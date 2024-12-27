@@ -15,3 +15,15 @@ export const ioTags = Tags.create('std/io')
 
   // write
   .add('write', '$write')
+  .add('write-json', '$writeJson')
+
+  // exists
+  .add('exists', '$exists')
+
+  // append
+  .add('append', '$append')
+  .add('append-sync', '$appendSync')
+
+  // mkdir
+  .add('mkdir', '$mkdir')
+  .add('mkdir-sync', '$mkdirSync')

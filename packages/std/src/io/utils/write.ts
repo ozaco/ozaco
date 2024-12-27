@@ -44,4 +44,4 @@ export const $writeJson = $fn(async (path: string, data: JsonValue, create = tru
   await Bun.write(path, stringified)
 
   return true
-}, ioTags.get('write'))
+}, ioTags.get('write-json'))
