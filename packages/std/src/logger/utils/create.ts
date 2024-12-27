@@ -3,8 +3,8 @@ import { capsule } from '../../results'
 
 import { loggerTags } from '../tag'
 
-import { createLog } from './api/log'
 import { createErr } from './api/err'
+import { createLog } from './api/log'
 import { createWarn } from './api/warn'
 
 export const create = capsule((options: Std.Logger.Options) => {
