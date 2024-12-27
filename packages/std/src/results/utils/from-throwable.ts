@@ -28,3 +28,22 @@ export const fromAsyncThrowable = <A extends readonly BlobType[], T, R>(
     )
   }) as BlobType
 }
+
+export const fromThrowable = <A extends readonly BlobType[], T, R>(
+  fn: (...args: A) => T,
+  errorFn: (err: unknown) => R
+): ((
+  ...args: A
+) => Std.Result<
+  T,
+  Std.InferNameType<Std.UnionsToResult<R>>,
+  Std.InferCauseType<Std.UnionsToResult<R>>
+>) => {
+  return ((...args: BlobType) => {
+    try {
+      return new Ok(fn(...args))
+    } catch (error) {
+      return errorFn(error) as BlobType
+    }
+  }) as BlobType
+}
