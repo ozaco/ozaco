@@ -1,6 +1,8 @@
 import picocolors from 'picocolors'
+
 import { capsule } from '../../results'
 
+import { LOGGER_LEVELS } from '../consts'
 import { loggerTags } from '../tag'
 
 import { createErr } from './api/err'
@@ -9,11 +11,14 @@ import { createWarn } from './api/warn'
 
 export const create = capsule((options: Std.Logger.Options) => {
   options.name = options.name.trim()
-  options.disableConsole = options.disableConsole ?? false
   options.transports = options.transports ?? []
+  options.level = options.level ?? 'log'
 
   const logger = {
-    options,
+    options: {
+      ...options,
+      levelIndex: LOGGER_LEVELS.indexOf(options.level),
+    },
 
     name: picocolors.bgBlack(picocolors.whiteBright(picocolors.bold(` ${options.name} `))),
 

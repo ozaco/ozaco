@@ -1,8 +1,9 @@
 import { $fn, err } from '@ozaco/std/results'
 
-import { exampleTags } from '../tag'
 import { users } from './data'
+
 import { logger } from '../consts'
+import { exampleTags } from '../tag'
 
 export const $getUser = $fn((name: string) => {
   const found = users.find(user => user.name === name)

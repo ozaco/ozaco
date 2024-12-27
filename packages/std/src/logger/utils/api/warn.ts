@@ -3,10 +3,13 @@ import picocolors from 'picocolors'
 import { capsule } from '../../../results'
 import type { BlobType } from '../../../shared'
 
+import { LOGGER_LEVELS } from '../../consts'
 import { loggerTags } from '../../tag'
 
 export const createWarn = (logger: Std.Logger.Api) => {
   const mark = picocolors.bgYellow(' warn ')
+
+  const noConsole = logger.options.levelIndex > LOGGER_LEVELS.indexOf('warn')
 
   const handler = (...args: BlobType[]) => {
     const [dateMark, date] = logger.date
@@ -15,9 +18,10 @@ export const createWarn = (logger: Std.Logger.Api) => {
       level: 'warn',
       messages: args,
       date,
+      noConsole,
     })
 
-    if (logger.options.disableConsole) {
+    if (noConsole) {
       return
     }
 

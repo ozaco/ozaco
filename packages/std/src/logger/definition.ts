@@ -3,6 +3,7 @@
 /// <reference path="../io/index.ts" />
 
 import type { BlobType } from '../shared'
+import type { LOGGER_LEVELS } from './consts'
 
 import type { loggerTags } from './tag'
 
@@ -18,22 +19,24 @@ declare global {
         level: 'err' | 'warn' | 'log'
         messages: string[]
         date: Date
+        noConsole: boolean
       }
 
       type Transport = (message: Message) => void
 
       interface Options {
         name: string
+        level?: (typeof LOGGER_LEVELS)[number]
 
-        disableConsole?: boolean
         transports?: Transport[]
       }
 
       interface Api {
         name: string
-        rawName: string
 
-        options: Required<Std.Logger.Options>
+        options: Required<Std.Logger.Options> & {
+          levelIndex: number
+        }
 
         get date(): [string, Date]
 
