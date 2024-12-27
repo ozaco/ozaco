@@ -9,7 +9,7 @@ export const createErr = (logger: Std.Logger.Api) => {
   const mark = picocolors.bgRed(' err ')
 
   const handler = (...args: BlobType[]) => {
-    const date = logger.date
+    const [dateMark, date] = logger.date
 
     logger.callTransports({
       level: 'err',
@@ -22,7 +22,7 @@ export const createErr = (logger: Std.Logger.Api) => {
     }
 
     // biome-ignore lint/suspicious/noConsole: Redundant
-    console.error('%s%s', logger.name, mark, ...args, date)
+    console.error('%s%s', logger.name, mark, ...args, dateMark)
   }
 
   return capsule(handler, loggerTags.get('err'))

@@ -29,7 +29,10 @@ export const create = capsule((options: Std.Logger.Options) => {
       const month = `${date.getMonth() + 1}`.padStart(2, '0')
       const year = `${date.getFullYear()}`
 
-      return picocolors.gray(`${hour}:${minute}:${second}.${millisecond} ${day}/${month}/${year}`)
+      return [
+        picocolors.gray(`${hour}:${minute}:${second}.${millisecond} ${day}/${month}/${year}`),
+        date,
+      ]
     },
   } as Std.Logger.Api
 

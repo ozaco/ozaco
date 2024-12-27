@@ -9,7 +9,7 @@ export const createWarn = (logger: Std.Logger.Api) => {
   const mark = picocolors.bgYellow(' warn ')
 
   const handler = (...args: BlobType[]) => {
-    const date = logger.date
+    const [dateMark, date] = logger.date
 
     logger.callTransports({
       level: 'warn',
@@ -22,7 +22,7 @@ export const createWarn = (logger: Std.Logger.Api) => {
     }
 
     // biome-ignore lint/suspicious/noConsole: Redundant
-    console.warn('%s%s', logger.name, mark, ...args, date)
+    console.warn('%s%s', logger.name, mark, ...args, dateMark)
   }
 
   return capsule(handler, loggerTags.get('warn'))

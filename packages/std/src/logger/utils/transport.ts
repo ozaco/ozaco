@@ -7,5 +7,5 @@ export const createTransport = (
   cb: Fn<[Std.Logger.Message], void>,
   ...additionalCauses: Std.ErrorValues[]
 ) => {
-  return capsule(cb, loggerTags.get('transport'), ...additionalCauses) as Std.Logger.Transport
+  return capsule(cb, ...additionalCauses, loggerTags.get('transport')) as Std.Logger.Transport
 }

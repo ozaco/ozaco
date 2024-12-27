@@ -17,7 +17,7 @@ declare global {
       interface Message {
         level: 'err' | 'warn' | 'log'
         messages: string[]
-        date: string
+        date: Date
       }
 
       type Transport = (message: Message) => void
@@ -35,13 +35,18 @@ declare global {
 
         options: Required<Std.Logger.Options>
 
-        get date(): string
+        get date(): [string, Date]
 
         callTransports: (message: Message) => void
 
         log: (...args: BlobType[]) => void
         err: (...args: BlobType[]) => void
         warn: (...args: BlobType[]) => void
+      }
+
+      // ------------ Transports ------------
+      interface FileTransportOptions {
+        dir?: string
       }
     }
   }
