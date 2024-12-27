@@ -27,5 +27,3 @@ export const createLog = (logger: Std.Logger.Api) => {
 
   return capsule(handler, loggerTags.get('log'))
 }
-
-const input = 2
