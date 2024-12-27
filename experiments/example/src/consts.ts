@@ -8,5 +8,5 @@ export const ENV = extractEnvs(env => ({
 
 export const logger = create({
   name: 'example',
-  transports: [createFileTransport()],
+  transports: [await createFileTransport()],
 })

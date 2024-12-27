@@ -3,7 +3,7 @@ import './handler'
 
 import { $sayHi } from './users/say-hi'
 
-$sayHi('alice')
+$sayHi('alice').unwrap()
 
 export * from './tag'
 export * from './consts'
