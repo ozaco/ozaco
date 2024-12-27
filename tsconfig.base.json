@@ -1,0 +1,41 @@
+{
+  "compilerOptions": {
+    /* Moonrepo */
+    "composite": true,
+    "declaration": true,
+    "declarationMap": true,
+    "emitDeclarationOnly": true,
+    "incremental": true,
+    "noEmitOnError": true,
+    "skipLibCheck": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+
+    /* Base Options: */
+    "esModuleInterop": true,
+    "target": "esnext",
+    "verbatimModuleSyntax": true,
+    "allowJs": true,
+    "resolveJsonModule": true,
+    "moduleDetection": "force",
+    "isolatedModules": true,
+    "allowImportingTsExtensions": false,
+    "downlevelIteration": true,
+
+    /* Strictness */
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "strictNullChecks": true,
+    "noImplicitAny": true,
+    "exactOptionalPropertyTypes": true,
+    "allowArbitraryExtensions": true,
+
+    "moduleResolution": "Bundler",
+    "module": "esnext",
+    "lib": ["esnext"],
+
+    "importHelpers": true,
+    "jsx": "react-jsx"
+  },
+  "exclude": ["**/dist/**"]
+}

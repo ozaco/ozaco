@@ -1,0 +1,29 @@
+{
+  "name": "@ozaco/example",
+  "version": "0.0.0",
+  "private": true,
+
+  "type": "module",
+  "files": ["dist"],
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "default": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+
+  "author": "giveerr (https://github.com/giveerr)",
+  "homepage": "https://ozaco.com/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ozaco/ozaco.git"
+  },
+
+  "devDependencies": {
+    "@ozaco/cli": "workspace:*"
+  },
+  "dependencies": {
+    "@ozaco/std": "workspace:*"
+  }
+}

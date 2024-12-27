@@ -1,0 +1,47 @@
+{
+  "name": "@ozaco/cli",
+  "description": "All in one cli for ozaco",
+  "version": "0.0.0",
+
+  "bin": {
+    "ozaco": "./command"
+  },
+
+  "type": "module",
+  "files": ["dist", "./command"],
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "default": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./main": {
+      "source": "./src/main.ts",
+      "default": "./dist/main.js",
+      "types": "./dist/main.d.ts"
+    }
+  },
+
+  "author": "giveerr (https://github.com/giveerr)",
+  "homepage": "https://ozaco.com/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ozaco/ozaco.git"
+  },
+
+  "dependencies": {
+    "clerc": "^0.44.0",
+    "oxc-parser": "^0.35.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  },
+  "peerDependencies": {
+    "typescript": ">= 5.0.0"
+  },
+  "peerDependenciesMeta": {
+    "typescript": {
+      "optional": true
+    }
+  }
+}

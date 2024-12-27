@@ -1,0 +1,43 @@
+$schema: "https://moonrepo.dev/schemas/tasks.json"
+
+implicitInputs:
+  - "package.json"
+
+fileGroups:
+  configs:
+    - "*.config.{js,cjs,mjs}"
+    - "*.json"
+  sources:
+    - "src/**/*"
+    - "types/**/*"
+  tests:
+    - "tests/**/*"
+    - "**/__tests__/**/*"
+  assets:
+    - "assets/**/*"
+    - "images/**/*"
+    - "static/**/*"
+    - "**/*.{scss,css}"
+
+tasks:
+  check:
+    command: "bun x @biomejs/biome check --no-errors-on-unmatched --files-ignore-unknown=true ."
+    platform: "system"
+    options:
+      affectedFiles: true
+  apply:
+    command: "bun x @biomejs/biome check --write --no-errors-on-unmatched --files-ignore-unknown=true ."
+    platform: "system"
+    options:
+      affectedFiles: true
+  apply-unsafe:
+    command: "bun x @biomejs/biome check --write --unsafe --no-errors-on-unmatched --files-ignore-unknown=true ."
+    platform: "system"
+    options:
+      affectedFiles: true
+  clean:
+    command: "rm -rf dist && rm -rf .ozaco"
+    local: true
+    options:
+      cache: false
+      persistent: false

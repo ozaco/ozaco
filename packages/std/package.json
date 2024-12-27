@@ -1,0 +1,54 @@
+{
+  "name": "@ozaco/std",
+  "version": "0.0.0",
+
+  "type": "module",
+  "files": ["dist"],
+  "exports": {
+    "./results": {
+      "source": "./src/results/index.ts",
+      "default": "./dist/results.js",
+      "types": "./dist/results.d.ts"
+    },
+    "./shared": {
+      "source": "./src/shared/index.ts",
+      "default": "./dist/shared.js",
+      "types": "./dist/shared.d.ts"
+    },
+    "./io": {
+      "source": "./src/io/index.ts",
+      "default": "./dist/io.js",
+      "types": "./dist/io.d.ts"
+    },
+    "./plugin": {
+      "source": "./src/plugin/index.ts",
+      "default": "./dist/plugin.js",
+      "types": "./dist/plugin.d.ts"
+    },
+    "./logger": {
+      "source": "./src/logger/index.ts",
+      "default": "./dist/logger.js",
+      "types": "./dist/logger.d.ts"
+    },
+    "./logger-file": {
+      "source": "./src/logger/transports/file.ts",
+      "default": "./dist/logger-file.js",
+      "types": "./dist/logger-file.d.ts"
+    }
+  },
+
+  "author": "giveerr (https://github.com/giveerr)",
+  "homepage": "https://ozaco.com/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ozaco/ozaco.git"
+  },
+
+  "devDependencies": {
+    "@ozaco/cli": "workspace:*"
+  },
+  "dependencies": {
+    "type-fest": "^4.30.0",
+    "picocolors": "^1.1.1"
+  }
+}

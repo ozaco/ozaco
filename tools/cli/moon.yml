@@ -1,0 +1,11 @@
+language: "typescript"
+type: "library"
+platform: "bun"
+
+tasks:
+  build:
+    command: "bun run src/main.ts build -a"
+    inputs:
+      - "src/**/*"
+    outputs:
+      - "dist/**"

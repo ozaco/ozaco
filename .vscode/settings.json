@@ -1,0 +1,10 @@
+{
+  "typescript.disableAutomaticTypeAcquisition": false,
+  "typescript.tsdk": "node_modules/typescript/lib",
+
+  "eslint.enable": false,
+  "prettier.enable": false,
+  "biome.enabled": true,
+
+  "editor.defaultFormatter": "biomejs.biome"
+}

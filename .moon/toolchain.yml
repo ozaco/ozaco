@@ -1,0 +1,10 @@
+$schema: "https://moonrepo.dev/schemas/toolchain.json"
+
+bun:
+  version: "1.1.42"
+  dependencyVersionFormat: "workspace"
+  syncProjectWorkspaceDependencies: true
+
+typescript:
+  syncProjectReferences: true
+  syncProjectReferencesToPaths: false
