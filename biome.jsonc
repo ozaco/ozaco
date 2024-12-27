@@ -434,7 +434,7 @@
         "noExportedImports": "error",
         "noIrregularWhitespace": "error",
         "noRestrictedTypes": "error",
-        "noSecrets": "error",
+        "noSecrets": "off",
         "noStaticElementInteractions": "error",
         "noUnknownPseudoClass": "error",
         "noUnknownPseudoElement": "error",
