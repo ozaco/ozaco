@@ -7,6 +7,10 @@ import { dirname } from 'node:path'
 import { $fn, err, fromThrowable } from '../../results'
 import { $mkdir, $mkdirSync } from './mkdir'
 
+/**
+ * The append function appends data to a file at the specified path and
+ * returns true in AsyncResult.
+ */
 export const $append = $fn(async (path: string, data: string | ArrayBuffer, create = true) => {
   const file = Bun.file(path)
   const exists = await file.exists()
@@ -24,6 +28,10 @@ export const $append = $fn(async (path: string, data: string | ArrayBuffer, crea
   return true
 }, ioTags.get('append'))
 
+/**
+ * The appendSync function appends data to a file at the specified path and
+ * returns true in Result.
+ */
 export const $appendSync = $fn((path: string, data: string | ArrayBuffer, create = true) => {
   const stats = fromThrowable(statSync, () =>
     err(ioTags.get('not-found'), `file: ${path} not found`)
