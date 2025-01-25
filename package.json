@@ -8,14 +8,17 @@
     "@biomejs/biome": "1.9.4",
     "@commitlint/cli": "^19.6.1",
     "@commitlint/config-conventional": "^19.6.0",
-    "@commitlint/prompt-cli": "^19.6.1",
-    "@types/bun": "^1.1.14",
+    "@commitlint/prompt-cli": "^19.7.0",
+    "@types/bun": "^1.1.17",
     "husky": "^9.1.7",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.3"
   },
   "scripts": {
     "prepare": "husky",
     "commit": "commit"
   },
-  "trustedDependencies": ["@biomejs/biome"]
+  "trustedDependencies": ["@biomejs/biome", "bufferutil", "es5-ext", "utf-8-validate"],
+  "patchedDependencies": {
+    "@clerc/core@0.44.0": "patches/@clerc%2Fcore@0.44.0.patch"
+  }
 }
