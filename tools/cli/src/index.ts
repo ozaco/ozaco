@@ -1,8 +1,15 @@
-export * from './shared/cli'
-export * from './shared/readJsonFile'
+import { Clerc } from 'clerc'
 
-export * from './plugins/builder/plugin'
-export * from './plugins/builder/utils/build'
-export * from './plugins/builder/utils/dts'
+import pkg from '../package.json'
 
-export * from 'clerc'
+export const cli = Clerc.create()
+  .name('ozaco')
+  .scriptName('ozaco')
+  .description(pkg.description)
+  .version(pkg.version)
+  .flag('cwd', 'Current Working Directory', {
+    default: process.cwd(),
+    type: String,
+  })
+
+export type Cli = typeof cli

@@ -144,6 +144,16 @@
           }
         }
       }
+    },
+    {
+      "include": ["./tools/cli/**/*.ts"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noExplicitAny": "off"
+          }
+        }
+      }
     }
   ],
   "linter": {

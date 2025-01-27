@@ -50,5 +50,6 @@
   "dependencies": {
     "type-fest": "^4.31.0",
     "picocolors": "^1.1.1"
-  }
+  },
+  "bundleDependencies": ["picocolors"]
 }

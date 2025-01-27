@@ -7,5 +7,6 @@ tasks:
     command: "bun run src/main.ts build -a"
     inputs:
       - "src/**/*"
+      - "packages/**/*"
     outputs:
       - "dist/**"
