@@ -46,19 +46,19 @@ export const fixExports = (rawCode: string) => {
         .replaceAll('  ', '')
     }
 
-    const exports = codeBlock
+    const rawExports = codeBlock
       .slice(codeBlock.indexOf('{') + 1, codeBlock.indexOf('}'))
       .split(',')
-      .map(exportName => {
-        const exportNameTrimmed = exportName.trim()
+      .map(exportName => exportName.trim())
 
-        if (exportNameTrimmed.includes('as')) {
-          // biome-ignore lint/style/noNonNullAssertion: Redundant
-          return exportNameTrimmed.split(' as ')[1]!
-        }
+    const exports = rawExports.map(exportName => {
+      if (exportName.includes('as')) {
+        // biome-ignore lint/style/noNonNullAssertion: Redundant
+        return exportName.split(' as ')[1]!
+      }
 
-        return exportNameTrimmed
-      })
+      return exportName
+    })
 
     const removeExports: string[] = []
 
@@ -74,6 +74,22 @@ export const fixExports = (rawCode: string) => {
 
     if (removeExports.length === exports.length) {
       code = code.replace(codeBlock, '')
+
+      return code
+    }
+
+    for (const exportName of removeExports) {
+      const rawExport = rawExports[exports.indexOf(exportName)]
+
+      if (!rawExport) {
+        continue
+      }
+
+      if (rawExport.includes('as')) {
+        code = code.replace(rawExport, '')
+      } else {
+        console.error(`unhandled export: ${rawExport}`)
+      }
     }
   }
 

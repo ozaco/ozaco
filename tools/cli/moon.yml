@@ -4,7 +4,7 @@ platform: "bun"
 
 tasks:
   build:
-    command: "bun run src/main.ts build -a"
+    command: "bun run src/main.ts build -s"
     inputs:
       - "src/**/*"
       - "packages/**/*"

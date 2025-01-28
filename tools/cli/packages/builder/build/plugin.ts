@@ -1,11 +1,11 @@
 import { join } from 'node:path'
-
 import { definePlugin } from 'clerc'
+
+import type { PackageJson } from 'type-fest'
 
 import { action } from './action'
 
 import type { Cli } from '../../../src'
-import type { PackageJson } from 'type-fest'
 
 export const plugin = definePlugin({
   setup: (cli: Cli) =>
@@ -74,15 +74,25 @@ export const plugin = definePlugin({
           ctx.flags.external = []
         }
 
-        await action({
-          cwd: ctx.flags.cwd,
+        try {
+          await action({
+            cwd: ctx.flags.cwd,
 
-          env: ctx.flags.env,
-          target: ctx.flags.target,
-          packages: ctx.parameters.packages,
+            env: ctx.flags.env,
+            target: ctx.flags.target,
+            packages: ctx.parameters.packages,
 
-          exports: packageJson.exports,
-          external: ctx.flags.external,
-        })
+            exports: packageJson.exports,
+            external: ctx.flags.external,
+          })
+        } catch (err) {
+          console.error(err as string)
+
+          process.exit(1)
+        }
+
+        if (!ctx.flags.silent) {
+          console.log('Build completed')
+        }
       }),
 })

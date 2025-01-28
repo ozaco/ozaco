@@ -1,9 +1,9 @@
 import { appendFileSync, statSync } from 'node:fs'
 import { appendFile } from 'node:fs/promises'
+import { dirname } from 'node:path'
 
 import { ioTags } from '../tag'
 
-import { dirname } from 'node:path'
 import { $fn, err, fromThrowable } from '../../results'
 import { $mkdir, $mkdirSync } from './mkdir'
 

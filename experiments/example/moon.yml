@@ -4,7 +4,7 @@ platform: "bun"
 
 tasks:
   build:
-    command: "bunx ozaco build"
+    command: "bunx ozaco build -s"
     deps:
       - "cli:build"
       - "std:build"
