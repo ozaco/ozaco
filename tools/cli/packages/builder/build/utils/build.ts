@@ -1,5 +1,5 @@
-import { basename, dirname, join } from 'node:path'
 import { exists, mkdir, unlink } from 'node:fs/promises'
+import { basename, dirname, join } from 'node:path'
 
 import type { ActionOptions } from '../action'
 import { fixExports } from './fix-exports'

@@ -9,6 +9,8 @@ fileGroups:
     - "*.json"
   sources:
     - "src/**/*"
+    - "packages/**/*"
+    - "plugins/**/*"
     - "types/**/*"
   tests:
     - "tests/**/*"
