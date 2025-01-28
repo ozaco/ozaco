@@ -1,0 +1,13 @@
+diff --git a/dist/index.d.ts b/dist/index.d.ts
+index 543c1ef8e72de51e9a333d1afe958633d9097378..a148be6430e484e835326461740666aeb9c48074 100644
+--- a/dist/index.d.ts
++++ b/dist/index.d.ts
+@@ -175,7 +175,7 @@ interface InterceptorObject<C extends Commands = Commands> {
+     fn: InterceptorFn<C>;
+ }
+ 
+-declare const Root: unique symbol;
++declare const Root: symbol;
+ type RootType = typeof Root;
+ declare class Clerc<C extends Commands = {}, GF extends GlobalFlagOptions = {}> {
+     #private;

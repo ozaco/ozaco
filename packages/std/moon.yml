@@ -4,7 +4,7 @@ platform: "bun"
 
 tasks:
   build:
-    command: "bun x ozaco build -a"
+    command: "bunx ozaco build -s"
     deps:
       - "cli:build"
     inputs:
@@ -17,3 +17,4 @@ tasks:
       - "std:build"
     inputs:
       - "tests/**/*"
+    local: true
