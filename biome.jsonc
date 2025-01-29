@@ -118,6 +118,17 @@
           }
         }
       }
+    },
+    {
+      "include": ["tools/cli/**/*.ts", "tools/cli/**/*.tsx"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noExplicitAny": "off",
+            "noConsole": "off"
+          }
+        }
+      }
     }
   ],
   "linter": {
