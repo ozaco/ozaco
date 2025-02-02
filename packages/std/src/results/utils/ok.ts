@@ -1,6 +1,6 @@
 import type { BlobType } from '../../shared'
 
-import type { Err } from './err'
+import { Err } from './err'
 
 /**
  * This class represents a successful result
@@ -8,14 +8,18 @@ import type { Err } from './err'
 export class Ok<T, const N extends Std.ErrorValues = never, const C extends Std.ErrorValues[] = []>
   implements Std.ResultType<T, N, C>
 {
-  constructor(readonly value: T) {}
+  constructor(readonly value: T) {
+    if (value instanceof Ok) {
+      this.value = value.value
+    }
+  }
 
   isOk(): this is Ok<T, N, C> {
     return true
   }
 
   isErr(): this is Err<T, N, C> {
-    return !this.isOk()
+    return false
   }
 
   unwrap(): T {
@@ -39,4 +43,5 @@ export class Ok<T, const N extends Std.ErrorValues = never, const C extends Std.
 /**
  * Shortcut for creating successful result
  */
-export const ok = <T>(value: T) => new Ok(value)
+export const ok = <T>(value: T) =>
+  (value instanceof Err ? value : new Ok(value)) as Std.OkResolver<T>

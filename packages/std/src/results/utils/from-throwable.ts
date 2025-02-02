@@ -1,49 +1,32 @@
-import type { BlobType } from '../../shared'
+import { type BlobType, isPromise } from '../../shared'
 
 import { ResultAsync } from './async'
 import { Ok } from './ok'
 
-/**
- * Converts an async function that throws to a function that returns a ResultAsync
- */
-export const fromAsyncThrowable = <A extends readonly BlobType[], T, R>(
-  fn: (...args: A) => Promise<T>,
-  errorFn: (err: unknown) => R
-): ((
-  ...args: A
-) => ResultAsync<
+export const fromThrowable = <
+  A extends BlobType[],
   T,
-  Std.InferNameType<Std.UnionsToResult<R>>,
-  Std.InferCauseType<Std.UnionsToResult<R>>
->) => {
-  return ((...args: BlobType) => {
-    return new ResultAsync(
-      (async () => {
-        try {
-          return new Ok(await fn(...args))
-        } catch (error) {
-          return errorFn(error) as BlobType
-        }
-      })()
-    )
-  }) as BlobType
-}
-
-export const fromThrowable = <A extends readonly BlobType[], T, R>(
+  R extends Std.Both<BlobType, BlobType, BlobType>,
+>(
   fn: (...args: A) => T,
   errorFn: (err: unknown) => R
-): ((
-  ...args: A
-) => Std.Result<
-  T,
-  Std.InferNameType<Std.UnionsToResult<R>>,
-  Std.InferCauseType<Std.UnionsToResult<R>>
->) => {
-  return ((...args: BlobType) => {
+) => {
+  return ((...args: A) => {
     try {
-      return new Ok(fn(...args))
-    } catch (error) {
-      return errorFn(error) as BlobType
+      const result = fn(...args)
+
+      if (isPromise(result) && !(result instanceof ResultAsync)) {
+        return new ResultAsync(
+          (result as unknown as Promise<BlobType>).then(
+            data => new Ok(data) as Std.Result<BlobType, BlobType, BlobType>,
+            e => errorFn(e)
+          )
+        )
+      }
+
+      return new Ok(result) as Std.Result<BlobType, BlobType, BlobType>
+    } catch (rawError) {
+      return errorFn(rawError)
     }
-  }) as BlobType
+  }) as Std.FromThrowable<A, T, R>
 }

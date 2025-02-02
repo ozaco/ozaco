@@ -1,20 +1,23 @@
-import { $try, err } from '@ozaco/std/results'
+import { $fn, err } from '@ozaco/std/results'
 
 import { logger } from '../consts'
 import { exampleTags } from '../tag'
 import { $getUser } from './get-user'
 
-export const $sayHi = (name?: string) =>
-  $try(function* () {
-    if (!name) {
-      return err(exampleTags.get('invalid-arguments'), 'name should be defined')
-    }
+export const $sayHi = $fn((name: string) => {
+  if (!name) {
+    return err(exampleTags.get('invalid-arguments'), 'name should be defined')
+  }
 
-    const found = yield* $getUser(name)
+  const found = $getUser(name)
 
-    if (found.age < 18) {
-      yield* err('?underage', 'under age')
-    }
+  if (found.isErr()) {
+    return found
+  }
 
-    logger.err(`Hi ${found.name}-${found.age}`)
-  }, exampleTags.get('say-hi'))
+  if (found.value.age < 18) {
+    return err('?underage', 'under age')
+  }
+
+  logger.err(`Hi ${found.value.name}-${found.value.age}`)
+}, exampleTags.get('say-hi'))

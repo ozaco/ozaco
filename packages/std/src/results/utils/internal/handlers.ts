@@ -8,55 +8,33 @@ import { Ok, ok } from '../ok'
 const invalidUsage = resultTags.get('invalid-usage')
 
 /**
- * This helper extracts the actual value from its first argument (even its nested ok's or okAsync)
+ * This helper extracts the actual value from its first argument
  */
 export const handleThen = (
-  data: BlobType,
+  result: BlobType,
   ...additionalCauses: Std.ErrorValues[]
-): Std.Result<BlobType, BlobType, BlobType> | ResultAsync<BlobType, BlobType, BlobType> => {
-  if (isPromise(data)) {
+): Std.Both<BlobType, BlobType, BlobType> => {
+  if (isPromise(result) && !(result instanceof ResultAsync)) {
     return new ResultAsync(
-      data.then(
-        async (rawData: BlobType) => {
-          const data = rawData.value ?? rawData
-
-          let result = data
-
-          while (isPromise(result)) {
-            const awaited = await result
-            result = awaited.value ?? awaited
-
-            if (awaited instanceof Err) {
-              return handleCatch(awaited, ...additionalCauses)
-            }
-
-            if (awaited instanceof Ok) {
-              break
-            }
-          }
-
-          return handleThen(result, ...additionalCauses)
-        },
+      (result as Promise<BlobType>).then(
+        data => handleThen(data, ...additionalCauses),
         e => handleCatch(e, ...additionalCauses)
-      ) as BlobType
+      )
     )
   }
 
-  let result = data
+  const isOk = result instanceof Ok
+  const isErr = result instanceof Err
 
-  while (result instanceof Ok) {
-    result = result.value ?? result
+  if (!(isOk || isErr)) {
+    return ok(result)
   }
 
-  if (result instanceof ResultAsync) {
-    return handleThen(result, ...additionalCauses)
-  }
-
-  if (result instanceof Err) {
+  if (isErr) {
     return handleCatch(result, ...additionalCauses)
   }
 
-  return ok(result)
+  return result
 }
 
 /**

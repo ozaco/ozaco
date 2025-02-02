@@ -29,7 +29,7 @@ export class Err<
   }
 
   isErr(): this is Err<T, N, C> {
-    return !this.isOk()
+    return true
   }
 
   unwrap(): never {
