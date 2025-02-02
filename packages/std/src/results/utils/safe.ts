@@ -1,4 +1,4 @@
-import { isPromise, type BlobType } from '../../shared'
+import { type BlobType, isPromise } from '../../shared'
 
 import { resultTags } from '../tag'
 import { handleCatch, handleThen } from './internal/handlers'
