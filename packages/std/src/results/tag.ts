@@ -6,3 +6,4 @@ export const resultTags = Tags.create('std/results')
 
   // causes
   .add('tags-get', 'tags#get')
+  .add('safe', '$safe')

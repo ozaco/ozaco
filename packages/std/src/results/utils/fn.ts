@@ -15,9 +15,9 @@ export const $fn = <A extends BlobType[], R, C extends Std.ErrorValues[] = []>(
 ) => {
   const result = ((...args: A) => {
     try {
-      const result = fn(...args)
+      const data = fn(...args)
 
-      return handleThen(result, ...additionalCauses)
+      return handleThen(data, ...additionalCauses)
     } catch (rawError) {
       return handleCatch(rawError, ...additionalCauses)
     }

@@ -90,9 +90,5 @@ export class Err<
 /**
  * Shortcut for creating failed result
  */
-export function err<T = never, const N extends Std.ErrorValues = never>(
-  name: N,
-  message: string
-): Err<T, N, []> {
-  return new Err(name, message)
-}
+export const err = <T = never, const N extends Std.ErrorValues = never>(name: N, message: string) =>
+  new Err<T, N, []>(name, message)

@@ -8,5 +8,6 @@ export * from './utils/forward'
 export * from './utils/from-throwable'
 export * from './utils/ok'
 export * from './utils/tag'
+export * from './utils/safe'
 
 export * from './tag'
