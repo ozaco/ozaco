@@ -1,17 +1,18 @@
-import { $fn, err } from '../../results'
+import { $safe, err } from '../../results'
 
 import { ioTags } from '../tag'
+import { $exists } from './exists'
 
 /**
  * The $read function reads a file from the specified path and
  * returns its contents as a ArrayBuffer in AsyncResult.
  */
-export const $read = $fn(async (path: string) => {
+export const $read = $safe(async function* (path: string) {
   const file = Bun.file(path)
-  const exists = await file.exists()
+  const exists = yield* $exists(path, 'file')
 
   if (!exists) {
-    return err(ioTags.get('not-found'), `file: ${path} not found`)
+    yield* err(ioTags.get('not-found'), `file: ${path} not found`)
   }
 
   return await file.arrayBuffer()
@@ -21,16 +22,16 @@ export const $read = $fn(async (path: string) => {
  * The $readJson function reads a file from the specified path and
  * returns its contents as a object in AsyncResult.
  */
-export const $readJson = $fn(async <T>(path: string) => {
+export const $readJson = $safe(async function* <T>(path: string) {
   const file = Bun.file(path)
-  const exists = await file.exists()
+  const exists = yield* $exists(path, 'file')
 
   if (!exists) {
-    return err(ioTags.get('not-found'), `file: ${path} not found`)
+    yield* err(ioTags.get('not-found'), `file: ${path} not found`)
   }
 
   if (!file.type.includes('application/json')) {
-    return err(
+    yield* err(
       ioTags.get('invalid-mime'),
       `file: ${path} file type: ${file.type} cannot be read with this method`
     )

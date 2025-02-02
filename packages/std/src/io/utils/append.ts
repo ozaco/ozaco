@@ -2,26 +2,29 @@ import { appendFileSync } from 'node:fs'
 import { appendFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 
-import { $fn, err } from '../../results'
+import { $safe, err } from '../../results'
 
 import { ioTags } from '../tag'
+import { $exists, $existsSync } from './exists'
 import { $mkdir, $mkdirSync } from './mkdir'
-import { $statsSync } from './stats'
 
 /**
  * The append function appends data to a file at the specified path and
  * returns true in AsyncResult.
  */
-export const $append = $fn(async (path: string, data: string | ArrayBuffer, create = true) => {
-  const file = Bun.file(path)
-  const exists = await file.exists()
+export const $append = $safe(async function* (
+  path: string,
+  data: string | ArrayBuffer,
+  create = true
+) {
+  const exists = yield* $exists(path, 'file')
 
   if (!(exists || create)) {
-    return err(ioTags.get('not-found'), `file: ${path} not found`)
+    yield* err(ioTags.get('not-found'), `file: ${path} not found`)
   }
 
   if (!exists) {
-    ;(await $mkdir(dirname(path))).unwrap()
+    yield* $mkdir(dirname(path))
   }
 
   await appendFile(path, data.toString())
@@ -33,16 +36,19 @@ export const $append = $fn(async (path: string, data: string | ArrayBuffer, crea
  * The appendSync function appends data to a file at the specified path and
  * returns true in Result.
  */
-export const $appendSync = $fn((path: string, data: string | ArrayBuffer, create = true) => {
-  const stats = $statsSync(path)
-  const exists = stats.isErr() ? false : (stats.value?.isFile() ?? false)
+export const $appendSync = $safe(function* (
+  path: string,
+  data: string | ArrayBuffer,
+  create = true
+) {
+  const exists = yield* $existsSync(path, 'file')
 
   if (!(exists || create)) {
-    return err(ioTags.get('not-found'), `file: ${path} not found`)
+    yield* err(ioTags.get('not-found'), `file: ${path} not found`)
   }
 
   if (!exists) {
-    $mkdirSync(dirname(path)).unwrap()
+    yield* $mkdirSync(dirname(path))
   }
 
   appendFileSync(path, data.toString())
