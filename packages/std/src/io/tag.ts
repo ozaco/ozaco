@@ -19,6 +19,7 @@ export const ioTags = Tags.create('std/io')
 
   // exists
   .add('exists', '$exists')
+  .add('exists-sync', '$existsSync')
 
   // append
   .add('append', '$append')
@@ -27,3 +28,7 @@ export const ioTags = Tags.create('std/io')
   // mkdir
   .add('mkdir', '$mkdir')
   .add('mkdir-sync', '$mkdirSync')
+
+  // stats
+  .add('stats', '$stats')
+  .add('stats-sync', '$statsSync')
