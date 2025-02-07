@@ -1,4 +1,4 @@
-import type { BlobType } from '../../shared'
+import type { BlobType, Fn } from '../../shared'
 
 import { resultTags } from '../tag'
 import { handleCatch, handleThen } from './internal/handlers'
@@ -13,7 +13,7 @@ export const $fn = <A extends BlobType[], R, C extends Std.ErrorValues[] = []>(
   fn: (...args: A) => R,
   ...additionalCauses: C
 ) => {
-  const result = ((...args: A) => {
+  return ((...args: A) => {
     try {
       const data = fn(...args)
 
@@ -21,11 +21,5 @@ export const $fn = <A extends BlobType[], R, C extends Std.ErrorValues[] = []>(
     } catch (rawError) {
       return handleCatch(rawError, ...additionalCauses)
     }
-  }) as Std.Middleware<A, Std.InjectError<Std.UnionsToResult<R>, typeof invalidUsage, C>>
-
-  result.addCauses = (...newAdditionalCauses) => {
-    return $fn(fn, ...additionalCauses, ...newAdditionalCauses) as BlobType
-  }
-
-  return result
+  }) as Fn<A, Std.InjectError<Std.UnionsToResult<R>, typeof invalidUsage, C>>
 }

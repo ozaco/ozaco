@@ -119,22 +119,6 @@ declare global {
 
     // ------------- Generators -------------
 
-    /**
-     * Adds the ability to add additional causes to a function
-     */
-    type Middleware<A extends BlobType[], R> = ((...args: A) => R) & {
-      addCauses: <C extends Std.ErrorValues[] = []>(
-        ...additionalCauses: C
-      ) => Middleware<
-        A,
-        R extends Std.Result<BlobType, BlobType, BlobType[]>
-          ? Std.InjectError<R, Std.InferNameType<R>, C>
-          : R extends Std.ResultAsync<BlobType, BlobType, BlobType[]>
-            ? Std.InjectError<R, Std.InferNameType<R>, C>
-            : R
-      >
-    }
-
     type $UnionsToResult<R, O, E> = O | E extends never
       ? never
       : R extends PromiseLike<BlobType>

@@ -1,4 +1,4 @@
-import { type BlobType, isPromise } from '../../shared'
+import { type BlobType, type Fn, isPromise } from '../../shared'
 
 import { resultTags } from '../tag'
 import { handleCatch, handleThen } from './internal/handlers'
@@ -15,7 +15,7 @@ const cause = resultTags.get('safe')
 export function $safe<A extends BlobType[], R, R2, C extends Std.ErrorValues[] = []>(
   body: (...args: A) => Generator<R, R2>,
   ...additionalCauses: C
-): Std.Middleware<
+): Fn<
   A,
   Std.InjectError<
     Std.UnionsToResult<R | R2>,
@@ -26,7 +26,7 @@ export function $safe<A extends BlobType[], R, R2, C extends Std.ErrorValues[] =
 export function $safe<A extends BlobType[], R, R2, C extends Std.ErrorValues[] = []>(
   body: (...args: A) => AsyncGenerator<R, R2>,
   ...additionalCauses: C
-): Std.Middleware<
+): Fn<
   A,
   Std.InjectError<
     Std.UnionsToResult<
@@ -39,7 +39,7 @@ export function $safe<A extends BlobType[], R, R2, C extends Std.ErrorValues[] =
 export function $safe<A extends BlobType[], R, R2, R3, R4, C extends Std.ErrorValues[] = []>(
   body: ((...args: A) => AsyncGenerator<R, R2>) | ((...args: A) => Generator<R3, R4>),
   ...additionalCauses: C
-): Std.Middleware<
+): Fn<
   A,
   Std.InjectError<
     Std.UnionsToResult<
@@ -49,7 +49,7 @@ export function $safe<A extends BlobType[], R, R2, R3, R4, C extends Std.ErrorVa
     C extends never ? (typeof cause)[] : (typeof cause)[] | C
   >
 > {
-  const result = ((...args: A) => {
+  return ((...args: A) => {
     try {
       const data = body(...args).next()
 
@@ -65,10 +65,4 @@ export function $safe<A extends BlobType[], R, R2, R3, R4, C extends Std.ErrorVa
       return handleCatch(rawError, ...additionalCauses) as BlobType
     }
   }) as BlobType
-
-  result.addCauses = (...newAdditionalCauses: BlobType[]) => {
-    return $safe(body as BlobType, ...additionalCauses, ...newAdditionalCauses) as BlobType
-  }
-
-  return result
 }
