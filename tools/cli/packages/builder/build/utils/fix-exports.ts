@@ -11,6 +11,21 @@ const indexOfSubstrings = function* (str: string, searchValue: string) {
   }
 }
 
+const replaceLast = (str: string, pattern: RegExp | string, replacement: string) => {
+  const match =
+    typeof pattern === 'string'
+      ? pattern
+      : (str.match(new RegExp(pattern.source, 'g')) || []).slice(-1)[0]
+
+  if (!match) {
+    return str
+  }
+
+  const last = str.lastIndexOf(match)
+
+  return last !== -1 ? `${str.slice(0, last)}${replacement}${str.slice(last + match.length)}` : str
+}
+
 // partial fix for https://github.com/oven-sh/bun/issues/14493
 export const fixExports = (rawCode: string) => {
   let code = rawCode
@@ -88,7 +103,7 @@ export const fixExports = (rawCode: string) => {
       if (rawExport.includes('as')) {
         code = code.replace(rawExport, '')
       } else {
-        console.error(`unhandled export: ${rawExport}`)
+        code = replaceLast(code, rawExport, '')
       }
     }
   }
