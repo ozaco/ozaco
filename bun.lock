@@ -38,7 +38,7 @@
       "name": "@ozaco/cli",
       "version": "0.0.0",
       "bin": {
-        "ozaco": "./command"
+        "ozaco": "./command",
       },
       "dependencies": {
         "clerc": "^0.44.0",
