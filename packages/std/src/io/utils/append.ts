@@ -17,9 +17,9 @@ export const $append = $safe(async function* (
   data: string | ArrayBuffer,
   create = true
 ) {
-  const exists = yield* $exists(path, 'file')
+  const exists = await $exists(path, 'file')
 
-  if (!(exists || create)) {
+  if (exists.isErr() && !create) {
     yield* err(ioTags.get('not-found'), `file: ${path} not found`)
   }
 
@@ -41,9 +41,9 @@ export const $appendSync = $safe(function* (
   data: string | ArrayBuffer,
   create = true
 ) {
-  const exists = yield* $existsSync(path, 'file')
+  const exists = $existsSync(path, 'file')
 
-  if (!(exists || create)) {
+  if (exists.isErr() && !create) {
     yield* err(ioTags.get('not-found'), `file: ${path} not found`)
   }
 
