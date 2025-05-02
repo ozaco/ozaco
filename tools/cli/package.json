@@ -1,7 +1,7 @@
 {
   "name": "@ozaco/cli",
   "description": "All in one cli for ozaco",
-  "version": "0.0.0",
+  "version": "0.0.1",
 
   "bin": {
     "ozaco": "./command"
@@ -39,7 +39,7 @@
   },
   "devDependencies": {
     "typescript": "^5.8.3",
-    "type-fest": "^4.40.0"
+    "type-fest": "^4.40.1"
   },
   "peerDependencies": {
     "typescript": ">= 5.0.0"

@@ -15,8 +15,8 @@ export const plugin = definePlugin({
           target: {
             alias: 't',
             type: String,
-            default: 'server',
-            description: 'Target environment [server, browser]',
+            default: 'bun',
+            description: 'Target environment [bun, browser]',
           },
 
           external: {
@@ -36,7 +36,7 @@ export const plugin = definePlugin({
         parameters: ['[packages...]'],
       })
       .on('build', async ctx => {
-        if (ctx.flags.target !== 'browser' && ctx.flags.target !== 'server') {
+        if (ctx.flags.target !== 'browser' && ctx.flags.target !== 'bun') {
           throw new Error(`Unknown build target ${ctx.flags.target}`)
         }
 

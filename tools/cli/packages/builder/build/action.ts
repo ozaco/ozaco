@@ -6,7 +6,7 @@ import { buildTypes } from './utils/build-types'
 export interface ActionOptions {
   cwd: string
 
-  target: 'server' | 'browser'
+  target: 'bun' | 'browser' | 'node'
   env: 'development' | 'production' | 'test'
   packages: string[]
 

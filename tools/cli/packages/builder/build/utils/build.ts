@@ -35,7 +35,7 @@ export const build = async (options: BuildOptions) => {
     throw: false,
 
     external: options.external,
-    target: options.target === 'server' ? 'bun' : 'browser',
+    target: options.target,
     minify:
       options.env === 'production'
         ? {
@@ -47,6 +47,9 @@ export const build = async (options: BuildOptions) => {
     sourcemap: 'linked',
     splitting: true,
     emitDCEAnnotations: true,
+    define: {
+      'process.env.NODE_ENV': JSON.stringify(options.env),
+    },
 
     plugins: [],
   })
