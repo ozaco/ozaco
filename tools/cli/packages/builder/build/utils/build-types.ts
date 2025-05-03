@@ -53,7 +53,7 @@ export const buildTypes = async (options: BuildTypesOptions) => {
           await Bun.write(
             // biome-ignore lint/style/noNonNullAssertion: <explanation>
             join(options.cwd, entry.types!),
-            `export * from './${join('.types', inputDir, filename)}'`
+            `export * from './${join('.types', inputDir, filename)}'`.replaceAll('\\', '/')
           )
         })
       )

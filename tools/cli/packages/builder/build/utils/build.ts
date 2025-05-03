@@ -79,7 +79,7 @@ export const build = async (options: BuildOptions) => {
       await Bun.write(
         // biome-ignore lint/style/noNonNullAssertion: Redundant
         join(options.cwd, entry.default!),
-        `// @bun\nexport * from '${targetPath}'`
+        `// @bun\nexport * from '${targetPath.replaceAll('\\', '/')}'`
       )
     })
   )
