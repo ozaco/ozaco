@@ -9,7 +9,7 @@ import { createErr } from './api/err'
 import { createLog } from './api/log'
 import { createWarn } from './api/warn'
 
-export const create = capsule((options: Std.Logger.Options) => {
+export const createLogger = capsule((options: Std.Logger.Options) => {
   options.name = options.name.trim()
   options.transports = options.transports ?? []
   options.level = options.level ?? 'log'
