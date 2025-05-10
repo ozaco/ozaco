@@ -1,5 +1,6 @@
 /// <reference types="@ozaco/std/shared" />
 /// <reference types="@ozaco/std/results" />
+/// <reference types="@ozaco/std/plugin" />
 
 import type { exampleTags } from './tag'
 
