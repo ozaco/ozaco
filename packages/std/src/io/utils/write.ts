@@ -21,7 +21,7 @@ export const $write = $safe(async function* (
 
   await Bun.write(path, data)
 
-  return true
+  return true as const
 }, ioTags.get('write'))
 
 /**
@@ -47,5 +47,5 @@ export const $writeJson = $safe(async function* (path: string, data: JsonValue, 
 
   await Bun.write(path, stringified)
 
-  return true
+  return true as const
 }, ioTags.get('write-json'))

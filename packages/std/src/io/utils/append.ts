@@ -19,17 +19,17 @@ export const $append = $safe(async function* (
 ) {
   const exists = await $exists(path, 'file')
 
-  if (exists.isErr() && !create) {
-    yield* err(ioTags.get('not-found'), `file: ${path} not found`)
-  }
+  if (exists.isErr()) {
+    if (!create) {
+      yield* err(ioTags.get('not-found'), `file: ${path} not found`)
+    }
 
-  if (!exists) {
     yield* $mkdir(dirname(path))
   }
 
   await appendFile(path, data.toString())
 
-  return true
+  return true as const
 }, ioTags.get('append'))
 
 /**
@@ -43,15 +43,15 @@ export const $appendSync = $safe(function* (
 ) {
   const exists = $existsSync(path, 'file')
 
-  if (exists.isErr() && !create) {
-    yield* err(ioTags.get('not-found'), `file: ${path} not found`)
-  }
+  if (exists.isErr()) {
+    if (!create) {
+      yield* err(ioTags.get('not-found'), `file: ${path} not found`)
+    }
 
-  if (!exists) {
     yield* $mkdirSync(dirname(path))
   }
 
   appendFileSync(path, data.toString())
 
-  return true
+  return true as const
 }, ioTags.get('append-sync'))
