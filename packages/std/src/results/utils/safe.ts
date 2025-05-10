@@ -17,8 +17,8 @@ export function $safe<A extends BlobType[], R, R2, C extends Std.ErrorValues[] =
   ...additionalCauses: C
 ): Fn<
   A,
-  Std.InjectError<
-    Std.UnionsToResult<R | R2>,
+  Std.InjectedResult<
+    R | R2,
     typeof invalidUsage,
     C extends never ? (typeof cause)[] : (typeof cause)[] | C
   >
@@ -28,10 +28,8 @@ export function $safe<A extends BlobType[], R, R2, C extends Std.ErrorValues[] =
   ...additionalCauses: C
 ): Fn<
   A,
-  Std.InjectError<
-    Std.UnionsToResult<
-      (R extends never ? never : Promise<R>) | (R2 extends never ? never : Promise<R2>)
-    >,
+  Std.InjectedResult<
+    (R extends never ? never : Promise<R>) | (R2 extends never ? never : Promise<R2>),
     typeof invalidUsage,
     C extends never ? (typeof cause)[] : (typeof cause)[] | C
   >
@@ -41,10 +39,8 @@ export function $safe<A extends BlobType[], R, R2, R3, R4, C extends Std.ErrorVa
   ...additionalCauses: C
 ): Fn<
   A,
-  Std.InjectError<
-    Std.UnionsToResult<
-      (R extends never ? never : Promise<R>) | (R2 extends never ? never : Promise<R2>) | R3 | R4
-    >,
+  Std.InjectedResult<
+    (R extends never ? never : Promise<R>) | (R2 extends never ? never : Promise<R2>) | R3 | R4,
     typeof invalidUsage,
     C extends never ? (typeof cause)[] : (typeof cause)[] | C
   >

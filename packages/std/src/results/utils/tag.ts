@@ -8,15 +8,18 @@ import { err } from './err'
  * For better type inference, use with chaining `Tags.add(...).add(...)`.
  */
 export class Tags<U extends [string, string], T extends string> {
+  isPlugin = false
   tags = new Map<string, string>()
 
-  constructor(protected base: T) {}
+  constructor(protected base: T) {
+    this.isPlugin = base.includes('@')
+  }
 
   /**
    * Adds a new tag to the Tag Manager.
    */
   add<K extends string, V extends string = never>(key: K, value?: V) {
-    const tag = `${this.base}.${value ?? key}`
+    const tag = this.isPlugin ? `${this.base}#${value ?? key}` : `${this.base}.${value ?? key}`
 
     if (!this.tags.get(key)) {
       this.tags.set(key, tag)
@@ -40,7 +43,13 @@ export class Tags<U extends [string, string], T extends string> {
 
     type R = Extract<U, [K, BlobType]>['1']
 
-    return found as R extends never ? `${T}.${K}` : `${T}.${R}`
+    return found as R extends never
+      ? T extends `${string}@${string}`
+        ? `${T}#${K}`
+        : `${T}.${K}`
+      : T extends `${string}@${string}`
+        ? `${T}#${K}`
+        : `${T}.${R}`
   }
 
   /**

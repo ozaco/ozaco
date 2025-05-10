@@ -21,5 +21,5 @@ export const $fn = <A extends BlobType[], R, C extends Std.ErrorValues[] = []>(
     } catch (rawError) {
       return handleCatch(rawError, ...additionalCauses)
     }
-  }) as Fn<A, Std.InjectError<Std.UnionsToResult<R>, typeof invalidUsage, C>>
+  }) as Fn<A, Std.InjectedResult<R, typeof invalidUsage, C>>
 }

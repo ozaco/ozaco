@@ -33,7 +33,10 @@ declare global {
     /**
      * Shortcut for union intersection of Std.Error values
      */
-    type ErrorValues = LiteralUnion<Std.ExtractErrors<Std.Error[keyof Std.Error]>, `?${string}`>
+    type ErrorValues = LiteralUnion<
+      Std.ExtractErrors<Std.Error[keyof Std.Error]>,
+      `?${string}` | `${string}@${string}#${string}` | `${string}@${string}#${string}/${string}`
+    >
 
     // ------------- Shortcuts -------------
 
@@ -156,6 +159,12 @@ declare global {
           >
         : never
 
+    type InjectedResult<
+      T,
+      N extends Std.ErrorValues,
+      C extends Std.ErrorValues[],
+    > = Std.InjectError<Std.UnionsToResult<T>, N, C>
+
     type FromThrowable<A extends BlobType[], T, R> = (
       ...args: A
     ) => Std.UnionsToResult<
@@ -171,5 +180,17 @@ declare global {
             Std.InferCauseType<Std.UnionsToResult<R>>
           >
     >
+
+    // ------------- Tags -------------
+
+    /**
+     * To merge tags
+     */
+
+    type MergeTags<T, T2> = T extends Tags<infer U, infer T>
+      ? T2 extends Tags<infer U2, infer T2>
+        ? Tags<U | U2, T>
+        : T
+      : T
   }
 }
