@@ -23,18 +23,15 @@ fileGroups:
 
 tasks:
   check:
-    command: "bun x @biomejs/biome check --no-errors-on-unmatched --files-ignore-unknown=true ."
-    platform: "system"
+    command: "biome check --no-errors-on-unmatched --files-ignore-unknown=true ."
     options:
       affectedFiles: true
   apply:
-    command: "bun x @biomejs/biome check --write --no-errors-on-unmatched --files-ignore-unknown=true ."
-    platform: "system"
+    command: "biome check --write --no-errors-on-unmatched --files-ignore-unknown=true ."
     options:
       affectedFiles: true
   apply-unsafe:
-    command: "bun x @biomejs/biome check --write --unsafe --no-errors-on-unmatched --files-ignore-unknown=true ."
-    platform: "system"
+    command: "biome check --write --unsafe --no-errors-on-unmatched --files-ignore-unknown=true ."
     options:
       affectedFiles: true
   clean:
