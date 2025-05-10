@@ -8,6 +8,10 @@ import { loggerTags } from '../tag'
 import { createErr } from './api/err'
 import { createLog } from './api/log'
 import { createWarn } from './api/warn'
+import { createInfo } from './api/info'
+import { createSuccess } from './api/success'
+import { createTrace } from './api/trace'
+import { createDebug } from './api/debug'
 
 export const createLogger = capsule((options: Std.Logger.Options) => {
   options.name = options.name.trim()
@@ -47,9 +51,13 @@ export const createLogger = capsule((options: Std.Logger.Options) => {
     }
   }, loggerTags.get('call-transports'))
 
+  logger.trace = createTrace(logger)
+  logger.debug = createDebug(logger)
   logger.log = createLog(logger)
   logger.err = createErr(logger)
   logger.warn = createWarn(logger)
+  logger.info = createInfo(logger)
+  logger.success = createSuccess(logger)
 
   return Object.freeze(logger)
 }, loggerTags.get('create'))

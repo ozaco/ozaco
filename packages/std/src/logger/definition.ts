@@ -16,7 +16,7 @@ declare global {
 
     namespace Logger {
       interface Message {
-        level: 'err' | 'warn' | 'log'
+        level: 'trace' | 'debug' | 'log' | 'info' | 'success' | 'warn' | 'err'
         messages: string[]
         date: Date
         noConsole: boolean
@@ -42,9 +42,13 @@ declare global {
 
         callTransports: (message: Message) => void
 
+        trace: (...args: BlobType[]) => void
+        debug: (...args: BlobType[]) => void
         log: (...args: BlobType[]) => void
         err: (...args: BlobType[]) => void
         warn: (...args: BlobType[]) => void
+        info: (...args: BlobType[]) => void
+        success: (...args: BlobType[]) => void
       }
 
       // ------------ Transports ------------
