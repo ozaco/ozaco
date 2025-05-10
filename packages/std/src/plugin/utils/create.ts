@@ -1,4 +1,4 @@
-import { $fn, $safe, capsule, Tags } from '../../results'
+import { $fn, $safe, Tags, capsule } from '../../results'
 import type { BlobType, EmptyType } from '../../shared'
 
 import { pluginTags } from '../tag'
