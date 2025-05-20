@@ -6,10 +6,10 @@
   "workspaces": ["{packages,plugins,apps,tools,experiments}/**"],
   "devDependencies": {
     "@biomejs/biome": "1.9.4",
-    "@commitlint/cli": "^19.8.0",
-    "@commitlint/config-conventional": "^19.8.0",
-    "@commitlint/prompt-cli": "^19.8.0",
-    "@types/bun": "^1.2.12",
+    "@commitlint/cli": "^19.8.1",
+    "@commitlint/config-conventional": "^19.8.1",
+    "@commitlint/prompt-cli": "^19.8.1",
+    "@types/bun": "^1.2.13",
     "husky": "^9.1.7",
     "typescript": "^5.8.3"
   },
