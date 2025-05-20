@@ -5,13 +5,13 @@ import { capsule } from '../../results'
 import { LOGGER_LEVELS } from '../consts'
 import { loggerTags } from '../tag'
 
+import { createDebug } from './api/debug'
 import { createErr } from './api/err'
-import { createLog } from './api/log'
-import { createWarn } from './api/warn'
 import { createInfo } from './api/info'
+import { createLog } from './api/log'
 import { createSuccess } from './api/success'
 import { createTrace } from './api/trace'
-import { createDebug } from './api/debug'
+import { createWarn } from './api/warn'
 
 export const createLogger = capsule((options: Std.Logger.Options) => {
   options.name = options.name.trim()
