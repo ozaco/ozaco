@@ -3,8 +3,15 @@ type: "library"
 platform: "bun"
 
 tasks:
-  build:
+  dev:
     command: "bun run src/main.ts build -s"
+    inputs:
+      - "src/**/*"
+      - "packages/**/*"
+    outputs:
+      - "dist/**"
+  build:
+    command: "bun run src/main.ts build -s -m prod"
     inputs:
       - "src/**/*"
       - "packages/**/*"

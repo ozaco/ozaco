@@ -27,6 +27,7 @@ export const plugin = definePlugin({
           },
 
           env: {
+            alias: 'm',
             type: String,
             default: 'development',
             description: 'Environment [development, production, test]',
@@ -38,6 +39,12 @@ export const plugin = definePlugin({
       .on('build', async ctx => {
         if (ctx.flags.target !== 'browser' && ctx.flags.target !== 'bun') {
           throw new Error(`Unknown build target ${ctx.flags.target}`)
+        }
+
+        if (ctx.flags.env === 'dev') {
+          ctx.flags.env = 'development'
+        } else if (ctx.flags.env === 'prod') {
+          ctx.flags.env = 'production'
         }
 
         if (

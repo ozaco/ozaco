@@ -58,7 +58,7 @@ export const build = async (options: BuildOptions) => {
     const filePath = join(outputGenerated, output.path)
     let code = await output.text()
 
-    if (filePath.endsWith('.js') && !filePath.includes('chunk-') && options.env !== 'production') {
+    if (filePath.endsWith('.js') && !filePath.includes('chunk-')) {
       code = fixExports(code)
     }
 

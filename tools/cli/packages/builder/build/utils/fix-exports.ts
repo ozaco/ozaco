@@ -1,111 +1,70 @@
-const indexOfSubstrings = function* (str: string, searchValue: string) {
-  let i = 0
-  while (true) {
-    const r = str.indexOf(searchValue, i)
-    if (r !== -1) {
-      yield r
-      i = r + 1
-    } else {
-      return
-    }
-  }
-}
+import type { ExportSpecifier } from 'acorn'
+import { parse } from 'acorn-loose'
 
-const replaceLast = (str: string, pattern: RegExp | string, replacement: string) => {
-  const match =
-    typeof pattern === 'string'
-      ? pattern
-      : (str.match(new RegExp(pattern.source, 'g')) || []).slice(-1)[0]
-
-  if (!match) {
-    return str
-  }
-
-  const last = str.lastIndexOf(match)
-
-  return last !== -1 ? `${str.slice(0, last)}${replacement}${str.slice(last + match.length)}` : str
-}
-
-// partial fix for https://github.com/oven-sh/bun/issues/14493
+// fix for https://github.com/oven-sh/bun/issues/14493
 export const fixExports = (rawCode: string) => {
   let code = rawCode
 
-  const exportLocations = [...indexOfSubstrings(code, 'export')]
+  const parsed = parse(code, {
+    ecmaVersion: 'latest',
+    sourceType: 'module',
+  })
+
+  const exports = parsed.body.filter(node => node.type === 'ExportNamedDeclaration')
 
   const seenExports = new Set<string>()
+  const targetRanges = new Set<string>()
 
-  for (const exportLocation of exportLocations) {
-    const line = code.slice(exportLocation).split('\n')[0]
+  for (const exportNode of exports) {
+    let total = 0
+    let target = 0
 
-    if (
-      !line?.startsWith('export ') ||
-      line.startsWith('export const') ||
-      line.startsWith('export let') ||
-      line.startsWith('export var') ||
-      line.startsWith('export function') ||
-      line.startsWith('export class') ||
-      line.startsWith('export default ') ||
-      line?.includes('${')
-    ) {
-      continue
-    }
+    const localTargets = new Set<ExportSpecifier>()
 
-    let codeBlock = line
-
-    if (!line.endsWith(';')) {
-      const ending = code.indexOf('};', exportLocation)
-      codeBlock = code
-        .slice(exportLocation, ending + 2)
-        .split('\n')
-        .join(' ')
-        .replaceAll('  ', '')
-    }
-
-    const rawExports = codeBlock
-      .slice(codeBlock.indexOf('{') + 1, codeBlock.indexOf('}'))
-      .split(',')
-      .map(exportName => exportName.trim())
-
-    const exports = rawExports.map(exportName => {
-      if (exportName.includes('as')) {
-        // biome-ignore lint/style/noNonNullAssertion: Redundant
-        return exportName.split(' as ')[1]!
+    for (const specifier of exportNode.specifiers) {
+      if (specifier.exported.type !== 'Identifier' || specifier.local.type !== 'Identifier') {
+        continue
       }
 
-      return exportName
-    })
+      total += 1
 
-    const removeExports: string[] = []
+      const data = rawCode.slice(specifier.start, specifier.end)
 
-    for (const exportName of exports) {
-      if (seenExports.has(exportName)) {
-        removeExports.push(exportName)
+      if (seenExports.has(data)) {
+        target += 1
+        localTargets.add(specifier)
 
         continue
       }
 
-      seenExports.add(exportName)
+      seenExports.add(data)
     }
 
-    if (removeExports.length === exports.length) {
-      code = code.replace(codeBlock, '')
+    if (total === target) {
+      targetRanges.add(`${exportNode.start}-${exportNode.end}`)
+    } else if (localTargets.size > 0) {
+      for (const localTarget of localTargets) {
+        const currIndex = exportNode.specifiers.indexOf(localTarget)
+        const prev = exportNode.specifiers[currIndex - 1]
 
-      return code
-    }
+        if (prev) {
+          targetRanges.add(`${prev.end}-${localTarget.end}`)
+          continue
+        }
 
-    for (const exportName of removeExports) {
-      const rawExport = rawExports[exports.indexOf(exportName)]
-
-      if (!rawExport) {
-        continue
-      }
-
-      if (rawExport.includes('as')) {
-        code = code.replace(rawExport, '')
-      } else {
-        code = replaceLast(code, rawExport, '')
+        targetRanges.add(`${localTarget.start}-${localTarget.end}`)
       }
     }
+  }
+
+  let offset = 0
+
+  for (const range of targetRanges) {
+    const [start, end] = range.split('-').map(Number) as [number, number]
+
+    code = code.slice(0, start + offset) + code.slice(end + offset)
+
+    offset -= end - start
   }
 
   return code
