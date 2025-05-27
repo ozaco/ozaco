@@ -55,7 +55,9 @@ export const buildFiles = async (
       const targetEntry = (options.entries as string[]).find(
         entry =>
           entry === output.path.replace('.js', '.tsx') ||
-          entry === output.path.replace('.js', '.jsx')
+          entry === output.path.replace('.js', '.jsx') ||
+          entry === output.path.replace('.js', '.ts') ||
+          entry === output.path
       )
 
       if (targetEntry) {
@@ -73,7 +75,7 @@ export const buildFiles = async (
         const filename = basename(entry.source).replace('.ts', '.js')
         const inputDir = dirname(entry.source)
 
-        let targetPath = join('.generated-tsx', inputDir, filename)
+        let targetPath = join('.generated-splits', inputDir, filename)
 
         if (!targetPath.startsWith('../')) {
           targetPath = `./${targetPath}`
@@ -89,9 +91,9 @@ export const buildFiles = async (
   }
 }
 
-export const buildTsx = async (options: BuildOptions) => {
+export const splitBuild = async (options: BuildOptions) => {
   const outputDir = join(options.cwd, 'dist')
-  const outputGenerated = join(outputDir, '.generated-tsx')
+  const outputGenerated = join(outputDir, '.generated-splits')
 
   if (!(await exists(outputGenerated))) {
     await mkdir(outputGenerated, {
@@ -105,7 +107,7 @@ export const buildTsx = async (options: BuildOptions) => {
 
   await buildFiles('barrel', outputGenerated, options)
 
-  const glob = new Bun.Glob('**/*.[jt]sx')
+  const glob = new Bun.Glob('**/*.{ts,js,tsx,jsx}')
 
   for (const entry of options.entries) {
     const filePath = join(options.cwd, entry.source)
@@ -119,14 +121,19 @@ export const buildTsx = async (options: BuildOptions) => {
       const scannedFile = `./${rawScannedFile}`
 
       for (const rawExport of rawExports) {
-        if (scannedFile === `${rawExport}.tsx` || scannedFile === `${rawExport}.jsx`) {
+        if (
+          scannedFile === `${rawExport}.tsx` ||
+          scannedFile === `${rawExport}.jsx` ||
+          scannedFile === `${rawExport}.ts` ||
+          scannedFile === `${rawExport}.js`
+        ) {
           exports.push(scannedFile)
         }
       }
     }
 
     if (rawExports.length !== exports.length) {
-      throw new Error(`tsx-export can only export tsx files (${entry.source})`)
+      throw new Error(`files not found (${entry.source})`)
     }
 
     const subEntries: string[] = []

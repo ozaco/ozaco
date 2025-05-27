@@ -1,6 +1,6 @@
 {
   "extends": "../../tsconfig.base.json",
-  "include": ["src", "test", "examples"],
+  "include": ["src", "test", "split"],
   "references": [
     {
       "path": "../../tools/cli"

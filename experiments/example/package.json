@@ -10,8 +10,14 @@
       "source": "./src/index.ts",
       "default": "./dist/index.js",
       "types": "./dist/index.d.ts"
+    },
+    "./split": {
+      "source": "./split/index.ts",
+      "default": "./dist/split.js",
+      "types": "./dist/split.d.ts"
     }
   },
+  "splitBuilds": ["split"],
 
   "author": "giveerr (https://github.com/giveerr)",
   "homepage": "https://ozaco.com/",

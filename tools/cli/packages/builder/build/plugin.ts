@@ -103,7 +103,8 @@ export const plugin = definePlugin({
             packages: ctx.parameters.packages,
 
             exports: packageJson.exports,
-            tsxExports: packageJson['tsx-exports'] ?? [],
+            // tsx-exports is renamed to splitBuilds, but we keep it for backwards compatibility
+            splitBuilds: packageJson.splitBuilds ?? packageJson['tsx-exports'] ?? [],
             external: ctx.flags.external ?? [],
           } as ActionOptions
         }

@@ -2,7 +2,7 @@ import type { PackageJson } from 'type-fest'
 
 import { type BuildEntry, build } from './utils/build'
 import { buildTypes } from './utils/build-types'
-import { buildTsx } from './utils/build-tsx'
+import { splitBuild } from './utils/split-build'
 
 export interface ActionOptions {
   cwd: string
@@ -13,7 +13,7 @@ export interface ActionOptions {
   packages: string[]
 
   exports: PackageJson['exports']
-  tsxExports: string[]
+  splitBuilds: string[]
   external: string[]
 }
 
@@ -43,7 +43,7 @@ export const action = async (options: ActionOptions) => {
       throw new Error(`Duplicate export path in definition ${name}`)
     }
 
-    if (options.tsxExports.includes(name)) {
+    if (options.splitBuilds.includes(name)) {
       tsxBuildEntries.push({
         name,
         source: definition.source,
@@ -74,7 +74,7 @@ export const action = async (options: ActionOptions) => {
   }
 
   if (tsxBuildEntries.length > 0) {
-    await buildTsx({
+    await splitBuild({
       env: options.env,
       cwd: options.cwd,
       target: options.target,

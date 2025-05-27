@@ -51,5 +51,9 @@ export const fixDirectives = (source: string, rawCode: string) => {
     .map(x => `"${x}";`)
     .join('\n')
 
+  if (!uniqueDirectives) {
+    return code
+  }
+
   return `${uniqueDirectives}\n${code}`
 }
