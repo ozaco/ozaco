@@ -5,6 +5,7 @@ import { buildTypes } from './utils/build-types'
 
 export interface ActionOptions {
   cwd: string
+  watch: boolean
 
   target: 'bun' | 'browser' | 'node'
   env: 'development' | 'production' | 'test'
@@ -58,6 +59,8 @@ export const action = async (options: ActionOptions) => {
 
   await buildTypes({
     cwd: options.cwd,
+    watch: options.watch,
+
     entries: buildEntries,
   })
 }

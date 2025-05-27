@@ -2,12 +2,18 @@ import { exists, mkdir } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 
 import type { BuildEntry } from './build'
+import { prettyMs } from '../../../../src'
 
 interface BuildTypesOptions {
   cwd: string
+  watch: boolean
 
   entries: BuildEntry[]
 }
+
+let proc: Bun.Subprocess | null = null
+
+const DECODER = new TextDecoder()
 
 export const buildTypes = async (options: BuildTypesOptions) => {
   if (options.entries.every(entry => !entry.types)) {
@@ -22,7 +28,48 @@ export const buildTypes = async (options: BuildTypesOptions) => {
     })
   }
 
-  await Bun.$`bun x tsc --project ./tsconfig.json --outDir ${tempDir}`.cwd(options.cwd)
+  if (options.watch) {
+    if (!proc) {
+      proc = Bun.spawn({
+        cmd: ['bun', 'x', 'tsc', '--project', './tsconfig.json', '--outDir', tempDir, '-w'],
+        cwd: options.cwd,
+        windowsHide: true,
+      })
+
+      // STDOUT
+      ;(async () => {
+        let lastBuildTime = performance.now()
+
+        if (proc?.stdout instanceof ReadableStream) {
+          for await (const data of proc.stdout) {
+            const decoded = DECODER.decode(data)
+            const currentTime = performance.now()
+
+            if (decoded.includes('error ')) {
+              console.error(decoded)
+            }
+
+            if (decoded.includes('Watching for file changes.')) {
+              console.log(`ts build completed in ${prettyMs(currentTime - lastBuildTime)}`)
+            }
+
+            lastBuildTime = currentTime
+          }
+        }
+      })()
+
+      // STDERR
+      ;(async () => {
+        if (proc?.stderr instanceof ReadableStream) {
+          for await (const data of proc.stderr) {
+            console.error(DECODER.decode(data))
+          }
+        }
+      })()
+    }
+  } else {
+    await Bun.$`bun x tsc --project ./tsconfig.json --outDir ${tempDir}`.cwd(options.cwd)
+  }
 
   const grouped = options.entries.reduce(
     (acc, curr) => {

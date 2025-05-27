@@ -20,3 +20,4 @@ export const cli = Clerc.create()
 export type Cli = typeof cli
 
 export * from 'clerc'
+export * from './utils'

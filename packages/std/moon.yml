@@ -3,6 +3,15 @@ type: "library"
 platform: "bun"
 
 tasks:
+  watch:
+    command: "bunx ozaco build -w"
+    deps:
+      - "cli:dev"
+    inputs:
+      - "src/**/*"
+    outputs:
+      - "dist/**"
+    local: true
   dev:
     command: "bunx ozaco build -s"
     deps:
