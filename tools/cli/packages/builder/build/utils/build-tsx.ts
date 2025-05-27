@@ -1,0 +1,143 @@
+import { exists, mkdir, unlink } from 'node:fs/promises'
+import { basename, dirname, join } from 'node:path'
+
+import type { ActionOptions } from '../action'
+import type { BuildEntry, BuildOptions } from './build'
+import { findExports } from './find-exports'
+import { fixExports } from './fix-exports'
+import { fixDirectives } from './fix-directives'
+
+export interface BuildFilesOptions
+  extends Pick<ActionOptions, 'env' | 'cwd' | 'target' | 'external'> {
+  entries: string[]
+}
+
+export const buildFiles = async (
+  type: 'barrel' | 'component',
+  outputGenerated: string,
+  options: BuildFilesOptions | BuildOptions
+) => {
+  const buildOutput = await Bun.build({
+    root: options.cwd,
+    entrypoints:
+      type === 'barrel'
+        ? options.entries.map(entry => (entry as BuildEntry).source)
+        : (options.entries as string[]),
+    throw: false,
+
+    external: type === 'barrel' ? ['*'] : options.external,
+    target: options.target,
+    minify:
+      options.env === 'production'
+        ? {
+            identifiers: false,
+            syntax: true,
+            whitespace: true,
+          }
+        : false,
+    sourcemap: 'linked',
+    splitting: true,
+    emitDCEAnnotations: true,
+    define: {
+      'process.env.NODE_ENV': JSON.stringify(options.env),
+    },
+
+    plugins: [],
+  })
+
+  for (const output of buildOutput.outputs) {
+    const filePath = join(outputGenerated, output.path)
+    let code = await output.text()
+
+    if ((filePath.endsWith('.js') || filePath.endsWith('.jsx')) && !filePath.includes('chunk-')) {
+      code = fixExports(code)
+
+      const targetEntry = (options.entries as string[]).find(
+        entry =>
+          entry === output.path.replace('.js', '.tsx') ||
+          entry === output.path.replace('.js', '.jsx')
+      )
+
+      if (targetEntry) {
+        const sourcecode = await Bun.file(join(options.cwd, targetEntry)).text()
+        code = fixDirectives(sourcecode, code)
+      }
+    }
+
+    await Bun.write(filePath, code)
+  }
+
+  if (type === 'barrel') {
+    await Promise.all(
+      (options.entries as BuildEntry[]).map(async entry => {
+        const filename = basename(entry.source).replace('.ts', '.js')
+        const inputDir = dirname(entry.source)
+
+        let targetPath = join('.generated-tsx', inputDir, filename)
+
+        if (!targetPath.startsWith('../')) {
+          targetPath = `./${targetPath}`
+        }
+
+        await Bun.write(
+          // biome-ignore lint/style/noNonNullAssertion: Redundant
+          join(options.cwd, entry.default!),
+          `// @bun\nexport * from '${targetPath.replaceAll('\\', '/')}'`
+        )
+      })
+    )
+  }
+}
+
+export const buildTsx = async (options: BuildOptions) => {
+  const outputDir = join(options.cwd, 'dist')
+  const outputGenerated = join(outputDir, '.generated-tsx')
+
+  if (!(await exists(outputGenerated))) {
+    await mkdir(outputGenerated, {
+      recursive: true,
+    })
+  }
+
+  const chunkFiles = [...new Bun.Glob(join(outputGenerated, './**/chunk-*')).scanSync()]
+
+  await Promise.all(chunkFiles.map(file => unlink(file)))
+
+  await buildFiles('barrel', outputGenerated, options)
+
+  const glob = new Bun.Glob('**/*.[jt]sx')
+
+  for (const entry of options.entries) {
+    const filePath = join(options.cwd, entry.source)
+    const fileDir = dirname(entry.source)
+    const absoluteFileDir = join(options.cwd, fileDir)
+
+    const rawExports = await findExports(filePath)
+    const exports: string[] = []
+
+    for await (const rawScannedFile of glob.scan(absoluteFileDir)) {
+      const scannedFile = `./${rawScannedFile}`
+
+      for (const rawExport of rawExports) {
+        if (scannedFile === `${rawExport}.tsx` || scannedFile === `${rawExport}.jsx`) {
+          exports.push(scannedFile)
+        }
+      }
+    }
+
+    if (rawExports.length !== exports.length) {
+      throw new Error(`tsx-export can only export tsx files (${entry.source})`)
+    }
+
+    const subEntries: string[] = []
+
+    for (const exportFile of exports) {
+      subEntries.push(join(fileDir, exportFile))
+    }
+
+    await buildFiles('component', outputGenerated, {
+      ...options,
+      entries: subEntries,
+    })
+  }
+}

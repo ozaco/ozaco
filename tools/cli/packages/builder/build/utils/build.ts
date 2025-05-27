@@ -3,6 +3,7 @@ import { basename, dirname, join } from 'node:path'
 
 import type { ActionOptions } from '../action'
 import { fixExports } from './fix-exports'
+import { fixDirectives } from './fix-directives'
 
 export interface BuildEntry {
   name: string
@@ -58,8 +59,19 @@ export const build = async (options: BuildOptions) => {
     const filePath = join(outputGenerated, output.path)
     let code = await output.text()
 
-    if (filePath.endsWith('.js') && !filePath.includes('chunk-')) {
+    if ((filePath.endsWith('.js') || filePath.endsWith('.jsx')) && !filePath.includes('chunk-')) {
       code = fixExports(code)
+
+      const targetEntry = options.entries.find(
+        entry =>
+          entry.source === output.path.replace('.js', '.tsx') ||
+          entry.source === output.path.replace('.js', '.jsx')
+      )
+
+      if (targetEntry) {
+        const sourcecode = await Bun.file(join(options.cwd, targetEntry.source)).text()
+        code = fixDirectives(sourcecode, code)
+      }
     }
 
     await Bun.write(filePath, code)

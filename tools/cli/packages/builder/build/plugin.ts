@@ -103,6 +103,7 @@ export const plugin = definePlugin({
             packages: ctx.parameters.packages,
 
             exports: packageJson.exports,
+            tsxExports: packageJson['tsx-exports'] ?? [],
             external: ctx.flags.external ?? [],
           } as ActionOptions
         }
