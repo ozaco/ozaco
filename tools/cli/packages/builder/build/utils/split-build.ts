@@ -4,8 +4,8 @@ import { basename, dirname, join } from 'node:path'
 import type { ActionOptions } from '../action'
 import type { BuildEntry, BuildOptions } from './build'
 import { findExports } from './find-exports'
-import { fixExports } from './fix-exports'
 import { fixDirectives } from './fix-directives'
+import { fixExports } from './fix-exports'
 
 export interface BuildFilesOptions
   extends Pick<ActionOptions, 'env' | 'cwd' | 'target' | 'external'> {

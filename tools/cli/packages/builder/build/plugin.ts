@@ -1,10 +1,10 @@
-import { join } from 'node:path'
 import { watch } from 'node:fs'
+import { join } from 'node:path'
 import { definePlugin } from 'clerc'
 
 import type { PackageJson } from 'type-fest'
 
-import { action, type ActionOptions } from './action'
+import { type ActionOptions, action } from './action'
 
 import { type Cli, prettyMs, throttle } from '../../../src'
 
