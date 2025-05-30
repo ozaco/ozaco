@@ -25,7 +25,7 @@
     },
     "packages/std": {
       "name": "@ozaco/std",
-      "version": "0.0.1",
+      "version": "0.0.2",
       "dependencies": {
         "picocolors": "^1.1.1",
         "type-fest": "^4.41.0",
@@ -36,7 +36,7 @@
     },
     "tools/cli": {
       "name": "@ozaco/cli",
-      "version": "0.0.3",
+      "version": "0.0.5",
       "bin": {
         "ozaco": "./command",
       },

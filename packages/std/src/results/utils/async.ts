@@ -37,7 +37,7 @@ export class ResultAsync<T, N extends Std.ErrorValues = never, C extends Std.Err
 
     if (result.isErr()) {
       // @ts-expect-error -- This is structurally equivalent and safe
-      yield new ResultAsync(Promise.resolve(result.error))
+      yield new ResultAsync(Promise.resolve(result))
     }
 
     // @ts-expect-error -- This is structurally equivalent and safe
