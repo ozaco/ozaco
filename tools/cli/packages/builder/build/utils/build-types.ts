@@ -1,9 +1,9 @@
 import { exists, mkdir } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 
+import { $, Glob } from 'bun'
 import { prettyMs } from '../../../../src'
 import type { BuildEntry } from './build'
-import { $, Glob } from 'bun'
 
 interface BuildTypesOptions {
   cwd: string
