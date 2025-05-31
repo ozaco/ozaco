@@ -40,6 +40,13 @@ export const plugin = definePlugin({
             default: false,
             description: 'Watch for changes',
           },
+
+          noJson: {
+            alias: 'j',
+            type: Boolean,
+            default: false,
+            description: 'Disable JSON support',
+          },
         },
 
         parameters: ['[packages...]'],
@@ -97,6 +104,7 @@ export const plugin = definePlugin({
           return {
             cwd: ctx.flags.cwd,
             watch: ctx.flags.watch,
+            json: !ctx.flags.noJson,
 
             env: ctx.flags.env,
             target: ctx.flags.target,

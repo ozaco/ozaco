@@ -3,10 +3,12 @@ import { basename, dirname, join } from 'node:path'
 
 import { prettyMs } from '../../../../src'
 import type { BuildEntry } from './build'
+import { $, Glob } from 'bun'
 
 interface BuildTypesOptions {
   cwd: string
   watch: boolean
+  json: boolean
 
   entries: BuildEntry[]
 }
@@ -15,6 +17,7 @@ let proc: Bun.Subprocess | null = null
 
 const DECODER = new TextDecoder()
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Redundant
 export const buildTypes = async (options: BuildTypesOptions) => {
   if (options.entries.every(entry => !entry.types)) {
     return true
@@ -89,6 +92,32 @@ export const buildTypes = async (options: BuildTypesOptions) => {
     },
     {} as Record<string, BuildEntry[]>
   )
+
+  if (options.json) {
+    const tsconfig = await Bun.file(join(options.cwd, 'tsconfig.json')).json()
+    const excludes = ((tsconfig.exclude ?? []) as string[]).map(pattern => new Glob(pattern))
+
+    if (tsconfig.include) {
+      for (const include of tsconfig.include) {
+        if (!include.includes('json')) {
+          continue
+        }
+
+        const glob = new Glob(include)
+
+        for await (const file of glob.scan({
+          onlyFiles: true,
+          cwd: options.cwd,
+        })) {
+          if (excludes.some(exclude => exclude.match(file)) || file.includes('node_modules/')) {
+            continue
+          }
+
+          await $`cp ${join(options.cwd, file)} ${join(tempDir, file)}`
+        }
+      }
+    }
+  }
 
   await Promise.all(
     Object.entries(grouped).map(async ([inputDir, entries]) => {

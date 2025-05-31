@@ -7,6 +7,7 @@ import { splitBuild } from './utils/split-build'
 export interface ActionOptions {
   cwd: string
   watch: boolean
+  json: boolean
 
   target: 'bun' | 'browser' | 'node'
   env: 'development' | 'production' | 'test'
@@ -87,6 +88,7 @@ export const action = async (options: ActionOptions) => {
   await buildTypes({
     cwd: options.cwd,
     watch: options.watch,
+    json: options.json,
 
     entries: [...buildEntries, ...tsxBuildEntries],
   })
