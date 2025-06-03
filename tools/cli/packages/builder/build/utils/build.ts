@@ -59,8 +59,10 @@ export const build = async (options: BuildOptions) => {
     const filePath = join(outputGenerated, output.path)
     let code = await output.text()
 
-    if ((filePath.endsWith('.js') || filePath.endsWith('.jsx')) && !filePath.includes('chunk-')) {
-      code = fixExports(code)
+    if (filePath.endsWith('.js') || filePath.endsWith('.jsx')) {
+      if (!filePath.includes('chunk-')) {
+        code = fixExports(code)
+      }
 
       const targetEntry = options.entries.find(
         entry =>
@@ -71,6 +73,8 @@ export const build = async (options: BuildOptions) => {
       if (targetEntry) {
         const sourcecode = await Bun.file(join(options.cwd, targetEntry.source)).text()
         code = fixDirectives(sourcecode, code)
+      } else if (filePath.includes('chunk-')) {
+        code = fixDirectives(code, code, true)
       }
     }
 

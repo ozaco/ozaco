@@ -25,7 +25,7 @@ export const buildFiles = async (
         : (options.entries as string[]),
     throw: false,
 
-    external: type === 'barrel' ? ['*'] : options.external,
+    external: ['*'],
     target: options.target,
     minify:
       options.env === 'production'
@@ -36,7 +36,7 @@ export const buildFiles = async (
           }
         : false,
     sourcemap: 'linked',
-    splitting: true,
+    splitting: false,
     emitDCEAnnotations: true,
     define: {
       'process.env.NODE_ENV': JSON.stringify(options.env),

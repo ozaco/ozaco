@@ -1,6 +1,6 @@
 import { parse } from 'acorn-loose'
 
-export const fixDirectives = (source: string, rawCode: string) => {
+export const fixDirectives = (source: string, rawCode: string, removeOnly = false) => {
   let code = rawCode
 
   const parsed = parse(code, {
@@ -51,7 +51,7 @@ export const fixDirectives = (source: string, rawCode: string) => {
     .map(x => `"${x}";`)
     .join('\n')
 
-  if (!uniqueDirectives) {
+  if (!uniqueDirectives || removeOnly) {
     return code
   }
 
