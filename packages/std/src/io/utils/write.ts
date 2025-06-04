@@ -13,9 +13,9 @@ export const $write = $safe(async function* (
   data: string | ArrayBuffer,
   create = true
 ) {
-  const exists = yield* $exists(path, 'file')
+  const exists = await $exists(path, 'file')
 
-  if (!(exists || create)) {
+  if (exists.isErr() && !create) {
     yield* err(ioTags.get('not-found'), `file: ${path} not found`)
   }
 
@@ -30,13 +30,13 @@ export const $write = $safe(async function* (
  */
 export const $writeJson = $safe(async function* (path: string, data: JsonValue, create = true) {
   const file = Bun.file(path)
-  const exists = yield* $exists(path, 'file')
+  const exists = await $exists(path, 'file')
 
-  if (!(exists || create)) {
+  if (exists.isErr() && !create) {
     yield* err(ioTags.get('not-found'), `file: ${path} not found`)
   }
 
-  if (!file.type.includes('application/json')) {
+  if (!(create || file.type.includes('application/json'))) {
     yield* err(
       ioTags.get('invalid-mime'),
       `file: ${path} file type: ${file.type} cannot be read with this method`

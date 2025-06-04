@@ -22,7 +22,7 @@ export const $read = $safe(async function* (path: string) {
  * The $readJson function reads a file from the specified path and
  * returns its contents as a object in AsyncResult.
  */
-export const $readJson = $safe(async function* <T>(path: string) {
+export const $readJson = $safe(async function* <T>(path: string, ignore = false) {
   const file = Bun.file(path)
   const exists = yield* $exists(path, 'file')
 
@@ -30,7 +30,7 @@ export const $readJson = $safe(async function* <T>(path: string) {
     yield* err(ioTags.get('not-found'), `file: ${path} not found`)
   }
 
-  if (!file.type.includes('application/json')) {
+  if (!(ignore || file.type.includes('application/json'))) {
     yield* err(
       ioTags.get('invalid-mime'),
       `file: ${path} file type: ${file.type} cannot be read with this method`
