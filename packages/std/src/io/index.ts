@@ -7,5 +7,6 @@ export * from './utils/exists'
 export * from './utils/append'
 export * from './utils/mkdir'
 export * from './utils/stats'
+export * from './utils/readdir'
 
 export * from './tag'

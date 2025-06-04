@@ -32,3 +32,7 @@ export const ioTags = Tags.create('std/io')
   // stats
   .add('stats', '$stats')
   .add('stats-sync', '$statsSync')
+
+  // readdir
+  .add('readdir', '$readdir')
+  .add('readdir-sync', '$readdirSync')
