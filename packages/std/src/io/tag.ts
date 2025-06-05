@@ -36,3 +36,12 @@ export const ioTags = Tags.create('std/io')
   // readdir
   .add('readdir', '$readdir')
   .add('readdir-sync', '$readdirSync')
+
+  // ----- experimental -----
+
+  // open-file
+  .add('open-file', '$ExperimentalOpenFile')
+
+  // read-from
+  .add('read-from', '$ExperimentalReadFrom')
+  .add('read-from-gen', '$ExperimentalReadFromGen')
