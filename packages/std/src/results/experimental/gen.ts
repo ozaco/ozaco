@@ -1,7 +1,7 @@
 import { err, resultTags } from '../../results'
 import type { AsyncGeneratorFn, BlobType, Fn, GeneratorFn } from '../../shared'
 
-import { handleThen, handleCatch } from '../utils/internal/handlers'
+import { handleCatch, handleThen } from '../utils/internal/handlers'
 
 const invalidUsage = resultTags.get('invalid-usage')
 

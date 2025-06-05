@@ -1,8 +1,8 @@
 import { open } from 'node:fs/promises'
 
 import { $safe } from '../../results'
-import { $existsSync } from '../utils/exists'
 import { ioTags } from '../tag'
+import { $existsSync } from '../utils/exists'
 
 /**
  * @experimental

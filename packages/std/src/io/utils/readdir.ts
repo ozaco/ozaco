@@ -1,5 +1,5 @@
-import { readdir } from 'node:fs/promises'
 import { readdirSync } from 'node:fs'
+import { readdir } from 'node:fs/promises'
 
 import { $safe, err } from '../../results'
 
