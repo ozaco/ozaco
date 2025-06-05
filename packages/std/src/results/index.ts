@@ -10,4 +10,6 @@ export * from './utils/ok'
 export * from './utils/tag'
 export * from './utils/safe'
 
+export * from './experimental/gen'
+
 export * from './tag'

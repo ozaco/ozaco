@@ -7,10 +7,10 @@ const invalidUsage = resultTags.get('invalid-usage')
 const cause = resultTags.get('safe')
 
 /**
- * Executes the given generator function and returns the result.
- *
- * If the function throws an error, the error is wrapped in a result and returned.
- * If the function returns a result, the result is returned.
+ * The $safe function is used to wrap a generator function that returns a Result or ResultAsync
+ * and automatically handles the error cases.
+ * yield* can be used to automatically unwrap results.
+ * Don't use yield to return a value. Use return instead. This function doesn't return a generator.
  */
 export function $safe<A extends BlobType[], R, R2, C extends Std.ErrorValues[] = []>(
   body: (...args: A) => Generator<R, R2>,
