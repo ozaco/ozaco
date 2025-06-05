@@ -1,0 +1,23 @@
+language: "typescript"
+type: "library"
+platform: "bun"
+
+tasks:
+  dev:
+    command: "bunx ozaco build -s"
+    deps:
+      - "cli:dev"
+      - "std:dev"
+    inputs:
+      - "src/**/*"
+    outputs:
+      - "dist/**"
+  build:
+    command: "bunx ozaco build -s -m prod"
+    deps:
+      - "cli:build"
+      - "std:build"
+    inputs:
+      - "src/**/*"
+    outputs:
+      - "dist/**"
