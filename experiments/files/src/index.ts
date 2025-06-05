@@ -1,16 +1,17 @@
+import { $readFrom, $writeTo } from '@ozaco/std/io'
 import { join } from 'node:path'
-import { $readFrom } from '@ozaco/std/io'
 
+import { logger } from './consts'
 import './definition'
 import './handler'
-import { logger } from './consts'
 
 const EMPTY_BUFFER = Buffer.from('')
 
 Bun.serve({
   port: 3000,
   async fetch() {
-    const reader = (await $readFrom(join(import.meta.dir, './example.txt'))).unwrap()
+    await using reader = (await $readFrom(join(import.meta.dir, './example.txt'))).unwrap()
+    await using writer = (await $writeTo(join(import.meta.dir, './example-2.txt'))).unwrap()
 
     let total = 0n
     let remainder = ''
@@ -34,10 +35,13 @@ Bun.serve({
 
         total += BigInt(part)
       }
+
+      await writer.write(Buffer.from(`${total.toString()}\n`))
     }
 
     if (remainder.trim() !== '') {
       total += BigInt(remainder)
+      await writer.write(Buffer.from(`${total.toString()}\n`))
     }
 
     logger.log('total', total.toString())

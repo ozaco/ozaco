@@ -12,6 +12,13 @@ const DEFAULT_CHUNK_SIZE = 64 * 1024
  * The $readFrom function reads a file from the specified path and
  * returns a AsyncGenerator<Buffer, number, unknown> in AsyncResult.
  * Don't store the buffer yielded by the generator. It's not a copy.
+ *
+ * @example
+ * await using reader = (await $readFrom(path)).unwrap()
+ *
+ * for await (const chunk of reader) {
+ *   console.log(chunk)
+ * }
  */
 // biome-ignore lint/suspicious/useAwait: <explanation>
 export const $readFrom = $safe(async function* (
@@ -25,7 +32,7 @@ export const $readFrom = $safe(async function* (
   const buffer = Buffer.allocUnsafe(chunkSize)
   let pointer = position
 
-  const reader = $gen(async function* () {
+  const readerFn = $gen(async function* () {
     try {
       while (pointer < stats.size) {
         const { bytesRead } = await fd.read(buffer, 0, chunkSize, pointer)
@@ -39,9 +46,16 @@ export const $readFrom = $safe(async function* (
     } finally {
       await fd.close()
     }
-
-    return 1
   }, ioTags.get('read-from-gen'))
 
-  return reader()
+  const reader = readerFn()
+
+  Reflect.defineProperty(reader, Symbol.asyncDispose, {
+    value: async () => {
+      pointer = stats.size
+      await fd.close()
+    },
+  })
+
+  return reader
 }, ioTags.get('read-from'))

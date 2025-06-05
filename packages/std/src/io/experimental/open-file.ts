@@ -10,8 +10,8 @@ import { ioTags } from '../tag'
  * The $openFile function opens a file at the specified path and
  * returns a FileHandle in AsyncResult.
  */
-export const $openFile = $safe(async function* (path: string) {
+export const $openFile = $safe(async function* (path: string, flags = 'r') {
   yield* $existsSync(path, 'file')
 
-  return await open(path, 'r')
+  return await open(path, flags)
 }, ioTags.get('open-file'))

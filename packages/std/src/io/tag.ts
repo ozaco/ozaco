@@ -37,6 +37,10 @@ export const ioTags = Tags.create('std/io')
   .add('readdir', '$readdir')
   .add('readdir-sync', '$readdirSync')
 
+  // touch
+  .add('touch', '$touch')
+  .add('touch-sync', '$touchSync')
+
   // ----- experimental -----
 
   // open-file
@@ -45,3 +49,8 @@ export const ioTags = Tags.create('std/io')
   // read-from
   .add('read-from', '$ExperimentalReadFrom')
   .add('read-from-gen', '$ExperimentalReadFromGen')
+
+  // write-to
+  .add('write-to', '$ExperimentalWriteTo')
+  .add('write-to#write', '$ExperimentalWriteToWrite')
+  .add('write-to#close', '$ExperimentalWriteToClose')
