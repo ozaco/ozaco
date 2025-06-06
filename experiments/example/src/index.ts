@@ -1,7 +1,7 @@
-import { logger } from './consts'
 import './definition'
-import './handler'
+import '@ozaco/std/effects'
 
+import { logger } from './consts'
 import { $sayHi } from './users/say-hi'
 
 $sayHi('alice').unwrap()

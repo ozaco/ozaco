@@ -34,6 +34,11 @@
       "source": "./src/logger/transports/file.ts",
       "default": "./dist/logger-file.js",
       "types": "./dist/logger-file.d.ts"
+    },
+    "./effects": {
+      "source": "./src/effects/index.ts",
+      "default": "./dist/effects.js",
+      "types": "./dist/effects.d.ts"
     }
   },
 

@@ -1,9 +1,10 @@
+import './definition'
+import '@ozaco/std/effects'
+
 import { $readFrom, $writeTo } from '@ozaco/std/io'
 import { join } from 'node:path'
 
 import { logger } from './consts'
-import './definition'
-import './handler'
 
 const EMPTY_BUFFER = Buffer.from('')
 const DECODER = new TextDecoder()
