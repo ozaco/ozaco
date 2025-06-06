@@ -4,6 +4,8 @@ import type { BlobType, EmptyType } from '../../shared'
 import { pluginTags } from '../tag'
 import { mergeArgs } from './internal/merge-args'
 
+const EXLUDED_KEYS = ['name', '$fn', '$safe', 'apply', 'meta', 'options', 'dependencies', 'tags']
+
 export const createPlugin = capsule(
   <const M extends Std.Plugin.Meta<BlobType, BlobType>, O extends BlobType[]>(
     meta: M,
@@ -42,6 +44,18 @@ export const createPlugin = capsule(
             return $safe(cb, tags.get(`${actionName}/${name}` as BlobType))
           },
 
+          $tag: (name: string, description: string) => {
+            if (!tags.has(`${actionName}/${name}`)) {
+              tags.add(`${actionName}/${name}`, description)
+            }
+
+            return actionContext
+          },
+
+          $peek: <R extends BlobType>(cb: BlobType) => {
+            return api[cb.$name]
+          },
+
           apply: (actions: BlobType) => {
             return Object.assign(actionContext, actions)
           },
@@ -53,17 +67,17 @@ export const createPlugin = capsule(
         }
 
         const actionResult = await action(actionContext).unwrap()
+        const actionData: BlobType = {}
 
-        Reflect.deleteProperty(actionResult, 'name')
-        Reflect.deleteProperty(actionResult, '$fn')
-        Reflect.deleteProperty(actionResult, '$safe')
-        Reflect.deleteProperty(actionResult, 'apply')
-        Reflect.deleteProperty(actionResult, 'meta')
-        Reflect.deleteProperty(actionResult, 'options')
-        Reflect.deleteProperty(actionResult, 'dependencies')
-        Reflect.deleteProperty(actionResult, 'tags')
+        for (const key in actionResult) {
+          if (EXLUDED_KEYS.includes(key)) {
+            continue
+          }
 
-        api[(action as BlobType).$name] = actionResult
+          actionData[key] = actionResult[key]
+        }
+
+        api[(action as BlobType).$name] = actionData
       }
 
       Object.assign(instance, api)

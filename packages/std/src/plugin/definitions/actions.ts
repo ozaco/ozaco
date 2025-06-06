@@ -75,9 +75,9 @@ declare global {
 
         $fn: Std.Plugin.$Fn<An, M>
         $safe: Std.Plugin.$Safe<An, M>
-        $throw: <N extends string>(
+        $tag: <N extends string>(
           name: N,
-          message: string
+          message?: string
         ) => Std.Plugin.ActionContext<
           An,
           M,
@@ -86,6 +86,11 @@ declare global {
           Std.MergeTags<T, Tags<[`${An}/${N}`, never], `${M['name']}@${M['version']}`>>,
           D
         >
+        $peek: <R2 extends BlobType>(
+          cb: Std.Plugin.Action<
+            Std.Plugin.ActionContext<BlobType, BlobType, BlobType, R2, BlobType, BlobType>
+          >
+        ) => R2
 
         apply: <C extends EmptyType>(
           actions: C
