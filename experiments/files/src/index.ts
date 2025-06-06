@@ -1,8 +1,8 @@
 import './definition'
 import '@ozaco/std/effects'
 
-import { $readFrom, $writeTo } from '@ozaco/std/io'
 import { join } from 'node:path'
+import { $readFrom, $writeTo } from '@ozaco/std/io'
 
 import { logger } from './consts'
 

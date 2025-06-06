@@ -1,8 +1,8 @@
 import './definition'
 import '@ozaco/std/effects'
 
-import { usersPlugin } from './plugins/users'
 import { logger } from './consts'
+import { usersPlugin } from './plugins/users'
 
 const users = await usersPlugin()
 
