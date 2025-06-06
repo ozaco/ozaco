@@ -10,7 +10,7 @@ const DEFAULT_CHUNK_SIZE = 64 * 1024
  * @experimental
  *
  * The $readFrom function reads a file from the specified path and
- * returns a AsyncGenerator<Buffer, number, unknown> in AsyncResult.
+ * returns a AsyncGenerator<ArrayBuffer, number, unknown> in AsyncResult.
  * Don't store the buffer yielded by the generator. It's not a copy.
  *
  * @example
@@ -41,7 +41,7 @@ export const $readFrom = $safe(async function* (
         }
 
         pointer += bytesRead
-        yield buffer.subarray(0, bytesRead)
+        yield buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + bytesRead)
       }
     } finally {
       await fd.close()

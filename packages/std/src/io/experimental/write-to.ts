@@ -19,7 +19,7 @@ import { $openFile } from './open-file'
  * @example
  * await using writer = (await $writeTo(path)).unwrap()
  *
- * await writer.write(Buffer.from('hi'))
+ * await writer.write(Uint8Array<ArrayBufferLike>)
  */
 
 // biome-ignore lint/suspicious/useAwait: <explanation>
@@ -29,7 +29,7 @@ export const $writeTo = $safe(async function* (path: string, position = 0) {
   const fd = yield* $openFile(path, 'w+')
   let pointer = position
 
-  const write = $fn(async (chunk: Buffer) => {
+  const write = $fn(async (chunk: Uint8Array<ArrayBufferLike>) => {
     const { bytesWritten } = await fd.write(chunk, 0, chunk.length, pointer)
 
     pointer += bytesWritten

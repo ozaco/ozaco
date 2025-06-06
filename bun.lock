@@ -23,6 +23,16 @@
         "@ozaco/cli": "workspace:*",
       },
     },
+    "experiments/files": {
+      "name": "@ozaco/files",
+      "version": "0.0.0",
+      "dependencies": {
+        "@ozaco/std": "workspace:*",
+      },
+      "devDependencies": {
+        "@ozaco/cli": "workspace:*",
+      },
+    },
     "packages/std": {
       "name": "@ozaco/std",
       "version": "0.0.2",
@@ -36,7 +46,7 @@
     },
     "tools/cli": {
       "name": "@ozaco/cli",
-      "version": "0.0.6",
+      "version": "0.0.7",
       "bin": {
         "ozaco": "./command",
       },
@@ -147,6 +157,8 @@
     "@ozaco/cli": ["@ozaco/cli@workspace:tools/cli"],
 
     "@ozaco/example": ["@ozaco/example@workspace:experiments/example"],
+
+    "@ozaco/files": ["@ozaco/files@workspace:experiments/files"],
 
     "@ozaco/std": ["@ozaco/std@workspace:packages/std"],
 

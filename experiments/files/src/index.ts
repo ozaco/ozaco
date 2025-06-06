@@ -1,11 +1,12 @@
-import { join } from 'node:path'
 import { $readFrom, $writeTo } from '@ozaco/std/io'
+import { join } from 'node:path'
 
 import { logger } from './consts'
 import './definition'
 import './handler'
 
 const EMPTY_BUFFER = Buffer.from('')
+const DECODER = new TextDecoder()
 
 Bun.serve({
   port: 3000,
@@ -17,7 +18,7 @@ Bun.serve({
     let remainder = ''
 
     for await (const chunk of reader) {
-      const data = chunk.else(EMPTY_BUFFER).toString()
+      const data = DECODER.decode(chunk.else(EMPTY_BUFFER))
 
       const currentData = remainder + data
 
