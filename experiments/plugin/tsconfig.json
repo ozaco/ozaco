@@ -8,5 +8,8 @@
     {
       "path": "../../packages/std"
     }
-  ]
+  ],
+  "compilerOptions": {
+    "plugins": [{ "name": "@ozaco/language-service" }]
+  }
 }

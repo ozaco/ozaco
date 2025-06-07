@@ -1,0 +1,17 @@
+language: "typescript"
+type: "library"
+platform: "bun"
+
+tasks:
+  dev:
+    command: "tsc -w"
+    inputs:
+      - "src/**/*"
+    outputs:
+      - "out/**"
+  build:
+    command: "tsc"
+    inputs:
+      - "src/**/*"
+    outputs:
+      - "out/**"

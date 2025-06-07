@@ -2,7 +2,6 @@
   "name": "@ozaco/plugin",
   "version": "0.0.0",
   "private": true,
-
   "type": "module",
   "files": ["dist"],
   "exports": {
@@ -12,16 +11,15 @@
       "types": "./dist/index.d.ts"
     }
   },
-
   "author": "giveerr (https://github.com/giveerr)",
   "homepage": "https://ozaco.com/",
   "repository": {
     "type": "git",
     "url": "https://github.com/ozaco/ozaco.git"
   },
-
   "devDependencies": {
-    "@ozaco/cli": "workspace:*"
+    "@ozaco/cli": "workspace:*",
+    "@ozaco/language-service": "workspace:*"
   },
   "dependencies": {
     "@ozaco/std": "workspace:*"

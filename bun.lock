@@ -41,6 +41,7 @@
       },
       "devDependencies": {
         "@ozaco/cli": "workspace:*",
+        "@ozaco/language-service": "workspace:*",
       },
     },
     "packages/std": {
@@ -75,6 +76,13 @@
       "optionalPeers": [
         "typescript",
       ],
+    },
+    "tools/ls": {
+      "name": "@ozaco/language-service",
+      "version": "0.0.0",
+      "dependencies": {
+        "typescript": "^5.8.3",
+      },
     },
   },
   "trustedDependencies": [
@@ -169,6 +177,8 @@
     "@ozaco/example": ["@ozaco/example@workspace:experiments/example"],
 
     "@ozaco/files": ["@ozaco/files@workspace:experiments/files"],
+
+    "@ozaco/language-service": ["@ozaco/language-service@workspace:tools/ls"],
 
     "@ozaco/plugin": ["@ozaco/plugin@workspace:experiments/plugin"],
 

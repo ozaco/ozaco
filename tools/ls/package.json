@@ -1,0 +1,16 @@
+{
+  "name": "@ozaco/language-service",
+  "version": "0.0.0",
+  "main": "./out",
+
+  "dependencies": {
+    "typescript": "^5.8.3"
+  },
+
+  "author": "giveerr (https://github.com/giveerr)",
+  "homepage": "https://ozaco.com/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ozaco/ozaco.git"
+  }
+}

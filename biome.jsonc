@@ -120,7 +120,12 @@
       }
     },
     {
-      "include": ["tools/cli/**/*.ts", "tools/cli/**/*.tsx"],
+      "include": [
+        "tools/cli/**/*.ts",
+        "tools/cli/**/*.tsx",
+        "tools/ls/**/*.ts",
+        "tools/ls/**/*.tsx"
+      ],
       "linter": {
         "rules": {
           "suspicious": {
