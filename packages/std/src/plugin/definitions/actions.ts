@@ -1,5 +1,5 @@
 import type { Tags } from '../../results'
-import type { BlobType, EmptyType, Fn } from '../../shared'
+import type { BlobType, EmptyType, Fn, Merge } from '../../shared'
 
 declare global {
   namespace Std {
@@ -162,9 +162,12 @@ declare global {
         ? Std.Plugin.Plugin<
             M,
             O,
-            R & {
-              [K in An]: R2
-            },
+            Merge<
+              R,
+              {
+                [K in An]: R2
+              }
+            >,
             Std.MergeTags<T, T2>,
             D
           >
