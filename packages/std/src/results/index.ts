@@ -1,3 +1,5 @@
+/// <reference path="../shared/index.ts"/>
+
 import './definition'
 
 export * from './utils/async'

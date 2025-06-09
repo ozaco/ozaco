@@ -5,9 +5,12 @@ import { buildTypes } from './utils/build-types'
 import { splitBuild } from './utils/split-build'
 
 export interface ActionOptions {
+  name: string
+
   cwd: string
   watch: boolean
   json: boolean
+  references: boolean
   format: 'cjs' | 'esm'
 
   target: 'bun' | 'browser' | 'node'
@@ -89,9 +92,11 @@ export const action = async (options: ActionOptions) => {
   }
 
   await buildTypes({
+    name: options.name,
     cwd: options.cwd,
     watch: options.watch,
     json: options.json,
+    references: options.references,
 
     entries: [...buildEntries, ...tsxBuildEntries],
   })

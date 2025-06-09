@@ -1,7 +1,3 @@
-/// <reference path="../shared/index.ts" />
-/// <reference path="../results/index.ts" />
-/// <reference path="../io/index.ts" />
-
 import type { BlobType } from '../shared'
 import type { LOGGER_LEVELS } from './consts'
 

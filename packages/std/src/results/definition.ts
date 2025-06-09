@@ -1,5 +1,3 @@
-/// <reference path="../shared/index.ts" />
-
 import type { BlobType, LiteralUnion } from '../shared'
 
 import type { resultTags } from './tag'

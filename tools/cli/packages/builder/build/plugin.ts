@@ -42,7 +42,6 @@ export const plugin = definePlugin({
           },
 
           noJson: {
-            alias: 'j',
             type: Boolean,
             default: false,
             description: 'Disable JSON support',
@@ -53,6 +52,12 @@ export const plugin = definePlugin({
             type: String,
             default: 'esm',
             description: 'Output format [cjs, esm]',
+          },
+
+          noReferences: {
+            type: Boolean,
+            default: false,
+            description: 'Enable references',
           },
         },
 
@@ -113,9 +118,12 @@ export const plugin = definePlugin({
           }
 
           return {
+            name: packageJson.name,
+
             cwd: ctx.flags.cwd,
             watch: ctx.flags.watch,
             json: !ctx.flags.noJson,
+            references: !ctx.flags.noReferences,
             format: ctx.flags.format,
 
             env: ctx.flags.env,

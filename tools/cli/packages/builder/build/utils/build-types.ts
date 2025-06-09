@@ -6,9 +6,12 @@ import { prettyMs } from '../../../../src'
 import type { BuildEntry } from './build'
 
 interface BuildTypesOptions {
+  name: string
+
   cwd: string
   watch: boolean
   json: boolean
+  references: boolean
 
   entries: BuildEntry[]
 }
@@ -125,11 +128,45 @@ export const buildTypes = async (options: BuildTypesOptions) => {
         entries.map(async entry => {
           // biome-ignore lint/style/noNonNullAssertion: Redundant
           const filename = basename(entry.source!)
+          const fileDirname = dirname(entry.source)
+
+          const originalFile = await Bun.file(join(options.cwd, entry.source)).text()
+          const splitted = originalFile.split('\n')
+
+          const referenceTargets: string[] = []
+
+          for (const line of splitted) {
+            if (line.includes('/// <reference path="')) {
+              const targetPath = line.slice('/// <reference path="'.length, line.lastIndexOf('"'))
+              referenceTargets.push(join(options.cwd, fileDirname, targetPath))
+            }
+          }
+
+          let references = ''
+
+          if (referenceTargets.length > 0) {
+            const foundTargets = referenceTargets
+              .map(referenceTarget => {
+                return options.entries.find(
+                  entry => join(options.cwd, entry.source) === referenceTarget
+                )
+              })
+              .filter(x => !!x && x.name !== 'default') as BuildEntry[]
+
+            references = `${foundTargets
+              .map(
+                entry => `/// <reference types="${options.name}/${entry.name}" preserve="true" />`
+              )
+              .join('\n')}\n\n`
+          }
 
           await Bun.write(
             // biome-ignore lint/style/noNonNullAssertion: <explanation>
             join(options.cwd, entry.types!),
-            `export * from './${join('.types', inputDir, filename)}'`.replaceAll('\\', '/')
+            `${references}export * from './${join('.types', inputDir, filename)}'`.replaceAll(
+              '\\',
+              '/'
+            )
           )
         })
       )

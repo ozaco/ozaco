@@ -43,7 +43,8 @@ declare global {
         meta: Readonly<M>
         defaultOptions: Readonly<O>
 
-        (...options: Partial<O>): Promise<Std.Plugin.PluginInstance<M, O, R, T, D>>
+        (): Promise<Std.Plugin.PluginInstance<M, O, R, T, D>>
+        (...options: O): Promise<Std.Plugin.PluginInstance<M, O, R, T, D>>
 
         action: Std.Plugin.CreateActionHandler<M, O, R, T, D>
         register: Std.Plugin.CreateRegisterHandler<M, O, R, T, D>
