@@ -13,7 +13,7 @@ tasks:
     outputs:
       - "dist/**"
   build:
-    command: "bunx ozaco build -f cjs -t node"
+    command: "bunx ozaco build -s -f cjs -t node"
     deps:
       - "cli:build"
       - "std:build"
