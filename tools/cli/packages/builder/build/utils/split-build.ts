@@ -8,7 +8,7 @@ import { fixDirectives } from './fix-directives'
 import { fixExports } from './fix-exports'
 
 export interface BuildFilesOptions
-  extends Pick<ActionOptions, 'env' | 'cwd' | 'target' | 'external'> {
+  extends Pick<ActionOptions, 'env' | 'cwd' | 'target' | 'external' | 'format'> {
   entries: string[]
 }
 
@@ -27,6 +27,7 @@ export const buildFiles = async (
 
     external: ['*'],
     target: options.target,
+    format: options.format,
     minify:
       options.env === 'production'
         ? {
@@ -84,7 +85,9 @@ export const buildFiles = async (
         await Bun.write(
           // biome-ignore lint/style/noNonNullAssertion: Redundant
           join(options.cwd, entry.default!),
-          `// @bun\nexport * from '${targetPath.replaceAll('\\', '/')}'`
+          options.format === 'cjs'
+            ? `// @bun @bun-cjs\nmodule.exports = require('${targetPath.replaceAll('\\', '/')}')`
+            : `// @bun\nexport * from '${targetPath.replaceAll('\\', '/')}'`
         )
       })
     )

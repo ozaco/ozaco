@@ -1,7 +1,7 @@
 {
   "name": "@ozaco/cli",
   "description": "All in one cli for ozaco",
-  "version": "0.0.7",
+  "version": "0.0.8",
 
   "bin": {
     "ozaco": "./command"
@@ -36,8 +36,8 @@
 
   "dependencies": {
     "clerc": "^0.44.0",
-    "acorn": "^8.14.1",
-    "acorn-loose": "^8.5.0"
+    "acorn": "^8.15.0",
+    "acorn-loose": "^8.5.1"
   },
   "devDependencies": {
     "typescript": "^5.8.3",

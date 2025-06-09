@@ -1,10 +1,21 @@
 {
   "name": "@ozaco/language-service",
   "version": "0.0.0",
-  "main": "./out",
+
+  "main": "./dist",
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "default": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
 
   "dependencies": {
     "typescript": "^5.8.3"
+  },
+  "devDependencies": {
+    "@ozaco/cli": "workspace:*"
   },
 
   "author": "giveerr (https://github.com/giveerr)",

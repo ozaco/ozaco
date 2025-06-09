@@ -4,14 +4,18 @@ platform: "bun"
 
 tasks:
   dev:
-    command: "tsc -w"
+    command: "bunx ozaco build -w -f cjs -t node"
+    deps:
+      - "cli:dev"
     inputs:
       - "src/**/*"
     outputs:
-      - "out/**"
+      - "dist/**"
   build:
-    command: "tsc"
+    command: "bunx ozaco build -f cjs -t node"
+    deps:
+      - "cli:build"
     inputs:
       - "src/**/*"
     outputs:
-      - "out/**"
+      - "dist/**"

@@ -8,6 +8,7 @@ export interface ActionOptions {
   cwd: string
   watch: boolean
   json: boolean
+  format: 'cjs' | 'esm'
 
   target: 'bun' | 'browser' | 'node'
   env: 'development' | 'production' | 'test'
@@ -69,6 +70,7 @@ export const action = async (options: ActionOptions) => {
       cwd: options.cwd,
       target: options.target,
       external: options.external,
+      format: options.format,
 
       entries: buildEntries,
     })
@@ -80,6 +82,7 @@ export const action = async (options: ActionOptions) => {
       cwd: options.cwd,
       target: options.target,
       external: options.external,
+      format: options.format,
 
       entries: tsxBuildEntries,
     })

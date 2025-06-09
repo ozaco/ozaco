@@ -17,7 +17,7 @@ export const plugin = definePlugin({
             alias: 't',
             type: String,
             default: 'bun',
-            description: 'Target environment [bun, browser]',
+            description: 'Target environment [bun, browser, node]',
           },
 
           external: {
@@ -47,12 +47,23 @@ export const plugin = definePlugin({
             default: false,
             description: 'Disable JSON support',
           },
+
+          format: {
+            alias: 'f',
+            type: String,
+            default: 'esm',
+            description: 'Output format [cjs, esm]',
+          },
         },
 
         parameters: ['[packages...]'],
       })
       .on('build', async ctx => {
-        if (ctx.flags.target !== 'browser' && ctx.flags.target !== 'bun') {
+        if (
+          ctx.flags.target !== 'browser' &&
+          ctx.flags.target !== 'bun' &&
+          ctx.flags.target !== 'node'
+        ) {
           throw new Error(`Unknown build target ${ctx.flags.target}`)
         }
 
@@ -105,6 +116,7 @@ export const plugin = definePlugin({
             cwd: ctx.flags.cwd,
             watch: ctx.flags.watch,
             json: !ctx.flags.noJson,
+            format: ctx.flags.format,
 
             env: ctx.flags.env,
             target: ctx.flags.target,

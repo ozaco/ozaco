@@ -12,7 +12,8 @@ export interface BuildEntry {
   types?: string
 }
 
-export interface BuildOptions extends Pick<ActionOptions, 'env' | 'cwd' | 'target' | 'external'> {
+export interface BuildOptions
+  extends Pick<ActionOptions, 'env' | 'cwd' | 'target' | 'external' | 'format'> {
   entries: BuildEntry[]
 }
 
@@ -37,6 +38,7 @@ export const build = async (options: BuildOptions) => {
 
     external: options.external,
     target: options.target,
+    format: options.format,
     minify:
       options.env === 'production'
         ? {
@@ -95,7 +97,9 @@ export const build = async (options: BuildOptions) => {
       await Bun.write(
         // biome-ignore lint/style/noNonNullAssertion: Redundant
         join(options.cwd, entry.default!),
-        `// @bun\nexport * from '${targetPath.replaceAll('\\', '/')}'`
+        options.format === 'cjs'
+          ? `// @bun @bun-cjs\nmodule.exports = require('${targetPath.replaceAll('\\', '/')}')`
+          : `// @bun\nexport * from '${targetPath.replaceAll('\\', '/')}'`
       )
     })
   )

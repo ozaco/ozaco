@@ -1,6 +1,5 @@
 import type * as ts from 'typescript/lib/tsserverlibrary'
-import { renamePluginActions } from './utils/plugin-actions'
-import { renamePluginInstance } from './utils/plugin-instance'
+// import { lexer } from './lexer'
 
 function init(_modules: any) {
   function create(info: ts.server.PluginCreateInfo) {
@@ -20,7 +19,15 @@ function init(_modules: any) {
         return prior
       }
 
-      const newDisplayParts = renamePluginInstance(renamePluginActions(prior.displayParts))
+      const content = prior.displayParts.map(part => part.text).join('')
+      // const lexed = lexer(content)
+
+      const newDisplayParts = prior.displayParts
+
+      newDisplayParts.push({
+        text: 'test2',
+        kind: 'text',
+      })
 
       return { ...prior, displayParts: newDisplayParts }
     }
@@ -31,4 +38,5 @@ function init(_modules: any) {
   return { create }
 }
 
+// @ts-expect-error
 export = init
