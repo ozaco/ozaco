@@ -57,7 +57,7 @@
     },
     "tools/cli": {
       "name": "@ozaco/cli",
-      "version": "0.0.7",
+      "version": "0.0.9",
       "bin": {
         "ozaco": "./command",
       },
@@ -81,6 +81,7 @@
       "name": "@ozaco/language-service",
       "version": "0.0.0",
       "dependencies": {
+        "@ozaco/std": "workspace:*",
         "typescript": "^5.8.3",
       },
       "devDependencies": {

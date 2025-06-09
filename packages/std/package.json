@@ -39,6 +39,11 @@
       "source": "./src/effects/index.ts",
       "default": "./dist/effects.js",
       "types": "./dist/effects.d.ts"
+    },
+    "./parser": {
+      "source": "./src/parser/index.ts",
+      "default": "./dist/parser.js",
+      "types": "./dist/parser.d.ts"
     }
   },
 

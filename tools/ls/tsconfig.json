@@ -4,6 +4,9 @@
   "references": [
     {
       "path": "../cli"
+    },
+    {
+      "path": "../../packages/std"
     }
   ]
 }

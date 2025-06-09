@@ -12,7 +12,8 @@
   },
 
   "dependencies": {
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "@ozaco/std": "workspace:*"
   },
   "devDependencies": {
     "@ozaco/cli": "workspace:*"

@@ -1,3 +1,5 @@
+import '@ozaco/std/effects'
+
 import type * as ts from 'typescript/lib/tsserverlibrary'
 // import { lexer } from './lexer'
 
