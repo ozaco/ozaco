@@ -1,7 +1,7 @@
 {
   "name": "@ozaco/cli",
   "description": "All in one cli for ozaco",
-  "version": "0.0.8",
+  "version": "0.0.9",
 
   "bin": {
     "ozaco": "./command"
