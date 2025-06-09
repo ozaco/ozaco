@@ -3,8 +3,8 @@ type: "library"
 platform: "bun"
 
 tasks:
-  dev:
-    command: "bunx ozaco build -w -f cjs -t node"
+  watch:
+    command: "bunx ozaco build -w -s -f cjs -t node"
     deps:
       - "cli:dev"
       - "std:dev"
@@ -12,10 +12,18 @@ tasks:
       - "src/**/*"
     outputs:
       - "dist/**"
-  build:
+    local: true
+  dev:
     command: "bunx ozaco build -s -f cjs -t node"
     deps:
-      - "cli:build"
+      - "std:dev"
+    inputs:
+      - "src/**/*"
+    outputs:
+      - "dist/**"
+  build:
+    command: "bunx ozaco build -s -f cjs -t node -m prod"
+    deps:
       - "std:build"
     inputs:
       - "src/**/*"
