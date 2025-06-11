@@ -99,6 +99,7 @@ export const plugin = definePlugin({
           }
 
           ctx.flags.external = [
+            ...(ctx.flags.external ?? []),
             ...Object.keys(packageJson.devDependencies || {}),
             ...Object.keys(packageJson.optionalDependencies || {}),
             ...Object.keys(packageJson.peerDependencies || {}),
@@ -125,6 +126,7 @@ export const plugin = definePlugin({
             json: !ctx.flags.noJson,
             references: !ctx.flags.noReferences,
             format: ctx.flags.format,
+            silent: ctx.flags.silent,
 
             env: ctx.flags.env,
             target: ctx.flags.target,

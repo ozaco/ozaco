@@ -12,6 +12,7 @@ export interface ActionOptions {
   json: boolean
   references: boolean
   format: 'cjs' | 'esm'
+  silent: boolean
 
   target: 'bun' | 'browser' | 'node'
   env: 'development' | 'production' | 'test'
@@ -74,6 +75,7 @@ export const action = async (options: ActionOptions) => {
       target: options.target,
       external: options.external,
       format: options.format,
+      silent: options.silent,
 
       entries: buildEntries,
     })
@@ -86,6 +88,7 @@ export const action = async (options: ActionOptions) => {
       target: options.target,
       external: options.external,
       format: options.format,
+      silent: options.silent,
 
       entries: tsxBuildEntries,
     })

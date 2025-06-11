@@ -13,7 +13,7 @@ export interface BuildEntry {
 }
 
 export interface BuildOptions
-  extends Pick<ActionOptions, 'env' | 'cwd' | 'target' | 'external' | 'format'> {
+  extends Pick<ActionOptions, 'env' | 'cwd' | 'target' | 'external' | 'format' | 'silent'> {
   entries: BuildEntry[]
 }
 
@@ -56,6 +56,10 @@ export const build = async (options: BuildOptions) => {
 
     plugins: [],
   })
+
+  if (!(buildOutput.success || options.silent)) {
+    console.error(...buildOutput.logs)
+  }
 
   for (const output of buildOutput.outputs) {
     const filePath = join(outputGenerated, output.path)
