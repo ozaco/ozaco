@@ -13,7 +13,7 @@ tasks:
       - "dist/**"
     local: true
   dev:
-    command: "bunx ozaco build -s"
+    command: "bunx ozaco build"
     deps:
       - "cli:dev"
     inputs:

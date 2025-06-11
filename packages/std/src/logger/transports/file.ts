@@ -7,7 +7,7 @@ import { $appendSync } from '../../io'
 import { capsule } from '../../results'
 
 export const createFileTransport = capsule(
-  async ({ dir = join(process.cwd(), '.ozaco/logs') }: Std.Logger.FileTransportOptions = {}) => {
+  ({ dir = join(process.cwd(), '.ozaco/logs') }: Std.Logger.FileTransportOptions = {}) => {
     const today = new Date().setHours(0, 0, 0, 0)
     const path = join(dir, `${+today}.log`)
 

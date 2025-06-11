@@ -1,5 +1,5 @@
 import type { Tags } from '../../results'
-import type { BlobType, EmptyType } from '../../shared'
+import type { BlobType, EmptyType, Fn } from '../../shared'
 import type { pluginTags } from '../tag'
 
 declare global {
@@ -31,6 +31,8 @@ declare global {
         options: O
         dependencies: D
         tags: T
+
+        wait: Fn<[], Std.ResultAsync<true, 'std/results.invalid-usage', 'std/plugin.wait'[]>>
       } & R
 
       interface Plugin<
@@ -43,8 +45,8 @@ declare global {
         meta: Readonly<M>
         defaultOptions: Readonly<O>
 
-        (): Promise<Std.Plugin.PluginInstance<M, O, R, T, D>>
-        (...options: O): Promise<Std.Plugin.PluginInstance<M, O, R, T, D>>
+        (): Std.Plugin.PluginInstance<M, O, R, T, D>
+        (...options: O): Std.Plugin.PluginInstance<M, O, R, T, D>
 
         action: Std.Plugin.CreateActionHandler<M, O, R, T, D>
         register: Std.Plugin.CreateRegisterHandler<M, O, R, T, D>

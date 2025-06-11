@@ -61,5 +61,5 @@
     "type-fest": "^4.41.0",
     "picocolors": "^1.1.1"
   },
-  "bundleDependencies": ["picocolors"]
+  "bundleDependencies": ["picocolors", "type-fest"]
 }

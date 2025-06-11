@@ -5,7 +5,7 @@ import { lexerPluginBase } from './base'
 import { utilsAction } from './utils.action'
 
 export const tokenizeAction = lexerPluginBase.action('tokenize', rawCtx => {
-  const ctx = rawCtx.$tag('regex-parse-error', 'Regex parse error, please check your lexer config.')
+  const ctx = rawCtx.$tag('regex-parse-error')
 
   const tokenize = ctx.$safe('tokenize', function* (rawInput: string) {
     const utils = ctx.$peek(utilsAction)
@@ -26,7 +26,7 @@ export const tokenizeAction = lexerPluginBase.action('tokenize', rawCtx => {
         return err(
           ctx.tags.get('tokenize/regex-parse-error'),
           'Regex parse error, please check your lexer config.'
-        )
+        ).appendData(input)
       }
 
       token.position = [lastPosition, lastPosition + token.value.length - 1]
