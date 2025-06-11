@@ -57,7 +57,7 @@
     },
     "tools/cli": {
       "name": "@ozaco/cli",
-      "version": "0.0.10",
+      "version": "0.0.11",
       "bin": {
         "ozaco": "./command",
       },

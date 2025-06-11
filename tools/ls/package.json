@@ -2,6 +2,7 @@
   "name": "@ozaco/language-service",
   "version": "0.0.0",
 
+  "type": "commonjs",
   "main": "./dist",
   "exports": {
     ".": {

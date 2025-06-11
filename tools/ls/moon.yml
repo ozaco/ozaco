@@ -14,7 +14,7 @@ tasks:
       - "dist/**"
     local: true
   dev:
-    command: "bunx ozaco build -s -f cjs -t node"
+    command: "bunx ozaco build -f cjs -t node"
     deps:
       - "std:dev"
     inputs:

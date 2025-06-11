@@ -1,7 +1,9 @@
 import '@ozaco/std/effects'
 
 import type * as ts from 'typescript/lib/tsserverlibrary'
-// import { lexer } from './lexer'
+
+import { lexer } from './lexer'
+import { logger } from './consts'
 
 function init(_modules: any) {
   function create(info: ts.server.PluginCreateInfo) {
@@ -22,14 +24,15 @@ function init(_modules: any) {
       }
 
       const content = prior.displayParts.map(part => part.text).join('')
-      // const lexed = lexer(content)
+      const tokens = lexer.tokenize.tokenize(content)
+
+      if (tokens.isOk()) {
+        logger.log('tokens', tokens.value)
+      } else {
+        logger.err('tokens', { ...tokens })
+      }
 
       const newDisplayParts = prior.displayParts
-
-      newDisplayParts.push({
-        text: 'test2',
-        kind: 'text',
-      })
 
       return { ...prior, displayParts: newDisplayParts }
     }
