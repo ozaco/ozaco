@@ -64,8 +64,8 @@ declare global {
         M extends Std.Plugin.Meta<string, string>,
         O extends BlobType[],
         R = EmptyType,
-        T = Tags<never, `${M['name']}@${M['version']}`>,
-        D = [],
+        T = Std.Plugin.BasePluginTags<M>,
+        D extends Std.Plugin.AnyDependencies = EmptyType,
       > {
         name: An
         meta: M
@@ -91,6 +91,13 @@ declare global {
             Std.Plugin.ActionContext<BlobType, BlobType, BlobType, R2, BlobType, BlobType>
           >
         ) => R2
+        $get: <N extends keyof D>(
+          name: N
+        ) => Std.Result<
+          ReturnType<D[N]>,
+          `${M['name']}@${M['version']}#not-found`,
+          `${M['name']}@${M['version']}#get`[]
+        >
 
         apply: <C extends EmptyType>(
           actions: C
@@ -125,18 +132,18 @@ declare global {
         M extends Std.Plugin.Meta<string, string>,
         O extends BlobType[],
         R = EmptyType,
-        T = Tags<never, `${M['name']}@${M['version']}`>,
-        D = [],
+        T = Std.Plugin.BasePluginTags<M>,
+        D extends Std.Plugin.AnyDependencies = EmptyType,
       > = <N extends string, R2 extends BlobType>(
         name: N,
         cb: Fn<[context: Std.Plugin.ActionContext<N, M, O, R, T, D>], R2>
-      ) => R2 extends Std.Plugin.ActionContext<
+      ) => Awaited<R2> extends Std.Plugin.ActionContext<
         N,
         BlobType,
         BlobType[],
         infer R3,
         infer T2,
-        BlobType[]
+        BlobType
       >
         ? Std.Plugin.Action<
             Std.Plugin.ActionContext<
@@ -154,8 +161,8 @@ declare global {
         M extends Std.Plugin.Meta<string, string>,
         O extends BlobType[],
         R = EmptyType,
-        T = Tags<never, `${M['name']}@${M['version']}`>,
-        D = [],
+        T = Std.Plugin.BasePluginTags<M>,
+        D extends Std.Plugin.AnyDependencies = EmptyType,
       > = <Ac>(action: Ac) => Ac extends Std.Plugin.Action<
         Std.Plugin.ActionContext<infer An, BlobType, BlobType, infer R2, infer T2, BlobType>
       >

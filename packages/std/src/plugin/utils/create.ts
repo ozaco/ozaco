@@ -1,4 +1,4 @@
-import { $fn, $safe, ResultAsync, Tags, capsule } from '../../results'
+import { $fn, $safe, ResultAsync, Tags, capsule, err } from '../../results'
 import type { BlobType, EmptyType } from '../../shared'
 
 import { pluginTags } from '../tag'
@@ -21,17 +21,11 @@ export const createPlugin = capsule(
   <const M extends Std.Plugin.Meta<BlobType, BlobType>, O extends BlobType[]>(
     meta: M,
     ...defaultOptions: O
-  ): Std.Plugin.Plugin<M, O, EmptyType, Tags<never, `${M['name']}@${M['version']}`>, []> => {
+  ): Std.Plugin.Plugin<M, O, EmptyType, Std.Plugin.BasePluginTags<M>, EmptyType> => {
     const actions: BlobType[] = []
-    const tags = new Tags(`${meta.name}@${meta.version}`)
+    const tags = new Tags(`${meta.name}@${meta.version}`).add('wait').add('not-found').add('get')
 
-    type Plugin = Std.Plugin.Plugin<
-      M,
-      O,
-      EmptyType,
-      Tags<never, `${M['name']}@${M['version']}`>,
-      []
-    >
+    type Plugin = Std.Plugin.Plugin<M, O, EmptyType, Std.Plugin.BasePluginTags<M>, EmptyType>
 
     const plugin = ((...options: Partial<O>) => {
       const api: BlobType = {}
@@ -39,7 +33,7 @@ export const createPlugin = capsule(
       const instance = {
         meta,
         options: mergeArgs(defaultOptions, options),
-        dependencies: [],
+        dependencies: {},
         tags,
       } as ReturnType<Plugin>
 
@@ -88,6 +82,16 @@ export const createPlugin = capsule(
             return actionContext
           },
 
+          $get: $fn((rawName: string) => {
+            const name = rawName as keyof typeof instance.dependencies
+
+            if (Object.hasOwn(instance.dependencies, name)) {
+              return instance.dependencies[name]
+            }
+
+            return err(tags.get('not-found'), `dependency ${name} not found`)
+          }, tags.get('get')),
+
           $peek: (cb: BlobType) => {
             return api[cb.$name]
           },
@@ -124,7 +128,15 @@ export const createPlugin = capsule(
         await Promise.all(localPromises)
 
         return true as const
-      }, pluginTags.get('wait'))
+      }, tags.get('wait'))
+
+      instance.plug = (name, plugin) => {
+        instance.dependencies[name] = plugin as BlobType
+
+        promises.push((instance.dependencies[name] as BlobType).wait())
+
+        return instance
+      }
 
       return instance
     }) as Plugin
@@ -146,6 +158,10 @@ export const createPlugin = capsule(
     plugin.register = cb => {
       actions.push(cb as Std.Plugin.Action<Std.Plugin.AnyActionContext>)
 
+      return plugin as BlobType
+    }
+
+    plugin.depends = () => {
       return plugin as BlobType
     }
 

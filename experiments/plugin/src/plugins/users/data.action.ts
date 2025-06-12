@@ -10,7 +10,7 @@ const users = [
   },
 ]
 
-export const dataAction = usersPluginBase.action('data', rawCtx => {
+export const dataAction = usersPluginBase.action('data', async rawCtx => {
   const ctx = rawCtx.$tag('not-found')
 
   const getOne = ctx.$fn('getOne', (name: string) => {

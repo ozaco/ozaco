@@ -23,9 +23,13 @@ declare global {
     type ExtractErrors<T> = T extends Tags<infer U, infer T>
       ? U extends [infer K, never]
         ? K extends string
-          ? `${T}.${K}`
+          ? T extends `${string}@${string}`
+            ? `${T}#${K}`
+            : `${T}.${K}`
           : never
-        : `${T}.${U['1']}`
+        : T extends `${string}@${string}`
+          ? `${T}#${U['1']}`
+          : `${T}.${U['1']}`
       : never
 
     /**
