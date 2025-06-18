@@ -3,7 +3,7 @@ import { err } from '../../../results'
 import { lexerPluginBase } from './base'
 
 export const utilsAction = lexerPluginBase.action('utils', rawCtx => {
-  const ctx = rawCtx.$tag('no-matches')
+  const ctx = rawCtx.tag('no-matches')
 
   const getTokenOnFirstMatch = ctx.$fn(
     'get-token-on-first-match',
@@ -19,7 +19,7 @@ export const utilsAction = lexerPluginBase.action('utils', rawCtx => {
   )
 
   const getNextToken = ctx.$fn('get-next-token', (input: string) => {
-    for (const eachLexer of ctx.options[0]) {
+    for (const eachLexer of ctx.meta.options) {
       for (const regex of eachLexer.regexes) {
         const token = getTokenOnFirstMatch({ input, type: eachLexer.type, regex })
 

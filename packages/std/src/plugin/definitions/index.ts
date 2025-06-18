@@ -1,2 +1,2 @@
-import './actions'
 import './plugin'
+import './actions'

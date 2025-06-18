@@ -5,8 +5,9 @@ import { dataAction } from './data.action'
 export const sayHiAction = usersPluginBase.action('sayHi', rawCtx => {
   const ctx = rawCtx
 
-  const to = ctx.$safe('to', function* (name: string) {
-    const data = ctx.$peek(dataAction)
+  // biome-ignore lint/suspicious/useAwait: <explanation>
+  const to = ctx.$safe('to', async function* (name: string) {
+    const data = yield* ctx.$peek(dataAction)
 
     const targetUser = yield* data.getOne(name)
 

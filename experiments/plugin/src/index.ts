@@ -5,10 +5,10 @@ import { logger } from './consts'
 import { usersPlugin } from './plugins/users'
 import { teamsPlugin } from './plugins/teams'
 
-const users = usersPlugin()
-const teams = teamsPlugin()
+const users = await usersPlugin()
+const teams = teamsPlugin().use('users', users)
 
-const team1 = teams.create.one('alice')
+const team1 = await teams.create.one('alice')
 
 if (team1.isErr()) {
   const cs = teams.tags.has(team1.name)

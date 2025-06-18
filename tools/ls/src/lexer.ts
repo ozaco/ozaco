@@ -1,6 +1,6 @@
 import { lexerPlugin } from '@ozaco/std/parser'
 
-export const lexer = lexerPlugin([
+export const lexer = lexerPlugin(
   {
     type: 'declaration',
     regexes: [
@@ -121,5 +121,5 @@ export const lexer = lexerPlugin([
       /^(#)/, // Hash (for comments)
       /^(@)/,
     ],
-  },
-])
+  }
+)

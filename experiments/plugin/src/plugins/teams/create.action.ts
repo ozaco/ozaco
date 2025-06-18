@@ -5,7 +5,8 @@ import { teamsPluginBase } from './base'
 export const createAction = teamsPluginBase.action('create', rawCtx => {
   const ctx = rawCtx
 
-  const one = ctx.$safe('one', function* (name: string) {
+  // biome-ignore lint/suspicious/useAwait: <explanation>
+  const one = ctx.$safe('one', async function* (name: string) {
     const users = yield* ctx.$get('users')
     const targetUser = yield* users.data.getOne(name)
 

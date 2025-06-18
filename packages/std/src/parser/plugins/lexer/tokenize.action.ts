@@ -5,10 +5,10 @@ import { lexerPluginBase } from './base'
 import { utilsAction } from './utils.action'
 
 export const tokenizeAction = lexerPluginBase.action('tokenize', rawCtx => {
-  const ctx = rawCtx.$tag('regex-parse-error')
+  const ctx = rawCtx.tag('regex-parse-error')
 
   const tokenize = ctx.$safe('tokenize', function* (rawInput: string) {
-    const utils = ctx.$peek(utilsAction)
+    const utils = yield* ctx.$peek(utilsAction)
 
     const tokens: Std.Parser.Token[] = []
 

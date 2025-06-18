@@ -1,171 +1,140 @@
-import { $fn, $safe, ResultAsync, Tags, capsule, err } from '../../results'
-import type { BlobType, EmptyType } from '../../shared'
+import { $fn, $safe, Tags, capsule, err } from '../../results'
+import { type BlobType, isPromise } from '../../shared'
 
 import { pluginTags } from '../tag'
 import { mergeArgs } from './internal/merge-args'
 
-const EXLUDED_KEYS = [
-  'name',
-  '$fn',
-  '$safe',
-  '$tag',
-  '$peek',
-  'apply',
-  'meta',
-  'options',
-  'dependencies',
-  'tags',
-]
-
 export const createPlugin = capsule(
-  <const M extends Std.Plugin.Meta<BlobType, BlobType>, O extends BlobType[]>(
-    meta: M,
-    ...defaultOptions: O
-  ): Std.Plugin.Plugin<M, O, EmptyType, Std.Plugin.BasePluginTags<M>, EmptyType> => {
-    const actions: BlobType[] = []
-    const tags = new Tags(`${meta.name}@${meta.version}`).add('wait').add('not-found').add('get')
+  <const M extends Std.Plugin.Meta<BlobType, BlobType, BlobType>>(
+    meta: M
+  ): Std.Plugin.BasePlugin<M> => {
+    let actions: Std.Plugin.Actions.AnyAction[] = []
 
-    type Plugin = Std.Plugin.Plugin<M, O, EmptyType, Std.Plugin.BasePluginTags<M>, EmptyType>
+    const plugin = capsule(
+      (...options: Std.Plugin.InferOptions<M>) => {
+        const instance: Std.Plugin.Instance<M> = {
+          meta: {
+            ...meta,
+            options: mergeArgs(meta.options ?? [], options),
+          },
 
-    const plugin = ((...options: Partial<O>) => {
-      const api: BlobType = {}
+          dependencies: {},
 
-      const instance = {
-        meta,
-        options: mergeArgs(defaultOptions, options),
-        dependencies: {},
-        tags,
-      } as ReturnType<Plugin>
+          tags: new Tags(`${meta.name}@${meta.version}`).add('not-found') as Std.Plugin.BaseTags<M>,
 
-      let promises = [] as PromiseLike<BlobType>[]
+          use: (name, dependency) => {
+            instance.dependencies[name] = dependency
 
-      const handler = (name: string, result: Std.Result<BlobType, BlobType, BlobType[]>) => {
-        const action = result.unwrap()
-        const actionData: BlobType = {}
+            return instance
+          },
+        }
 
-        for (const key in action) {
-          if (EXLUDED_KEYS.includes(key)) {
+        const promises: Promise<BlobType>[] = []
+
+        for (const action of actions) {
+          let api: BlobType = {}
+
+          const ctx = {} as Std.Plugin.Actions.Context<BlobType, M, BlobType, BlobType, BlobType>
+
+          Object.assign(ctx, instance, {
+            apply: value => {
+              if (value) {
+                api = Object.assign(api, value ?? {})
+              }
+
+              return ctx
+            },
+
+            tag: (key, value) => {
+              ctx.tags.add(`${action.$name}/${key}`, value)
+
+              return ctx as BlobType
+            },
+
+            $peek: $fn(action => {
+              if (Reflect.has(instance, action.$name)) {
+                return (instance as BlobType)[action.$name]
+              }
+
+              return err(
+                `${meta.name}@${meta.version}#${action.$name}/not-registered`,
+                `action (${action.$name}) not registered`
+              )
+            }, `${meta.name}@${meta.version}#${action.$name}/peek`) as BlobType,
+
+            $get: $fn(name => {
+              if (Reflect.has(ctx.dependencies, name)) {
+                return (ctx.dependencies as BlobType)[name]
+              }
+
+              return err(`${meta.name}@${meta.version}#not-found`, `plugin (${name}) not found`)
+            }, `${meta.name}@${meta.version}#${action.$name}/get`) as BlobType,
+
+            $fn: (name: string, cb: BlobType) => {
+              ctx.tags.add(`${action.$name}/${name}`)
+
+              return $fn(cb, ctx.tags.get(`${action.$name}/${name}` as BlobType)) as BlobType
+            },
+
+            $safe: (name: string, cb: BlobType) => {
+              ctx.tags.add(`${action.$name}/${name}`)
+
+              return $safe(cb, ctx.tags.get(`${action.$name}/${name}` as BlobType)) as BlobType
+            },
+          } satisfies Pick<
+            Std.Plugin.Actions.Context<BlobType, M, BlobType, BlobType, BlobType>,
+            'apply' | 'tag' | '$peek' | '$get' | '$fn' | '$safe'
+          >)
+
+          const actionResult = action(ctx)
+
+          // async action
+          if (isPromise(actionResult)) {
+            promises.push(
+              actionResult.then(resultCtx => {
+                Object.assign(instance, { [action.$name]: api })
+                instance.tags = resultCtx.tags
+              })
+            )
+
             continue
           }
 
-          actionData[key] = action[key]
+          Object.assign(instance, { [action.$name]: api })
+          instance.tags = actionResult.tags
         }
 
-        api[name] = actionData
-      }
+        actions = []
 
-      for (const action of actions) {
-        const actionName = (action as BlobType).$name as string
-        const actionContext = {
-          name: actionName,
-
-          $fn: (name: string, cb: BlobType) => {
-            if (!tags.has(`${actionName}/${name}`)) {
-              tags.add(`${actionName}/${name}`)
-            }
-
-            return $fn(cb, tags.get(`${actionName}/${name}` as BlobType))
-          },
-          $safe: (name: string, cb: BlobType) => {
-            if (!tags.has(`${actionName}/${name}`)) {
-              tags.add(`${actionName}/${name}`)
-            }
-
-            return $safe(cb, tags.get(`${actionName}/${name}` as BlobType))
-          },
-
-          $tag: (name: string, description: string) => {
-            if (!tags.has(`${actionName}/${name}`)) {
-              tags.add(`${actionName}/${name}`, description)
-            }
-
-            return actionContext
-          },
-
-          $get: $fn((rawName: string) => {
-            const name = rawName as keyof typeof instance.dependencies
-
-            if (Object.hasOwn(instance.dependencies, name)) {
-              return instance.dependencies[name]
-            }
-
-            return err(tags.get('not-found'), `dependency ${name} not found`)
-          }, tags.get('get')),
-
-          $peek: (cb: BlobType) => {
-            return api[cb.$name]
-          },
-
-          apply: (actions: BlobType) => {
-            return Object.assign(actionContext, actions)
-          },
-
-          tags: tags,
-          meta: instance.meta,
-          options: instance.options,
-          dependencies: instance.dependencies,
+        if (promises.length > 0) {
+          return Promise.all(promises).then(() => instance)
         }
 
-        const actionResult = action(actionContext)
-
-        if (actionResult instanceof ResultAsync) {
-          promises.push(actionResult.then(result => handler(action.$name, result)))
-        } else {
-          handler(action.$name, actionResult)
-        }
-      }
-
-      Object.assign(instance, api)
-
-      instance.wait = $fn(async () => {
-        if (promises.length === 0) {
-          return true as const
-        }
-
-        const localPromises = [...promises]
-        promises = []
-
-        await Promise.all(localPromises)
-
-        return true as const
-      }, tags.get('wait'))
-
-      instance.plug = (name, plugin) => {
-        instance.dependencies[name] = plugin as BlobType
-
-        promises.push((instance.dependencies[name] as BlobType).wait())
-
-        return instance
-      }
-
-      return instance
-    }) as Plugin
-
-    plugin.meta = Object.seal(meta)
-    plugin.defaultOptions = Object.seal(defaultOptions)
+        return Object.seal(instance)
+      },
+      `${meta.name as string}@${meta.version as string}#init`
+    ) as Std.Plugin.BasePlugin<M>
 
     plugin.action = (name, cb) => {
-      if (!tags.has(name)) {
-        tags.add(name)
-      }
+      const action = capsule(
+        cb,
+        `${meta.name}@${meta.version}#${name}/init`
+      ) as unknown as Std.Plugin.Actions.AnyAction
 
-      const action = $fn(cb, tags.get(name as BlobType) as BlobType) as BlobType
       action.$name = name
 
-      return action
+      return action as BlobType
     }
 
-    plugin.register = cb => {
-      actions.push(cb as Std.Plugin.Action<Std.Plugin.AnyActionContext>)
+    plugin.register = action => {
+      actions.push(action)
 
       return plugin as BlobType
     }
 
-    plugin.depends = () => {
-      return plugin as BlobType
-    }
+    plugin.depends = () => plugin as BlobType
 
-    return plugin
+    return Object.freeze(plugin)
   },
   pluginTags.get('create')
 )

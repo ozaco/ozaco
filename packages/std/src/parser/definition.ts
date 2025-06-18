@@ -8,6 +8,8 @@ declare global {
     }
 
     namespace Parser {
+      type Options = Std.Parser.LexerConfig[]
+
       interface Token {
         type: string
         value: string

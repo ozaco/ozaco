@@ -4,190 +4,210 @@ import type { BlobType, EmptyType, Fn, Merge } from '../../shared'
 declare global {
   namespace Std {
     namespace Plugin {
-      type $Fn<N extends string, M extends Std.Plugin.Meta<BlobType, BlobType>> = <
-        T extends string,
-        A extends BlobType[],
-        R,
-      >(
-        name: T,
-        cb: Fn<A, R>
-      ) => Fn<
-        A,
-        Std.InjectedResult<
+      namespace Actions {
+        type $Fn<N extends string, M extends Std.Plugin.AnyMeta> = <
+          T extends string,
+          A extends BlobType[],
           R,
-          'std/results.invalid-usage',
-          `${M['name']}@${M['version']}#${N}/${T}`[]
-        >
-      >
-
-      interface $Safe<N extends string, M extends Std.Plugin.Meta<BlobType, BlobType>> {
-        <T extends string, A extends BlobType[], R, R2>(
+        >(
           name: T,
-          body: (...args: A) => Generator<R, R2>
-        ): Fn<
+          cb: Fn<A, R>
+        ) => Fn<
           A,
           Std.InjectedResult<
-            R | R2,
+            R,
             'std/results.invalid-usage',
             `${M['name']}@${M['version']}#${N}/${T}`[]
           >
         >
-        <T extends string, A extends BlobType[], R, R2>(
-          name: T,
-          body: (...args: A) => AsyncGenerator<R, R2>
-        ): Fn<
-          A,
-          Std.InjectedResult<
-            (R extends never ? never : Promise<R>) | (R2 extends never ? never : Promise<R2>),
-            'std/results.invalid-usage',
-            `${M['name']}@${M['version']}#${N}/${T}`[]
-          >
-        >
-        <T extends string, A extends BlobType[], R, R2, R3, R4>(
-          name: T,
-          body: ((...args: A) => AsyncGenerator<R, R2>) | ((...args: A) => Generator<R3, R4>)
-        ): Fn<
-          A,
-          Std.InjectedResult<
-            | (R extends never ? never : Promise<R>)
-            | (R2 extends never ? never : Promise<R2>)
-            | R3
-            | R4,
-            'std/results.invalid-usage',
-            `${M['name']}@${M['version']}#${N}/${T}`[]
-          >
-        >
-      }
 
-      interface ActionContext<
-        An extends string,
-        M extends Std.Plugin.Meta<string, string>,
-        O extends BlobType[],
-        R = EmptyType,
-        T = Std.Plugin.BasePluginTags<M>,
-        D extends Std.Plugin.AnyDependencies = EmptyType,
-      > {
-        name: An
-        meta: M
-        options: O
-        tags: Std.MergeTags<T, Tags<[An, never], `${M['name']}@${M['version']}`>>
-        dependencies: D
-
-        $fn: Std.Plugin.$Fn<An, M>
-        $safe: Std.Plugin.$Safe<An, M>
-        $tag: <N extends string>(
-          name: N,
-          message?: string
-        ) => Std.Plugin.ActionContext<
-          An,
-          M,
-          O,
-          R,
-          Std.MergeTags<T, Tags<[`${An}/${N}`, never], `${M['name']}@${M['version']}`>>,
-          D
-        >
-        $peek: <R2 extends BlobType>(
-          cb: Std.Plugin.Action<
-            Std.Plugin.ActionContext<BlobType, BlobType, BlobType, R2, BlobType, BlobType>
-          >
-        ) => R2
-        $get: <N extends keyof D>(
-          name: N
-        ) => Std.Result<
-          ReturnType<D[N]>,
-          `${M['name']}@${M['version']}#not-found`,
-          `${M['name']}@${M['version']}#get`[]
-        >
-
-        apply: <C extends EmptyType>(
-          actions: C
-        ) => Std.Plugin.ActionContext<
-          An,
-          M,
-          O,
-          R & C,
-          Std.MergeTags<
-            T,
-            Tags<
-              {
-                [K in keyof C]: K extends string ? [`${An}/${K}`, never] : never
-              }[keyof C],
-              `${M['name']}@${M['version']}`
-            >
-          >,
-          D
-        >
-      }
-
-      type Action<Ac extends Std.Plugin.AnyActionContext> = Fn<
-        [context: Ac],
-        Std.InjectedResult<
-          Ac,
-          'std/results.invalid-usage',
-          `${Ac['meta']['name']}@${Ac['meta']['version']}#${Ac['name']}`[]
-        >
-      >
-
-      type CreateActionHandler<
-        M extends Std.Plugin.Meta<string, string>,
-        O extends BlobType[],
-        R = EmptyType,
-        T = Std.Plugin.BasePluginTags<M>,
-        D extends Std.Plugin.AnyDependencies = EmptyType,
-      > = <N extends string, R2 extends BlobType>(
-        name: N,
-        cb: Fn<[context: Std.Plugin.ActionContext<N, M, O, R, T, D>], R2>
-      ) => Awaited<R2> extends Std.Plugin.ActionContext<
-        N,
-        BlobType,
-        BlobType[],
-        infer R3,
-        infer T2,
-        BlobType
-      >
-        ? Std.Plugin.Action<
-            Std.Plugin.ActionContext<
-              N,
-              M,
-              O,
-              R3,
-              Std.MergeTags<Std.MergeTags<T, T2>, Tags<[N, never], `${M['name']}@${M['version']}`>>,
-              D
+        interface $Safe<N extends string, M extends Std.Plugin.AnyMeta> {
+          <T extends string, A extends BlobType[], R, R2>(
+            name: T,
+            body: (...args: A) => Generator<R, R2>
+          ): Fn<
+            A,
+            Std.InjectedResult<
+              R | R2,
+              'std/results.invalid-usage',
+              `${M['name']}@${M['version']}#${N}/${T}`[]
             >
           >
-        : never
+          <T extends string, A extends BlobType[], R, R2>(
+            name: T,
+            body: (...args: A) => AsyncGenerator<R, R2>
+          ): Fn<
+            A,
+            Std.InjectedResult<
+              (R extends never ? never : Promise<R>) | (R2 extends never ? never : Promise<R2>),
+              'std/results.invalid-usage',
+              `${M['name']}@${M['version']}#${N}/${T}`[]
+            >
+          >
+          <T extends string, A extends BlobType[], R, R2, R3, R4>(
+            name: T,
+            body: ((...args: A) => AsyncGenerator<R, R2>) | ((...args: A) => Generator<R3, R4>)
+          ): Fn<
+            A,
+            Std.InjectedResult<
+              | (R extends never ? never : Promise<R>)
+              | (R2 extends never ? never : Promise<R2>)
+              | R3
+              | R4,
+              'std/results.invalid-usage',
+              `${M['name']}@${M['version']}#${N}/${T}`[]
+            >
+          >
+        }
 
-      type CreateRegisterHandler<
-        M extends Std.Plugin.Meta<string, string>,
-        O extends BlobType[],
-        R = EmptyType,
-        T = Std.Plugin.BasePluginTags<M>,
-        D extends Std.Plugin.AnyDependencies = EmptyType,
-      > = <Ac>(action: Ac) => Ac extends Std.Plugin.Action<
-        Std.Plugin.ActionContext<infer An, BlobType, BlobType, infer R2, infer T2, BlobType>
-      >
-        ? Std.Plugin.Plugin<
+        interface Context<
+          N extends string,
+          M extends Std.Plugin.AnyMeta,
+          R = EmptyType,
+          T = Std.Plugin.BaseTags<M>,
+          D extends Std.Plugin.AnyDependency = EmptyType,
+        > {
+          meta: M
+          tags: T
+          dependencies: D
+
+          tag: <K extends string>(
+            key: K,
+            value?: string
+          ) => Std.Plugin.Actions.Context<
+            N,
             M,
-            O,
-            Merge<
-              R,
-              {
-                [K in An]: R2
-              }
-            >,
-            Std.MergeTags<T, T2>,
+            R,
+            Std.MergeTags<T, Tags<[`${N}/${K}`, never], `${M['name']}@${M['version']}`>>,
             D
           >
-        : Std.Plugin.Plugin<M, O, R, T, D>
 
-      type AnyActionContext = Std.Plugin.ActionContext<
-        BlobType,
-        BlobType,
-        BlobType,
-        BlobType,
-        BlobType,
-        BlobType
-      >
+          apply: <V>(value: V) => Std.Plugin.Actions.Context<
+            N,
+            M,
+            Merge<R, V>,
+            Std.MergeTags<
+              T,
+              Tags<
+                {
+                  [K in keyof V]: K extends string ? [`${N}/${K}`, never] : never
+                }[keyof V],
+                `${M['name']}@${M['version']}`
+              >
+            >,
+            D
+          >
+
+          $peek: <A extends Std.Plugin.Actions.AnyAction>(
+            action: A
+          ) => Std.Plugin.Actions.CheckIsSync<A> extends true
+            ? Std.Result<
+                Std.Plugin.Actions.InferResult<Std.Plugin.Actions.InferContext<A>>,
+                `${M['name']}@${M['version']}#${Std.Plugin.Actions.InferActionName<A>}/not-registerd`,
+                `${M['name']}@${M['version']}#${N}/peek`[]
+              >
+            : Std.ResultAsync<
+                Std.Plugin.Actions.InferResult<Std.Plugin.Actions.InferContext<A>>,
+                `${M['name']}@${M['version']}#${Std.Plugin.Actions.InferActionName<A>}/not-registered`,
+                `${M['name']}@${M['version']}#${N}/peek`[]
+              >
+
+          $get: <Pn extends keyof D>(
+            name: Pn
+          ) => Std.Result<
+            D[Pn],
+            `${M['name']}@${M['version']}#not-found`,
+            `${M['name']}@${M['version']}#${N}/get`[]
+          >
+
+          $fn: Std.Plugin.Actions.$Fn<N, M>
+          $safe: Std.Plugin.Actions.$Safe<N, M>
+        }
+
+        interface Sync<
+          N extends string,
+          M extends Std.Plugin.AnyMeta,
+          R = EmptyType,
+          T = Std.Plugin.BaseTags<M>,
+          D extends Std.Plugin.AnyDependency = EmptyType,
+        > {
+          $name: N
+
+          (
+            ctx: Std.Plugin.Actions.Context<N, M, EmptyType, T, D>
+          ): Std.Plugin.Actions.Context<N, M, R, T, D>
+        }
+
+        interface Async<
+          N extends string,
+          M extends Std.Plugin.AnyMeta,
+          R = EmptyType,
+          T = Std.Plugin.BaseTags<M>,
+          D extends Std.Plugin.AnyDependency = EmptyType,
+        > {
+          $name: N
+
+          (
+            ctx: Std.Plugin.Actions.Context<N, M, EmptyType, T, D>
+          ): Promise<Std.Plugin.Actions.Context<N, M, R, T, D>>
+        }
+
+        // Context shortcuts
+
+        type InferResult<C> = C extends Std.Plugin.Actions.Context<
+          BlobType,
+          BlobType,
+          infer R,
+          BlobType,
+          BlobType
+        >
+          ? R
+          : never
+
+        type InferTags<C> = C extends Std.Plugin.Actions.Context<
+          BlobType,
+          BlobType,
+          BlobType,
+          infer T,
+          BlobType
+        >
+          ? T
+          : never
+
+        // Action Shortcuts
+
+        type AnySyncAction = Std.Plugin.Actions.Sync<
+          BlobType,
+          BlobType,
+          BlobType,
+          BlobType,
+          BlobType
+        >
+        type AnyAsyncAction = Std.Plugin.Actions.Async<
+          BlobType,
+          BlobType,
+          BlobType,
+          BlobType,
+          BlobType
+        >
+        type AnyAction = AnySyncAction | AnyAsyncAction
+
+        type CheckIsSync<A extends Std.Plugin.Actions.AnyAction> = ReturnType<A> extends Awaited<
+          ReturnType<A>
+        >
+          ? true
+          : false
+
+        type InferContext<A> = A extends Std.Plugin.Actions.AnyAction
+          ? Awaited<ReturnType<A>>
+          : never
+
+        type InferActionName<A extends Std.Plugin.Actions.AnyAction> = Awaited<
+          ReturnType<A>
+        > extends Std.Plugin.Actions.Context<infer N, BlobType, BlobType, BlobType, BlobType>
+          ? N
+          : never
+      }
     }
   }
 }

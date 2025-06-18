@@ -11,7 +11,7 @@ const users = [
 ]
 
 export const dataAction = usersPluginBase.action('data', async rawCtx => {
-  const ctx = rawCtx.$tag('not-found')
+  const ctx = rawCtx.tag('not-found')
 
   const getOne = ctx.$fn('getOne', (name: string) => {
     const found = users.find(user => user.name === name)
