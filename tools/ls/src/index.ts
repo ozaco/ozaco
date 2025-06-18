@@ -24,13 +24,20 @@ function init(_modules: any) {
       }
 
       const content = prior.displayParts.map(part => part.text).join('')
-      const tokens = lexer.tokenize.tokenize(content)
+      const tokensResult = lexer.tokenize.tokenize(content)
 
-      if (tokens.isOk()) {
-        logger.log('tokens', tokens.value)
-      } else {
-        logger.err('tokens', { ...tokens })
+      if (tokensResult.isErr()) {
+        logger.err('tokens', { ...tokensResult })
+
+        prior.displayParts.push({
+          kind: 'text',
+          text: '(ozaco/language-service failed)',
+        })
+
+        return prior
       }
+
+      logger.log('tokens', tokensResult.value)
 
       const newDisplayParts = prior.displayParts
 
