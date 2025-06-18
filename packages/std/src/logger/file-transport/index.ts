@@ -1,3 +1,8 @@
+/// <reference path="../../shared/index.ts" />
+/// <reference path="../../results/index.ts" />
+/// <reference path="../../plugin/index.ts" />
+/// <reference path="../index.ts" />
+
 import { join } from 'node:path'
 
 import { createPlugin } from '../../plugin'
