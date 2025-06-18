@@ -46,7 +46,7 @@
     },
     "packages/std": {
       "name": "@ozaco/std",
-      "version": "0.0.2",
+      "version": "0.0.3",
       "dependencies": {
         "picocolors": "^1.1.1",
         "type-fest": "^4.41.0",

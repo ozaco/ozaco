@@ -2,7 +2,9 @@
   "extends": "../../tsconfig.base.json",
   "include": ["src", "test", "examples"],
   "compilerOptions": {
-    "lib": ["esnext", "dom"]
+    "lib": ["esnext", "dom"],
+    "baseUrl": ".",
+    "declarationDir": "dist/.types"
   },
   "references": [
     {

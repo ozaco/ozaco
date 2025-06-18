@@ -1,6 +1,10 @@
 {
   "extends": "../../tsconfig.base.json",
   "include": ["src", "test", "examples"],
+  "compilerOptions": {
+    "baseUrl": ".",
+    "declarationDir": "dist/.types"
+  },
   "references": [
     {
       "path": "../cli"
