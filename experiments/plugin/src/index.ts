@@ -2,8 +2,8 @@ import './definition'
 import '@ozaco/std/effects'
 
 import { logger } from './consts'
-import { usersPlugin } from './plugins/users'
 import { teamsPlugin } from './plugins/teams'
+import { usersPlugin } from './plugins/users'
 
 const users = await usersPlugin()
 const teams = teamsPlugin().use('users', users)

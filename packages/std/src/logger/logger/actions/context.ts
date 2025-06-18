@@ -1,7 +1,7 @@
 import picocolors from 'picocolors'
 
-import { loggerPluginBase } from '../base'
 import { LOGGER_LEVELS } from '../../consts'
+import { loggerPluginBase } from '../base'
 
 export const contextAction = loggerPluginBase.action('context', ctx => {
   const level = ctx.meta.options[1] ?? 'log'

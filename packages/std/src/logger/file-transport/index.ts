@@ -5,8 +5,8 @@
 
 import { join } from 'node:path'
 
-import { createPlugin } from '../../plugin'
 import { $appendSync } from '../../io'
+import { createPlugin } from '../../plugin'
 
 export const fileTransportBase = createPlugin({
   name: 'file-transport',

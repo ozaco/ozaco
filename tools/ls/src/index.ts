@@ -2,8 +2,8 @@ import '@ozaco/std/effects'
 
 import type * as ts from 'typescript/lib/tsserverlibrary'
 
-import { lexer } from './lexer'
 import { logger } from './consts'
+import { lexer } from './lexer'
 
 function init(_modules: any) {
   function create(info: ts.server.PluginCreateInfo) {
