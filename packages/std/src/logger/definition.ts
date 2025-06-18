@@ -1,15 +1,8 @@
-import type { BlobType } from '../shared'
+import type { BlobType, Fn } from '../shared'
 import type { LOGGER_LEVELS } from './consts'
-
-import type { loggerTags } from './tag'
 
 declare global {
   namespace Std {
-    // ------------ Errors ------------
-    interface Error {
-      'std/logger': typeof loggerTags
-    }
-
     namespace Logger {
       interface Message {
         level: 'trace' | 'debug' | 'log' | 'info' | 'success' | 'warn' | 'err'
@@ -18,38 +11,19 @@ declare global {
         noConsole: boolean
       }
 
-      type Transport = (message: Message) => void
+      type Options = [name: string, level?: (typeof LOGGER_LEVELS)[number]]
 
-      interface Options {
-        name: string
-        level?: (typeof LOGGER_LEVELS)[number]
+      type AnyTransport = Std.Plugin.Sync<
+        BlobType,
+        {
+          write: Fn<[message: Message], void>
+        },
+        BlobType,
+        BlobType
+      >
 
-        transports?: Transport[]
-      }
-
-      interface Api {
-        name: string
-
-        options: Required<Std.Logger.Options> & {
-          levelIndex: number
-        }
-
-        get date(): [string, Date]
-
-        callTransports: (message: Message) => void
-
-        trace: (...args: BlobType[]) => void
-        debug: (...args: BlobType[]) => void
-        log: (...args: BlobType[]) => void
-        err: (...args: BlobType[]) => void
-        warn: (...args: BlobType[]) => void
-        info: (...args: BlobType[]) => void
-        success: (...args: BlobType[]) => void
-      }
-
-      // ------------ Transports ------------
-      interface FileTransportOptions {
-        dir?: string
+      namespace FileTransport {
+        type Options = [dir?: string]
       }
     }
   }

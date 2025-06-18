@@ -7,8 +7,4 @@ export const ENV = extractEnvs(env => ({
   level: (env.LOG_LEVEL ?? 'log') as (typeof LOGGER_LEVELS)[number],
 }))
 
-export const logger = createLogger({
-  name: 'example',
-  transports: [await createFileTransport()],
-  level: ENV.level,
-})
+export const logger = createLogger('example', ENV.level).use('file', createFileTransport())

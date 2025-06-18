@@ -5,6 +5,8 @@ declare global {
   namespace Std {
     namespace Plugin {
       namespace Actions {
+        type $Capsule = <A extends BlobType[], R>(name: string, fn: (...args: A) => R) => Fn<A, R>
+
         type $Fn<N extends string, M extends Std.Plugin.AnyMeta> = <
           T extends string,
           A extends BlobType[],
@@ -102,12 +104,12 @@ declare global {
             action: A
           ) => Std.Plugin.Actions.CheckIsSync<A> extends true
             ? Std.Result<
-                Std.Plugin.Actions.InferResult<Std.Plugin.Actions.InferContext<A>>,
+                Std.Plugin.Actions.InferActionResult<A>,
                 `${M['name']}@${M['version']}#${Std.Plugin.Actions.InferActionName<A>}/not-registerd`,
                 `${M['name']}@${M['version']}#${N}/peek`[]
               >
             : Std.ResultAsync<
-                Std.Plugin.Actions.InferResult<Std.Plugin.Actions.InferContext<A>>,
+                Std.Plugin.Actions.InferActionResult<A>,
                 `${M['name']}@${M['version']}#${Std.Plugin.Actions.InferActionName<A>}/not-registered`,
                 `${M['name']}@${M['version']}#${N}/peek`[]
               >
@@ -122,6 +124,7 @@ declare global {
 
           $fn: Std.Plugin.Actions.$Fn<N, M>
           $safe: Std.Plugin.Actions.$Safe<N, M>
+          $capsule: Std.Plugin.Actions.$Capsule
         }
 
         interface Sync<
@@ -130,8 +133,10 @@ declare global {
           R = EmptyType,
           T = Std.Plugin.BaseTags<M>,
           D extends Std.Plugin.AnyDependency = EmptyType,
+          Di extends boolean = false,
         > {
           $name: N
+          $direct: Di
 
           (
             ctx: Std.Plugin.Actions.Context<N, M, EmptyType, T, D>
@@ -144,8 +149,10 @@ declare global {
           R = EmptyType,
           T = Std.Plugin.BaseTags<M>,
           D extends Std.Plugin.AnyDependency = EmptyType,
+          Di extends boolean = false,
         > {
           $name: N
+          $direct: Di
 
           (
             ctx: Std.Plugin.Actions.Context<N, M, EmptyType, T, D>
@@ -181,6 +188,7 @@ declare global {
           BlobType,
           BlobType,
           BlobType,
+          BlobType,
           BlobType
         >
         type AnyAsyncAction = Std.Plugin.Actions.Async<
@@ -188,9 +196,50 @@ declare global {
           BlobType,
           BlobType,
           BlobType,
+          BlobType,
           BlobType
         >
-        type AnyAction = AnySyncAction | AnyAsyncAction
+        type AnyAction = Std.Plugin.Actions.AnySyncAction | Std.Plugin.Actions.AnyAsyncAction
+
+        type InferDirect<A> = A extends Std.Plugin.Actions.Sync<
+          BlobType,
+          BlobType,
+          BlobType,
+          BlobType,
+          BlobType,
+          infer Di
+        >
+          ? Di
+          : A extends Std.Plugin.Actions.Async<
+                BlobType,
+                BlobType,
+                BlobType,
+                BlobType,
+                BlobType,
+                infer Di
+              >
+            ? Di
+            : never
+
+        type InferActionResult<A> = A extends Std.Plugin.Actions.Sync<
+          BlobType,
+          BlobType,
+          infer R,
+          BlobType,
+          BlobType,
+          BlobType
+        >
+          ? R
+          : A extends Std.Plugin.Actions.Async<
+                BlobType,
+                BlobType,
+                infer R,
+                BlobType,
+                BlobType,
+                BlobType
+              >
+            ? R
+            : never
 
         type CheckIsSync<A extends Std.Plugin.Actions.AnyAction> = ReturnType<A> extends Awaited<
           ReturnType<A>

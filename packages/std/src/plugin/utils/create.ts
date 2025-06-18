@@ -81,9 +81,15 @@ export const createPlugin = capsule(
 
               return $safe(cb, ctx.tags.get(`${action.$name}/${name}` as BlobType)) as BlobType
             },
+
+            $capsule: (name, cb) => {
+              ctx.tags.add(`${action.$name}/${name}`)
+
+              return capsule(cb, ctx.tags.get(`${action.$name}/${name}`))
+            },
           } satisfies Pick<
             Std.Plugin.Actions.Context<BlobType, M, BlobType, BlobType, BlobType>,
-            'apply' | 'tag' | '$peek' | '$get' | '$fn' | '$safe'
+            'apply' | 'tag' | '$peek' | '$get' | '$fn' | '$safe' | '$capsule'
           >)
 
           const actionResult = action(ctx)
@@ -93,6 +99,11 @@ export const createPlugin = capsule(
             promises.push(
               actionResult.then(resultCtx => {
                 Object.assign(instance, { [action.$name]: api })
+
+                if (action.$direct) {
+                  Object.assign(instance, instance[action.$name as keyof typeof instance])
+                }
+
                 instance.tags = resultCtx.tags
               })
             )
@@ -101,6 +112,11 @@ export const createPlugin = capsule(
           }
 
           Object.assign(instance, { [action.$name]: api })
+
+          if (action.$direct) {
+            Object.assign(instance, instance[action.$name as keyof typeof instance])
+          }
+
           instance.tags = actionResult.tags
         }
 
@@ -122,6 +138,19 @@ export const createPlugin = capsule(
       ) as unknown as Std.Plugin.Actions.AnyAction
 
       action.$name = name
+      action.$direct = false
+
+      return action as BlobType
+    }
+
+    plugin.direct = (name, cb) => {
+      const action = capsule(
+        cb,
+        `${meta.name}@${meta.version}#${name}/init`
+      ) as unknown as Std.Plugin.Actions.AnyAction
+
+      action.$name = name
+      action.$direct = true
 
       return action as BlobType
     }

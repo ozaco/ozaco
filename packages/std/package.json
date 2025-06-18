@@ -31,7 +31,7 @@
       "types": "./dist/logger.d.ts"
     },
     "./logger-file": {
-      "source": "./src/logger/transports/file.ts",
+      "source": "./src/logger/file-transport/index.ts",
       "default": "./dist/logger-file.js",
       "types": "./dist/logger-file.d.ts"
     },

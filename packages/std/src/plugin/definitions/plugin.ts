@@ -39,6 +39,31 @@ declare global {
         readonly meta: M
         readonly tags: T
 
+        direct: <
+          N extends string,
+          C extends Promisify<Std.Plugin.Actions.Context<N, M, BlobType, T, D>>,
+        >(
+          name: N,
+
+          cb: Fn<[context: Std.Plugin.Actions.Context<N, M, R, T, D>], C>
+        ) => Awaited<C> extends C
+          ? Std.Plugin.Actions.Sync<
+              N,
+              M,
+              Std.Plugin.Actions.InferResult<C>,
+              Std.Plugin.Actions.InferTags<C>,
+              D,
+              true
+            >
+          : Std.Plugin.Actions.Async<
+              N,
+              M,
+              Std.Plugin.Actions.InferResult<Awaited<C>>,
+              Std.Plugin.Actions.InferTags<Awaited<C>>,
+              D,
+              true
+            >
+
         action: <
           N extends string,
           C extends Promisify<Std.Plugin.Actions.Context<N, M, BlobType, T, D>>,
@@ -52,14 +77,16 @@ declare global {
               M,
               Std.Plugin.Actions.InferResult<C>,
               Std.Plugin.Actions.InferTags<C>,
-              D
+              D,
+              false
             >
           : Std.Plugin.Actions.Async<
               N,
               M,
               Std.Plugin.Actions.InferResult<Awaited<C>>,
               Std.Plugin.Actions.InferTags<Awaited<C>>,
-              D
+              D,
+              false
             >
       }
 
@@ -74,33 +101,51 @@ declare global {
         // always returns async
         register: <A extends Std.Plugin.Actions.AnyAction>(
           action: A
-        ) => A extends Std.Plugin.Actions.Sync<infer N, BlobType, infer R2, infer T2, BlobType>
+        ) => A extends Std.Plugin.Actions.Sync<
+          infer N,
+          BlobType,
+          infer R2,
+          infer T2,
+          BlobType,
+          infer Di
+        >
           ? Std.Plugin.Sync<
               M,
               Merge<
                 R,
-                {
-                  [K in N]: R2
-                }
+                Di extends true
+                  ? R2
+                  : {
+                      [K in N]: R2
+                    }
               >,
               Std.MergeTags<T, T2>,
               D
             >
-          : A extends Std.Plugin.Actions.Async<infer N, BlobType, infer R2, infer T2, BlobType>
+          : A extends Std.Plugin.Actions.Async<
+                infer N,
+                BlobType,
+                infer R2,
+                infer T2,
+                BlobType,
+                infer Di
+              >
             ? Std.Plugin.Async<
                 M,
                 Merge<
                   R,
-                  {
-                    [K in N]: R2
-                  }
+                  Di extends true
+                    ? R2
+                    : {
+                        [K in N]: R2
+                      }
                 >,
                 Std.MergeTags<T, T2>,
                 D
               >
             : never
 
-        depends: <N extends string, P extends Std.Plugin.AnyPlugin>() => Std.Plugin.Sync<
+        depends: <N extends string, P>() => Std.Plugin.Sync<
           M,
           R,
           T,
@@ -124,10 +169,48 @@ declare global {
         // always returns async
         register: <A extends Std.Plugin.Actions.AnyAction>(
           action: A
-        ) => A extends Std.Plugin.Actions.Sync<BlobType, BlobType, infer R2, infer T2>
-          ? Std.Plugin.Async<M, Merge<R, R2>, Std.MergeTags<T, T2>, D>
-          : A extends Std.Plugin.Actions.Async<BlobType, BlobType, infer R2, infer T2>
-            ? Std.Plugin.Async<M, Merge<R, R2>, Std.MergeTags<T, T2>, D>
+        ) => A extends Std.Plugin.Actions.Sync<
+          infer N,
+          BlobType,
+          infer R2,
+          infer T2,
+          BlobType,
+          infer Di
+        >
+          ? Std.Plugin.Async<
+              M,
+              Merge<
+                R,
+                Di extends true
+                  ? R2
+                  : {
+                      [K in N]: R2
+                    }
+              >,
+              Std.MergeTags<T, T2>,
+              D
+            >
+          : A extends Std.Plugin.Actions.Async<
+                infer N,
+                BlobType,
+                infer R2,
+                infer T2,
+                BlobType,
+                infer Di
+              >
+            ? Std.Plugin.Async<
+                M,
+                Merge<
+                  R,
+                  Di extends true
+                    ? R2
+                    : {
+                        [K in N]: R2
+                      }
+                >,
+                Std.MergeTags<T, T2>,
+                D
+              >
             : never
 
         depends: <N extends string, P extends Std.Plugin.AnyPlugin>() => Std.Plugin.Async<
@@ -161,10 +244,7 @@ declare global {
 
       // Plugin Shortcuts
 
-      type AnyDependency = Record<
-        string,
-        Std.Plugin.Instance<BlobType, BlobType, BlobType, BlobType>
-      >
+      type AnyDependency = Record<string, Std.Plugin.AnyInstance>
 
       type AnyPlugin =
         | Std.Plugin.Sync<BlobType, BlobType, BlobType, BlobType>
@@ -182,6 +262,8 @@ declare global {
         : P extends Std.Plugin.Async<infer M, infer R, infer T, infer D>
           ? Std.Plugin.Instance<M, R, T, D>
           : never
+
+      type AnyInstance = Std.Plugin.Instance<BlobType, BlobType, BlobType, BlobType>
     }
   }
 }
