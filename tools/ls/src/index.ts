@@ -9,10 +9,9 @@ function init(_modules: any) {
   function create(info: ts.server.PluginCreateInfo) {
     const proxy: ts.LanguageService = Object.create(null)
 
+    // biome-ignore lint/suspicious/useGuardForIn: Redundant
     for (const k in info.languageService) {
-      if (Object.hasOwn(proxy, k)) {
-        ;(proxy as any)[k] = (info.languageService as any)[k]
-      }
+      ;(proxy as any)[k] = (info.languageService as any)[k]
     }
 
     proxy.getQuickInfoAtPosition = (filename, position) => {

@@ -29,9 +29,11 @@ export class ResultAsync<T, N extends Std.ErrorValues = never, C extends Std.Err
     const result = await this._promise
 
     if (result.isErr()) {
+      // @ts-expect-error -- This is structurally equivalent and safe
       yield new ResultAsync(Promise.resolve(result))
     }
 
+    // @ts-expect-error -- This is structurally equivalent and safe
     return result.value
   }
 }

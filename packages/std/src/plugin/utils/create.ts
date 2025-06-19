@@ -5,7 +5,7 @@ import { pluginTags } from '../tag'
 import { mergeArgs } from './internal/merge-args'
 
 export const createPlugin = capsule(<const M extends Std.Plugin.Meta<BlobType, BlobType, BlobType>>(meta: M): Std.Plugin.BasePlugin<M> => {
-  let actions: Std.Plugin.Actions.AnyAction[] = []
+  const actions: Std.Plugin.Actions.AnyAction[] = []
 
   const plugin = capsule(
     (...options: Std.Plugin.InferOptions<M>) => {
@@ -108,8 +108,6 @@ export const createPlugin = capsule(<const M extends Std.Plugin.Meta<BlobType, B
 
         instance.tags = actionResult.tags
       }
-
-      actions = []
 
       if (promises.length > 0) {
         return Promise.all(promises).then(() => instance)

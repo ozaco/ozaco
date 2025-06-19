@@ -2,8 +2,7 @@ import type { BlobType, LiteralUnion } from '../shared'
 
 import type { resultTags } from './tag'
 import type { ResultAsync as $ResultAsync } from './utils/async'
-import type { Ok } from './utils/ok'
-import type { Err } from './utils/results'
+import type { Err, Ok } from './utils/results'
 import type { Tags } from './utils/tag'
 
 declare global {
