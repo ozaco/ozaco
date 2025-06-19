@@ -2,16 +2,13 @@
 
 import './definition'
 
+export * from './experimental/gen'
+export * from './tag'
 export * from './utils/async'
 export * from './utils/capsule'
-export * from './utils/err'
 export * from './utils/fn'
 export * from './utils/forward'
 export * from './utils/from-throwable'
-export * from './utils/ok'
-export * from './utils/tag'
+export * from './utils/results'
 export * from './utils/safe'
-
-export * from './experimental/gen'
-
-export * from './tag'
+export * from './utils/tag'

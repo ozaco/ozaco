@@ -1,27 +1,20 @@
 import type { BlobType } from '../../shared'
 
-import type { Ok } from './ok'
-
 /**
  * This class represents a failed result
  */
-export class Err<
-  T = never,
-  const N extends Std.ErrorValues = never,
-  const C extends Std.ErrorValues[] = [],
-> implements Std.ResultType<T, N, C>
-{
+export class Err<T = never, const N extends Std.ErrorValues = never, const C extends Std.ErrorValues[] = []> implements Std.ResultType<T, N, C> {
   constructor(
-    // biome-ignore lint/nursery/useConsistentMemberAccessibility: Redundant
+    // biome-ignore lint/style/useConsistentMemberAccessibility: Redundant
     public name: N,
-    // biome-ignore lint/nursery/useConsistentMemberAccessibility: Redundant
+    // biome-ignore lint/style/useConsistentMemberAccessibility: Redundant
     public message: string,
-    // biome-ignore lint/nursery/useConsistentMemberAccessibility: Redundant
+    // biome-ignore lint/style/useConsistentMemberAccessibility: Redundant
     public causes = [] as unknown as C,
-    // biome-ignore lint/nursery/useConsistentMemberAccessibility: Redundant
+    // biome-ignore lint/style/useConsistentMemberAccessibility: Redundant
     public data: BlobType[] = [],
-    // biome-ignore lint/nursery/useConsistentMemberAccessibility: Redundant
-    public timestamp: number = Date.now()
+    // biome-ignore lint/style/useConsistentMemberAccessibility: Redundant
+    public timestamp: number = Date.now(),
   ) {}
 
   isOk(): this is Ok<T, N, C> {
@@ -49,7 +42,7 @@ export class Err<
    */
   appendCause<const A extends Std.ErrorValues[] = []>(...additionalCauses: A) {
     for (const additionalCause of additionalCauses) {
-      if (additionalCause && this.causes[this.causes.length - 1] !== additionalCause) {
+      if (additionalCause && this.causes.at(-1) !== additionalCause) {
         this.causes.push(additionalCause)
       }
     }
@@ -90,5 +83,45 @@ export class Err<
 /**
  * Shortcut for creating failed result
  */
-export const err = <T = never, const N extends Std.ErrorValues = never>(name: N, message: string) =>
-  new Err<T, N, []>(name, message)
+export const err = <T = never, const N extends Std.ErrorValues = never>(name: N, message: string) => new Err<T, N, []>(name, message)
+
+/**
+ * This class represents a successful result
+ */
+export class Ok<T, const N extends Std.ErrorValues = never, const C extends Std.ErrorValues[] = []> implements Std.ResultType<T, N, C> {
+  constructor(readonly value: T) {
+    if (value instanceof Ok) {
+      this.value = value.value
+    }
+  }
+
+  isOk(): this is Ok<T, N, C> {
+    return true
+  }
+
+  isErr(): this is Err<T, N, C> {
+    return false
+  }
+
+  unwrap(): T {
+    return this.value
+  }
+
+  else<A>(_value: A): T | A {
+    return this.value
+  }
+
+  or<A extends Std.Result<BlobType, BlobType, BlobType>>(_value: A) {
+    return this
+  }
+
+  // biome-ignore lint/correctness/useYield: Redundant
+  *[Symbol.iterator](): Generator<Err<never, N, C>, T> {
+    return this.value
+  }
+}
+
+/**
+ * Shortcut for creating successful result
+ */
+export const ok = <T>(value: T) => (value instanceof Err ? value : new Ok(value)) as Std.OkResolver<T>

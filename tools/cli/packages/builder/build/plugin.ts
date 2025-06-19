@@ -1,74 +1,67 @@
 import { watch } from 'node:fs'
 import { join } from 'node:path'
+import process from 'node:process'
 import { definePlugin } from 'clerc'
-
 import type { PackageJson } from 'type-fest'
-
-import { type ActionOptions, action } from './action'
-
 import { type Cli, prettyMs, throttle } from '../../../src'
+import { type ActionOptions, action } from './action'
 
 export const plugin = definePlugin({
   setup: (cli: Cli) =>
     cli
       .command('build', 'Builds the project', {
         flags: {
-          target: {
-            alias: 't',
+          env: {
+            alias: 'm',
+            default: 'development',
+            description: 'Environment [development(dev), production(prod), test]',
             type: String,
-            default: 'bun',
-            description: 'Target environment [bun, browser, node]',
           },
 
           external: {
             alias: 'e',
-            type: [String],
             default: null,
             description: 'External dependencies [by default excludes all]',
-          },
-
-          env: {
-            alias: 'm',
-            type: String,
-            default: 'development',
-            description: 'Environment [development(dev), production(prod), test]',
-          },
-
-          watch: {
-            alias: 'w',
-            type: Boolean,
-            default: false,
-            description: 'Watch for changes',
-          },
-
-          noJson: {
-            type: Boolean,
-            default: false,
-            description: 'Disable JSON support',
+            type: [String],
           },
 
           format: {
             alias: 'f',
-            type: String,
             default: 'esm',
             description: 'Output format [cjs, esm]',
+            type: String,
+          },
+
+          noJson: {
+            default: false,
+            description: 'Disable JSON support',
+            type: Boolean,
           },
 
           noReferences: {
-            type: Boolean,
             default: false,
             description: 'Enable references',
+            type: Boolean,
+          },
+          target: {
+            alias: 't',
+            default: 'bun',
+            description: 'Target environment [bun, browser, node]',
+            type: String,
+          },
+
+          watch: {
+            alias: 'w',
+            default: false,
+            description: 'Watch for changes',
+            type: Boolean,
           },
         },
 
         parameters: ['[packages...]'],
       })
       .on('build', async ctx => {
-        if (
-          ctx.flags.target !== 'browser' &&
-          ctx.flags.target !== 'bun' &&
-          ctx.flags.target !== 'node'
-        ) {
+        if (ctx.flags.target !== 'browser' && ctx.flags.target !== 'bun' && ctx.flags.target !== 'node') {
           throw new Error(`Unknown build target ${ctx.flags.target}`)
         }
 
@@ -82,11 +75,7 @@ export const plugin = definePlugin({
           ctx.flags.env = 'development'
         }
 
-        if (
-          ctx.flags.env !== 'development' &&
-          ctx.flags.env !== 'production' &&
-          ctx.flags.env !== 'test'
-        ) {
+        if (ctx.flags.env !== 'development' && ctx.flags.env !== 'production' && ctx.flags.env !== 'test') {
           throw new Error(`Unknown environment ${ctx.flags.env}`)
         }
 
@@ -111,31 +100,27 @@ export const plugin = definePlugin({
             const bundledDependencies = new Set(packageJson.bundleDependencies).values().toArray()
 
             ctx.flags.external = ctx.flags.external.filter(x => !bundledDependencies.includes(x))
-          } else if (
-            typeof packageJson.bundleDependencies === 'boolean' &&
-            packageJson.bundleDependencies
-          ) {
+          } else if (typeof packageJson.bundleDependencies === 'boolean' && packageJson.bundleDependencies) {
             ctx.flags.external = []
           }
 
           return {
-            name: packageJson.name,
-
             cwd: ctx.flags.cwd,
-            watch: ctx.flags.watch,
-            json: !ctx.flags.noJson,
-            references: !ctx.flags.noReferences,
-            format: ctx.flags.format,
-            silent: ctx.flags.silent,
 
             env: ctx.flags.env,
-            target: ctx.flags.target,
-            packages: ctx.parameters.packages,
 
             exports: packageJson.exports,
+            external: ctx.flags.external ?? [],
+            format: ctx.flags.format,
+            json: !ctx.flags.noJson,
+            name: packageJson.name,
+            packages: ctx.parameters.packages,
+            references: !ctx.flags.noReferences,
+            silent: ctx.flags.silent,
             // tsx-exports is renamed to splitBuilds, but we keep it for backwards compatibility
             splitBuilds: packageJson.splitBuilds ?? packageJson['tsx-exports'] ?? [],
-            external: ctx.flags.external ?? [],
+            target: ctx.flags.target,
+            watch: ctx.flags.watch,
           } as ActionOptions
         }
 
@@ -165,7 +150,7 @@ export const plugin = definePlugin({
               }
 
               throttledAction()
-            }
+            },
           )
 
           return

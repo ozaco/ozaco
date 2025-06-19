@@ -1,4 +1,7 @@
 {
+  "compilerOptions": {
+    "plugins": [{ "name": "@ozaco/language-service" }]
+  },
   "extends": "../../tsconfig.base.json",
   "include": ["src", "test"],
   "references": [
@@ -8,8 +11,5 @@
     {
       "path": "../../packages/std"
     }
-  ],
-  "compilerOptions": {
-    "plugins": [{ "name": "@ozaco/language-service" }]
-  }
+  ]
 }

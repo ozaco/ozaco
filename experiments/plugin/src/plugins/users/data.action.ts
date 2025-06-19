@@ -4,12 +4,13 @@ import { usersPluginBase } from './base'
 
 const users = [
   {
+    age: 19,
     name: 'alice',
     surname: 'zuberg',
-    age: 19,
   },
 ]
 
+// biome-ignore lint/suspicious/useAwait: Redundant
 export const dataAction = usersPluginBase.action('data', async rawCtx => {
   const ctx = rawCtx.tag('not-found')
 
@@ -33,5 +34,5 @@ export const dataAction = usersPluginBase.action('data', async rawCtx => {
     return found
   })
 
-  return ctx.apply({ getOne, getMany })
+  return ctx.apply({ getMany, getOne })
 })

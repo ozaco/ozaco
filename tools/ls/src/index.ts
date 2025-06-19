@@ -10,13 +10,15 @@ function init(_modules: any) {
     const proxy: ts.LanguageService = Object.create(null)
 
     for (const k in info.languageService) {
-      ;(proxy as any)[k] = (info.languageService as any)[k]
+      if (Object.hasOwn(proxy, k)) {
+        ;(proxy as any)[k] = (info.languageService as any)[k]
+      }
     }
 
     proxy.getQuickInfoAtPosition = (filename, position) => {
       const prior = info.languageService.getQuickInfoAtPosition?.(filename, position)
       if (!prior) {
-        return undefined
+        return
       }
 
       if (!(filename.endsWith('.ts') && prior.displayParts)) {

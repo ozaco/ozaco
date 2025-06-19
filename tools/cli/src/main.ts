@@ -1,12 +1,5 @@
 import { friendlyErrorPlugin, helpPlugin, notFoundPlugin, versionPlugin } from 'clerc'
-
-import { cli } from '.'
 import { plugin as builder } from '../packages/builder'
+import { cli } from '.'
 
-cli
-  .use(helpPlugin())
-  .use(notFoundPlugin())
-  .use(versionPlugin())
-  .use(friendlyErrorPlugin())
-  .use(builder)
-  .parse()
+cli.use(helpPlugin()).use(notFoundPlugin()).use(versionPlugin()).use(friendlyErrorPlugin()).use(builder).parse()

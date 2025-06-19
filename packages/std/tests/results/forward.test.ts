@@ -45,7 +45,7 @@ describe('std/results/fn', () => {
         () => {
           return err('?test', 'test message').appendCause('?test-cause')
         },
-        '?test-cause'
+        '?test-cause',
       )
 
       expect(result).toThrow(Err)
@@ -57,7 +57,7 @@ describe('std/results/fn', () => {
         () => {
           return ok(err('?test', 'test message').appendCause('?test-cause'))
         },
-        '?test-cause'
+        '?test-cause',
       )
 
       expect(result).toThrow(Err)
@@ -69,7 +69,7 @@ describe('std/results/fn', () => {
         () => {
           return ok(ok(err('?test', 'test message').appendCause('?test-cause')))
         },
-        '?test-cause'
+        '?test-cause',
       )
 
       expect(result).toThrow(Err)
@@ -81,7 +81,7 @@ describe('std/results/fn', () => {
         () => {
           return ok(ok(ok(err('?test', 'test message').appendCause('?test-cause'))))
         },
-        '?test-cause'
+        '?test-cause',
       )
 
       expect(result).toThrow(Err)

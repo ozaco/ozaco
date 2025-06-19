@@ -31,10 +31,7 @@ export const $readJson = $safe(async function* <T>(path: string, ignore = false)
   }
 
   if (!(ignore || file.type.includes('application/json'))) {
-    yield* err(
-      ioTags.get('invalid-mime'),
-      `file: ${path} file type: ${file.type} cannot be read with this method`
-    )
+    yield* err(ioTags.get('invalid-mime'), `file: ${path} file type: ${file.type} cannot be read with this method`)
   }
 
   return (await file.json()) as T

@@ -2,7 +2,7 @@ import { createPlugin } from '../../plugin'
 
 export const loggerPluginBase = createPlugin({
   name: 'logger',
-  version: '0.0.0',
 
   options: [] as unknown as Std.Logger.Options,
+  version: '0.0.0',
 }).depends<string, Std.Logger.AnyTransport>()

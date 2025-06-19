@@ -8,11 +8,7 @@ import { $exists } from './exists'
  * The $write function writes a file to the specified path and
  * returns true in AsyncResult.
  */
-export const $write = $safe(async function* (
-  path: string,
-  data: string | ArrayBuffer,
-  create = true
-) {
+export const $write = $safe(async function* (path: string, data: string | ArrayBuffer, create = true) {
   const exists = await $exists(path, 'file')
 
   if (exists.isErr() && !create) {
@@ -37,10 +33,7 @@ export const $writeJson = $safe(async function* (path: string, data: JsonValue, 
   }
 
   if (!(create || file.type.includes('application/json'))) {
-    yield* err(
-      ioTags.get('invalid-mime'),
-      `file: ${path} file type: ${file.type} cannot be read with this method`
-    )
+    yield* err(ioTags.get('invalid-mime'), `file: ${path} file type: ${file.type} cannot be read with this method`)
   }
 
   const stringified = JSON.stringify(data)

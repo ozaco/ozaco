@@ -5,7 +5,7 @@ import { dataAction } from './data.action'
 export const sayHiAction = usersPluginBase.action('sayHi', rawCtx => {
   const ctx = rawCtx
 
-  // biome-ignore lint/suspicious/useAwait: <explanation>
+  // biome-ignore lint/suspicious/useAwait: Redundant
   const to = ctx.$safe('to', async function* (name: string) {
     const data = yield* ctx.$peek(dataAction)
 

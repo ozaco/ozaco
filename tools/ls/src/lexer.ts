@@ -2,22 +2,10 @@ import { lexerPlugin } from '@ozaco/std/parser'
 
 export const lexer = lexerPlugin(
   {
+    regexes: [/^(const)/, /^(let)/, /^(var)/, /^(type)/, /^(interface)/, /^(enum)/, /^(as)/, /^(function)/, /^(class)/, /^(extends)/],
     type: 'declaration',
-    regexes: [
-      /^(const)/,
-      /^(let)/,
-      /^(var)/,
-      /^(type)/,
-      /^(interface)/,
-      /^(enum)/,
-      /^(as)/,
-      /^(function)/,
-      /^(class)/,
-      /^(extends)/,
-    ],
   },
   {
-    type: 'keyword',
     regexes: [
       /^(import)/,
       /^(from)/,
@@ -51,33 +39,33 @@ export const lexer = lexerPlugin(
       /^(with)/,
       /^(debugger)/,
     ],
+    type: 'keyword',
   },
   {
-    type: 'whitespace',
     regexes: [/^(\s+)/],
+    type: 'whitespace',
   },
   {
-    type: 'misc',
     regexes: [
       /^(\(alias\))/,
       /^(\.\.\.)/, // Spread syntax,
       /^([0-9]+(\.[0-9]+)*)/, // version
     ],
+    type: 'misc',
   },
   {
-    type: 'namespace',
     regexes: [/^([a-zA-Z_][a-zA-Z0-9_]*(\.[a-zA-Z_][a-zA-Z0-9_]*)+)/],
+    type: 'namespace',
   },
   {
-    type: 'identifier',
     regexes: [/^([a-zA-Z_$][a-zA-Z0-9_$]*)/],
+    type: 'identifier',
   },
   {
-    type: 'number',
     regexes: [/^[0-9]+(\.[0-9]+)?/],
+    type: 'number',
   },
   {
-    type: 'symbol',
     regexes: [
       /^(\()/, // Parantheses
       /^(\))/,
@@ -121,5 +109,6 @@ export const lexer = lexerPlugin(
       /^(#)/, // Hash (for comments)
       /^(@)/,
     ],
-  }
+    type: 'symbol',
+  },
 )

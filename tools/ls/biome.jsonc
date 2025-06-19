@@ -1,14 +1,27 @@
 {
-  "$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.0.0/schema.json",
 
-  "extends": ["../../biome.jsonc"],
+  "extends": "//",
 
   "linter": {
     "rules": {
+      "style": {
+        "noInferrableTypes": "error",
+        "noParameterAssign": "error",
+        "noUnusedTemplateLiteral": "error",
+        "noUselessElse": "error",
+        "useAsConstAssertion": "error",
+        "useDefaultParameterLast": "error",
+        "useEnumInitializers": "error",
+        "useNumberNamespace": "error",
+        "useSelfClosingElements": "error",
+        "useSingleVarDeclarator": "error",
+      },
       "suspicious": {
+        "noConsole": "off",
         "noExplicitAny": "off",
-        "noConsole": "off"
-      }
-    }
-  }
+      },
+    },
+  },
+  "root": false,
 }

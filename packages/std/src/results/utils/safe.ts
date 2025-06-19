@@ -15,14 +15,7 @@ const cause = resultTags.get('safe')
 export function $safe<A extends BlobType[], R, R2, C extends Std.ErrorValues[] = []>(
   body: (...args: A) => Generator<R, R2>,
   ...additionalCauses: C
-): Fn<
-  A,
-  Std.InjectedResult<
-    R | R2,
-    typeof invalidUsage,
-    C extends never ? (typeof cause)[] : (typeof cause)[] | C
-  >
->
+): Fn<A, Std.InjectedResult<R | R2, typeof invalidUsage, C extends never ? (typeof cause)[] : (typeof cause)[] | C>>
 export function $safe<A extends BlobType[], R, R2, C extends Std.ErrorValues[] = []>(
   body: (...args: A) => AsyncGenerator<R, R2>,
   ...additionalCauses: C
@@ -52,7 +45,7 @@ export function $safe<A extends BlobType[], R, R2, R3, R4, C extends Std.ErrorVa
       if (isPromise(data)) {
         return handleThen(
           data.then(v => v.value),
-          ...additionalCauses
+          ...additionalCauses,
         ) as BlobType
       }
 

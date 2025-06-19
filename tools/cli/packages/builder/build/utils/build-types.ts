@@ -43,7 +43,8 @@ export const buildTypes = async (options: BuildTypesOptions) => {
       })
 
       // STDOUT
-      ;(async () => {
+
+      await (async () => {
         let lastBuildTime = performance.now()
 
         if (proc?.stdout instanceof ReadableStream) {
@@ -65,7 +66,8 @@ export const buildTypes = async (options: BuildTypesOptions) => {
       })()
 
       // STDERR
-      ;(async () => {
+
+      await (async () => {
         if (proc?.stderr instanceof ReadableStream) {
           for await (const data of proc.stderr) {
             console.error(DECODER.decode(data))
@@ -93,7 +95,7 @@ export const buildTypes = async (options: BuildTypesOptions) => {
 
       return acc
     },
-    {} as Record<string, BuildEntry[]>
+    {} as Record<string, BuildEntry[]>,
   )
 
   if (options.json) {
@@ -109,8 +111,8 @@ export const buildTypes = async (options: BuildTypesOptions) => {
         const glob = new Glob(include)
 
         for await (const file of glob.scan({
-          onlyFiles: true,
           cwd: options.cwd,
+          onlyFiles: true,
         })) {
           if (excludes.some(exclude => exclude.match(file)) || file.includes('node_modules/')) {
             continue
@@ -147,29 +149,20 @@ export const buildTypes = async (options: BuildTypesOptions) => {
           if (referenceTargets.length > 0) {
             const foundTargets = referenceTargets
               .map(referenceTarget => {
-                return options.entries.find(
-                  entry => join(options.cwd, entry.source) === referenceTarget
-                )
+                return options.entries.find(rawEntry => join(options.cwd, rawEntry.source) === referenceTarget)
               })
               .filter(x => !!x && x.name !== 'default') as BuildEntry[]
 
-            references = `${foundTargets
-              .map(
-                entry => `/// <reference types="${options.name}/${entry.name}" preserve="true" />`
-              )
-              .join('\n')}\n\n`
+            references = `${foundTargets.map(targetEntry => `/// <reference types="${options.name}/${targetEntry.name}" preserve="true" />`).join('\n')}\n\n`
           }
 
           await Bun.write(
-            // biome-ignore lint/style/noNonNullAssertion: <explanation>
+            // biome-ignore lint/style/noNonNullAssertion: Redundant
             join(options.cwd, entry.types!),
-            `${references}export * from './${join('.types', inputDir, filename)}'`.replaceAll(
-              '\\',
-              '/'
-            )
+            `${references}export * from './${join('.types', inputDir, filename)}'`.replaceAll('\\', '/'),
           )
-        })
+        }),
       )
-    })
+    }),
   )
 }

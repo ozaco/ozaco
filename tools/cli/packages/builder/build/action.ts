@@ -36,12 +36,7 @@ export const action = async (options: ActionOptions) => {
       continue
     }
 
-    if (
-      !definition ||
-      typeof definition !== 'object' ||
-      Array.isArray(definition) ||
-      typeof definition.source !== 'string'
-    ) {
+    if (!definition || typeof definition !== 'object' || Array.isArray(definition) || typeof definition.source !== 'string') {
       throw new Error(`Invalid exports definition ${name}`)
     }
 
@@ -51,9 +46,9 @@ export const action = async (options: ActionOptions) => {
 
     if (options.splitBuilds.includes(name)) {
       tsxBuildEntries.push({
+        default: definition.default as string,
         name,
         source: definition.source,
-        default: definition.default as string,
         types: definition.types as string,
       })
 
@@ -61,46 +56,46 @@ export const action = async (options: ActionOptions) => {
     }
 
     buildEntries.push({
+      default: definition.default as string,
       name,
       source: definition.source,
-      default: definition.default as string,
       types: definition.types as string,
     })
   }
 
   if (buildEntries.length > 0) {
     await build({
-      env: options.env,
       cwd: options.cwd,
-      target: options.target,
+
+      entries: buildEntries,
+      env: options.env,
       external: options.external,
       format: options.format,
       silent: options.silent,
-
-      entries: buildEntries,
+      target: options.target,
     })
   }
 
   if (tsxBuildEntries.length > 0) {
     await splitBuild({
-      env: options.env,
       cwd: options.cwd,
-      target: options.target,
+
+      entries: tsxBuildEntries,
+      env: options.env,
       external: options.external,
       format: options.format,
       silent: options.silent,
-
-      entries: tsxBuildEntries,
+      target: options.target,
     })
   }
 
   await buildTypes({
-    name: options.name,
     cwd: options.cwd,
-    watch: options.watch,
-    json: options.json,
-    references: options.references,
 
     entries: [...buildEntries, ...tsxBuildEntries],
+    json: options.json,
+    name: options.name,
+    references: options.references,
+    watch: options.watch,
   })
 }

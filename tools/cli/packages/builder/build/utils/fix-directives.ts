@@ -21,11 +21,7 @@ export const fixDirectives = (source: string, rawCode: string, removeOnly = fals
     if (node.type === 'ExpressionStatement' && node.directive) {
       directives.push(node.directive)
       targetRanges.add(`${node.start}-${node.end}`)
-    } else if (
-      node.type === 'ExpressionStatement' &&
-      node.expression.type === 'Literal' &&
-      typeof node.expression.value === 'string'
-    ) {
+    } else if (node.type === 'ExpressionStatement' && node.expression.type === 'Literal' && typeof node.expression.value === 'string') {
       directives.push(node.expression.value)
       targetRanges.add(`${node.start}-${node.end}`)
     }
@@ -47,9 +43,7 @@ export const fixDirectives = (source: string, rawCode: string, removeOnly = fals
     offset -= end - start
   }
 
-  const uniqueDirectives = [...new Set(directives.concat(otherDirectives))]
-    .map(x => `"${x}";`)
-    .join('\n')
+  const uniqueDirectives = [...new Set(directives.concat(otherDirectives))].map(x => `"${x}";`).join('\n')
 
   if (!uniqueDirectives || removeOnly) {
     return code

@@ -1,27 +1,27 @@
 {
-  "name": "@ozaco/plugin",
-  "version": "0.0.0",
-  "private": true,
-  "type": "module",
-  "files": ["dist"],
-  "exports": {
-    ".": {
-      "source": "./src/index.ts",
-      "default": "./dist/index.js",
-      "types": "./dist/index.d.ts"
-    }
-  },
   "author": "giveerr (https://github.com/giveerr)",
-  "homepage": "https://ozaco.com/",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/ozaco/ozaco.git"
+  "dependencies": {
+    "@ozaco/std": "workspace:*"
   },
   "devDependencies": {
     "@ozaco/cli": "workspace:*",
     "@ozaco/language-service": "workspace:*"
   },
-  "dependencies": {
-    "@ozaco/std": "workspace:*"
-  }
+  "exports": {
+    ".": {
+      "default": "./dist/index.js",
+      "source": "./src/index.ts",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": ["dist"],
+  "homepage": "https://ozaco.com/",
+  "name": "@ozaco/plugin",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ozaco/ozaco.git"
+  },
+  "type": "module",
+  "version": "0.0.0"
 }

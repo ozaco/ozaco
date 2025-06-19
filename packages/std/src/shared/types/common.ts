@@ -1,7 +1,7 @@
-// biome-ignore lint/suspicious/noExplicitAny: <explanation>
+// biome-ignore lint/suspicious/noExplicitAny: For awareness
 export type BlobType = any
 
-// biome-ignore lint/complexity/noBannedTypes: <explanation>
+// biome-ignore lint/complexity/noBannedTypes: For awareness
 export type EmptyType = {}
 
 export type Fn<A extends BlobType[], R> = (...args: A) => R
@@ -12,6 +12,4 @@ export type IsPromise<T> = T extends PromiseLike<BlobType> ? true : false
 
 export type GeneratorFn<A extends BlobType[], Y, R, N> = (...args: A) => Generator<Y, R, N>
 
-export type AsyncGeneratorFn<A extends BlobType[], Y, R, N> = (
-  ...args: A
-) => AsyncGenerator<Y, R, N>
+export type AsyncGeneratorFn<A extends BlobType[], Y, R, N> = (...args: A) => AsyncGenerator<Y, R, N>

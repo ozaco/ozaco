@@ -1,9 +1,7 @@
 import { mkdirSync } from 'node:fs'
 import { mkdir } from 'node:fs/promises'
-
-import { ioTags } from '../tag'
-
 import { $fn } from '../../results'
+import { ioTags } from '../tag'
 
 /**
  * The mkdir function creates a directory at the specified path asynchronously.

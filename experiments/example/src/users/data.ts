@@ -5,7 +5,7 @@ export interface User {
 
 export const users: User[] = [
   {
-    name: 'alice',
     age: 19,
+    name: 'alice',
   },
 ]

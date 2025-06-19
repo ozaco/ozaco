@@ -39,31 +39,13 @@ export const apiAction = loggerPluginBase.direct('api', ctx => {
   const errNoConsole = context.options.levelIndex > LOGGER_LEVELS.indexOf('err')
 
   return ctx.apply({
-    trace: ctx.$capsule('trace', (...args: BlobType[]) => {
-      const [dateMark, date] = context.date
-
-      context.callTransports({
-        level: 'trace',
-        messages: args,
-        date,
-        noConsole: traceNoConsole,
-      })
-
-      if (traceNoConsole) {
-        return
-      }
-
-      // biome-ignore lint/suspicious/noConsole: Redundant
-      console.log('%s%s', context.name, traceMark, ...args, dateMark)
-    }),
-
     debug: ctx.$capsule('debug', (...args: BlobType[]) => {
       const [dateMark, date] = context.date
 
       context.callTransports({
+        date,
         level: 'debug',
         messages: args,
-        date,
         noConsole: debugNoConsole,
       })
 
@@ -75,31 +57,31 @@ export const apiAction = loggerPluginBase.direct('api', ctx => {
       console.debug('%s%s', context.name, debugMark, ...args, dateMark)
     }),
 
-    log: ctx.$capsule('log', (...args: BlobType[]) => {
+    err: ctx.$capsule('err', (...args: BlobType[]) => {
       const [dateMark, date] = context.date
 
       context.callTransports({
-        level: 'log',
-        messages: args,
         date,
-        noConsole: logNoConsole,
+        level: 'err',
+        messages: args,
+        noConsole: errNoConsole,
       })
 
-      if (logNoConsole) {
+      if (errNoConsole) {
         return
       }
 
       // biome-ignore lint/suspicious/noConsole: Redundant
-      console.debug('%s%s', context.name, logMark, ...args, dateMark)
+      console.debug('%s%s', context.name, errMark, ...args, dateMark)
     }),
 
     info: ctx.$capsule('info', (...args: BlobType[]) => {
       const [dateMark, date] = context.date
 
       context.callTransports({
+        date,
         level: 'info',
         messages: args,
-        date,
         noConsole: infoNoConsole,
       })
 
@@ -111,13 +93,31 @@ export const apiAction = loggerPluginBase.direct('api', ctx => {
       console.debug('%s%s', context.name, infoMark, ...args, dateMark)
     }),
 
+    log: ctx.$capsule('log', (...args: BlobType[]) => {
+      const [dateMark, date] = context.date
+
+      context.callTransports({
+        date,
+        level: 'log',
+        messages: args,
+        noConsole: logNoConsole,
+      })
+
+      if (logNoConsole) {
+        return
+      }
+
+      // biome-ignore lint/suspicious/noConsole: Redundant
+      console.debug('%s%s', context.name, logMark, ...args, dateMark)
+    }),
+
     success: ctx.$capsule('success', (...args: BlobType[]) => {
       const [dateMark, date] = context.date
 
       context.callTransports({
+        date,
         level: 'success',
         messages: args,
-        date,
         noConsole: successNoConsole,
       })
 
@@ -128,14 +128,31 @@ export const apiAction = loggerPluginBase.direct('api', ctx => {
       // biome-ignore lint/suspicious/noConsole: Redundant
       console.debug('%s%s', context.name, successMark, ...args, dateMark)
     }),
+    trace: ctx.$capsule('trace', (...args: BlobType[]) => {
+      const [dateMark, date] = context.date
+
+      context.callTransports({
+        date,
+        level: 'trace',
+        messages: args,
+        noConsole: traceNoConsole,
+      })
+
+      if (traceNoConsole) {
+        return
+      }
+
+      // biome-ignore lint/suspicious/noConsole: Redundant
+      console.log('%s%s', context.name, traceMark, ...args, dateMark)
+    }),
 
     warn: ctx.$capsule('warn', (...args: BlobType[]) => {
       const [dateMark, date] = context.date
 
       context.callTransports({
+        date,
         level: 'warn',
         messages: args,
-        date,
         noConsole: warnNoConsole,
       })
 
@@ -145,24 +162,6 @@ export const apiAction = loggerPluginBase.direct('api', ctx => {
 
       // biome-ignore lint/suspicious/noConsole: Redundant
       console.debug('%s%s', context.name, warnMark, ...args, dateMark)
-    }),
-
-    err: ctx.$capsule('err', (...args: BlobType[]) => {
-      const [dateMark, date] = context.date
-
-      context.callTransports({
-        level: 'err',
-        messages: args,
-        date,
-        noConsole: errNoConsole,
-      })
-
-      if (errNoConsole) {
-        return
-      }
-
-      // biome-ignore lint/suspicious/noConsole: Redundant
-      console.debug('%s%s', context.name, errMark, ...args, dateMark)
     }),
   })
 })

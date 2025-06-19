@@ -1,6 +1,6 @@
+import process from 'node:process'
 import { Clerc } from 'clerc'
-
-import pkg from '../package.json'
+import pkg from '../package.json' with { type: 'json' }
 
 export const cli = Clerc.create()
   .name('ozaco')

@@ -9,10 +9,7 @@ import { $stats, $statsSync } from './stats'
  */
 
 // biome-ignore lint/suspicious/useAwait: Redundant
-export const $exists = $safe(async function* (
-  path: string,
-  type: 'file' | 'dir' | 'auto' = 'auto'
-) {
+export const $exists = $safe(async function* (path: string, type: 'file' | 'dir' | 'auto' = 'auto') {
   const stat = yield* $stats(path)
 
   if (type === 'auto') {

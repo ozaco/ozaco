@@ -4,14 +4,14 @@
 /// <reference path="../index.ts" />
 
 import { join } from 'node:path'
-
+import process from 'node:process'
 import { $appendSync } from '../../io'
 import { createPlugin } from '../../plugin'
 
 export const fileTransportBase = createPlugin({
   name: 'file-transport',
-  version: '0.0.0',
   options: [] as Std.Logger.FileTransport.Options,
+  version: '0.0.0',
 })
 
 export const createFileTransport = fileTransportBase.register(
@@ -28,5 +28,5 @@ export const createFileTransport = fileTransportBase.register(
     return ctx.apply({
       write,
     })
-  })
+  }),
 )

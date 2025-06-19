@@ -1,55 +1,54 @@
 {
-  "name": "@ozaco/cli",
-  "description": "All in one cli for ozaco",
-  "version": "0.0.11",
+  "author": "giveerr (https://github.com/giveerr)",
 
   "bin": {
     "ozaco": "./command"
   },
+  "bundleDependencies": ["clerc", "acorn", "acorn-loose"],
 
-  "type": "module",
-  "files": ["dist", "./command"],
+  "dependencies": {
+    "acorn": "^8.15.0",
+    "acorn-loose": "^8.5.1",
+    "clerc": "^0.44.0"
+  },
+  "description": "All in one cli for ozaco",
+  "devDependencies": {
+    "type-fest": "^4.41.0",
+    "typescript": "^5.8.3"
+  },
   "exports": {
     ".": {
-      "source": "./src/index.ts",
       "default": "./dist/index.js",
+      "source": "./src/index.ts",
       "types": "./dist/index.d.ts"
     },
-    "./main": {
-      "source": "./src/main.ts",
-      "default": "./dist/main.js",
-      "types": "./dist/main.d.ts"
-    },
     "./builder": {
-      "source": "./packages/builder/index.ts",
       "default": "./dist/packages/builder.js",
+      "source": "./packages/builder/index.ts",
       "types": "./dist/packages/builder.d.ts"
+    },
+    "./main": {
+      "default": "./dist/main.js",
+      "source": "./src/main.ts",
+      "types": "./dist/main.d.ts"
     }
   },
-
-  "author": "giveerr (https://github.com/giveerr)",
+  "files": ["dist", "./command"],
   "homepage": "https://ozaco.com/",
+  "name": "@ozaco/cli",
+  "peerDependencies": {
+    "typescript": ">= 5.0.0"
+  },
+  "peerDependenciesMeta": {
+    "typescript": {
+      "optional": true
+    }
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/ozaco/ozaco.git"
   },
 
-  "dependencies": {
-    "clerc": "^0.44.0",
-    "acorn": "^8.15.0",
-    "acorn-loose": "^8.5.1"
-  },
-  "devDependencies": {
-    "typescript": "^5.8.3",
-    "type-fest": "^4.41.0"
-  },
-  "peerDependencies": {
-    "typescript": ">= 5.0.0"
-  },
-  "bundleDependencies": ["clerc", "acorn", "acorn-loose"],
-  "peerDependenciesMeta": {
-    "typescript": {
-      "optional": true
-    }
-  }
+  "type": "module",
+  "version": "0.0.11"
 }

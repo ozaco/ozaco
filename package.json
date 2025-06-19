@@ -1,24 +1,25 @@
 {
-  "name": "ozaco",
-  "private": "true",
-  "type": "module",
-  "version": "0.0.0",
-  "workspaces": ["{packages,plugins,apps,tools,experiments}/**"],
   "devDependencies": {
-    "@biomejs/biome": "1.9.4",
+    "@biomejs/biome": "2.0.0",
     "@commitlint/cli": "^19.8.1",
     "@commitlint/config-conventional": "^19.8.1",
     "@commitlint/prompt-cli": "^19.8.1",
-    "@types/bun": "^1.2.14",
+    "@types/bun": "^1.2.16",
     "husky": "^9.1.7",
     "typescript": "^5.8.3"
   },
-  "scripts": {
-    "prepare": "husky",
-    "commit": "commit"
-  },
-  "trustedDependencies": ["@biomejs/biome", "bufferutil", "es5-ext", "utf-8-validate"],
+  "name": "ozaco",
   "patchedDependencies": {
     "@clerc/core@0.44.0": "patches/@clerc%2Fcore@0.44.0.patch"
-  }
+  },
+  "private": "true",
+  "scripts": {
+    "commit": "commit",
+    "prepare": "husky"
+  },
+
+  "trustedDependencies": ["@biomejs/biome", "bufferutil", "es5-ext", "utf-8-validate"],
+  "type": "module",
+  "version": "0.0.0",
+  "workspaces": ["{packages,plugins,apps,tools,experiments}/**"]
 }

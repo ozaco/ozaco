@@ -4,10 +4,7 @@ import { ResultAsync } from './async'
 
 import { handleCatch, handleThen } from './internal/handlers'
 
-export const forward = <R, T = Std.InferOkType<Std.UnionsToResult<R>>>(
-  fn: () => R,
-  ...additionalCauses: Std.ErrorValues[]
-): R extends PromiseLike<BlobType> ? Promise<T> : T => {
+export const forward = <R, T = Std.InferOkType<Std.UnionsToResult<R>>>(fn: () => R, ...additionalCauses: Std.ErrorValues[]): R extends PromiseLike<BlobType> ? Promise<T> : T => {
   try {
     const result = handleThen(fn(), ...additionalCauses)
 

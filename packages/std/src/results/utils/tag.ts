@@ -1,6 +1,6 @@
 import type { BlobType, LiteralUnion } from '../../shared'
 
-import { err } from './err'
+import { err } from './results'
 
 /**
  * Tags Manager for result system. It's used to create a tag for a result.
@@ -36,33 +36,24 @@ export class Tags<U extends [string, string], T extends string> {
     const found = this.tags.get(key)
 
     if (!found) {
-      return err('std/results.unexpected', `${key} cannot found in: ${this.base} tags`)
-        .appendCause('std/results.tags#get')
-        .throw()
+      return err('std/results.unexpected', `${key} cannot found in: ${this.base} tags`).appendCause('std/results.tags#get').throw()
     }
 
     type R = Extract<U, [K, BlobType]>['1']
 
-    return found as R extends never
-      ? T extends `${string}@${string}`
-        ? `${T}#${K}`
-        : `${T}.${K}`
-      : T extends `${string}@${string}`
-        ? `${T}#${K}`
-        : `${T}.${R}`
+    return found as R extends never ? (T extends `${string}@${string}` ? `${T}#${K}` : `${T}.${K}`) : T extends `${string}@${string}` ? `${T}#${K}` : `${T}.${R}`
   }
 
   /**
    * Checks if the Tag Manager has a specific key (can be a tag or a value).
    */
-  has<const K extends string>(
-    key: K
-  ): K extends Std.ExtractErrors<Tags<U, T>> ? true : K extends U['0'] ? true : false {
+  has<const K extends string>(key: K): K extends Std.ExtractErrors<Tags<U, T>> ? true : K extends U['0'] ? true : false {
     const found = this.tags.get(key) ?? this.tags.values().find(tag => tag.includes(key))
 
     return !!found as BlobType
   }
 
+  // biome-ignore lint/nursery/noShadow: Redundant
   static create<T extends string>(base: T) {
     return new Tags<never, T>(base)
   }

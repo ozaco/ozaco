@@ -1,14 +1,20 @@
 {
-  "typescript.disableAutomaticTypeAcquisition": false,
-  "typescript.tsdk": "node_modules/typescript/lib",
-  "eslint.enable": false,
-  "prettier.enable": false,
-  "biome.enabled": true,
-  "editor.defaultFormatter": "biomejs.biome",
   "[json]": {
     "editor.defaultFormatter": "biomejs.biome"
   },
   "[jsonc]": {
     "editor.defaultFormatter": "biomejs.biome"
-  }
+  },
+  "biome.enabled": true,
+  "editor.codeActionsOnSave": {
+    "source.fixAll.biome": "explicit"
+  },
+  "editor.defaultFormatter": "biomejs.biome",
+  "eslint.enable": false,
+
+  "javascript.preferences.importModuleSpecifier": "shortest",
+  "prettier.enable": false,
+  "typescript.disableAutomaticTypeAcquisition": false,
+  "typescript.preferences.importModuleSpecifier": "project-relative",
+  "typescript.tsdk": "node_modules/typescript/lib"
 }

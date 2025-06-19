@@ -7,26 +7,19 @@ import { findExports } from './find-exports'
 import { fixDirectives } from './fix-directives'
 import { fixExports } from './fix-exports'
 
-export interface BuildFilesOptions
-  extends Pick<ActionOptions, 'env' | 'cwd' | 'target' | 'external' | 'format'> {
+export interface BuildFilesOptions extends Pick<ActionOptions, 'env' | 'cwd' | 'target' | 'external' | 'format'> {
   entries: string[]
 }
 
-export const buildFiles = async (
-  type: 'barrel' | 'component',
-  outputGenerated: string,
-  options: BuildFilesOptions | BuildOptions
-) => {
+export const buildFiles = async (type: 'barrel' | 'component', outputGenerated: string, options: BuildFilesOptions | BuildOptions) => {
   const buildOutput = await Bun.build({
-    root: options.cwd,
-    entrypoints:
-      type === 'barrel'
-        ? options.entries.map(entry => (entry as BuildEntry).source)
-        : (options.entries as string[]),
-    throw: false,
+    define: {
+      'process.env.NODE_ENV': JSON.stringify(options.env),
+    },
+    emitDCEAnnotations: true,
+    entrypoints: type === 'barrel' ? options.entries.map(entry => (entry as BuildEntry).source) : (options.entries as string[]),
 
     external: ['*'],
-    target: options.target,
     format: options.format,
     minify:
       options.env === 'production'
@@ -36,14 +29,13 @@ export const buildFiles = async (
             whitespace: true,
           }
         : false,
-    sourcemap: 'linked',
-    splitting: false,
-    emitDCEAnnotations: true,
-    define: {
-      'process.env.NODE_ENV': JSON.stringify(options.env),
-    },
 
     plugins: [],
+    root: options.cwd,
+    sourcemap: 'linked',
+    splitting: false,
+    target: options.target,
+    throw: false,
   })
 
   for (const output of buildOutput.outputs) {
@@ -55,10 +47,7 @@ export const buildFiles = async (
 
       const targetEntry = (options.entries as string[]).find(
         entry =>
-          entry === output.path.replace('.js', '.tsx') ||
-          entry === output.path.replace('.js', '.jsx') ||
-          entry === output.path.replace('.js', '.ts') ||
-          entry === output.path
+          entry === output.path.replace('.js', '.tsx') || entry === output.path.replace('.js', '.jsx') || entry === output.path.replace('.js', '.ts') || entry === output.path,
       )
 
       if (targetEntry) {
@@ -87,9 +76,9 @@ export const buildFiles = async (
           join(options.cwd, entry.default!),
           options.format === 'cjs'
             ? `// @bun @bun-cjs\nmodule.exports = require('${targetPath.replaceAll('\\', '/')}')`
-            : `// @bun\nexport * from '${targetPath.replaceAll('\\', '/')}'`
+            : `// @bun\nexport * from '${targetPath.replaceAll('\\', '/')}'`,
         )
-      })
+      }),
     )
   }
 }
@@ -124,12 +113,7 @@ export const splitBuild = async (options: BuildOptions) => {
       const scannedFile = `./${rawScannedFile}`
 
       for (const rawExport of rawExports) {
-        if (
-          scannedFile === `${rawExport}.tsx` ||
-          scannedFile === `${rawExport}.jsx` ||
-          scannedFile === `${rawExport}.ts` ||
-          scannedFile === `${rawExport}.js`
-        ) {
+        if (scannedFile === `${rawExport}.tsx` || scannedFile === `${rawExport}.jsx` || scannedFile === `${rawExport}.ts` || scannedFile === `${rawExport}.js`) {
           exports.push(scannedFile)
         }
       }

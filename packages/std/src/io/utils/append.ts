@@ -12,11 +12,7 @@ import { $mkdir, $mkdirSync } from './mkdir'
  * The append function appends data to a file at the specified path and
  * returns true in AsyncResult.
  */
-export const $append = $safe(async function* (
-  path: string,
-  data: string | ArrayBuffer,
-  create = true
-) {
+export const $append = $safe(async function* (path: string, data: string | ArrayBuffer, create = true) {
   const exists = await $exists(path, 'file')
 
   if (exists.isErr()) {
@@ -36,11 +32,7 @@ export const $append = $safe(async function* (
  * The appendSync function appends data to a file at the specified path and
  * returns true in Result.
  */
-export const $appendSync = $safe(function* (
-  path: string,
-  data: string | ArrayBuffer,
-  create = true
-) {
+export const $appendSync = $safe(function* (path: string, data: string | ArrayBuffer, create = true) {
   const exists = $existsSync(path, 'file')
 
   if (exists.isErr()) {

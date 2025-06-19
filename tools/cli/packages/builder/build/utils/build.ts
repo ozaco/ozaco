@@ -12,8 +12,7 @@ export interface BuildEntry {
   types?: string
 }
 
-export interface BuildOptions
-  extends Pick<ActionOptions, 'env' | 'cwd' | 'target' | 'external' | 'format' | 'silent'> {
+export interface BuildOptions extends Pick<ActionOptions, 'env' | 'cwd' | 'target' | 'external' | 'format' | 'silent'> {
   entries: BuildEntry[]
 }
 
@@ -32,12 +31,13 @@ export const build = async (options: BuildOptions) => {
   await Promise.all(chunkFiles.map(file => unlink(file)))
 
   const buildOutput = await Bun.build({
-    root: options.cwd,
+    define: {
+      'process.env.NODE_ENV': JSON.stringify(options.env),
+    },
+    emitDCEAnnotations: true,
     entrypoints: options.entries.map(entry => entry.source),
-    throw: false,
 
     external: options.external,
-    target: options.target,
     format: options.format,
     minify:
       options.env === 'production'
@@ -47,14 +47,13 @@ export const build = async (options: BuildOptions) => {
             whitespace: true,
           }
         : false,
-    sourcemap: 'linked',
-    splitting: true,
-    emitDCEAnnotations: true,
-    define: {
-      'process.env.NODE_ENV': JSON.stringify(options.env),
-    },
 
     plugins: [],
+    root: options.cwd,
+    sourcemap: 'linked',
+    splitting: true,
+    target: options.target,
+    throw: false,
   })
 
   if (!(buildOutput.success || options.silent)) {
@@ -70,11 +69,7 @@ export const build = async (options: BuildOptions) => {
         code = fixExports(code)
       }
 
-      const targetEntry = options.entries.find(
-        entry =>
-          entry.source === output.path.replace('.js', '.tsx') ||
-          entry.source === output.path.replace('.js', '.jsx')
-      )
+      const targetEntry = options.entries.find(entry => entry.source === output.path.replace('.js', '.tsx') || entry.source === output.path.replace('.js', '.jsx'))
 
       if (targetEntry) {
         const sourcecode = await Bun.file(join(options.cwd, targetEntry.source)).text()
@@ -103,8 +98,8 @@ export const build = async (options: BuildOptions) => {
         join(options.cwd, entry.default!),
         options.format === 'cjs'
           ? `// @bun @bun-cjs\nmodule.exports = require('${targetPath.replaceAll('\\', '/')}')`
-          : `// @bun\nexport * from '${targetPath.replaceAll('\\', '/')}'`
+          : `// @bun\nexport * from '${targetPath.replaceAll('\\', '/')}'`,
       )
-    })
+    }),
   )
 }

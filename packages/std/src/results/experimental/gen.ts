@@ -1,7 +1,8 @@
-import { err, resultTags } from '../../results'
 import type { AsyncGeneratorFn, BlobType, Fn, GeneratorFn } from '../../shared'
 
+import { resultTags } from '../tag'
 import { handleCatch, handleThen } from '../utils/internal/handlers'
+import { err } from '../utils/results'
 
 const invalidUsage = resultTags.get('invalid-usage')
 
@@ -12,27 +13,13 @@ const invalidUsage = resultTags.get('invalid-usage')
  * and automatically handles the error cases, yielding and returning
  * Result or ResultAsync instances.
  */
-export const $gen = <
-  A extends BlobType[],
-  G extends Generator<BlobType, BlobType, BlobType> | AsyncGenerator<BlobType, BlobType, BlobType>,
-  C extends Std.ErrorValues[] = [],
->(
+export const $gen = <A extends BlobType[], G extends Generator<BlobType, BlobType, BlobType> | AsyncGenerator<BlobType, BlobType, BlobType>, C extends Std.ErrorValues[] = []>(
   genFn: Fn<A, G>,
   ...additionalCauses: C
 ): G extends AsyncGenerator<infer Y, infer R, infer N>
-  ? AsyncGeneratorFn<
-      A,
-      Std.InjectedResult<Y, typeof invalidUsage, C>,
-      Std.InjectedResult<R, typeof invalidUsage, C>,
-      N
-    >
+  ? AsyncGeneratorFn<A, Std.InjectedResult<Y, typeof invalidUsage, C>, Std.InjectedResult<R, typeof invalidUsage, C>, N>
   : G extends Generator<infer Y, infer R, infer N>
-    ? GeneratorFn<
-        A,
-        Std.InjectedResult<Y, typeof invalidUsage, C>,
-        Std.InjectedResult<R, typeof invalidUsage, C>,
-        N
-      >
+    ? GeneratorFn<A, Std.InjectedResult<Y, typeof invalidUsage, C>, Std.InjectedResult<R, typeof invalidUsage, C>, N>
     : never => {
   return ((...args: A) => {
     let generator: BlobType

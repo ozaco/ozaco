@@ -2,13 +2,13 @@
   "extends": "./tsconfig.base.json",
   "references": [
     {
-      "path": "experiments/example"
+      "path": "experiments/example",
     },
     {
-      "path": "packages/std"
+      "path": "packages/std",
     },
     {
-      "path": "tools/cli"
-    }
-  ]
+      "path": "tools/cli",
+    },
+  ],
 }

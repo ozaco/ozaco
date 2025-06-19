@@ -22,7 +22,7 @@ import { $openFile } from './open-file'
  * await writer.write(Uint8Array<ArrayBufferLike>)
  */
 
-// biome-ignore lint/suspicious/useAwait: <explanation>
+// biome-ignore lint/suspicious/useAwait: Redundant
 export const $writeTo = $safe(async function* (path: string, position = 0) {
   yield* $touch(path)
 
@@ -42,8 +42,8 @@ export const $writeTo = $safe(async function* (path: string, position = 0) {
   }, ioTags.get('write-to#close'))
 
   const api = {
-    write,
     close,
+    write,
 
     [Symbol.asyncDispose]: async () => {
       await close()

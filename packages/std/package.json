@@ -1,65 +1,64 @@
 {
-  "name": "@ozaco/std",
-  "version": "0.0.4",
-
-  "type": "module",
-  "files": ["dist"],
-  "exports": {
-    "./results": {
-      "source": "./src/results/index.ts",
-      "default": "./dist/results.js",
-      "types": "./dist/results.d.ts"
-    },
-    "./shared": {
-      "source": "./src/shared/index.ts",
-      "default": "./dist/shared.js",
-      "types": "./dist/shared.d.ts"
-    },
-    "./io": {
-      "source": "./src/io/index.ts",
-      "default": "./dist/io.js",
-      "types": "./dist/io.d.ts"
-    },
-    "./plugin": {
-      "source": "./src/plugin/index.ts",
-      "default": "./dist/plugin.js",
-      "types": "./dist/plugin.d.ts"
-    },
-    "./logger": {
-      "source": "./src/logger/index.ts",
-      "default": "./dist/logger.js",
-      "types": "./dist/logger.d.ts"
-    },
-    "./logger-file": {
-      "source": "./src/logger/file-transport/index.ts",
-      "default": "./dist/logger-file.js",
-      "types": "./dist/logger-file.d.ts"
-    },
-    "./effects": {
-      "source": "./src/effects/index.ts",
-      "default": "./dist/effects.js",
-      "types": "./dist/effects.d.ts"
-    },
-    "./parser": {
-      "source": "./src/parser/index.ts",
-      "default": "./dist/parser.js",
-      "types": "./dist/parser.d.ts"
-    }
-  },
-
   "author": "giveerr (https://github.com/giveerr)",
-  "homepage": "https://ozaco.com/",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/ozaco/ozaco.git"
+  "bundleDependencies": ["picocolors", "type-fest"],
+  "dependencies": {
+    "picocolors": "^1.1.1",
+    "type-fest": "^4.41.0"
   },
 
   "devDependencies": {
     "@ozaco/cli": "workspace:*"
   },
-  "dependencies": {
-    "type-fest": "^4.41.0",
-    "picocolors": "^1.1.1"
+  "exports": {
+    "./effects": {
+      "default": "./dist/effects.js",
+      "source": "./src/effects/index.ts",
+      "types": "./dist/effects.d.ts"
+    },
+    "./io": {
+      "default": "./dist/io.js",
+      "source": "./src/io/index.ts",
+      "types": "./dist/io.d.ts"
+    },
+    "./logger": {
+      "default": "./dist/logger.js",
+      "source": "./src/logger/index.ts",
+      "types": "./dist/logger.d.ts"
+    },
+    "./logger-file": {
+      "default": "./dist/logger-file.js",
+      "source": "./src/logger/file-transport/index.ts",
+      "types": "./dist/logger-file.d.ts"
+    },
+    "./parser": {
+      "default": "./dist/parser.js",
+      "source": "./src/parser/index.ts",
+      "types": "./dist/parser.d.ts"
+    },
+    "./plugin": {
+      "default": "./dist/plugin.js",
+      "source": "./src/plugin/index.ts",
+      "types": "./dist/plugin.d.ts"
+    },
+    "./results": {
+      "default": "./dist/results.js",
+      "source": "./src/results/index.ts",
+      "types": "./dist/results.d.ts"
+    },
+    "./shared": {
+      "default": "./dist/shared.js",
+      "source": "./src/shared/index.ts",
+      "types": "./dist/shared.d.ts"
+    }
   },
-  "bundleDependencies": ["picocolors", "type-fest"]
+  "files": ["dist"],
+  "homepage": "https://ozaco.com/",
+  "name": "@ozaco/std",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ozaco/ozaco.git"
+  },
+
+  "type": "module",
+  "version": "0.0.4"
 }

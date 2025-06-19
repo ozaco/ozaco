@@ -20,12 +20,8 @@ const DEFAULT_CHUNK_SIZE = 64 * 1024
  *   console.log(chunk)
  * }
  */
-// biome-ignore lint/suspicious/useAwait: <explanation>
-export const $readFrom = $safe(async function* (
-  path: string,
-  chunkSize = DEFAULT_CHUNK_SIZE,
-  position = 0
-) {
+// biome-ignore lint/suspicious/useAwait: Redundant
+export const $readFrom = $safe(async function* (path: string, chunkSize = DEFAULT_CHUNK_SIZE, position = 0) {
   const fd = yield* $openFile(path)
   const stats = yield* $stats(path)
 

@@ -1,5 +1,5 @@
+import process from 'node:process'
 import { Err } from '../../results'
-
 import { ENV, logger } from '../consts'
 
 if (ENV.handler) {

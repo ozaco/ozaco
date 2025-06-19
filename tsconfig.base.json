@@ -1,41 +1,42 @@
 {
   "compilerOptions": {
     /* Moonrepo */
+    "allowArbitraryExtensions": true,
+    "allowImportingTsExtensions": false,
+    "allowJs": true,
+    /* Moonrepo */
     "composite": true,
     "declaration": true,
     "declarationMap": true,
+    "downlevelIteration": true,
     "emitDeclarationOnly": true,
-    "incremental": true,
-    "noEmitOnError": true,
-    "skipLibCheck": true,
-    "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
 
     /* Base Options: */
     "esModuleInterop": true,
-    "target": "esnext",
-    "verbatimModuleSyntax": true,
-    "allowJs": true,
-    "resolveJsonModule": true,
-    "moduleDetection": "force",
+    "exactOptionalPropertyTypes": true,
+    "experimentalDecorators": true,
+
+    "importHelpers": true,
+    "incremental": true,
     "isolatedModules": true,
-    "allowImportingTsExtensions": false,
-    "downlevelIteration": true,
+    "jsx": "react-jsx",
+    "lib": ["esnext"],
+    "module": "esnext",
+    "moduleDetection": "force",
+
+    "moduleResolution": "Bundler",
+    "noEmitOnError": true,
+    "noImplicitAny": true,
+    "noUncheckedIndexedAccess": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
 
     /* Strictness */
     "strict": true,
-    "noUncheckedIndexedAccess": true,
     "strictNullChecks": true,
-    "noImplicitAny": true,
-    "exactOptionalPropertyTypes": true,
-    "allowArbitraryExtensions": true,
-
-    "moduleResolution": "Bundler",
-    "module": "esnext",
-    "lib": ["esnext"],
-
-    "importHelpers": true,
-    "jsx": "react-jsx"
+    "target": "esnext",
+    "verbatimModuleSyntax": true,
   },
-  "exclude": ["**/dist/**"]
+  "exclude": ["**/dist/**"],
 }

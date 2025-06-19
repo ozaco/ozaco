@@ -8,15 +8,24 @@ export const contextAction = loggerPluginBase.action('context', ctx => {
 
   const options = {
     level,
-    name: ctx.meta.options[0].trim(),
     levelIndex: LOGGER_LEVELS.indexOf(level),
+    name: ctx.meta.options[0].trim(),
   }
 
   const name = picocolors.bgBlack(picocolors.whiteBright(picocolors.bold(` ${options.name} `)))
 
   return ctx.apply({
-    name,
-    options,
+    callTransports: ctx.$capsule('call-transports', (message: Std.Logger.Message) => {
+      const dependencyNames = Object.keys(ctx.dependencies) as unknown as (keyof typeof ctx.dependencies)[]
+
+      for (const dependencyName of dependencyNames) {
+        const transport = ctx.dependencies[dependencyName]
+
+        if (transport) {
+          transport.write(message)
+        }
+      }
+    }),
 
     get date() {
       const date = new Date()
@@ -30,24 +39,9 @@ export const contextAction = loggerPluginBase.action('context', ctx => {
       const month = `${date.getMonth() + 1}`.padStart(2, '0')
       const year = `${date.getFullYear()}`
 
-      return [
-        picocolors.gray(`${hour}:${minute}:${second}.${millisecond} ${day}/${month}/${year}`),
-        date,
-      ] as const
+      return [picocolors.gray(`${hour}:${minute}:${second}.${millisecond} ${day}/${month}/${year}`), date] as const
     },
-
-    callTransports: ctx.$capsule('call-transports', (message: Std.Logger.Message) => {
-      const dependencyNames = Object.keys(
-        ctx.dependencies
-      ) as unknown as (keyof typeof ctx.dependencies)[]
-
-      for (const dependencyName of dependencyNames) {
-        const transport = ctx.dependencies[dependencyName]
-
-        if (transport) {
-          transport.write(message)
-        }
-      }
-    }),
+    name,
+    options,
   })
 })

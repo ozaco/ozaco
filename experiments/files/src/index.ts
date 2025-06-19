@@ -10,7 +10,6 @@ const EMPTY_BUFFER = Buffer.from('')
 const DECODER = new TextDecoder()
 
 Bun.serve({
-  port: 3000,
   async fetch() {
     await using reader = (await $readFrom(join(import.meta.dir, './example.txt'))).unwrap()
     await using writer = (await $writeTo(join(import.meta.dir, './example-2.txt'))).unwrap()
@@ -50,6 +49,7 @@ Bun.serve({
 
     return new Response(total.toString())
   },
+  port: 3000,
 })
 
 export * from './consts'
