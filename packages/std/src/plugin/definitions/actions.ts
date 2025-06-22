@@ -56,7 +56,7 @@ declare global {
               T,
               Tags<
                 {
-                  [K in keyof V]: K extends string ? [`${N}/${K}`, never] : never
+                  [K in keyof V]: K extends string ? (V[K] extends Fn<BlobType, Std.Both<BlobType, BlobType, BlobType>> ? [`${N}/${K}`, never] : never) : never
                 }[keyof V],
                 `${M['name']}@${M['version']}`
               >
@@ -83,6 +83,7 @@ declare global {
           $fn: Std.Plugin.Actions.$Fn<N, M>
           $safe: Std.Plugin.Actions.$Safe<N, M>
           $capsule: Std.Plugin.Actions.$Capsule
+          $signal: <T extends BlobType>(defaultValue: T) => Std.Plugin.Signal<T>
         }
 
         interface Sync<

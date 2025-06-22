@@ -1,5 +1,5 @@
 import { $fn, $safe, capsule, err, Tags } from '../../results'
-import { type BlobType, isPromise } from '../../shared'
+import { type BlobType, isFunction, isPromise } from '../../shared'
 
 import { pluginTags } from '../tag'
 import { mergeArgs } from './internal/merge-args'
@@ -66,9 +66,26 @@ export const createPlugin = capsule(<const M extends Std.Plugin.Meta<BlobType, B
 
             return $safe(cb, ctx.tags.get(`${action.$name}/${name}` as BlobType)) as BlobType
           },
+
+          $signal: defaultValue => {
+            let value = defaultValue
+
+            // biome-ignore lint/complexity/useArrowFunction: uses arguments
+            return function () {
+              // biome-ignore lint/complexity/noArguments: redundant
+              const args = arguments
+
+              if (args.length > 0) {
+                value = isFunction(args[0]) ? args[0](value) : args[0]
+              }
+
+              return value
+            }
+          },
+
           apply: value => {
             if (value) {
-              api = Object.assign(api, value ?? {})
+              api = Object.assign(api, value)
             }
 
             return ctx
@@ -79,34 +96,28 @@ export const createPlugin = capsule(<const M extends Std.Plugin.Meta<BlobType, B
 
             return ctx as BlobType
           },
-        } satisfies Pick<Std.Plugin.Actions.Context<BlobType, M, BlobType, BlobType, BlobType>, 'apply' | 'tag' | '$peek' | '$get' | '$fn' | '$safe' | '$capsule'>)
+        } satisfies Pick<Std.Plugin.Actions.Context<BlobType, M, BlobType, BlobType, BlobType>, 'apply' | 'tag' | '$peek' | '$get' | '$fn' | '$safe' | '$capsule' | '$signal'>)
 
         const actionResult = action(ctx)
 
+        const applyActionResult = (resultCtx: Std.Plugin.Actions.Context<BlobType, BlobType, BlobType, BlobType, BlobType>) => {
+          Object.assign(instance, { [action.$name]: Object.seal(api) })
+
+          if (action.$direct) {
+            Object.assign(instance, instance[action.$name as keyof typeof instance])
+          }
+
+          instance.tags = resultCtx.tags
+        }
+
         // async action
         if (isPromise(actionResult)) {
-          promises.push(
-            actionResult.then(resultCtx => {
-              Object.assign(instance, { [action.$name]: api })
-
-              if (action.$direct) {
-                Object.assign(instance, instance[action.$name as keyof typeof instance])
-              }
-
-              instance.tags = resultCtx.tags
-            }),
-          )
+          promises.push(actionResult.then(applyActionResult))
 
           continue
         }
 
-        Object.assign(instance, { [action.$name]: api })
-
-        if (action.$direct) {
-          Object.assign(instance, instance[action.$name as keyof typeof instance])
-        }
-
-        instance.tags = actionResult.tags
+        applyActionResult(actionResult)
       }
 
       if (promises.length > 0) {

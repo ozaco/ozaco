@@ -11,6 +11,12 @@ declare global {
     }
 
     namespace Plugin {
+      interface Signal<T> {
+        (): T
+        (cb: Fn<[curr: T], T>): T
+        (newValue: T): T
+      }
+
       interface Meta<N extends string, V extends string, O extends BlobType[] = BlobType[]> {
         name: N
         version: V
