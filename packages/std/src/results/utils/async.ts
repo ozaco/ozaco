@@ -7,7 +7,7 @@ import { Err, Ok } from './results'
 export class ResultAsync<T, N extends Std.ErrorValues = never, C extends Std.ErrorValues[] = []>
   implements PromiseLike<Std.Result<T, N, C>>
 {
-  private _promise: Promise<Std.Result<T, N, C>>
+  private readonly _promise: Promise<Std.Result<T, N, C>>
 
   constructor(res: Promise<Std.Result<T, N, C>>) {
     this._promise = res

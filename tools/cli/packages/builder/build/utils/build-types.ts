@@ -1,3 +1,5 @@
+// biome-ignore-all lint/nursery/noExcessiveLinesPerFunction: Redundant
+
 import { exists, mkdir } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 

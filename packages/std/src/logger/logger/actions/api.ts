@@ -1,3 +1,5 @@
+// biome-ignore-all lint/nursery/noExcessiveLinesPerFunction: Redundant
+
 import picocolors from 'picocolors'
 
 import type { BlobType } from '../../../shared'

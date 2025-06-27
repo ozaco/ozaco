@@ -1,3 +1,5 @@
+// biome-ignore-all lint/nursery/noExcessiveLinesPerFunction: Redundant
+
 import { $fn, $safe, capsule, err, Tags } from '../../results'
 import { type BlobType, isFunction, isPromise } from '../../shared'
 

@@ -1,5 +1,5 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.0.0/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.0.6/schema.json",
 
   "assist": {
     "actions": {
@@ -259,8 +259,17 @@
         "noBitwiseOperators": "error",
         "noConstantBinaryExpression": "error",
         "noDestructuredProps": "warn",
+        "noExcessiveLinesPerFunction": {
+          "level": "error",
+          "options": {
+            "maxLines": 100,
+            "skipBlankLines": false,
+            "skipIifes": false,
+          },
+        },
         "noFloatingPromises": "warn",
         "noGlobalDirnameFilename": "error",
+        "noImplicitCoercion": "off",
         "noImportantStyles": "warn",
         "noImportCycles": "error",
         "noNestedComponentDefinitions": "error",
@@ -271,6 +280,7 @@
         "noSecrets": "off",
         "noShadow": "error",
         "noTsIgnore": "warn",
+        "noUnassignedVariables": "error",
         "noUnknownAtRule": "error",
         "noUnresolvedImports": "error",
         "noUnwantedPolyfillio": "error",
@@ -299,9 +309,11 @@
         "useNumericSeparators": "error",
         "useObjectSpread": "off",
         "useParseIntRadix": "error",
+        "useReadonlyClassProperties": "error",
         "useSingleJsDocAsterisk": "error",
         "useSortedClasses": "error",
         "useSymbolDescription": "error",
+        "useUnifiedTypeSignature": "error",
         "useUniqueElementIds": "error",
       },
       "performance": {
@@ -390,6 +402,7 @@
         "useTrimStartEnd": "error",
       },
       "suspicious": {
+        "noAlert": "error",
         "noApproximativeNumericConstant": "off",
         "noArrayIndexKey": "error",
         "noAssignInExpressions": "error",
@@ -508,6 +521,16 @@
         "rules": {
           "correctness": {
             "useHookAtTopLevel": "off",
+          },
+        },
+      },
+    },
+    {
+      "includes": ["**/*.test.ts"],
+      "linter": {
+        "rules": {
+          "nursery": {
+            "noExcessiveLinesPerFunction": "off",
           },
         },
       },

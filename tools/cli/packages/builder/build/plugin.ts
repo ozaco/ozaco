@@ -7,6 +7,7 @@ import { type Cli, prettyMs, throttle } from '../../../src'
 import { type ActionOptions, action } from './action'
 
 export const plugin = definePlugin({
+  // biome-ignore lint/nursery/noExcessiveLinesPerFunction: Redundant
   setup: (cli: Cli) =>
     cli
       .command('build', 'Builds the project', {

@@ -12,8 +12,7 @@ declare global {
 
     namespace Plugin {
       interface Signal<T> {
-        (): T
-        (cb: Fn<[curr: T], T>): T
+        (cb?: Fn<[curr: T], T>): T
         (newValue: T): T
       }
 
