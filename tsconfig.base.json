@@ -36,7 +36,8 @@
     "strict": true,
     "strictNullChecks": true,
     "target": "esnext",
-    "verbatimModuleSyntax": true,
+    "types": ["node", "@types/bun"],
+    "verbatimModuleSyntax": true
   },
-  "exclude": ["**/dist/**"],
+  "exclude": ["**/dist/**"]
 }

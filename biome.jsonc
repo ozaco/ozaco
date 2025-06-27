@@ -22,7 +22,7 @@
       "indentStyle": "space",
       "indentWidth": 2,
       "lineEnding": "lf",
-      "lineWidth": 180,
+      "lineWidth": 120,
       "quoteStyle": "single",
     },
     "linter": {
@@ -49,7 +49,7 @@
     "indentStyle": "space",
     "indentWidth": 2,
     "lineEnding": "lf",
-    "lineWidth": 180,
+    "lineWidth": 120,
     "useEditorconfig": false,
   },
 
@@ -68,7 +68,7 @@
       "indentWidth": 2,
       "jsxQuoteStyle": "single",
       "lineEnding": "lf",
-      "lineWidth": 180,
+      "lineWidth": 120,
       "quoteProperties": "asNeeded",
       "quoteStyle": "single",
       "semicolons": "asNeeded",
@@ -97,7 +97,7 @@
       "indentStyle": "space",
       "indentWidth": 2,
       "lineEnding": "lf",
-      "lineWidth": 180,
+      "lineWidth": 120,
       "trailingCommas": "all",
     },
     "linter": {

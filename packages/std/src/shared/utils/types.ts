@@ -11,3 +11,7 @@ export const isPromise = (value: unknown): value is PromiseLike<BlobType> => {
 export const isFunction = (value: unknown): value is Function => {
   return typeof value === 'function'
 }
+
+export const isArray = <T>(value: unknown): value is T[] => {
+  return Array.isArray(value)
+}

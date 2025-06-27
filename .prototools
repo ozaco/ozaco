@@ -1,5 +1,5 @@
-bun = "1.2.16"
-moon = "1.37.3"
+bun = "1.2.17"
+moon = "1.38.0"
 
 [plugins]
 moon = "https://raw.githubusercontent.com/moonrepo/moon/master/proto-plugin.toml"
