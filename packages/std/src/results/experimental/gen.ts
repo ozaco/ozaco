@@ -13,7 +13,11 @@ const invalidUsage = resultTags.get('invalid-usage')
  * and automatically handles the error cases, yielding and returning
  * Result or ResultAsync instances.
  */
-export const $gen = <A extends BlobType[], G extends Generator<BlobType, BlobType, BlobType> | AsyncGenerator<BlobType, BlobType, BlobType>, C extends Std.ErrorValues[] = []>(
+export const $gen = <
+  A extends BlobType[],
+  G extends Generator<BlobType, BlobType, BlobType> | AsyncGenerator<BlobType, BlobType, BlobType>,
+  C extends Std.ErrorValues[] = [],
+>(
   genFn: Fn<A, G>,
   ...additionalCauses: C
 ): G extends AsyncGenerator<infer Y, infer R, infer N>

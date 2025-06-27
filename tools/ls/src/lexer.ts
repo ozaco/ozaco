@@ -2,7 +2,18 @@ import { lexerPlugin } from '@ozaco/std/parser'
 
 export const lexer = lexerPlugin(
   {
-    regexes: [/^(const)/, /^(let)/, /^(var)/, /^(type)/, /^(interface)/, /^(enum)/, /^(as)/, /^(function)/, /^(class)/, /^(extends)/],
+    regexes: [
+      /^(const)/,
+      /^(let)/,
+      /^(var)/,
+      /^(type)/,
+      /^(interface)/,
+      /^(enum)/,
+      /^(as)/,
+      /^(function)/,
+      /^(class)/,
+      /^(extends)/,
+    ],
     type: 'declaration',
   },
   {

@@ -3,7 +3,10 @@ import { type BlobType, isPromise } from '../../shared'
 import { ResultAsync } from './async'
 import { ok } from './results'
 
-export const fromThrowable = <A extends BlobType[], T, R extends Std.Both<BlobType, BlobType, BlobType>>(fn: (...args: A) => T, errorFn: (err: unknown) => R) => {
+export const fromThrowable = <A extends BlobType[], T, R extends Std.Both<BlobType, BlobType, BlobType>>(
+  fn: (...args: A) => T,
+  errorFn: (err: unknown) => R,
+) => {
   return ((...args: A) => {
     try {
       const result = fn(...args)

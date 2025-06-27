@@ -9,7 +9,10 @@ const invalidUsage = resultTags.get('invalid-usage')
 /**
  * This helper extracts the actual value from its first argument
  */
-export const handleThen = (result: BlobType, ...additionalCauses: Std.ErrorValues[]): Std.Both<BlobType, BlobType, BlobType> => {
+export const handleThen = (
+  result: BlobType,
+  ...additionalCauses: Std.ErrorValues[]
+): Std.Both<BlobType, BlobType, BlobType> => {
   if (isPromise(result) && !(result instanceof ResultAsync)) {
     return new ResultAsync(
       (result as Promise<BlobType>).then(

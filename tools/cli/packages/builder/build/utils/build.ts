@@ -69,7 +69,10 @@ export const build = async (options: BuildOptions) => {
         code = fixExports(code)
       }
 
-      const targetEntry = options.entries.find(entry => entry.source === output.path.replace('.js', '.tsx') || entry.source === output.path.replace('.js', '.jsx'))
+      const targetEntry = options.entries.find(
+        entry =>
+          entry.source === output.path.replace('.js', '.tsx') || entry.source === output.path.replace('.js', '.jsx'),
+      )
 
       if (targetEntry) {
         const sourcecode = await Bun.file(join(options.cwd, targetEntry.source)).text()

@@ -3,7 +3,9 @@ import type { BlobType } from '../../shared'
 /**
  * This class represents a failed result
  */
-export class Err<T = never, const N extends Std.ErrorValues = never, const C extends Std.ErrorValues[] = []> implements Std.ResultType<T, N, C> {
+export class Err<T = never, const N extends Std.ErrorValues = never, const C extends Std.ErrorValues[] = []>
+  implements Std.ResultType<T, N, C>
+{
   constructor(
     // biome-ignore lint/style/useConsistentMemberAccessibility: Redundant
     public name: N,
@@ -83,12 +85,15 @@ export class Err<T = never, const N extends Std.ErrorValues = never, const C ext
 /**
  * Shortcut for creating failed result
  */
-export const err = <T = never, const N extends Std.ErrorValues = never>(name: N, message: string) => new Err<T, N, []>(name, message)
+export const err = <T = never, const N extends Std.ErrorValues = never>(name: N, message: string) =>
+  new Err<T, N, []>(name, message)
 
 /**
  * This class represents a successful result
  */
-export class Ok<T, const N extends Std.ErrorValues = never, const C extends Std.ErrorValues[] = []> implements Std.ResultType<T, N, C> {
+export class Ok<T, const N extends Std.ErrorValues = never, const C extends Std.ErrorValues[] = []>
+  implements Std.ResultType<T, N, C>
+{
   constructor(readonly value: T) {
     if (value instanceof Ok) {
       this.value = value.value

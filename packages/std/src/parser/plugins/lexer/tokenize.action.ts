@@ -23,7 +23,10 @@ export const tokenizeAction = lexerPluginBase.action('tokenize', rawCtx => {
       token = result.token
 
       if (!token.value) {
-        return err(ctx.tags.get('tokenize/regex-parse-error'), 'Regex parse error, please check your lexer config.').appendData(input)
+        return err(
+          ctx.tags.get('tokenize/regex-parse-error'),
+          'Regex parse error, please check your lexer config.',
+        ).appendData(input)
       }
 
       token.position = [lastPosition, lastPosition + token.value.length - 1]

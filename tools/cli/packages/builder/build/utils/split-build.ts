@@ -11,13 +11,18 @@ export interface BuildFilesOptions extends Pick<ActionOptions, 'env' | 'cwd' | '
   entries: string[]
 }
 
-export const buildFiles = async (type: 'barrel' | 'component', outputGenerated: string, options: BuildFilesOptions | BuildOptions) => {
+export const buildFiles = async (
+  type: 'barrel' | 'component',
+  outputGenerated: string,
+  options: BuildFilesOptions | BuildOptions,
+) => {
   const buildOutput = await Bun.build({
     define: {
       'process.env.NODE_ENV': JSON.stringify(options.env),
     },
     emitDCEAnnotations: true,
-    entrypoints: type === 'barrel' ? options.entries.map(entry => (entry as BuildEntry).source) : (options.entries as string[]),
+    entrypoints:
+      type === 'barrel' ? options.entries.map(entry => (entry as BuildEntry).source) : (options.entries as string[]),
 
     external: ['*'],
     format: options.format,
@@ -47,7 +52,10 @@ export const buildFiles = async (type: 'barrel' | 'component', outputGenerated: 
 
       const targetEntry = (options.entries as string[]).find(
         entry =>
-          entry === output.path.replace('.js', '.tsx') || entry === output.path.replace('.js', '.jsx') || entry === output.path.replace('.js', '.ts') || entry === output.path,
+          entry === output.path.replace('.js', '.tsx') ||
+          entry === output.path.replace('.js', '.jsx') ||
+          entry === output.path.replace('.js', '.ts') ||
+          entry === output.path,
       )
 
       if (targetEntry) {
@@ -113,7 +121,12 @@ export const splitBuild = async (options: BuildOptions) => {
       const scannedFile = `./${rawScannedFile}`
 
       for (const rawExport of rawExports) {
-        if (scannedFile === `${rawExport}.tsx` || scannedFile === `${rawExport}.jsx` || scannedFile === `${rawExport}.ts` || scannedFile === `${rawExport}.js`) {
+        if (
+          scannedFile === `${rawExport}.tsx` ||
+          scannedFile === `${rawExport}.jsx` ||
+          scannedFile === `${rawExport}.ts` ||
+          scannedFile === `${rawExport}.js`
+        ) {
           exports.push(scannedFile)
         }
       }

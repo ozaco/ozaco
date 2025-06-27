@@ -9,7 +9,10 @@ const invalidUsage = resultTags.get('invalid-usage')
  * The $fn function is used to wrap a function that returns a Result or ResultAsync
  * and automatically handles the error cases.
  */
-export const $fn = <A extends BlobType[], R, C extends Std.ErrorValues[] = []>(fn: (...args: A) => R, ...additionalCauses: C) => {
+export const $fn = <A extends BlobType[], R, C extends Std.ErrorValues[] = []>(
+  fn: (...args: A) => R,
+  ...additionalCauses: C
+) => {
   return ((...args: A) => {
     try {
       const data = fn(...args)

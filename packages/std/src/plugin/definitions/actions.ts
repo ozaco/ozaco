@@ -41,12 +41,27 @@ declare global {
           >
         }
 
-        interface Context<N extends string, M extends Std.Plugin.AnyMeta, R = EmptyType, T = Std.Plugin.BaseTags<M>, D extends Std.Plugin.AnyDependency = EmptyType> {
+        interface Context<
+          N extends string,
+          M extends Std.Plugin.AnyMeta,
+          R = EmptyType,
+          T = Std.Plugin.BaseTags<M>,
+          D extends Std.Plugin.AnyDependency = EmptyType,
+        > {
           meta: M
           tags: T
           dependencies: D
 
-          tag: <K extends string>(key: K, value?: string) => Std.Plugin.Actions.Context<N, M, R, Std.MergeTags<T, Tags<[`${N}/${K}`, never], `${M['name']}@${M['version']}`>>, D>
+          tag: <K extends string>(
+            key: K,
+            value?: string,
+          ) => Std.Plugin.Actions.Context<
+            N,
+            M,
+            R,
+            Std.MergeTags<T, Tags<[`${N}/${K}`, never], `${M['name']}@${M['version']}`>>,
+            D
+          >
 
           apply: <V>(value: V) => Std.Plugin.Actions.Context<
             N,
@@ -56,7 +71,11 @@ declare global {
               T,
               Tags<
                 {
-                  [K in keyof V]: K extends string ? (V[K] extends Fn<BlobType, Std.Both<BlobType, BlobType, BlobType>> ? [`${N}/${K}`, never] : never) : never
+                  [K in keyof V]: K extends string
+                    ? V[K] extends Fn<BlobType, Std.Both<BlobType, BlobType, BlobType>>
+                      ? [`${N}/${K}`, never]
+                      : never
+                    : never
                 }[keyof V],
                 `${M['name']}@${M['version']}`
               >
@@ -78,7 +97,9 @@ declare global {
                 `${M['name']}@${M['version']}#${N}/peek`[]
               >
 
-          $get: <Pn extends keyof D>(name: Pn) => Std.Result<D[Pn], `${M['name']}@${M['version']}#not-found`, `${M['name']}@${M['version']}#${N}/get`[]>
+          $get: <Pn extends keyof D>(
+            name: Pn,
+          ) => Std.Result<D[Pn], `${M['name']}@${M['version']}#not-found`, `${M['name']}@${M['version']}#${N}/get`[]>
 
           $fn: Std.Plugin.Actions.$Fn<N, M>
           $safe: Std.Plugin.Actions.$Safe<N, M>
@@ -116,9 +137,13 @@ declare global {
 
         // Context shortcuts
 
-        type InferResult<C> = C extends Std.Plugin.Actions.Context<BlobType, BlobType, infer R, BlobType, BlobType> ? R : never
+        type InferResult<C> = C extends Std.Plugin.Actions.Context<BlobType, BlobType, infer R, BlobType, BlobType>
+          ? R
+          : never
 
-        type InferTags<C> = C extends Std.Plugin.Actions.Context<BlobType, BlobType, BlobType, infer T, BlobType> ? T : never
+        type InferTags<C> = C extends Std.Plugin.Actions.Context<BlobType, BlobType, BlobType, infer T, BlobType>
+          ? T
+          : never
 
         // Action Shortcuts
 
@@ -126,23 +151,41 @@ declare global {
         type AnyAsyncAction = Std.Plugin.Actions.Async<BlobType, BlobType, BlobType, BlobType, BlobType, BlobType>
         type AnyAction = Std.Plugin.Actions.AnySyncAction | Std.Plugin.Actions.AnyAsyncAction
 
-        type InferDirect<A> = A extends Std.Plugin.Actions.Sync<BlobType, BlobType, BlobType, BlobType, BlobType, infer Di>
+        type InferDirect<A> = A extends Std.Plugin.Actions.Sync<
+          BlobType,
+          BlobType,
+          BlobType,
+          BlobType,
+          BlobType,
+          infer Di
+        >
           ? Di
           : A extends Std.Plugin.Actions.Async<BlobType, BlobType, BlobType, BlobType, BlobType, infer Di>
             ? Di
             : never
 
-        type InferActionResult<A> = A extends Std.Plugin.Actions.Sync<BlobType, BlobType, infer R, BlobType, BlobType, BlobType>
+        type InferActionResult<A> = A extends Std.Plugin.Actions.Sync<
+          BlobType,
+          BlobType,
+          infer R,
+          BlobType,
+          BlobType,
+          BlobType
+        >
           ? R
           : A extends Std.Plugin.Actions.Async<BlobType, BlobType, infer R, BlobType, BlobType, BlobType>
             ? R
             : never
 
-        type CheckIsSync<A extends Std.Plugin.Actions.AnyAction> = ReturnType<A> extends Awaited<ReturnType<A>> ? true : false
+        type CheckIsSync<A extends Std.Plugin.Actions.AnyAction> = ReturnType<A> extends Awaited<ReturnType<A>>
+          ? true
+          : false
 
         type InferContext<A> = A extends Std.Plugin.Actions.AnyAction ? Awaited<ReturnType<A>> : never
 
-        type InferActionName<A extends Std.Plugin.Actions.AnyAction> = Awaited<ReturnType<A>> extends Std.Plugin.Actions.Context<infer N, BlobType, BlobType, BlobType, BlobType>
+        type InferActionName<A extends Std.Plugin.Actions.AnyAction> = Awaited<
+          ReturnType<A>
+        > extends Std.Plugin.Actions.Context<infer N, BlobType, BlobType, BlobType, BlobType>
           ? N
           : never
       }

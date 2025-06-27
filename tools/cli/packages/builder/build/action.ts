@@ -36,7 +36,12 @@ export const action = async (options: ActionOptions) => {
       continue
     }
 
-    if (!definition || typeof definition !== 'object' || Array.isArray(definition) || typeof definition.source !== 'string') {
+    if (
+      !definition ||
+      typeof definition !== 'object' ||
+      Array.isArray(definition) ||
+      typeof definition.source !== 'string'
+    ) {
       throw new Error(`Invalid exports definition ${name}`)
     }
 

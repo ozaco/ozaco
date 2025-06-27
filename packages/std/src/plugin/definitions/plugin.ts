@@ -23,7 +23,12 @@ declare global {
         options?: O
       }
 
-      type Instance<M extends Std.Plugin.AnyMeta, R = EmptyType, T = Std.Plugin.BaseTags<M>, D extends Std.Plugin.AnyDependency = EmptyType> = {
+      type Instance<
+        M extends Std.Plugin.AnyMeta,
+        R = EmptyType,
+        T = Std.Plugin.BaseTags<M>,
+        D extends Std.Plugin.AnyDependency = EmptyType,
+      > = {
         meta: M
         tags: T
         dependencies: D
@@ -31,7 +36,12 @@ declare global {
         use: <N extends keyof D>(name: N, dependency: D[N]) => Instance<M, R, T, D>
       } & R
 
-      interface Base<M extends Std.Plugin.AnyMeta, R = EmptyType, T = Std.Plugin.BaseTags<M>, D extends Std.Plugin.AnyDependency = EmptyType> {
+      interface Base<
+        M extends Std.Plugin.AnyMeta,
+        R = EmptyType,
+        T = Std.Plugin.BaseTags<M>,
+        D extends Std.Plugin.AnyDependency = EmptyType,
+      > {
         readonly meta: M
         readonly tags: T
 
@@ -41,7 +51,14 @@ declare global {
           cb: Fn<[context: Std.Plugin.Actions.Context<N, M, R, T, D>], C>,
         ) => Awaited<C> extends C
           ? Std.Plugin.Actions.Sync<N, M, Std.Plugin.Actions.InferResult<C>, Std.Plugin.Actions.InferTags<C>, D, true>
-          : Std.Plugin.Actions.Async<N, M, Std.Plugin.Actions.InferResult<Awaited<C>>, Std.Plugin.Actions.InferTags<Awaited<C>>, D, true>
+          : Std.Plugin.Actions.Async<
+              N,
+              M,
+              Std.Plugin.Actions.InferResult<Awaited<C>>,
+              Std.Plugin.Actions.InferTags<Awaited<C>>,
+              D,
+              true
+            >
 
         action: <N extends string, C extends Promisify<Std.Plugin.Actions.Context<N, M, BlobType, T, D>>>(
           name: N,
@@ -49,10 +66,22 @@ declare global {
           cb: Fn<[context: Std.Plugin.Actions.Context<N, M, R, T, D>], C>,
         ) => Awaited<C> extends C
           ? Std.Plugin.Actions.Sync<N, M, Std.Plugin.Actions.InferResult<C>, Std.Plugin.Actions.InferTags<C>, D, false>
-          : Std.Plugin.Actions.Async<N, M, Std.Plugin.Actions.InferResult<Awaited<C>>, Std.Plugin.Actions.InferTags<Awaited<C>>, D, false>
+          : Std.Plugin.Actions.Async<
+              N,
+              M,
+              Std.Plugin.Actions.InferResult<Awaited<C>>,
+              Std.Plugin.Actions.InferTags<Awaited<C>>,
+              D,
+              false
+            >
       }
 
-      interface Sync<M extends Std.Plugin.AnyMeta, R = EmptyType, T = Std.Plugin.BaseTags<M>, D extends Std.Plugin.AnyDependency = EmptyType> extends Std.Plugin.Base<M, R, T, D> {
+      interface Sync<
+        M extends Std.Plugin.AnyMeta,
+        R = EmptyType,
+        T = Std.Plugin.BaseTags<M>,
+        D extends Std.Plugin.AnyDependency = EmptyType,
+      > extends Std.Plugin.Base<M, R, T, D> {
         (...args: Std.Plugin.InferOptions<M>): Std.Plugin.Instance<M, R, T, D>
 
         // always returns async
@@ -101,7 +130,12 @@ declare global {
         >
       }
 
-      interface Async<M extends Std.Plugin.AnyMeta, R = EmptyType, T = Std.Plugin.BaseTags<M>, D extends Std.Plugin.AnyDependency = EmptyType> extends Std.Plugin.Base<M, R, T, D> {
+      interface Async<
+        M extends Std.Plugin.AnyMeta,
+        R = EmptyType,
+        T = Std.Plugin.BaseTags<M>,
+        D extends Std.Plugin.AnyDependency = EmptyType,
+      > extends Std.Plugin.Base<M, R, T, D> {
         (...args: Std.Plugin.InferOptions<M>): Promise<Std.Plugin.Instance<M, R, T, D>>
 
         // always returns async
@@ -161,15 +195,25 @@ declare global {
 
       type $BaseTags<N extends string, V extends string> = Tags<['not-found', never], `${N}@${V}`>
 
-      type BaseTags<M extends Std.Plugin.Meta<BlobType, BlobType, BlobType>> = Std.Plugin.$BaseTags<Std.Plugin.InferName<M>, Std.Plugin.InferVersion<M>>
+      type BaseTags<M extends Std.Plugin.Meta<BlobType, BlobType, BlobType>> = Std.Plugin.$BaseTags<
+        Std.Plugin.InferName<M>,
+        Std.Plugin.InferVersion<M>
+      >
 
       // Plugin Shortcuts
 
       type AnyDependency = Record<string, Std.Plugin.AnyInstance>
 
-      type AnyPlugin = Std.Plugin.Sync<BlobType, BlobType, BlobType, BlobType> | Std.Plugin.Async<BlobType, BlobType, BlobType, BlobType>
+      type AnyPlugin =
+        | Std.Plugin.Sync<BlobType, BlobType, BlobType, BlobType>
+        | Std.Plugin.Async<BlobType, BlobType, BlobType, BlobType>
 
-      type BasePlugin<M extends Std.Plugin.Meta<BlobType, BlobType, BlobType>> = Std.Plugin.Sync<M, EmptyType, Std.Plugin.BaseTags<M>, EmptyType>
+      type BasePlugin<M extends Std.Plugin.Meta<BlobType, BlobType, BlobType>> = Std.Plugin.Sync<
+        M,
+        EmptyType,
+        Std.Plugin.BaseTags<M>,
+        EmptyType
+      >
 
       type InferInstance<P> = P extends Std.Plugin.Sync<infer M, infer R, infer T, infer D>
         ? Std.Plugin.Instance<M, R, T, D>

@@ -34,19 +34,28 @@ declare global {
     /**
      * Shortcut for union intersection of Std.Error values
      */
-    type ErrorValues = LiteralUnion<Std.ExtractErrors<Std.Error[keyof Std.Error]>, `?${string}` | `${string}@${string}#${string}` | `${string}@${string}#${string}/${string}`>
+    type ErrorValues = LiteralUnion<
+      Std.ExtractErrors<Std.Error[keyof Std.Error]>,
+      `?${string}` | `${string}@${string}#${string}` | `${string}@${string}#${string}/${string}`
+    >
 
     // ------------- Shortcuts -------------
 
     /**
      * Resolves the Ok type from a Err or nested Ok
      */
-    type OkResolver<T> = T extends Err<BlobType, BlobType, BlobType> ? T : Ok<T extends Ok<infer T2, never, []> ? T2 : T, never, []>
+    type OkResolver<T> = T extends Err<BlobType, BlobType, BlobType>
+      ? T
+      : Ok<T extends Ok<infer T2, never, []> ? T2 : T, never, []>
 
     /**
      * Infers the T type from a Result<T, N, C>
      */
-    type InferOkType<R> = R extends Std.Result<infer T, BlobType, BlobType[]> ? T : R extends ResultAsync<infer T, BlobType> ? T : never
+    type InferOkType<R> = R extends Std.Result<infer T, BlobType, BlobType[]>
+      ? T
+      : R extends ResultAsync<infer T, BlobType>
+        ? T
+        : never
     /**
      * Infers the N type from a Result<T, N, C>
      */
@@ -69,7 +78,9 @@ declare global {
     /**
      * Shortcut for both Result and ResultAsync
      */
-    type Both<T, N extends Std.ErrorValues = never, C extends Std.ErrorValues[] = []> = Std.Result<T, N, C> | Std.ResultAsync<T, N, C>
+    type Both<T, N extends Std.ErrorValues = never, C extends Std.ErrorValues[] = []> =
+      | Std.Result<T, N, C>
+      | Std.ResultAsync<T, N, C>
 
     /**
      * Basic implementation of a Result
@@ -117,26 +128,39 @@ declare global {
      */
     type UnionsToResult<R> = Std.$UnionsToResult<
       R,
-      Extract<Awaited<R>, Ok<BlobType, BlobType, BlobType>> | Ok<Exclude<Awaited<R>, Std.Result<BlobType, BlobType, BlobType>>, never, []>,
+      | Extract<Awaited<R>, Ok<BlobType, BlobType, BlobType>>
+      | Ok<Exclude<Awaited<R>, Std.Result<BlobType, BlobType, BlobType>>, never, []>,
       Extract<Awaited<R>, Err<BlobType, BlobType, BlobType>>
     >
 
     /**
      * Adds error tags to a Result or ResultAsync type.
      */
-    type InjectError<U, N extends Std.ErrorValues, C extends Std.ErrorValues[]> = U extends Std.Result<infer O, infer Un, infer Uc>
+    type InjectError<U, N extends Std.ErrorValues, C extends Std.ErrorValues[]> = U extends Std.Result<
+      infer O,
+      infer Un,
+      infer Uc
+    >
       ? Std.Result<O, Un | N, Uc[number] | C[number] extends never ? [] : (Uc[number] | C[number])[]>
       : U extends Std.ResultAsync<infer O, infer Un, infer Uc>
         ? Std.ResultAsync<O, Un | N, Uc[number] | C[number] extends never ? [] : (Uc[number] | C[number])[]>
         : never
 
-    type InjectedResult<T, N extends Std.ErrorValues, C extends Std.ErrorValues[]> = Std.InjectError<Std.UnionsToResult<T>, N, C>
+    type InjectedResult<T, N extends Std.ErrorValues, C extends Std.ErrorValues[]> = Std.InjectError<
+      Std.UnionsToResult<T>,
+      N,
+      C
+    >
 
     type FromThrowable<A extends BlobType[], T, R> = (
       ...args: A
     ) => Std.UnionsToResult<
       T extends PromiseLike<BlobType>
-        ? Std.ResultAsync<Awaited<T>, Std.InferNameType<Std.UnionsToResult<R>>, Std.InferCauseType<Std.UnionsToResult<R>>>
+        ? Std.ResultAsync<
+            Awaited<T>,
+            Std.InferNameType<Std.UnionsToResult<R>>,
+            Std.InferCauseType<Std.UnionsToResult<R>>
+          >
         : Std.Result<T, Std.InferNameType<Std.UnionsToResult<R>>, Std.InferCauseType<Std.UnionsToResult<R>>>
     >
 
@@ -146,6 +170,10 @@ declare global {
      * To merge tags
      */
 
-    type MergeTags<T, T2> = T extends Tags<infer U, infer T> ? (T2 extends Tags<infer U2, BlobType> ? Tags<U | U2, T> : T) : T
+    type MergeTags<T, T2> = T extends Tags<infer U, infer T>
+      ? T2 extends Tags<infer U2, BlobType>
+        ? Tags<U | U2, T>
+        : T
+      : T
   }
 }
