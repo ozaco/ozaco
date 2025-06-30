@@ -6,5 +6,12 @@ declare global {
     interface Error {
       'std/io': typeof ioTags
     }
+
+    namespace Io {
+      interface WriteJsonOptions {
+        create?: boolean
+        ignore?: boolean
+      }
+    }
   }
 }

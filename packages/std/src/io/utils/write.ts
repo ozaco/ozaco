@@ -4,6 +4,11 @@ import type { JsonValue } from '../../shared'
 import { ioTags } from '../tag'
 import { $exists } from './exists'
 
+const defaultWriteJsonOptions: Std.Io.WriteJsonOptions = {
+  create: true,
+  ignore: false,
+}
+
 /**
  * The $write function writes a file to the specified path and
  * returns true in AsyncResult.
@@ -22,17 +27,22 @@ export const $write = $safe(async function* (path: string, data: string | ArrayB
 
 /**
  * The $writeJson function writes a object (as JSON) to the specified path and
+ * defaults to create true and ignore false.
  * returns true in AsyncResult.
  */
-export const $writeJson = $safe(async function* (path: string, data: JsonValue, create = true) {
+export const $writeJson = $safe(async function* (
+  path: string,
+  data: JsonValue,
+  options: Std.Io.WriteJsonOptions = defaultWriteJsonOptions,
+) {
   const file = Bun.file(path)
   const exists = await $exists(path, 'file')
 
-  if (exists.isErr() && !create) {
+  if (exists.isErr() && !options.create) {
     yield* err(ioTags.get('not-found'), `file: ${path} not found`)
   }
 
-  if (!(create || file.type.includes('application/json'))) {
+  if (!(options.ignore || file.type.includes('application/json'))) {
     yield* err(ioTags.get('invalid-mime'), `file: ${path} file type: ${file.type} cannot be read with this method`)
   }
 

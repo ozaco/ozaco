@@ -1,16 +1,9 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { exists, unlink } from 'node:fs/promises'
 import { join } from 'node:path'
 
-import { $write, $writeJson } from '../../../dist/io'
+import { $rm, $write, $writeJson } from '../../../dist/io'
 import { Err, Ok, ResultAsync } from '../../../dist/results'
 import type { BlobType } from '../../../dist/shared'
-
-const removeFile = async (path: string) => {
-  if (await exists(path)) {
-    await unlink(path)
-  }
-}
 
 describe('std/io/write', () => {
   describe('text', () => {
@@ -18,7 +11,7 @@ describe('std/io/write', () => {
     const txtFileContent = 'hi this is alice zuberg'
 
     afterEach(async () => {
-      await removeFile(txtFilePath)
+      ;(await $rm(txtFilePath)).unwrap()
     })
 
     test('correct', async () => {
@@ -43,8 +36,8 @@ describe('std/io/write', () => {
     const incorrectJsonFileContent = undefined
 
     afterEach(async () => {
-      await removeFile(jsonFilePath)
-      await removeFile(incorrectJsonFilePath)
+      await $rm(jsonFilePath)
+      await $rm(incorrectJsonFilePath)
     })
 
     test('correct', async () => {
