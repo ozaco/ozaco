@@ -142,6 +142,12 @@ export const splitBuild = async (options: BuildOptions) => {
       subEntries.push(join(fileDir, exportFile))
     }
 
+    if (subEntries.length === 0) {
+      console.warn('No exports found, skipping...')
+
+      continue
+    }
+
     await buildFiles('component', outputGenerated, {
       ...options,
       entries: subEntries,

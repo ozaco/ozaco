@@ -13,7 +13,7 @@ declare global {
     // ------------- Errors -------------
 
     /**
-     * Use this instead of CustomErrors. CustomErrors is for overriding
+     * Used to merge errors from different packages
      */
     interface Error {
       'std/results': typeof resultTags
