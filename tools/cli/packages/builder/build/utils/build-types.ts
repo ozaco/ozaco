@@ -1,4 +1,5 @@
 // biome-ignore-all lint/nursery/noExcessiveLinesPerFunction: Redundant
+// biome-ignore-all lint/nursery/noFloatingPromises: Redundant
 
 import { exists, mkdir } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
@@ -45,8 +46,7 @@ export const buildTypes = async (options: BuildTypesOptions) => {
       })
 
       // STDOUT
-
-      await (async () => {
+      ;(async () => {
         let lastBuildTime = performance.now()
 
         if (proc?.stdout instanceof ReadableStream) {
@@ -68,8 +68,7 @@ export const buildTypes = async (options: BuildTypesOptions) => {
       })()
 
       // STDERR
-
-      await (async () => {
+      ;(async () => {
         if (proc?.stderr instanceof ReadableStream) {
           for await (const data of proc.stderr) {
             console.error(DECODER.decode(data))
