@@ -98,7 +98,7 @@
       "indentWidth": 2,
       "lineEnding": "lf",
       "lineWidth": 120,
-      "trailingCommas": "all",
+      "trailingCommas": "none",
     },
     "linter": {
       "enabled": true,
@@ -532,6 +532,14 @@
           "nursery": {
             "noExcessiveLinesPerFunction": "off",
           },
+        },
+      },
+    },
+    {
+      "includes": ["**/*.jsonc"],
+      "json": {
+        "formatter": {
+          "trailingCommas": "all",
         },
       },
     },
