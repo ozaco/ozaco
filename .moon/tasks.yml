@@ -27,16 +27,18 @@ tasks:
     options:
       affectedFiles: true
   apply:
+    local: true
     command: "biome check --write --no-errors-on-unmatched --files-ignore-unknown=true ."
     options:
       affectedFiles: true
   apply-unsafe:
+    local: true
     command: "biome check --write --unsafe --no-errors-on-unmatched --files-ignore-unknown=true ."
     options:
       affectedFiles: true
   clean:
-    command: "rm -rf dist && rm -rf .ozaco"
     local: true
+    command: "rm -rf dist && rm -rf .ozaco"
     options:
       cache: false
       persistent: false

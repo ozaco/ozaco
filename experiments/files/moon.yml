@@ -4,6 +4,7 @@ platform: "bun"
 
 tasks:
   dev:
+    local: true
     command: "bunx ozaco build -s"
     deps:
       - "cli:dev"

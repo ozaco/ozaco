@@ -4,6 +4,7 @@ platform: "bun"
 
 tasks:
   watch:
+    local: true
     command: "bunx ozaco build -w -s -f cjs -t node"
     deps:
       - "cli:dev"
@@ -12,8 +13,8 @@ tasks:
       - "src/**/*"
     outputs:
       - "dist/**"
-    local: true
   dev:
+    local: true
     command: "bunx ozaco build -f cjs -t node"
     deps:
       - "std:dev"

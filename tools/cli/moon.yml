@@ -4,6 +4,7 @@ platform: "bun"
 
 tasks:
   dev:
+    local: true
     command: "bun run src/main.ts build -s"
     inputs:
       - "src/**/*"

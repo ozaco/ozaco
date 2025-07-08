@@ -4,6 +4,7 @@ platform: "bun"
 
 tasks:
   watch:
+    local: true
     command: "bunx ozaco build -w"
     deps:
       - "cli:dev"
@@ -11,8 +12,8 @@ tasks:
       - "src/**/*"
     outputs:
       - "dist/**"
-    local: true
   dev:
+    local: true
     command: "bunx ozaco build"
     deps:
       - "cli:dev"
@@ -34,4 +35,3 @@ tasks:
       - "std:build"
     inputs:
       - "tests/**/*"
-    local: true
