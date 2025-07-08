@@ -1,6 +1,6 @@
 $schema: "https://moonrepo.dev/schemas/toolchain.json"
 
 bun:
-  version: "1.2.17"
+  version: "1.2.18"
   dependencyVersionFormat: "workspace"
   syncProjectWorkspaceDependencies: true
