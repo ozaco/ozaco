@@ -141,3 +141,4 @@ lib/
 pnpm-lock.yaml
 .DS_Store
 .ozaco
+experiments
