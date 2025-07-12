@@ -1,14 +1,17 @@
 {
-  "author": "giveerr (https://github.com/giveerr)",
+  "type": "module",
+  "version": "0.0.5",
+  "name": "@ozaco/std",
+
   "bundleDependencies": ["picocolors", "type-fest"],
   "dependencies": {
     "picocolors": "^1.1.1",
     "type-fest": "^4.41.0"
   },
-
   "devDependencies": {
     "@ozaco/cli": "workspace:*"
   },
+
   "exports": {
     "./effects": {
       "default": "./dist/effects.js",
@@ -51,14 +54,13 @@
       "types": "./dist/shared.d.ts"
     }
   },
+
   "files": ["dist"],
+
+  "author": "giveerr (https://github.com/giveerr)",
   "homepage": "https://ozaco.com/",
-  "name": "@ozaco/std",
   "repository": {
     "type": "git",
     "url": "https://github.com/ozaco/ozaco.git"
-  },
-
-  "type": "module",
-  "version": "0.0.5"
+  }
 }

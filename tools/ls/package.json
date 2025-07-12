@@ -1,5 +1,7 @@
 {
-  "author": "giveerr (https://github.com/giveerr)",
+  "type": "commonjs",
+  "name": "@ozaco/language-service",
+  "version": "0.0.0",
 
   "dependencies": {
     "@ozaco/std": "workspace:*",
@@ -8,6 +10,7 @@
   "devDependencies": {
     "@ozaco/cli": "workspace:*"
   },
+
   "exports": {
     ".": {
       "default": "./dist/index.js",
@@ -15,14 +18,12 @@
       "types": "./dist/index.d.ts"
     }
   },
-  "homepage": "https://ozaco.com/",
   "main": "./dist",
-  "name": "@ozaco/language-service",
+
+  "author": "giveerr (https://github.com/giveerr)",
+  "homepage": "https://ozaco.com/",
   "repository": {
     "type": "git",
     "url": "https://github.com/ozaco/ozaco.git"
-  },
-
-  "type": "commonjs",
-  "version": "0.0.0"
+  }
 }

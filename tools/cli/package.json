@@ -1,21 +1,32 @@
 {
-  "author": "giveerr (https://github.com/giveerr)",
+  "type": "module",
+  "version": "0.0.13",
+  "name": "@ozaco/cli",
+  "description": "All in one cli for ozaco",
 
   "bin": {
     "ozaco": "./command"
   },
-  "bundleDependencies": ["clerc", "acorn", "acorn-loose"],
 
+  "bundleDependencies": ["clerc", "acorn", "acorn-loose"],
   "dependencies": {
     "acorn": "^8.15.0",
     "acorn-loose": "^8.5.2",
     "clerc": "^0.44.0"
   },
-  "description": "All in one cli for ozaco",
   "devDependencies": {
     "type-fest": "^4.41.0",
     "typescript": "^5.8.3"
   },
+  "peerDependencies": {
+    "typescript": ">= 5.0.0"
+  },
+  "peerDependenciesMeta": {
+    "typescript": {
+      "optional": true
+    }
+  },
+
   "exports": {
     ".": {
       "default": "./dist/index.js",
@@ -33,22 +44,13 @@
       "types": "./dist/main.d.ts"
     }
   },
+
   "files": ["dist", "./command"],
+
+  "author": "giveerr (https://github.com/giveerr)",
   "homepage": "https://ozaco.com/",
-  "name": "@ozaco/cli",
-  "peerDependencies": {
-    "typescript": ">= 5.0.0"
-  },
-  "peerDependenciesMeta": {
-    "typescript": {
-      "optional": true
-    }
-  },
   "repository": {
     "type": "git",
     "url": "https://github.com/ozaco/ozaco.git"
-  },
-
-  "type": "module",
-  "version": "0.0.13"
+  }
 }

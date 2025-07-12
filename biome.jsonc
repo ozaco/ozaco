@@ -543,6 +543,18 @@
         },
       },
     },
+    {
+      "assist": {
+        "actions": {
+          "source": {
+            "useSortedAttributes": "off",
+            "useSortedKeys": "off",
+            "useSortedProperties": "off",
+          },
+        },
+      },
+      "includes": ["**/package.json"],
+    },
   ],
 
   "root": true,

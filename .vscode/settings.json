@@ -6,7 +6,9 @@
     "editor.defaultFormatter": "biomejs.biome"
   },
   "biome.enabled": true,
+
   "editor.codeActionsOnSave": {
+    "source.action.useSortedKeys.biome": "explicit",
     "source.fixAll.biome": "explicit"
   },
   "editor.defaultFormatter": "biomejs.biome",
