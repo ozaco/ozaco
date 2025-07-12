@@ -13,37 +13,6 @@
         "typescript": "^5.8.3",
       },
     },
-    "experiments/example": {
-      "name": "@ozaco/example",
-      "version": "0.0.0",
-      "dependencies": {
-        "@ozaco/std": "workspace:*",
-      },
-      "devDependencies": {
-        "@ozaco/cli": "workspace:*",
-      },
-    },
-    "experiments/files": {
-      "name": "@ozaco/files",
-      "version": "0.0.0",
-      "dependencies": {
-        "@ozaco/std": "workspace:*",
-      },
-      "devDependencies": {
-        "@ozaco/cli": "workspace:*",
-      },
-    },
-    "experiments/plugin": {
-      "name": "@ozaco/plugin",
-      "version": "0.0.0",
-      "dependencies": {
-        "@ozaco/std": "workspace:*",
-      },
-      "devDependencies": {
-        "@ozaco/cli": "workspace:*",
-        "@ozaco/language-service": "workspace:*",
-      },
-    },
     "packages/std": {
       "name": "@ozaco/std",
       "version": "0.0.5",
@@ -178,13 +147,7 @@
 
     "@ozaco/cli": ["@ozaco/cli@workspace:tools/cli"],
 
-    "@ozaco/example": ["@ozaco/example@workspace:experiments/example"],
-
-    "@ozaco/files": ["@ozaco/files@workspace:experiments/files"],
-
     "@ozaco/language-service": ["@ozaco/language-service@workspace:tools/ls"],
-
-    "@ozaco/plugin": ["@ozaco/plugin@workspace:experiments/plugin"],
 
     "@ozaco/std": ["@ozaco/std@workspace:packages/std"],
 

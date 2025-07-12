@@ -23,21 +23,6 @@
       "source": "./src/io/index.ts",
       "types": "./dist/io.d.ts"
     },
-    "./logger": {
-      "default": "./dist/logger.js",
-      "source": "./src/logger/index.ts",
-      "types": "./dist/logger.d.ts"
-    },
-    "./logger-file": {
-      "default": "./dist/logger-file.js",
-      "source": "./src/logger/file-transport/index.ts",
-      "types": "./dist/logger-file.d.ts"
-    },
-    "./parser": {
-      "default": "./dist/parser.js",
-      "source": "./src/parser/index.ts",
-      "types": "./dist/parser.d.ts"
-    },
     "./plugin": {
       "default": "./dist/plugin.js",
       "source": "./src/plugin/index.ts",
@@ -52,6 +37,21 @@
       "default": "./dist/shared.js",
       "source": "./src/shared/index.ts",
       "types": "./dist/shared.d.ts"
+    },
+    "./logger": {
+      "default": "./dist/logger.js",
+      "source": "./src/logger/index.ts",
+      "types": "./dist/logger.d.ts"
+    },
+    "./logger/file": {
+      "default": "./dist/logger-file.js",
+      "source": "./src/logger/file-transport/index.ts",
+      "types": "./dist/logger-file.d.ts"
+    },
+    "./parser": {
+      "default": "./dist/parser.js",
+      "source": "./src/parser/index.ts",
+      "types": "./dist/parser.d.ts"
     }
   },
 
