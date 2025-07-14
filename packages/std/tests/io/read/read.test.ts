@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import { join } from 'node:path'
 
-import { $read } from '../../../dist/io'
-import { Ok, ResultAsync } from '../../../dist/results'
+import { $read } from '@ozaco/std/io'
+import { Ok, ResultAsync } from '@ozaco/std/results'
 
 describe('std/io/read', () => {
   describe('json', () => {

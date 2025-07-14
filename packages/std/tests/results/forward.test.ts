@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 
-import { Err, err, forward, ok, okAsync } from '../../dist/results'
-import { wait } from '../../src/shared'
+import { Err, err, forward, ok, okAsync } from '@ozaco/std/results'
+import { wait } from '@ozaco/std/shared'
 
 describe('std/results/fn', () => {
   const testData = 'hi' as const
