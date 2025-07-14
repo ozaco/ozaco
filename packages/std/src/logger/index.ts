@@ -5,4 +5,4 @@
 import './definition'
 
 export * from './consts'
-export * from './logger'
+export * from './core'
