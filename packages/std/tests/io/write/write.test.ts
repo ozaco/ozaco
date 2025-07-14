@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import { join } from 'node:path'
 
-import { $rm, $write, $writeJson } from '../../../dist/io'
-import { Err, Ok, ResultAsync } from '../../../dist/results'
-import type { BlobType } from '../../../dist/shared'
+import { $rm, $write, $writeJson } from '@ozaco/std/io'
+import { Err, Ok, ResultAsync } from '@ozaco/std/results'
+import type { BlobType } from '@ozaco/std/shared'
 
 describe('std/io/write', () => {
   describe('text', () => {

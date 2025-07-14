@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 
-import { $fn, Err, err, errAsync, Ok, ok, okAsync, ResultAsync } from '../../dist/results'
-import { wait } from '../../dist/shared'
+import { $fn, Err, err, errAsync, Ok, ok, okAsync, ResultAsync } from '@ozaco/std/results'
+import { wait } from '@ozaco/std/shared'
 
 describe('std/results/fn', () => {
   describe('sync', () => {
