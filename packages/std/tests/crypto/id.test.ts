@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 
-describe('std/crypto/generate-id', async () => {
+describe('std/crypto/id', async () => {
   const core = await import('@ozaco/std/crypto')
   const unsafe = await import('@ozaco/std/crypto/unsafe')
   const legacy = await import('@ozaco/std/crypto/legacy')
