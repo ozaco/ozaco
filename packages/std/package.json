@@ -52,6 +52,22 @@
       "default": "./dist/parser.js",
       "source": "./src/parser/index.ts",
       "types": "./dist/parser.d.ts"
+    },
+
+    "./crypto": {
+      "default": "./dist/crypto.js",
+      "source": "./src/crypto/index.ts",
+      "types": "./dist/crypto.d.ts"
+    },
+    "./crypto/legacy": {
+      "default": "./dist/crypto-legacy.js",
+      "source": "./src/crypto/modules/legacy.ts",
+      "types": "./dist/crypto-legacy.d.ts"
+    },
+    "./crypto/unsafe": {
+      "default": "./dist/crypto-unsafe.js",
+      "source": "./src/crypto/modules/unsafe.ts",
+      "types": "./dist/crypto-unsafe.d.ts"
     }
   },
 
