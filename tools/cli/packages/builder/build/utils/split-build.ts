@@ -118,7 +118,7 @@ export const splitBuild = async (options: BuildOptions) => {
     const exports: string[] = []
 
     for await (const rawScannedFile of glob.scan(absoluteFileDir)) {
-      const scannedFile = `./${rawScannedFile}`
+      const scannedFile = `./${rawScannedFile.replaceAll('\\', '/')}`
 
       for (const rawExport of rawExports) {
         if (

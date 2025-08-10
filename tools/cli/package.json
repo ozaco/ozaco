@@ -1,6 +1,6 @@
 {
   "type": "module",
-  "version": "0.0.13",
+  "version": "0.0.14",
   "name": "@ozaco/cli",
   "description": "All in one cli for ozaco",
 
