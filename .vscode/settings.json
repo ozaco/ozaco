@@ -1,0 +1,7 @@
+{
+    "deno.enable": true,
+    "deno.lint": false,
+    "deno.unstable": false,
+    "deno.config": "deno.jsonc",
+    "biome.enabled": true,
+}
