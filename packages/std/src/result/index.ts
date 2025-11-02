@@ -1,5 +1,6 @@
 export * from './const'
 export * from './fn'
+export * from './from'
 export * from './handle'
 export * from './result'
 export * from './safe'
