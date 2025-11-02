@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "declarationDir": "dist/.types",
+    "lib": [
+      "esnext",
+      "dom"
+    ],
+    "paths": {
+      "@shared": [
+        "src/shared/index.ts"
+      ],
+      "@result": [
+        "src/result/index.ts"
+      ]
+    }
+  },
+  "extends": "../../tsconfig.base.json",
+  "include": [
+    "src",
+    "test",
+    "examples"
+  ],
+  "references": []
+}

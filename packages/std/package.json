@@ -1,0 +1,32 @@
+{
+  "name": "@ozaco/std",
+  "type": "module",
+  "version": "0.0.6",
+  "exports": {
+    "./result": {
+      "default": "./dist/result.js",
+      "source": "./src/result/index.ts",
+      "types": "./dist/result.d.ts"
+    },
+    "./shared": {
+      "default": "./dist/shared.js",
+      "source": "./src/shared/index.ts",
+      "types": "./dist/shared.d.ts"
+    }
+  },
+
+  "files": [
+    "dist"
+  ],
+
+  "dependencies": {
+    "type-fest": "^5.1.0"
+  },
+
+  "author": "giveerr (https://github.com/giveerr)",
+  "homepage": "https://ozaco.com/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ozaco/ozaco.git"
+  }
+}

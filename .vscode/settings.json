@@ -1,7 +1,35 @@
 {
-    "deno.enable": true,
-    "deno.lint": false,
-    "deno.unstable": false,
-    "deno.config": "deno.jsonc",
-    "biome.enabled": true,
+  "[json]": {
+    "editor.defaultFormatter": "biomejs.biome"
+  },
+  "[jsonc]": {
+    "editor.defaultFormatter": "biomejs.biome"
+  },
+  "biome.enabled": true,
+  "deno.enable": false,
+
+  "editor.codeActionsOnSave": {
+    "source.action.useSortedKeys.biome": "explicit",
+    "source.fixAll.biome": "explicit"
+  },
+  "editor.defaultFormatter": "biomejs.biome",
+  "eslint.enable": false,
+  "files.associations": {
+    "*.css": "css"
+  },
+  "css.validate": false,
+
+  "javascript.preferences.importModuleSpecifier": "shortest",
+  "prettier.enable": false,
+  "typescript.disableAutomaticTypeAcquisition": false,
+  "typescript.preferences.importModuleSpecifier": "project-relative",
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "tailwindCSS.classFunctions": [
+    "cva",
+    "cx",
+    "clsx"
+  ],
+  "[typescriptreact]": {
+    "editor.defaultFormatter": "biomejs.biome"
+  }
 }
