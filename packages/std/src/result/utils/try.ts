@@ -1,7 +1,6 @@
 import { type BlobType, isPromise } from '@shared'
-
+import type { Err, Result, ResultAsync } from '../types'
 import { handle, handleAsync, handleError } from './handle'
-import type { Err, Result, ResultAsync } from './types'
 
 export function $try<Args extends BlobType[], Value, Name extends string = never, Cause extends string = never>(
   cb: (...args: Args) => PromiseLike<Result<Value | Err<Name>, Name>>,

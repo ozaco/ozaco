@@ -1,7 +1,7 @@
 import { type BlobType, isPromise } from '@shared'
+import type { Err, Result, ResultAsync } from '../types'
 import { handleAsync } from './handle'
-import { ok } from './result'
-import type { Err, Result, ResultAsync } from './types'
+import { auto } from './result'
 
 export function $from<Args extends BlobType[], Value, Handler extends Err<BlobType>, Cause extends string = never>(
   cb: (...args: Args) => PromiseLike<Value>,
@@ -21,7 +21,7 @@ export function $from(cb: (...args: BlobType[]) => BlobType, handler: (error: un
 
       if (isPromise(out)) {
         const result = out.then(
-          out => ok(out),
+          out => auto(out),
           e => handler(e),
         )
 
@@ -30,7 +30,7 @@ export function $from(cb: (...args: BlobType[]) => BlobType, handler: (error: un
         return result
       }
 
-      return ok(out)
+      return auto(out)
     } catch (e) {
       return handler(e)
     }

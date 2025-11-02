@@ -1,7 +1,7 @@
-import type { BlobType } from '../shared'
-import { isPromise } from '../shared/utils/is'
+import type { BlobType } from '../../shared'
+import { isPromise } from '../../shared/utils/is'
+import type { Err, Result, ResultAsync } from '../types'
 import { handle, handleAsync, handleError } from './handle'
-import type { Err, Result, ResultAsync } from './types'
 
 export function $safe<Args extends BlobType[], Value, Name extends string = never, Cause extends string = never>(
   cb: (...args: Args) => AsyncGenerator<Err<Name>, Result<Value | Err<Name>, Name>>,

@@ -1,6 +1,6 @@
 import type { BlobType } from '@shared'
 
-import { isErr, isOk, ok, unexpected } from './result'
+import { auto, isErr, unexpected } from './result'
 
 export const handleAsync = async <T extends PromiseLike<BlobType>>(value: T) => {
   Object.assign(value, {
@@ -21,11 +21,7 @@ export const handle = (value: BlobType, causes: string[]) => {
     return handleError(value, causes)
   }
 
-  if (isOk(value)) {
-    return value
-  }
-
-  return ok(value)
+  return auto(value)
 }
 export const handleError = (error: BlobType, causes: string[]) => {
   if (isErr(error)) {

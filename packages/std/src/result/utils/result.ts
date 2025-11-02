@@ -1,6 +1,6 @@
 import { type BlobType, isPromise } from '@shared'
-import { RESULT_ERR, RESULT_OK } from './const'
-import type { Err, Ok, Result, ResultAsync } from './types'
+import { RESULT_ERR, RESULT_OK } from '../const'
+import type { Err, Ok, Result, ResultAsync } from '../types'
 
 export const ok = <Type>(value: Type): Ok<Type> => {
   return {
