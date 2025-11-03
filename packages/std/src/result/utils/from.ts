@@ -8,6 +8,7 @@ export function $from<Args extends BlobType[], Value, Handler extends Err<BlobTy
   handler: (error: unknown) => Handler,
   ...causes: Cause[]
 ): (...args: Args) => ResultAsync<Value, Handler['_n'] | Cause>
+
 export function $from<Args extends BlobType[], Value, Handler extends Err<BlobType>, Cause extends string = never>(
   cb: (...args: Args) => Value,
   handler: (error: unknown) => Handler,

@@ -7,18 +7,22 @@ export function $safe<Args extends BlobType[], Value, Name extends string = neve
   cb: (...args: Args) => AsyncGenerator<Err<Name>, Result<Value | Err<Name>, Name>>,
   ...causes: Cause[]
 ): (...args: Args) => ResultAsync<Value, Cause | Name>
+
 export function $safe<Args extends BlobType[], Value, Name extends string = never, Cause extends string = never>(
   cb: (...args: Args) => AsyncGenerator<Err<Name>, Value | Err<Name>>,
   ...causes: Cause[]
 ): (...args: Args) => ResultAsync<Value, Cause | Name>
+
 export function $safe<Args extends BlobType[], Value, Name extends string = never, Cause extends string = never>(
   cb: (...args: Args) => Generator<Err<Name>, Result<Value | Err<Name>, Name>>,
   ...causes: Cause[]
 ): (...args: Args) => Result<Value, Cause | Name>
+
 export function $safe<Args extends BlobType[], Value, Name extends string = never, Cause extends string = never>(
   cb: (...args: Args) => Generator<Err<Name>, Value | Err<Name>>,
   ...causes: Cause[]
 ): (...args: Args) => Result<Value, Cause | Name>
+
 export function $safe(cb: (...args: BlobType[]) => BlobType, ...causes: string[]) {
   return (...args: BlobType[]) => {
     try {

@@ -6,18 +6,22 @@ export function $try<Args extends BlobType[], Value, Name extends string = never
   cb: (...args: Args) => PromiseLike<Result<Value | Err<Name>, Name>>,
   ...causes: Cause[]
 ): ResultAsync<Value, Cause | Name>
+
 export function $try<Args extends BlobType[], Value, Name extends string = never, Cause extends string = never>(
   cb: (...args: Args) => PromiseLike<Value | Err<Name>>,
   ...causes: Cause[]
 ): ResultAsync<Value, Cause | Name>
+
 export function $try<Args extends BlobType[], Value, Name extends string = never, Cause extends string = never>(
   cb: (...args: Args) => Result<Value | Err<Name>, Name>,
   ...causes: Cause[]
 ): Result<Value, Cause | Name>
+
 export function $try<Args extends BlobType[], Value, Name extends string = never, Cause extends string = never>(
   cb: (...args: Args) => Value | Err<Name>,
   ...causes: Cause[]
 ): Result<Value, Cause | Name>
+
 export function $try(cb: (...args: BlobType[]) => BlobType, ...causes: string[]) {
   try {
     const out = cb()
