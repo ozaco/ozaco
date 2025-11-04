@@ -15,7 +15,29 @@ export type Err<Name extends string> = {
 
   [Symbol.iterator](): Generator<Err<Name>, never>
 }
+
 export type Result<Type, Name extends string> = Ok<Type> | Err<Name>
-export type ResultAsync<Type, Name extends string> = PromiseLike<Result<Type, Name>> & {
+
+export type BaseResultAsync<Type, Name extends string> = PromiseLike<Result<Type, Name>> & {
   [Symbol.asyncIterator](): AsyncGenerator<Err<Name>, Type>
 }
+export type ResultAsync<Type, Name extends string> = (Type extends never
+  ? Name extends never
+    ? never
+    : BaseResultAsync<Type, Name>
+  : BaseResultAsync<Type, Name>) & {}
+
+export type ResultBoth<Type, Name extends string> = Result<Type, Name> | ResultAsync<Type, Name>
+
+export type ExtractResultAsync<Value, Name extends string> = PromiseLike<
+  ResultBoth<PromiseLike<Value> | Value | Err<Name>, Name> | PromiseLike<Value> | Value | Err<Name>
+>
+
+export type ExtractResult<Value, Name extends string> = Result<Value | Err<Name>, Name> | Value | Err<Name>
+
+export type ExtractResultBoth<Value, AsyncValue, Name extends string, AsyncName extends string> =
+  | ResultAsync<Result<AsyncValue, AsyncName> | PromiseLike<AsyncValue> | AsyncValue | Err<AsyncName>, AsyncName>
+  | Result<PromiseLike<AsyncValue> | Value | Err<Name>, Name>
+  | PromiseLike<AsyncValue | Result<AsyncValue, AsyncName>>
+  | Value
+  | Err<Name>

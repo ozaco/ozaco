@@ -1,4 +1,5 @@
-import { type BlobType, isPromise } from '@shared'
+import { type BlobType, isPromise } from 'std:shared'
+
 import { RESULT_ERR, RESULT_OK } from '../const'
 import type { Err, Ok, Result, ResultAsync } from '../types'
 
@@ -41,22 +42,11 @@ export function auto(value: BlobType) {
 }
 
 export const unexpected = (error: Error, cause: string[] = []): Err<'ERR_UNEXPECTED'> => {
-  return {
-    _c: cause,
-    _d: Date.now(),
-    _m: error.message,
-    _n: 'ERR_UNEXPECTED',
-    _o: error,
-    _t: RESULT_ERR,
+  const result = err('ERR_UNEXPECTED', error.message, cause)
 
-    // @ts-expect-error Redundant
-    *[Symbol.iterator]() {
-      // biome-ignore lint/complexity/noUselessThisAlias: Redundant
-      const self = this
-      yield self
-      return self
-    },
-  }
+  result._o = error
+
+  return result
 }
 
 export function isOk<Value>(result: Ok<Value>): result is Ok<Value>

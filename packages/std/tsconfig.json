@@ -7,17 +7,21 @@
       "dom"
     ],
     "paths": {
-      "@shared": [
+      "std:shared": [
         "src/shared/index.ts"
       ],
-      "@result": [
+      "std:result": [
         "src/result/index.ts"
+      ],
+      "std:signal": [
+        "experimental/signal/index.ts"
       ]
     }
   },
   "extends": "../../tsconfig.base.json",
   "include": [
     "src",
+    "experimental",
     "test",
     "examples"
   ],

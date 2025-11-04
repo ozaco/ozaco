@@ -1,26 +1,24 @@
-import { type BlobType, isPromise } from '@shared'
-import type { Err, Result, ResultAsync } from '../types'
+import { type BlobType, isPromise } from 'std:shared'
+
+import type { ExtractResultAsync, ExtractResultBoth, Result, ResultAsync } from '../types'
 import { handle, handleAsync, handleError } from './handle'
 
 export function $fn<Args extends BlobType[], Value, Name extends string = never, Cause extends string = never>(
-  cb: (...args: Args) => PromiseLike<Result<Value | Err<Name>, Name>>,
+  cb: (...args: Args) => ExtractResultAsync<Value, Name>,
   ...causes: Cause[]
 ): (...args: Args) => ResultAsync<Value, Cause | Name>
 
-export function $fn<Args extends BlobType[], Value, Name extends string = never, Cause extends string = never>(
-  cb: (...args: Args) => PromiseLike<Value | Err<Name>>,
+export function $fn<
+  Args extends BlobType[],
+  Value,
+  AsyncValue = never,
+  Name extends string = never,
+  AsyncName extends string = never,
+  Cause extends string = never,
+>(
+  cb: (...args: Args) => ExtractResultBoth<Value, AsyncValue, Name, AsyncName>,
   ...causes: Cause[]
-): (...args: Args) => ResultAsync<Value, Cause | Name>
-
-export function $fn<Args extends BlobType[], Value, Name extends string = never, Cause extends string = never>(
-  cb: (...args: Args) => Result<Value | Err<Name>, Name>,
-  ...causes: Cause[]
-): (...args: Args) => Result<Value, Cause | Name>
-
-export function $fn<Args extends BlobType[], Value, Name extends string = never, Cause extends string = never>(
-  cb: (...args: Args) => Value | Err<Name>,
-  ...causes: Cause[]
-): (...args: Args) => Result<Value, Cause | Name>
+): (...args: Args) => Result<Value, Cause | Name> | ResultAsync<AsyncValue, Cause | AsyncName>
 
 export function $fn(cb: (...args: BlobType[]) => BlobType, ...causes: string[]) {
   return (...args: BlobType[]) => {

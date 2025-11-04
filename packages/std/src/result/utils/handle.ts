@@ -1,4 +1,4 @@
-import type { BlobType } from '@shared'
+import type { BlobType } from 'std:shared'
 
 import { auto, isErr, unexpected } from './result'
 
@@ -23,6 +23,7 @@ export const handle = (value: BlobType, causes: string[]) => {
 
   return auto(value)
 }
+
 export const handleError = (error: BlobType, causes: string[]) => {
   if (isErr(error)) {
     if (causes.length > 0) {

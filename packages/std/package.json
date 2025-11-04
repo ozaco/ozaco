@@ -12,6 +12,11 @@
       "default": "./dist/shared.js",
       "source": "./src/shared/index.ts",
       "types": "./dist/shared.d.ts"
+    },
+    "./experimental/signal": {
+      "default": "./dist/experimental/signal.js",
+      "source": "./experimental/signal/index.ts",
+      "types": "./dist/experimental/signal.d.ts"
     }
   },
 
