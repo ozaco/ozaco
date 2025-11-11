@@ -23,7 +23,8 @@
     "src",
     "experimental",
     "test",
-    "examples"
+    "examples",
+    "local"
   ],
   "references": []
 }

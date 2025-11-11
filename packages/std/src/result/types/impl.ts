@@ -97,6 +97,14 @@ export namespace Impl {
   }
 
   export interface Guard {
+    <Args extends BlobType[], U, V>(
+      fn: (...args: Args) => Generator<U, V>,
+      ...causes: string[]
+    ): (...args: Args) => ResultFromUnion<V | U>
+    <Args extends BlobType[], U, V>(
+      fn: (...args: Args) => AsyncGenerator<U, V>,
+      ...causes: string[]
+    ): (...args: Args) => ResultFromUnion<Promise<V | U>>
     <Args extends BlobType[], R>(fn: (...args: Args) => R, ...causes: string[]): (...args: Args) => ResultFromUnion<R>
 
     <R>(...causes: string[]): (result: R) => ResultFromUnion<R>
@@ -111,5 +119,16 @@ export namespace Impl {
     ): <R1 extends ResultMaybeAsync<BlobType, Parameters<F>[0]>>(
       result: R1,
     ) => ResultFor<R1 | ReturnType<F>, InferSuccess<R1> | InferSuccess<F>, InferFailure<F>>
+  }
+
+  export interface AndThrough {
+    <R1 extends ResultMaybeAsync<BlobType, BlobType>, R2 extends ResultMaybeAsync<BlobType, BlobType>>(
+      fn: (a: InferSuccess<R1>) => R2,
+    ): (result: R1) => ResultFor<R1 | R2, InferSuccess<R1>, InferFailure<R1> | InferFailure<R2>>
+    <F extends (a: BlobType) => ResultMaybeAsync<BlobType, BlobType>>(
+      fn: F,
+    ): <R1 extends ResultMaybeAsync<Parameters<F>[0], BlobType>>(
+      result: R1,
+    ) => ResultFor<R1 | ReturnType<F>, InferSuccess<R1>, InferFailure<R1> | InferFailure<F>>
   }
 }

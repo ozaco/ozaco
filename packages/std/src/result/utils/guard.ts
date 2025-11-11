@@ -1,10 +1,9 @@
-import { type BlobType, isString } from 'std:shared'
+import { type BlobType, isAsyncGenerator, isGenerator, isPromise, isString } from 'std:shared'
 
 import type { Impl } from '../types'
 
 import { auto } from './auto'
 import { isFailure, isResult } from './is'
-import { mapError } from './map-error'
 import { pipe } from './pipe'
 
 export const guard: Impl.Guard = (...args: BlobType[]): BlobType => {
@@ -18,14 +17,29 @@ export const guard: Impl.Guard = (...args: BlobType[]): BlobType => {
 
   return (...args: BlobType[]) =>
     pipe(
-      firstArgument.apply(null, args),
-      auto(),
-      mapError(error => {
-        if (isResult(error) && isFailure(error)) {
-          error.causes.push(...causes)
+      firstArgument(...args),
+      returnValue => {
+        let newReturnValue = returnValue
+
+        if (isGenerator(returnValue)) {
+          newReturnValue = returnValue.next().value
+        } else if (isAsyncGenerator(returnValue)) {
+          newReturnValue = returnValue.next().then((result: BlobType) => result.value)
         }
 
-        return error
-      }),
+        if (isResult(newReturnValue) && isFailure(newReturnValue)) {
+          newReturnValue.causes.push(...causes)
+        } else if (isPromise(newReturnValue)) {
+          return newReturnValue.then(result => {
+            if (isResult(result) && isFailure(result)) {
+              result.causes.push(...causes)
+            }
+            return result
+          })
+        }
+
+        return returnValue
+      },
+      auto(),
     )
 }

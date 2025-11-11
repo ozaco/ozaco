@@ -15,7 +15,13 @@ export const auto: Impl.Auto = (...args: BlobType[]): BlobType => {
   }
 
   if (isPromise(firstArgument)) {
-    return firstArgument.then(newResponse => auto(newResponse, defaultValue))
+    return firstArgument.then(newResponse => {
+      if(isFailure(newResponse) && hasDefaultValue) {
+        return auto(defaultValue)
+      }
+
+      return auto(newResponse)
+    })
   } else if (isResult(firstArgument)) {
     if (isFailure(firstArgument) && hasDefaultValue) {
       return auto(defaultValue)

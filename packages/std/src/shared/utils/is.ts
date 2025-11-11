@@ -19,3 +19,14 @@ export const isArray = <T>(value: unknown): value is T[] => {
 export const isString = (value: unknown): value is string => {
   return typeof value === 'string'
 }
+
+export const isGenerator = (value: unknown): value is Generator<BlobType, BlobType> => {
+  return typeof value === 'object' && typeof (value as Generator<BlobType, BlobType>)?.[Symbol.iterator] === 'function'
+}
+
+export const isAsyncGenerator = (value: unknown): value is AsyncGenerator<BlobType, BlobType> => {
+  return (
+    typeof value === 'object' &&
+    typeof (value as AsyncGenerator<BlobType, BlobType>)?.[Symbol.asyncIterator] === 'function'
+  )
+}
