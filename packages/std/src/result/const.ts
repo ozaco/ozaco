@@ -1,2 +1,2 @@
-export const RESULT_OK = Symbol('RESULT_OK')
-export const RESULT_ERR = Symbol('RESULT_ERR')
+export const RESULT_SUCCESS = Symbol.for('std:result:success')
+export const RESULT_FAILURE = Symbol.for('std:result:failure')

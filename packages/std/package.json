@@ -24,10 +24,6 @@
     "dist"
   ],
 
-  "dependencies": {
-    "type-fest": "^5.1.0"
-  },
-
   "author": "giveerr (https://github.com/giveerr)",
   "homepage": "https://ozaco.com/",
   "repository": {

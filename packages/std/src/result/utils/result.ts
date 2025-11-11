@@ -1,27 +1,12 @@
-import { type BlobType, isPromise } from 'std:shared'
+import { type BlobType, isPromise, type Writeable } from 'std:shared'
 
-import { RESULT_ERR, RESULT_OK } from '../const'
-import type { Err, Ok, Result, ResultAsync } from '../types'
+import { RESULT_FAILURE, RESULT_SUCCESS } from '../const'
+import type { Failure, Impl, Success } from '../types'
 
-export const ok = <Type>(value: Type): Ok<Type> => {
-  return {
-    _t: RESULT_OK,
-    _v: value,
-    // biome-ignore lint/correctness/useYield: Redundant
-    *[Symbol.iterator]() {
-      return this._v
-    },
-  }
-}
-
-export function err<Name extends string>(name: Name, message: string, cause?: string[]): Err<Name>
-export function err(name: string, message: string, cause: string[] = []) {
-  return {
-    _c: cause,
+export const fail: Impl.Fail = (...args: BlobType[]) => {
+  const failure = {
+    _t: RESULT_FAILURE,
     _d: Date.now(),
-    _m: message,
-    _n: name,
-    _t: RESULT_ERR,
 
     *[Symbol.iterator]() {
       // biome-ignore lint/complexity/noUselessThisAlias: Redundant
@@ -29,53 +14,60 @@ export function err(name: string, message: string, cause: string[] = []) {
       yield self
       return self
     },
+  } as Writeable<Failure<BlobType>>
+
+  if (args.length === 0) {
+    failure.causes = [] as string[]
+    failure.message = ''
+
+    return failure as BlobType
   }
-}
 
-export function auto<Value extends Result<BlobType, BlobType>>(value: Value): Value
-export function auto<Value extends BlobType>(value: Value): Ok<Value>
-export function auto(value: BlobType) {
-  if (isResult(value)) {
-    return value
+  const error = args[0]
+  const message = args[1] ?? ''
+  const causes = args.slice(2)
+
+  if (isPromise(error)) {
+    return error.then(error => {
+      failure.causes = causes
+      failure.message = message
+      failure.error = error
+
+      return failure
+    }) as BlobType
   }
-  return ok(value)
+
+  failure.causes = causes
+  failure.message = message
+  failure.error = error
+
+  return failure as BlobType
 }
 
-export const unexpected = (error: Error, cause: string[] = []): Err<'ERR_UNEXPECTED'> => {
-  const result = err('ERR_UNEXPECTED', error.message, cause)
+export const succeed: Impl.Succeed = (...args: BlobType[]) => {
+  const success = {
+    _t: RESULT_SUCCESS,
 
-  result._o = error
+    // biome-ignore lint/correctness/useYield: Redundant
+    *[Symbol.iterator]() {
+      return this.value
+    },
+  } as Writeable<Success<BlobType>>
 
-  return result
-}
+  if (args.length === 0) {
+    return success as BlobType
+  }
 
-export function isOk<Value>(result: Ok<Value>): result is Ok<Value>
-export function isOk(result: unknown): result is Ok<unknown>
-export function isOk(result: unknown): result is Ok<unknown> {
-  return (result as BlobType)?._t === RESULT_OK
-}
+  const value = args[0]
+  if (isPromise(value)) {
+    return value.then(value => {
+      success.value = value
 
-export function isErr<Name extends string>(result: Err<Name>): result is Err<Name>
-export function isErr(result: unknown): result is Err<string>
-export function isErr(result: unknown): result is Err<string> {
-  return (result as BlobType)?._t === RESULT_ERR
-}
+      return success
+    }) as BlobType
+  }
 
-export function isResult<Value, Name extends string>(result: Result<Value, Name>): result is Result<Value, Name>
-export function isResult(result: unknown): result is Result<unknown, string>
-export function isResult(result: unknown): result is Result<unknown, string> {
-  return isOk(result) || isErr(result)
-}
+  success.value = value
 
-export function unwrap<Value, Name extends string>(result: ResultAsync<Value, Name>): PromiseLike<Value>
-export function unwrap<Value>(result: Ok<Value>): Value
-export function unwrap<Name extends string>(result: Err<Name>): never
-export function unwrap<Value, Name extends string>(result: Result<Value, Name>): Value
-export function unwrap<Value>(result: Value): Value
-export function unwrap(result: BlobType) {
-  if (isPromise(result)) return result.then(v => unwrap(v))
-
-  if (isErr(result)) throw result
-  if (isOk(result)) return result._v
-  return result
+  return success as BlobType
 }

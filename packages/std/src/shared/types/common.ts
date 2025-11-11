@@ -5,6 +5,9 @@ export type BlobType = any
 export type EmptyType = {}
 
 export type IsPromise<T> = T extends PromiseLike<BlobType> ? true : false
-export type IsAnyPromise<T> = Extract<T, PromiseLike<BlobType>> extends never ? false : true
+export type HasPromise<T> = object extends T ? false : Promise<BlobType> extends T ? true : false
 
 export type MaybePromise<T> = T | Promise<T>
+
+export type Writeable<T> = { -readonly [P in keyof T]: T[P] }
+export type DeepWriteable<T> = { -readonly [P in keyof T]: DeepWriteable<T[P]> }
