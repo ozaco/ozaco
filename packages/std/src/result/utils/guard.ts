@@ -1,35 +1,31 @@
-import { type BlobType, isPromise } from 'std:shared'
+import { type BlobType, isString } from 'std:shared'
 
 import type { Impl } from '../types'
+
 import { auto } from './auto'
 import { isFailure, isResult } from './is'
+import { mapError } from './map-error'
+import { pipe } from './pipe'
 
-export const guard: Impl.Guard = (fn: (...args: BlobType[]) => BlobType, ...causes: string[]): BlobType => {
-  return (...args: BlobType[]) => {
-    const result = fn(...args)
+export const guard: Impl.Guard = (...args: BlobType[]): BlobType => {
+  const firstArgument = args[0]
 
-    if (isPromise(result)) {
-      return result.then(result => {
-        if (isResult(result)) {
-          if (isFailure(result)) {
-            result.causes.push(...causes)
-          }
+  if (isString(firstArgument)) {
+    return (result: BlobType) => guard(result, ...args)
+  }
 
-          return result
+  const causes = args.slice(1)
+
+  return (...args: BlobType[]) =>
+    pipe(
+      firstArgument.apply(null, args),
+      auto(),
+      mapError(error => {
+        if (isResult(error) && isFailure(error)) {
+          error.causes.push(...causes)
         }
 
-        return auto(result)
-      })
-    }
-
-    if (isResult(result)) {
-      if (isFailure(result)) {
-        result.causes.push(...causes)
-      }
-
-      return result
-    }
-
-    return auto(result)
-  }
+        return error
+      }),
+    )
 }

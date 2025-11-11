@@ -15,3 +15,7 @@ export const isFunction = (value: unknown): value is Function => {
 export const isArray = <T>(value: unknown): value is T[] => {
   return Array.isArray(value)
 }
+
+export const isString = (value: unknown): value is string => {
+  return typeof value === 'string'
+}
