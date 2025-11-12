@@ -3,6 +3,7 @@ import type { BlobType, HasPromise } from 'std:shared'
 import type { Pipe as $Pipe } from './internal/pipe'
 
 import type {
+  Failure,
   InferFailure,
   InferSuccess,
   Result,
@@ -64,19 +65,21 @@ export namespace Impl {
   export interface Map {
     <R1 extends ResultMaybeAsync<BlobType, BlobType>, const T2>(
       fn: (a: InferSuccess<R1>) => T2,
-    ): (result: R1) => ResultFor<R1, T2, InferFailure<R1>>
+    ): (result: R1) => ResultFor<R1, InferSuccess<ResultFromUnion<T2>>, InferFailure<R1>>
     <T1, const T2>(
       fn: (a: T1) => T2,
-    ): <R1 extends ResultMaybeAsync<T1, BlobType>>(result: R1) => ResultFor<R1, T2, InferFailure<R1>>
+    ): <R1 extends ResultMaybeAsync<T1, BlobType>>(
+      result: R1,
+    ) => ResultFor<R1, InferSuccess<ResultFromUnion<T2>>, InferFailure<R1>>
   }
 
   export interface MapError {
-    <R1 extends ResultMaybeAsync<BlobType, BlobType>, const E2>(
-      fn: (a: InferFailure<R1>) => E2,
-    ): (result: R1) => ResultFor<R1, InferSuccess<R1>, E2>
-    <E1, const E2>(
+    <R1 extends ResultMaybeAsync<BlobType, BlobType>, E2 extends ResultMaybeAsync<BlobType, BlobType>>(
+      fn: (a: Failure<InferFailure<R1>>) => E2,
+    ): (result: R1) => ResultFor<R1, InferSuccess<R1>, InferFailure<E2>>
+    <E1, const E2 extends ResultMaybeAsync<BlobType, BlobType>>(
       fn: (a: E1) => E2,
-    ): <R1 extends ResultMaybeAsync<BlobType, E1>>(result: R1) => ResultFor<R1, InferSuccess<R1>, E2>
+    ): <R1 extends ResultMaybeAsync<BlobType, E1>>(result: R1) => ResultFor<R1, InferSuccess<R1>, InferFailure<E2>>
   }
 
   export type Pipe = $Pipe
@@ -112,23 +115,12 @@ export namespace Impl {
 
   export interface OrElse {
     <R1 extends ResultMaybeAsync<BlobType, BlobType>, R2 extends ResultMaybeAsync<BlobType, BlobType>>(
-      fn: (a: InferFailure<R1>) => R2,
+      fn: (a: Failure<InferFailure<R1>>) => R2,
     ): (result: R1) => ResultFor<R1 | R2, InferSuccess<R1> | InferSuccess<R2>, InferFailure<R2>>
     <F extends (a: BlobType) => ResultMaybeAsync<BlobType, BlobType>>(
       fn: F,
     ): <R1 extends ResultMaybeAsync<BlobType, Parameters<F>[0]>>(
       result: R1,
     ) => ResultFor<R1 | ReturnType<F>, InferSuccess<R1> | InferSuccess<F>, InferFailure<F>>
-  }
-
-  export interface AndThrough {
-    <R1 extends ResultMaybeAsync<BlobType, BlobType>, R2 extends ResultMaybeAsync<BlobType, BlobType>>(
-      fn: (a: InferSuccess<R1>) => R2,
-    ): (result: R1) => ResultFor<R1 | R2, InferSuccess<R1>, InferFailure<R1> | InferFailure<R2>>
-    <F extends (a: BlobType) => ResultMaybeAsync<BlobType, BlobType>>(
-      fn: F,
-    ): <R1 extends ResultMaybeAsync<Parameters<F>[0], BlobType>>(
-      result: R1,
-    ) => ResultFor<R1 | ReturnType<F>, InferSuccess<R1>, InferFailure<R1> | InferFailure<F>>
   }
 }

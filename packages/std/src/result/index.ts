@@ -1,7 +1,6 @@
 export * from './const'
 export * from './types'
 
-export * from './utils/and-through'
 export * from './utils/auto'
 export * from './utils/combine'
 export * from './utils/guard'

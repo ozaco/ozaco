@@ -18,19 +18,19 @@ export const guard: Impl.Guard = (...args: BlobType[]): BlobType => {
   return (...args: BlobType[]) =>
     pipe(
       firstArgument(...args),
-      returnValue => {
-        let newReturnValue = returnValue
+      rawResult => {
+        let result = rawResult
 
-        if (isGenerator(returnValue)) {
-          newReturnValue = returnValue.next().value
-        } else if (isAsyncGenerator(returnValue)) {
-          newReturnValue = returnValue.next().then((result: BlobType) => result.value)
+        if (isGenerator(rawResult)) {
+          result = rawResult.next().value
+        } else if (isAsyncGenerator(rawResult)) {
+          result = rawResult.next().then((result: BlobType) => result.value)
         }
 
-        if (isResult(newReturnValue) && isFailure(newReturnValue)) {
-          newReturnValue.causes.push(...causes)
-        } else if (isPromise(newReturnValue)) {
-          return newReturnValue.then(result => {
+        if (isResult(result) && isFailure(result)) {
+          result.causes.push(...causes)
+        } else if (isPromise(result)) {
+          return result.then(result => {
             if (isResult(result) && isFailure(result)) {
               result.causes.push(...causes)
             }
@@ -38,7 +38,7 @@ export const guard: Impl.Guard = (...args: BlobType[]): BlobType => {
           })
         }
 
-        return returnValue
+        return result
       },
       auto(),
     )
