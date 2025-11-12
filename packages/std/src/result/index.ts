@@ -1,6 +1,7 @@
 export * from './const'
 export * from './types'
 
+export * from './utils/append-causes'
 export * from './utils/auto'
 export * from './utils/combine'
 export * from './utils/guard'

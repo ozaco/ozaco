@@ -109,8 +109,6 @@ export namespace Impl {
       ...causes: string[]
     ): (...args: Args) => ResultFromUnion<Promise<V | U>>
     <Args extends BlobType[], R>(fn: (...args: Args) => R, ...causes: string[]): (...args: Args) => ResultFromUnion<R>
-
-    <R>(...causes: string[]): (result: R) => ResultFromUnion<R>
   }
 
   export interface OrElse {
@@ -122,5 +120,10 @@ export namespace Impl {
     ): <R1 extends ResultMaybeAsync<BlobType, Parameters<F>[0]>>(
       result: R1,
     ) => ResultFor<R1 | ReturnType<F>, InferSuccess<R1> | InferSuccess<F>, InferFailure<F>>
+  }
+
+  export interface AppendCauses {
+    <T extends ResultMaybeAsync<BlobType, BlobType>>(result: T, ...causes: string[]): T
+    <T extends ResultMaybeAsync<BlobType, BlobType>>(...causes: string[]): (result: T) => T
   }
 }
