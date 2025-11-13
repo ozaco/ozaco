@@ -16,14 +16,18 @@ import type {
 export namespace Impl {
   export interface Succeed {
     (): ResultFor<never, void, never>
+
+    <T extends `${string}`>(value: Promise<Awaited<T>> | Promise<T>): ResultFor<true, T, never>
+    <T extends `${string}`>(value: T): ResultFor<false, T, never>
     <const T>(value: T): ResultFor<T, Awaited<T>, never>
   }
 
   export interface Fail {
     (): ResultFor<never, never, void>
-    <const E>(error: E): ResultFor<E, never, Awaited<E>>
-    <const E>(error: E, message: string): ResultFor<E, never, Awaited<E>>
-    <const E>(error: E, message: string, ...causes: string[]): ResultFor<E, never, Awaited<E>>
+
+    <E extends `${string}`>(value: Promise<Awaited<E>> | Promise<E>): ResultFor<true, never, E>
+    <E extends `${string}`>(value: E): ResultFor<false, never, E>
+    <const E>(error: E, message?: string, ...causes: string[]): ResultFor<E, never, Awaited<E>>
   }
 
   export interface Combine {
@@ -95,7 +99,10 @@ export namespace Impl {
       defaultValue: T,
     ): true extends HasPromise<R> ? ResultAsync<InferSuccess<R> | T, never> : Result<InferSuccess<R> | T, never>
 
+    <T extends `${string}`>(value: Promise<Awaited<T>> | Promise<T>): ResultFor<true, T, never>
+    <T extends `${string}`>(value: T): ResultFor<false, T, never>
     <const T>(value: T): ResultFromUnion<T>
+
     <R>(): (result: R) => ResultFromUnion<R>
   }
 
