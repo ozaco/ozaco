@@ -9,5 +9,5 @@ export type HasPromise<T> = object extends T ? false : Promise<BlobType> extends
 
 export type MaybePromise<T> = T | Promise<T>
 
-export type Writeable<T> = { -readonly [P in keyof T]: T[P] }
+export type Writable<T> = { -readonly [P in keyof T]: T[P] }
 export type DeepWriteable<T> = { -readonly [P in keyof T]: DeepWriteable<T[P]> }

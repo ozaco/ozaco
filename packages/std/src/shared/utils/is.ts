@@ -30,3 +30,7 @@ export const isAsyncGenerator = (value: unknown): value is AsyncGenerator<BlobTy
     typeof (value as AsyncGenerator<BlobType, BlobType>)?.[Symbol.asyncIterator] === 'function'
   )
 }
+
+export const isNumber = (x: unknown): x is number => {
+  return typeof x === 'number'
+}

@@ -1,17 +1,8 @@
 import type { BlobType, HasPromise } from 'std:shared'
 
+import type { Helpers } from './helpers'
 import type { Pipe as $Pipe } from './internal/pipe'
-
-import type {
-  Failure,
-  InferFailure,
-  InferSuccess,
-  Result,
-  ResultAsync,
-  ResultFor,
-  ResultFromUnion,
-  ResultMaybeAsync,
-} from './result'
+import type { Failure, Result, ResultAsync, ResultFor, ResultFromUnion, ResultMaybeAsync } from './result'
 
 export namespace Impl {
   export interface Succeed {
@@ -33,57 +24,59 @@ export namespace Impl {
   export interface Combine {
     <X extends Record<string, ResultMaybeAsync<BlobType, BlobType>>>(
       x: X,
-    ): ResultFor<X[keyof X], { [K in keyof X]: InferSuccess<X[K]> }, InferFailure<X[keyof X]>[]>
+    ): ResultFor<X[keyof X], { [K in keyof X]: Helpers.InferSuccess<X[K]> }, Helpers.InferFailure<X[keyof X]>[]>
     <const X extends Array<ResultMaybeAsync<BlobType, BlobType>>>(
       x: X,
-    ): ResultFor<X[number], { [K in keyof X]: InferSuccess<X[K]> }, InferFailure<X[number]>[]>
+    ): ResultFor<X[number], { [K in keyof X]: Helpers.InferSuccess<X[K]> }, Helpers.InferFailure<X[number]>[]>
     <const X extends ReadonlyArray<ResultMaybeAsync<BlobType, BlobType>>>(
       x: X,
-    ): ResultFor<X[number], { [K in keyof X]: InferSuccess<X[K]> }, InferFailure<X[number]>[]>
+    ): ResultFor<X[number], { [K in keyof X]: Helpers.InferSuccess<X[K]> }, Helpers.InferFailure<X[number]>[]>
     <const X extends Array<unknown>, Fn extends (value: X[number]) => ResultMaybeAsync<BlobType, BlobType>>(
       x: X,
       fn: Fn,
-    ): ResultFor<ReturnType<Fn>, { [K in keyof X]: InferSuccess<Fn> }, InferFailure<Fn>[]>
+    ): ResultFor<ReturnType<Fn>, { [K in keyof X]: Helpers.InferSuccess<Fn> }, Helpers.InferFailure<Fn>[]>
     <const X extends ReadonlyArray<unknown>, Fn extends (value: X[number]) => ResultMaybeAsync<BlobType, BlobType>>(
       x: X,
       fn: Fn,
-    ): ResultFor<ReturnType<Fn>, { [K in keyof X]: InferSuccess<Fn> }, InferFailure<Fn>[]>
+    ): ResultFor<ReturnType<Fn>, { [K in keyof X]: Helpers.InferSuccess<Fn> }, Helpers.InferFailure<Fn>[]>
   }
 
   export interface Unwrap {
     <R extends ResultMaybeAsync<BlobType, BlobType>>(
       result: R,
-    ): true extends HasPromise<R> ? Promise<InferSuccess<R>> : InferSuccess<R>
+    ): true extends HasPromise<R> ? Promise<Helpers.InferSuccess<R>> : Helpers.InferSuccess<R>
     <R extends ResultMaybeAsync<BlobType, BlobType>, T>(
       result: R,
       defaultValue: T,
-    ): true extends HasPromise<R> ? Promise<InferSuccess<R> | T> : InferSuccess<R> | T
+    ): true extends HasPromise<R> ? Promise<Helpers.InferSuccess<R> | T> : Helpers.InferSuccess<R> | T
     <R extends ResultMaybeAsync<BlobType, BlobType>>(): (
       result: R,
-    ) => true extends HasPromise<R> ? Promise<InferSuccess<R>> : InferSuccess<R>
+    ) => true extends HasPromise<R> ? Promise<Helpers.InferSuccess<R>> : Helpers.InferSuccess<R>
     <R extends ResultMaybeAsync<BlobType, BlobType>, T>(
       defaultValue: T,
-    ): (result: R) => true extends HasPromise<R> ? Promise<InferSuccess<R> | T> : InferSuccess<R> | T
+    ): (result: R) => true extends HasPromise<R> ? Promise<Helpers.InferSuccess<R> | T> : Helpers.InferSuccess<R> | T
   }
 
   export interface Map {
     <R1 extends ResultMaybeAsync<BlobType, BlobType>, const T2>(
-      fn: (a: InferSuccess<R1>) => T2,
-    ): (result: R1) => ResultFor<R1, InferSuccess<ResultFromUnion<T2>>, InferFailure<R1>>
+      fn: (a: Helpers.InferSuccess<R1>) => T2,
+    ): (result: R1) => ResultFor<R1, Helpers.InferSuccess<ResultFromUnion<T2>>, Helpers.InferFailure<R1>>
     <T1, const T2>(
       fn: (a: T1) => T2,
     ): <R1 extends ResultMaybeAsync<T1, BlobType>>(
       result: R1,
-    ) => ResultFor<R1, InferSuccess<ResultFromUnion<T2>>, InferFailure<R1>>
+    ) => ResultFor<R1, Helpers.InferSuccess<ResultFromUnion<T2>>, Helpers.InferFailure<R1>>
   }
 
   export interface MapError {
     <R1 extends ResultMaybeAsync<BlobType, BlobType>, E2 extends ResultMaybeAsync<BlobType, BlobType>>(
-      fn: (a: Failure<InferFailure<R1>>) => E2,
-    ): (result: R1) => ResultFor<R1, InferSuccess<R1>, InferFailure<E2>>
+      fn: (a: Failure<Helpers.InferFailure<R1>>) => E2,
+    ): (result: R1) => ResultFor<R1, Helpers.InferSuccess<R1>, Helpers.InferFailure<E2>>
     <E1, const E2 extends ResultMaybeAsync<BlobType, BlobType>>(
       fn: (a: E1) => E2,
-    ): <R1 extends ResultMaybeAsync<BlobType, E1>>(result: R1) => ResultFor<R1, InferSuccess<R1>, InferFailure<E2>>
+    ): <R1 extends ResultMaybeAsync<BlobType, E1>>(
+      result: R1,
+    ) => ResultFor<R1, Helpers.InferSuccess<R1>, Helpers.InferFailure<E2>>
   }
 
   export type Pipe = $Pipe
@@ -92,12 +85,14 @@ export namespace Impl {
     <R extends ResultMaybeAsync<BlobType, BlobType>>(
       result: R,
     ): true extends HasPromise<R>
-      ? ResultAsync<InferSuccess<R>, InferFailure<R>>
-      : Result<InferSuccess<R>, InferFailure<R>>
+      ? ResultAsync<Helpers.InferSuccess<R>, Helpers.InferFailure<R>>
+      : Result<Helpers.InferSuccess<R>, Helpers.InferFailure<R>>
     <R extends ResultMaybeAsync<BlobType, BlobType>, T>(
       result: R,
       defaultValue: T,
-    ): true extends HasPromise<R> ? ResultAsync<InferSuccess<R> | T, never> : Result<InferSuccess<R> | T, never>
+    ): true extends HasPromise<R>
+      ? ResultAsync<Helpers.InferSuccess<R> | T, never>
+      : Result<Helpers.InferSuccess<R> | T, never>
 
     <T extends `${string}`>(value: Promise<Awaited<T>> | Promise<T>): ResultFor<true, T, never>
     <T extends `${string}`>(value: T): ResultFor<false, T, never>
@@ -120,13 +115,13 @@ export namespace Impl {
 
   export interface OrElse {
     <R1 extends ResultMaybeAsync<BlobType, BlobType>, R2 extends ResultMaybeAsync<BlobType, BlobType>>(
-      fn: (a: Failure<InferFailure<R1>>) => R2,
-    ): (result: R1) => ResultFor<R1 | R2, InferSuccess<R1> | InferSuccess<R2>, InferFailure<R2>>
+      fn: (a: Failure<Helpers.InferFailure<R1>>) => R2,
+    ): (result: R1) => ResultFor<R1 | R2, Helpers.InferSuccess<R1> | Helpers.InferSuccess<R2>, Helpers.InferFailure<R2>>
     <F extends (a: BlobType) => ResultMaybeAsync<BlobType, BlobType>>(
       fn: F,
     ): <R1 extends ResultMaybeAsync<BlobType, Parameters<F>[0]>>(
       result: R1,
-    ) => ResultFor<R1 | ReturnType<F>, InferSuccess<R1> | InferSuccess<F>, InferFailure<F>>
+    ) => ResultFor<R1 | ReturnType<F>, Helpers.InferSuccess<R1> | Helpers.InferSuccess<F>, Helpers.InferFailure<F>>
   }
 
   export interface AppendCauses {

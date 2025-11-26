@@ -13,10 +13,10 @@
       "source": "./src/shared/index.ts",
       "types": "./dist/shared.d.ts"
     },
-    "./experimental/signal": {
-      "default": "./dist/experimental/signal.js",
-      "source": "./experimental/signal/index.ts",
-      "types": "./dist/experimental/signal.d.ts"
+    "./event": {
+      "default": "./dist/event.js",
+      "source": "./src/event/index.ts",
+      "types": "./dist/event.d.ts"
     }
   },
 

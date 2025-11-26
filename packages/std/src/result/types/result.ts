@@ -1,4 +1,4 @@
-import type { BlobType, HasPromise, IsPromise } from 'std:shared'
+import type { HasPromise, IsPromise } from 'std:shared'
 
 import type { RESULT_FAILURE, RESULT_SUCCESS } from '../const'
 
@@ -31,31 +31,3 @@ export type ResultMaybeAsync<T, E> = ResultAsync<T, E> | Result<T, E>
 export type ResultFor<R, T, E> = true extends HasPromise<R> ? ResultAsync<T, E> : Result<T, E>
 
 export type ResultFromUnion<R> = Helpers.UnionToResultFor<IsPromise<R>, Helpers.UnionToResult<Awaited<R>>>
-
-export type InferSuccess<T> = [
-  T,
-] extends [
-  (...args: BlobType[]) => ResultMaybeAsync<infer U, BlobType>,
-]
-  ? U
-  : [
-        T,
-      ] extends [
-        ResultMaybeAsync<infer U, BlobType>,
-      ]
-    ? U
-    : never
-
-export type InferFailure<T> = [
-  T,
-] extends [
-  (...args: BlobType[]) => ResultMaybeAsync<BlobType, infer U>,
-]
-  ? U
-  : [
-        T,
-      ] extends [
-        ResultMaybeAsync<BlobType, infer U>,
-      ]
-    ? U
-    : never

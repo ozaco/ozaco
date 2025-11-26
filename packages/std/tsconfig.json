@@ -13,8 +13,8 @@
       "std:result": [
         "src/result/index.ts"
       ],
-      "std:signal": [
-        "experimental/signal/index.ts"
+      "std:event": [
+        "src/event/index.ts"
       ]
     }
   },

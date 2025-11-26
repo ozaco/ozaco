@@ -1,4 +1,4 @@
-import { type BlobType, isPromise, type Writeable } from 'std:shared'
+import { type BlobType, isPromise, type Writable } from 'std:shared'
 
 import { RESULT_FAILURE, RESULT_SUCCESS } from '../const'
 import type { Failure, Impl, Success } from '../types'
@@ -14,7 +14,7 @@ export const fail: Impl.Fail = (...args: BlobType[]) => {
       yield self
       return self
     },
-  } as Writeable<Failure<BlobType>>
+  } as Writable<Failure<BlobType>>
 
   if (args.length === 0) {
     failure.causes = [] as string[]
@@ -52,7 +52,7 @@ export const succeed: Impl.Succeed = (...args: BlobType[]) => {
     *[Symbol.iterator]() {
       return this.value
     },
-  } as Writeable<Success<BlobType>>
+  } as Writable<Success<BlobType>>
 
   if (args.length === 0) {
     return success as BlobType

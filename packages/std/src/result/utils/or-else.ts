@@ -1,16 +1,16 @@
 import { type BlobType, isPromise } from 'std:shared'
 
-import type { Failure, Impl, InferFailure, InferSuccess, Result, ResultMaybeAsync } from '../types'
+import type { Failure, Helpers, Impl, Result, ResultMaybeAsync } from '../types'
 import { isSuccess } from './is'
 
 export const orElse: Impl.OrElse = <
   R1 extends ResultMaybeAsync<BlobType, BlobType>,
   R2 extends ResultMaybeAsync<BlobType, BlobType>,
 >(
-  fn: (a: Failure<InferFailure<R1>>) => R2,
+  fn: (a: Failure<Helpers.InferFailure<R1>>) => R2,
 ) => {
   return (result: R1) => {
-    const apply = (r: Result<InferSuccess<R1>, InferFailure<R1>>) => {
+    const apply = (r: Result<Helpers.InferSuccess<R1>, Helpers.InferFailure<R1>>) => {
       if (isSuccess(r)) return r
 
       return fn(r)

@@ -1,6 +1,6 @@
 import { type BlobType, isPromise } from 'std:shared'
 
-import type { Impl, InferFailure, InferSuccess, Result, ResultMaybeAsync } from '../types'
+import type { Helpers, Impl, Result, ResultMaybeAsync } from '../types'
 
 import { isFailure, isResult } from './is'
 
@@ -9,12 +9,12 @@ export const unwrap: Impl.Unwrap = <R extends ResultMaybeAsync<BlobType, BlobTyp
 ): BlobType => {
   const firstArgument = args[0]
 
-  if (isResult<InferSuccess<R>, InferFailure<R>>(firstArgument) || isPromise(firstArgument)) {
+  if (isResult<Helpers.InferSuccess<R>, Helpers.InferFailure<R>>(firstArgument) || isPromise(firstArgument)) {
     const result = firstArgument
     const hasDefault = args.length === 2
     const defaultValue = hasDefault ? (args[1] as T) : undefined
 
-    const apply = (r: Result<InferSuccess<R>, InferFailure<R>>): InferSuccess<R> | T => {
+    const apply = (r: Result<Helpers.InferSuccess<R>, Helpers.InferFailure<R>>): Helpers.InferSuccess<R> | T => {
       if (isFailure(r)) {
         if (hasDefault) return defaultValue as T
 
@@ -31,7 +31,7 @@ export const unwrap: Impl.Unwrap = <R extends ResultMaybeAsync<BlobType, BlobTyp
   const defaultValue = hasDefault ? (args[0] as T) : undefined
 
   return (result: R) => {
-    const apply = (r: Result<InferSuccess<R>, InferFailure<R>>): InferSuccess<R> | T => {
+    const apply = (r: Result<Helpers.InferSuccess<R>, Helpers.InferFailure<R>>): Helpers.InferSuccess<R> | T => {
       if (isFailure(r)) {
         if (hasDefault) return defaultValue as T
 
