@@ -12,6 +12,14 @@ export const isFunction = (value: unknown): value is Function => {
   return typeof value === 'function'
 }
 
+export const isObject = (value: unknown): value is Record<string, unknown> => {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+export const isUndefined = (value: unknown): value is undefined => {
+  return typeof value === 'undefined'
+}
+
 export const isArray = <T>(value: unknown): value is T[] => {
   return Array.isArray(value)
 }

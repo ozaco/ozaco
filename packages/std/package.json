@@ -17,6 +17,11 @@
       "default": "./dist/event.js",
       "source": "./src/event/index.ts",
       "types": "./dist/event.d.ts"
+    },
+    "./plugin": {
+      "default": "./dist/plugin.js",
+      "source": "./src/plugin/index.ts",
+      "types": "./dist/plugin.d.ts"
     }
   },
 

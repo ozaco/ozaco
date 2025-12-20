@@ -15,6 +15,9 @@
       ],
       "std:event": [
         "src/event/index.ts"
+      ],
+      "std:plugin": [
+        "src/plugin/index.ts"
       ]
     }
   },

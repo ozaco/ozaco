@@ -26,7 +26,7 @@ export namespace Helpers {
     : [
           T,
         ] extends [
-          ResultMaybeAsync<BlobType, infer _U>,
+          ResultMaybeAsync<BlobType, infer U>,
         ]
       ? U
       : never
