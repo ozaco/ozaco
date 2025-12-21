@@ -6,7 +6,7 @@ export const logDebug = unstyled.extend(({ def, use }) => {
   const ctx = use(optionsContext)
 
   const action = (...args: unknown[]) => {
-    if (ctx.level <= LEVEL.DEBUG) {
+    if (ctx.level > LEVEL.DEBUG) {
       return
     }
 
