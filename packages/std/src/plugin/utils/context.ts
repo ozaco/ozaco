@@ -9,21 +9,31 @@ import { isExtendable } from './extendable'
 export const createContext: Impl.CreateContext = (data, cloneAlgorithm) => {
   type Result = Context<BlobType>
 
-  const clone = isFunction(data) ? data : () => (cloneAlgorithm ?? structuredClone)(data)
+  const clone = isFunction(data) ? data : () => (cloneAlgorithm ?? Object.assign.bind(null, {}))(data)
   const bindings: WeakMap<Helpers.AnyExtendable, unknown> = new WeakMap()
 
   const event = createEvent() as Result['event']
+
+  const getBinding: Result['getBinding'] = extendable => {
+    const check = bindings.has(extendable)
+
+    if (check) {
+      return bindings.get(extendable)
+    }
+
+    return null
+  }
 
   const result: Result = {
     _t: CONTEXT,
 
     event,
 
-    getBinding: bindings.get,
+    getBinding: getBinding,
     bind: (extendable, override = false) => {
-      const existing = bindings.get(extendable)
+      const existing = getBinding(extendable)
 
-      if (!isExtendable(existing) && !override) {
+      if (isExtendable(existing) && !override) {
         return existing
       }
 

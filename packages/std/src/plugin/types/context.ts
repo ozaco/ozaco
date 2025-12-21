@@ -13,6 +13,6 @@ export type Context<Data> = {
 
   event: EventEmitter<ContextEvents>
 
-  getBinding: (from: Helpers.AnyExtendable) => Data | undefined
+  getBinding: (from: Helpers.AnyExtendable) => Data | null
   bind: (to: Helpers.AnyExtendable, override?: boolean) => Data
 }

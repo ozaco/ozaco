@@ -26,7 +26,13 @@ export namespace Helpers {
 
   export type DefinitionUse = <T>(
     target: T,
-  ) => T extends AnyContext ? InferContextData<T> : T extends AnyDependencyList ? InferExistingDependencies<T> : T
+  ) => T extends AnyContext
+    ? InferContextData<T>
+    : T extends AnyDependencyList
+      ? InferExistingDependencies<T>
+      : T extends AnyDefinition
+        ? InferDefinitionValue<T>
+        : T
 
   export type AnyDefinition = Definition<BlobType, BlobType>
 

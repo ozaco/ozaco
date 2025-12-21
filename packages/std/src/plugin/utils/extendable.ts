@@ -16,7 +16,7 @@ export const createExtendable: Impl.CreateExtendable = meta => {
 
   const result: Result = {
     _t: EXTENDABLE,
-    _m: structuredClone(meta),
+    _m: Object.assign({}, meta),
 
     event,
 

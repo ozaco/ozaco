@@ -25,7 +25,7 @@ export interface Definition<Key, Value> {
   getValue: (options: { use: Helpers.DefinitionUse }) => Value
   getRequired: () => (keyof Value)[]
 
-  key: <NewKey extends LiteralUnion<Key, string>>(key: NewKey) => Definition<NewKey, Value>
+  key: <const NewKey extends LiteralUnion<Key, string>>(key: NewKey) => Definition<NewKey, Value>
   require: (...keys: (keyof Value)[]) => Definition<Key, Value>
   optional: (...keys: (keyof Value)[]) => Definition<Key, Value>
 }
