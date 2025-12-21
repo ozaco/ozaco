@@ -4,8 +4,9 @@ import { optionsContext } from './contexts'
 
 import { logDebug } from './definitions/debug'
 import { init } from './definitions/init'
+import { unstyled } from './definitions/unstyled'
 
 export const extendable = createExtendable({
   namespace: 'cli',
   name: 'logger',
-}).define(optionsContext, init.key('setOptions'), logDebug.key('debug'))
+}).define(optionsContext, init.key('setOptions'), unstyled.key('unstyled'), logDebug.key('debug'))
