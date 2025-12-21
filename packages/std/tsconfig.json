@@ -18,6 +18,9 @@
       ],
       "std:plugin": [
         "src/plugin/index.ts"
+      ],
+      "std:logger": [
+        "src/logger/index.ts"
       ]
     }
   },
