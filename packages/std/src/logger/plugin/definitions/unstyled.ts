@@ -1,17 +1,12 @@
 import { createDefinition } from 'std:plugin'
 
-import { optionsContext } from '../contexts'
+import { context } from '../base'
 
 export const unstyled = createDefinition(({ use }) => {
-  const ctx = use(optionsContext)
+  const ctx = use(context)
 
   return (cb: (...args: unknown[]) => void, ...args: unknown[]) => {
     if (ctx.disabled) {
-      return
-    }
-
-    if (ctx.plain) {
-      console.log(...args)
       return
     }
 

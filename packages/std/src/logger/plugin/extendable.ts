@@ -1,22 +1,19 @@
 import { createExtendable } from 'std:plugin'
 
-import { optionsContext } from './contexts'
-
-import { conditional } from './definitions/conditional'
-import { logDebug } from './definitions/debug'
+import { context, dependencies } from './base'
 import { init } from './definitions/init'
+import { log } from './definitions/log'
 import { unstyled } from './definitions/unstyled'
 
-export const partialExtendable = createExtendable({
+export const extendable = createExtendable({
   namespace: 'cli',
   name: 'logger',
 }).define(
-  optionsContext,
+  context,
+  dependencies,
 
   init.key('setOptions'),
-
   unstyled.key('unstyled'),
-  logDebug.key('debug'),
-)
 
-export const extendable = partialExtendable.define(conditional.key('if'))
+  log,
+)

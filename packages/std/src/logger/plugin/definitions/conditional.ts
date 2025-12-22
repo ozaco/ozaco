@@ -1,6 +1,6 @@
 import { createDefinition, type Helpers } from 'std:plugin'
 
-import { partialExtendable } from '../extendable'
+import { extendable } from '../extendable'
 
 import type { logDebug } from './debug'
 import type { init } from './init'
@@ -11,7 +11,7 @@ export const conditional = createDefinition(({ use }) => {
 
   return (contiditon: boolean) => {
     if (contiditon) {
-      return use(partialExtendable)
+      return use(extendable)
     }
 
     return {

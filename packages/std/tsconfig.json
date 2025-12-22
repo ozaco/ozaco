@@ -21,6 +21,9 @@
       ],
       "std:logger": [
         "src/logger/index.ts"
+      ],
+      "std:color": [
+        "src/color/index.ts"
       ]
     }
   },

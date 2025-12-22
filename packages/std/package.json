@@ -27,6 +27,11 @@
       "default": "./dist/logger.js",
       "source": "./src/logger/index.ts",
       "types": "./dist/logger.d.ts"
+    },
+    "./color": {
+      "default": "./dist/color.js",
+      "source": "./src/color/index.ts",
+      "types": "./dist/color.d.ts"
     }
   },
 

@@ -1,14 +1,15 @@
 import { createPlugin } from 'std:plugin'
 
-import { conditional } from './definitions/conditional'
 import { init } from './definitions/init'
 
 import { extendable } from './extendable'
 
-export const createLogger = createPlugin(
-  extendable.define(conditional.key('if')),
+export const createColors = createPlugin(
+  extendable,
   {
     version: '0.0.0',
   },
   init,
 )
+
+export const { api: colors } = createColors()

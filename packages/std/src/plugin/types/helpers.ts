@@ -94,13 +94,15 @@ export namespace Helpers {
     [name: string]: AnyPlugin
   }
 
-  export type InferPluginFromExtendable<Ext> = [
-    Ext,
+  export type InferPluginFromExtendable<T> = [
+    T,
   ] extends [
     AnyExtendable,
   ]
-    ? Plugin<InferMetadata<Ext>, InferDefinitions<Ext>>
-    : never
+    ? Plugin<InferMetadata<T>, InferDefinitions<T>>
+    : T extends AnyPlugin
+      ? T
+      : never
 
   export type InferUseFromDependencies<Deps> = [
     Deps,

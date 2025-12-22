@@ -28,13 +28,13 @@ export namespace Impl {
 
   export type CreatePlugin = <
     Ext extends Helpers.AnyExtendable,
-    const NewOptions extends Helpers.InferIncompleteMetadata<Ext>,
+    const NewMeta extends Helpers.InferIncompleteMetadata<Ext>,
     Constructor extends Definition<BlobType, (...args: BlobType[]) => BlobType>,
   >(
     extendable: Ext,
-    options: NewOptions,
+    options: NewMeta,
     con?: Constructor,
   ) => (
     ...args: Parameters<Helpers.InferDefinitionValue<Constructor>>
-  ) => Plugin<Expand<Merge<Helpers.InferMetadata<Ext>, NewOptions>>, Helpers.InferDefinitions<Ext>>
+  ) => Plugin<Expand<Merge<Helpers.InferMetadata<Ext>, NewMeta>>, Helpers.InferDefinitions<Ext>>
 }

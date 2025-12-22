@@ -67,7 +67,13 @@ export const createDefinition: Impl.CreateDefinition = (valueOrFn = {}) => {
         }
       }
 
-      return result
+      const newResult = createDefinition(value)
+
+      if (required.length > 0) {
+        newResult.require(...(required as never[]))
+      }
+
+      return newResult as Helpers.AnyDefinition
     },
   }
 

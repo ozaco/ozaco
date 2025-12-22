@@ -22,14 +22,14 @@ export type DependencyListEvents = {
 }
 
 export type DependencyListOptions<Deps extends EmptyType> = {
-  [K in keyof Deps]: string
+  [K in keyof Deps]: string | Deps[K]
 }
 
 export type Dependencies<Deps> = {
   [K in keyof Deps]: Helpers.InferPluginFromExtendable<Deps[K]>
 }
 
-export interface DependencyList<Deps> extends Omit<Context<Map<keyof Deps, Deps[keyof Deps]>>, '_t' | 'event'> {
+export interface DependencyList<Deps> extends Omit<Context<Deps>, '_t' | 'event'> {
   _t: typeof DEPENDENCY_LIST
 
   add: <NewDeps extends EmptyType>(deps: DependencyListOptions<NewDeps>) => DependencyList<Expand<Merge<Deps, NewDeps>>>

@@ -11,6 +11,7 @@ import { isExtendable } from './extendable'
 const createUse = (
   executedDefinitionMap: WeakMap<Helpers.AnyDefinition, unknown>,
   extendable: Helpers.AnyExtendable,
+  currentApi?: BlobType,
 ): Helpers.DefinitionUse => {
   return target => {
     if (isDependencyList(target) || isContext(target)) {
@@ -26,6 +27,11 @@ const createUse = (
     } else if (isExtendable(target)) {
       const tempExecutedDefinitionMap = new WeakMap<Helpers.AnyDefinition, unknown>()
 
+      // FIX: this may be an illegal optimization !!!
+      if (extendable === target) {
+        return currentApi
+      }
+
       return createApi(tempExecutedDefinitionMap, target)
     }
 
@@ -40,7 +46,7 @@ const createApi = (
   const api = {}
   const definitions = extendable.getDefinitions()
 
-  const use = createUse(executedDefinitionMap, extendable)
+  const use = createUse(executedDefinitionMap, extendable, api)
 
   for (const definition of definitions) {
     const definitionValue = definition.getValue({
@@ -82,8 +88,8 @@ export const createPlugin: Impl.CreatePlugin = (extendable, options, constructor
 
     const executedDefinitionMap = new WeakMap<Helpers.AnyDefinition, unknown>()
 
-    const use = createUse(executedDefinitionMap, extendable)
     const api = createApi(executedDefinitionMap, extendable)
+    const use = createUse(executedDefinitionMap, extendable, api)
 
     if (isDefinition(constructorDefinition)) {
       const con = constructorDefinition.getValue({
@@ -164,4 +170,8 @@ export const createPlugin: Impl.CreatePlugin = (extendable, options, constructor
 
     return result
   }
+}
+
+export const isPlugin = (value: unknown): value is Helpers.AnyPlugin => {
+  return typeof value === 'object' && value !== null && '_t' in value && value._t === PLUGIN
 }
