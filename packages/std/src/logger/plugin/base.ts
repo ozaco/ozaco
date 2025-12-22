@@ -1,4 +1,4 @@
-import { type ColorPlugin, createColors } from 'std:color'
+import { type ColorPlugin, colorsPlugin } from 'std:color'
 import { createContext, createDependencyList } from 'std:plugin'
 
 import { LEVEL } from '../const'
@@ -18,5 +18,5 @@ export const context = createContext<Context>({
 export const dependencies = createDependencyList<{
   'std#colors': ColorPlugin
 }>({
-  'std#colors': createColors(),
+  'std#colors': colorsPlugin,
 })
