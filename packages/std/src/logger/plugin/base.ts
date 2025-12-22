@@ -11,8 +11,6 @@ export const context = createContext<Context>({
   level: LEVEL.INFO,
 
   stream: process.stdout,
-
-  getScope: () => null,
 })
 
 export const dependencies = createDependencyList<{

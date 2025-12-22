@@ -1,21 +1,21 @@
 import { createDefinition, type Helpers } from 'std:plugin'
+import { nop } from 'std:shared'
 
 import { extendable } from '../extendable'
 
-import type { logDebug } from './debug'
+import { fakeLog } from './fake-log'
 import type { init } from './init'
 import type { unstyled } from './unstyled'
 
 export const conditional = createDefinition(({ use }) => {
-  const nop = (..._args: unknown[]) => void 0
-
   return (contiditon: boolean) => {
     if (contiditon) {
       return use(extendable)
     }
 
     return {
-      debug: nop as Helpers.InferDefinitionValue<typeof logDebug>,
+      ...fakeLog,
+
       setOptions: nop as Helpers.InferDefinitionValue<typeof init>,
       unstyled: nop as Helpers.InferDefinitionValue<typeof unstyled>,
     }

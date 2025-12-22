@@ -10,7 +10,6 @@ export const init = createDefinition(({ use }) => {
   return (options?: Options) => {
     ctx.stream = options?.stream ?? ctx.stream
     ctx.disabled = options?.disabled ?? ctx.disabled
-    ctx.scope = options?.scope ?? ctx.scope
     ctx.level = options?.level ?? ctx.level
     ctx.noColors = options?.noColors ?? ctx.noColors
 
@@ -21,10 +20,8 @@ export const init = createDefinition(({ use }) => {
       enabled: !ctx.noColors,
     })
 
-    if (ctx.scope) {
-      ctx.getScope = () => {
-        return colors.text.gray(`[ ${ctx.scope} ]`)
-      }
+    if (options?.scope) {
+      ctx.scope = colors.style.bold(colors.text.gray(`[${colors.text.gray(options.scope)}]`))
     }
   }
 })

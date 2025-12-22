@@ -1,15 +1,26 @@
 import { createDefinition } from 'std:plugin'
 
+import type { LEVEL } from '../../const'
+
 import { context } from '../base'
+
+export type MethodImpl = () => string
+export type CallbackImpl = (...args: unknown[]) => void
 
 export const unstyled = createDefinition(({ use }) => {
   const ctx = use(context)
 
-  return (cb: (...args: unknown[]) => void, ...args: unknown[]) => {
+  return (level: LEVEL, method: MethodImpl, cb: CallbackImpl, ...args: unknown[]) => {
     if (ctx.disabled) {
       return
     }
 
-    cb(...args)
+    if (ctx.level > level) {
+      return
+    }
+
+    args.unshift(method())
+
+    cb.apply(null, args)
   }
 })

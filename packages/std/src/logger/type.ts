@@ -14,7 +14,7 @@ export type Options = {
 }
 
 export type Context = Expand<Required<Options>> & {
-  getScope: () => null | string
+  scope: null | string
 }
 
 export type LoggerPlugin = ReturnType<typeof createLogger>
