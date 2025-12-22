@@ -7,7 +7,7 @@ import { logDebug } from './definitions/debug'
 import { init } from './definitions/init'
 import { unstyled } from './definitions/unstyled'
 
-export const extendable = createExtendable({
+export const partialExtendable = createExtendable({
   namespace: 'cli',
   name: 'logger',
 }).define(
@@ -17,6 +17,6 @@ export const extendable = createExtendable({
 
   unstyled.key('unstyled'),
   logDebug.key('debug'),
-
-  conditional.key('if'),
 )
+
+export const extendable = partialExtendable.define(conditional.key('if'))

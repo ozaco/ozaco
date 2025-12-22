@@ -6,6 +6,75 @@ import type { Helpers, Impl } from '../types'
 import { isContext } from './context'
 import { isDefinition } from './definition'
 import { isDependencyList } from './dependency-list'
+import { isExtendable } from './extendable'
+
+const createUse = (
+  executedDefinitionMap: WeakMap<Helpers.AnyDefinition, unknown>,
+  extendable: Helpers.AnyExtendable,
+): Helpers.DefinitionUse => {
+  return target => {
+    if (isDependencyList(target) || isContext(target)) {
+      return target.getBinding(extendable)
+    } else if (isDefinition(target)) {
+      const check = executedDefinitionMap.has(target)
+
+      if (check) {
+        return executedDefinitionMap.get(target)
+      }
+
+      return null
+    } else if (isExtendable(target)) {
+      const tempExecutedDefinitionMap = new WeakMap<Helpers.AnyDefinition, unknown>()
+
+      return createApi(tempExecutedDefinitionMap, target)
+    }
+
+    return target
+  }
+}
+
+const createApi = (
+  executedDefinitionMap: WeakMap<Helpers.AnyDefinition, unknown>,
+  extendable: Helpers.AnyExtendable,
+) => {
+  const api = {}
+  const definitions = extendable.getDefinitions()
+
+  const use = createUse(executedDefinitionMap, extendable)
+
+  for (const definition of definitions) {
+    const definitionValue = definition.getValue({
+      use,
+    })
+
+    let result: unknown
+
+    const key = definition.getKey()
+    const required = definition.getRequired()
+
+    if (required.length >= 0) {
+      const missingKeys = required.filter(requiredKey => Reflect.has(definitionValue, requiredKey))
+
+      if (missingKeys.length > 0) {
+        throw new Error(`missingKeys in ${definition.getKey()}: ${missingKeys.join(',')}`)
+      }
+    }
+
+    if (key) {
+      result = {
+        [key]: definitionValue,
+      }
+    } else {
+      result = definitionValue
+    }
+
+    Object.assign(api, result)
+
+    executedDefinitionMap.set(definition, definitionValue)
+  }
+
+  return api
+}
 
 export const createPlugin: Impl.CreatePlugin = (extendable, options, constructorDefinition) => {
   return (...args) => {
@@ -13,63 +82,15 @@ export const createPlugin: Impl.CreatePlugin = (extendable, options, constructor
 
     const executedDefinitionMap = new WeakMap<Helpers.AnyDefinition, unknown>()
 
-    const api = {}
-
-    const getValueOptions: {
-      use: Helpers.DefinitionUse
-    } = {
-      use: target => {
-        if (isDependencyList(target) || isContext(target)) {
-          return target.getBinding(extendable)
-        } else if (isDefinition(target)) {
-          const check = executedDefinitionMap.has(target)
-
-          if (check) {
-            return executedDefinitionMap.get(target)
-          }
-
-          return null
-        }
-
-        return target
-      },
-    }
+    const use = createUse(executedDefinitionMap, extendable)
+    const api = createApi(executedDefinitionMap, extendable)
 
     if (isDefinition(constructorDefinition)) {
-      const con = constructorDefinition.getValue(getValueOptions)
+      const con = constructorDefinition.getValue({
+        use,
+      })
 
       con(...args)
-    }
-
-    const definitions = extendable.getDefinitions()
-
-    for (const definition of definitions) {
-      const definitionValue = definition.getValue(getValueOptions)
-
-      let result: unknown
-
-      const key = definition.getKey()
-      const required = definition.getRequired()
-
-      if (required.length >= 0) {
-        const missingKeys = required.filter(requiredKey => Reflect.has(definitionValue, requiredKey))
-
-        if (missingKeys.length > 0) {
-          throw new Error(`missingKeys in ${definition.getKey()}: ${missingKeys.join(',')}`)
-        }
-      }
-
-      if (key) {
-        result = {
-          [key]: definitionValue,
-        }
-      } else {
-        result = definitionValue
-      }
-
-      Object.assign(api, result)
-
-      executedDefinitionMap.set(definition, definitionValue)
     }
 
     const result: Result = {

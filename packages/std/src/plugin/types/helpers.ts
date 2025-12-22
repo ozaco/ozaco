@@ -32,7 +32,9 @@ export namespace Helpers {
       ? InferExistingDependencies<T>
       : T extends AnyDefinition
         ? InferDefinitionValue<T>
-        : T
+        : T extends AnyExtendable
+          ? InferDefinitions<T>
+          : T
 
   export type AnyDefinition = Definition<BlobType, BlobType>
 

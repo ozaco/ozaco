@@ -1,21 +1,17 @@
 import { createDefinition, type Helpers } from 'std:plugin'
 
-import { logDebug } from './debug'
-import { init } from './init'
-import { unstyled } from './unstyled'
+import { partialExtendable } from '../extendable'
+
+import type { logDebug } from './debug'
+import type { init } from './init'
+import type { unstyled } from './unstyled'
 
 export const conditional = createDefinition(({ use }) => {
-  const logger = {
-    debug: use(logDebug),
-    setOptions: use(init),
-    unstyled: use(unstyled),
-  }
-
   const nop = (..._args: unknown[]) => void 0
 
   return (contiditon: boolean) => {
     if (contiditon) {
-      return logger
+      return use(partialExtendable)
     }
 
     return {
