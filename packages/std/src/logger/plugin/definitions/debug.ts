@@ -1,5 +1,7 @@
-import { LEVEL } from 'src/logger/const'
+import { LEVEL } from '../../const'
+
 import { optionsContext } from '../contexts'
+
 import { unstyled } from './unstyled'
 
 export const logDebug = unstyled.extend(({ def, use }) => {

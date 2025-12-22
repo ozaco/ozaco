@@ -11,5 +11,3 @@ export const createLogger = createPlugin(
   },
   init,
 )
-
-export type LoggerPlugin = ReturnType<typeof createLogger>
