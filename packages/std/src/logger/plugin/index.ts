@@ -1,8 +1,9 @@
 import { createPlugin } from 'std:plugin'
 
+import { LEVEL } from '../const'
+
 import { conditional } from './definitions/conditional'
 import { init } from './definitions/init'
-
 import { extendable } from './extendable'
 
 export const createLogger = createPlugin(
@@ -12,3 +13,9 @@ export const createLogger = createPlugin(
   },
   init,
 )
+
+export const loggerPlugin = createLogger({
+  level: LEVEL.INFO,
+})
+
+export const {api: logger} = loggerPlugin

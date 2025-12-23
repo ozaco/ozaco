@@ -6,7 +6,6 @@ import type { Context } from '../type'
 
 export const context = createContext<Context>({
   scope: null,
-  noColors: false,
   disabled: false,
   level: LEVEL.INFO,
 

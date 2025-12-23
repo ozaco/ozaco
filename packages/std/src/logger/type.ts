@@ -5,16 +5,15 @@ import type { LEVEL } from './const'
 import type { createLogger } from './plugin'
 
 export type Options = {
-  scope?: string | null
-  noColors?: boolean
-  disabled?: boolean
   level?: LEVEL
+  scope?: string | null
+  disabled?: boolean
 
   stream?: Writable
 }
 
-export type Context = Expand<Required<Options>> & {
-  scope: null | string
-}
+export type Context = Expand<Required<Omit<Options, 'scope'>> & {
+  scope: null | (() => string)
+}>
 
 export type LoggerPlugin = ReturnType<typeof createLogger>

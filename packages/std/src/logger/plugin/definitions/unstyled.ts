@@ -10,7 +10,7 @@ export type CallbackImpl = (...args: unknown[]) => void
 export const unstyled = createDefinition(({ use }) => {
   const ctx = use(context)
 
-  return (level: LEVEL, method: MethodImpl, cb: CallbackImpl, ...args: unknown[]) => {
+  return (cb: CallbackImpl, method: MethodImpl, level: LEVEL, ...args: unknown[]) => {
     if (ctx.disabled) {
       return
     }
