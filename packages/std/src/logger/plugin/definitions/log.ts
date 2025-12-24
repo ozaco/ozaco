@@ -8,7 +8,21 @@ export const log = unstyled.extend(({ def, use }) => {
   const ctx = use(context)
   const colors = use(dependencies).colors.api
 
-  const buildText = (method: MethodImpl) => () => (ctx.scope ? `${ctx.scope()} ${method()}` : method())
+  const buildText = (method: MethodImpl) => () => {
+    const texts: string[] = []
+
+    if (ctx.scope) {
+      texts.push(ctx.scope())
+    }
+
+    if (ctx.date) {
+      texts.push(colors.text.black(ctx.date()))
+    }
+
+    texts.push(method())
+
+    return texts.join(' ')
+  }
 
   const trace = buildText(() => colors.text.gray('TRACE'))
   const debug = buildText(() => colors.textBright.blue('DEBUG'))

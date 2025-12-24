@@ -8,6 +8,7 @@ export const context = createContext<Context>({
   scope: null,
   disabled: false,
   level: LEVEL.INFO,
+  date: () => new Date().toISOString(),
 
   stream: process.stdout,
 })

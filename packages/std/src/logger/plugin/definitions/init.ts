@@ -1,4 +1,5 @@
 import { createDefinition } from 'std:plugin'
+import { isBoolean, isFunction } from 'std:shared'
 
 import type { Options } from '../../type'
 
@@ -11,6 +12,12 @@ export const init = createDefinition(({ use }) => {
     ctx.level = options?.level ?? ctx.level
     ctx.stream = options?.stream ?? ctx.stream
     ctx.disabled = options?.disabled ?? ctx.disabled
+
+    if (isBoolean(options?.date)) {
+      ctx.date = options.date ? () => new Date().toISOString() : null
+    } else if (isFunction(options?.date)) {
+      ctx.date = options.date
+    }
 
     if (options?.scope) {
       const colors = use(dependencies).colors.api
