@@ -17,8 +17,6 @@ export type DependencyListEvents = {
     name: string,
     version: string,
   ]
-
-  // TODO: onInit
 }
 
 export type DependencyListOptions<Deps extends EmptyType> = {
@@ -37,6 +35,7 @@ export interface DependencyList<Deps> extends Omit<Context<Deps>, '_t' | 'event'
     deps: DependencyListOptions<TargetDependencies>,
     force?: Force,
   ) => DependencyList<Force extends true ? Omit<Deps, keyof TargetDependencies> : Deps>
+  getVersion: (name: keyof Deps) => string | undefined
 
   getRequired: () => (keyof Deps)[]
   require: (...keys: (keyof Deps)[]) => DependencyList<Deps>

@@ -14,6 +14,8 @@ export interface Plugin<Meta extends Helpers.AnyMetadata, Api = EmptyType> {
 
   api: Api
 
+  get: Helpers.DefinitionUse
+
   use: <Deps extends Helpers.AnyDependencyList = never>(
     list: Deps,
     deps: Helpers.InferUseFromDependencies<Deps>,
@@ -21,6 +23,6 @@ export interface Plugin<Meta extends Helpers.AnyMetadata, Api = EmptyType> {
 
   unuse: <Deps extends Helpers.AnyDependencyList = never>(
     list: Deps,
-    deps: Helpers.InferUseFromDependencies<Deps>[keyof Helpers.InferUseFromDependencies<Deps>][],
+    deps: Helpers.InferUseFromDependencies<Deps>,
   ) => Plugin<Meta, Api>
 }

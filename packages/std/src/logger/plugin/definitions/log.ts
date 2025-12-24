@@ -6,9 +6,7 @@ import { type MethodImpl, unstyled } from './unstyled'
 
 export const log = unstyled.extend(({ def, use }) => {
   const ctx = use(context)
-  const deps = use(dependencies)
-
-  const colors = deps['std#colors'].api
+  const colors = use(dependencies).colors.api
 
   const buildText = (method: MethodImpl) => () => (ctx.scope ? `${ctx.scope()} ${method()}` : method())
 

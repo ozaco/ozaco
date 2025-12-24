@@ -8,8 +8,7 @@ import type { Helpers } from './helpers'
 
 export type DefinitionEvents = ContextEvents & {
   extended: Helpers.AnyDefinition
-
-  // TODO: onInit
+  plugin: Helpers.AnyPlugin
 }
 
 export interface Definition<Key, Value> {

@@ -18,6 +18,7 @@ export const createDefinition: Impl.CreateDefinition = (valueOrFn = {}) => {
     event,
 
     getKey: () => key,
+
     getValue: options => {
       if (isFunction(value)) {
         return value(options)
@@ -25,6 +26,7 @@ export const createDefinition: Impl.CreateDefinition = (valueOrFn = {}) => {
 
       return value
     },
+
     getRequired: () => required,
 
     key: value => {

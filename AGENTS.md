@@ -1,5 +1,5 @@
 # AGENTS.md
-1. Install deps with `bun install`; Bun 1.3.2 is pinned via Moon toolchain.
+1. Install deps with `bun install`; Bun 1.3.5 is pinned via Moon toolchain.
 2. Always execute workflows through Moon (`moon run <task>`); avoid invoking Bun CLIs directly.
 3. Full lint pass: `moon run :check` (wraps `bunx biome check --no-errors-on-unmatched --files-ignore-unknown=true .`).
 4. Auto-fix formatting: `moon run :apply`; escalate to `moon run :apply-unsafe` for deeper rewrites.

@@ -58,8 +58,8 @@ const createApi = (
     const key = definition.getKey()
     const required = definition.getRequired()
 
-    if (required.length >= 0) {
-      const missingKeys = required.filter(requiredKey => Reflect.has(definitionValue, requiredKey))
+    if (required.length > 0) {
+      const missingKeys = required.filter(requiredKey => !Reflect.has(definitionValue, requiredKey))
 
       if (missingKeys.length > 0) {
         throw new Error(`missingKeys in ${definition.getKey()}: ${missingKeys.join(',')}`)
@@ -91,14 +91,6 @@ export const createPlugin: Impl.CreatePlugin = (extendable, options, constructor
     const api = createApi(executedDefinitionMap, extendable)
     const use = createUse(executedDefinitionMap, extendable, api)
 
-    if (isDefinition(constructorDefinition)) {
-      const con = constructorDefinition.getValue({
-        use,
-      })
-
-      con(...args)
-    }
-
     const result: Result = {
       _t: PLUGIN,
       _e: extendable,
@@ -109,63 +101,71 @@ export const createPlugin: Impl.CreatePlugin = (extendable, options, constructor
 
       api,
 
-      use: (list: Helpers.AnyDependencyList, dependencies) => {
+      get: use,
+
+      // TODO: version matching
+
+      use: (list: Helpers.AnyDependencyList, targetDependencies) => {
         const dependencyMap = list.getBinding(extendable)
 
         if (!dependencyMap) {
           return result
         }
 
-        const keys = dependencyMap.keys()
+        const keys = Object.keys(dependencyMap)
 
-        for (const rawKey of keys) {
-          const key = rawKey.toString()
-          const [name, version] = key.split('@')
+        for (const key of keys) {
+          const dependencyVersion = list.getVersion(key)
 
-          const isAnyVersion = version === '*'
-
-          if (!name || Reflect.has(dependencies, name)) {
-            continue
-          }
-
-          if (isAnyVersion) {
-            dependencyMap.set(rawKey, dependencies[name])
-          } else if (dependencies[name] && version === dependencies[name].version) {
-            dependencyMap.set(rawKey, dependencies[name])
+          if (
+            dependencyVersion &&
+            (dependencyVersion === '*' || dependencyVersion === targetDependencies[key]?.version)
+          ) {
+            dependencyMap[key] = targetDependencies[key]
           }
         }
 
         return result
       },
 
-      unuse: (list: Helpers.AnyDependencyList, dependencies) => {
+      unuse: (list: Helpers.AnyDependencyList, targetDependencies) => {
         const dependencyMap = list.getBinding(extendable)
 
         if (!dependencyMap) {
           return result
         }
 
-        const keys = dependencyMap.keys()
+        const keys = Object.keys(dependencyMap)
 
-        for (const rawKey of keys) {
-          const key = rawKey.toString()
-          const [name, version] = key.split('@')
+        for (const key of keys) {
+          const dependencyVersion = list.getVersion(key)
 
-          const isAnyVersion = version === '*'
-
-          const isMatching = dependencies.some(
-            dependency =>
-              `${dependency.namespace}#${dependency.name}` === name &&
-              (isAnyVersion ? true : dependency.version === version),
-          )
-
-          if (isMatching) {
-            dependencyMap.delete(rawKey)
+          if (
+            dependencyVersion &&
+            (dependencyVersion === '*' || dependencyVersion === targetDependencies[key]?.version)
+          ) {
+            Reflect.deleteProperty(dependencyMap, key)
           }
         }
 
         return result
       },
+    }
+
+    // Publish plugin event
+
+    if (isDefinition(constructorDefinition)) {
+      const con = constructorDefinition.getValue({
+        use,
+      })
+
+      constructorDefinition.event.emit('plugin', result)
+
+      con(...args)
+    }
+
+    for (const definition of extendable.getDefinitions()) {
+      definition.event.emit('plugin', result)
     }
 
     return result

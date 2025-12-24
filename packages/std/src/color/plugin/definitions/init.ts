@@ -2,10 +2,10 @@ import { createDefinition } from 'std:plugin'
 
 import type { Options } from '../../type'
 
-import { optionsContext } from '../context'
+import { context } from '../base'
 
 export const init = createDefinition(({ use }) => {
-  const ctx = use(optionsContext)
+  const ctx = use(context)
 
   return (options?: Options) => {
     ctx.enabled = options?.enabled ?? ctx.enabled
@@ -13,9 +13,7 @@ export const init = createDefinition(({ use }) => {
 })
 
 export const getOptions = createDefinition(({ use }) => {
-  const ctx = use(optionsContext)
+  const ctx = use(context)
 
-  return () => {
-    return ctx
-  }
+  return () => ctx
 }).key('getOptions')

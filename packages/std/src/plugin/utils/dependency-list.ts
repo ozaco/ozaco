@@ -5,8 +5,8 @@ import { createContext } from './context'
 import { isPlugin } from './plugin'
 
 export const createDependencyList: Impl.CreateDependencyList = defaultDependencies => {
-  const dependencyMap: Record<string, Helpers.AnyPlugin> = {}
-  const dependencyVersionMap: Record<string, string> = {}
+  const dependencyMap: Record<PropertyKey, Helpers.AnyPlugin> = {}
+  const dependencyVersionMap: Record<PropertyKey, string> = {}
 
   const result = createContext(() => dependencyMap) as unknown as Helpers.AnyDependencyList
 
@@ -56,6 +56,8 @@ export const createDependencyList: Impl.CreateDependencyList = defaultDependenci
 
     return result
   }
+
+  result.getVersion = name => dependencyVersionMap[name]
 
   result.add(defaultDependencies)
 

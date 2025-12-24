@@ -13,7 +13,7 @@ export const context = createContext<Context>({
 })
 
 export const dependencies = createDependencyList<{
-  'std#colors': ColorPlugin
+  colors: ColorPlugin
 }>({
-  'std#colors': colorsPlugin,
+  colors: colorsPlugin,
 })

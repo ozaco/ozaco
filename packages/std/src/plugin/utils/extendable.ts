@@ -21,6 +21,7 @@ export const createExtendable: Impl.CreateExtendable = meta => {
     event,
 
     getDefinitions: () => definitionList,
+
     define: (...args: BlobType[]) => {
       for (const arg of args) {
         if (isContext(arg)) {

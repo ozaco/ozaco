@@ -2,10 +2,10 @@ import { createDefinition } from 'std:plugin'
 
 import type { InputTypes } from '../../type'
 
-import { optionsContext } from '../context'
+import { context } from '../base'
 
 export const formatter = createDefinition(({ use }) => {
-  const ctx = use(optionsContext)
+  const ctx = use(context)
 
   const formatter =
     (open: string, close: string, replace = open) =>
@@ -21,6 +21,7 @@ export const formatter = createDefinition(({ use }) => {
   const replaceClose = (string: string, close: string, replace: string, index: number) => {
     let result = '',
       cursor = 0
+
     do {
       result += string.substring(cursor, index) + replace
       cursor = index + close.length
