@@ -8,6 +8,7 @@ export type Options = {
   level?: LEVEL
   scope?: string | null
   disabled?: boolean
+  noConsole?: boolean
   date?: (() => string) | boolean
 
   stream?: Writable

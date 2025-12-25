@@ -7,6 +7,7 @@ import type { Context } from '../type'
 export const context = createContext<Context>({
   scope: null,
   disabled: false,
+  noConsole: false,
   level: LEVEL.INFO,
   date: () => new Date().toISOString(),
 

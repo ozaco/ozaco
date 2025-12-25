@@ -11,11 +11,13 @@ export const unstyled = createDefinition(({ use }) => {
   const ctx = use(context)
 
   return (cb: CallbackImpl, method: MethodImpl, level: LEVEL, ...args: unknown[]) => {
-    if (ctx.disabled) {
+    if (ctx.disabled || ctx.level > level) {
       return
     }
 
-    if (ctx.level > level) {
+    // TODO: transports
+
+    if (ctx.noConsole) {
       return
     }
 

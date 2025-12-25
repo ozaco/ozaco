@@ -12,6 +12,7 @@ export const init = createDefinition(({ use }) => {
     ctx.level = options?.level ?? ctx.level
     ctx.stream = options?.stream ?? ctx.stream
     ctx.disabled = options?.disabled ?? ctx.disabled
+    ctx.noConsole = options?.noConsole ?? ctx.noConsole
 
     if (isBoolean(options?.date)) {
       ctx.date = options.date ? () => new Date().toISOString() : null
