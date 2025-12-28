@@ -128,12 +128,17 @@ export const createPlugin: Impl.CreatePlugin = (extendable, options, constructor
             (dependencyVersion === '*' || dependencyVersion === targetDependencies[key]?.version)
           ) {
             if (isArray(dependencyMap[key])) {
-              dependencyMap[key].push(targetDependencies[key])
+              if (isArray(targetDependencies[key])) {
+                dependencyMap[key].push(...targetDependencies[key])
+              } else {
+                dependencyMap[key].push(targetDependencies[key])
+              }
             } else {
               dependencyMap[key] = targetDependencies[key]
             }
 
             event.emit('use', {
+              plugin: result,
               dependencyList: list,
               dependency: dependencyMap[key],
             })
@@ -160,6 +165,7 @@ export const createPlugin: Impl.CreatePlugin = (extendable, options, constructor
             (dependencyVersion === '*' || dependencyVersion === targetDependencies[key]?.version)
           ) {
             event.emit('unuse', {
+              plugin: result,
               dependencyList: list,
               dependency: dependencyMap[key],
             })

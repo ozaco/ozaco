@@ -7,10 +7,12 @@ import type { Helpers } from './helpers'
 
 export type PluginEvents = {
   use: {
+    plugin: Helpers.AnyPlugin
     dependencyList: Helpers.AnyDependencyList
     dependency: Helpers.AnyPlugin
   }
   unuse: {
+    plugin: Helpers.AnyPlugin
     dependencyList: Helpers.AnyDependencyList
     dependency: Helpers.AnyPlugin
   }
@@ -31,11 +33,11 @@ export interface Plugin<Meta extends Helpers.AnyMetadata, Api = EmptyType> {
 
   use: <Deps extends Helpers.AnyDependencyList = never>(
     list: Deps,
-    deps: Helpers.InferUseFromDependencies<Deps>,
+    deps: Partial<Helpers.InferUseFromDependencies<Deps>>,
   ) => Plugin<Meta, Api>
 
   unuse: <Deps extends Helpers.AnyDependencyList = never>(
     list: Deps,
-    deps: Helpers.InferUseFromDependencies<Deps>,
+    deps: Partial<Helpers.InferUseFromDependencies<Deps>>,
   ) => Plugin<Meta, Api>
 }

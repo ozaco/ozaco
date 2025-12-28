@@ -7,6 +7,8 @@ import { init } from './definitions/init'
 import { trigger } from './definitions/trigger'
 import { write } from './definitions/write'
 
-export const extendableTransport = createExtendable({
+export const baseTransport = createExtendable({
   namespace: 'cli/logger',
-}).define(transportContext, init.key('setOptions'), write, flush, trigger)
+}).define(transportContext, write, flush, trigger)
+
+export const extendableTransport = baseTransport.define(init.key('setOptions'))

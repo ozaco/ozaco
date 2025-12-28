@@ -4,7 +4,7 @@ import { createContext, createDependencyList } from 'std:plugin'
 import { LEVEL } from '../const'
 import type { AnyTransport, Context } from '../type'
 
-export const context = createContext<Context>({
+export const loggerContext = createContext<Context>({
   scope: null,
   disabled: false,
   noConsole: false,
@@ -15,7 +15,7 @@ export const context = createContext<Context>({
   getDate: null,
 })
 
-export const dependencies = createDependencyList<{
+export const loggerDependencies = createDependencyList<{
   colors: ColorPlugin
   transports: AnyTransport[]
 }>({

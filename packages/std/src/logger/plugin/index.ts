@@ -19,3 +19,5 @@ export const loggerPlugin = createLogger({
 })
 
 export const { api: logger } = loggerPlugin
+
+export * from './base'

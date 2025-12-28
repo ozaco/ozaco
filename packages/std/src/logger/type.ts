@@ -2,7 +2,7 @@ import type { Helpers, Plugin } from 'std:plugin'
 import type { Expand } from 'std:shared'
 
 import type { LEVEL } from './const'
-import type { extendableTransport } from './create-transport'
+import type { baseTransport } from './create-transport'
 import type { createLogger } from './plugin'
 
 export type Options = {
@@ -15,7 +15,9 @@ export type Options = {
 
 export type Context = Expand<
   Required<
-    Options & {
+    Omit<Options, 'date'> & {
+      date: null | (() => string)
+
       getScope: null | (() => string)
       getDate: null | (() => string)
     }
@@ -32,11 +34,9 @@ export type TransportOptions = {
 
 export type TransportContext = Expand<
   Required<Omit<TransportOptions, 'logger'>> & {
-    logger: null | Context
+    logger: null | LoggerPlugin
   }
 >
-
-export type ExtendableTransport = typeof extendableTransport
 
 export type AnyTransport = Plugin<
   {
@@ -44,5 +44,5 @@ export type AnyTransport = Plugin<
     name: string
     version: string
   },
-  Helpers.InferDefinitions<ExtendableTransport>
+  Helpers.InferDefinitions<typeof baseTransport>
 >

@@ -1,8 +1,7 @@
 import { createDefinition } from 'std:plugin'
 
-import { context } from '../../plugin/base'
-
 import type { TransportOptions } from '../../type'
+
 import { transportContext } from '../base'
 
 export const init = createDefinition(({ use }) => {
@@ -12,6 +11,6 @@ export const init = createDefinition(({ use }) => {
     transportCtx.level = options?.level ?? transportCtx.level
     transportCtx.disabled = options?.disabled ?? transportCtx.disabled
 
-    transportCtx.logger = options?.logger?.get(context) ?? transportCtx.logger
+    transportCtx.logger = options?.logger ?? transportCtx.logger
   }
 })

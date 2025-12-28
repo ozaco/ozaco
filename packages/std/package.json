@@ -33,6 +33,11 @@
       "source": "./src/logger/create-transport/index.ts",
       "types": "./dist/logger/create-transport.d.ts"
     },
+    "./logger/transport/file": {
+      "default": "./dist/logger/transport/file.js",
+      "source": "./src/logger/transport/file/index.ts",
+      "types": "./dist/logger/transport/file.d.ts"
+    },
     "./color": {
       "default": "./dist/color.js",
       "source": "./src/color/index.ts",

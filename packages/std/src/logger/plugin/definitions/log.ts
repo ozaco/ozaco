@@ -1,12 +1,12 @@
 import { LEVEL } from '../../const'
 
-import { context, dependencies } from '../base'
+import { loggerContext, loggerDependencies } from '../base'
 
 import { type MethodImpl, unstyled } from './unstyled'
 
 export const log = unstyled.extend(({ def, use }) => {
-  const ctx = use(context)
-  const colors = use(dependencies).colors.api
+  const ctx = use(loggerContext)
+  const colors = use(loggerDependencies).colors.api
 
   const buildText = (method: MethodImpl) => () => {
     const texts: string[] = []
