@@ -11,12 +11,12 @@ export const log = unstyled.extend(({ def, use }) => {
   const buildText = (method: MethodImpl) => () => {
     const texts: string[] = []
 
-    if (ctx.scope) {
-      texts.push(ctx.scope())
+    if (ctx.getScope) {
+      texts.push(ctx.getScope())
     }
 
-    if (ctx.date) {
-      texts.push(colors.text.black(ctx.date()))
+    if (ctx.getDate) {
+      texts.push(colors.text.black(ctx.getDate()))
     }
 
     texts.push(method())

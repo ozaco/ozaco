@@ -102,7 +102,9 @@ export namespace Helpers {
     ? Plugin<InferMetadata<T>, InferDefinitions<T>>
     : T extends AnyPlugin
       ? T
-      : never
+      : T extends Array<infer U>
+        ? InferPluginFromExtendable<U>[]
+        : never
 
   export type InferUseFromDependencies<Deps> = [
     Deps,

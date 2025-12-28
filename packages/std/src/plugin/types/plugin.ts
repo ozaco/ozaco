@@ -1,8 +1,20 @@
+import type { EventEmitter } from 'std:event'
 import type { EmptyType } from 'std:shared'
 
 import type { PLUGIN } from '../const'
 
 import type { Helpers } from './helpers'
+
+export type PluginEvents = {
+  use: {
+    dependencyList: Helpers.AnyDependencyList
+    dependency: Helpers.AnyPlugin
+  }
+  unuse: {
+    dependencyList: Helpers.AnyDependencyList
+    dependency: Helpers.AnyPlugin
+  }
+}
 
 export interface Plugin<Meta extends Helpers.AnyMetadata, Api = EmptyType> {
   _t: typeof PLUGIN
@@ -13,6 +25,7 @@ export interface Plugin<Meta extends Helpers.AnyMetadata, Api = EmptyType> {
   version: Required<Meta>['version']
 
   api: Api
+  event: EventEmitter<PluginEvents>
 
   get: Helpers.DefinitionUse
 

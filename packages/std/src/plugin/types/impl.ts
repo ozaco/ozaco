@@ -14,7 +14,9 @@ export namespace Impl {
   ) => Context<Data>
 
   export interface CreateDefinition {
-    <Value extends EmptyType>(value?: (utils: { use: Helpers.DefinitionUse }) => Value): Definition<unknown, Value>
+    <Value extends EmptyType>(
+      value?: (utils: { use: Helpers.DefinitionUse; event: Helpers.AnyPlugin['event'] }) => Value,
+    ): Definition<unknown, Value>
     <Value>(value?: Value): Definition<unknown, Value>
   }
 
@@ -24,6 +26,7 @@ export namespace Impl {
 
   export type CreateDependencyList = <Deps extends EmptyType = EmptyType>(
     dependencies: DependencyListOptions<Deps>,
+    shared?: boolean,
   ) => DependencyList<Deps>
 
   export type CreatePlugin = <

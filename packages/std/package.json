@@ -28,6 +28,11 @@
       "source": "./src/logger/index.ts",
       "types": "./dist/logger.d.ts"
     },
+    "./logger/create-transport": {
+      "default": "./dist/logger/create-transport.js",
+      "source": "./src/logger/create-transport/index.ts",
+      "types": "./dist/logger/create-transport.d.ts"
+    },
     "./color": {
       "default": "./dist/color.js",
       "source": "./src/color/index.ts",

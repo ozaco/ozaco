@@ -1,4 +1,5 @@
-import type { BlobType } from 'std:shared'
+import { createEvent } from 'std:event'
+import { type BlobType, isArray } from 'std:shared'
 
 import { PLUGIN } from '../const'
 import type { Helpers, Impl } from '../types'
@@ -11,6 +12,7 @@ import { isExtendable } from './extendable'
 const createUse = (
   executedDefinitionMap: WeakMap<Helpers.AnyDefinition, unknown>,
   extendable: Helpers.AnyExtendable,
+  event: Helpers.AnyPlugin['event'],
   currentApi?: BlobType,
 ): Helpers.DefinitionUse => {
   return target => {
@@ -32,7 +34,7 @@ const createUse = (
         return currentApi
       }
 
-      return createApi(tempExecutedDefinitionMap, target)
+      return createApi(tempExecutedDefinitionMap, target, event)
     }
 
     return target
@@ -42,15 +44,17 @@ const createUse = (
 const createApi = (
   executedDefinitionMap: WeakMap<Helpers.AnyDefinition, unknown>,
   extendable: Helpers.AnyExtendable,
+  event: Helpers.AnyPlugin['event'],
 ) => {
   const api = {}
   const definitions = extendable.getDefinitions()
 
-  const use = createUse(executedDefinitionMap, extendable, api)
+  const use = createUse(executedDefinitionMap, extendable, event, api)
 
   for (const definition of definitions) {
     const definitionValue = definition.getValue({
       use,
+      event,
     })
 
     let result: unknown
@@ -86,10 +90,11 @@ export const createPlugin: Impl.CreatePlugin = (extendable, options, constructor
   return (...args) => {
     type Result = Helpers.AnyPlugin
 
+    const event = createEvent() as Result['event']
     const executedDefinitionMap = new WeakMap<Helpers.AnyDefinition, unknown>()
 
-    const api = createApi(executedDefinitionMap, extendable)
-    const use = createUse(executedDefinitionMap, extendable, api)
+    const api = createApi(executedDefinitionMap, extendable, event)
+    const use = createUse(executedDefinitionMap, extendable, event, api)
 
     const result: Result = {
       _t: PLUGIN,
@@ -100,6 +105,7 @@ export const createPlugin: Impl.CreatePlugin = (extendable, options, constructor
       version: (options as BlobType).version ?? extendable._m.version,
 
       api,
+      event,
 
       get: use,
 
@@ -121,7 +127,16 @@ export const createPlugin: Impl.CreatePlugin = (extendable, options, constructor
             dependencyVersion &&
             (dependencyVersion === '*' || dependencyVersion === targetDependencies[key]?.version)
           ) {
-            dependencyMap[key] = targetDependencies[key]
+            if (isArray(dependencyMap[key])) {
+              dependencyMap[key].push(targetDependencies[key])
+            } else {
+              dependencyMap[key] = targetDependencies[key]
+            }
+
+            event.emit('use', {
+              dependencyList: list,
+              dependency: dependencyMap[key],
+            })
           }
         }
 
@@ -144,7 +159,18 @@ export const createPlugin: Impl.CreatePlugin = (extendable, options, constructor
             dependencyVersion &&
             (dependencyVersion === '*' || dependencyVersion === targetDependencies[key]?.version)
           ) {
-            Reflect.deleteProperty(dependencyMap, key)
+            event.emit('unuse', {
+              dependencyList: list,
+              dependency: dependencyMap[key],
+            })
+
+            if (isArray(dependencyMap[key])) {
+              dependencyMap[key] = dependencyMap[key].filter(current => {
+                return current !== targetDependencies[key]
+              })
+            } else {
+              Reflect.deleteProperty(dependencyMap, key)
+            }
           }
         }
 
@@ -157,6 +183,7 @@ export const createPlugin: Impl.CreatePlugin = (extendable, options, constructor
     if (isDefinition(constructorDefinition)) {
       const con = constructorDefinition.getValue({
         use,
+        event,
       })
 
       constructorDefinition.event.emit('plugin', result)

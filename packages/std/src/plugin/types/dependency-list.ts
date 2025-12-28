@@ -37,9 +37,5 @@ export interface DependencyList<Deps> extends Omit<Context<Deps>, '_t' | 'event'
   ) => DependencyList<Force extends true ? Omit<Deps, keyof TargetDependencies> : Deps>
   getVersion: (name: keyof Deps) => string | undefined
 
-  getRequired: () => (keyof Deps)[]
-  require: (...keys: (keyof Deps)[]) => DependencyList<Deps>
-  optional: (...keys: (keyof Deps)[]) => DependencyList<Deps>
-
   event: EventEmitter<DependencyListEvents>
 }

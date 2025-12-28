@@ -31,7 +31,7 @@ export const createExtendable: Impl.CreateExtendable = meta => {
         } else if (isDependencyList(arg)) {
           arg.bind(result)
 
-          event.emit('dependency-list', arg)
+          event.emit('dependencyList', arg)
         } else if (isDefinition(arg)) {
           if (!definitionList.includes(arg)) {
             definitionList.push(arg)

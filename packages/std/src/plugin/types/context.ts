@@ -8,7 +8,7 @@ export type ContextEvents = {
   extendable: Helpers.AnyExtendable
 }
 
-export type Context<Data> = {
+export interface Context<Data> {
   _t: typeof CONTEXT
 
   event: EventEmitter<ContextEvents>

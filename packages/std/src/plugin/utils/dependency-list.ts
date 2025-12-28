@@ -1,14 +1,18 @@
+import { isArray, isString } from 'std:shared'
+
 import { DEPENDENCY_LIST } from '../const'
 import type { Helpers, Impl } from '../types'
 
 import { createContext } from './context'
 import { isPlugin } from './plugin'
 
-export const createDependencyList: Impl.CreateDependencyList = defaultDependencies => {
-  const dependencyMap: Record<PropertyKey, Helpers.AnyPlugin> = {}
+export const createDependencyList: Impl.CreateDependencyList = (defaultDependencies, shared = false) => {
+  const dependencyMap: Record<PropertyKey, Helpers.AnyPlugin | Helpers.AnyPlugin[]> = {}
   const dependencyVersionMap: Record<PropertyKey, string> = {}
 
-  const result = createContext(() => dependencyMap) as unknown as Helpers.AnyDependencyList
+  const result = createContext(() =>
+    shared ? dependencyMap : Object.assign({}, dependencyMap),
+  ) as unknown as Helpers.AnyDependencyList
 
   result._t = DEPENDENCY_LIST
 
@@ -17,7 +21,18 @@ export const createDependencyList: Impl.CreateDependencyList = defaultDependenci
       if (isPlugin(value)) {
         dependencyMap[fullName] = value
         dependencyVersionMap[fullName] = value.version
-      } else {
+      } else if (isArray(value)) {
+        if (!value.every(isPlugin)) {
+          return result
+        }
+
+        const newList = isArray(dependencyMap[fullName]) ? dependencyMap[fullName] : []
+
+        newList.push(...value)
+
+        dependencyMap[fullName] = newList
+        dependencyVersionMap[fullName] = value.at(-1)?.version ?? '*'
+      } else if (isString(value)) {
         dependencyVersionMap[fullName] = value as string
       }
 
@@ -36,11 +51,21 @@ export const createDependencyList: Impl.CreateDependencyList = defaultDependenci
       let targetVersion: string
 
       if (isPlugin(value)) {
-        doesMatch = dependencyMap[fullName] === value.version
-        targetVersion = value.version
-      } else {
         doesMatch = dependencyMap[fullName] === value
+        targetVersion = value.version
+      } else if (isString(value)) {
+        doesMatch = dependencyVersionMap[fullName] === value
         targetVersion = value as string
+      } else if (isArray(value) && value.every(isPlugin)) {
+        doesMatch = false
+
+        dependencyMap[fullName] = ((dependencyMap[fullName] as Helpers.AnyPlugin[]) ?? []).filter(current => {
+          return !value.includes(current)
+        })
+
+        targetVersion = value.at(-1)?.version ?? '*'
+      } else {
+        return result
       }
 
       if (doesMatch || force) {

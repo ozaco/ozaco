@@ -10,20 +10,22 @@ export const init = createDefinition(({ use }) => {
 
   return (options?: Options) => {
     ctx.level = options?.level ?? ctx.level
-    ctx.stream = options?.stream ?? ctx.stream
     ctx.disabled = options?.disabled ?? ctx.disabled
     ctx.noConsole = options?.noConsole ?? ctx.noConsole
 
+    ctx.scope = options?.scope ?? ctx.scope
+    ctx.date = options?.date ?? ctx.date
+
     if (isBoolean(options?.date)) {
-      ctx.date = options.date ? () => new Date().toISOString() : null
+      ctx.getDate = options.date ? () => new Date().toISOString() : null
     } else if (isFunction(options?.date)) {
-      ctx.date = options.date
+      ctx.getDate = options.date
     }
 
-    if (options?.scope) {
+    if (ctx?.scope) {
       const colors = use(dependencies).colors.api
 
-      ctx.scope = () => colors.style.bold(colors.text.gray(`[${colors.text.gray(options.scope)}]`))
+      ctx.getScope = () => colors.style.bold(colors.text.gray(`[${colors.text.gray(ctx.scope)}]`))
     }
   }
 })

@@ -15,13 +15,13 @@ export interface Definition<Key, Value> {
   _t: typeof DEFINITION
 
   extend: <NewValue extends Expand<ToPartialObect<Value>>>(
-    cb: (options: { def: Value; use: Helpers.DefinitionUse }) => NewValue,
+    cb: (options: { def: Value; use: Helpers.DefinitionUse; event: Helpers.AnyPlugin['event'] }) => NewValue,
   ) => Definition<Key, NewValue>
 
   event: EventEmitter<DefinitionEvents>
 
   getKey: () => Key
-  getValue: (options: { use: Helpers.DefinitionUse }) => Value
+  getValue: (options: { use: Helpers.DefinitionUse; event: Helpers.AnyPlugin['event'] }) => Value
   getRequired: () => (keyof Value)[]
 
   key: <const NewKey extends LiteralUnion<Key, string>>(key: NewKey) => Definition<NewKey, Value>

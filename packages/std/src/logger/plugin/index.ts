@@ -18,4 +18,4 @@ export const loggerPlugin = createLogger({
   level: LEVEL.INFO,
 })
 
-export const {api: logger} = loggerPlugin
+export const { api: logger } = loggerPlugin

@@ -22,6 +22,9 @@
       "std:logger": [
         "src/logger/index.ts"
       ],
+      "std:logger:create-transport": [
+        "src/logger/create-transport/index.ts"
+      ],
       "std:color": [
         "src/color/index.ts"
       ]
