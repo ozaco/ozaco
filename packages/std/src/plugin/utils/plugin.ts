@@ -123,9 +123,14 @@ export const createPlugin: Impl.CreatePlugin = (extendable, options, constructor
         for (const key of keys) {
           const dependencyVersion = list.getVersion(key)
 
+          const targetVersion =
+            (isArray(targetDependencies[key])
+              ? (targetDependencies[key] as Helpers.AnyPlugin[]).at(-1)?.version
+              : targetDependencies[key]?.version) ?? '*'
+
           if (
             dependencyVersion &&
-            (dependencyVersion === '*' || dependencyVersion === targetDependencies[key]?.version)
+            (dependencyVersion === '*' || targetVersion === '*' || dependencyVersion === targetVersion)
           ) {
             if (isArray(dependencyMap[key])) {
               if (isArray(targetDependencies[key])) {

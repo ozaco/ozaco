@@ -20,5 +20,5 @@ export const loggerDependencies = createDependencyList<{
   transports: AnyTransport[]
 }>({
   colors: colorsPlugin,
-  transports: [],
+  transports: '*',
 })

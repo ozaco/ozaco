@@ -12,20 +12,19 @@ export const unstyled = createDefinition(({ use }) => {
   const deps = use(loggerDependencies)
 
   return (cb: CallbackImpl, method: MethodImpl, level: LEVEL, ...args: unknown[]) => {
-    if (ctx.disabled || ctx.level > level) {
+    if (ctx.disabled) {
       return
     }
 
-    // TODO: transports
-    for (const transport of deps.transports) {
-      transport.api.write(...args)
+    for (const transport of deps.transports ?? []) {
+      const ok = transport.api.write(level, ...args)
 
-      if (transport.api.trigger()) {
+      if (transport.api.trigger(ok)) {
         transport.api.flush()
       }
     }
 
-    if (ctx.noConsole) {
+    if (ctx.noConsole || ctx.level > level) {
       return
     }
 

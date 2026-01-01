@@ -1,15 +1,5 @@
 import { createDefinition } from 'std:plugin'
 
-import { transportContext } from '../base'
-
-export const trigger = createDefinition(({ use }) => {
-  const transportCtx = use(transportContext)
-
-  return () => {
-    if (transportCtx.disabled) {
-      return false
-    }
-
-    return true
-  }
+export const trigger = createDefinition(() => {
+  return (writeOk: boolean): boolean => !writeOk
 }).key('trigger')

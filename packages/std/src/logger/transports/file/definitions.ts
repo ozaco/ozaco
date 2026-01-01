@@ -1,8 +1,14 @@
-import { createWriteStream, existsSync, mkdirSync } from 'node:fs'
+import { createWriteStream, mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
 
-import { loggerContext } from 'std:logger'
-import { init as initDefinition, transportContext, write as writeDefinition } from 'std:logger:create-transport'
+import { type LEVEL, loggerContext } from 'std:logger'
+import {
+  flush as flushDefinition,
+  init as initDefinition,
+  transportContext,
+  trigger as triggerDefinition,
+  write as writeDefinition,
+} from 'std:logger:create-transport'
 
 import type { FileTransportContext, FileTransportOptions } from './types'
 
@@ -11,49 +17,95 @@ export const init = initDefinition
     return (options?: FileTransportOptions) => {
       const ctx = use(transportContext as unknown as FileTransportContext)
 
-      ctx.path = options?.path ?? ctx.path ?? `.ozaco/logs/${Date.now()}.log`
+      ctx.path = options?.path ?? ctx.path ?? `.ozaco/logs/latest.log`
 
-      const dir = dirname(ctx.path)
+      mkdirSync(dirname(ctx.path), {
+        recursive: true,
+      })
 
-      if (!existsSync(dir)) {
-        mkdirSync(dir, {
-          recursive: true,
-        })
-      }
+      ctx.queue ??= []
+      ctx.draining ??= false
+
+      ctx.limit = options?.limit ?? ctx.limit ?? 1000
+      ctx.highWaterMark = options?.highWaterMark ?? ctx.highWaterMark ?? 64 * 1024
 
       ctx.stream =
         options?.stream ??
         ctx.stream ??
         createWriteStream(ctx.path, {
+          flags: 'a',
           autoClose: true,
-          flags: 'a+',
-          highWaterMark: 16 * 1024, // 16KB
-          flush: true,
+          highWaterMark: ctx.highWaterMark,
         })
+
+      if (options?.platform && ctx.platformInfo === undefined) {
+        if (typeof process !== 'undefined') {
+          ctx.platformInfo = `${process.ppid ?? '-'}/${process.pid}@${process.platform}-${process.arch}`
+        } else if (typeof window !== 'undefined') {
+          ctx.platformInfo = `browser@${window.navigator.userAgent}`
+        } else {
+          ctx.platformInfo = 'unknown'
+        }
+      }
 
       return def(options)
     }
   })
   .key('setOptions')
 
-export const write = writeDefinition.extend(({ def, use }) => {
+export const write = writeDefinition.extend(({ use }) => {
   const ctx = use(transportContext as unknown as FileTransportContext)
 
-  return (...args: unknown[]) => {
-    const result = def(...args)
-    const loggerCtx = ctx.logger?.get(loggerContext)
+  return (level: LEVEL, ...args: unknown[]) => {
+    const loggerCtx = ctx.logger.get(loggerContext)
 
-    if (result) {
-      const object = {
-        date: loggerCtx?.date?.() ?? null,
-        scope: loggerCtx?.scope ?? null,
-        level: ctx.level,
-        message: args,
-      }
+    if (ctx.disabled || (ctx.level ?? loggerCtx.level) > level) return false
 
-      ctx.stream?.write(`${JSON.stringify(object)}\n`)
+    ctx.queue.push(
+      `{"date":"${loggerCtx.date?.() ?? ''}","scope":"${loggerCtx.scope ?? ''}","level":"${level}","message":${JSON.stringify(args)}${
+        ctx.platformInfo ? `,"platform":"${ctx.platformInfo}"` : ''
+      }}\n`,
+    )
+
+    return true
+  }
+})
+
+export const trigger = triggerDefinition.extend(({ use }) => {
+  const ctx = use(transportContext as unknown as FileTransportContext)
+
+  // ok will always be true no need to check it
+  return (_ok: boolean) => !ctx.draining
+})
+
+export const flush = flushDefinition.extend(({ use }) => {
+  const ctx = use(transportContext as unknown as FileTransportContext)
+
+  const flushInternal = (): boolean => {
+    if (ctx.draining || ctx.queue.length === 0) {
+      return false
     }
 
-    return result
+    ctx.draining = true
+
+    while (ctx.queue.length > 0) {
+      // biome-ignore lint/style/noNonNullAssertion: Redundant
+      const chunk = ctx.queue.shift()!
+      const ok = ctx.stream.write(chunk)
+
+      if (!ok) {
+        ctx.stream.once('drain', () => {
+          ctx.draining = false
+
+          flushInternal()
+        })
+        return false
+      }
+    }
+
+    ctx.draining = false
+    return true
   }
+
+  return flushInternal
 })

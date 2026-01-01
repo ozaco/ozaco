@@ -7,7 +7,7 @@ import { createContext } from './context'
 import { isPlugin } from './plugin'
 
 export const createDependencyList: Impl.CreateDependencyList = (defaultDependencies, shared = false) => {
-  const dependencyMap: Record<PropertyKey, Helpers.AnyPlugin | Helpers.AnyPlugin[]> = {}
+  const dependencyMap: Record<PropertyKey, undefined | Helpers.AnyPlugin | Helpers.AnyPlugin[]> = {}
   const dependencyVersionMap: Record<PropertyKey, string> = {}
 
   const result = createContext(() =>
@@ -34,6 +34,7 @@ export const createDependencyList: Impl.CreateDependencyList = (defaultDependenc
         dependencyVersionMap[fullName] = value.at(-1)?.version ?? '*'
       } else if (isString(value)) {
         dependencyVersionMap[fullName] = value as string
+        dependencyMap[fullName] = undefined
       }
 
       result.event.emit('add', [

@@ -1,9 +1,9 @@
 export enum LEVEL {
-  TRACE = -200,
-  DEBUG = -100,
-  INFO = 0,
-  SUCCESS = 100,
-  WARN = 200,
-  ERROR = 300,
-  FATAL = 400,
+  TRACE = 0,
+  DEBUG = 100,
+  INFO = 200,
+  SUCCESS = 300,
+  WARN = 400,
+  ERROR = 500,
+  FATAL = 600,
 }
