@@ -22,6 +22,5 @@ export type MergeTuple<T extends object[], Acc = EmptyType> = T extends [
   ? MergeTuple<Rest, Merge<Acc, A>>
   : Acc
 
-export type MergeObjectUnion<U extends BlobType> = UnionToTuple<U> extends object[]
-  ? MergeTuple<UnionToTuple<U>>
-  : never
+export type MergeObjectUnion<U extends BlobType> =
+  UnionToTuple<U> extends object[] ? MergeTuple<UnionToTuple<U>> : never

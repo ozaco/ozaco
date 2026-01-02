@@ -38,11 +38,8 @@ export namespace Helpers {
 
   export type AnyDefinition = Definition<BlobType, BlobType>
 
-  export type InferDefinitionKey<Type> = Type extends Definition<infer Key, BlobType>
-    ? Key extends PropertyKey
-      ? Key
-      : never
-    : never
+  export type InferDefinitionKey<Type> =
+    Type extends Definition<infer Key, BlobType> ? (Key extends PropertyKey ? Key : never) : never
   export type InferDefinitionValue<Type> = Type extends Definition<BlobType, infer Value> ? Value : never
 
   // Definition Merger
