@@ -24,16 +24,16 @@ export const colors = formatter.extend(({ def: formatter }) => {
       cyan: formatter('\x1b[36m', '\x1b[39m'),
       white: formatter('\x1b[37m', '\x1b[39m'),
       gray: formatter('\x1b[90m', '\x1b[39m'),
-    },
 
-    textBright: {
-      red: formatter('\x1b[91m', '\x1b[39m'),
-      green: formatter('\x1b[92m', '\x1b[39m'),
-      yellow: formatter('\x1b[93m', '\x1b[39m'),
-      blue: formatter('\x1b[94m', '\x1b[39m'),
-      magenta: formatter('\x1b[95m', '\x1b[39m'),
-      cyan: formatter('\x1b[96m', '\x1b[39m'),
-      white: formatter('\x1b[97m', '\x1b[39m'),
+      bright: {
+        red: formatter('\x1b[91m', '\x1b[39m'),
+        green: formatter('\x1b[92m', '\x1b[39m'),
+        yellow: formatter('\x1b[93m', '\x1b[39m'),
+        blue: formatter('\x1b[94m', '\x1b[39m'),
+        magenta: formatter('\x1b[95m', '\x1b[39m'),
+        cyan: formatter('\x1b[96m', '\x1b[39m'),
+        white: formatter('\x1b[97m', '\x1b[39m'),
+      },
     },
 
     bg: {
@@ -46,16 +46,16 @@ export const colors = formatter.extend(({ def: formatter }) => {
       cyan: formatter('\x1b[46m', '\x1b[49m'),
       white: formatter('\x1b[47m', '\x1b[49m'),
       gray: formatter('\x1b[100m', '\x1b[49m'),
-    },
 
-    bgBright: {
-      red: formatter('\x1b[101m', '\x1b[49m'),
-      green: formatter('\x1b[102m', '\x1b[49m'),
-      yellow: formatter('\x1b[103m', '\x1b[49m'),
-      blue: formatter('\x1b[104m', '\x1b[49m'),
-      magenta: formatter('\x1b[105m', '\x1b[49m'),
-      cyan: formatter('\x1b[106m', '\x1b[49m'),
-      white: formatter('\x1b[107m', '\x1b[49m'),
+      bright: {
+        red: formatter('\x1b[101m', '\x1b[49m'),
+        green: formatter('\x1b[102m', '\x1b[49m'),
+        yellow: formatter('\x1b[103m', '\x1b[49m'),
+        blue: formatter('\x1b[104m', '\x1b[49m'),
+        magenta: formatter('\x1b[105m', '\x1b[49m'),
+        cyan: formatter('\x1b[106m', '\x1b[49m'),
+        white: formatter('\x1b[107m', '\x1b[49m'),
+      },
     },
   }
 })

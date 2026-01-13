@@ -25,7 +25,7 @@ export const log = unstyled.extend(({ def, use }) => {
   }
 
   const trace = buildText(() => colors.text.gray('TRACE'))
-  const debug = buildText(() => colors.textBright.blue('DEBUG'))
+  const debug = buildText(() => colors.text.bright.blue('DEBUG'))
   const info = buildText(() => colors.text.blue('INFO'))
   const success = buildText(() => colors.text.green('SUCCESS'))
   const warn = buildText(() => colors.text.yellow('WARN'))
