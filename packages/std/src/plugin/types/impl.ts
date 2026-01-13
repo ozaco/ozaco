@@ -15,7 +15,11 @@ export namespace Impl {
 
   export interface CreateDefinition {
     <Value extends EmptyType>(
-      value?: (utils: { use: Helpers.DefinitionUse; event: Helpers.AnyPlugin['event'] }) => Value,
+      value?: (utils: {
+        use: Helpers.DefinitionUse
+        event: Helpers.AnyPlugin['event']
+        rebind: Helpers.Rebind
+      }) => Value,
     ): Definition<unknown, Value>
     <Value>(value?: Value): Definition<unknown, Value>
   }
@@ -40,4 +44,8 @@ export namespace Impl {
   ) => (
     ...args: Parameters<Helpers.InferDefinitionValue<Constructor>>
   ) => Plugin<Expand<Merge<Helpers.InferMetadata<Ext>, NewMeta>>, Helpers.InferDefinitions<Ext>>
+
+  // Internal
+  export type CreateUse = (options: Helpers.CreateUseOptions) => Helpers.DefinitionUse
+  export type CreateApi = <T = EmptyType>(options: Helpers.CreateApiOptions) => T
 }

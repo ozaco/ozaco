@@ -21,7 +21,11 @@ export interface Definition<Key, Value> {
   event: EventEmitter<DefinitionEvents>
 
   getKey: () => Key
-  getValue: (options: { use: Helpers.DefinitionUse; event: Helpers.AnyPlugin['event'] }) => Value
+  getValue: (options: {
+    use: Helpers.DefinitionUse
+    event: Helpers.AnyPlugin['event']
+    rebind: Helpers.Rebind
+  }) => Value
   getRequired: () => (keyof Value)[]
 
   key: <const NewKey extends LiteralUnion<Key, string>>(key: NewKey) => Definition<NewKey, Value>

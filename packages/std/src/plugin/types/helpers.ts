@@ -36,6 +36,8 @@ export namespace Helpers {
           ? InferDefinitions<T>
           : T
 
+  export type Rebind = <T>(key: string, handler: (target: T) => void) => void
+
   export type AnyDefinition = Definition<BlobType, BlobType>
 
   export type InferDefinitionKey<Type> =
@@ -112,4 +114,17 @@ export namespace Helpers {
     : Deps extends DependencyList<infer D>
       ? Dependencies<D>
       : UseAnyDependency
+
+  // Internal
+
+  export interface CreateUseOptions extends CreateApiOptions {
+    api?: BlobType
+  }
+
+  export interface CreateApiOptions {
+    rebindings: Set<string>
+    executedDefinitionMap: WeakMap<Helpers.AnyDefinition, unknown>
+    extendable: Helpers.AnyExtendable
+    event: Helpers.AnyPlugin['event']
+  }
 }

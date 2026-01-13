@@ -1,38 +1,30 @@
-import type { EventEmitter } from 'std:event'
 import { createDefinition, type PluginEvents } from 'std:plugin'
-import { type BlobType, isArray, isBoolean, isFunction } from 'std:shared'
+import { isArray, isBoolean, isFunction } from 'std:shared'
 
 import { transportContext } from '../../create-transport'
 import type { Options } from '../../type'
 import { isTransport } from '../../utils'
+
 import { loggerContext, loggerDependencies } from '../base'
 
-const listeners = new WeakMap<EventEmitter<BlobType>, BlobType>()
+export const init = createDefinition(({ use, rebind }) => {
+  rebind('transports', ({ plugin, dependency }: PluginEvents['use']) => {
+    const transports = isArray(dependency)
+      ? dependency
+      : [
+          dependency,
+        ]
 
-export const init = createDefinition(({ use, event }) => {
-  const ctx = use(loggerContext)
-
-  if (!listeners.has(event)) {
-    const listener = ({ plugin, dependency }: PluginEvents['use']) => {
-      const transports = isArray(dependency)
-        ? dependency
-        : [
-            dependency,
-          ]
-
-      for (const transport of transports) {
-        if (!isTransport(transport)) {
-          continue
-        }
-
-        transport.get(transportContext).logger = plugin
+    for (const transport of transports) {
+      if (!isTransport(transport)) {
+        continue
       }
+
+      transport.get(transportContext).logger = plugin
     }
+  })
 
-    event.on('use', listener)
-
-    listeners.set(event, listener)
-  }
+  const ctx = use(loggerContext)
 
   return (options?: Options) => {
     ctx.level = options?.level ?? ctx.level

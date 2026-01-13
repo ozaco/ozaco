@@ -4,87 +4,10 @@ import { type BlobType, isArray } from 'std:shared'
 import { PLUGIN } from '../const'
 import type { Helpers, Impl } from '../types'
 
-import { isContext } from './context'
 import { isDefinition } from './definition'
-import { isDependencyList } from './dependency-list'
-import { isExtendable } from './extendable'
 
-const createUse = (
-  executedDefinitionMap: WeakMap<Helpers.AnyDefinition, unknown>,
-  extendable: Helpers.AnyExtendable,
-  event: Helpers.AnyPlugin['event'],
-  currentApi?: BlobType,
-): Helpers.DefinitionUse => {
-  return target => {
-    if (isDependencyList(target) || isContext(target)) {
-      return target.getBinding(extendable)
-    } else if (isDefinition(target)) {
-      const check = executedDefinitionMap.has(target)
-
-      if (check) {
-        return executedDefinitionMap.get(target)
-      }
-
-      return null
-    } else if (isExtendable(target)) {
-      const tempExecutedDefinitionMap = new WeakMap<Helpers.AnyDefinition, unknown>()
-
-      // FIX: this may be an illegal optimization !!!
-      if (extendable === target) {
-        return currentApi
-      }
-
-      return createApi(tempExecutedDefinitionMap, target, event)
-    }
-
-    return target
-  }
-}
-
-const createApi = (
-  executedDefinitionMap: WeakMap<Helpers.AnyDefinition, unknown>,
-  extendable: Helpers.AnyExtendable,
-  event: Helpers.AnyPlugin['event'],
-) => {
-  const api = {}
-  const definitions = extendable.getDefinitions()
-
-  const use = createUse(executedDefinitionMap, extendable, event, api)
-
-  for (const definition of definitions) {
-    const definitionValue = definition.getValue({
-      use,
-      event,
-    })
-
-    let result: unknown
-
-    const key = definition.getKey()
-    const required = definition.getRequired()
-
-    if (required.length > 0) {
-      const missingKeys = required.filter(requiredKey => !Reflect.has(definitionValue, requiredKey))
-
-      if (missingKeys.length > 0) {
-        throw new Error(`missingKeys in ${definition.getKey()}: ${missingKeys.join(',')}`)
-      }
-    }
-
-    if (key) {
-      result = {
-        [key]: definitionValue,
-      }
-    } else {
-      result = definitionValue
-    }
-
-    Object.assign(api, result)
-
-    executedDefinitionMap.set(definition, definitionValue)
-  }
-
-  return api
-}
+import { createApi } from './internal/api'
+import { createUse } from './internal/use'
 
 export const createPlugin: Impl.CreatePlugin = (extendable, options, constructorDefinition) => {
   return (...args) => {
@@ -92,9 +15,21 @@ export const createPlugin: Impl.CreatePlugin = (extendable, options, constructor
 
     const event = createEvent() as Result['event']
     const executedDefinitionMap = new WeakMap<Helpers.AnyDefinition, unknown>()
+    const rebindings = new Set<string>()
 
-    const api = createApi(executedDefinitionMap, extendable, event)
-    const use = createUse(executedDefinitionMap, extendable, event, api)
+    const api = createApi({
+      executedDefinitionMap,
+      extendable,
+      rebindings,
+      event,
+    })
+    const use = createUse({
+      executedDefinitionMap,
+      extendable,
+      rebindings,
+      event,
+      api,
+    })
 
     const result: Result = {
       _t: PLUGIN,
@@ -192,10 +127,7 @@ export const createPlugin: Impl.CreatePlugin = (extendable, options, constructor
     // Publish plugin event
 
     if (isDefinition(constructorDefinition)) {
-      const con = constructorDefinition.getValue({
-        use,
-        event,
-      })
+      const con = use(constructorDefinition)
 
       constructorDefinition.event.emit('plugin', result)
 
