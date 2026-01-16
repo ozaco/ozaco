@@ -7,6 +7,7 @@ import type { Helpers, Impl } from '../types'
 import { isDefinition } from './definition'
 
 import { createApi } from './internal/api'
+import { createRebind } from './internal/rebind'
 import { createUse } from './internal/use'
 
 export const createPlugin: Impl.CreatePlugin = (extendable, options, constructorDefinition) => {
@@ -17,16 +18,20 @@ export const createPlugin: Impl.CreatePlugin = (extendable, options, constructor
     const executedDefinitionMap = new WeakMap<Helpers.AnyDefinition, unknown>()
     const rebindings = new Set<string>()
 
+    const rebind = createRebind({
+      event,
+      rebindings,
+    })
     const api = createApi({
       executedDefinitionMap,
       extendable,
-      rebindings,
+      rebind,
       event,
     })
     const use = createUse({
       executedDefinitionMap,
       extendable,
-      rebindings,
+      rebind,
       event,
       api,
     })

@@ -1,4 +1,4 @@
-import { createDefinition, type PluginEvents } from 'std:plugin'
+import { createDefinition } from 'std:plugin'
 import { isArray, isBoolean, isFunction } from 'std:shared'
 
 import { transportContext } from '../../create-transport'
@@ -8,7 +8,7 @@ import { isTransport } from '../../utils'
 import { loggerContext, loggerDependencies } from '../base'
 
 export const init = createDefinition(({ use, rebind }) => {
-  rebind('transports', ({ plugin, dependency }: PluginEvents['use']) => {
+  rebind('transports', ({ plugin, dependency }) => {
     const transports = isArray(dependency)
       ? dependency
       : [

@@ -46,6 +46,7 @@ export namespace Impl {
   ) => Plugin<Expand<Merge<Helpers.InferMetadata<Ext>, NewMeta>>, Helpers.InferDefinitions<Ext>>
 
   // Internal
+  export type CreateRebind = (options: Helpers.CreateRebindOptions) => Helpers.Rebind
   export type CreateUse = (options: Helpers.CreateUseOptions) => Helpers.DefinitionUse
   export type CreateApi = <T = EmptyType>(options: Helpers.CreateApiOptions) => T
 }

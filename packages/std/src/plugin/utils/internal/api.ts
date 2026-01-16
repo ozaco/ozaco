@@ -1,29 +1,20 @@
 import type { BlobType } from 'std:shared'
 
-import type { Helpers, Impl } from '../../types'
+import type { Impl } from '../../types'
 
 import { createUse } from './use'
 
-export const createApi: Impl.CreateApi = ({ event, extendable, executedDefinitionMap, rebindings }) => {
+export const createApi: Impl.CreateApi = ({ event, extendable, executedDefinitionMap, rebind }) => {
   const api = {} as BlobType
   const definitions = extendable.getDefinitions()
 
   const use = createUse({
-    rebindings,
+    rebind,
     executedDefinitionMap,
     extendable,
     event,
     api,
   })
-
-  const rebind: Helpers.Rebind = (key, handler) => {
-    if (rebindings.has(key)) {
-      return
-    }
-
-    event.on('use', handler)
-    rebindings.add(key)
-  }
 
   for (const definition of definitions) {
     const definitionValue = definition.getValue({

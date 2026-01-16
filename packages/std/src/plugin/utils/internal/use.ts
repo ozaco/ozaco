@@ -7,8 +7,8 @@ import { isExtendable } from '../extendable'
 
 import { createApi } from './api'
 
-export const createUse: Impl.CreateUse = ({ event, extendable, api, rebindings, executedDefinitionMap }) => {
-  return target => {
+export const createUse: Impl.CreateUse = ({ event, extendable, api, rebind, executedDefinitionMap }) => {
+  const result: Helpers.DefinitionUse = target => {
     if (isDependencyList(target) || isContext(target)) {
       return target.getBinding(extendable)
     } else if (isDefinition(target)) {
@@ -18,9 +18,11 @@ export const createUse: Impl.CreateUse = ({ event, extendable, api, rebindings, 
         return executedDefinitionMap.get(target)
       }
 
-      // TODO: better implementation instead of returning null
-
-      return null
+      return target.getValue({
+        event,
+        use: result,
+        rebind,
+      })
     } else if (isExtendable(target)) {
       const tempExecutedDefinitionMap = new WeakMap<Helpers.AnyDefinition, unknown>()
 
@@ -31,7 +33,7 @@ export const createUse: Impl.CreateUse = ({ event, extendable, api, rebindings, 
 
       return createApi({
         event,
-        rebindings,
+        rebind,
         extendable: target,
         executedDefinitionMap: tempExecutedDefinitionMap,
       })
@@ -39,4 +41,6 @@ export const createUse: Impl.CreateUse = ({ event, extendable, api, rebindings, 
 
     return target
   }
+
+  return result
 }

@@ -4,7 +4,7 @@ import type { Context } from './context'
 import type { Definition } from './definition'
 import type { Dependencies, DependencyList } from './dependency-list'
 import type { Extendable, Metadata } from './extendable'
-import type { Plugin } from './plugin'
+import type { Plugin, PluginEvents } from './plugin'
 
 export namespace Helpers {
   // Context
@@ -36,7 +36,7 @@ export namespace Helpers {
           ? InferDefinitions<T>
           : T
 
-  export type Rebind = <T>(key: string, handler: (target: T) => void) => void
+  export type Rebind = (key: string, handler: (target: PluginEvents['use']) => void) => void
 
   export type AnyDefinition = Definition<BlobType, BlobType>
 
@@ -117,14 +117,20 @@ export namespace Helpers {
 
   // Internal
 
-  export interface CreateUseOptions extends CreateApiOptions {
-    api?: BlobType
+  export interface CreateRebindOptions {
+    rebindings: Set<string>
+    event: Helpers.AnyPlugin['event']
   }
 
   export interface CreateApiOptions {
-    rebindings: Set<string>
     executedDefinitionMap: WeakMap<Helpers.AnyDefinition, unknown>
     extendable: Helpers.AnyExtendable
     event: Helpers.AnyPlugin['event']
+
+    rebind: Rebind
+  }
+
+  export interface CreateUseOptions extends CreateApiOptions {
+    api?: BlobType
   }
 }
