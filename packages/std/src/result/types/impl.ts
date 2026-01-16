@@ -128,4 +128,9 @@ export namespace Impl {
     <T extends ResultMaybeAsync<BlobType, BlobType>>(result: T, ...causes: string[]): T
     <T extends ResultMaybeAsync<BlobType, BlobType>>(...causes: string[]): (result: T) => T
   }
+
+  export type Throwable = <R, E extends Helpers.ErrorConstructor>(
+    cb: () => R,
+    errorClass?: E,
+  ) => ResultFromUnion<R | Failure<E['prototype']>>
 }

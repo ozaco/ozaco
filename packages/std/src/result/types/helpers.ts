@@ -36,4 +36,9 @@ export namespace Helpers {
   export type UnionToResultFor<P, R> = true extends P
     ? ResultAsync<InferSuccess<R>, InferFailure<R>>
     : Result<InferSuccess<R>, InferFailure<R>>
+
+  export interface ErrorConstructor<E = Error> {
+    new (error: Error): E
+    readonly prototype: E
+  }
 }

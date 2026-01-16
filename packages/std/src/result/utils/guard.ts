@@ -1,4 +1,4 @@
-import { type BlobType, isAsyncGenerator, isGenerator } from 'std:shared'
+import { type BlobType, isAsyncGenerator, isGenerator, isPromise } from 'std:shared'
 
 import type { Impl } from '../types'
 import { appendCauses } from './append-causes'
@@ -13,6 +13,18 @@ export const guard: Impl.Guard = (...args: BlobType[]): BlobType => {
     pipe(
       firstArgument(...args),
       result => {
+        if (isPromise(result)) {
+          return result.then(result => {
+            if (isGenerator(result)) {
+              return result.next().value
+            } else if (isAsyncGenerator(result)) {
+              return result.next().then((result: BlobType) => result.value)
+            }
+
+            return result
+          })
+        }
+
         if (isGenerator(result)) {
           return result.next().value
         } else if (isAsyncGenerator(result)) {
