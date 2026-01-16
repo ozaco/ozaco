@@ -42,6 +42,11 @@
       "default": "./dist/color.js",
       "source": "./src/color/index.ts",
       "types": "./dist/color.d.ts"
+    },
+    "./io": {
+      "default": "./dist/io.js",
+      "source": "./src/io/index.ts",
+      "types": "./dist/io.d.ts"
     }
   },
 
