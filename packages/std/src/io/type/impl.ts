@@ -5,18 +5,21 @@ import type { PathType } from '../const'
 import type { Api } from './api'
 
 export namespace Impl {
-  export interface Stats {
-    stats: {
-      (handler: Api.Handle, type: 'number'): ResultAsync<Api.Stats<number>, never>
-      (handler: Api.Handle, type: 'bigint'): ResultAsync<Api.Stats<bigint>, never>
-      (handler: Api.Handle): ResultAsync<Api.Stats<bigint>, never>
-    }
+  export interface StatsAsync {
+    (handler: Api.Handle, type: 'number'): ResultAsync<Api.Stats<number>, never>
+    (handler: Api.Handle, type: 'bigint'): ResultAsync<Api.Stats<bigint>, never>
+    (handler: Api.Handle): ResultAsync<Api.Stats<bigint>, never>
+  }
 
-    statsSync: {
-      (handler: Api.Handle, type: 'number'): Result<Api.Stats<number>, never>
-      (handler: Api.Handle, type: 'bigint'): Result<Api.Stats<bigint>, never>
-      (handler: Api.Handle): Result<Api.Stats<bigint>, never>
-    }
+  export interface StatsSync {
+    (handler: Api.Handle, type: 'number'): Result<Api.Stats<number>, never>
+    (handler: Api.Handle, type: 'bigint'): Result<Api.Stats<bigint>, never>
+    (handler: Api.Handle): Result<Api.Stats<bigint>, never>
+  }
+
+  export interface Stats {
+    stats: Impl.StatsAsync
+    statsSync: Impl.StatsSync
   }
 
   export type Handle = (
