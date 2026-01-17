@@ -1,25 +1,51 @@
 import { createDefinition } from 'std:plugin'
-import { fail, guard, throwable } from 'std:result'
+import { guard } from 'std:result'
+import type { BlobType } from 'std:shared'
 
-import { FSError, IOErrors, Runtime } from '../../const'
+import { IOErrors } from '../../const'
+import type { Impl } from '../../type'
 
-import { context } from '../base'
+export const stats = createDefinition((): Impl.Stats => {
+  const createDummy = (type: 'number' | 'bigint') => ({
+    get isFile() {
+      return false
+    },
+    get isDirectory() {
+      return false
+    },
+    get isSymlink() {
+      return false
+    },
+    get isBlockDevice() {
+      return null
+    },
+    get isFifo() {
+      return null
+    },
+    get isSocket() {
+      return null
+    },
 
-import { importFs } from '../internal/imports'
+    size: (type === 'number' ? 0 : 0n) as BlobType,
 
-export const stats = createDefinition(({ use }) => {
-  const ctx = use(context)
+    modification: null,
+    access: null,
 
-  return guard(async function* (path: string) {
-    switch (ctx.runtime) {
-      case Runtime.bun:
-      case Runtime.node: {
-        const fs = yield* await importFs()
+    device: (type === 'number' ? 0 : 0n) as BlobType,
+    mode: null,
+    links: null,
 
-        return throwable(() => fs.stat(path), FSError)
-      }
-    }
+    blocks: null,
+    blockSize: null,
+  })
 
-    return fail(IOErrors.unsupported, `stats operation is not supported on runtime: ${ctx.runtime}`)
-  }, IOErrors.stats)
-}).key('stats')
+  return {
+    stats: guard(async type => {
+      return createDummy(type ?? 'bigint')
+    }, IOErrors.stats),
+
+    statsSync: guard(type => {
+      return createDummy(type ?? 'bigint')
+    }, IOErrors.statsSync),
+  }
+})

@@ -10,11 +10,9 @@ export enum Runtime {
 }
 
 export enum IOErrors {
-  dirExists = 'io.dir.exists',
-  dirCreate = 'io.dir.create',
-  stats = 'io.stats',
-  unexpectedRuntime = 'io.unexpected-runtime',
-  unsupported = 'io.unsupported-operation',
+  stats = 'io.stats.async',
+  statsSync = 'io.stats.sync',
+  handle = 'io.handle',
 }
 
 export class FSError extends Error {
