@@ -4,29 +4,26 @@ import { guard } from 'std:result'
 import { IOErrors } from '../../const'
 import type { Impl } from '../../type'
 
-export const handle = createDefinition((): Impl.Handle => {
-  return guard((path, options = {}) => {
-    const splitted = path.split('/').filter(x => x.trim().length > 0)
+import { path as pathDefinition } from './path'
 
-    const fullTarget = splitted.pop() ?? '/'
-    const [target, ...extensions] = fullTarget.split('.')
+export const handle = createDefinition(({ use }): Impl.Handle => {
+  const path = use(pathDefinition)
 
-    let dirPaths: string[] = splitted
+  return guard((str, options = {}) => {
+    const target = path.basename(str)
+    const extname = path.extname(str)?.slice(1) ?? null
+    const fullDirname = path.dirname(str)
+    const type = path.type(str)
 
-    const splittedRoot = options.root?.split('/').filter(x => x.trim().length > 0) ?? []
-
-    if (splittedRoot.length > 0) {
-      dirPaths = splitted.slice(splittedRoot.length)
-    }
+    const dirname = options.root ? path.relative(options.root, fullDirname) : fullDirname
 
     return {
-      // biome-ignore lint/style/noNonNullAssertion: Redundant
-      target: target!,
-      extension: extensions.length > 0 ? extensions.join('.') : null,
-
-      dir: dirPaths.join('/'),
-
+      target,
+      extname,
+      dirname,
       root: options.root ?? null,
+
+      type,
       data: options.data ?? null,
     }
   }, IOErrors.handle)

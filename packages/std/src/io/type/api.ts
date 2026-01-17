@@ -1,5 +1,7 @@
 import type { BlobType } from 'std:shared'
 
+import type { PathType } from '../const'
+
 export namespace Api {
   export interface Stats<T extends number | bigint = bigint> {
     get isFile(): boolean
@@ -21,11 +23,13 @@ export namespace Api {
 
   export interface Handle {
     target: string
-    extension: string | null
-
-    dir: string
+    extname: string | null
+    dirname: string
     root: string | null
 
+    type: PathType
+
+    // TODO: internal optimizations for: { stats }
     data: BlobType
   }
 }

@@ -26,6 +26,7 @@ export type Result<T, E> = Success<T> | Failure<E>
 
 export interface ResultAsync<T, E> extends Promise<Result<T, E>> {
   [Symbol.iterator](): Promise<Generator<Failure<E>, T>>
+  // TODO: asyncIterator
 }
 
 export type ResultMaybeAsync<T, E> = ResultAsync<T, E> | Result<T, E>

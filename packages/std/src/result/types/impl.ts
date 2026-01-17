@@ -60,12 +60,12 @@ export namespace Impl {
   export interface Map {
     <R1 extends ResultMaybeAsync<BlobType, BlobType>, const T2>(
       fn: (a: Helpers.InferSuccess<R1>) => T2,
-    ): (result: R1) => ResultFor<R1, Helpers.InferSuccess<ResultFromUnion<T2>>, Helpers.InferFailure<R1>>
+    ): (result: R1) => ResultFor<T2, Helpers.InferSuccess<ResultFromUnion<T2>>, Helpers.InferFailure<R1>>
     <T1, const T2>(
       fn: (a: T1) => T2,
     ): <R1 extends ResultMaybeAsync<T1, BlobType>>(
       result: R1,
-    ) => ResultFor<R1, Helpers.InferSuccess<ResultFromUnion<T2>>, Helpers.InferFailure<R1>>
+    ) => ResultFor<T2, Helpers.InferSuccess<ResultFromUnion<T2>>, Helpers.InferFailure<R1>>
   }
 
   export interface MapError {
