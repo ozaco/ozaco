@@ -5,30 +5,30 @@ import type { PathType } from '../const'
 import type { Api } from './api'
 
 export namespace Impl {
-  export interface StatsAsync {
-    (handler: Api.Handle, type: 'number'): ResultAsync<Api.Stats<number>, never>
-    (handler: Api.Handle, type: 'bigint'): ResultAsync<Api.Stats<bigint>, never>
-    (handler: Api.Handle): ResultAsync<Api.Stats<bigint>, never>
+  export interface StatsAsync<E = never> {
+    (handler: Api.Handle, type: 'number'): ResultAsync<Api.Stats<number>, E>
+    (handler: Api.Handle, type: 'bigint'): ResultAsync<Api.Stats<bigint>, E>
+    (handler: Api.Handle): ResultAsync<Api.Stats<bigint>, E>
   }
 
-  export interface StatsSync {
-    (handler: Api.Handle, type: 'number'): Result<Api.Stats<number>, never>
-    (handler: Api.Handle, type: 'bigint'): Result<Api.Stats<bigint>, never>
-    (handler: Api.Handle): Result<Api.Stats<bigint>, never>
+  export interface StatsSync<E = never> {
+    (handler: Api.Handle, type: 'number'): Result<Api.Stats<number>, E>
+    (handler: Api.Handle, type: 'bigint'): Result<Api.Stats<bigint>, E>
+    (handler: Api.Handle): Result<Api.Stats<bigint>, E>
   }
 
-  export interface Stats {
-    stats: Impl.StatsAsync
-    statsSync: Impl.StatsSync
+  export interface Stats<E = never> {
+    stats: Impl.StatsAsync<E>
+    statsSync: Impl.StatsSync<E>
   }
 
-  export type Handle = (
+  export type Handle<E = never> = (
     path: string,
     options?: {
       root?: string | undefined
       data?: BlobType
     },
-  ) => Result<Api.Handle, never>
+  ) => Result<Api.Handle, E>
 
   export interface Path {
     join: (...segments: string[]) => string

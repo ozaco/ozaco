@@ -33,6 +33,9 @@
       ],
       "std:io": [
         "src/io/index.ts"
+      ],
+      "std:io:node": [
+        "src/io/runtime/node/index.ts"
       ]
     }
   },

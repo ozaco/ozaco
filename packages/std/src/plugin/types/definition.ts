@@ -1,5 +1,5 @@
 import type { EventEmitter } from 'std:event'
-import type { Expand, LiteralUnion, ToPartialObect } from 'std:shared'
+import type { LiteralUnion } from 'std:shared'
 
 import type { DEFINITION } from '../const'
 
@@ -14,7 +14,7 @@ export type DefinitionEvents = ContextEvents & {
 export interface Definition<Key, Value> {
   _t: typeof DEFINITION
 
-  extend: <NewValue extends Expand<ToPartialObect<Value>>>(
+  extend: <NewValue>(
     cb: (options: { def: Value; use: Helpers.DefinitionUse; event: Helpers.AnyPlugin['event'] }) => NewValue,
   ) => Definition<Key, NewValue>
 

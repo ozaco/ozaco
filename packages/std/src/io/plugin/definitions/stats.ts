@@ -3,10 +3,10 @@ import { guard } from 'std:result'
 import type { BlobType } from 'std:shared'
 
 import { IOErrors } from '../../const'
-import type { Impl } from '../../type'
+import type { Api, Impl } from '../../type'
 
 export const stats = createDefinition((): Impl.Stats => {
-  const createDummy = (type: 'number' | 'bigint') => ({
+  const createDummy = (type: 'number' | 'bigint'): Api.Stats<BlobType> => ({
     get isFile() {
       return false
     },
