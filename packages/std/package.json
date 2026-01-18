@@ -52,6 +52,11 @@
       "default": "./dist/io/runtime-node.js",
       "source": "./src/io/runtimes/node/index.ts",
       "types": "./dist/io/runtime-node.d.ts"
+    },
+    "./io/bun": {
+      "default": "./dist/io/runtime-bun.js",
+      "source": "./src/io/runtimes/bun/index.ts",
+      "types": "./dist/io/runtime-bun.d.ts"
     }
   },
 
