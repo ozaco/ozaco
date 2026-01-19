@@ -29,7 +29,7 @@ export const createContext: Impl.CreateContext = (data, cloneAlgorithm) => {
 
     event,
 
-    getBinding: getBinding,
+    getBinding,
     bind: (extendable, override = false) => {
       const existing = getBinding(extendable)
 
