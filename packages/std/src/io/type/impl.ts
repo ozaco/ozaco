@@ -34,5 +34,5 @@ export namespace Impl {
     cwd: () => string
   }
 
-  export type Open<E = never> = (handle: Api.Handle) => ResultAsync<Api.File, E>
+  export type Open<E = never> = (handle: Api.Handle | string) => ResultAsync<Api.File, E>
 }

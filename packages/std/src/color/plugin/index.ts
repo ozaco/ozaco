@@ -13,4 +13,4 @@ export const createColors = createPlugin(
 )
 
 export const colorsPlugin = createColors()
-export const colors = colorsPlugin.api
+export const { api: colors } = colorsPlugin

@@ -7,7 +7,7 @@ import { init } from './definitions/init'
 import { extendable } from './extendable'
 
 export const createLogger = createPlugin(
-  extendable.define(conditional.key('if')),
+  extendable.define(conditional),
   {
     version: '0.0.0',
   },

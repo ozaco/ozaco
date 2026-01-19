@@ -13,8 +13,8 @@ export const open = openDefinition.extend(({ use, def }): Impl.Open<FSError | IO
     async function* (handle) {
       const result = yield* await def(handle)
 
-      result.stats = yield* await statsApi.stats(handle)
-      result.raw = yield* await throwable(() => fsOpenAsync(handle.assembled), FSError)
+      result.stats = yield* await statsApi.stats(result.handle)
+      result.raw = yield* await throwable(() => fsOpenAsync(result.handle.assembled), FSError)
 
       result[Symbol.dispose] = () => {
         const file = result.raw as FSFileHanlde

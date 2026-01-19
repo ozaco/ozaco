@@ -20,4 +20,4 @@ export const conditional = createDefinition(({ use }) => {
       unstyled: nop as Helpers.InferDefinitionValue<typeof unstyled>,
     }
   }
-})
+}).key('if')
