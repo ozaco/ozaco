@@ -20,6 +20,14 @@ export const createExtendable: Impl.CreateExtendable = meta => {
 
     event,
 
+    clone: () => {
+      const newResult = createExtendable(meta)
+
+      newResult.define.apply(null, definitionList)
+
+      return newResult
+    },
+
     getDefinitions: () => definitionList,
 
     define: (...args: BlobType[]) => {

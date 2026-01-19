@@ -25,6 +25,8 @@ export interface Extendable<Meta extends Helpers.AnyMetadata, Defs = EmptyType> 
 
   event: EventEmitter<ExtendableEvents>
 
+  clone: () => Extendable<Meta, Defs>
+
   getDefinitions: () => Helpers.AnyDefinition[]
   define: <NewDefs extends (Helpers.AnyDefinition | Helpers.AnyContext | Helpers.AnyDependencyList)[]>(
     ...args: NewDefs
