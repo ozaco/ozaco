@@ -2,7 +2,7 @@ import { createDefinition } from 'std:plugin'
 import { guard } from 'std:result'
 import type { BlobType } from 'std:shared'
 
-import { IOErrors } from '../../const'
+import { IOErrors, Runtime } from '../../const'
 import type { Api, Impl } from '../../type'
 
 export const stats = createDefinition((): Impl.Stats => {
@@ -40,12 +40,20 @@ export const stats = createDefinition((): Impl.Stats => {
   })
 
   return {
-    stats: guard(async (_handler, type?: BlobType) => {
-      return createDummy(type ?? 'bigint')
-    }, IOErrors.stats),
+    stats: guard(
+      async (_handle, type?: BlobType) => {
+        return createDummy(type ?? 'bigint')
+      },
+      IOErrors.stats,
+      Runtime.unknown,
+    ),
 
-    statsSync: guard((_handler, type?: BlobType) => {
-      return createDummy(type ?? 'bigint')
-    }, IOErrors.statsSync),
+    statsSync: guard(
+      (_handle, type?: BlobType) => {
+        return createDummy(type ?? 'bigint')
+      },
+      IOErrors.statsSync,
+      Runtime.unknown,
+    ),
   }
 })

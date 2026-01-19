@@ -31,6 +31,7 @@ export const path = createDefinition((): Impl.Path => {
     }
   }
 
+  // FIX: cannot join cwd with file urls
   const join = (...segments: string[]): string => {
     if (segments.length === 0) return '.'
 

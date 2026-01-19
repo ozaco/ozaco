@@ -34,6 +34,7 @@ export enum IOErrors {
   stats = 'io.stats.async',
   statsSync = 'io.stats.sync',
   handle = 'io.handle',
+  open = 'io.open',
 
   // errors
   unsupported = 'unsupported',

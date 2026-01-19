@@ -1,7 +1,5 @@
 import { createDefinition } from 'std:plugin'
-import { guard } from 'std:result'
 
-import { IOErrors } from '../../const'
 import type { Impl } from '../../type'
 
 import { path as pathDefinition } from './path'
@@ -9,22 +7,23 @@ import { path as pathDefinition } from './path'
 export const handle = createDefinition(({ use }): Impl.Handle => {
   const path = use(pathDefinition)
 
-  return guard((str, options = {}) => {
+  return (str, root) => {
     const target = path.basename(str)
     const extname = path.extname(str)?.slice(1) ?? null
-    const fullDirname = path.dirname(str)
+    const dirname = path.dirname(str)
     const type = path.type(str)
-
-    const dirname = options.root ? path.relative(options.root, fullDirname) : fullDirname
 
     return {
       target,
       extname,
       dirname,
-      root: options.root ?? null,
+      root: root ?? null,
 
       type,
-      data: options.data ?? null,
+
+      get assembled() {
+        return path.join(root ?? '', dirname, target)
+      },
     }
-  }, IOErrors.handle)
+  }
 }).key('handle')

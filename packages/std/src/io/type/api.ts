@@ -29,7 +29,16 @@ export namespace Api {
 
     type: PathType
 
-    // TODO: internal optimizations for: { stats }
-    data: BlobType
+    get assembled(): string
+  }
+
+  export interface File {
+    // file handle or target runtime
+    raw: BlobType
+    handle: Api.Handle
+    stats: Api.Stats
+
+    [Symbol.dispose]: () => void
+    [Symbol.asyncDispose]: () => Promise<void>
   }
 }
