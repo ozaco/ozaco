@@ -5,6 +5,7 @@ import { appendCauses } from './append-causes'
 import { auto } from './auto'
 import { pipe } from './pipe'
 
+// TODO: guard should wrap in try-catch blocks
 export const guard: Impl.Guard = (...args: BlobType[]): BlobType => {
   const firstArgument = args[0]
   const causes = args.slice(1)

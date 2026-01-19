@@ -48,28 +48,26 @@ export const createDefinition: Impl.CreateDefinition = (valueOrFn = {}) => {
     },
 
     extend: cb => {
+      let newValue: unknown
+
       if (isFunction(value)) {
-        const prev = value
+        newValue = (options: BlobType) =>
+          pipe(value(options), curr => {
+            options.def = curr
 
-        value = (options: BlobType) =>
-          pipe(
-            prev,
-            prev => prev(options),
-            curr => {
-              options.def = curr
-
-              return cb(options)
-            },
-          )
+            return cb(options)
+          })
       } else {
-        value = (options: BlobType) => {
+        newValue = (options: BlobType) => {
           options.def = value
 
           return cb(options)
         }
       }
 
-      const newResult = createDefinition(value)
+      const newResult = createDefinition(newValue)
+
+      newResult.key(key)
 
       if (required.length > 0) {
         newResult.require(...(required as never[]))
