@@ -1,4 +1,19 @@
-import { POSIX_SEP, Runtime, URL_PROTOCOLS, WIN_SEP } from './const'
+import { isObject } from 'std:shared'
+
+import { HANDLE, POSIX_SEP, Runtime, STATS, URL_PROTOCOLS, WIN_SEP } from './const'
+import type { Api } from './type'
+
+export const isStats = (result: unknown): result is Api.Stats => {
+  return isObject(result) && result._t === STATS
+}
+
+export const isHandle = (result: unknown): result is Api.Handle => {
+  return isObject(result) && result._t === HANDLE
+}
+
+export const isFile = (result: unknown): result is Api.File => {
+  return isObject(result) && result._t === HANDLE
+}
 
 export const detectRuntime = (): Runtime => {
   if (typeof globalThis.process !== 'undefined' && globalThis.process.versions) {

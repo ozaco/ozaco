@@ -1,5 +1,6 @@
 import { createDefinition } from 'std:plugin'
 
+import { HANDLE } from '../../const'
 import type { Impl } from '../../type'
 
 import { path as pathDefinition } from './path'
@@ -14,6 +15,8 @@ export const handle = createDefinition(({ use }): Impl.Handle => {
     const type = path.type(str)
 
     return {
+      _t: HANDLE,
+
       target,
       extname,
       dirname,

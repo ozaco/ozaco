@@ -35,4 +35,14 @@ export namespace Impl {
   }
 
   export type Open<E = never> = (handle: Api.Handle | string) => ResultAsync<Api.File, E>
+
+  export type Read<E = never> = (
+    file: string | Api.Handle | Api.File,
+    buffer: ArrayBufferLike,
+    options?: {
+      offset?: number | undefined
+      length?: number | undefined
+      position?: number | bigint | null | undefined
+    },
+  ) => ResultAsync<number, E>
 }

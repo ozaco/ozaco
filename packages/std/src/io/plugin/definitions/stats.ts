@@ -2,11 +2,13 @@ import { createDefinition } from 'std:plugin'
 import { guard } from 'std:result'
 import type { BlobType } from 'std:shared'
 
-import { IOErrors, Runtime } from '../../const'
+import { IOErrors, Runtime, STATS } from '../../const'
 import type { Api, Impl } from '../../type'
 
 export const stats = createDefinition((): Impl.Stats => {
   const createDummy = (type: 'number' | 'bigint'): Api.Stats<BlobType> => ({
+    _t: STATS,
+
     get isFile() {
       return false
     },

@@ -1,5 +1,9 @@
 // TODO: add deno support
 
+export const STATS = Symbol.for('std:io:stats')
+export const HANDLE = Symbol.for('std:io:handle')
+export const FILE = Symbol.for('std:io:file')
+
 import type { BlobType } from 'std:shared'
 
 export const POSIX_SEP = '/'
@@ -35,6 +39,7 @@ export enum IOErrors {
   statsSync = 'io.stats.sync',
   handle = 'io.handle',
   open = 'io.open',
+  read = 'io.open.read',
 
   // errors
   unsupported = 'unsupported',

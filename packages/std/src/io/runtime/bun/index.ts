@@ -3,8 +3,9 @@ import { createPlugin } from 'std:plugin'
 
 import { stats } from '../node/stats'
 import { open } from './open'
+import { read } from './read'
 
-export const createBunIO = createPlugin(extendableIO.clone().define(stats, open), {
+export const createBunIO = createPlugin(extendableIO.clone().define(stats, open, read), {
   name: 'bun',
 })
 

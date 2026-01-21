@@ -10,8 +10,6 @@ export const open = openDefinition.extend(({ use, def }): Impl.Open<FSError | IO
     async function* (handle) {
       const result = yield* await def(handle)
 
-      console.log(result)
-
       result.stats = yield* await statsApi.stats(result.handle)
       result.raw = yield* throwable(() => Bun.file(result.handle.assembled), FSError)
 
