@@ -3,7 +3,7 @@ import { guard } from 'std:result'
 import { isString } from 'std:shared'
 
 import { IOErrors, Runtime } from '../../const'
-import type { Impl } from '../../type'
+import type { Impl } from '../../types'
 
 import { handle as handleDefinition } from './handle'
 import { stats as statsDefinition } from './stats'
