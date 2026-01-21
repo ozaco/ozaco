@@ -39,10 +39,29 @@ export enum IOErrors {
   statsSync = 'io.stats.sync',
   handle = 'io.handle',
   open = 'io.open',
-  read = 'io.open.read',
-
+  read = 'io.read',
+  write = 'io.write',
   // errors
   unsupported = 'unsupported',
+}
+
+export enum FSFlags {
+  append = 'a',
+  append_exclusive = 'ax',
+  append_read = 'a+',
+  append_read_exclusive = 'ax+',
+  append_sync = 'as',
+  append_read_sync = 'as+',
+
+  read = 'r',
+  read_sync = 'rs',
+  read_write = 'r+',
+  read_write_sync = 'rs+',
+
+  write = 'w',
+  write_exclusive = 'wx',
+  write_read = 'w+',
+  write_read_exclusive = 'wx+',
 }
 
 export class FSError extends Error {

@@ -1,5 +1,5 @@
 import { closeSync as fsCloseSync } from 'node:fs'
-import { type FileHandle as FSFileHanlde, open as fsOpenAsync } from 'node:fs/promises'
+import { type FileHandle as FSFileHandle, open as fsOpenAsync } from 'node:fs/promises'
 
 import { FSError, type Impl, IOErrors, open as openDefinition, Runtime } from 'std:io'
 import { guard, throwable } from 'std:result'
@@ -10,20 +10,20 @@ export const open = openDefinition.extend(({ use, def }): Impl.Open<FSError | IO
   const statsApi = use(statsDefinition)
 
   return guard(
-    async function* (handle) {
-      const result = yield* await def(handle)
+    async function* (handle, flag) {
+      const result = yield* await def(handle, flag)
 
+      result.raw = yield* await throwable(() => fsOpenAsync(result.handle.assembled, flag), FSError)
       result.stats = yield* await statsApi.stats(result.handle)
-      result.raw = yield* await throwable(() => fsOpenAsync(result.handle.assembled), FSError)
 
       result[Symbol.dispose] = () => {
-        const file = result.raw as FSFileHanlde
+        const file = result.raw as FSFileHandle
 
         fsCloseSync(file.fd)
       }
 
       result[Symbol.asyncDispose] = async () => {
-        const file = result.raw as FSFileHanlde
+        const file = result.raw as FSFileHandle
 
         await file.close()
       }

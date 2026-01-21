@@ -4,8 +4,9 @@ import { createPlugin } from 'std:plugin'
 import { open } from './open'
 import { read } from './read'
 import { stats } from './stats'
+import { write } from './write'
 
-export const createNodeIO = createPlugin(extendableIO.clone().define(stats, open, read), {
+export const createNodeIO = createPlugin(extendableIO.clone().define(stats, open, read, write), {
   name: 'node',
 })
 

@@ -1,6 +1,6 @@
 import type { Result, ResultAsync } from 'std:result'
 
-import type { PathType } from '../const'
+import type { FSFlags, PathType } from '../const'
 import type { Api } from './api'
 
 export namespace Impl {
@@ -34,7 +34,7 @@ export namespace Impl {
     cwd: () => string
   }
 
-  export type Open<E = never> = (handle: Api.Handle | string) => ResultAsync<Api.File, E>
+  export type Open<E = never> = (handle: Api.Handle | string, flag?: FSFlags) => ResultAsync<Api.File, E>
 
   export type Read<E = never> = (
     file: string | Api.Handle | Api.File,
@@ -43,6 +43,16 @@ export namespace Impl {
       offset?: number | undefined
       length?: number | undefined
       position?: number | bigint | null | undefined
+    },
+  ) => ResultAsync<number, E>
+
+  export type Write<E = never> = (
+    file: string | Api.Handle | Api.File,
+    buffer: ArrayBufferLike,
+    options?: {
+      offset?: number | undefined
+      length?: number | undefined
+      position?: number | null | undefined
     },
   ) => ResultAsync<number, E>
 }
