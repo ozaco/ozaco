@@ -11,25 +11,19 @@ export const write = writeDefinition.extend(({ use }): Impl.Write<FSError | IOEr
   return guard(async function* (rawFile, arrayBuffer, options) {
     let file: Api.File
     if (typeof rawFile === 'string' || isHandle(rawFile)) {
-      file = yield* await openApi(rawFile, FSFlags.write)
+      file = yield* await openApi(rawFile, FSFlags.WRITE)
     } else {
       file = rawFile
     }
+
     const view = new Uint8Array(arrayBuffer)
     const fileHandle = file.raw as FSFileHandle
+
     const offset = options?.offset ?? 0
     const length = options?.length ?? view.byteLength - offset
-    const position = options?.position ?? offset
+    const position = options?.position ?? null
 
-    const { bytesWritten } = yield* await throwable(
-      () =>
-        fileHandle.write(view, {
-          offset,
-          length,
-          position,
-        }),
-      FSError,
-    )
+    const { bytesWritten } = yield* await throwable(() => fileHandle.write(view, offset, length, position), FSError)
     return bytesWritten
   })
 })

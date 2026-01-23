@@ -4,6 +4,7 @@ export const STATS = Symbol.for('std:io:stats')
 export const HANDLE = Symbol.for('std:io:handle')
 export const FILE = Symbol.for('std:io:file')
 
+import { constants as FSConst } from 'node:fs'
 import type { BlobType } from 'std:shared'
 
 export const POSIX_SEP = '/'
@@ -45,24 +46,13 @@ export enum IOErrors {
   unsupported = 'unsupported',
 }
 
-export enum FSFlags {
-  append = 'a',
-  append_exclusive = 'ax',
-  append_read = 'a+',
-  append_read_exclusive = 'ax+',
-  append_sync = 'as',
-  append_read_sync = 'as+',
+export const FSFlags = {
+  APPEND: FSConst.O_APPEND | FSConst.O_RDWR,
+  READ: FSConst.O_RDONLY,
+  WRITE: FSConst.O_RDWR,
+} as const
 
-  read = 'r',
-  read_sync = 'rs',
-  read_write = 'r+',
-  read_write_sync = 'rs+',
-
-  write = 'w',
-  write_exclusive = 'wx',
-  write_read = 'w+',
-  write_read_exclusive = 'wx+',
-}
+export type FSFlags = (typeof FSFlags)[keyof typeof FSFlags]
 
 export class FSError extends Error {
   constructor(err: Error) {
