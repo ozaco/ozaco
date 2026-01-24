@@ -1,52 +1,5 @@
-import { isObject } from 'std:shared'
-
-import { HANDLE, POSIX_SEP, Runtime, STATS, URL_PROTOCOLS, WIN_SEP } from './const'
-import type { Api } from './type'
-
-export const isStats = (result: unknown): result is Api.Stats => {
-  return isObject(result) && result._t === STATS
-}
-
-export const isHandle = (result: unknown): result is Api.Handle => {
-  return isObject(result) && result._t === HANDLE
-}
-
-export const isFile = (result: unknown): result is Api.File => {
-  return isObject(result) && result._t === HANDLE
-}
-
-export const detectRuntime = (): Runtime => {
-  if (typeof globalThis.process !== 'undefined' && globalThis.process.versions) {
-    if ((globalThis.process.versions as Record<string, unknown>).bun) {
-      return Runtime.bun
-    }
-    if (globalThis.process.versions.node) {
-      return Runtime.node
-    }
-  }
-  if (typeof window !== 'undefined' || typeof self !== 'undefined') {
-    return Runtime.browser
-  }
-  return Runtime.unknown
-}
-
-export const isWindows = (): boolean => {
-  if (typeof globalThis.process !== 'undefined' && globalThis.process.platform) {
-    return globalThis.process.platform === 'win32'
-  }
-  if (typeof navigator !== 'undefined' && navigator.userAgent) {
-    return navigator.userAgent.includes('Windows')
-  }
-  return false
-}
-
-export const isUrl = (path?: string): path is string => {
-  return !!path && URL_PROTOCOLS.some(protocol => path.startsWith(protocol))
-}
-
-export const isWindowsPath = (path?: string): boolean => {
-  return !!path && (/^[a-zA-Z]:/.test(path) || path.includes(WIN_SEP))
-}
+import { POSIX_SEP, WIN_SEP } from '../const'
+import { isUrl, isWindows, isWindowsPath } from './is'
 
 export const toUniversal = (path?: string): string => {
   return path?.replace(/\\/g, POSIX_SEP) ?? ''

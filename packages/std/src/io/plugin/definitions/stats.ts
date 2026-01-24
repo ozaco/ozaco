@@ -3,7 +3,7 @@ import { guard } from 'std:result'
 import type { BlobType } from 'std:shared'
 
 import { IOErrors, Runtime, STATS } from '../../const'
-import type { Api, Impl } from '../../type'
+import type { Api, Impl } from '../../types'
 
 export const stats = createDefinition((): Impl.Stats => {
   const createDummy = (type: 'number' | 'bigint'): Api.Stats<BlobType> => ({

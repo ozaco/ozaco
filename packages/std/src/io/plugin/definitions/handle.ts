@@ -1,7 +1,6 @@
 import { createDefinition } from 'std:plugin'
-
 import { HANDLE } from '../../const'
-import type { Impl } from '../../type'
+import type { Impl } from '../../types'
 
 import { path as pathDefinition } from './path'
 

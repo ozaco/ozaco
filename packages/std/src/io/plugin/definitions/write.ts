@@ -1,7 +1,7 @@
 import { createDefinition } from 'std:plugin'
 import { guard } from 'std:result'
 import { IOErrors, Runtime } from 'src/io/const'
-import type { Impl } from '../../type'
+import type { Impl } from '../../types'
 
 export const write = createDefinition((): Impl.Write => {
   return guard(

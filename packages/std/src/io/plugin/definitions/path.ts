@@ -1,7 +1,7 @@
 import { createDefinition } from 'std:plugin'
 
 import { PathType, POSIX_SEP, Runtime } from '../../const'
-import type { Impl } from '../../type'
+import type { Impl } from '../../types'
 import {
   detectRuntime,
   dirnamePosix,

@@ -1,10 +1,11 @@
 import type { FileHandle as FSFileHandle } from 'node:fs/promises'
 
 import type { Api, Impl } from 'std:io'
-import { FSError, FSFlags, IOErrors, isHandle, Runtime, read as readDefinition } from 'std:io'
+import { Flags, FSError, IOErrors, isHandle, Runtime, read as readDefinition } from 'std:io'
 import { guard, throwable } from 'std:result'
 
 import { open as openDefinition } from '../node/open'
+import { toFsFlag } from './internal/utils'
 
 export const read = readDefinition.extend(({ use }): Impl.Read<FSError | IOErrors.unsupported> => {
   const openApi = use(openDefinition)
@@ -14,7 +15,7 @@ export const read = readDefinition.extend(({ use }): Impl.Read<FSError | IOError
       let file: Api.File
 
       if (typeof rawFile === 'string' || isHandle(rawFile)) {
-        file = yield* await openApi(rawFile, FSFlags.read)
+        file = yield* await openApi(rawFile, toFsFlag(Flags.read))
       } else {
         file = rawFile
       }

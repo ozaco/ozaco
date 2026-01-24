@@ -2,7 +2,7 @@ import { createDefinition } from 'std:plugin'
 import { guard } from 'std:result'
 
 import { IOErrors, Runtime } from '../../const'
-import type { Impl } from '../../type'
+import type { Impl } from '../../types'
 
 export const read = createDefinition((): Impl.Read => {
   return guard(

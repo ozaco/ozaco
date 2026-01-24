@@ -3,7 +3,7 @@ import { type FileHandle as FSFileHandle, open as fsOpenAsync } from 'node:fs/pr
 
 import { FSError, type Impl, IOErrors, open as openDefinition, Runtime } from 'std:io'
 import { guard, throwable } from 'std:result'
-
+import { toFsFlag } from './internal/utils'
 import { stats as statsDefinition } from './stats'
 
 export const open = openDefinition.extend(({ use, def }): Impl.Open<FSError | IOErrors.unsupported> => {
@@ -15,6 +15,7 @@ export const open = openDefinition.extend(({ use, def }): Impl.Open<FSError | IO
 
       result.raw = yield* await throwable(() => fsOpenAsync(result.handle.assembled, flag), FSError)
       result.stats = yield* await statsApi.stats(result.handle)
+      result.raw = yield* await throwable(() => fsOpenAsync(result.handle.assembled, toFsFlag(result.flag)), FSError)
 
       result[Symbol.dispose] = () => {
         const file = result.raw as FSFileHandle

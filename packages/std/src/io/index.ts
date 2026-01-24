@@ -2,6 +2,6 @@ export * from './const'
 
 export * from './plugin'
 
-export * from './type'
+export * from './types'
 
 export * from './utils'
