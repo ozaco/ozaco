@@ -1,6 +1,6 @@
 import type { BlobType } from 'std:shared'
 
-import type { PathType } from '../const'
+import type { Flags, PathType } from '../const'
 
 export namespace Api {
   export interface Stats<T extends number | bigint = bigint> {
@@ -33,10 +33,11 @@ export namespace Api {
   }
 
   export interface File {
-    // file handle or target runtime
+    // file handle for target runtime
     raw: BlobType
     handle: Api.Handle
     stats: Api.Stats
+    flag: Flags
 
     [Symbol.dispose]: () => void
     [Symbol.asyncDispose]: () => Promise<void>

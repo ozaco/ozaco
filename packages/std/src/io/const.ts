@@ -11,14 +11,27 @@ export const URL_PROTOCOLS = [
   'wss:',
 ]
 
-export enum PathType {
-  url = 'url',
-  file = 'file',
-  ftp = 'ftp',
-  ws = 'ws',
-  wss = 'wss',
+export enum Flags {
+  none = 0,
 
-  path = 'path',
+  read = 1 << 0,
+  append = 1 << 1,
+  write = 1 << 2,
+
+  truncate = 1 << 3,
+  create = 1 << 4,
+  exclude = 1 << 5,
+  sync = 1 << 6,
+}
+
+export enum PathType {
+  url,
+  file,
+  ftp,
+  ws,
+  wss,
+
+  path,
 }
 
 export enum Runtime {

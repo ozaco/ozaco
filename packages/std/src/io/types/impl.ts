@@ -1,6 +1,6 @@
 import type { Result, ResultAsync } from 'std:result'
 
-import type { PathType } from '../const'
+import type { Flags, PathType } from '../const'
 import type { Api } from './api'
 
 export namespace Impl {
@@ -34,5 +34,5 @@ export namespace Impl {
     cwd: () => string
   }
 
-  export type Open<E = never> = (handle: Api.Handle | string) => ResultAsync<Api.File, E>
+  export type Open<E = never> = (handle: Api.Handle | string, flag?: Flags) => ResultAsync<Api.File, E>
 }

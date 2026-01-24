@@ -7,10 +7,8 @@ export const open = openDefinition.extend(({ use, def }): Impl.Open<FSError | IO
   const statsApi = use(statsDefinition)
 
   return guard(
-    async function* (handle) {
-      const result = yield* await def(handle)
-
-      console.log(result)
+    async function* (handle, flag) {
+      const result = yield* await def(handle, flag)
 
       result.stats = yield* await statsApi.stats(result.handle)
       result.raw = yield* throwable(() => Bun.file(result.handle.assembled), FSError)
