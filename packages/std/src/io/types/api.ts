@@ -1,9 +1,11 @@
 import type { BlobType } from 'std:shared'
 
-import type { Flags, PathType } from '../const'
+import type { FILE, Flags, HANDLE, PathType, STATS } from '../const'
 
 export namespace Api {
   export interface Stats<T extends number | bigint = bigint> {
+    _t: typeof STATS
+
     get isFile(): boolean
     get isDirectory(): boolean
     get isSymlink(): boolean
@@ -22,6 +24,8 @@ export namespace Api {
   }
 
   export interface Handle {
+    _t: typeof HANDLE
+
     target: string
     extname: string | null
     dirname: string
@@ -33,7 +37,8 @@ export namespace Api {
   }
 
   export interface File {
-    // file handle for target runtime
+    _t: typeof FILE
+    // file handle or target runtime
     raw: BlobType
     handle: Api.Handle
     stats: Api.Stats

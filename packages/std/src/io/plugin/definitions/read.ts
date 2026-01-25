@@ -1,0 +1,15 @@
+import { createDefinition } from 'std:plugin'
+import { guard } from 'std:result'
+
+import { IOErrors, Runtime } from '../../const'
+import type { Impl } from '../../types'
+
+export const read = createDefinition((): Impl.Read => {
+  return guard(
+    async (_rawFile, _view, _options) => {
+      return 0
+    },
+    IOErrors.read,
+    Runtime.unknown,
+  )
+}).key('read')

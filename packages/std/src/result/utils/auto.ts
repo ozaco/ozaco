@@ -10,7 +10,7 @@ export const auto: Impl.Auto = (...args: BlobType[]): BlobType => {
   const hasDefaultValue = args.length === 2
   const defaultValue = hasDefaultValue ? args[1] : undefined
 
-  if (!firstArgument) {
+  if (args.length === 0) {
     return (result: ResultMaybeAsync<BlobType, BlobType>) => auto(result)
   }
 

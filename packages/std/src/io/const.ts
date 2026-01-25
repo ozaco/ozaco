@@ -1,4 +1,7 @@
 // TODO: add deno support
+export const STATS = Symbol.for('std:io:stats')
+export const HANDLE = Symbol.for('std:io:handle')
+export const FILE = Symbol.for('std:io:file')
 
 export const POSIX_SEP = '/'
 export const WIN_SEP = '\\'
@@ -46,7 +49,8 @@ export enum IOErrors {
   statsSync = 'io.stats.sync',
   handle = 'io.handle',
   open = 'io.open',
-
+  read = 'io.read',
+  write = 'io.write',
   // errors
   unsupported = 'unsupported',
 }

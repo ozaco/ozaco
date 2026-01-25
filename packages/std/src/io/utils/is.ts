@@ -1,4 +1,18 @@
-import { URL_PROTOCOLS, WIN_SEP } from '../const'
+import { isObject } from 'std:shared'
+import { HANDLE, STATS, URL_PROTOCOLS, WIN_SEP } from '../const'
+import type { Api } from '../types'
+
+export const isStats = (result: unknown): result is Api.Stats => {
+  return isObject(result) && result._t === STATS
+}
+
+export const isHandle = (result: unknown): result is Api.Handle => {
+  return isObject(result) && result._t === HANDLE
+}
+
+export const isFile = (result: unknown): result is Api.File => {
+  return isObject(result) && result._t === HANDLE
+}
 
 export const isWindows = (): boolean => {
   if (typeof globalThis.process !== 'undefined' && globalThis.process.platform) {

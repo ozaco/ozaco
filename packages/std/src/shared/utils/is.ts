@@ -46,3 +46,20 @@ export const isAsyncGenerator = (value: unknown): value is AsyncGenerator<BlobTy
 export const isNumber = (x: unknown): x is number => {
   return typeof x === 'number'
 }
+
+export const isArrayBuffer = (x: unknown): x is ArrayBuffer => {
+  return typeof x === 'object' && x !== null && Object.prototype.toString.call(x) === '[object ArrayBuffer]'
+}
+
+export const isSharedArrayBuffer = (x: unknown): x is SharedArrayBuffer => {
+  return (
+    typeof SharedArrayBuffer !== 'undefined' &&
+    typeof x === 'object' &&
+    x !== null &&
+    Object.prototype.toString.call(x) === '[object SharedArrayBuffer]'
+  )
+}
+
+export const isArrayBufferView = (x: unknown): x is ArrayBufferView => {
+  return typeof x === 'object' && x !== null && ArrayBuffer.isView(x)
+}

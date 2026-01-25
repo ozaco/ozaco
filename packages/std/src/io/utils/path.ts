@@ -1,5 +1,4 @@
 import { POSIX_SEP, WIN_SEP } from '../const'
-
 import { isUrl, isWindows, isWindowsPath } from './is'
 
 export const toUniversal = (path?: string): string => {
