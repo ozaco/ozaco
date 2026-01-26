@@ -51,6 +51,8 @@ export enum IOErrors {
   open = 'io.open',
   read = 'io.read',
   write = 'io.write',
+
   // errors
   unsupported = 'unsupported',
+  create = 'create',
 }

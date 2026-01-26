@@ -1,9 +1,9 @@
 import { closeSync as fsCloseSync } from 'node:fs'
-import { type FileHandle as FSFileHandle, open as fsOpenAsync } from 'node:fs/promises'
+import { type FileHandle as FSFileHandle, open as fsOpenAsync, writeFile as fsWriteFile } from 'node:fs/promises'
 
-import { FSError, type Impl, IOErrors, open as openDefinition, Runtime } from 'std:io'
-import { guard, throwable } from 'std:result'
-import { toFsFlag } from './internal/utils'
+import { type Api, Flags, FSError, type Impl, IOErrors, open as openDefinition, Runtime } from 'std:io'
+import { guard, isFailure, throwable } from 'std:result'
+import { includePerm, toFsFlag } from './internal/utils'
 import { stats as statsDefinition } from './stats'
 
 export const open = openDefinition.extend(({ use, def }): Impl.Open<FSError | IOErrors.unsupported> => {
@@ -13,8 +13,24 @@ export const open = openDefinition.extend(({ use, def }): Impl.Open<FSError | IO
     async function* (handle, flag) {
       const result = yield* await def(handle, flag)
 
-      result.raw = yield* await throwable(() => fsOpenAsync(result.handle.assembled, flag), FSError)
-      result.stats = yield* await statsApi.stats(result.handle)
+      const statsResult = await statsApi.stats(result.handle)
+
+      let stats: Api.Stats
+
+      if (
+        includePerm(result.flag, Flags.create) &&
+        isFailure(statsResult) &&
+        statsResult.error instanceof FSError &&
+        statsResult.error.code === 'ENOENT'
+      ) {
+        yield* await throwable(() => fsWriteFile(result.handle.assembled, ''), FSError, IOErrors.create)
+
+        stats = yield* await statsApi.stats(result.handle)
+      } else {
+        stats = yield* statsResult
+      }
+
+      result.stats = stats
       result.raw = yield* await throwable(() => fsOpenAsync(result.handle.assembled, toFsFlag(result.flag)), FSError)
 
       result[Symbol.dispose] = () => {

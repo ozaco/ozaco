@@ -132,5 +132,6 @@ export namespace Impl {
   export type Throwable = <R, E extends Helpers.ErrorConstructor>(
     cb: () => R,
     errorClass?: E,
+    ...causes: string[]
   ) => ResultFromUnion<R | Failure<E['prototype']>>
 }

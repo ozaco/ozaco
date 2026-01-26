@@ -1,6 +1,8 @@
 import type { BlobType } from 'std:shared'
 
 export class FSError extends Error {
+  code?: string
+
   constructor(err: Error) {
     super(err.message)
 
