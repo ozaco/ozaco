@@ -21,7 +21,7 @@ export namespace Impl {
     statsSync: Impl.StatsSync<E>
   }
 
-  export type Handle = (path: string | URL, root?: string | undefined) => Api.Handle
+  export type Handle = (path: string | URL | Buffer, root?: string | undefined) => Api.Handle
 
   export interface Path {
     join: (...segments: string[]) => string
@@ -34,7 +34,7 @@ export namespace Impl {
     cwd: () => string
   }
 
-  export type Open<E = never> = (handle: Api.Handle | string | URL, flag?: Flags) => ResultAsync<Api.File, E>
+  export type Open<E = never> = (handle: Api.Handle | string | URL | Buffer, flag?: Flags) => ResultAsync<Api.File, E>
   export type Read<E = never> = (
     file: string | Api.Handle | Api.File,
     buffer: ArrayBufferLike,
@@ -55,5 +55,5 @@ export namespace Impl {
     },
   ) => ResultAsync<number, E>
 
-  export type Exists<E = never> = (path: string | URL) => ResultAsync<string | false, E>
+  export type Exists<E = never> = (path: string | URL | Buffer) => ResultAsync<string | false, E>
 }

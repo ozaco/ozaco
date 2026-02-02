@@ -13,8 +13,12 @@ export const open = createDefinition(({ use }): Impl.Open => {
 
   return guard(
     async function* (rawHandle, flag = Flags.none) {
-      const resolvedHandle = rawHandle instanceof URL ? fileURLToPath(rawHandle) : rawHandle
-
+      const resolvedHandle =
+        rawHandle instanceof Buffer
+          ? rawHandle.toString('utf8')
+          : rawHandle instanceof URL
+            ? fileURLToPath(rawHandle)
+            : (rawHandle as string)
       const handle = isString(resolvedHandle) ? handleApi(resolvedHandle) : resolvedHandle
       const stats = yield* await statsApi.stats(handle)
 
