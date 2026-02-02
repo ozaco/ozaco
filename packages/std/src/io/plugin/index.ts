@@ -1,3 +1,4 @@
+export * from './definitions/exists'
 export * from './definitions/handle'
 export * from './definitions/open'
 export * from './definitions/path'
