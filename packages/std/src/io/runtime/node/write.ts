@@ -1,8 +1,9 @@
 import type { FileHandle as FSFileHandle } from 'node:fs/promises'
+
 import { type Api, Flags, FSError, type Impl, type IOErrors, isHandle } from 'std:io'
 import { guard, throwable } from 'std:result'
-import { write as writeDefinition } from '../../plugin'
 
+import { write as writeDefinition } from '../../plugin'
 import { open as openDefinition } from '../node/open'
 import { toFsFlag } from './internal/utils'
 

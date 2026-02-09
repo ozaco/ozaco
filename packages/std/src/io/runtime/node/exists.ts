@@ -2,6 +2,7 @@ import { fileURLToPath } from 'node:url'
 import { exists as existsDefinition, FSError, handle as handleDefinition, type Impl, IOErrors, Runtime } from 'std:io'
 import { guard, isFailure } from 'std:result'
 import { isString } from 'std:shared'
+
 import { stats as nodeStatsDefinition } from './stats'
 
 export const exists = existsDefinition.extend(({ use }): Impl.Exists<FSError | IOErrors.exists> => {

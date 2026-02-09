@@ -1,6 +1,7 @@
 import type { Api, Impl } from 'std:io'
 import { Flags, type FSError, IOErrors, isHandle, Runtime, write as writeDefinition } from 'std:io'
 import { guard } from 'std:result'
+
 import { toFsFlag } from '../node/internal/utils'
 import { open as nodeOpenDefinition } from '../node/open'
 import { write as nodeWriteDefinition } from '../node/write'

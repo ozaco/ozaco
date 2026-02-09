@@ -3,6 +3,7 @@ import { type FileHandle as FSFileHandle, open as fsOpenAsync, writeFile as fsWr
 
 import { type Api, Flags, FSError, type Impl, IOErrors, open as openDefinition, Runtime } from 'std:io'
 import { guard, isFailure, throwable } from 'std:result'
+
 import { includePerm, toFsFlag } from './internal/utils'
 import { stats as statsDefinition } from './stats'
 

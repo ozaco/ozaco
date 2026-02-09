@@ -35,6 +35,7 @@ export namespace Impl {
   }
 
   export type Open<E = never> = (handle: Api.Handle | string | URL, flag?: Flags) => ResultAsync<Api.File, E>
+
   export type Read<E = never> = (
     file: string | Api.Handle | Api.File,
     buffer: ArrayBufferLike,
