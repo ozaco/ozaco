@@ -1,9 +1,9 @@
 import { createExtendable } from 'std:plugin'
 
-import { handle } from './definitions/handle'
-import { path } from './definitions/path'
+import { handleDefinition } from './definitions/handle'
+import { pathDefinition } from './definitions/path'
 
 export const extendableIO = createExtendable({
   namespace: 'io',
   version: '0.0.0',
-}).define(handle, path)
+}).define(handleDefinition, pathDefinition)

@@ -4,7 +4,7 @@ import type { InputTypes } from '../../type'
 
 import { context } from '../base'
 
-export const formatter = createDefinition(({ use }) => {
+export const formatterImplementation = createDefinition(({ use }) => {
   const ctx = use(context)
 
   const formatter =

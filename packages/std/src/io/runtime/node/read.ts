@@ -1,10 +1,10 @@
 import type { FileHandle as FSFileHandle } from 'node:fs/promises'
 
 import type { Impl } from 'std:io'
-import { FSError, IOErrors, Runtime, read as readDefinition } from 'std:io'
+import { FSError, IOErrors, Runtime, readDefinition } from 'std:io'
 import { guard, throwable } from 'std:result'
 
-export const read = readDefinition.extend((): Impl.Read<FSError | IOErrors.unsupported> => {
+export const readImplementation = readDefinition.extend((): Impl.Read<FSError | IOErrors.unsupported> => {
   return guard(
     async function* (file, arrayBuffer, options) {
       const view = new Uint8Array(arrayBuffer)

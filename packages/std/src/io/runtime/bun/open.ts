@@ -1,16 +1,16 @@
 import { writeFile as fsWriteFile } from 'node:fs/promises'
 
-import { Flags, FSError, type Impl, IOErrors, open as openDefinition, Runtime } from 'std:io'
+import { Flags, FSError, type Impl, IOErrors, openDefinition, Runtime } from 'std:io'
 import { fail, guard, throwable } from 'std:result'
 
-import { exists as existsDefinition } from '../node/exists'
+import { existsImplementation } from '../node/exists'
 import { includePerm, toFsFlag } from '../node/internal/utils'
-import { stats as statsDefinition } from '../node/stats'
+import { statsImplementation } from '../node/stats'
 
-export const open = openDefinition.extend(
+export const openImplementation = openDefinition.extend(
   ({ use, def }): Impl.Open<FSError | IOErrors.missingFlag | IOErrors.unsupported> => {
-    const statsApi = use(statsDefinition)
-    const existsApi = use(existsDefinition)
+    const statsApi = use(statsImplementation)
+    const existsApi = use(existsImplementation)
 
     return guard(
       async function* (target, flag) {

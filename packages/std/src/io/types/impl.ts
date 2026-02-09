@@ -39,7 +39,7 @@ export namespace Impl {
 
   export interface Exists {
     exists: Impl.ExistsAsync
-    existsSync: Impl.ExistsAsync
+    existsSync: Impl.ExistsSync
   }
 
   export type Open<E = never> = (target: Api.Target, flag?: Flags) => ResultAsync<Api.File, E>

@@ -1,6 +1,6 @@
-import { formatter } from './formatter'
+import { formatterImplementation } from './formatter'
 
-export const colors = formatter.extend(({ def: formatter }) => {
+export const colorsImplementation = formatterImplementation.extend(({ def: formatter }) => {
   return {
     reset: formatter('\x1b[0m', '\x1b[0m'),
 

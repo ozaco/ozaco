@@ -1,16 +1,14 @@
 import { createDefinition } from 'std:plugin'
-import { guard } from 'std:result'
-
-import { IOErrors, Runtime } from '../../const'
 import type { Impl } from '../../types'
-import type { FSError } from '../../utils'
 
-export const exists = createDefinition((): Impl.Exists<FSError | IOErrors.exists> => {
-  return guard(
-    async _target => {
-      return false as const
+export const existsDefinition = createDefinition((): Impl.Exists => {
+  return {
+    exists: async _target => {
+      return false
     },
-    IOErrors.exists,
-    Runtime.unknown,
-  )
+
+    existsSync: _target => {
+      return false
+    },
+  }
 }).key('exists')

@@ -3,11 +3,11 @@ import { dirname } from 'node:path'
 
 import { type LEVEL, loggerContext } from 'std:logger'
 import {
-  flush as flushDefinition,
-  init as initDefinition,
+  flushDefinition,
+  initDefinition,
   transportContext,
-  trigger as triggerDefinition,
-  write as writeDefinition,
+  triggerDefinition,
+  writeDefinition,
 } from 'std:logger:create-transport'
 
 import type { FileTransportContext, FileTransportOptions } from './types'

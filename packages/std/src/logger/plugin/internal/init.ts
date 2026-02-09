@@ -7,7 +7,7 @@ import { isTransport } from '../../utils'
 
 import { loggerContext, loggerDependencies } from '../base'
 
-export const init = createDefinition(({ use, rebind }) => {
+export const initImplementation = createDefinition(({ use, rebind }) => {
   rebind('transports', ({ plugin, dependency }) => {
     const transports = isArray(dependency)
       ? dependency

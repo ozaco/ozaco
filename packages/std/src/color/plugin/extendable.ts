@@ -2,11 +2,11 @@ import { createExtendable } from 'std:plugin'
 
 import { context } from './base'
 
-import { colors } from './definitions/colors'
-import { formatter } from './definitions/formatter'
-import { getOptions, init } from './definitions/init'
+import { colorsImplementation } from './internal/colors'
+import { formatterImplementation } from './internal/formatter'
+import { getOptions, initImplementation } from './internal/init'
 
 export const extendable = createExtendable({
   namespace: 'std',
   name: 'color',
-}).define(context, init.key('setOptions'), getOptions, formatter, colors)
+}).define(context, initImplementation.key('setOptions'), getOptions, formatterImplementation, colorsImplementation)

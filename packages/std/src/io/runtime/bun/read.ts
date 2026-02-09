@@ -1,13 +1,13 @@
 import { open as fsOpenAsync } from 'node:fs/promises'
 
 import type { Impl } from 'std:io'
-import { FSError, IOErrors, Runtime, read as readDefinition } from 'std:io'
+import { FSError, IOErrors, Runtime, readDefinition } from 'std:io'
 import { guard, throwable } from 'std:result'
 import { toFsFlag } from '../node/internal/utils'
-import { read as nodeReadDefinition } from '../node/read'
+import { readImplementation as nodeReadImplementation } from '../node/read'
 
-export const read = readDefinition.extend(({ use }): Impl.Read<FSError | IOErrors.unsupported> => {
-  const nodeReadApi = use(nodeReadDefinition)
+export const readImplementation = readDefinition.extend(({ use }): Impl.Read<FSError | IOErrors.unsupported> => {
+  const nodeReadApi = use(nodeReadImplementation)
 
   return guard(
     async function* (file, arrayBuffer, options) {

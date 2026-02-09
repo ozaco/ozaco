@@ -3,10 +3,10 @@ import { guard } from 'std:result'
 
 import { FILE, Flags, IOErrors, Runtime } from '../../const'
 import type { Api, Impl } from '../../types'
-import { handle as handleDefinition } from './handle'
-import { stats as statsDefinition } from './stats'
+import { handleDefinition } from './handle'
+import { statsDefinition } from './stats'
 
-export const open = createDefinition(({ use }): Impl.Open => {
+export const openDefinition = createDefinition(({ use }): Impl.Open => {
   const handleApi = use(handleDefinition)
   const statsApi = use(statsDefinition)
 

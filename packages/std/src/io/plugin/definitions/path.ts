@@ -13,7 +13,7 @@ import {
   toUniversal,
 } from '../../utils'
 
-export const path = createDefinition((): Impl.Path => {
+export const pathDefinition = createDefinition((): Impl.Path => {
   const runtime = detectRuntime()
 
   const cwd = (): string => {

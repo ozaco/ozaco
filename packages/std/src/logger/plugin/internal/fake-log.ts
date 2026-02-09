@@ -1,9 +1,9 @@
 import type { Helpers } from 'std:plugin'
 import { nop } from 'std:shared'
 
-import type { log } from './log'
+import type { logImplementation } from './log'
 
-type Result = Helpers.InferDefinitionValue<typeof log>
+type Result = Helpers.InferDefinitionValue<typeof logImplementation>
 
 export const fakeLog: Result = {
   trace: nop as Result['trace'],

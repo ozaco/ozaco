@@ -3,9 +3,9 @@ import type { FileHandle as FSFileHandle } from 'node:fs/promises'
 import { FSError, type Impl, IOErrors, Runtime } from 'std:io'
 import { guard, throwable } from 'std:result'
 
-import { write as writeDefinition } from '../../plugin'
+import { writeDefinition } from '../../plugin'
 
-export const write = writeDefinition.extend((): Impl.Write<FSError | IOErrors.unsupported> => {
+export const writeImplementation = writeDefinition.extend((): Impl.Write<FSError | IOErrors.unsupported> => {
   return guard(
     async function* (file, arrayBuffer, options) {
       const view = new Uint8Array(arrayBuffer)

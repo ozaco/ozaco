@@ -1,15 +1,14 @@
 import { createPlugin } from 'std:plugin'
 
-import { init } from './definitions/init'
-
 import { extendable } from './extendable'
+import { initImplementation } from './internal/init'
 
 export const createColors = createPlugin(
   extendable,
   {
     version: '0.0.0',
   },
-  init,
+  initImplementation,
 )
 
 export const colorsPlugin = createColors()

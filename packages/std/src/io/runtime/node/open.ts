@@ -1,17 +1,17 @@
 import { closeSync as fsCloseSync } from 'node:fs'
 import { type FileHandle as FSFileHandle, open as fsOpenAsync, writeFile as fsWriteFile } from 'node:fs/promises'
 
-import { Flags, FSError, type Impl, IOErrors, open as openDefinition, Runtime } from 'std:io'
+import { Flags, FSError, type Impl, IOErrors, openDefinition, Runtime } from 'std:io'
 import { fail, guard, throwable } from 'std:result'
 
-import { exists as existsDefinition } from './exists'
+import { existsImplementation } from './exists'
 import { includePerm, toFsFlag } from './internal/utils'
-import { stats as statsDefinition } from './stats'
+import { statsImplementation } from './stats'
 
-export const open = openDefinition.extend(
+export const openImplementation = openDefinition.extend(
   ({ use, def }): Impl.Open<FSError | IOErrors.missingFlag | IOErrors.unsupported> => {
-    const statsApi = use(statsDefinition)
-    const existsApi = use(existsDefinition)
+    const statsApi = use(statsImplementation)
+    const existsApi = use(existsImplementation)
 
     return guard(
       async function* (target, flag) {

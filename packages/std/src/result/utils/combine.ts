@@ -44,7 +44,7 @@ export const combine: Impl.Combine = (
         }
 
         return errors.length > 0 ? fail(errors) : succeed(accumulator)
-      })
+      }) as BlobType
     }
 
     const accumulator = initialValue

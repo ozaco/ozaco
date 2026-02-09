@@ -4,7 +4,7 @@ import type { TransportOptions } from '../../type'
 
 import { transportContext } from '../base'
 
-export const init = createDefinition(({ use }) => {
+export const initDefinition = createDefinition(({ use }) => {
   const transportCtx = use(transportContext)
 
   return (options?: TransportOptions) => {

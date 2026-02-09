@@ -1,9 +1,9 @@
 import { createExtendable } from 'std:plugin'
 
 import { loggerContext, loggerDependencies } from './base'
-import { init } from './definitions/init'
-import { log } from './definitions/log'
-import { unstyled } from './definitions/unstyled'
+import { initImplementation } from './internal/init'
+import { logImplementation } from './internal/log'
+import { unstyledImplementation } from './internal/unstyled'
 
 export const extendable = createExtendable({
   namespace: 'cli',
@@ -12,8 +12,8 @@ export const extendable = createExtendable({
   loggerContext,
   loggerDependencies,
 
-  init.key('setOptions'),
-  unstyled.key('unstyled'),
+  initImplementation.key('setOptions'),
+  unstyledImplementation.key('unstyled'),
 
-  log,
+  logImplementation,
 )

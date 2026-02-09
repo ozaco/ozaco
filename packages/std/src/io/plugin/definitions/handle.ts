@@ -4,9 +4,9 @@ import { createDefinition } from 'std:plugin'
 import { HANDLE } from '../../const'
 import type { Impl } from '../../types'
 import { isHandle } from '../../utils'
-import { path as pathDefinition } from './path'
+import { pathDefinition } from './path'
 
-export const handle = createDefinition(({ use }): Impl.Handle => {
+export const handleDefinition = createDefinition(({ use }): Impl.Handle => {
   const path = use(pathDefinition)
 
   return (str, root) => {

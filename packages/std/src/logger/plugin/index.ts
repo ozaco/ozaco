@@ -1,17 +1,16 @@
 import { createPlugin } from 'std:plugin'
 
 import { LEVEL } from '../const'
-
-import { conditional } from './definitions/conditional'
-import { init } from './definitions/init'
 import { extendable } from './extendable'
+import { conditionalImplementation } from './internal/conditional'
+import { initImplementation } from './internal/init'
 
 export const createLogger = createPlugin(
-  extendable.define(conditional),
+  extendable.define(conditionalImplementation),
   {
     version: '0.0.0',
   },
-  init,
+  initImplementation,
 )
 
 export const loggerPlugin = createLogger({

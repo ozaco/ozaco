@@ -2,9 +2,9 @@ import { LEVEL } from '../../const'
 
 import { loggerContext, loggerDependencies } from '../base'
 
-import { type MethodImpl, unstyled } from './unstyled'
+import { type MethodImpl, unstyledImplementation } from './unstyled'
 
-export const log = unstyled.extend(({ def, use }) => {
+export const logImplementation = unstyledImplementation.extend(({ def, use }) => {
   const ctx = use(loggerContext)
   const colors = use(loggerDependencies).colors.api
 

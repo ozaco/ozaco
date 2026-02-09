@@ -2,13 +2,13 @@ import { createExtendable } from 'std:plugin'
 
 import { transportContext } from './base'
 
-import { flush } from './definitions/flush'
-import { init } from './definitions/init'
-import { trigger } from './definitions/trigger'
-import { write } from './definitions/write'
+import { flushDefinition } from './definitions/flush'
+import { initDefinition } from './definitions/init'
+import { triggerDefinition } from './definitions/trigger'
+import { writeDefinition } from './definitions/write'
 
 export const baseTransport = createExtendable({
   namespace: 'cli/logger',
-}).define(transportContext, write, flush, trigger)
+}).define(transportContext, writeDefinition, flushDefinition, triggerDefinition)
 
-export const extendableTransport = baseTransport.define(init.key('setOptions'))
+export const extendableTransport = baseTransport.define(initDefinition.key('setOptions'))

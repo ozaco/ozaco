@@ -1,5 +1,5 @@
 import { createDefinition } from 'std:plugin'
 
-export const trigger = createDefinition(() => {
+export const triggerDefinition = createDefinition(() => {
   return (writeOk: boolean): boolean => !writeOk
 }).key('trigger')

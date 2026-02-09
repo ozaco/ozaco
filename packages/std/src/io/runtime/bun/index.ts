@@ -1,15 +1,20 @@
 import { extendableIO } from 'std:io'
 import { createPlugin } from 'std:plugin'
 
-import { exists } from '../node/exists'
-import { stats } from '../node/stats'
-import { open } from './open'
-import { read } from './read'
-import { write } from './write'
+import { existsImplementation } from '../node/exists'
+import { statsImplementation } from '../node/stats'
+import { openImplementation } from './open'
+import { readImplementation } from './read'
+import { writeImplementation } from './write'
 
-export const createBunIO = createPlugin(extendableIO.clone().define(stats, open, read, write, exists), {
-  name: 'bun',
-})
+export const createBunIO = createPlugin(
+  extendableIO
+    .clone()
+    .define(statsImplementation, openImplementation, readImplementation, writeImplementation, existsImplementation),
+  {
+    name: 'bun',
+  },
+)
 
 export const bunIO = createBunIO()
 

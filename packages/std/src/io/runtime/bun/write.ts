@@ -1,14 +1,14 @@
 import { open as fsOpenAsync } from 'node:fs/promises'
 
 import type { Impl } from 'std:io'
-import { FSError, IOErrors, Runtime, write as writeDefinition } from 'std:io'
+import { FSError, IOErrors, Runtime, writeDefinition } from 'std:io'
 import { guard, throwable } from 'std:result'
 
 import { toFsFlag } from '../node/internal/utils'
-import { write as nodeWriteDefinition } from '../node/write'
+import { writeImplementation as nodeWriteImplementation } from '../node/write'
 
-export const write = writeDefinition.extend(({ use }): Impl.Write<FSError | IOErrors.unsupported> => {
-  const nodeWriteApi = use(nodeWriteDefinition)
+export const writeImplementation = writeDefinition.extend(({ use }): Impl.Write<FSError | IOErrors.unsupported> => {
+  const nodeWriteApi = use(nodeWriteImplementation)
 
   return guard(
     async function* (file, arrayBuffer, options) {

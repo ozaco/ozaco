@@ -7,7 +7,7 @@ import { loggerContext, loggerDependencies } from '../base'
 export type MethodImpl = () => string
 export type CallbackImpl = (...args: unknown[]) => void
 
-export const unstyled = createDefinition(({ use }) => {
+export const unstyledImplementation = createDefinition(({ use }) => {
   const ctx = use(loggerContext)
   const deps = use(loggerDependencies)
 

@@ -4,7 +4,7 @@ import type { Options } from '../../type'
 
 import { context } from '../base'
 
-export const init = createDefinition(({ use }) => {
+export const initImplementation = createDefinition(({ use }) => {
   const ctx = use(context)
 
   return (options?: Options) => {

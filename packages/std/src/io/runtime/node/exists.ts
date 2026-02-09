@@ -1,10 +1,10 @@
-import { exists as existsDefinition, FSError, handle as handleDefinition, type Impl } from 'std:io'
+import { existsDefinition, FSError, handleDefinition, type Impl } from 'std:io'
 import { isFailure } from 'std:result'
 
-import { stats as nodeStatsDefinition } from './stats'
+import { statsImplementation } from './stats'
 
-export const exists = existsDefinition.extend(({ use }): Impl.Exists => {
-  const statsApi = use(nodeStatsDefinition)
+export const existsImplementation = existsDefinition.extend(({ use }): Impl.Exists => {
+  const statsApi = use(statsImplementation)
   const handleApi = use(handleDefinition)
 
   return {
@@ -21,7 +21,7 @@ export const exists = existsDefinition.extend(({ use }): Impl.Exists => {
       return true
     },
 
-    existsSync: async target => {
+    existsSync: target => {
       const handle = handleApi(target)
       const result = statsApi.statsSync(handle)
 
