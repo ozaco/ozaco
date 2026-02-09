@@ -34,7 +34,13 @@ export namespace Impl {
     statsSync: Impl.StatsSync<E>
   }
 
-  export type Exists<E = never> = (target: Api.Target) => ResultAsync<boolean, E>
+  export type ExistsAsync = (target: Api.Target) => Promise<boolean>
+  export type ExistsSync = (target: Api.Target) => boolean
+
+  export interface Exists {
+    exists: Impl.ExistsAsync
+    existsSync: Impl.ExistsAsync
+  }
 
   export type Open<E = never> = (target: Api.Target, flag?: Flags) => ResultAsync<Api.File, E>
 

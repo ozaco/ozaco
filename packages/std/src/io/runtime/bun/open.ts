@@ -1,24 +1,23 @@
 import { writeFile as fsWriteFile } from 'node:fs/promises'
 
-import { type Api, Flags, FSError, type Impl, IOErrors, open as openDefinition, Runtime } from 'std:io'
-import { fail, guard, isFailure, throwable } from 'std:result'
+import { Flags, FSError, type Impl, IOErrors, open as openDefinition, Runtime } from 'std:io'
+import { fail, guard, throwable } from 'std:result'
 
-import { includePerm } from '../node/internal/utils'
+import { exists as existsDefinition } from '../node/exists'
+import { includePerm, toFsFlag } from '../node/internal/utils'
 import { stats as statsDefinition } from '../node/stats'
 
 export const open = openDefinition.extend(
   ({ use, def }): Impl.Open<FSError | IOErrors.missingFlag | IOErrors.unsupported> => {
     const statsApi = use(statsDefinition)
+    const existsApi = use(existsDefinition)
 
     return guard(
-      async function* (handle, flag) {
-        const result = yield* await def(handle, flag)
+      async function* (target, flag) {
+        const result = yield* await def(target, flag)
+        const exists = await existsApi.exists(result.handle)
 
-        const statsResult = await statsApi.stats(result.handle)
-
-        let stats: Api.Stats
-
-        if (isFailure(statsResult) && statsResult.error instanceof FSError && statsResult.error.code === 'ENOENT') {
+        if (!exists) {
           if (!includePerm(result.flag, Flags.Moderator)) {
             return fail(IOErrors.missingFlag, 'Moderator flag is missing')
           }
@@ -26,18 +25,14 @@ export const open = openDefinition.extend(
           yield* await throwable(
             () =>
               fsWriteFile(result.handle.assembled, '', {
-                flag: result.flag,
+                flag: toFsFlag(result.flag),
               }),
             FSError,
             IOErrors.create,
           )
-
-          stats = yield* await statsApi.stats(result.handle)
-        } else {
-          stats = yield* statsResult
         }
 
-        result.stats = stats
+        result.stats = yield* await statsApi.stats(result.handle)
         result.meta.bun = yield* throwable(() => Bun.file(result.handle.assembled), FSError)
 
         return result
