@@ -5,6 +5,9 @@ export const FILE = Symbol.for('std:io:file')
 
 export const POSIX_SEP = '/'
 export const WIN_SEP = '\\'
+
+export const CH_SLASH = 47 // '/'
+export const CH_COLON = 58 // ':'
 export const URL_PROTOCOLS = [
   'http:',
   'https:',

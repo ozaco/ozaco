@@ -1,10 +1,11 @@
 import { createDefinition } from 'std:plugin'
 
-import { PathType, POSIX_SEP, Runtime } from '../../const'
+import { CH_SLASH, PathType, POSIX_SEP, Runtime } from '../../const'
 import type { Impl } from '../../types'
 import {
   detectRuntime,
   dirnamePosix,
+  hasDriveLetter,
   isUrl,
   isWindowsPath,
   normalize,
@@ -31,73 +32,96 @@ export const pathDefinition = createDefinition((): Impl.Path => {
     }
   }
 
-  // FIX: cannot join cwd with file urls
   const join = (...segments: string[]): string => {
-    if (segments.length === 0) return '.'
+    const len = segments.length
+    if (len === 0) return '.'
 
-    const filtered = segments.filter(s => s.length > 0)
-    if (filtered.length === 0) return '.'
+    // Single pass: filter empties, detect first URL, detect windows, build universal joined string
+    let hasWindows = false
+    let firstNonEmpty = -1
+    let count = 0
 
-    const first = filtered[0]
+    for (let i = 0; i < len; i++) {
+      const seg = segments[i]
+      if (seg && seg.length > 0) {
+        if (firstNonEmpty === -1) firstNonEmpty = i
+        count++
+      }
+    }
+
+    if (count === 0) return '.'
+
+    const first = segments[firstNonEmpty]
 
     if (isUrl(first)) {
       try {
         const url = new URL(first)
-        const restPath = filtered.slice(1).map(toUniversal).join(POSIX_SEP)
-        url.pathname = normalizePosix(url.pathname + POSIX_SEP + restPath)
+        let rest = ''
+        for (let i = firstNonEmpty + 1; i < len; i++) {
+          const s = segments[i] ?? ''
+          if (s.length === 0) continue
+          if (rest.length > 0) rest += POSIX_SEP
+          rest += toUniversal(s)
+        }
+        url.pathname = normalizePosix(`${url.pathname}${POSIX_SEP}${rest}`)
         return url.href
       } catch {
-        return normalize(filtered.join(POSIX_SEP))
+        // fall through to path-based join
       }
     }
 
-    const useWindowsSep = filtered.some(isWindowsPath)
-    const universal = filtered.map(toUniversal).join(POSIX_SEP)
-    const normalized = normalize(universal)
+    // Build joined string + detect windows in one pass
+    let joined = ''
+    for (let i = 0; i < len; i++) {
+      const s = segments[i] ?? ''
+      if (s.length === 0) continue
+      if (!hasWindows && isWindowsPath(s)) hasWindows = true
+      if (joined.length > 0) joined += POSIX_SEP
+      joined += toUniversal(s)
+    }
 
-    return useWindowsSep ? toNative(normalized, true) : normalized
+    const normalized = normalize(joined)
+    return hasWindows ? toNative(normalized, true) : normalized
   }
 
   const resolve = (...segments: string[]): string => {
     let resolved = ''
-    let hasWindowsPath = false
+    let hasWindows = false
 
     for (let i = segments.length - 1; i >= 0; i--) {
       const segment = segments[i]
       if (!segment || segment.length === 0) continue
 
       if (isUrl(segment)) {
-        if (resolved.length === 0) {
-          return normalize(segment, true)
-        }
+        if (resolved.length === 0) return normalize(segment, true)
         try {
           const url = new URL(segment)
-          url.pathname = normalizePosix(url.pathname + POSIX_SEP + resolved)
+          url.pathname = normalizePosix(`${url.pathname}${POSIX_SEP}${resolved}`)
           return url.href
         } catch {
           continue
         }
       }
 
-      if (isWindowsPath(segment)) {
-        hasWindowsPath = true
-      }
+      if (isWindowsPath(segment)) hasWindows = true
 
       const universal = toUniversal(segment)
       resolved = resolved.length > 0 ? `${universal}${POSIX_SEP}${resolved}` : universal
 
-      if (universal.charCodeAt(0) === 47 || /^[a-zA-Z]:/.test(segment)) {
+      // If we hit an absolute path, we're done
+      if (universal.charCodeAt(0) === CH_SLASH || hasDriveLetter(segment)) {
         const normalized = normalize(resolved)
-        return hasWindowsPath ? toNative(normalized, true) : normalized
+        return hasWindows ? toNative(normalized, true) : normalized
       }
     }
 
+    // No absolute path found — resolve against cwd
     const currentDir = cwd()
 
     if (isUrl(currentDir)) {
       try {
         const url = new URL(currentDir)
-        url.pathname = normalizePosix(url.pathname + POSIX_SEP + resolved)
+        url.pathname = normalizePosix(`${url.pathname}${POSIX_SEP}${resolved}`)
         return url.href
       } catch {
         return normalize(resolved)
@@ -106,7 +130,7 @@ export const pathDefinition = createDefinition((): Impl.Path => {
 
     const full = `${toUniversal(currentDir)}${POSIX_SEP}${resolved}`
     const normalized = normalize(full)
-    return hasWindowsPath || isWindowsPath(currentDir) ? toNative(normalized, true) : normalized
+    return hasWindows || isWindowsPath(currentDir) ? toNative(normalized, true) : normalized
   }
 
   const basename = (inputPath: string, suffix?: string): string => {
@@ -116,32 +140,41 @@ export const pathDefinition = createDefinition((): Impl.Path => {
 
     if (isUrl(inputPath)) {
       try {
-        const url = new URL(inputPath)
-        workPath = url.pathname
+        workPath = new URL(inputPath).pathname
       } catch {
         return ''
       }
+    } else {
+      const hasBackslash = workPath.indexOf('\\') !== -1
+      if (hasBackslash) workPath = toUniversal(inputPath)
     }
 
-    workPath = toUniversal(workPath)
-
+    // Strip trailing slashes
     let end = workPath.length
-    while (end > 0 && workPath.charCodeAt(end - 1) === 47) {
-      end--
-    }
+    while (end > 0 && workPath.charCodeAt(end - 1) === CH_SLASH) end--
 
+    // Find start of basename
     let start = end
-    while (start > 0 && workPath.charCodeAt(start - 1) !== 47) {
-      start--
+    while (start > 0 && workPath.charCodeAt(start - 1) !== CH_SLASH) start--
+
+    if (start === end) return ''
+
+    if (!suffix) return workPath.slice(start, end)
+
+    const baseLen = end - start
+    const suffLen = suffix.length
+    if (suffLen >= baseLen) return workPath.slice(start, end)
+
+    // Check suffix match via charCodeAt to avoid slice allocation on mismatch
+    let match = true
+    for (let i = 0; i < suffLen; i++) {
+      if (workPath.charCodeAt(end - suffLen + i) !== suffix.charCodeAt(i)) {
+        match = false
+        break
+      }
     }
 
-    let base = workPath.slice(start, end)
-
-    if (suffix && base.endsWith(suffix)) {
-      base = base.slice(0, base.length - suffix.length)
-    }
-
-    return base
+    return match ? workPath.slice(start, end - suffLen) : workPath.slice(start, end)
   }
 
   const dirname = (inputPath: string): string => {
@@ -150,40 +183,34 @@ export const pathDefinition = createDefinition((): Impl.Path => {
     if (isUrl(inputPath)) {
       try {
         const url = new URL(inputPath)
-        const pathDir = dirnamePosix(url.pathname)
-        url.pathname = pathDir
+        url.pathname = dirnamePosix(url.pathname)
         return url.href
       } catch {
         return '.'
       }
     }
 
-    const hadWindowsSep = isWindowsPath(inputPath)
+    const useWindows = isWindowsPath(inputPath)
     const workPath = toUniversal(inputPath)
 
     let prefix = ''
     let pathPart = workPath
 
-    const driveMatch = workPath.match(/^([a-zA-Z]:)(.*)$/)
-    if (driveMatch) {
-      prefix = driveMatch[1] || ''
-      pathPart = driveMatch[2] || POSIX_SEP
+    if (hasDriveLetter(workPath)) {
+      prefix = workPath.slice(0, 2)
+      pathPart = workPath.length > 2 ? workPath.slice(2) : POSIX_SEP
     }
 
     const result = prefix + dirnamePosix(pathPart)
-    return hadWindowsSep ? toNative(result, true) : result
+    return useWindows ? toNative(result, true) : result
   }
 
   const extname = (inputPath: string): string | null => {
     const base = basename(inputPath)
-    if (!base || base.startsWith('.')) {
-      const dotIndex = base.indexOf('.', 1)
-      if (dotIndex === -1) return null
-      return base.slice(dotIndex)
-    }
+    if (!base) return null
 
     const dotIndex = base.lastIndexOf('.')
-    if (dotIndex === -1 || dotIndex === 0) return null
+    if (dotIndex <= 0) return null
 
     return base.slice(dotIndex)
   }
@@ -198,33 +225,26 @@ export const pathDefinition = createDefinition((): Impl.Path => {
   }
 
   const relative = (from: string, to: string): string => {
-    const fromResolved = normalizePosix(toUniversal(resolve(from)))
-    const toResolved = normalizePosix(toUniversal(resolve(to)))
+    const fromNormalized = normalizePosix(toUniversal(resolve(from)))
+    const toNormalized = normalizePosix(toUniversal(resolve(to)))
 
-    if (fromResolved === toResolved) return '.'
+    if (fromNormalized === toNormalized) return '.'
 
-    const fromParts = fromResolved.split(POSIX_SEP).filter(Boolean)
-    const toParts = toResolved.split(POSIX_SEP).filter(Boolean)
+    const fromParts = fromNormalized.split(POSIX_SEP).filter(Boolean)
+    const toParts = toNormalized.split(POSIX_SEP).filter(Boolean)
 
-    let commonLength = 0
-    const minLength = Math.min(fromParts.length, toParts.length)
+    let common = 0
+    const limit = Math.min(fromParts.length, toParts.length)
+    while (common < limit && fromParts[common] === toParts[common]) common++
 
-    for (let i = 0; i < minLength; i++) {
-      if (fromParts[i] === toParts[i]) {
-        commonLength++
-      } else {
-        break
-      }
-    }
+    const ups = fromParts.length - common
 
-    const upCount = fromParts.length - commonLength
-    const downParts = toParts.slice(commonLength)
+    // Build result without intermediate Array(n).fill + spread
+    const parts: string[] = []
+    for (let i = 0; i < ups; i++) parts.push('..')
+    for (let i = common; i < toParts.length; i++) parts.push(toParts[i] ?? '')
 
-    const result = [
-      ...Array(upCount).fill('..'),
-      ...downParts,
-    ].join(POSIX_SEP)
-    return result || '.'
+    return parts.length > 0 ? parts.join(POSIX_SEP) : '.'
   }
 
   return {

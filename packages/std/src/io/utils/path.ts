@@ -1,44 +1,51 @@
-import { POSIX_SEP, WIN_SEP } from '../const'
-import { isUrl, isWindows, isWindowsPath } from './is'
+import { CH_SLASH, POSIX_SEP, WIN_SEP } from '../const'
+import { hasDriveLetter, isUrl, isWindows, isWindowsPath } from './is'
 
 export const toUniversal = (path?: string): string => {
-  return path?.replace(/\\/g, POSIX_SEP) ?? ''
+  if (!path) return ''
+  if (path.indexOf(WIN_SEP) === -1) return path
+  return path.replaceAll(WIN_SEP, POSIX_SEP)
 }
 
-export const toNative = (rawPath?: string, forceWindows = false): string => {
-  const path = rawPath ?? ''
-
-  if (forceWindows || isWindows()) {
-    return path.replace(/\//g, WIN_SEP)
-  }
-
-  return path
+export const toNative = (path?: string, forceWindows = false): string => {
+  if (!path) return ''
+  if (!(forceWindows || isWindows())) return path
+  if (path.indexOf(POSIX_SEP) === -1) return path
+  return path.replaceAll(POSIX_SEP, WIN_SEP)
 }
 
 export const normalizePosix = (path?: string): string => {
   if (!path || path.length === 0) return '.'
 
-  const isAbsolute = path.charCodeAt(0) === 47
-  const segments = path.split(POSIX_SEP)
+  const isAbsolute = path.charCodeAt(0) === CH_SLASH
+
+  // Fast path: no '.', '..', or '//' → already clean
+  if (path.indexOf('..') === -1 && path.indexOf('//') === -1) {
+    const hasDot = path.indexOf('/./') !== -1 || path === '.' || path.endsWith('/.')
+    if (!hasDot) {
+      if (path.length > 1 && path.charCodeAt(path.length - 1) === CH_SLASH) {
+        return path.slice(0, path.length - 1)
+      }
+      return path
+    }
+  }
+
+  const parts = path.split(POSIX_SEP)
   const result: string[] = []
 
-  for (const segment of segments) {
-    if (segment === '' || segment === '.') continue
-    if (segment === '..') {
-      if (result.length > 0 && result[result.length - 1] !== '..') {
-        result.pop()
-      } else if (!isAbsolute) {
-        result.push('..')
-      }
+  for (let i = 0; i < parts.length; i++) {
+    const part = parts[i] ?? ''
+    if (part === '' || part === '.') continue
+    if (part === '..') {
+      if (result.length > 0 && result[result.length - 1] !== '..') result.pop()
+      else if (!isAbsolute) result.push('..')
     } else {
-      result.push(segment)
+      result.push(part)
     }
   }
 
   const normalized = result.join(POSIX_SEP)
-  if (isAbsolute) {
-    return POSIX_SEP + normalized
-  }
+  if (isAbsolute) return POSIX_SEP + normalized
   return normalized || '.'
 }
 
@@ -48,53 +55,43 @@ export const normalize = (path?: string, preserveUrl = false): string => {
   if (preserveUrl && isUrl(path)) {
     try {
       const url = new URL(path)
-      const normalizedPath = normalizePosix(url.pathname)
-      url.pathname = normalizedPath
+      url.pathname = normalizePosix(url.pathname)
       return url.href
     } catch {
       return path
     }
   }
 
-  const hadWindowsSep = isWindowsPath(path)
+  const useWindows = isWindowsPath(path)
   const universal = toUniversal(path)
 
   let prefix = ''
   let workPath = universal
 
-  const driveMatch = universal.match(/^([a-zA-Z]:)(.*)$/)
-  if (driveMatch) {
-    prefix = driveMatch[1] ?? ''
-    workPath = driveMatch[2] || POSIX_SEP
+  if (hasDriveLetter(universal)) {
+    prefix = universal.slice(0, 2)
+    workPath = universal.length > 2 ? universal.slice(2) : POSIX_SEP
   }
 
-  const normalized = normalizePosix(workPath)
-  const result = prefix + normalized
-
-  return hadWindowsSep ? toNative(result, true) : result
+  const result = prefix + normalizePosix(workPath)
+  return useWindows ? toNative(result, true) : result
 }
 
 export const dirnamePosix = (path?: string): string => {
   if (!path || path.length === 0) return '.'
 
-  const isAbsolute = path.charCodeAt(0) === 47
+  const isAbsolute = path.charCodeAt(0) === CH_SLASH
+
+  // Strip trailing slashes
   let end = path.length
+  while (end > 0 && path.charCodeAt(end - 1) === CH_SLASH) end--
 
-  while (end > 0 && path.charCodeAt(end - 1) === 47) {
-    end--
-  }
+  // Strip last segment (basename)
+  while (end > 0 && path.charCodeAt(end - 1) !== CH_SLASH) end--
 
-  while (end > 0 && path.charCodeAt(end - 1) !== 47) {
-    end--
-  }
+  // Strip trailing slashes of the dirname
+  while (end > 0 && path.charCodeAt(end - 1) === CH_SLASH) end--
 
-  while (end > 0 && path.charCodeAt(end - 1) === 47) {
-    end--
-  }
-
-  if (end === 0) {
-    return isAbsolute ? POSIX_SEP : '.'
-  }
-
+  if (end === 0) return isAbsolute ? POSIX_SEP : '.'
   return path.slice(0, end)
 }
