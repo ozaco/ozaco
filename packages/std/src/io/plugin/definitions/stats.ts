@@ -43,7 +43,7 @@ export const stats = createDefinition((): Impl.Stats => {
 
   return {
     stats: guard(
-      async (_handle, type?: BlobType) => {
+      async (_target, type?: BlobType) => {
         return createDummy(type ?? 'bigint')
       },
       IOErrors.stats,
@@ -51,7 +51,7 @@ export const stats = createDefinition((): Impl.Stats => {
     ),
 
     statsSync: guard(
-      (_handle, type?: BlobType) => {
+      (_target, type?: BlobType) => {
         return createDummy(type ?? 'bigint')
       },
       IOErrors.statsSync,

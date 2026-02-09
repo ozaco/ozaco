@@ -1,8 +1,8 @@
 import { extendableIO } from 'std:io'
 import { createPlugin } from 'std:plugin'
 
+import { exists } from '../node/exists'
 import { stats } from '../node/stats'
-import { exists } from './exists'
 import { open } from './open'
 import { read } from './read'
 import { write } from './write'

@@ -6,7 +6,7 @@ import type { Impl } from '../../types'
 
 export const read = createDefinition((): Impl.Read => {
   return guard(
-    async (_rawFile, _view, _options) => {
+    async (_file, _view, _options) => {
       return 0
     },
     IOErrors.read,

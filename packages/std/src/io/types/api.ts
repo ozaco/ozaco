@@ -33,18 +33,21 @@ export namespace Api {
 
     type: PathType
 
-    get assembled(): string
+    get assembled(): string | URL
   }
 
   export interface File {
     _t: typeof FILE
-    // file handle or target runtime
-    raw: BlobType
+
     handle: Api.Handle
     stats: Api.Stats
     flag: Flags
 
+    meta: Record<string, BlobType>
+
     [Symbol.dispose]: () => void
     [Symbol.asyncDispose]: () => Promise<void>
   }
+
+  export type Target = Api.Handle | string | URL
 }

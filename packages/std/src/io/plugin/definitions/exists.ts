@@ -7,7 +7,7 @@ import type { FSError } from '../../utils'
 
 export const exists = createDefinition((): Impl.Exists<FSError | IOErrors.exists> => {
   return guard(
-    async _path => {
+    async _target => {
       return false as const
     },
     IOErrors.exists,

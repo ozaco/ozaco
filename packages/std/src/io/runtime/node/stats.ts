@@ -1,11 +1,22 @@
 import { type BigIntStats as FsBigIntStats, type Stats as FsStats, statSync as fsStatsSync } from 'node:fs'
 import { stat as fsStats } from 'node:fs/promises'
 
-import { type Api, FSError, type Impl, IOErrors, PathType, Runtime, stats as statsDefinition } from 'std:io'
+import {
+  type Api,
+  FSError,
+  handle as handleDefinition,
+  type Impl,
+  IOErrors,
+  PathType,
+  Runtime,
+  stats as statsDefinition,
+} from 'std:io'
 import { fail, guard, throwable } from 'std:result'
 import type { BlobType } from 'std:shared'
 
-export const stats = statsDefinition.extend(({ def }): Impl.Stats<IOErrors.unsupported | FSError> => {
+export const stats = statsDefinition.extend(({ def, use }): Impl.Stats<IOErrors.unsupported | FSError> => {
+  const handleApi = use(handleDefinition)
+
   const createStats = (result: Api.Stats<BlobType>, current: FsStats | FsBigIntStats) => {
     Object.defineProperties(result, {
       isFile: {
@@ -55,56 +66,54 @@ export const stats = statsDefinition.extend(({ def }): Impl.Stats<IOErrors.unsup
 
     result.blocks = current.blocks
     result.blockSize = current.blksize
+
+    return result
   }
 
   return {
     stats: guard(
-      async function* (handle, type: BlobType = 'bigint') {
+      async function* (target, type: BlobType = 'bigint') {
+        const handle = handleApi(target)
         const result: Api.Stats<BlobType> = yield* await def.stats(handle, type)
 
         if (handle.type !== PathType.path && handle.type !== PathType.file) {
           return fail(IOErrors.unsupported, `(PathType) Expected: path got: ${handle.type}`)
         }
 
-        const target = handle.type === PathType.file ? new URL(handle.assembled) : handle.assembled
-
         const current = yield* await throwable(
           () =>
-            fsStats(target, {
+            fsStats(handle.assembled, {
               bigint: type === 'bigint',
             }),
           FSError,
         )
 
-        createStats(result, current)
-
-        return result
+        return createStats(result, current)
       },
       IOErrors.stats,
       Runtime.node,
     ),
 
     statsSync: guard(
-      function* (handle, type: BlobType = 'bigint') {
+      function* (target, type: BlobType = 'bigint') {
+        const handle = handleApi(target)
         const result: Api.Stats<BlobType> = yield* def.statsSync(handle, type)
 
         if (handle.type !== PathType.path && handle.type !== PathType.file) {
           return fail(IOErrors.unsupported, `(PathType) Expected: path got: ${handle.type}`)
         }
 
-        const target = handle.type === PathType.file ? new URL(handle.assembled) : handle.assembled
+        const filePath = handle.type === PathType.file ? handle.assembled : new URL(handle.assembled)
 
         const current = yield* throwable(
           () =>
-            fsStatsSync(target, {
+            fsStatsSync(filePath, {
               bigint: type === 'bigint',
             }),
           FSError,
         )
 
-        createStats(result, current)
-
-        return result
+        return createStats(result, current)
       },
       IOErrors.statsSync,
       Runtime.node,

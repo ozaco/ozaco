@@ -4,24 +4,7 @@ import type { Flags, PathType } from '../const'
 import type { Api } from './api'
 
 export namespace Impl {
-  export interface StatsAsync<E = never> {
-    (handle: Api.Handle, type: 'number'): ResultAsync<Api.Stats<number>, E>
-    (handle: Api.Handle, type: 'bigint'): ResultAsync<Api.Stats<bigint>, E>
-    (handle: Api.Handle): ResultAsync<Api.Stats<bigint>, E>
-  }
-
-  export interface StatsSync<E = never> {
-    (handle: Api.Handle, type: 'number'): Result<Api.Stats<number>, E>
-    (handle: Api.Handle, type: 'bigint'): Result<Api.Stats<bigint>, E>
-    (handle: Api.Handle): Result<Api.Stats<bigint>, E>
-  }
-
-  export interface Stats<E = never> {
-    stats: Impl.StatsAsync<E>
-    statsSync: Impl.StatsSync<E>
-  }
-
-  export type Handle = (path: string | URL, root?: string | undefined) => Api.Handle
+  export type Handle = (path: string | URL | Api.Handle, root?: string | undefined) => Api.Handle
 
   export interface Path {
     join: (...segments: string[]) => string
@@ -34,10 +17,29 @@ export namespace Impl {
     cwd: () => string
   }
 
-  export type Open<E = never> = (handle: Api.Handle | string | URL, flag?: Flags) => ResultAsync<Api.File, E>
+  export interface StatsAsync<E = never> {
+    (target: Api.Target, type: 'number'): ResultAsync<Api.Stats<number>, E>
+    (target: Api.Target, type: 'bigint'): ResultAsync<Api.Stats<bigint>, E>
+    (target: Api.Target): ResultAsync<Api.Stats<bigint>, E>
+  }
+
+  export interface StatsSync<E = never> {
+    (target: Api.Target, type: 'number'): Result<Api.Stats<number>, E>
+    (target: Api.Target, type: 'bigint'): Result<Api.Stats<bigint>, E>
+    (target: Api.Target): Result<Api.Stats<bigint>, E>
+  }
+
+  export interface Stats<E = never> {
+    stats: Impl.StatsAsync<E>
+    statsSync: Impl.StatsSync<E>
+  }
+
+  export type Exists<E = never> = (target: Api.Target) => ResultAsync<boolean, E>
+
+  export type Open<E = never> = (target: Api.Target, flag?: Flags) => ResultAsync<Api.File, E>
 
   export type Read<E = never> = (
-    file: string | Api.Handle | Api.File,
+    file: Api.File,
     buffer: ArrayBufferLike,
     options?: {
       offset?: number | undefined
@@ -47,7 +49,7 @@ export namespace Impl {
   ) => ResultAsync<number, E>
 
   export type Write<E = never> = (
-    file: string | Api.Handle | Api.File,
+    file: Api.File,
     buffer: ArrayBufferLike,
     options?: {
       offset?: number | undefined
@@ -55,6 +57,4 @@ export namespace Impl {
       position?: number | null | undefined
     },
   ) => ResultAsync<number, E>
-
-  export type Exists<E = never> = (path: string | URL) => ResultAsync<string | false, E>
 }

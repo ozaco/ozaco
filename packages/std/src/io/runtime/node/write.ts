@@ -1,31 +1,25 @@
 import type { FileHandle as FSFileHandle } from 'node:fs/promises'
 
-import { type Api, Flags, FSError, type Impl, type IOErrors, isHandle } from 'std:io'
+import { FSError, type Impl, IOErrors, Runtime } from 'std:io'
 import { guard, throwable } from 'std:result'
 
 import { write as writeDefinition } from '../../plugin'
-import { open as openDefinition } from '../node/open'
-import { toFsFlag } from './internal/utils'
 
-export const write = writeDefinition.extend(({ use }): Impl.Write<FSError | IOErrors.unsupported> => {
-  const openApi = use(openDefinition)
+export const write = writeDefinition.extend((): Impl.Write<FSError | IOErrors.unsupported> => {
+  return guard(
+    async function* (file, arrayBuffer, options) {
+      const view = new Uint8Array(arrayBuffer)
+      const fileHandle = file.meta.node as FSFileHandle
 
-  return guard(async function* (rawFile, arrayBuffer, options) {
-    let file: Api.File
-    if (typeof rawFile === 'string' || isHandle(rawFile)) {
-      file = yield* await openApi(rawFile, toFsFlag(Flags.write))
-    } else {
-      file = rawFile
-    }
+      const offset = options?.offset ?? 0
+      const length = options?.length ?? view.byteLength - offset
+      const position = options?.position ?? null
 
-    const view = new Uint8Array(arrayBuffer)
-    const fileHandle = file.raw as FSFileHandle
+      const { bytesWritten } = yield* await throwable(() => fileHandle.write(view, offset, length, position), FSError)
 
-    const offset = options?.offset ?? 0
-    const length = options?.length ?? view.byteLength - offset
-    const position = options?.position ?? null
-
-    const { bytesWritten } = yield* await throwable(() => fileHandle.write(view, offset, length, position), FSError)
-    return bytesWritten
-  })
+      return bytesWritten
+    },
+    IOErrors.write,
+    Runtime.node,
+  )
 })

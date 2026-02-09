@@ -25,6 +25,9 @@ export enum Flags {
   create = 1 << 4,
   exclude = 1 << 5,
   sync = 1 << 6,
+
+  Moderator = Flags.read | Flags.write | Flags.create,
+  Recreate = Flags.Moderator | Flags.truncate,
 }
 
 export enum PathType {
@@ -52,7 +55,9 @@ export enum IOErrors {
   read = 'io.read',
   write = 'io.write',
   exists = 'io.exists',
+
   // errors
-  unsupported = 'unsupported',
-  create = 'create',
+  unsupported = 'io.unsupported',
+  missingFlag = 'io.missing-flag',
+  create = 'io.create',
 }
