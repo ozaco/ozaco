@@ -11,7 +11,7 @@ export const openDefinition = createDefinition(({ use }): Impl.Open => {
   const statsApi = use(statsDefinition)
 
   return guard(
-    async function* (target, flag = Flags.none) {
+    async function* (target, flag = Flags.Moderator) {
       const handle = handleApi(target)
       const stats = yield* await statsApi.stats(handle)
 
