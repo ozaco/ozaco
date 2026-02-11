@@ -19,3 +19,5 @@ export const createNodeIO = createPlugin(
 export const nodeIO = createNodeIO()
 
 export const { api: io } = nodeIO
+
+export * from './utils'

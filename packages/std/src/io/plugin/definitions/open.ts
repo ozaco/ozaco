@@ -3,15 +3,19 @@ import { guard } from 'std:result'
 
 import { FILE, Flags, IOErrors, Runtime } from '../../const'
 import type { Api, Impl } from '../../types'
+import { ioContext } from '../base'
 import { handleDefinition } from './handle'
 import { statsDefinition } from './stats'
 
 export const openDefinition = createDefinition(({ use }): Impl.Open => {
   const handleApi = use(handleDefinition)
   const statsApi = use(statsDefinition)
+  const context = use(ioContext)
 
   return guard(
-    async function* (target, flag = Flags.Moderator) {
+    async function* (target, rawFlag) {
+      const flag = context.autoPerm ? (rawFlag ?? Flags.Moderator) : (rawFlag ?? Flags.none)
+
       const handle = handleApi(target)
       const stats = yield* await statsApi.stats(handle)
 

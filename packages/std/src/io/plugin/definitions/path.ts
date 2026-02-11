@@ -3,7 +3,6 @@ import { createDefinition } from 'std:plugin'
 import { CH_SLASH, PathType, POSIX_SEP, Runtime } from '../../const'
 import type { Impl } from '../../types'
 import {
-  detectRuntime,
   dirnamePosix,
   hasDriveLetter,
   isUrl,
@@ -13,18 +12,19 @@ import {
   toNative,
   toUniversal,
 } from '../../utils'
+import { ioContext } from '../base'
 
-export const pathDefinition = createDefinition((): Impl.Path => {
-  const runtime = detectRuntime()
+export const pathDefinition = createDefinition(({ use }): Impl.Path => {
+  const context = use(ioContext)
 
   const cwd = (): string => {
-    switch (runtime) {
+    switch (context.runtime) {
       case Runtime.bun:
       case Runtime.node:
         return globalThis.process?.cwd?.() ?? POSIX_SEP
       case Runtime.browser:
         if (typeof location !== 'undefined') {
-          return location.href.replace(/\/[^/]*$/, '') || location.origin
+          return location.href.replace(/\/[^/]*$/, '') || location.origin || POSIX_SEP
         }
         return POSIX_SEP
       default:

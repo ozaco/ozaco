@@ -2,9 +2,12 @@ import type { Result, ResultAsync } from 'std:result'
 
 import type { Flags, PathType } from '../const'
 import type { Api } from './api'
+import type { Options } from './common'
 
 export namespace Impl {
   export type Handle = (path: string | URL | Api.Handle, root?: string | undefined) => Api.Handle
+
+  export type Init = (options: Options) => void
 
   export interface Path {
     join: (...segments: string[]) => string

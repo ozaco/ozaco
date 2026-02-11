@@ -1,4 +1,5 @@
 import { createDefinition } from 'std:plugin'
+
 import type { Impl } from '../../types'
 
 export const existsDefinition = createDefinition((): Impl.Exists => {
