@@ -1,6 +1,6 @@
 import { createDefinition } from 'std:plugin'
 
-import type { InputTypes } from '../../type'
+import type { InputTypes } from '../../types'
 
 import { context } from '../base'
 

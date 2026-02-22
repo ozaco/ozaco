@@ -1,6 +1,6 @@
 import { createDefinition } from 'std:plugin'
 
-import type { Options } from '../../type'
+import type { Options } from '../../types'
 
 import { context } from '../base'
 
