@@ -3,16 +3,7 @@
     "lib": ["esnext", "dom"],
     "paths": {
       "std:shared": ["./src/shared/index.ts"],
-      "std:result": ["./src/result/index.ts"],
-      "std:event": ["./src/event/index.ts"],
-      "std:plugin": ["./src/plugin/index.ts"],
-      "std:logger": ["./src/logger/index.ts"],
-      "std:logger:create-transport": ["./src/logger/create-transport/index.ts"],
-      "std:logger:file-transport": ["./src/logger/transports/file/index.ts"],
-      "std:color": ["./src/color/index.ts"],
-      "std:io": ["./src/io/index.ts"],
-      "std:io:node": ["./src/io/runtime/node/index.ts"],
-      "std:io:bun": ["./src/io/runtime/bun/index.ts"]
+      "std:result": ["./src/result/index.ts"]
     }
   },
   "extends": "../../tsconfig.base.json",

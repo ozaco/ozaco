@@ -21,51 +21,6 @@
       "types": "./dist/shared.d.ts",
       "source": "./src/shared/index.ts",
       "default": "./dist/shared.js"
-    },
-    "./event": {
-      "types": "./dist/event.d.ts",
-      "source": "./src/event/index.ts",
-      "default": "./dist/event.js"
-    },
-    "./plugin": {
-      "types": "./dist/plugin.d.ts",
-      "source": "./src/plugin/index.ts",
-      "default": "./dist/plugin.js"
-    },
-    "./logger": {
-      "types": "./dist/logger/index.d.ts",
-      "source": "./src/logger/index.ts",
-      "default": "./dist/logger/index.js"
-    },
-    "./logger/create-transport": {
-      "types": "./dist/logger/create-transport.d.ts",
-      "source": "./src/logger/create-transport/index.ts",
-      "default": "./dist/logger/create-transport.js"
-    },
-    "./logger/file-transport": {
-      "types": "./dist/logger/transport-file.d.ts",
-      "source": "./src/logger/transports/file/index.ts",
-      "default": "./dist/logger/transport-file.js"
-    },
-    "./color": {
-      "types": "./dist/color.d.ts",
-      "source": "./src/color/index.ts",
-      "default": "./dist/color.js"
-    },
-    "./io": {
-      "types": "./dist/io/index.d.ts",
-      "source": "./src/io/index.ts",
-      "default": "./dist/io/index.js"
-    },
-    "./io/node": {
-      "types": "./dist/io/runtime-node.d.ts",
-      "source": "./src/io/runtime/node/index.ts",
-      "default": "./dist/io/runtime-node.js"
-    },
-    "./io/bun": {
-      "types": "./dist/io/runtime-bun.d.ts",
-      "source": "./src/io/runtime/bun/index.ts",
-      "default": "./dist/io/runtime-bun.js"
     }
   },
   "devDependencies": {
