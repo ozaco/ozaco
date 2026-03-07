@@ -4,6 +4,19 @@ import type { InputTypes } from '../../types'
 
 import { context } from '../base'
 
+const replaceClose = (string: string, close: string, replace: string, index: number) => {
+  let result = '',
+    cursor = 0
+
+  do {
+    result += string.substring(cursor, index) + replace
+    cursor = index + close.length
+    index = string.indexOf(close, cursor)
+  } while (~index)
+
+  return result + string.substring(cursor)
+}
+
 export const formatterImplementation = createDefinition(({ use }) => {
   const ctx = use(context)
 
@@ -15,21 +28,10 @@ export const formatterImplementation = createDefinition(({ use }) => {
       if (!ctx.enabled) return string
 
       const index = string.indexOf(close, open.length)
-      return ~index ? open + replaceClose(string, close, replace, index) + close : open + string + close
+      return ~index
+        ? open + replaceClose(string, close, replace, index) + close
+        : open + string + close
     }
-
-  const replaceClose = (string: string, close: string, replace: string, index: number) => {
-    let result = '',
-      cursor = 0
-
-    do {
-      result += string.substring(cursor, index) + replace
-      cursor = index + close.length
-      index = string.indexOf(close, cursor)
-    } while (~index)
-
-    return result + string.substring(cursor)
-  }
 
   return formatter
 })

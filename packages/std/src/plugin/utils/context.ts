@@ -9,7 +9,9 @@ import { isExtendable } from './extendable'
 export const createContext: Impl.CreateContext = (data, cloneAlgorithm) => {
   type Result = Context<BlobType>
 
-  const clone = isFunction(data) ? data : () => (cloneAlgorithm ?? Object.assign.bind(null, {}))(data)
+  const clone = isFunction(data)
+    ? data
+    : () => (cloneAlgorithm ?? Object.assign.bind(null, {}))(data)
   const bindings: WeakMap<Helpers.AnyExtendable, unknown> = new WeakMap()
 
   const event = createEvent() as Result['event']
@@ -37,13 +39,13 @@ export const createContext: Impl.CreateContext = (data, cloneAlgorithm) => {
         return existing
       }
 
-      const data = clone()
+      const bound = clone()
 
-      bindings.set(extendable, data)
+      bindings.set(extendable, bound)
 
       event.emit('extendable', extendable)
 
-      return data
+      return bound
     },
   }
 

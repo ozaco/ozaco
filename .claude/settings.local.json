@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(moon:*)",
+      "WebSearch",
+      "WebFetch(domain:tsdown.dev)",
+      "WebFetch(domain:oxc.rs)",
+      "WebFetch(domain:deepwiki.com)",
+      "WebFetch(domain:www.npmjs.com)",
+      "Bash(bun install:*)",
+      "Bash(npx oxlint:*)",
+      "Bash(npx oxfmt:*)",
+      "Bash(./node_modules/.bin/oxfmt:*)",
+      "Bash(bun:*)",
+      "Bash(npm view:*)",
+      "Bash(ls:*)",
+      "Bash(node_modules/.bin/oxlint:*)",
+      "Bash(node_modules/.bin/oxfmt:*)",
+      "Bash(python3:*)",
+      "Bash(npx tsdown:*)",
+      "WebFetch(domain:github.com)",
+      "Bash(chmod +x:*)"
+    ]
+  }
+}

@@ -1,66 +1,79 @@
-import { type BigIntStats as FsBigIntStats, type Stats as FsStats, statSync as fsStatsSync } from 'node:fs'
+import {
+  type BigIntStats as FsBigIntStats,
+  type Stats as FsStats,
+  statSync as fsStatsSync,
+} from 'node:fs'
 import { stat as fsStats } from 'node:fs/promises'
 
-import { type Api, FSError, handleDefinition, type Impl, IOErrors, PathType, Runtime, statsDefinition } from 'std:io'
+import {
+  type Api,
+  FSError,
+  handleDefinition,
+  type Impl,
+  IOErrors,
+  PathType,
+  Runtime,
+  statsDefinition,
+} from 'std:io'
 import { fail, guard, throwable } from 'std:result'
 import type { BlobType } from 'std:shared'
+
+const createStats = (result: Api.Stats<BlobType>, current: FsStats | FsBigIntStats) => {
+  Object.defineProperties(result, {
+    isFile: {
+      value: current.isFile(),
+      writable: false,
+      configurable: true,
+    },
+
+    isDirectory: {
+      value: current.isDirectory(),
+      writable: false,
+      configurable: true,
+    },
+
+    isSymlink: {
+      value: current.isSymbolicLink(),
+      writable: false,
+      configurable: true,
+    },
+
+    isBlockDevice: {
+      value: current.isBlockDevice(),
+      writable: false,
+      configurable: true,
+    },
+
+    isFifo: {
+      value: current.isFIFO(),
+      writable: false,
+      configurable: true,
+    },
+
+    isSocket: {
+      value: current.isSocket(),
+      writable: false,
+      configurable: true,
+    },
+  })
+
+  result.size = current.size
+  result.modification = +current.ctime > +current.mtime ? current.ctime : current.mtime
+  result.access = current.atime
+
+  result.device = current.dev
+  result.mode = current.mode
+  result.links = current.nlink
+
+  result.blocks = current.blocks
+  result.blockSize = current.blksize
+
+  return result
+}
 
 export const statsImplementation = statsDefinition.extend(
   ({ def, use }): Impl.Stats<IOErrors.unsupported | FSError> => {
     const handleApi = use(handleDefinition)
-
-    const createStats = (result: Api.Stats<BlobType>, current: FsStats | FsBigIntStats) => {
-      Object.defineProperties(result, {
-        isFile: {
-          value: current.isFile(),
-          writable: false,
-          configurable: true,
-        },
-
-        isDirectory: {
-          value: current.isDirectory(),
-          writable: false,
-          configurable: true,
-        },
-
-        isSymlink: {
-          value: current.isSymbolicLink(),
-          writable: false,
-          configurable: true,
-        },
-
-        isBlockDevice: {
-          value: current.isBlockDevice(),
-          writable: false,
-          configurable: true,
-        },
-
-        isFifo: {
-          value: current.isFIFO(),
-          writable: false,
-          configurable: true,
-        },
-
-        isSocket: {
-          value: current.isSocket(),
-          writable: false,
-          configurable: true,
-        },
-      })
-
-      result.size = current.size
-      result.modification = +current.ctime > +current.mtime ? current.ctime : current.mtime
-      result.access = current.atime
-
-      result.device = current.dev
-      result.mode = current.mode
-      result.links = current.nlink
-
-      result.blocks = current.blocks
-      result.blockSize = current.blksize
-
-      return result
-    }
 
     return {
       stats: guard(
@@ -95,7 +108,8 @@ export const statsImplementation = statsDefinition.extend(
             return fail(IOErrors.unsupported, `(PathType) Expected: path got: ${handle.type}`)
           }
 
-          const filePath = handle.type === PathType.file ? handle.assembled : new URL(handle.assembled)
+          const filePath =
+            handle.type === PathType.file ? handle.assembled : new URL(handle.assembled)
 
           const current = yield* throwable(
             () =>

@@ -1,6 +1,6 @@
 import { type BlobType, isPromise } from 'std:shared'
 
-import type { Impl, ResultMaybeAsync } from '../types'
+import type { Impl } from '../types'
 
 import { isFailure, isResult } from './is'
 import { succeed } from './result'
@@ -11,7 +11,7 @@ export const auto: Impl.Auto = (...args: BlobType[]): BlobType => {
   const defaultValue = hasDefaultValue ? args[1] : undefined
 
   if (args.length === 0) {
-    return (result: ResultMaybeAsync<BlobType, BlobType>) => auto(result)
+    return (result: BlobType) => auto(result)
   }
 
   if (isPromise(firstArgument)) {

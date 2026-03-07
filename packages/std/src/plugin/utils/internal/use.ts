@@ -7,7 +7,13 @@ import { isExtendable } from '../extendable'
 
 import { createApi } from './api'
 
-export const createUse: Impl.CreateUse = ({ event, extendable, api, rebind, executedDefinitionMap }) => {
+export const createUse: Impl.CreateUse = ({
+  event,
+  extendable,
+  api,
+  rebind,
+  executedDefinitionMap,
+}) => {
   const result: Helpers.DefinitionUse = target => {
     if (isDependencyList(target) || isContext(target)) {
       return target.getBinding(extendable)

@@ -6,7 +6,10 @@ import type { Helpers, Impl } from '../types'
 import { createContext } from './context'
 import { isPlugin } from './plugin'
 
-export const createDependencyList: Impl.CreateDependencyList = (defaultDependencies, shared = false) => {
+export const createDependencyList: Impl.CreateDependencyList = (
+  defaultDependencies,
+  shared = false,
+) => {
   const dependencyMap: Record<PropertyKey, undefined | Helpers.AnyPlugin | Helpers.AnyPlugin[]> = {}
   const dependencyVersionMap: Record<PropertyKey, string> = {}
 
@@ -37,10 +40,7 @@ export const createDependencyList: Impl.CreateDependencyList = (defaultDependenc
         dependencyMap[fullName] = undefined
       }
 
-      result.event.emit('add', [
-        fullName,
-        dependencyVersionMap[fullName] as string,
-      ])
+      result.event.emit('add', [fullName, dependencyVersionMap[fullName] as string])
     }
 
     return result
@@ -60,9 +60,11 @@ export const createDependencyList: Impl.CreateDependencyList = (defaultDependenc
       } else if (isArray(value) && value.every(isPlugin)) {
         doesMatch = false
 
-        dependencyMap[fullName] = ((dependencyMap[fullName] as Helpers.AnyPlugin[]) ?? []).filter(current => {
-          return !value.includes(current)
-        })
+        dependencyMap[fullName] = ((dependencyMap[fullName] as Helpers.AnyPlugin[]) ?? []).filter(
+          current => {
+            return !value.includes(current)
+          },
+        )
 
         targetVersion = value.at(-1)?.version ?? '*'
       } else {
@@ -74,10 +76,7 @@ export const createDependencyList: Impl.CreateDependencyList = (defaultDependenc
         Reflect.deleteProperty(dependencyVersionMap, fullName)
       }
 
-      result.event.emit('remove', [
-        fullName,
-        targetVersion,
-      ])
+      result.event.emit('remove', [fullName, targetVersion])
     }
 
     return result
@@ -91,5 +90,7 @@ export const createDependencyList: Impl.CreateDependencyList = (defaultDependenc
 }
 
 export const isDependencyList = (value: unknown): value is Helpers.AnyDependencyList => {
-  return typeof value === 'object' && value !== null && '_t' in value && value._t === DEPENDENCY_LIST
+  return (
+    typeof value === 'object' && value !== null && '_t' in value && value._t === DEPENDENCY_LIST
+  )
 }

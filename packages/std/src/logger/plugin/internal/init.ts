@@ -9,11 +9,7 @@ import { loggerContext, loggerDependencies } from '../base'
 
 export const initImplementation = createDefinition(({ use, rebind }) => {
   rebind('transports', ({ plugin, dependency }) => {
-    const transports = isArray(dependency)
-      ? dependency
-      : [
-          dependency,
-        ]
+    const transports = isArray(dependency) ? dependency : [dependency]
 
     for (const transport of transports) {
       if (!isTransport(transport)) {

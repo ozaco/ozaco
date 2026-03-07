@@ -15,10 +15,7 @@ export const createEvent = <M extends EventEmitterMap = EmptyType>(): EventEmitt
   event.on = (eventName: BlobType, listener: EventEmitterListener<BlobType>): BlobType => {
     const listeners = eventListeners.get(eventName) ?? []
 
-    eventListeners.set(eventName, [
-      ...listeners,
-      listener,
-    ])
+    eventListeners.set(eventName, [...listeners, listener])
 
     return event
   }

@@ -1,22 +1,19 @@
 import { type BlobType, isPromise } from 'std:shared'
 
-import type { Helpers, Impl, Result, ResultMaybeAsync } from '../types'
+import type { Impl } from '../types'
 
 import { isFailure, isResult } from './is'
 
-export const unwrap: Impl.Unwrap = <R extends ResultMaybeAsync<BlobType, BlobType>, T = never>(
-  ...args: BlobType[]
-): BlobType => {
+export const unwrap: Impl.Unwrap = (...args: BlobType[]): BlobType => {
   const firstArgument = args[0]
 
-  if (isResult<Helpers.InferSuccess<R>, Helpers.InferFailure<R>>(firstArgument) || isPromise(firstArgument)) {
-    const result = firstArgument
+  if (isResult(firstArgument) || isPromise(firstArgument)) {
     const hasDefault = args.length === 2
-    const defaultValue = hasDefault ? (args[1] as T) : undefined
+    const defaultValue = hasDefault ? args[1] : undefined
 
-    const apply = (r: Result<Helpers.InferSuccess<R>, Helpers.InferFailure<R>>): Helpers.InferSuccess<R> | T => {
+    const apply = (r: BlobType) => {
       if (isFailure(r)) {
-        if (hasDefault) return defaultValue as T
+        if (hasDefault) return defaultValue
 
         throw r
       }
@@ -24,16 +21,16 @@ export const unwrap: Impl.Unwrap = <R extends ResultMaybeAsync<BlobType, BlobTyp
       return r.value
     }
 
-    return isPromise(result) ? result.then(apply) : apply(result)
+    return isPromise(firstArgument) ? firstArgument.then(apply) : apply(firstArgument)
   }
 
   const hasDefault = args.length === 1
-  const defaultValue = hasDefault ? (args[0] as T) : undefined
+  const defaultValue = hasDefault ? args[0] : undefined
 
-  return (result: R) => {
-    const apply = (r: Result<Helpers.InferSuccess<R>, Helpers.InferFailure<R>>): Helpers.InferSuccess<R> | T => {
+  return (result: BlobType) => {
+    const apply = (r: BlobType) => {
       if (isFailure(r)) {
-        if (hasDefault) return defaultValue as T
+        if (hasDefault) return defaultValue
 
         throw r
       }

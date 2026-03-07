@@ -47,7 +47,8 @@ export const isUrl = (path?: string): path is string => {
 
 export const isWindowsPath = (path?: string): boolean => {
   if (!path) return false
-  if (path.length >= 2 && path.charCodeAt(1) === CH_COLON && isAlpha(path.charCodeAt(0))) return true
+  if (path.length >= 2 && path.charCodeAt(1) === CH_COLON && isAlpha(path.charCodeAt(0)))
+    return true
   return path.indexOf(WIN_SEP) !== -1
 }
 

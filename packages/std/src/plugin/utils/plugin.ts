@@ -70,7 +70,9 @@ export const createPlugin: Impl.CreatePlugin = (extendable, options, constructor
 
           if (
             dependencyVersion &&
-            (dependencyVersion === '*' || targetVersion === '*' || dependencyVersion === targetVersion)
+            (dependencyVersion === '*' ||
+              targetVersion === '*' ||
+              dependencyVersion === targetVersion)
           ) {
             if (isArray(dependencyMap[key])) {
               if (isArray(targetDependencies[key])) {

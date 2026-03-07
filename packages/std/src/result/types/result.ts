@@ -33,4 +33,7 @@ export type ResultMaybeAsync<T, E> = ResultAsync<T, E> | Result<T, E>
 
 export type ResultFor<R, T, E> = true extends HasPromise<R> ? ResultAsync<T, E> : Result<T, E>
 
-export type ResultFromUnion<R> = Helpers.UnionToResultFor<IsPromise<R>, Helpers.UnionToResult<Awaited<R>>>
+export type ResultFromUnion<R> = Helpers.UnionToResultFor<
+  IsPromise<R>,
+  Helpers.UnionToResult<Awaited<R>>
+>

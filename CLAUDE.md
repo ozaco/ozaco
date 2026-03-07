@@ -4,17 +4,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Commands
 
-**All workflows must go through Moon** - never invoke Bun/Biome directly except for debugging.
+**All workflows must go through Moon** - never invoke Bun/OXC directly except for debugging.
 
 ```bash
-bun install                           # Install dependencies (Bun 1.3.5 pinned via Moon)
-moon run :check                       # Full lint pass (Biome)
-moon run :apply                       # Auto-fix formatting
-moon run :apply-unsafe                # Deeper rewrites
+bun install                           # Install dependencies (Bun 1.3.9 pinned via Moon)
+moon run :check                       # Full lint + format check (oxlint + oxfmt)
+moon run :apply                       # Auto-fix formatting and lint
+moon run :apply-unsafe                # Auto-fix with dangerous rewrites (oxlint --fix-dangerous)
 moon run :clean                       # Reset build artifacts (dist, .ozaco)
-moon run std:build                    # Build @ozaco/std package
-moon run std:test                     # Run all tests
-moon run std:test -- --filter "case"  # Run specific test by name
+moon run std:build                    # Build @ozaco/std package (tsdown)
 ```
 
 Pre-commit hook runs `moon run :check --affected`.
@@ -48,7 +46,7 @@ The core package exports these modules via path aliases (e.g., `std:result`, `st
 
 ## Code Style
 
-Biome is canonical: 2 spaces, width 120, single quotes, JSX double quotes, trailing commas `all`, semicolons `asNeeded`.
+OXC is canonical (oxlint + oxfmt): 2 spaces, width 100, single quotes, JSX single quotes, trailing commas `all`, no semicolons.
 
 - **Import order:** external packages → `std:*` aliases → relatives
 - **Use `import type`** for type-only imports

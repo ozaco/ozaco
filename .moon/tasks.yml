@@ -1,47 +1,44 @@
-$schema: "https://moonrepo.dev/schemas/tasks.json"
+$schema: 'https://moonrepo.dev/schemas/tasks.json'
 
 implicitInputs:
-  - "package.json"
+  - 'package.json'
 
 fileGroups:
   configs:
-    - "*.config.{js,cjs,mjs}"
-    - "*.json"
+    - '*.config.{js,cjs,mjs}'
+    - '*.json'
   sources:
-    - "src/**/*"
-    - "packages/**/*"
-    - "plugins/**/*"
-    - "types/**/*"
+    - 'src/**/*'
+    - 'packages/**/*'
+    - 'plugins/**/*'
+    - 'types/**/*'
   tests:
-    - "tests/**/*"
-    - "**/__tests__/**/*"
+    - 'tests/**/*'
+    - '**/__tests__/**/*'
   assets:
-    - "assets/**/*"
-    - "images/**/*"
-    - "static/**/*"
-    - "**/*.{scss,css}"
+    - 'assets/**/*'
+    - 'images/**/*'
+    - 'static/**/*'
+    - '**/*.{scss,css}'
 
 tasks:
   check:
-    command: "biome check --no-errors-on-unmatched --files-ignore-unknown=true ."
-    deps:
-      - target: "build"
-        optional: true
+    command: 'oxlint . && oxfmt --check .'
     options:
       affectedFiles: true
   apply:
     local: true
-    command: "biome check --write --no-errors-on-unmatched --files-ignore-unknown=true ."
+    command: 'oxfmt --write . && oxlint --fix .'
     options:
       affectedFiles: true
   apply-unsafe:
     local: true
-    command: "biome check --write --unsafe --no-errors-on-unmatched --files-ignore-unknown=true ."
+    command: 'oxfmt --write . && oxlint --fix-dangerously .'
     options:
       affectedFiles: true
   clean:
     local: true
-    command: "rm -rf dist && rm -rf .ozaco"
+    command: 'rm -rf dist && rm -rf .ozaco'
     options:
       cache: false
       persistent: false

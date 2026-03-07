@@ -1,15 +1,12 @@
 import { type BlobType, isPromise, isString } from 'std:shared'
 
-import type { Impl, Result, ResultMaybeAsync } from '../types'
+import type { Impl } from '../types'
 
 import { isFailure, isResult } from './is'
 
-export const appendCauses: Impl.AppendCauses = (
-  firstArgument: ResultMaybeAsync<unknown, unknown> | string | undefined,
-  ...causes: string[]
-): BlobType => {
+export const appendCauses: Impl.AppendCauses = (firstArgument, ...causes: string[]): BlobType => {
   if (!isString(firstArgument) && firstArgument) {
-    const apply = (result: Result<unknown, unknown>) => {
+    const apply = (result: BlobType) => {
       if (isResult(result) && isFailure(result)) {
         result.causes.push(...causes)
       }
@@ -21,10 +18,10 @@ export const appendCauses: Impl.AppendCauses = (
   }
 
   if (!firstArgument) {
-    return (result: ResultMaybeAsync<unknown, unknown>) => result
+    return (result: BlobType) => result
   }
 
-  const apply = (failure: Result<unknown, unknown>) => {
+  const apply = (failure: BlobType) => {
     if (isResult(failure) && isFailure(failure)) {
       failure.causes.push(firstArgument, ...causes)
     }
@@ -32,5 +29,5 @@ export const appendCauses: Impl.AppendCauses = (
     return failure
   }
 
-  return (result: ResultMaybeAsync<unknown, unknown>) => (isPromise(result) ? result.then(apply) : apply(result))
+  return (result: BlobType) => (isPromise(result) ? result.then(apply) : apply(result))
 }

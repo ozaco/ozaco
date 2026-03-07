@@ -13,7 +13,11 @@ export type ExtendableEvents = {
   plugin: Helpers.AnyPlugin
 }
 
-export interface Metadata<Namespace extends string, Name extends string = never, Version extends string = never> {
+export interface Metadata<
+  Namespace extends string,
+  Name extends string = never,
+  Version extends string = never,
+> {
   namespace: Namespace
   name?: Name
   version?: Version
@@ -28,7 +32,9 @@ export interface Extendable<Meta extends Helpers.AnyMetadata, Defs = EmptyType> 
   clone: () => Extendable<Meta, Defs>
 
   getDefinitions: () => Helpers.AnyDefinition[]
-  define: <NewDefs extends (Helpers.AnyDefinition | Helpers.AnyContext | Helpers.AnyDependencyList)[]>(
+  define: <
+    NewDefs extends (Helpers.AnyDefinition | Helpers.AnyContext | Helpers.AnyDependencyList)[],
+  >(
     ...args: NewDefs
   ) => Extendable<Meta, Helpers.MergeDefinitons<Defs, NewDefs>>
 }

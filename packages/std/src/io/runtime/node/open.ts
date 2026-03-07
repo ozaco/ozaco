@@ -1,5 +1,9 @@
 import { closeSync as fsCloseSync } from 'node:fs'
-import { type FileHandle as FSFileHandle, open as fsOpenAsync, writeFile as fsWriteFile } from 'node:fs/promises'
+import {
+  type FileHandle as FSFileHandle,
+  open as fsOpenAsync,
+  writeFile as fsWriteFile,
+} from 'node:fs/promises'
 
 import { Flags, FSError, type Impl, IOErrors, openDefinition, Runtime } from 'std:io'
 import { fail, guard, throwable } from 'std:result'

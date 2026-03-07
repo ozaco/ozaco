@@ -9,4 +9,10 @@ import { getOptions, initImplementation } from './internal/init'
 export const extendable = createExtendable({
   namespace: 'std',
   name: 'color',
-}).define(context, initImplementation.key('setOptions'), getOptions, formatterImplementation, colorsImplementation)
+}).define(
+  context,
+  initImplementation.key('setOptions'),
+  getOptions,
+  formatterImplementation,
+  colorsImplementation,
+)

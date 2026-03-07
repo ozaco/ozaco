@@ -1,17 +1,17 @@
-$schema: "https://moonrepo.dev/schemas/workspace.json"
+$schema: 'https://moonrepo.dev/schemas/workspace.json'
 
 projects:
-  - "apps/*"
-  - "packages/*"
-  - "plugins/*"
-  - "experiments/*"
-  - "tools/*"
+  - 'apps/*'
+  - 'packages/*'
+  - 'plugins/*'
+  - 'experiments/*'
+  - 'tools/*'
 
 vcs:
-  manager: "git"
-  provider: "github"
-  defaultBranch: "development"
+  manager: 'git'
+  provider: 'github'
+  defaultBranch: 'development'
   hooks:
     pre-commit:
-      - "moon run :check --affected"
+      - 'moon run :check --affected'
   syncHooks: true

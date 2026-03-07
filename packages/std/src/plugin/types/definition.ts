@@ -15,7 +15,11 @@ export interface Definition<Key, Value> {
   _t: typeof DEFINITION
 
   extend: <NewValue>(
-    cb: (options: { def: Value; use: Helpers.DefinitionUse; event: Helpers.AnyPlugin['event'] }) => NewValue,
+    cb: (options: {
+      def: Value
+      use: Helpers.DefinitionUse
+      event: Helpers.AnyPlugin['event']
+    }) => NewValue,
   ) => Definition<Key, NewValue>
 
   event: EventEmitter<DefinitionEvents>

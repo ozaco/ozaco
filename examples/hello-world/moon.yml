@@ -1,0 +1,14 @@
+tasks:
+  build:
+    command: 'tsdown'
+    inputs:
+      - 'src/**/*'
+      - 'tsdown.config.ts'
+    outputs:
+      - 'dist/**/*'
+    deps:
+      - 'std:build'
+  run:
+    command: 'bun run src/index.ts'
+    deps:
+      - 'std:build'

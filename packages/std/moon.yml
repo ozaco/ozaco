@@ -1,0 +1,14 @@
+tasks:
+  build:
+    command: 'tsdown'
+    inputs:
+      - 'src/**/*'
+      - 'tsdown.config.ts'
+    outputs:
+      - 'dist/**/*'
+  test:
+    command: 'bun test'
+    deps:
+      - 'std:build'
+    inputs:
+      - 'tests/**/*'

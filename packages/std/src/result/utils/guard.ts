@@ -4,37 +4,39 @@ import type { Impl } from '../types'
 import { appendCauses } from './append-causes'
 import { auto } from './auto'
 import { pipe } from './pipe'
+import { fail } from './result'
 
-// TODO: guard should wrap in try-catch blocks
 export const guard: Impl.Guard = (...args: BlobType[]): BlobType => {
   const firstArgument = args[0]
   const causes = args.slice(1)
 
-  return (...args: BlobType[]) =>
-    pipe(
-      firstArgument(...args),
-      result => {
-        if (isPromise(result)) {
-          return result.then(result => {
-            if (isGenerator(result)) {
-              return result.next().value
-            } else if (isAsyncGenerator(result)) {
-              return result.next().then((result: BlobType) => result.value)
-            }
+  return (...innerArgs: BlobType[]) => {
+    const extract = (res: BlobType) => {
+      if (isGenerator(res)) {
+        return res.next().value
+      } else if (isAsyncGenerator(res)) {
+        return res.next().then((r: BlobType) => r.value)
+      }
 
-            return result
-          })
-        }
+      return res
+    }
 
-        if (isGenerator(result)) {
-          return result.next().value
-        } else if (isAsyncGenerator(result)) {
-          return result.next().then((result: BlobType) => result.value)
-        }
+    try {
+      const res = firstArgument(...innerArgs)
 
-        return result
-      },
-      appendCauses(...causes),
-      auto(),
-    )
+      if (isPromise(res)) {
+        return pipe(
+          res.then(extract, (err: BlobType) =>
+            fail(err instanceof Error ? err : new Error(String(err)), 'from guard', ...causes),
+          ),
+          appendCauses(...causes),
+          auto(),
+        )
+      }
+
+      return pipe(extract(res), appendCauses(...causes), auto())
+    } catch (err) {
+      return fail(err instanceof Error ? err : new Error(String(err)), 'from guard', ...causes)
+    }
+  }
 }

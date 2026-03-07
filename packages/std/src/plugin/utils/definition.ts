@@ -29,8 +29,8 @@ export const createDefinition: Impl.CreateDefinition = (valueOrFn = {}) => {
 
     getRequired: () => required,
 
-    key: value => {
-      key = value as never
+    key: newKey => {
+      key = newKey as never
 
       return result as BlobType
     },

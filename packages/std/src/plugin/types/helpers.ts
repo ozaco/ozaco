@@ -12,11 +12,7 @@ export namespace Helpers {
   export type AnyContext = Context<BlobType>
 
   export type InferContextData<Type> = Type extends Context<infer Data> ? Data : never
-  export type InferExistingContextData<Type> = [
-    Type,
-  ] extends [
-    never,
-  ]
+  export type InferExistingContextData<Type> = [Type] extends [never]
     ? unknown
     : Type extends Context<infer Data>
       ? Data
@@ -42,23 +38,25 @@ export namespace Helpers {
 
   export type InferDefinitionKey<Type> =
     Type extends Definition<infer Key, BlobType> ? (Key extends PropertyKey ? Key : never) : never
-  export type InferDefinitionValue<Type> = Type extends Definition<BlobType, infer Value> ? Value : never
+  export type InferDefinitionValue<Type> =
+    Type extends Definition<BlobType, infer Value> ? Value : never
 
   // Definition Merger
 
   export type ApplyDefinition<Type extends AnyDefinition> = Type extends infer U
-    ? [
-        InferDefinitionKey<U>,
-      ] extends [
-        never,
-      ]
+    ? [InferDefinitionKey<U>] extends [never]
       ? InferDefinitionValue<U>
       : ObjectFromKeyValue<InferDefinitionKey<U>, InferDefinitionValue<U>>
     : never
 
-  export type ToApplied<Type extends AnyDefinition[]> = MergeObjectUnion<ApplyDefinition<Type[number]>>
+  export type ToApplied<Type extends AnyDefinition[]> = MergeObjectUnion<
+    ApplyDefinition<Type[number]>
+  >
 
-  export type MergeDefinitons<Defs, NewDefs extends (AnyDefinition | AnyContext | AnyDependencyList)[]> = Expand<
+  export type MergeDefinitons<
+    Defs,
+    NewDefs extends (AnyDefinition | AnyContext | AnyDependencyList)[],
+  > = Expand<
     Merge<Defs, ToApplied<NewDefs extends Array<infer D> ? Extract<D, AnyDefinition>[] : []>>
   >
 
@@ -67,11 +65,7 @@ export namespace Helpers {
   export type AnyDependencyList = DependencyList<BlobType>
 
   export type InferDependencyListData<Deps> = Deps extends DependencyList<infer D> ? D : never
-  export type InferExistingDependencies<Deps> = [
-    Deps,
-  ] extends [
-    never,
-  ]
+  export type InferExistingDependencies<Deps> = [Deps] extends [never]
     ? unknown
     : Deps extends DependencyList<infer D>
       ? Dependencies<D>
@@ -83,8 +77,11 @@ export namespace Helpers {
   export type AnyExtendable = Extendable<AnyMetadata, BlobType>
 
   export type InferMetadata<T> = T extends Extendable<infer Meta, BlobType> ? Meta : never
-  export type InferDefinitions<T> = T extends Extendable<BlobType, infer Definitions> ? Definitions : never
-  export type InferIncompleteMetadata<T> = Expand<Required<Omit<AnyMetadata, keyof InferMetadata<T>>>>
+  export type InferDefinitions<T> =
+    T extends Extendable<BlobType, infer Definitions> ? Definitions : never
+  export type InferIncompleteMetadata<T> = Expand<
+    Required<Omit<AnyMetadata, keyof InferMetadata<T>>>
+  >
 
   // Plugin
 
@@ -93,11 +90,7 @@ export namespace Helpers {
     [name: string]: AnyPlugin
   }
 
-  export type InferPluginFromExtendable<T> = [
-    T,
-  ] extends [
-    AnyExtendable,
-  ]
+  export type InferPluginFromExtendable<T> = [T] extends [AnyExtendable]
     ? Plugin<InferMetadata<T>, InferDefinitions<T>>
     : T extends AnyPlugin
       ? T
@@ -105,11 +98,7 @@ export namespace Helpers {
         ? InferPluginFromExtendable<U>[]
         : never
 
-  export type InferUseFromDependencies<Deps> = [
-    Deps,
-  ] extends [
-    never,
-  ]
+  export type InferUseFromDependencies<Deps> = [Deps] extends [never]
     ? UseAnyDependency
     : Deps extends DependencyList<infer D>
       ? Dependencies<D>

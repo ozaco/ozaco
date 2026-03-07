@@ -9,14 +9,8 @@ import type { Helpers } from './helpers'
 export type DependencyListEvents = {
   extendable: Helpers.AnyExtendable
 
-  add: [
-    name: string,
-    version: string,
-  ]
-  remove: [
-    name: string,
-    version: string,
-  ]
+  add: [name: string, version: string]
+  remove: [name: string, version: string]
 }
 
 export type DependencyListOptions<Deps extends EmptyType> = {
@@ -30,7 +24,9 @@ export type Dependencies<Deps> = {
 export interface DependencyList<Deps> extends Omit<Context<Deps>, '_t' | 'event'> {
   _t: typeof DEPENDENCY_LIST
 
-  add: <NewDeps extends EmptyType>(deps: DependencyListOptions<NewDeps>) => DependencyList<Expand<Merge<Deps, NewDeps>>>
+  add: <NewDeps extends EmptyType>(
+    deps: DependencyListOptions<NewDeps>,
+  ) => DependencyList<Expand<Merge<Deps, NewDeps>>>
   remove: <TargetDependencies extends EmptyType, Force extends boolean = false>(
     deps: DependencyListOptions<TargetDependencies>,
     force?: Force,

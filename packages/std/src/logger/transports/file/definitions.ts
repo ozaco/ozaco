@@ -89,7 +89,6 @@ export const flush = flushDefinition.extend(({ use }) => {
     ctx.draining = true
 
     while (ctx.queue.length > 0) {
-      // biome-ignore lint/style/noNonNullAssertion: Redundant
       const chunk = ctx.queue.shift()!
       const ok = ctx.stream.write(chunk)
 

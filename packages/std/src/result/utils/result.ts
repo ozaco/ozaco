@@ -9,10 +9,9 @@ export const fail: Impl.Fail = (...args: BlobType[]) => {
     _d: Date.now(),
 
     *[Symbol.iterator]() {
-      // biome-ignore lint/complexity/noUselessThisAlias: Redundant
+      // oxlint-disable-next-line no-this-alias
       const self = this
       yield self
-      return self
     },
   } as Writable<Failure<BlobType>>
 
@@ -28,10 +27,10 @@ export const fail: Impl.Fail = (...args: BlobType[]) => {
   const causes = args.slice(2)
 
   if (isPromise(error)) {
-    return error.then(error => {
+    return error.then(resolved => {
       failure.causes = causes
       failure.message = message
-      failure.error = error
+      failure.error = resolved
 
       return failure
     }) as BlobType
@@ -48,7 +47,7 @@ export const succeed: Impl.Succeed = (...args: BlobType[]) => {
   const success = {
     _t: RESULT_SUCCESS,
 
-    // biome-ignore lint/correctness/useYield: Redundant
+    // oxlint-disable-next-line require-yield
     *[Symbol.iterator]() {
       return this.value
     },
@@ -60,8 +59,8 @@ export const succeed: Impl.Succeed = (...args: BlobType[]) => {
 
   const value = args[0]
   if (isPromise(value)) {
-    return value.then(value => {
-      success.value = value
+    return value.then(resolved => {
+      success.value = resolved
 
       return success
     }) as BlobType

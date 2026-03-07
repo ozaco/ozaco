@@ -1,7 +1,5 @@
-// biome-ignore lint/suspicious/noExplicitAny: For awareness
 export type BlobType = any
 
-// biome-ignore lint/complexity/noBannedTypes: For awareness
 export type EmptyType = {}
 
 export type IsPromise<T> = T extends Promise<BlobType> ? true : false
@@ -20,4 +18,6 @@ export type Expand<T> = { [K in keyof T]: T[K] } & {}
 
 export type Primitive = null | undefined | string | number | boolean | symbol | bigint
 
-export type LiteralUnion<LiteralType, BaseType extends Primitive> = LiteralType | (BaseType & Record<never, never>)
+export type LiteralUnion<LiteralType, BaseType extends Primitive> =
+  | LiteralType
+  | (BaseType & Record<never, never>)

@@ -10,7 +10,13 @@ import { writeImplementation } from './write'
 export const createBunIO = createPlugin(
   extendableIO
     .clone()
-    .define(statsImplementation, openImplementation, readImplementation, writeImplementation, existsImplementation),
+    .define(
+      statsImplementation,
+      openImplementation,
+      readImplementation,
+      writeImplementation,
+      existsImplementation,
+    ),
   {
     name: 'bun',
   },

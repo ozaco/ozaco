@@ -7,7 +7,6 @@ export const isPromise = (value: unknown): value is PromiseLike<BlobType> => {
   return typeof value === 'object' && typeof (value as BlobType)?.then === 'function'
 }
 
-// biome-ignore lint/complexity/noBannedTypes: redundant
 export const isFunction = (value: unknown): value is Function => {
   return typeof value === 'function'
 }
@@ -33,13 +32,20 @@ export const isBoolean = (value: unknown): value is boolean => {
 }
 
 export const isGenerator = (value: unknown): value is Generator<BlobType, BlobType> => {
-  return typeof value === 'object' && typeof (value as Generator<BlobType, BlobType>)?.[Symbol.iterator] === 'function'
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as BlobType).next === 'function' &&
+    typeof (value as BlobType)[Symbol.iterator] === 'function'
+  )
 }
 
 export const isAsyncGenerator = (value: unknown): value is AsyncGenerator<BlobType, BlobType> => {
   return (
     typeof value === 'object' &&
-    typeof (value as AsyncGenerator<BlobType, BlobType>)?.[Symbol.asyncIterator] === 'function'
+    value !== null &&
+    typeof (value as BlobType).next === 'function' &&
+    typeof (value as BlobType)[Symbol.asyncIterator] === 'function'
   )
 }
 
@@ -48,7 +54,11 @@ export const isNumber = (x: unknown): x is number => {
 }
 
 export const isArrayBuffer = (x: unknown): x is ArrayBuffer => {
-  return typeof x === 'object' && x !== null && Object.prototype.toString.call(x) === '[object ArrayBuffer]'
+  return (
+    typeof x === 'object' &&
+    x !== null &&
+    Object.prototype.toString.call(x) === '[object ArrayBuffer]'
+  )
 }
 
 export const isSharedArrayBuffer = (x: unknown): x is SharedArrayBuffer => {

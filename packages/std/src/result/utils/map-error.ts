@@ -1,21 +1,18 @@
 import { type BlobType, isPromise } from 'std:shared'
 
-import type { Helpers, Impl, Result, ResultFor, ResultMaybeAsync } from '../types'
+import type { Impl } from '../types'
 
 import { isSuccess } from './is'
+import { fail } from './result'
 
-export const mapError: Impl.MapError = <E1, E2>(fn: (a: E1) => E2) => {
-  return <R1 extends ResultMaybeAsync<BlobType, E1>>(result: R1): ResultFor<R1, Helpers.InferSuccess<R1>, E2> => {
-    const apply = (r: Result<Helpers.InferSuccess<R1>, BlobType>) => {
+export const mapError: Impl.MapError = (fn: BlobType) => {
+  return (result: BlobType) => {
+    const apply = (r: BlobType) => {
       if (isSuccess(r)) return r
 
-      return fn(r as E1)
+      return fail(fn(r.error), r.message, ...r.causes)
     }
 
-    if (isPromise(result)) {
-      return result.then<unknown>(apply) as ResultFor<R1, Helpers.InferSuccess<R1>, E2>
-    }
-
-    return apply(result) as ResultFor<R1, Helpers.InferSuccess<R1>, E2>
+    return (isPromise(result) ? result.then(apply) : apply(result)) as BlobType
   }
 }

@@ -1,0 +1,19 @@
+{
+  "name": "@ozaco/hello-world",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "source": "./src/index.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "dependencies": {
+    "@ozaco/std": "workspace:*"
+  },
+  "devDependencies": {
+    "tsdown": "^0.21.0"
+  }
+}
