@@ -6,6 +6,13 @@ tasks:
       - 'tsdown.config.ts'
     outputs:
       - 'dist/**/*'
+  dev:
+    command: 'tsdown --watch'
+    inputs:
+      - 'src/**/*'
+      - 'tsdown.config.ts'
+    outputs:
+      - 'dist/**/*'
   test:
     command: 'bun test'
     deps:

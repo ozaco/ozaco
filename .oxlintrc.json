@@ -5,10 +5,12 @@
     "suspicious": "warn",
     "perf": "warn"
   },
-  "plugins": ["unicorn", "typescript", "import", "oxc"],
+  "plugins": ["unicorn", "typescript", "oxc", "import", "jsx-a11y", "react-perf", "promise"],
   "rules": {
     "no-unused-vars": "error",
-    "unicorn/no-array-for-each": "warn"
+    "unicorn/no-array-for-each": "warn",
+    "typescript/no-explicit-any": "error",
+    "no-empty-object-type": "error"
   },
   "ignorePatterns": ["dist/**"]
 }
