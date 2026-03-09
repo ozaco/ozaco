@@ -3,7 +3,8 @@
     "lib": ["esnext", "dom"],
     "paths": {
       "std:shared": ["./src/shared/index.ts"],
-      "std:result": ["./src/result/index.ts"]
+      "std:result": ["./src/result/index.ts"],
+      "std:match": ["./src/match/index.ts"]
     }
   },
   "extends": "../../tsconfig.base.json",

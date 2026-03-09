@@ -50,6 +50,9 @@ export namespace Impl {
   }
 
   export interface Unwrap {
+    <R extends Failure<AnyType>>(result: R): never
+    <R extends ResultBoth<never, AnyType>>(result: R): never
+
     <R extends ResultBoth<AnyType, AnyType>>(
       result: R,
     ): true extends IsPromiseStrict<R> ? Promise<Helpers.InferSuccess<R>> : Helpers.InferSuccess<R>

@@ -19,7 +19,8 @@
       "Bash(python3:*)",
       "Bash(npx tsdown:*)",
       "WebFetch(domain:github.com)",
-      "Bash(chmod +x:*)"
+      "Bash(chmod +x:*)",
+      "Bash(npx:*)"
     ]
   }
 }

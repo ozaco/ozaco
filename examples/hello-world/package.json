@@ -11,7 +11,8 @@
     }
   },
   "dependencies": {
-    "@ozaco/std": "workspace:*"
+    "@ozaco/std": "workspace:*",
+    "zod": "4.3.6"
   },
   "devDependencies": {
     "tsdown": "^0.21.0"

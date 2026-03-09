@@ -21,6 +21,11 @@
       "types": "./dist/shared.d.ts",
       "source": "./src/shared/index.ts",
       "default": "./dist/shared.js"
+    },
+    "./match": {
+      "types": "./dist/match.d.ts",
+      "source": "./src/match/index.ts",
+      "default": "./dist/match.js"
     }
   },
   "devDependencies": {
