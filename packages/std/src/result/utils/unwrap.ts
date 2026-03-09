@@ -3,7 +3,7 @@ import { isPromise, type AnyType } from 'std:shared'
 import { isFailure, isResult } from './is'
 import type { Impl } from '../types/impl'
 
-export const unwrap: Impl.Unwrap = (...args: AnyType[]): AnyType => {
+export const unwrap: Impl.Unwrap = ((...args: AnyType[]): AnyType => {
   const firstArgument = args[0]
 
   if (isResult(firstArgument) || isPromise(firstArgument)) {
@@ -39,4 +39,4 @@ export const unwrap: Impl.Unwrap = (...args: AnyType[]): AnyType => {
 
     return isPromise(result) ? result.then(apply) : apply(result)
   }
-}
+}) as AnyType

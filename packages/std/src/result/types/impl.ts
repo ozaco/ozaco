@@ -1,7 +1,7 @@
 import type { AnyType, IsPromiseStrict } from 'std:shared'
 
-import type { Failure, Result, ResultAsync, ResultBoth, ResultFor } from './result'
 import type { Helpers } from './helpers'
+import type { Failure, Result, ResultAsync, ResultBoth, ResultFor } from './result'
 
 export namespace Impl {
   export interface Succeed {
@@ -50,7 +50,6 @@ export namespace Impl {
   }
 
   export interface Unwrap {
-    <R extends Failure<AnyType>>(result: R): never
     <R extends ResultBoth<never, AnyType>>(result: R): never
 
     <R extends ResultBoth<AnyType, AnyType>>(
