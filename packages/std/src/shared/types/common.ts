@@ -15,3 +15,9 @@ export type IsPromiseStrict<T> = object extends T
   : T extends Promise<AnyType>
     ? true
     : false
+
+export type GuardValue<fn> = fn extends ((value: AnyType) => value is infer b)
+  ? b
+  : fn extends (value: infer a) => unknown
+    ? a
+    : never

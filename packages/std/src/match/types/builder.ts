@@ -1,5 +1,5 @@
 import type { Failure } from 'std:result'
-import type { StandardSchemaV1 } from 'std:shared'
+import type { GuardValue, StandardSchemaV1 } from 'std:shared'
 
 export interface MatchBuilder<Input, Remaining, Output> {
   with: <S extends StandardSchemaV1, R>(
@@ -8,8 +8,8 @@ export interface MatchBuilder<Input, Remaining, Output> {
   ) => MatchBuilder<Input, Exclude<Remaining, StandardSchemaV1.InferInput<S>>, Output | R>
 
   when: {
-    <N extends Remaining, R>(
-      predicate: (value: Remaining) => value is N,
+    <P extends (value: Remaining) => unknown, R, N extends Extract<Remaining, GuardValue<P>>>(
+      predicate: P,
       handler: (value: N) => R,
     ): MatchBuilder<Input, Exclude<Remaining, N>, Output | R>
     <R>(
