@@ -1,5 +1,14 @@
 import type { Failure } from 'std:result'
-import type { GuardValue, StandardSchemaV1 } from 'std:shared'
+import type { GuardValue } from './common'
+import type { StandardSchemaV1 } from './schema'
+
+import type { AnyType } from './common'
+
+export type MatchCase = {
+  handler: (value: AnyType) => AnyType
+  predicate?: (value: AnyType) => boolean
+  schema?: StandardSchemaV1
+}
 
 export interface MatchBuilder<Input, Remaining, Output> {
   with: <S extends StandardSchemaV1, R>(

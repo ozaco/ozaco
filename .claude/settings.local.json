@@ -20,7 +20,8 @@
       "Bash(npx tsdown:*)",
       "WebFetch(domain:github.com)",
       "Bash(chmod +x:*)",
-      "Bash(npx:*)"
+      "Bash(npx:*)",
+      "Bash(grep:*)"
     ]
   }
 }

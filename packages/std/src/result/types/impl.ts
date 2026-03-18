@@ -33,6 +33,8 @@ export namespace Impl {
       ? ResultAsync<Helpers.InferSuccess<R> | T, never>
       : Result<Helpers.InferSuccess<R> | T, never>
 
+    <const T>(): (value: T) => Helpers.ResultFromUnion<T>
+
     <T extends `${string}`>(value: Promise<Awaited<T>> | Promise<T>): ResultFor<true, T, never>
     <T extends `${string}`>(value: T): ResultFor<false, T, never>
     <const T>(value: T): Helpers.ResultFromUnion<T>
