@@ -1,3 +1,8 @@
+language: typescript
+layer: library
+toolchains:
+  default: bun
+
 tasks:
   build:
     command: bunx tsdown
