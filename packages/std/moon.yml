@@ -1,13 +1,13 @@
 tasks:
   build:
-    command: tsdown
+    command: bunx tsdown
     inputs:
       - src/**/*
       - tsdown.config.ts
     outputs:
       - dist/**/*
   dev:
-    command: tsdown --watch
+    command: bunx tsdown --watch
     inputs:
       - src/**/*
       - tsdown.config.ts

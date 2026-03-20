@@ -1,6 +1,6 @@
 tasks:
   build:
-    command: tsdown
+    command: bunx tsdown
     inputs:
       - src/**/*
       - tsdown.config.ts
