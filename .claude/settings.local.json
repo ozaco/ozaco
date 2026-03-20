@@ -21,7 +21,8 @@
       "WebFetch(domain:github.com)",
       "Bash(chmod +x:*)",
       "Bash(npx:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(xargs cat:*)"
     ]
   }
 }

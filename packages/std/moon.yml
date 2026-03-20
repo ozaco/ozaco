@@ -1,21 +1,21 @@
 tasks:
   build:
-    command: 'tsdown'
+    command: tsdown
     inputs:
-      - 'src/**/*'
-      - 'tsdown.config.ts'
+      - src/**/*
+      - tsdown.config.ts
     outputs:
-      - 'dist/**/*'
+      - dist/**/*
   dev:
-    command: 'tsdown --watch'
+    command: tsdown --watch
     inputs:
-      - 'src/**/*'
-      - 'tsdown.config.ts'
+      - src/**/*
+      - tsdown.config.ts
     outputs:
-      - 'dist/**/*'
+      - dist/**/*
   test:
-    command: 'bun test'
+    command: bun test
     deps:
-      - 'std:build'
+      - std:build
     inputs:
-      - 'tests/**/*'
+      - tests/**/*
