@@ -1,5 +1,5 @@
 import type { AnyType, IsPromise } from 'std:shared'
-import type { Result, ResultAsync, ResultBoth, ResultFor } from './result'
+import type { Result, ResultAsync, ResultBoth } from './result'
 
 export namespace Helpers {
   export type InferSuccess<T> = [T] extends [(...args: AnyType[]) => ResultBoth<infer U, AnyType>]
@@ -14,7 +14,7 @@ export namespace Helpers {
       ? U
       : never
 
-  export type UnionToResult<R> = R extends Result<AnyType, AnyType> ? R : ResultFor<false, R, never>
+  export type UnionToResult<R> = R extends Result<AnyType, AnyType> ? R : Result<R, never>
 
   export type UnionToResultFor<P, R> = true extends P
     ? ResultAsync<InferSuccess<R>, InferFailure<R>>

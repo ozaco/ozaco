@@ -5,18 +5,18 @@ import type { Failure, Result, ResultAsync, ResultBoth, ResultFor } from './resu
 
 export namespace Impl {
   export interface Succeed {
-    (): ResultFor<false, void, never>
+    (): Result<void, never>
 
-    <T extends `${string}`>(value: Promise<Awaited<T>> | Promise<T>): ResultFor<true, T, never>
-    <T extends `${string}`>(value: T): ResultFor<false, T, never>
+    <T extends `${string}`>(value: PromiseLike<T>): ResultAsync<T, never>
+    <T extends `${string}`>(value: T): Result<T, never>
     <const T>(value: T): ResultFor<T, Awaited<T>, never>
   }
 
   export interface Fail {
-    (): ResultFor<false, never, void>
+    (): Result<never, void>
 
-    <E extends `${string}`>(value: Promise<Awaited<E>> | Promise<E>): ResultFor<true, never, E>
-    <E extends `${string}`>(value: E): ResultFor<false, never, E>
+    <E extends `${string}`>(error: PromiseLike<E>): ResultAsync<never, E>
+    <E extends `${string}`>(error: E): Result<never, E>
     <const E>(error: E, message?: string, ...causes: string[]): ResultFor<E, never, Awaited<E>>
   }
 
@@ -35,8 +35,8 @@ export namespace Impl {
 
     <const T>(): (value: T) => Helpers.ResultFromUnion<T>
 
-    <T extends `${string}`>(value: Promise<Awaited<T>> | Promise<T>): ResultFor<true, T, never>
-    <T extends `${string}`>(value: T): ResultFor<false, T, never>
+    <T extends `${string}`>(value: PromiseLike<T>): ResultAsync<T, never>
+    <T extends `${string}`>(value: T): Result<T, never>
     <const T>(value: T): Helpers.ResultFromUnion<T>
   }
 
