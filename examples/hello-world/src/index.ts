@@ -1,16 +1,13 @@
-import { isResult, type Result } from '@ozaco/std/result'
+import { fail, guard, succeed } from '@ozaco/std/result'
 import { match } from '@ozaco/std/shared'
+import { z } from 'zod/mini'
 
-import z from 'zod/v3'
+const sayHi = guard(function* (target: unknown) {
+  const name = yield* match(target)
+    .with(z.string(), targetName => succeed(targetName))
+    .otherwise(() => fail('unsupported target'))
 
-// ── Result + match via .when() ──
+  return `Hi ${name}` as const
+})
 
-const input = 'alice' as 'alice' | 10 | Result<string, never>
-
-const output = match(input)
-  .with(z.literal('alice'), i => `Hi ${i}`)
-  .with(z.literal(10), i => i * 10)
-  .when(isResult, () => 2)
-  .exhaustive()
-
-console.log(output)
+console.log(sayHi('Alice'))

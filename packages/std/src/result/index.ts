@@ -5,6 +5,7 @@ export * from './utils/success'
 export * from './utils/throwable'
 export * from './utils/append-causes'
 export * from './utils/unwrap'
+export * from './utils/guard'
 
 export * from './types/result'
 export * from './types/helpers'

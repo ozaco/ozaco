@@ -49,7 +49,3 @@ tasks:
       runInCI: false
     script: rm -rf dist && rm -rf .out && rm -rf .tanstack && rm -rf coverage
     preset: server
-
-
-inheritedBy:
-  language: tasks

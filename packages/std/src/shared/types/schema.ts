@@ -58,11 +58,11 @@ export namespace StandardSchemaV1 {
     readonly validate: (
       value: unknown,
       options?: StandardSchemaV1.Options | undefined,
-    ) => Result<Output> | Promise<Result<Output>>
+    ) => ValidationResult<Output> | Promise<ValidationResult<Output>>
   }
 
   /** The result interface of the validate function. */
-  export type Result<Output> = SuccessResult<Output> | FailureResult
+  export type ValidationResult<Output> = SuccessResult<Output> | FailureResult
 
   /** The result interface if validation succeeds. */
   export interface SuccessResult<Output> {

@@ -76,4 +76,19 @@ export namespace Impl {
       ? Promise<Helpers.InferSuccess<R> | T>
       : Helpers.InferSuccess<R> | T
   }
+
+  export interface Guard {
+    <Args extends AnyType[], U, V>(
+      fn: (...args: Args) => Generator<U, V>,
+      ...causes: string[]
+    ): (...args: Args) => Helpers.ResultFromUnion<V | U>
+    <Args extends AnyType[], U, V>(
+      fn: (...args: Args) => AsyncGenerator<U, V>,
+      ...causes: string[]
+    ): (...args: Args) => Helpers.ResultFromUnion<Promise<V | U>>
+    <Args extends AnyType[], R>(
+      fn: (...args: Args) => R,
+      ...causes: string[]
+    ): (...args: Args) => Helpers.ResultFromUnion<R>
+  }
 }
