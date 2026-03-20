@@ -6,14 +6,15 @@ projects:
   - plugins/*
   - experiments/*
   - tools/*
+  - .
 
 vcs:
   client: git
   provider: github
-  defaultBranch: development
+  defaultBranch: rewrite
   hooks:
     pre-commit:
       - 'moon run :apply --affected --status=staged'
     commit-msg:
-      - 'npx --no -- commitlint --edit $ARG1'
+      - 'bunx --no -- commitlint --edit $ARG1'
   sync: true
