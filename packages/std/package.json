@@ -22,8 +22,5 @@
       "source": "./src/shared/index.ts",
       "default": "./dist/shared.js"
     }
-  },
-  "devDependencies": {
-    "tsdown": "^0.21.4"
   }
 }

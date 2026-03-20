@@ -12,6 +12,7 @@
         "@types/node": "^25.5.0",
         "oxfmt": "^0.41.0",
         "oxlint": "^1.56.0",
+        "tsdown": "^0.21.4",
         "typescript": "^6.0.1-rc",
       },
     },
@@ -22,16 +23,10 @@
         "@ozaco/std": "workspace:*",
         "zod": "4.3.6",
       },
-      "devDependencies": {
-        "tsdown": "^0.21.4",
-      },
     },
     "packages/std": {
       "name": "@ozaco/std",
       "version": "0.0.6",
-      "devDependencies": {
-        "tsdown": "^0.21.4",
-      },
     },
   },
   "packages": {
