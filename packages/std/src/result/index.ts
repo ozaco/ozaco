@@ -6,9 +6,11 @@ export * from './utils/throwable'
 export * from './utils/append-causes'
 export * from './utils/unwrap'
 export * from './utils/guard'
+export * from './utils/maybe'
 
 export * from './types/result'
 export * from './types/helpers'
 export * from './types/impl'
+export * from './types/maybe'
 
 export * from './const'

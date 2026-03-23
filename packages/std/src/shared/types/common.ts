@@ -21,3 +21,5 @@ export type GuardValue<fn> = fn extends ((value: AnyType) => value is infer b)
   : fn extends (value: infer a) => unknown
     ? a
     : never
+
+export type PromiseWithResolvers<T> = ReturnType<typeof Promise.withResolvers<T>>

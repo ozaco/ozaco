@@ -2,6 +2,7 @@ import type { AnyType, IsPromiseStrict } from 'std:shared'
 
 import type { Helpers } from './helpers'
 import type { Failure, Result, ResultAsync, ResultBoth, ResultFor } from './result'
+import type { Maybe } from './maybe'
 
 export namespace Impl {
   export interface Succeed {
@@ -91,4 +92,12 @@ export namespace Impl {
       ...causes: string[]
     ): (...args: Args) => Helpers.ResultFromUnion<R>
   }
+
+  export interface Just {
+    (): Maybe<void>
+    <T>(value: T): Maybe<T>
+    <T>(value?: T | undefined): Maybe<T | undefined>
+  }
+
+  export type Nothing = <T = void>() => Maybe<T>
 }

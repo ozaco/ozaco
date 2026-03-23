@@ -12,6 +12,11 @@
   ],
   "type": "module",
   "exports": {
+    "./effect": {
+      "types": "./dist/effect.d.ts",
+      "source": "./src/effect/index.ts",
+      "default": "./dist/effect.js"
+    },
     "./result": {
       "types": "./dist/result.d.ts",
       "source": "./src/result/index.ts",
