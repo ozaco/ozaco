@@ -1,4 +1,5 @@
-import { isSuccess, succeed, type Result } from 'std:result'
+import { isSuccess, succeed } from 'std:result'
+import type { Result } from 'std:result'
 
 import type { Helpers } from '../types/helpers'
 import type { Operation } from '../types/operation'
@@ -11,11 +12,11 @@ export const createCoroutine = <T>({
   operation,
   scope,
 }: Helpers.CoroutineOptions<T>): Helpers.Coroutine<T> => {
-  let reducer = scope.expect(ReducerContext)
+  const reducer = scope.expect(ReducerContext)
 
   let iterator: Helpers.Coroutine<T>['data']['iterator'] | undefined = undefined
 
-  let routine = {
+  const routine = {
     runLevel: 0,
     scope,
     data: {

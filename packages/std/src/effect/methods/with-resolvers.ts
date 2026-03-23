@@ -1,15 +1,17 @@
-import { fail, isSuccess, succeed, type Result } from 'std:result'
+import { fail, isSuccess, succeed } from 'std:result'
+import type { Result } from 'std:result'
+
+import type { Helpers } from '../types/helpers'
 import type { Operation } from '../types/operation'
 
 import { action } from './action'
-import type { Helpers } from '../types/helpers'
 
 export const withResolvers = <T>(description?: string): Helpers.WithResolvers<T> => {
-  let continuations = new Set<(result: Result<T, unknown>) => void>()
+  const continuations = new Set<(result: Result<T, unknown>) => void>()
   let result: Result<T, unknown> | undefined = undefined
 
-  let operation: Operation<T> = action<T>(function (resolve, reject) {
-    let settle = (outcome: Result<T, unknown>) => {
+  const operation: Operation<T> = action<T>(function (resolve, reject) {
+    const settle = (outcome: Result<T, unknown>) => {
       if (isSuccess(outcome)) {
         resolve(outcome.value)
       } else {
@@ -25,17 +27,17 @@ export const withResolvers = <T>(description?: string): Helpers.WithResolvers<T>
     return () => continuations.delete(settle)
   }, description)
 
-  let settle = (outcome: Result<T, unknown>) => {
+  const settle = (outcome: Result<T, unknown>) => {
     if (!result) {
       result = outcome
     }
-    for (let continuation of continuations) {
+    for (const continuation of continuations) {
       continuation(result)
     }
   }
 
-  let resolve = (value: T) => settle(succeed(value) as Result<T, never>)
-  let reject = (error: unknown) => settle(fail(error))
+  const resolve = (value: T) => settle(succeed(value) as Result<T, never>)
+  const reject = (error: unknown) => settle(fail(error))
 
   return { operation, resolve, reject }
 }

@@ -1,7 +1,8 @@
-import { isPromise, type AnyType, type Writable } from 'std:shared'
+import { isPromise } from 'std:shared'
+import type { AnyType, Writable } from 'std:shared'
 
-import type { Impl } from '../types/impl'
 import { RESULT_SUCCESS } from '../const'
+import type { Impl } from '../types/impl'
 import type { Success } from '../types/result'
 
 export const succeed: Impl.Succeed = (...args: AnyType[]) => {

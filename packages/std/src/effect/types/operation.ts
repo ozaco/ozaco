@@ -1,7 +1,7 @@
 import type { Result } from 'std:result'
+import type { AnyType } from 'std:shared'
 
 import type { Helpers } from './helpers'
-import type { AnyType } from 'std:shared'
 
 export interface Operation<T, E = never> {
   [Symbol.iterator](): Iterator<Helpers.Effect<unknown> | Helpers.FailureOf<E>, T, unknown>

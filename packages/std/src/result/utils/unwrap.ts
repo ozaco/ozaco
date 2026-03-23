@@ -1,7 +1,9 @@
-import { isPromise, type AnyType } from 'std:shared'
+import { isPromise } from 'std:shared'
+import type { AnyType } from 'std:shared'
+
+import type { Impl } from '../types/impl'
 
 import { isFailure, isResult } from './is'
-import type { Impl } from '../types/impl'
 
 export const unwrap: Impl.Unwrap = ((...args: AnyType[]): AnyType => {
   const firstArgument = args[0]
@@ -12,7 +14,9 @@ export const unwrap: Impl.Unwrap = ((...args: AnyType[]): AnyType => {
 
     const apply = (r: AnyType) => {
       if (isFailure(r)) {
-        if (hasDefault) return defaultValue
+        if (hasDefault) {
+          return defaultValue
+        }
 
         throw r
       }
@@ -29,7 +33,9 @@ export const unwrap: Impl.Unwrap = ((...args: AnyType[]): AnyType => {
   return (result: AnyType) => {
     const apply = (r: AnyType) => {
       if (isFailure(r)) {
-        if (hasDefault) return defaultValue
+        if (hasDefault) {
+          return defaultValue
+        }
 
         throw r
       }

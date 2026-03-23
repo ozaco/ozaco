@@ -1,8 +1,10 @@
-import { isSuccess, succeed, unwrap, type Result } from 'std:result'
+import { isSuccess, succeed, unwrap } from 'std:result'
+import type { Result } from 'std:result'
+
+import { createContext } from '../methods/context'
 import type { Operation, Task } from '../types/operation'
 
 import { box } from './box'
-import { createContext } from '../methods/context'
 
 export class TaskGroup {
   tasks = new Set<Task<unknown>>()
@@ -18,10 +20,10 @@ export class TaskGroup {
   *halt(): Operation<void> {
     let total: Result<void, unknown> = succeed()
     while (this.tasks.size > 0) {
-      let tasks = [...this.tasks].toReversed()
+      const tasks = [...this.tasks].toReversed()
       this.tasks.clear()
-      for (let task of tasks) {
-        let result = yield* box(task.halt)
+      for (const task of tasks) {
+        const result = yield* box(task.halt)
         if (!isSuccess(result)) {
           total = result
         }

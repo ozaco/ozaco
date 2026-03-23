@@ -1,3 +1,7 @@
+import { isJust, isSuccess, succeed } from 'std:result'
+import type { AnyType } from 'std:shared'
+
+import { useScope } from '../methods/scope'
 import type { Helpers } from '../types/helpers'
 import type { Operation, Scope, Task } from '../types/operation'
 
@@ -5,10 +9,7 @@ import { createCoroutine } from './coroutine'
 import { Delimiter, DelimiterContext, ErrorContext } from './delimiter'
 import { createFuture } from './future'
 import { createScopeInternal } from './scope-internal'
-import { encapsulate, TaskGroupContext } from './task-group'
-import { useScope } from '../methods/scope'
-import { isJust, isSuccess, succeed } from 'std:result'
-import type { AnyType } from 'std:shared'
+import { TaskGroupContext, encapsulate } from './task-group'
 
 export interface TaskOptions<T> {
   owner: Helpers.ScopeInternal
@@ -23,11 +24,11 @@ export interface NewTask<T> {
 }
 
 export const createTask = <T>(options: TaskOptions<T>): NewTask<T> => {
-  let { owner, operation } = options
-  let [scope, destroy] = createScopeInternal(owner)
-  let future = createFuture<T>()
+  const { owner, operation } = options
+  const [scope, destroy] = createScopeInternal(owner)
+  const future = createFuture<T>()
 
-  let task = Object.defineProperties(future.future, {
+  const task = Object.defineProperties(future.future, {
     halt: {
       enumerable: false,
       value() {
@@ -73,13 +74,13 @@ export const createTask = <T>(options: TaskOptions<T>): NewTask<T> => {
     },
   }) as Task<T>
 
-  let top = new Delimiter<T>(() => encapsulate(operation))
+  const top = new Delimiter<T>(() => encapsulate(operation))
   scope.set(DelimiterContext, top as Delimiter<unknown>)
 
-  let group = scope.expect(TaskGroupContext)
+  const group = scope.expect(TaskGroupContext)
   group.add(task)
 
-  let boundary = owner.expect(ErrorContext)
+  const boundary = owner.expect(ErrorContext)
   scope.set(ErrorContext, top)
 
   scope.ensure(function* () {
@@ -87,25 +88,25 @@ export const createTask = <T>(options: TaskOptions<T>): NewTask<T> => {
       yield* top.close()
     } finally {
       group.delete(task)
-      let { outcome } = top
+      const { outcome } = top
       if (isJust(outcome)) {
-        let result = outcome.value
+        const result = outcome.value
         if (isSuccess(result)) {
           future.resolve(result.value)
         } else {
-          let { error } = result
+          const { error } = result
           future.reject(error)
           boundary.raise(error)
         }
       } else {
-        let halted = new Error('halted')
+        const halted = new Error('halted')
         halted.name = 'OperationError'
         future.reject(halted)
       }
     }
   })
 
-  let routine = createCoroutine({
+  const routine = createCoroutine({
     scope,
     *operation() {
       try {
@@ -116,20 +117,20 @@ export const createTask = <T>(options: TaskOptions<T>): NewTask<T> => {
     },
   })
 
-  let start = () => routine.next(succeed())
+  const start = () => routine.next(succeed())
 
   return { scope, routine, task, start }
 }
 
 export function* trap<T>(operation: () => Operation<T>): Operation<T> {
-  let scope = yield* useScope()
+  const scope = yield* useScope()
 
-  let original = {
+  const original = {
     error: scope.expect(ErrorContext),
     delimiter: scope.expect(DelimiterContext),
   }
 
-  let delimiter = new Delimiter(operation, original.delimiter)
+  const delimiter = new Delimiter(operation, original.delimiter)
 
   scope.set(ErrorContext, delimiter)
   scope.set(DelimiterContext, delimiter as Delimiter<unknown>)
@@ -138,7 +139,7 @@ export function* trap<T>(operation: () => Operation<T>): Operation<T> {
   } finally {
     scope.set(ErrorContext, original.error)
     scope.set(DelimiterContext, original.delimiter)
-    let outcome = delimiter.outcome!
+    const outcome = delimiter.outcome!
     // oxlint-disable-next-line no-unsafe-finally
     return (yield {
       description: 'trap return',

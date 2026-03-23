@@ -1,20 +1,22 @@
+import { fail, isSuccess, succeed, unwrap } from 'std:result'
+import type { Result } from 'std:result'
+
+import { withResolvers } from '../methods/with-resolvers'
+import type { Helpers } from '../types/helpers'
 import type { Context, Operation, Scope, Task } from '../types/operation'
 
 import { Children, Priority } from './contexts'
 import { createTask } from './task'
-import { withResolvers } from '../methods/with-resolvers'
-import { fail, isSuccess, succeed, unwrap, type Result } from 'std:result'
-import type { Helpers } from '../types/helpers'
 
 export function createScopeInternal(
   parent?: Scope,
 ): [Helpers.ScopeInternal, () => Operation<void>] {
-  let destructors = new Set<() => Operation<void>>()
+  const destructors = new Set<() => Operation<void>>()
 
-  let contexts: Record<string, unknown> = Object.create(
+  const contexts: Record<string, unknown> = Object.create(
     parent ? (parent as Helpers.ScopeInternal).contexts : null,
   )
-  let scope: Helpers.ScopeInternal = Object.create({
+  const scope: Helpers.ScopeInternal = Object.create({
     [Symbol.toStringTag]: 'Scope',
     contexts,
     get<T>(context: Context<T>): T | undefined {
@@ -24,22 +26,22 @@ export function createScopeInternal(
       return (contexts[context.name] = value)
     },
     expect<T>(context: Context<T>): T {
-      let value = scope.get(context)
-      if (typeof value === 'undefined') {
-        let error = new Error(context.name)
+      const value = scope.get(context)
+      if (value === undefined) {
+        const error = new Error(context.name)
         error.name = 'MissingContextError'
         throw error
       }
       return value
     },
     delete<T>(context: Context<T>): boolean {
-      return delete contexts[context.name]
+      return Reflect.deleteProperty(context, context.name)
     },
     hasOwn<T>(context: Context<T>): boolean {
       return !!Reflect.getOwnPropertyDescriptor(contexts, context.name)
     },
     run<T>(operation: () => Operation<T>): Task<T> {
-      let { task, start } = createTask({ operation, owner: scope })
+      const { task, start } = createTask({ operation, owner: scope })
       start()
       return task
     },
@@ -47,7 +49,7 @@ export function createScopeInternal(
       return {
         // oxlint-disable-next-line require-yield
         *[Symbol.iterator]() {
-          let { task, start } = createTask({ operation, owner: scope })
+          const { task, start } = createTask({ operation, owner: scope })
           start()
           return task
         },
@@ -63,7 +65,8 @@ export function createScopeInternal(
   scope.set(Children, new Set())
   parent?.expect(Children).add(scope)
 
-  let unbind = parent ? (parent as Helpers.ScopeInternal).ensure(destroy) : () => {}
+  // oxlint-disable-next-line no-use-before-define
+  const unbind = parent ? (parent as Helpers.ScopeInternal).ensure(destroy) : () => {}
 
   let destruction: Helpers.WithResolvers<void> | undefined = undefined
 
@@ -76,7 +79,7 @@ export function createScopeInternal(
     unbind()
     let outcome: Result<void, unknown> = succeed()
     try {
-      for (let destructor of destructors) {
+      for (const destructor of destructors) {
         try {
           destructors.delete(destructor)
           yield* destructor()

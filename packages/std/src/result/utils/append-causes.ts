@@ -1,6 +1,8 @@
-import { isPromise, isString, type AnyType } from 'std:shared'
+import { isPromise, isString } from 'std:shared'
+import type { AnyType } from 'std:shared'
 
 import type { Impl } from '../types/impl'
+
 import { isFailure, isResult } from './is'
 
 export const appendCauses: Impl.AppendCauses = (firstArgument, ...causes): AnyType => {

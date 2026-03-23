@@ -2,15 +2,89 @@
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "categories": {
     "correctness": "error",
-    "suspicious": "warn",
-    "perf": "warn"
+    "perf": "error",
+    "restriction": "error",
+    "suspicious": "error",
+    "pedantic": "error",
+    "style": "error"
   },
   "plugins": ["unicorn", "typescript", "oxc", "import", "jsx-a11y", "react-perf", "promise"],
   "rules": {
     "no-unused-vars": "error",
+    "no-empty-object-type": "error",
+    "max-lines-per-function": "off",
+    "oxc/no-optional-chaining": "off",
+    "oxc/no-barrel-file": "off",
+
     "unicorn/no-array-for-each": "warn",
+    "unicorn/no-this-assignment": "off",
+    "unicorn/no-array-reduce": "off",
+    "unicorn/prefer-spread": "off",
+    "unicorn/prefer-at": "off",
+    "unicorn/no-useless-undefined": "off",
+    "unicorn/no-null": "off",
+
+    "eslint/id-length": "off",
+    "eslint/sort-keys": "off",
+    "eslint/no-undefined": "off",
+    "eslint/no-ternary": "off",
+    "eslint/max-classes-per-file": "off",
+    "eslint/max-statements": "off",
+    "eslint/prefer-destructuring": "off",
+    "eslint/max-depth": "off",
+    "eslint/no-magic-numbers": "off",
+    "eslint/no-warning-comments": "off",
+    "eslint/func-names": "off",
+    "eslint/no-empty-function": "off",
+    "eslint/func-style": "off",
+    "eslint/no-console": "off",
+    "eslint/no-plusplus": "off",
+    // "eslint/func-style": ["error", "expression"],
+    "eslint/capitalized-comments": "off",
+    "eslint/no-continue": "off",
+    "eslint/no-implicit-coercion": "off",
+    "eslint/sort-imports": "off",
+    "eslint/no-void": "off",
+    "eslint/no-duplicate-imports": [
+      "error",
+      {
+        "allowSeparateTypeImports": true
+      }
+    ],
+    "eslint/no-cycle": "off",
+    "eslint/new-cap": "off",
+
+    "typescript/ban-types": "off",
+    "typescript/consistent-type-definitions": "off",
+    "typescript/explicit-function-return-type": "off",
+    "typescript/no-namespace": "off",
+    "typescript/no-empty-interface": "off",
+    "typescript/array-type": "off",
+    "typescript/no-non-null-assertion": "off",
+    "typescript/no-invalid-void-type": "off",
+    "typescript/parameter-properties": "off",
+    "typescript/explicit-module-boundary-types": "off",
+    "typescript/unified-signatures": "off",
     "typescript/no-explicit-any": "error",
-    "no-empty-object-type": "error"
+
+    "promise/spec-only": "off",
+    "promise/avoid-new": "off",
+    "promise/prefer-await-to-then": "off",
+    "promise/prefer-await-to-callbacks": "off",
+    "promise/catch-or-return": "off",
+    "promise/prefer-catch": "off",
+
+    "import/group-exports": "off",
+    "import/no-named-export": "off",
+    "import/prefer-default-export": "off",
+    "import/no-relative-parent-imports": "off",
+    "import/no-unresolved": ["error", { "commonjs": true, "amd": true }],
+    "import/named": "error",
+    "import/namespace": "error",
+    "import/default": "error",
+    "import/export": "error",
+    "import/consistent-type-specifier-style": ["error", "prefer-top-level"],
+    "import/no-cycle": "off"
   },
   "ignorePatterns": ["dist/**"]
 }

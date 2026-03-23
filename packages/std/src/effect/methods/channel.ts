@@ -1,7 +1,7 @@
 import type { Operation, Stream } from '../types/operation'
 
-import { createSignal } from './signal'
 import { lift } from './lift'
+import { createSignal } from './signal'
 
 export interface Channel<T, TClose> extends Stream<T, TClose> {
   send(message: T): Operation<void>
@@ -9,7 +9,7 @@ export interface Channel<T, TClose> extends Stream<T, TClose> {
 }
 
 export const createChannel = <T, TClose = void>(): Channel<T, TClose> => {
-  let signal = createSignal<T, TClose>()
+  const signal = createSignal<T, TClose>()
 
   return {
     send: lift(signal.send),

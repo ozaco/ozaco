@@ -1,8 +1,10 @@
-import { isPromise, type AnyType } from 'std:shared'
+import { isPromise } from 'std:shared'
+import type { AnyType } from 'std:shared'
 
 import type { Impl } from '../types/impl'
-import { succeed } from './success'
+
 import { isFailure, isResult } from './is'
+import { succeed } from './success'
 
 export const auto: Impl.Auto = (...args: AnyType[]): AnyType => {
   if (args.length === 0) {

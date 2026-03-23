@@ -1,4 +1,5 @@
-import { isPromise, type AnyType, type Writable } from 'std:shared'
+import { isPromise } from 'std:shared'
+import type { AnyType, Writable } from 'std:shared'
 
 import { RESULT_FAILURE } from '../const'
 import type { Impl } from '../types/impl'

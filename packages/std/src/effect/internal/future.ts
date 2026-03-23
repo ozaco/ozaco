@@ -1,25 +1,24 @@
 import { lazyPromiseWithResolvers } from 'std:shared'
 
-import type { Future } from '../types/operation'
-import type { Helpers } from '../types/helpers'
-
 import { withResolvers } from '../methods/with-resolvers'
+import type { Helpers } from '../types/helpers'
+import type { Future } from '../types/operation'
 
 export const createFuture = <T>(): Helpers.FutureWithResolvers<T> => {
-  let promise = lazyPromiseWithResolvers<T>()
-  let operation = withResolvers<T>()
+  const promise = lazyPromiseWithResolvers<T>()
+  const operation = withResolvers<T>()
 
-  let resolve = (value: T) => {
+  const resolve = (value: T) => {
     promise.resolve(value)
     operation.resolve(value)
   }
 
-  let reject = (error: unknown) => {
+  const reject = (error: unknown) => {
     promise.reject(error)
     operation.reject(error)
   }
 
-  let future = Object.defineProperties(promise.promise, {
+  const future = Object.defineProperties(promise.promise, {
     [Symbol.iterator]: {
       enumerable: false,
       value: operation.operation[Symbol.iterator],

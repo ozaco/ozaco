@@ -1,4 +1,6 @@
-import { fail, succeed, type Result } from 'std:result'
+import { fail, succeed } from 'std:result'
+import type { Result } from 'std:result'
+
 import type { Operation } from '../types/operation'
 
 export function* box<T>(op: () => Operation<T>): Operation<Result<T, unknown>> {

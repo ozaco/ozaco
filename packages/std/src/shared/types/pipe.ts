@@ -1,3 +1,5 @@
+// oxlint-disable max-lines
+
 export interface Pipe {
   <A>(a: A): A
   <A, B = never>(a: A, ab: (a: Awaited<A>) => B): B

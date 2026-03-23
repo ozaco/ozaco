@@ -1,4 +1,5 @@
-import { isPromise, type AnyFunction, type AnyType } from 'std:shared'
+import type { AnyFunction, AnyType } from 'std:shared'
+import { isPromise } from 'std:shared'
 
 import type { Pipe } from '../types/pipe'
 

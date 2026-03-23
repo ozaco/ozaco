@@ -1,9 +1,11 @@
-import { isAsyncGenerator, isGenerator, isPromise, pipe, type AnyType } from 'std:shared'
+import { isAsyncGenerator, isGenerator, isPromise, pipe } from 'std:shared'
+import type { AnyType } from 'std:shared'
+
+import type { Impl } from '../types/impl'
 
 import { appendCauses } from './append-causes'
-import type { Impl } from '../types/impl'
-import { fail } from './fail'
 import { auto } from './auto'
+import { fail } from './fail'
 
 export const guard: Impl.Guard = (...args: AnyType[]): AnyType => {
   const firstArgument = args[0]
@@ -25,8 +27,12 @@ export const guard: Impl.Guard = (...args: AnyType[]): AnyType => {
 
       if (isPromise(res)) {
         return pipe(
-          res.then(extract, (err: AnyType) =>
-            fail(err instanceof Error ? err : new Error(String(err)), 'from guard', ...causes),
+          res.then(extract, (error: AnyType) =>
+            fail(
+              error instanceof Error ? error : new Error(String(error)),
+              'from guard',
+              ...causes,
+            ),
           ),
           appendCauses(...causes),
           auto(),
@@ -34,8 +40,12 @@ export const guard: Impl.Guard = (...args: AnyType[]): AnyType => {
       }
 
       return pipe(extract(res), appendCauses(...causes), auto())
-    } catch (err) {
-      return fail(err instanceof Error ? err : new Error(String(err)), 'from guard', ...causes)
+    } catch (error) {
+      return fail(
+        error instanceof Error ? error : new Error(String(error)),
+        'from guard',
+        ...causes,
+      )
     }
   }
 }

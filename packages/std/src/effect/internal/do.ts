@@ -4,10 +4,10 @@ import { isSuccess } from 'std:result'
 import type { Helpers } from '../types/helpers'
 import type { Operation } from '../types/operation'
 
-export const Do = <T>(effect: Helpers.Effect<T>): Operation<T> => ({
+export const doOp = <T>(effect: Helpers.Effect<T>): Operation<T> => ({
   [Symbol.iterator]() {
     let result: Result<T, unknown> | undefined = undefined
-    let perform: Helpers.Effect<T> = {
+    const perform: Helpers.Effect<T> = {
       description: `do <${effect.description}>`,
       enter(resolve, routine) {
         return effect.enter(r => {

@@ -7,7 +7,7 @@ export const ensure = (fn: () => Operation<unknown> | void): Operation<void> =>
     try {
       yield* provide()
     } finally {
-      let result = fn()
+      const result = fn()
       if (result && typeof result[Symbol.iterator] === 'function') {
         yield* result
       }

@@ -1,8 +1,11 @@
+import { fail, isFailure, isSuccess, succeed, unwrap } from 'std:result'
+import type { Result } from 'std:result'
+
 import type { AnyType } from '../types/common'
-import type { StandardSchemaV1 } from '../types/schema'
 import type { MatchBuilder, MatchCase } from '../types/match'
+import type { StandardSchemaV1 } from '../types/schema'
+
 import { isPromise } from './is'
-import { fail, isFailure, isSuccess, succeed, unwrap, type Result } from 'std:result'
 
 const validateSchema = (
   schema: StandardSchemaV1,
@@ -36,6 +39,7 @@ const createBuilder = <Input, Remaining, Output>(
         return succeed(c.handler(value))
       }
     }
+
     return fail(null)
   }
 
@@ -70,11 +74,10 @@ const createBuilder = <Input, Remaining, Output>(
 
     run() {
       const result = execute()
-      return isSuccess(result) ? result.value : null
+      return isSuccess(result) ? result.value : undefined
     },
   } as AnyType
 }
 
-export const match = <const T>(value: T) => {
-  return createBuilder(value, []) as unknown as MatchBuilder<T, T, never>
-}
+export const match = <const T>(value: T) =>
+  createBuilder(value, []) as unknown as MatchBuilder<T, T, never>

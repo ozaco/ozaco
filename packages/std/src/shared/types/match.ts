@@ -1,8 +1,7 @@
 import type { Failure } from 'std:result'
-import type { GuardValue } from './common'
-import type { StandardSchemaV1 } from './schema'
 
-import type { AnyType } from './common'
+import type { GuardValue, AnyType } from './common'
+import type { StandardSchemaV1 } from './schema'
 
 export type MatchCase = {
   handler: (value: AnyType) => AnyType

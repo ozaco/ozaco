@@ -1,20 +1,21 @@
 import type { Result } from 'std:result'
 import { fail, isSuccess, succeed } from 'std:result'
-import { type PromiseWithResolvers } from 'std:shared'
+import type { PromiseWithResolvers } from 'std:shared'
 
 export const lazyPromise = <T, E>(
   resolver: (resolve: (value: T) => void, reject: (error: E) => void) => void,
 ): Promise<T> => {
   let _promise: Promise<T> | undefined = undefined
 
-  let reify = async () => {
+  // oxlint-disable-next-line oxc/no-async-await
+  const reify = async () => {
     if (!_promise) {
       _promise = new Promise<T>(resolver)
     }
     return await _promise
   }
 
-  let promise: Promise<T> = Object.create(Promise.prototype, {
+  const promise: Promise<T> = Object.create(Promise.prototype, {
     // oxlint-disable-next-line unicorn/no-thenable
     then: {
       enumerable: false,
@@ -42,12 +43,12 @@ export const lazyPromiseWithResolvers = <T>(): PromiseWithResolvers<T> => {
     }
   }
 
-  let resolve = ((value: T) =>
+  const resolve = ((value: T) =>
     settle(succeed(value) as Result<T, never>)) as PromiseWithResolvers<T>['resolve']
-  let reject = (error: unknown) => settle(fail(error))
+  const reject = (error: unknown) => settle(fail(error))
 
-  let promise = lazyPromise<T, unknown>(($resolve, $reject) => {
-    let record = ($result: Result<T, unknown>) => {
+  const promise = lazyPromise<T, unknown>(($resolve, $reject) => {
+    const record = ($result: Result<T, unknown>) => {
       if (isSuccess($result)) {
         $resolve($result.value)
       } else {

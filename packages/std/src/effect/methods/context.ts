@@ -1,25 +1,47 @@
-import { succeed, type Result } from 'std:result'
+import { succeed } from 'std:result'
+import type { Result } from 'std:result'
 
+import { doOp } from '../internal/do'
 import type { Helpers } from '../types/helpers'
 import type { Context, Operation, Scope } from '../types/operation'
 
-import { Do } from '../internal/do'
+const useScope = <T>(fn: (scope: Scope) => T, description: string): Helpers.Effect<T> => ({
+  description,
+  enter: (rootResolve, { scope }) => {
+    rootResolve(succeed(fn(scope)) as Result<T, never>)
+    return resolve => {
+      resolve(succeed())
+    }
+  },
+})
+
+const getContext = <T>(context: Context<T>) =>
+  useScope(scope => scope.get(context), `get(${context.name})`)
+
+const setContext = <T>(context: Context<T>, value: T) =>
+  useScope(scope => scope.set(context, value), `set(${context.name}, ${value})`)
+
+const expectContext = <T>(context: Context<T>) =>
+  useScope(scope => scope.expect(context), `expect(${context.name})`)
+
+const deleteContext = <T>(context: Context<T>) =>
+  useScope(scope => scope.delete(context), `delete(${context.name})`)
 
 export const createContext = <T>(name: string, defaultValue?: T): Context<T> => {
-  let context = {
+  const context = {
     name,
     defaultValue,
-    get: () => Do(Get(context)),
-    set: (value: T) => Do(Set(context, value)),
-    expect: () => Do(Expect(context)),
-    delete: () => Do(Delete(context)),
+    get: () => doOp(getContext(context)),
+    set: (value: T) => doOp(setContext(context, value)),
+    expect: () => doOp(expectContext(context)),
+    delete: () => doOp(deleteContext(context)),
     *with<R>(value: T, operation: (value: T) => Operation<R>): Operation<R> {
-      let scope = yield* Do(UseScope(target => target, 'useScope()'))
-      let original = scope.hasOwn(context) ? scope.get(context) : undefined
+      const scope = yield* doOp(useScope(target => target, 'useScope()'))
+      const original = scope.hasOwn(context) ? scope.get(context) : undefined
       try {
         return yield* operation(scope.set(context, value))
       } finally {
-        if (typeof original === 'undefined') {
+        if (original === undefined) {
           scope.delete(context)
         } else {
           scope.set(context, original)
@@ -30,25 +52,3 @@ export const createContext = <T>(name: string, defaultValue?: T): Context<T> => 
 
   return context
 }
-
-const Get = <T>(context: Context<T>) =>
-  UseScope(scope => scope.get(context), `get(${context.name})`)
-
-const Set = <T>(context: Context<T>, value: T) =>
-  UseScope(scope => scope.set(context, value), `set(${context.name}, ${value})`)
-
-const Expect = <T>(context: Context<T>) =>
-  UseScope(scope => scope.expect(context), `expect(${context.name})`)
-
-const Delete = <T>(context: Context<T>) =>
-  UseScope(scope => scope.delete(context), `delete(${context.name})`)
-
-const UseScope = <T>(fn: (scope: Scope) => T, description: string): Helpers.Effect<T> => ({
-  description,
-  enter: (rootResolve, { scope }) => {
-    rootResolve(succeed(fn(scope)) as Result<T, never>)
-    return resolve => {
-      resolve(succeed())
-    }
-  },
-})

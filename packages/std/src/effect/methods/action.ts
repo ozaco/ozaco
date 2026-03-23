@@ -1,19 +1,21 @@
-import { fail, succeed, type Result } from 'std:result'
+import { fail, succeed } from 'std:result'
+import type { Result } from 'std:result'
+
 import type { Helpers } from '../types/helpers'
 import type { Operation } from '../types/operation'
 
 export const action = <T>(executor: Helpers.Executor<T>, desc?: string): Operation<T> => ({
   *[Symbol.iterator]() {
-    let effect: Helpers.Effect<T> = {
+    const effect: Helpers.Effect<T> = {
       description: desc ?? 'action',
       enter: settle => {
-        let resolve = (value: T) => {
+        const resolve = (value: T) => {
           settle(succeed<T>(value) as Result<T, never>)
         }
-        let reject = (error: unknown) => {
+        const reject = (error: unknown) => {
           settle(fail(error))
         }
-        let discard = executor(resolve, reject)
+        const discard = executor(resolve, reject)
         return discarded => {
           try {
             discard()

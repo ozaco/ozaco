@@ -1,8 +1,8 @@
 import type { AnyType, IsPromiseStrict } from 'std:shared'
 
 import type { Helpers } from './helpers'
-import type { Failure, Result, ResultAsync, ResultBoth, ResultFor } from './result'
 import type { Maybe } from './maybe'
+import type { Failure, Result, ResultAsync, ResultBoth, ResultFor } from './result'
 
 export namespace Impl {
   export interface Succeed {

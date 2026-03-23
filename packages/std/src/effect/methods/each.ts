@@ -1,3 +1,5 @@
+// oxlint-disable import/exports-last
+
 import type { Helpers } from '../types/helpers'
 import type { Operation, Stream } from '../types/operation'
 
@@ -6,24 +8,26 @@ import { useScope } from './scope'
 import { spawn } from './spawn'
 import { withResolvers } from './with-resolvers'
 
+const EachStack = createContext<Helpers.EachLoop<unknown>[]>('each')
+
 export function each<T>(stream: Stream<T, unknown>): Operation<Iterable<T>> {
   return {
     *[Symbol.iterator]() {
-      let scope = yield* useScope()
+      const scope = yield* useScope()
       if (!scope.hasOwn(EachStack)) {
         scope.set(EachStack, [])
       }
 
-      let done = withResolvers<void>()
-      let cxt = withResolvers<Helpers.EachLoop<T>>()
+      const done = withResolvers<void>()
+      const cxt = withResolvers<Helpers.EachLoop<T>>()
 
       yield* spawn(function* () {
-        let subscription = yield* stream
-        let current = yield* subscription.next()
+        const subscription = yield* stream
+        const current = yield* subscription.next()
 
-        let stack = scope.expect(EachStack)
+        const stack = scope.expect(EachStack)
 
-        let context: Helpers.EachLoop<T> = {
+        const context: Helpers.EachLoop<T> = {
           subscription,
           current,
           finish() {
@@ -40,13 +44,13 @@ export function each<T>(stream: Stream<T, unknown>): Operation<Iterable<T>> {
         yield* done.operation
       })
 
-      let context = yield* cxt.operation
+      const context = yield* cxt.operation
 
       return {
         [Symbol.iterator]: () => ({
           next() {
             if (context.stale) {
-              let error = new Error(
+              const error = new Error(
                 'for each loop did not use each.next() operation before continuing',
               )
               error.name = 'IterationError'
@@ -69,14 +73,14 @@ each.next = function next(): Operation<void> {
   return {
     name: 'each.next()',
     *[Symbol.iterator]() {
-      let stack = yield* EachStack.expect()
-      let context = stack[stack.length - 1]
+      const stack = yield* EachStack.expect()
+      const context = stack[stack.length - 1]
       if (!context) {
-        let error = new Error('cannot call next() outside of an iteration')
+        const error = new Error('cannot call next() outside of an iteration')
         error.name = 'IterationError'
         throw error
       }
-      let current = yield* context.subscription.next()
+      const current = yield* context.subscription.next()
       delete context.stale
       context.current = current
       if (current.done) {
@@ -85,5 +89,3 @@ each.next = function next(): Operation<void> {
     },
   } as Operation<void>
 }
-
-const EachStack = createContext<Helpers.EachLoop<unknown>[]>('each')

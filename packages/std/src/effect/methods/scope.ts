@@ -1,18 +1,18 @@
 import { succeed } from 'std:result'
-import type { Helpers } from '../types/helpers'
-import type { Future, Operation, Scope } from '../types/operation'
 
 import { createScopeInternal } from '../internal/scope-internal'
+import type { Helpers } from '../types/helpers'
+import type { Future, Operation, Scope } from '../types/operation'
 
 export const global = createScopeInternal()[0] as Scope
 
 export function createScope(
   parent: Scope = global,
 ): Scope & AsyncDisposable & [Scope, () => Future<void>] {
-  let [scope, destroy] = createScopeInternal(parent)
-  let dispose = () => parent.run(destroy)
+  const [scope, destroy] = createScopeInternal(parent)
+  const dispose = () => parent.run(destroy)
 
-  let tuple = [scope, dispose]
+  const tuple = [scope, dispose]
 
   Object.defineProperty(scope, Symbol.iterator, {
     value: tuple[Symbol.iterator].bind(tuple),

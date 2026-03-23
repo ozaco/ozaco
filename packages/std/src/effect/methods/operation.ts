@@ -1,14 +1,17 @@
-import { fail, isFailure, succeed, type Failure, type Result } from 'std:result'
+import { fail, isFailure, succeed } from 'std:result'
+import type { Failure, Result } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import type { Helpers } from '../types/helpers'
 import type { Future } from '../types/operation'
+
 import { run } from './run'
 
-export const operation = <Args extends AnyType[], T, E = never>(
-  fn: (...args: Args) => Generator<Failure<E> | Helpers.Effect<unknown>, T, unknown>,
-): ((...args: Args) => Future<T, E>) => {
-  return (...args) => {
+export const operation =
+  <Args extends AnyType[], T, E = never>(
+    fn: (...args: Args) => Generator<Failure<E> | Helpers.Effect<unknown>, T, unknown>,
+  ): ((...args: Args) => Future<T, E>) =>
+  (...args) => {
     const op = {
       [Symbol.iterator](): Iterator<Helpers.Effect<unknown>, T, unknown> {
         const inner = fn(...args)
@@ -65,4 +68,3 @@ export const operation = <Args extends AnyType[], T, E = never>(
       },
     })
   }
-}

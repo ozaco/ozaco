@@ -1,19 +1,19 @@
+import { succeed } from 'std:result'
+import type { Result } from 'std:result'
+
+import { Priority } from '../internal/contexts'
+import { useCoroutine } from '../internal/coroutine'
+import { createTask, trap } from '../internal/task'
 import type { Helpers } from '../types/helpers'
 import type { Operation } from '../types/operation'
 
-import { useCoroutine } from '../internal/coroutine'
-import { Priority } from '../internal/contexts'
-import { createTask, trap } from '../internal/task'
 import { suspend } from './suspend'
-import { succeed, type Result } from 'std:result'
 
-export interface Provide<T> {
-  (value: T): Operation<void>
-}
+export type Provide<T> = (value: T) => Operation<void>
 
 export const resource = <T>(op: (provide: Provide<T>) => Operation<void>): Operation<T> => ({
   *[Symbol.iterator]() {
-    let caller = yield* useCoroutine()
+    const caller = yield* useCoroutine()
 
     function* provide(value: T): Operation<void> {
       caller.next(succeed(value) as Result<T, never>)
@@ -21,7 +21,7 @@ export const resource = <T>(op: (provide: Provide<T>) => Operation<void>): Opera
     }
 
     return yield* trap<T>(function* () {
-      let { scope, start } = createTask<void>({
+      const { scope, start } = createTask<void>({
         owner: caller.scope as Helpers.ScopeInternal,
         operation: () => op(provide),
       })

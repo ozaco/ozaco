@@ -1,7 +1,7 @@
 import type { Failure, Result } from 'std:result'
+import type { AnyFunction, AnyType } from 'std:shared'
 
 import type { Future, Operation, Scope, Subscription, Yielded } from './operation'
-import type { AnyFunction, AnyType } from 'std:shared'
 
 export namespace Helpers {
   export interface ErrorBoundary {
@@ -18,9 +18,7 @@ export namespace Helpers {
 
   export type FailureOf<E> = [E] extends [never] ? never : Failure<E>
 
-  export interface Resolve<T> {
-    (value: T): void
-  }
+  export type Resolve<T> = (value: T) => void
 
   export interface Effect<T> {
     description: string
@@ -76,7 +74,7 @@ export namespace Helpers {
 
   export type EventList<T> = T extends {
     addEventListener(type: infer P, ...args: AnyType): void
-    addEventListener(type: infer _P2, ...args: AnyType): void
+    addEventListener(type: infer P, ...args: AnyType): void
   }
     ? P & string
     : never
@@ -88,12 +86,10 @@ export namespace Helpers {
     stale?: true
   }
 
-  export interface Callable<
+  export type Callable<
     T extends Operation<unknown> | Promise<unknown> | unknown,
     TArgs extends unknown[] = [],
-  > {
-    (...args: TArgs): T
-  }
+  > = (...args: TArgs) => T
 
   export interface AsyncIterableType<T, TReturn = unknown> {
     [Symbol.asyncIterator](): AsyncIterator<T, TReturn>
@@ -103,9 +99,10 @@ export namespace Helpers {
     -readonly [P in keyof T]: Yielded<T[P]>
   }
 
-  export interface Executor<T> {
-    (resolve: (value: T) => void, reject: (error: unknown) => void): () => void
-  }
+  export type Executor<T> = (
+    resolve: (value: T) => void,
+    reject: (error: unknown) => void,
+  ) => () => void
 
   export interface ScopeInternal extends Scope, AsyncDisposable {
     contexts: Record<string, unknown>

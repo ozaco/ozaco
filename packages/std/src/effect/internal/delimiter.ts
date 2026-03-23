@@ -1,19 +1,12 @@
+import { fail, isFailure, isJust, just, nothing, succeed } from 'std:result'
+import type { Maybe, Result } from 'std:result'
+
+import { createContext } from '../methods/context'
+import { withResolvers } from '../methods/with-resolvers'
 import type { Helpers } from '../types/helpers'
 import type { Operation } from '../types/operation'
 
-import { createContext } from '../methods/context'
 import { useCoroutine } from './coroutine'
-import { withResolvers } from '../methods/with-resolvers'
-import {
-  fail,
-  isFailure,
-  isJust,
-  just,
-  nothing,
-  succeed,
-  type Maybe,
-  type Result,
-} from 'std:result'
 
 export class Delimiter<T> implements Operation<Maybe<Result<T, unknown>>>, Helpers.ErrorBoundary {
   level = 0
@@ -29,7 +22,7 @@ export class Delimiter<T> implements Operation<Maybe<Result<T, unknown>>>, Helpe
   ) {}
 
   raise(error: unknown): void {
-    let failure = just(fail(error))
+    const failure = just(fail(error))
     if (this.finalized) {
       this.parent?.exit(failure)
     } else {
@@ -42,11 +35,11 @@ export class Delimiter<T> implements Operation<Maybe<Result<T, unknown>>>, Helpe
   }
 
   *close(): Operation<void> {
-    let done = this.future.operation
-    let interrupted = !this.computed
+    const done = this.future.operation
+    const interrupted = !this.computed
 
     this.close = function* close() {
-      let outcome = yield* done
+      const outcome = yield* done
       if (interrupted && isJust(outcome) && isFailure(outcome.value)) {
         throw outcome.value.error
       }
@@ -54,10 +47,8 @@ export class Delimiter<T> implements Operation<Maybe<Result<T, unknown>>>, Helpe
     if (!this.outcome) {
       this.interrupt()
       yield* this.close()
-    } else {
-      if (interrupted && isJust(this.outcome) && isFailure(this.outcome.value)) {
-        throw this.outcome.value.error
-      }
+    } else if (interrupted && isJust(this.outcome) && isFailure(this.outcome.value)) {
+      throw this.outcome.value.error
     }
   }
 
@@ -67,16 +58,16 @@ export class Delimiter<T> implements Operation<Maybe<Result<T, unknown>>>, Helpe
     }
     this.outcome = isJust(this.outcome) && isFailure(this.outcome.value) ? this.outcome : outcome
     this.level++
-    if (!this.routine) {
+    if (this.routine) {
+      this.routine.return(succeed(this.outcome))
+    } else {
       this.finalized = true
       this.future.resolve(this.outcome)
-    } else {
-      this.routine.return(succeed(this.outcome))
     }
   }
 
   get validator(): () => boolean {
-    let { level } = this
+    const { level } = this
     return () => !this.finalized && this.level === level
   }
 
@@ -84,7 +75,7 @@ export class Delimiter<T> implements Operation<Maybe<Result<T, unknown>>>, Helpe
     this.routine = yield* useCoroutine()
 
     try {
-      let value = yield* this.operation()
+      const value = yield* this.operation()
       if (this.level === 0) {
         this.computed = true
         this.outcome = just(succeed(value as T) as Result<T, unknown>)

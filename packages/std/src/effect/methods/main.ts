@@ -1,38 +1,59 @@
 import { isSuccess } from 'std:result'
 import type { AnyType } from 'std:shared'
 
+import type { Helpers } from '../types/helpers'
+import type { Operation } from '../types/operation'
+
 import { call } from './call'
 import { callcc } from './callcc'
 import { createContext } from './context'
 import { run } from './run'
 import { useScope } from './scope'
 
-import type { Helpers } from '../types/helpers'
-import type { Operation } from '../types/operation'
+const ExitContext = createContext<(exit: Helpers.Exit) => Operation<void>>('exit')
+
+declare const Deno: AnyType
+
+function* withHost<T>(op: Helpers.HostOperation<T>): Operation<T> {
+  const global = globalThis as Record<string, unknown>
+
+  // oxlint-disable-next-line unicorn/no-typeof-undefined
+  if (typeof global.Deno !== 'undefined') {
+    return yield* op.deno()
+  } else if (
+    // oxlint-disable-next-line unicorn/no-typeof-undefined
+    Object.prototype.toString.call(typeof global.process === 'undefined' ? 0 : global.process) ===
+    '[object process]'
+  ) {
+    return yield* op.node()
+  }
+  return yield* op.browser()
+}
 
 export function* exit(status: number, message?: string): Operation<void> {
-  let escape = yield* ExitContext.expect()
-  let payload: Helpers.Exit = { status }
+  const escape = yield* ExitContext.expect()
+  const payload: Helpers.Exit = { status }
   if (message !== undefined) {
     payload.message = message
   }
   yield* escape(payload)
 }
 
+// oxlint-disable-next-line oxc/no-async-await
 export async function main(body: (args: string[]) => Operation<void>): Promise<void> {
   // oxlint-disable-next-line unicorn/consistent-function-scoping
   let hardexit = (_status: number) => {}
 
-  let result = await run(() =>
+  const result = await run(() =>
     callcc<Helpers.Exit>(function* (resolve) {
       yield* ExitContext.set(resolve)
 
-      let interval = setInterval(() => {}, Math.pow(2, 30))
+      const interval = setInterval(() => {}, 2 ** 30)
 
-      let scope = yield* useScope()
+      const scope = yield* useScope()
 
       try {
-        let interrupt = {
+        const interrupt = {
           SIGINT: () => scope.run(() => resolve({ status: 130, signal: 'SIGINT' })),
           SIGTERM: () => scope.run(() => resolve({ status: 143, signal: 'SIGTERM' })),
         }
@@ -54,9 +75,11 @@ export async function main(body: (args: string[]) => Operation<void>): Promise<v
             }
           },
           *node() {
-            let { default: process } = yield* call<AnyType>(
+            const { default: process } = yield* call<AnyType>(
+              // oxlint-disable-next-line unicorn/new-for-builtins, no-new-func
               () => Function('return import("node:process")')() as Promise<AnyType>,
             )
+            // oxlint-disable-next-line unicorn/no-process-exit
             hardexit = status => process.exit(status)
             try {
               process.on('SIGINT', interrupt.SIGINT)
@@ -111,22 +134,4 @@ export async function main(body: (args: string[]) => Operation<void>): Promise<v
   console.error('unknown error', result)
 
   return hardexit(1)
-}
-
-const ExitContext = createContext<(exit: Helpers.Exit) => Operation<void>>('exit')
-
-declare const Deno: AnyType
-
-function* withHost<T>(op: Helpers.HostOperation<T>): Operation<T> {
-  let global = globalThis as Record<string, unknown>
-
-  if (typeof global.Deno !== 'undefined') {
-    return yield* op.deno()
-  } else if (
-    Object.prototype.toString.call(typeof global.process !== 'undefined' ? global.process : 0) ===
-    '[object process]'
-  ) {
-    return yield* op.node()
-  }
-  return yield* op.browser()
 }

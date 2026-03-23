@@ -1,7 +1,8 @@
 import type { Context, Stream, Subscription } from '../types/operation'
 
 import { createContext } from './context'
-import { createQueue, type Queue } from './queue'
+import { createQueue } from './queue'
+import type { Queue } from './queue'
 import { resource } from './resource'
 
 export interface Signal<T, TClose> extends Stream<T, TClose> {
@@ -15,11 +16,11 @@ export const SignalQueueFactory: Context<typeof createQueue> = createContext(
 )
 
 export const createSignal = <T, TClose = never>(): Signal<T, TClose> => {
-  let subscribers = new Set<Queue<T, TClose>>()
+  const subscribers = new Set<Queue<T, TClose>>()
 
-  let subscribe = resource<Subscription<T, TClose>>(function* (provide) {
-    let newQueue = yield* SignalQueueFactory.expect()
-    let queue = newQueue<T, TClose>()
+  const subscribe = resource<Subscription<T, TClose>>(function* (provide) {
+    const newQueue = yield* SignalQueueFactory.expect()
+    const queue = newQueue<T, TClose>()
     subscribers.add(queue)
 
     try {
@@ -30,16 +31,21 @@ export const createSignal = <T, TClose = never>(): Signal<T, TClose> => {
   })
 
   const send = (value: T) => {
-    for (let queue of subscribers) {
+    for (const queue of subscribers) {
       queue.add(value)
     }
   }
 
   const close = (value: TClose) => {
-    for (let queue of subscribers) {
+    for (const queue of subscribers) {
       queue.close(value)
     }
   }
 
-  return { ...subscribe, send, close }
+  const result = subscribe as Signal<T, TClose>
+
+  result.send = send
+  result.close = close
+
+  return result
 }

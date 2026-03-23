@@ -1,4 +1,5 @@
 import type { AnyType, IsPromise } from 'std:shared'
+
 import type { Result, ResultAsync, ResultBoth } from './result'
 
 export namespace Helpers {

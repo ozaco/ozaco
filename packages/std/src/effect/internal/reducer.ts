@@ -1,42 +1,65 @@
 import { fail, isSuccess } from 'std:result'
 import { PriorityQueue } from 'std:shared'
 
-import type { Helpers } from '../types/helpers'
 import { createContext } from '../methods/context'
+import type { Helpers } from '../types/helpers'
+
+class InstructionQueue extends PriorityQueue<Helpers.Instruction> {
+  enqueue(instruction: Helpers.Instruction): void {
+    const [priority] = instruction
+    this.push(priority, instruction)
+  }
+
+  dequeue(): Helpers.Instruction | undefined {
+    while (true) {
+      const top = this.pop()
+      if (!top) {
+        return undefined
+      }
+      const validate = top[3]
+      if (!validate()) {
+        continue
+      }
+      return top
+    }
+  }
+}
 
 export class Reducer {
   reducing = false
   readonly queue = new InstructionQueue()
 
   reduce = (instruction: Helpers.Instruction) => {
-    let { queue } = this
+    const { queue } = this
 
     queue.enqueue(instruction)
 
-    if (this.reducing) return
+    if (this.reducing) {
+      return
+    }
 
     try {
       this.reducing = true
 
       let item = queue.dequeue()
       while (item) {
-        let [, routine, result, _, method = 'next' as const] = item
+        const [, routine, result, _, method = 'next' as const] = item
         try {
-          let iterator = routine.data.iterator
+          const iterator = routine.data.iterator
           if (isSuccess(result)) {
             if (method === 'next') {
-              let next = iterator.next(result.value)
+              const next = iterator.next(result.value)
               if (!next.done) {
                 routine.data.exit = next.value.enter(routine.next, routine)
               }
             } else if (iterator.return) {
-              let next = iterator.return(result.value)
+              const next = iterator.return(result.value)
               if (!next.done) {
                 routine.data.exit = next.value.enter(routine.next, routine)
               }
             }
           } else if (iterator.throw) {
-            let next = iterator.throw(result.error)
+            const next = iterator.throw(result.error)
             if (!next.done) {
               routine.data.exit = next.value.enter(routine.next, routine)
             }
@@ -50,27 +73,6 @@ export class Reducer {
       }
     } finally {
       this.reducing = false
-    }
-  }
-}
-
-class InstructionQueue extends PriorityQueue<Helpers.Instruction> {
-  enqueue(instruction: Helpers.Instruction): void {
-    let [priority] = instruction
-    this.push(priority, instruction)
-  }
-
-  dequeue(): Helpers.Instruction | undefined {
-    while (true) {
-      let top = this.pop()
-      if (!top) {
-        return undefined
-      }
-      let validate = top[3]
-      if (!validate()) {
-        continue
-      }
-      return top
     }
   }
 }
