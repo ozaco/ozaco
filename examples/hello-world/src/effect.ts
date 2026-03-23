@@ -1,4 +1,4 @@
-import { run, sleep, spawn } from '@ozaco/std/effect'
+import { run, sleep, spawn } from 'std:effect'
 
 const result = await run(function* () {
   // <- parent scope

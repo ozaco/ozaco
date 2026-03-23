@@ -3,7 +3,8 @@ import { defineConfig } from 'tsdown'
 // oxlint-disable-next-line import/no-default-export
 export default defineConfig({
   entry: {
-    index: './src/index.ts',
+    effect: './src/effect.ts',
+    'say-hi': './src/say-hi.ts',
   },
   dts: true,
   fixedExtension: false,

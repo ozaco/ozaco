@@ -8,7 +8,9 @@
     "url": "https://github.com/ozaco/ozaco.git"
   },
   "files": [
-    "dist"
+    "dist",
+    "src",
+    "tsconfig.paths.json"
   ],
   "type": "module",
   "exports": {

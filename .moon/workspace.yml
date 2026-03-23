@@ -5,6 +5,7 @@ projects:
   - packages/*
   - plugins/*
   - experiments/*
+  - examples/*
   - tools/*
   - .
 
