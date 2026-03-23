@@ -15,6 +15,7 @@
     "max-lines-per-function": "off",
     "oxc/no-optional-chaining": "off",
     "oxc/no-barrel-file": "off",
+    "oxc/no-async-await": "off",
 
     "unicorn/no-array-for-each": "warn",
     "unicorn/no-this-assignment": "off",
@@ -23,6 +24,9 @@
     "unicorn/prefer-at": "off",
     "unicorn/no-useless-undefined": "off",
     "unicorn/no-null": "off",
+    "unicorn/new-for-builtins": "off",
+    "unicorn/prefer-global-this": "off",
+    "unicorn/no-nested-ternary": "off",
 
     "eslint/id-length": "off",
     "eslint/sort-keys": "off",
@@ -53,6 +57,10 @@
     ],
     "eslint/no-cycle": "off",
     "eslint/new-cap": "off",
+    "eslint/no-use-before-define": "off",
+    "eslint/no-inline-comments": "off",
+    "eslint/init-declarations": "off",
+    "eslint/no-nested-ternary": "off",
 
     "typescript/ban-types": "off",
     "typescript/consistent-type-definitions": "off",
@@ -84,7 +92,13 @@
     "import/default": "error",
     "import/export": "error",
     "import/consistent-type-specifier-style": ["error", "prefer-top-level"],
-    "import/no-cycle": "off"
+    "import/no-cycle": "off",
+    "import/no-nodejs-modules": "off",
+    "import/no-anonymous-default-export": "off",
+
+    "react-perf/jsx-no-new-object-as-prop": "off",
+    "react-perf/jsx-no-new-function-as-prop": "off",
+    "react-perf/jsx-no-new-array-as-prop": "off"
   },
-  "ignorePatterns": ["dist/**"]
+  "ignorePatterns": ["**/dist/**"]
 }
