@@ -5,14 +5,14 @@ toolchains:
 
 tasks:
   build:
-    command: bunx tsdown
+    command: bun x tsdown
     inputs:
       - src/**/*
       - tsdown.config.ts
     outputs:
       - dist/**/*
   dev:
-    command: bunx tsdown --watch
+    command: bun x tsdown --watch
     inputs:
       - src/**/*
       - tsdown.config.ts
