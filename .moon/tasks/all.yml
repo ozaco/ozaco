@@ -28,19 +28,19 @@ tasks:
     options:
       affectedFiles: true
       runInCI: true
-    script: bunx oxfmt --check && bunx oxlint
+    script: oxfmt --check && oxlint
     toolchains: bun
   apply:
     options:
       affectedFiles: true
       runInCI: false
-    script: bunx oxfmt && bunx oxlint --fix
+    script: oxfmt && oxlint --fix
     toolchains: bun
   apply-unsafe:
     options:
       affectedFiles: true
       runInCI: false
-    script: bunx oxfmt && bunx oxlint --fix-dangerously
+    script: oxfmt && oxlint --fix-dangerously
     toolchains: bun
   clean:
     options:
