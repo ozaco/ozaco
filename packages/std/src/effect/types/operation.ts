@@ -1,5 +1,4 @@
 import type { Result } from 'std:result'
-import type { AnyType } from 'std:shared'
 
 import type { Helpers } from './helpers'
 
@@ -40,9 +39,3 @@ export interface Scope {
   delete<T>(context: Context<T>): boolean
   hasOwn<T>(context: Context<T>): boolean
 }
-
-export type Yielded<T extends Operation<unknown, AnyType>> =
-  T extends Operation<infer TYield, AnyType> ? TYield : never
-
-export type YieldedError<T extends Operation<unknown, AnyType>> =
-  T extends Operation<AnyType, infer TError> ? TError : never

@@ -1,13 +1,16 @@
+import { fail } from 'std:result'
+import type { AnyType } from 'std:shared'
+
 import { trap } from '../internal/task'
 import type { Helpers } from '../types/helpers'
 import type { Operation, Task } from '../types/operation'
 
 import { spawn } from './spawn'
 
-export function* all<T extends readonly Operation<unknown>[] | []>(
+export function* all<T extends readonly Operation<unknown, AnyType>[] | []>(
   ops: T,
-): Operation<Helpers.All<T>> {
-  const tasks: Task<unknown>[] = []
+): Operation<Helpers.All<T>, Helpers.YieldedError<T[number]>> {
+  const tasks: Task<unknown, unknown>[] = []
   try {
     return yield* trap(function* (): Operation<Helpers.All<T>> {
       for (const operation of ops) {
@@ -16,7 +19,7 @@ export function* all<T extends readonly Operation<unknown>[] | []>(
       }
       const results: unknown[] = []
       for (const task of tasks) {
-        const result = yield* task
+        const result = yield* task as AnyType
         results.push(result)
       }
       return results as Helpers.All<T>
@@ -25,6 +28,6 @@ export function* all<T extends readonly Operation<unknown>[] | []>(
     for (const task of tasks) {
       yield* task.halt()
     }
-    throw error
+    return fail(error) as Helpers.YieldedError<T[number]>
   }
 }

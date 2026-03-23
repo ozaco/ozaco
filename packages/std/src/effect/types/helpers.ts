@@ -1,9 +1,15 @@
 import type { Failure, Result } from 'std:result'
 import type { AnyFunction, AnyType } from 'std:shared'
 
-import type { Future, Operation, Scope, Subscription, Yielded } from './operation'
+import type { Future, Operation, Scope, Subscription } from './operation'
 
 export namespace Helpers {
+  export type Yielded<T extends Operation<unknown, AnyType>> =
+    T extends Operation<infer TYield, AnyType> ? TYield : never
+
+  export type YieldedError<T extends Operation<unknown, AnyType>> =
+    T extends Operation<AnyType, infer TError> ? TError : never
+
   export interface ErrorBoundary {
     raise(error: unknown): void
   }
@@ -95,7 +101,7 @@ export namespace Helpers {
     [Symbol.asyncIterator](): AsyncIterator<T, TReturn>
   }
 
-  export type All<T extends readonly Operation<unknown>[] | []> = {
+  export type All<T extends readonly Operation<unknown, unknown>[] | []> = {
     -readonly [P in keyof T]: Yielded<T[P]>
   }
 
