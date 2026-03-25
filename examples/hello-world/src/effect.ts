@@ -1,5 +1,6 @@
-import { operation, race, run, sleep, spawn } from 'std:effect'
+import { all, operation, run, sleep, spawn } from 'std:effect'
 import { fail } from 'std:result'
+import { filter, pipe } from 'std:shared'
 
 const result = await run(function* () {
   // <- parent scope
@@ -32,9 +33,14 @@ const sleepAndReturn = operation(function* <T>(value: T, ms: number) {
 })
 
 const result2 = await run(function* () {
-  const raced = yield* race([sleepAndReturn('alice', 100), sleepAndReturn('asuna', 200)])
+  const allUers = yield* all([sleepAndReturn('alice', 100), sleepAndReturn('asuna', 75)])
 
-  return raced
+  const filtered = pipe(
+    allUers,
+    filter(value => value.includes('l')),
+  )
+
+  return filtered
 })
 
 console.log(result2, 'here')

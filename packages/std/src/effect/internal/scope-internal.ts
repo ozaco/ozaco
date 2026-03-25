@@ -1,5 +1,5 @@
-import { fail, isSuccess, succeed, unwrap } from 'std:result'
 import type { Result } from 'std:result'
+import { fail, isSuccess, succeed, unwrap } from 'std:result'
 
 import { withResolvers } from '../methods/with-resolvers'
 import type { Helpers } from '../types/helpers'
@@ -65,7 +65,6 @@ export function createScopeInternal(
   scope.set(Children, new Set())
   parent?.expect(Children).add(scope)
 
-  // oxlint-disable-next-line no-use-before-define
   const unbind = parent ? (parent as Helpers.ScopeInternal).ensure(destroy) : () => {}
 
   let destruction: Helpers.WithResolvers<void> | undefined = undefined

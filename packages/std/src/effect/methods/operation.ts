@@ -1,4 +1,4 @@
-import { fail, isFailure, succeed } from 'std:result'
+import { isFailure } from 'std:result'
 import type { Failure, Result } from 'std:result'
 import type { AnyType } from 'std:shared'
 
@@ -44,11 +44,7 @@ export const operation =
       },
     } as Future<T, E>
 
-    const settled = () =>
-      run(() => op).then(
-        value => succeed(value) as Result<T, E>,
-        error => fail(error) as Result<T, E>,
-      )
+    const settled = () => run(() => op) as Promise<Result<T, E>>
 
     // yield* uses [Symbol.iterator] → runs through effect
     // await uses .then() → settles into Result<T, E>

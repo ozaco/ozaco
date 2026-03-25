@@ -1,4 +1,3 @@
-import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import { trap } from '../internal/task'
@@ -28,6 +27,6 @@ export function* all<T extends readonly Operation<unknown, AnyType>[] | []>(
     for (const task of tasks) {
       yield* task.halt()
     }
-    return fail(error) as Helpers.YieldedError<T[number]>
+    throw error
   }
 }
