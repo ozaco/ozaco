@@ -95,6 +95,7 @@
     "import/no-cycle": "off",
     "import/no-nodejs-modules": "off",
     "import/no-anonymous-default-export": "off",
+    "import/max-dependencies": "off",
 
     "react-perf/jsx-no-new-object-as-prop": "off",
     "react-perf/jsx-no-new-function-as-prop": "off",

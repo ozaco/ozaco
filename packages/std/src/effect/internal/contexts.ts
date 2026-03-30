@@ -2,8 +2,22 @@ import { createContext } from '../methods/context'
 import type { Helpers } from '../types/helpers'
 import type { Scope } from '../types/operation'
 
+import type { Delimiter } from './delimiter'
+import { Reducer } from './reducer'
+import { TaskGroup } from './task-group'
+
 export const Routine = createContext<Helpers.Coroutine<unknown>>('std:effect:coroutine')
 
 export const Priority = createContext<number>('std:effect:scope.generation', 0)
 
 export const Children = createContext<Set<Scope>>('std:effect:scope.children')
+
+export const DelimiterContext = createContext<Delimiter<unknown>>('std:effect:delimiter')
+
+export const ErrorContext = createContext<Helpers.ErrorBoundary>('std:effect:boundary', {
+  raise: () => {},
+})
+
+export const ReducerContext = createContext<Reducer>('std:effect:reducer', new Reducer())
+
+export const TaskGroupContext = createContext<TaskGroup>('std:effect:task-group', new TaskGroup())

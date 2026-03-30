@@ -5,11 +5,12 @@ import { useScope } from '../methods/scope'
 import type { Helpers } from '../types/helpers'
 import type { Operation, Scope, Task } from '../types/operation'
 
+import { DelimiterContext, ErrorContext, TaskGroupContext } from './contexts'
 import { createCoroutine } from './coroutine'
-import { Delimiter, DelimiterContext, ErrorContext } from './delimiter'
+import { Delimiter } from './delimiter'
 import { createFuture } from './future'
 import { createScopeInternal } from './scope-internal'
-import { TaskGroupContext, encapsulate } from './task-group'
+import { encapsulate } from './task-group'
 
 export interface TaskOptions<T> {
   owner: Helpers.ScopeInternal
@@ -141,9 +142,8 @@ export function* trap<T>(operation: () => Operation<T>): Operation<T> {
     scope.set(DelimiterContext, original.delimiter)
     const outcome = delimiter.outcome!
     // oxlint-disable-next-line no-unsafe-finally
-    return (yield {
-      description: 'trap return',
-      enter(resolve) {
+    return (yield [
+      resolve => {
         if (isJust(outcome)) {
           resolve(outcome.value)
         } else {
@@ -151,6 +151,7 @@ export function* trap<T>(operation: () => Operation<T>): Operation<T> {
         }
         return (didExit: Helpers.Resolve<unknown>) => didExit(succeed())
       },
-    } as Helpers.Effect<T>) as T
+      'trap return',
+    ] as Helpers.Effect<T>) as T
   }
 }

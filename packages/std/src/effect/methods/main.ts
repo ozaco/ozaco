@@ -39,7 +39,6 @@ export function* exit(status: number, message?: string): Operation<void> {
   yield* escape(payload)
 }
 
-// oxlint-disable-next-line oxc/no-async-await
 export async function main(body: (args: string[]) => Operation<void>): Promise<void> {
   // oxlint-disable-next-line unicorn/consistent-function-scoping
   let hardexit = (_status: number) => {}
@@ -76,7 +75,7 @@ export async function main(body: (args: string[]) => Operation<void>): Promise<v
           },
           *node() {
             const { default: process } = yield* call<AnyType>(
-              // oxlint-disable-next-line unicorn/new-for-builtins, no-new-func
+              // oxlint-disable-next-line no-new-func
               () => Function('return import("node:process")')() as Promise<AnyType>,
             )
             // oxlint-disable-next-line unicorn/no-process-exit

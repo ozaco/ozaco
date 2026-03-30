@@ -3,10 +3,10 @@ import { fail, succeed } from 'std:result'
 
 import type { Operation } from '../types/operation'
 
-export function* box<T>(op: () => Operation<T>): Operation<Result<T, unknown>> {
+export function* box<T, E = unknown>(op: () => Operation<T, E>): Operation<Result<T, E>> {
   try {
-    return succeed(yield* op()) as Result<T, unknown>
+    return succeed(yield* op() as Operation<T>) as Result<T, E>
   } catch (error) {
-    return fail(error)
+    return fail(error) as Result<T, E>
   }
 }

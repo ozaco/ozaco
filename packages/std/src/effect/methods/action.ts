@@ -1,14 +1,13 @@
-import { fail, succeed } from 'std:result'
 import type { Result } from 'std:result'
+import { fail, succeed } from 'std:result'
 
 import type { Helpers } from '../types/helpers'
 import type { Operation } from '../types/operation'
 
 export const action = <T>(executor: Helpers.Executor<T>, desc?: string): Operation<T> => ({
   *[Symbol.iterator]() {
-    const effect: Helpers.Effect<T> = {
-      description: desc ?? 'action',
-      enter: settle => {
+    const effect: Helpers.Effect<T> = [
+      settle => {
         const resolve = (value: T) => {
           settle(succeed<T>(value) as Result<T, never>)
         }
@@ -25,7 +24,9 @@ export const action = <T>(executor: Helpers.Executor<T>, desc?: string): Operati
           }
         }
       },
-    }
+      desc ?? 'action',
+    ]
+
     return (yield effect) as T
   },
 })

@@ -1,12 +1,10 @@
-import { isSuccess, succeed } from 'std:result'
 import type { Result } from 'std:result'
+import { isSuccess, succeed } from 'std:result'
 
 import type { Helpers } from '../types/helpers'
 import type { Operation } from '../types/operation'
 
-import { Priority } from './contexts'
-import { DelimiterContext } from './delimiter'
-import { ReducerContext } from './reducer'
+import { DelimiterContext, Priority, ReducerContext } from './contexts'
 
 export const createCoroutine = <T>({
   operation,
@@ -60,11 +58,11 @@ export const createCoroutine = <T>({
 }
 
 export function* useCoroutine(): Operation<Helpers.Coroutine> {
-  return (yield {
-    description: 'useCoroutine()',
-    enter: (resolve, routine) => {
+  return (yield [
+    (resolve, routine) => {
       resolve(succeed(routine))
       return uninstalled => uninstalled(succeed())
     },
-  } as Helpers.Effect<Helpers.Coroutine>) as Helpers.Coroutine
+    'useCoroutine()',
+  ] as Helpers.Effect<Helpers.Coroutine>) as Helpers.Coroutine
 }

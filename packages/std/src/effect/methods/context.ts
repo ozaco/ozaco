@@ -1,19 +1,19 @@
-import { succeed } from 'std:result'
 import type { Result } from 'std:result'
+import { succeed } from 'std:result'
 
 import { doOp } from '../internal/do'
 import type { Helpers } from '../types/helpers'
 import type { Context, Operation, Scope } from '../types/operation'
 
-const useScope = <T>(fn: (scope: Scope) => T, description: string): Helpers.Effect<T> => ({
-  description,
-  enter: (rootResolve, { scope }) => {
+const useScope = <T>(fn: (scope: Scope) => T, cause: string): Helpers.Effect<T> => [
+  (rootResolve, { scope }) => {
     rootResolve(succeed(fn(scope)) as Result<T, never>)
     return resolve => {
       resolve(succeed())
     }
   },
-})
+  cause,
+]
 
 const getContext = <T>(context: Context<T>) =>
   useScope(scope => scope.get(context), `get(${context.name})`)

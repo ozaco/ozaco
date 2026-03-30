@@ -7,14 +7,13 @@ import type { Operation } from '../types/operation'
 export const doOp = <T>(effect: Helpers.Effect<T>): Operation<T> => ({
   [Symbol.iterator]() {
     let result: Result<T, unknown> | undefined = undefined
-    const perform: Helpers.Effect<T> = {
-      description: `do <${effect.description}>`,
-      enter(resolve, routine) {
-        return effect.enter(r => {
+    const perform: Helpers.Effect<T> = [
+      (resolve, routine) =>
+        effect[0](r => {
           resolve((result = r))
-        }, routine)
-      },
-    }
+        }, routine),
+      `do <${effect[1]}>`,
+    ]
 
     return {
       next() {

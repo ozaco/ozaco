@@ -26,13 +26,13 @@ export namespace Helpers {
 
   export type Resolve<T> = (value: T) => void
 
-  export interface Effect<T> {
-    description: string
-    enter(
+  export type Effect<T> = [
+    enter: (
       resolve: Helpers.Resolve<Result<T, unknown>>,
       routine: Coroutine,
-    ): (resolve: Helpers.Resolve<Result<void, unknown>>) => void
-  }
+    ) => (resolve: Helpers.Resolve<Result<void, unknown>>) => void,
+    cause: string,
+  ]
 
   export interface Coroutine<T = unknown> {
     scope: Scope

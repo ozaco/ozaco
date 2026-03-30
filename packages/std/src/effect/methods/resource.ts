@@ -1,5 +1,5 @@
-import { succeed } from 'std:result'
 import type { Result } from 'std:result'
+import { succeed } from 'std:result'
 
 import { Priority } from '../internal/contexts'
 import { useCoroutine } from '../internal/coroutine'
@@ -30,10 +30,10 @@ export const resource = <T>(op: (provide: Provide<T>) => Operation<void>): Opera
 
       start()
 
-      return (yield {
-        description: 'await resource',
-        enter: () => (uninstalled: Helpers.Resolve<unknown>) => uninstalled(succeed()),
-      } as Helpers.Effect<T>) as T
+      return (yield [
+        () => (uninstalled: Helpers.Resolve<unknown>) => uninstalled(succeed()),
+        'await resource',
+      ] as Helpers.Effect<T>) as T
     })
   },
 })

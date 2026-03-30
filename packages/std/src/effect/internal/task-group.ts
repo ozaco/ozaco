@@ -1,10 +1,10 @@
-import { isSuccess, succeed, unwrap } from 'std:result'
 import type { Result } from 'std:result'
+import { isSuccess, succeed, unwrap } from 'std:result'
 
-import { createContext } from '../methods/context'
 import type { Operation, Task } from '../types/operation'
 
 import { box } from './box'
+import { TaskGroupContext } from './contexts'
 
 export class TaskGroup {
   tasks = new Set<Task<unknown>>()
@@ -33,8 +33,6 @@ export class TaskGroup {
     unwrap(total)
   }
 }
-
-export const TaskGroupContext = createContext<TaskGroup>('std:effect:task-group', new TaskGroup())
 
 export const encapsulate = <T>(operation: () => Operation<T>): Operation<T> =>
   TaskGroupContext.with(new TaskGroup(), function* (group) {

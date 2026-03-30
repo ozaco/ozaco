@@ -1,7 +1,6 @@
 import { fail, isSuccess } from 'std:result'
 import { PriorityQueue } from 'std:shared'
 
-import { createContext } from '../methods/context'
 import type { Helpers } from '../types/helpers'
 
 class InstructionQueue extends PriorityQueue<Helpers.Instruction> {
@@ -50,18 +49,18 @@ export class Reducer {
             if (method === 'next') {
               const next = iterator.next(result.value)
               if (!next.done) {
-                routine.data.exit = next.value.enter(routine.next, routine)
+                routine.data.exit = next.value[0](routine.next, routine)
               }
             } else if (iterator.return) {
               const next = iterator.return(result.value)
               if (!next.done) {
-                routine.data.exit = next.value.enter(routine.next, routine)
+                routine.data.exit = next.value[0](routine.next, routine)
               }
             }
           } else if (iterator.throw) {
             const next = iterator.throw(result.error)
             if (!next.done) {
-              routine.data.exit = next.value.enter(routine.next, routine)
+              routine.data.exit = next.value[0](routine.next, routine)
             }
           } else {
             throw result.error
@@ -76,5 +75,3 @@ export class Reducer {
     }
   }
 }
-
-export const ReducerContext = createContext<Reducer>('std:effect:reducer', new Reducer())

@@ -1,7 +1,6 @@
-import { fail, isFailure, isJust, just, nothing, succeed } from 'std:result'
 import type { Maybe, Result } from 'std:result'
+import { fail, isFailure, isJust, just, nothing, succeed } from 'std:result'
 
-import { createContext } from '../methods/context'
 import { withResolvers } from '../methods/with-resolvers'
 import type { Helpers } from '../types/helpers'
 import type { Operation } from '../types/operation'
@@ -92,9 +91,3 @@ export class Delimiter<T> implements Operation<Maybe<Result<T, unknown>>>, Helpe
     }
   }
 }
-
-export const DelimiterContext = createContext<Delimiter<unknown>>('std:effect:delimiter')
-
-export const ErrorContext = createContext<Helpers.ErrorBoundary>('std:effect:boundary', {
-  raise: () => {},
-})
