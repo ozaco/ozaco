@@ -1,10 +1,11 @@
 import type { Result } from 'std:result'
-import { fail, isSuccess, succeed, unwrap } from 'std:result'
+import { isSuccess, succeed, unwrap } from 'std:result'
 
 import { withResolvers } from '../methods/with-resolvers'
 import type { Helpers } from '../types/helpers'
 import type { Context, Operation, Scope, Task } from '../types/operation'
 
+import { box } from './box'
 import { Children, Priority } from './contexts'
 import { createTask } from './task'
 
@@ -79,11 +80,10 @@ export function createScopeInternal(
     let outcome: Result<void, unknown> = succeed()
     try {
       for (const destructor of destructors) {
-        try {
-          destructors.delete(destructor)
-          yield* destructor()
-        } catch (error) {
-          outcome = fail(error)
+        destructors.delete(destructor)
+        const result = yield* box(destructor)
+        if (!isSuccess(result)) {
+          outcome = result as Result<void, unknown>
         }
       }
     } finally {

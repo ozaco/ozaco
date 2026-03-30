@@ -1,5 +1,5 @@
-import { fail, succeed } from 'std:result'
 import type { Result } from 'std:result'
+import { fail, succeed } from 'std:result'
 
 import type { Operation } from '../types/operation'
 
