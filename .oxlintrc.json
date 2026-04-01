@@ -55,7 +55,6 @@
         "allowSeparateTypeImports": true
       }
     ],
-    "eslint/no-cycle": "off",
     "eslint/new-cap": "off",
     "eslint/no-use-before-define": "off",
     "eslint/no-inline-comments": "off",
@@ -86,7 +85,6 @@
     "import/no-named-export": "off",
     "import/prefer-default-export": "off",
     "import/no-relative-parent-imports": "off",
-    "import/no-unresolved": ["error", { "commonjs": true, "amd": true }],
     "import/named": "error",
     "import/namespace": "error",
     "import/default": "error",
