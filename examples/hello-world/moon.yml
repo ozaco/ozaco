@@ -15,7 +15,7 @@ tasks:
       - std:build
   run:
     command: bun run src/index.ts
+    options:
+      runInCI: false
     deps:
       - std:build
-  watch:
-    command: bun run src/index.ts --watch
