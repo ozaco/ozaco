@@ -15,24 +15,51 @@
   "type": "module",
   "exports": {
     "./plugin": {
-      "types": "./dist/plugin.d.ts",
-      "source": "./src/plugin/index.ts",
-      "default": "./dist/plugin.js"
+      "import": {
+        "types": "./dist/plugin.d.ts",
+        "default": "./dist/plugin.js"
+      },
+      "require": {
+        "types": "./dist/plugin.d.cts",
+        "default": "./dist/plugin.cjs"
+      },
+      "source": "./src/plugin/index.ts"
     },
     "./effect": {
-      "types": "./dist/effect.d.ts",
-      "source": "./src/effect/index.ts",
-      "default": "./dist/effect.js"
+      "import": {
+        "types": "./dist/effect.d.ts",
+        "default": "./dist/effect.js"
+      },
+      "require": {
+        "types": "./dist/effect.d.cts",
+        "default": "./dist/effect.cjs"
+      },
+      "source": "./src/effect/index.ts"
     },
     "./result": {
-      "types": "./dist/result.d.ts",
-      "source": "./src/result/index.ts",
-      "default": "./dist/result.js"
+      "import": {
+        "types": "./dist/result.d.ts",
+        "default": "./dist/result.js"
+      },
+      "require": {
+        "types": "./dist/result.d.cts",
+        "default": "./dist/result.cjs"
+      },
+      "source": "./src/result/index.ts"
     },
     "./shared": {
-      "types": "./dist/shared.d.ts",
-      "source": "./src/shared/index.ts",
-      "default": "./dist/shared.js"
+      "import": {
+        "types": "./dist/shared.d.ts",
+        "default": "./dist/shared.js"
+      },
+      "require": {
+        "types": "./dist/shared.d.cts",
+        "default": "./dist/shared.cjs"
+      },
+      "source": "./src/shared/index.ts"
     }
+  },
+  "devDependencies": {
+    "tsdown": "catalog:build"
   }
 }

@@ -8,6 +8,7 @@ export default defineConfig({
     effect: './src/effect/index.ts',
     plugin: './src/plugin/index.ts',
   },
+  format: ['esm', 'cjs'],
   dts: true,
   fixedExtension: false,
   clean: true,

@@ -5,14 +5,12 @@ toolchains:
 
 tasks:
   build:
-    command: bun x tsdown -c packages/std/tsdown.config.ts
+    command: bun x tsdown
     inputs:
       - src/**/*
       - tsdown.config.ts
     outputs:
       - dist/**/*
-    options:
-      runFromWorkspaceRoot: true
   run:
     command: bun run src/index.ts
     deps:

@@ -3,7 +3,6 @@ $schema: https://moonrepo.dev/schemas/tasks.json
 implicitInputs:
   - package.json
   - tsconfig.json
-  - tsconfig.base.json
 
 fileGroups:
   configs:
@@ -29,5 +28,5 @@ tasks:
       cache: false
       persistent: false
       runInCI: false
-    script: rm -rf dist && rm -rf .out && rm -rf .tanstack && rm -rf coverage
+    script: rm -rf dist && rm -rf .out && rm -rf .tanstack && rm -rf coverage && rm -rf .ozaco
     preset: server

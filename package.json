@@ -2,9 +2,21 @@
   "name": "ozaco",
   "version": "0.0.0",
   "private": true,
-  "workspaces": [
-    "{packages,plugins,apps,tools,experiments,examples}/**"
-  ],
+  "workspaces": {
+    "packages": [
+      "packages/*",
+      "plugins/*",
+      "apps/*",
+      "tools/*",
+      "experiments/*",
+      "examples/*"
+    ],
+    "catalogs": {
+      "build": {
+        "tsdown": "^0.21.7"
+      }
+    }
+  },
   "type": "module",
   "scripts": {
     "commit": "commit"
@@ -17,7 +29,6 @@
     "@types/node": "^25.5.2",
     "oxfmt": "^0.43.0",
     "oxlint": "^1.58.0",
-    "tsdown": "^0.21.7",
     "typescript": "^6.0.2"
   }
 }
