@@ -15,7 +15,7 @@ vcs:
   defaultBranch: rewrite
   hooks:
     pre-commit:
-      - 'moon run :apply --affected --status=staged'
+      - 'moon run :check'
     commit-msg:
       - 'bunx --no -- commitlint --edit $ARG1'
   sync: true

@@ -6,6 +6,7 @@ export default defineConfig({
     result: './src/result/index.ts',
     shared: './src/shared/index.ts',
     effect: './src/effect/index.ts',
+    plugin: './src/plugin/index.ts',
   },
   dts: true,
   fixedExtension: false,

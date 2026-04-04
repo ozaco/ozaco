@@ -14,6 +14,11 @@
   ],
   "type": "module",
   "exports": {
+    "./plugin": {
+      "types": "./dist/plugin.d.ts",
+      "source": "./src/plugin/index.ts",
+      "default": "./dist/plugin.js"
+    },
     "./effect": {
       "types": "./dist/effect.d.ts",
       "source": "./src/effect/index.ts",
