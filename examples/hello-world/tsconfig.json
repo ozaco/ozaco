@@ -8,5 +8,5 @@
     "emitDeclarationOnly": false,
     "incremental": false
   },
-  "include": ["src"]
+  "include": ["src", "tsdown.config.ts"]
 }
