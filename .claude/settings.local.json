@@ -24,7 +24,8 @@
       "Bash(grep:*)",
       "Bash(xargs cat:*)",
       "Bash(gh issue:*)",
-      "WebFetch(domain:bun.com)"
+      "WebFetch(domain:bun.com)",
+      "WebFetch(domain:docs.npmjs.com)"
     ]
   }
 }
