@@ -24,6 +24,7 @@ jobs:
         with:
           auto-install: true
 
+      - run: 'bun install --frozen-lockfile'
       - run: 'moon run std:build --color'
 
       - run: 'bun publish --access public'
