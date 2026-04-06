@@ -1,4 +1,3 @@
-import type { Result } from 'std:result'
 import { isSuccess, succeed } from 'std:result'
 
 import type { Helpers } from '../types/helpers'
@@ -24,28 +23,26 @@ export const createCoroutine = <T>({
         }
         return iterator
       },
-      exit: (resolve: Helpers.Resolve<Result<unknown, unknown>>) => resolve(succeed()),
+      exit: resolve => resolve(succeed()),
     },
-    next(result: Result<unknown, unknown>) {
-      routine.data.exit((exitResult: Result<unknown, unknown>) => {
-        routine.data.exit = (didExit: Helpers.Resolve<Result<unknown, unknown>>) =>
-          didExit(succeed())
+    next(result) {
+      routine.data.exit(exitResult => {
+        routine.data.exit = didExit => didExit(succeed())
         reducer.reduce([
           scope.expect(Priority),
-          routine as unknown as Helpers.Coroutine<unknown>,
+          routine,
           isSuccess(exitResult) ? result : exitResult,
           scope.expect(DelimiterContext).validator,
           'next',
         ])
       })
     },
-    return(result: Result<unknown, unknown>) {
-      routine.data.exit((exitResult: Result<unknown, unknown>) => {
-        routine.data.exit = (didExit: Helpers.Resolve<Result<unknown, unknown>>) =>
-          didExit(succeed())
+    return(result) {
+      routine.data.exit(exitResult => {
+        routine.data.exit = didExit => didExit(succeed())
         reducer.reduce([
           scope.expect(Priority),
-          routine as unknown as Helpers.Coroutine<unknown>,
+          routine,
           isSuccess(exitResult) ? result : exitResult,
           scope.expect(DelimiterContext).validator,
           'return',

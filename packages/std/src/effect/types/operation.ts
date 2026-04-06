@@ -20,6 +20,11 @@ export interface Subscription<T, TDone> {
 
 export type Stream<T, TReturn> = Operation<Subscription<T, TReturn>>
 
+export interface Signal<T, TClose> extends Stream<T, TClose> {
+  send(value: T): void
+  close(value: TClose): void
+}
+
 export interface Context<T> {
   name: string
   defaultValue?: T

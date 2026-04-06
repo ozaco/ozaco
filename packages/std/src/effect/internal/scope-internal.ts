@@ -1,4 +1,3 @@
-import type { Result } from 'std:result'
 import { isSuccess, succeed, unwrap } from 'std:result'
 
 import { withResolvers } from '../methods/with-resolvers'
@@ -77,13 +76,13 @@ export function createScopeInternal(
     destruction = withResolvers<void>()
     parent?.expect(Children).delete(scope)
     unbind()
-    let outcome: Result<void, unknown> = succeed()
+    let outcome = succeed()
     try {
       for (const destructor of destructors) {
         destructors.delete(destructor)
         const result = yield* box(destructor)
         if (!isSuccess(result)) {
-          outcome = result as Result<void, unknown>
+          outcome = result
         }
       }
     } finally {

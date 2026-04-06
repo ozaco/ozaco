@@ -23,3 +23,9 @@ export type GuardValue<fn> = fn extends ((value: AnyType) => value is infer b)
     : never
 
 export type PromiseWithResolvers<T> = ReturnType<typeof Promise.withResolvers<T>>
+
+export type Primitive = null | undefined | string | number | boolean | symbol | bigint
+
+export type LiteralUnion<LiteralType, BaseType extends Primitive> =
+  | LiteralType
+  | (BaseType & Record<never, never>)

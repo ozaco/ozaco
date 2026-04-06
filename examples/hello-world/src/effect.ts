@@ -1,46 +1,23 @@
-import { operation, race, run, sleep, spawn } from 'std:effect'
-import { fail } from 'std:result'
-import { filter, pipe } from 'std:shared'
+import { each, run, spawn } from 'std:effect'
+import { createEvent, useEvent, useEventOnce } from 'std:event'
 
-const result = await run(function* () {
-  // <- parent scope
+const bus = createEvent<{
+  data: [string, number]
+  error: [Error]
+  close: []
+}>()
+
+await run(function* () {
+  const onDataStream = useEvent(bus, 'data')
+
   yield* spawn(function* () {
-    let i = 0
-
-    while (true) {
-      yield* sleep(10)
-
-      console.log('got value:', i)
-      i++
+    for (const data of yield* each(onDataStream)) {
+      console.log(data, 'here')
     }
   })
 
-  yield* sleep(11)
+  bus.emit('data', 'sa', 10)
+  bus.emit('data', 'sa', 10)
 
-  return 'hey'
+  const a = yield* useEventOnce(bus, 'close')
 })
-
-console.log(result)
-
-const sleepAndReturn = operation(function* <T>(value: T, ms: number) {
-  yield* sleep(ms)
-
-  if (ms > 100) {
-    yield* fail('too-much')
-  }
-
-  return value
-})
-
-const result2 = await run(function* () {
-  const allUers = yield* race([sleepAndReturn('alice', 100), sleepAndReturn('asuna', 75)])
-
-  const filtered = pipe(
-    allUers,
-    filter(value => value.includes('')),
-  )
-
-  return filtered
-})
-
-console.log(result2, 'here')

@@ -1,14 +1,8 @@
 {
   "compilerOptions": {
-    "lib": ["esnext", "dom"],
-    "paths": {
-      "std:shared": ["./src/shared/index.ts"],
-      "std:result": ["./src/result/index.ts"],
-      "std:effect": ["./src/effect/index.ts"],
-      "std:plugin": ["./src/plugin/index.ts"]
-    }
+    "lib": ["esnext", "dom"]
   },
-  "extends": "../../tsconfig.base.json",
+  "extends": ["../../tsconfig.base.json", "./tsconfig.paths.json"],
   "include": ["src", "experimental", "test", "examples", "local", "tsdown.config.ts"],
   "references": []
 }

@@ -149,7 +149,7 @@ export function* trap<T>(operation: () => Operation<T>): Operation<T> {
         } else {
           original.delimiter.interrupt()
         }
-        return (didExit: Helpers.Resolve<unknown>) => didExit(succeed())
+        return didExit => didExit(succeed())
       },
       'trap return',
     ] as Helpers.Effect<T>) as T

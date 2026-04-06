@@ -1,6 +1,5 @@
-import { fail, succeed } from 'std:result'
-import { lazyPromiseWithResolvers } from 'std:shared'
 import type { AnyType } from 'std:shared'
+import { lazyPromiseWithResolvers } from 'std:shared'
 
 import { withResolvers } from '../methods/with-resolvers'
 import type { Helpers } from '../types/helpers'
@@ -11,12 +10,12 @@ export const createFuture = <T>(): Helpers.FutureWithResolvers<T> => {
   const operation = withResolvers<T>()
 
   const resolve = (value: T) => {
-    promise.resolve(succeed(value))
+    promise.resolve(value)
     operation.resolve(value)
   }
 
   const reject = (error: unknown) => {
-    promise.resolve(fail(error))
+    promise.resolve(error)
     operation.reject(error)
   }
 

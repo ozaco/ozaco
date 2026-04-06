@@ -36,6 +36,17 @@
       },
       "source": "./src/effect/index.ts"
     },
+    "./event": {
+      "import": {
+        "types": "./dist/event.d.ts",
+        "default": "./dist/event.js"
+      },
+      "require": {
+        "types": "./dist/event.d.cts",
+        "default": "./dist/event.cjs"
+      },
+      "source": "./src/event/index.ts"
+    },
     "./result": {
       "import": {
         "types": "./dist/result.d.ts",

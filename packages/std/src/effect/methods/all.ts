@@ -11,7 +11,7 @@ export function* all<T extends readonly Operation<unknown, AnyType>[] | []>(
 ): Operation<Helpers.All<T>, Helpers.YieldedError<T[number]>> {
   const tasks: Task<unknown, unknown>[] = []
   try {
-    return yield* trap(function* (): Operation<Helpers.All<T>> {
+    return yield* trap(function* () {
       for (const operation of ops) {
         const member = () => operation
         tasks.push(yield* spawn(member))

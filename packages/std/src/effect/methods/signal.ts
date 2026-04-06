@@ -1,14 +1,9 @@
-import type { Context, Stream, Subscription } from '../types/operation'
+import type { Context, Signal, Subscription } from '../types/operation'
 
 import { createContext } from './context'
-import { createQueue } from './queue'
 import type { Queue } from './queue'
+import { createQueue } from './queue'
 import { resource } from './resource'
-
-export interface Signal<T, TClose> extends Stream<T, TClose> {
-  send(value: T): void
-  close(value: TClose): void
-}
 
 export const SignalQueueFactory: Context<typeof createQueue> = createContext(
   'Signal.createQueue',

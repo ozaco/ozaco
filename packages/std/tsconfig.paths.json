@@ -4,6 +4,7 @@
       "std:shared": ["./src/shared/index.ts", "./dist/shared.d.ts"],
       "std:result": ["./src/result/index.ts", "./dist/result.d.ts"],
       "std:effect": ["./src/effect/index.ts", "./dist/effect.d.ts"],
+      "std:event": ["./src/event/index.ts", "./dist/event.d.ts"],
       "std:plugin": ["./src/plugin/index.ts", "./dist/plugin.d.ts"]
     }
   }

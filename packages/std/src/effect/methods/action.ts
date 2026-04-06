@@ -9,7 +9,7 @@ export const action = <T>(executor: Helpers.Executor<T>, desc?: string): Operati
     const effect: Helpers.Effect<T> = [
       settle => {
         const resolve = (value: T) => {
-          settle(succeed<T>(value) as Result<T, never>)
+          settle(succeed(value) as Result<T, never>)
         }
         const reject = (error: unknown) => {
           settle(fail(error))

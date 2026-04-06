@@ -7,7 +7,6 @@ export const lazyPromise = <T, E>(
 ): Promise<T> => {
   let _promise: Promise<T> | undefined = undefined
 
-  // oxlint-disable-next-line oxc/no-async-await
   const reify = async () => {
     if (!_promise) {
       _promise = new Promise<T>(resolver)
