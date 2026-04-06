@@ -1,5 +1,5 @@
-import { each, run, spawn } from 'std:effect'
-import { createEvent, useEvent, useEventOnce } from 'std:event'
+import { run, sleep, spawn } from 'std:effect'
+import { createEvent, onEvent, useEventOnce } from 'std:event'
 
 const bus = createEvent<{
   data: [string, number]
@@ -7,17 +7,21 @@ const bus = createEvent<{
   close: []
 }>()
 
-await run(function* () {
-  const onDataStream = useEvent(bus, 'data')
-
+run(function* () {
   yield* spawn(function* () {
-    for (const data of yield* each(onDataStream)) {
-      console.log(data, 'here')
-    }
+    // oxlint-disable-next-line require-yield
+    yield* onEvent(bus, 'data', function* (name, age) {
+      console.log(name, age, 'here')
+    })
   })
 
-  bus.emit('data', 'sa', 10)
-  bus.emit('data', 'sa', 10)
+  yield* sleep(0)
+  bus.emit('data', 'alice', 19)
+  bus.emit('data', 'yuuki', 15)
 
-  const a = yield* useEventOnce(bus, 'close')
+  yield* useEventOnce(bus, 'close')
 })
+
+setTimeout(() => {
+  bus.emit('close')
+}, 1000)

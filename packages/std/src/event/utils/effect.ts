@@ -1,5 +1,5 @@
 import type { Operation, Stream, Subscription } from 'std:effect'
-import { createSignal, resource } from 'std:effect'
+import { createSignal, each, resource } from 'std:effect'
 import type { AnyType } from 'std:shared'
 
 import type { EventSource, Helpers } from '../types'
@@ -19,10 +19,28 @@ export function useEvent<
         (yield* signal) as unknown as Subscription<Helpers.InferEventType<T, K>, never>,
       )
     } finally {
-      console.log('closing', name)
       target.off(name as AnyType, handler)
     }
   })
+}
+
+export function onEvent<
+  T extends EventSource<AnyType>,
+  K extends keyof Helpers.InferEventSource<T>,
+>(
+  target: T,
+  name: K,
+  handler: (...args: Helpers.InferEventType<T, K>) => Operation<void>,
+): Operation<void> {
+  return {
+    *[Symbol.iterator]() {
+      const stream = useEvent(target, name)
+      for (const args of yield* each(stream)) {
+        yield* handler(...args)
+        yield* each.next()
+      }
+    },
+  }
 }
 
 export function useEventOnce<

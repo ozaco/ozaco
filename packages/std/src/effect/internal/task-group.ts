@@ -1,5 +1,5 @@
 import type { Result } from 'std:result'
-import { isSuccess, succeed, unwrap } from 'std:result'
+import { isFailure, succeed, unwrap } from 'std:result'
 
 import type { Operation, Task } from '../types/operation'
 
@@ -24,7 +24,7 @@ export class TaskGroup {
       this.tasks.clear()
       for (const task of tasks) {
         const result = yield* box(task.halt)
-        if (!isSuccess(result)) {
+        if (isFailure(result)) {
           total = result
         }
       }

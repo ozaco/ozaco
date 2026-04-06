@@ -24,6 +24,8 @@
     "module": "esnext",
     "moduleDetection": "force",
 
+    "types": ["node", "bun"],
+
     "moduleResolution": "bundler",
     "noEmitOnError": true,
     "noImplicitAny": true,
