@@ -19,7 +19,7 @@ tasks:
     outputs:
       - dist/**/*
   test:
-    command: bun test
+    command: bun test --pass-with-no-tests
     deps:
       - std:build
     inputs:
