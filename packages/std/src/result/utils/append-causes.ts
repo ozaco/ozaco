@@ -3,12 +3,12 @@ import { isPromise, isString } from 'std:shared'
 
 import type { Impl } from '../types/impl'
 
-import { isFailure, isResult } from './is'
+import { isFailure } from './is'
 
 export const appendCauses: Impl.AppendCauses = (firstArgument, ...causes): AnyType => {
   if (!isString(firstArgument) && firstArgument) {
     const apply = (result: AnyType) => {
-      if (isResult(result) && isFailure(result)) {
+      if (isFailure(result)) {
         result.causes.push(...causes)
       }
 
@@ -23,7 +23,7 @@ export const appendCauses: Impl.AppendCauses = (firstArgument, ...causes): AnyTy
   }
 
   const apply = (failure: AnyType) => {
-    if (isResult(failure) && isFailure(failure)) {
+    if (isFailure(failure)) {
       failure.causes.push(firstArgument, ...causes)
     }
 

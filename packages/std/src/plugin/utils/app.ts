@@ -3,9 +3,9 @@ import { isContext } from 'std:effect'
 import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 
-import type { App } from '../types'
+import type { App } from '../types/plugin'
 
-import { isPlugin } from './is'
+import { isNamespace, isPlugin } from './is'
 
 export const createApp = (): App => {
   const store = new Map<Context<unknown>, unknown>()
@@ -20,6 +20,11 @@ export const createApp = (): App => {
     if (isPlugin(target)) {
       if (!store.has(target.context as Context<unknown>)) {
         throw new Error(`Plugin "${target.name}" is not installed`)
+      }
+      return store.get(target.context as Context<unknown>)
+    } else if (isNamespace(target)) {
+      if (!store.has(target.context as Context<unknown>)) {
+        throw new Error(`Namespace "${target.name}" has no installed implementation`)
       }
       return store.get(target.context as Context<unknown>)
     } else if (isContext(target)) {

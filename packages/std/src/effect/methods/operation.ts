@@ -1,5 +1,5 @@
 import type { Failure, Result } from 'std:result'
-import { appendCauses, isFailure } from 'std:result'
+import { appendCauses, fail, isFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import type { Helpers } from '../types/helpers'
@@ -20,7 +20,14 @@ export const operation =
         const inner = fn(...args)
         return {
           next(value: unknown) {
-            const step = inner.next(value)
+            let step: IteratorResult<Failure<E> | Helpers.Effect<unknown>, T>
+
+            try {
+              step = inner.next(value)
+            } catch (error) {
+              step = { done: false, value: isFailure(error) ? error : (fail(error) as AnyType) }
+            }
+
             if (step.done) {
               return { done: true, value: step.value }
             }
@@ -34,7 +41,17 @@ export const operation =
             }
           },
           throw(error: unknown) {
-            const step = inner.throw?.(error)
+            let step: IteratorResult<Failure<E> | Helpers.Effect<unknown>, T>
+
+            try {
+              step = inner.throw?.(error)
+            } catch (subError) {
+              step = {
+                done: false,
+                value: isFailure(subError) ? subError : (fail(subError) as AnyType),
+              }
+            }
+
             if (!step || step.done) {
               throw error
             }

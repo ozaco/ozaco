@@ -1,5 +1,7 @@
 export * from './const'
-export * from './types'
+
+export * from './types/helpers'
+export * from './types/plugin'
 
 export * from './utils/app'
 export * from './utils/install'
