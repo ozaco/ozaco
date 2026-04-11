@@ -25,10 +25,10 @@
     "@commitlint/cli": "^20.5.0",
     "@commitlint/config-conventional": "^20.5.0",
     "@commitlint/prompt-cli": "^20.5.0",
-    "@types/bun": "^1.3.11",
-    "@types/node": "^25.5.2",
-    "oxfmt": "^0.43.0",
-    "oxlint": "^1.58.0",
+    "@types/bun": "^1.3.12",
+    "@types/node": "^25.6.0",
+    "oxfmt": "^0.44.0",
+    "oxlint": "^1.59.0",
     "typescript": "^6.0.2"
   }
 }
