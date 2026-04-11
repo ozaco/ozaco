@@ -3,26 +3,15 @@ import { isContext } from 'std:effect'
 import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 
-import type { Plugin, Use } from '../types'
+import type { App } from '../types'
 
 import { isPlugin } from './is'
-
-export interface App {
-  install<TName extends string, TContext, TArgs extends unknown[]>(
-    plugin: Plugin<TName, TContext, TArgs>,
-    ...args: TArgs
-  ): TContext
-  use: Use
-}
 
 export const createApp = (): App => {
   const store = new Map<Context<unknown>, unknown>()
 
-  const install: App['install'] = <TName extends string, TContext, TArgs extends unknown[]>(
-    plugin: Plugin<TName, TContext, TArgs>,
-    ...args: TArgs
-  ): TContext => {
-    const value = plugin.setup(use, ...args)
+  const install: App['install'] = (plugin, ...args) => {
+    const value = plugin.setup(...args)
     store.set(plugin.context as Context<unknown>, value)
     return value as AnyType
   }

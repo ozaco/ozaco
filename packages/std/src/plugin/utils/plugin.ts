@@ -1,22 +1,23 @@
 import type { Operation } from 'std:effect'
-import { createContext } from 'std:effect'
+import { createContext, operation } from 'std:effect'
 import { appendCauses, isFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import { PLUGIN } from '../const'
-import type { AnyAction, Plugin, PluginDef, Use } from '../types'
+import type { AnyAction, Plugin, PluginDef } from '../types'
 
 export const definePlugin = <
   TName extends string,
   TContext,
+  TError,
   TArgs extends unknown[] = [],
 >(options: {
   name: TName
   version: string
   description?: string
   dependencies?: readonly Plugin[]
-  setup(use: Use, ...args: TArgs): Operation<TContext>
-}): PluginDef<TName, TContext, TArgs> => {
+  setup(...args: TArgs): Operation<TContext, TError>
+}): PluginDef<TName, [TContext, TError], TArgs> => {
   const context = createContext<TContext>(options.name)
   const deps = options.dependencies ?? []
 
@@ -49,9 +50,13 @@ export const definePlugin = <
         description: options.description,
         context,
         dependencies: deps,
-        setup: options.setup,
+        setup: operation(
+          options.setup as AnyType,
+          '#setup',
+          `${options.name}@${options.version ?? 'lts'}`,
+        ),
         actions: Object.freeze(built),
-      }) as Plugin<TName, TContext, TArgs, AnyType>
+      }) as Plugin<TName, [TContext, TError], TArgs, AnyType>
     },
   }
 }

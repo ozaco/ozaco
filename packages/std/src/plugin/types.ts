@@ -12,7 +12,7 @@ export type AnyAction = (...args: AnyType[]) => Operation<unknown, unknown>
 
 export interface Plugin<
   TName extends string = string,
-  TContext = unknown,
+  TResult extends [unknown, unknown] = [unknown, unknown],
   TArgs extends unknown[] = unknown[],
   TActions = unknown,
 > {
@@ -20,21 +20,33 @@ export interface Plugin<
   name: TName
   version: string
   description: string
-  context: Context<TContext>
+  context: Context<TResult[0]>
   dependencies: readonly Plugin[]
-  setup(use: Use, ...args: TArgs): Operation<TContext>
+  setup(...args: TArgs): Operation<TResult[0], TResult[1]>
   actions: TActions
 }
 
-export interface PluginDef<TName extends string, TContext, TArgs extends unknown[]> {
-  context: Context<TContext>
-  build(): Plugin<TName, TContext, TArgs>
+export interface PluginDef<
+  TName extends string,
+  TResult extends [unknown, unknown],
+  TArgs extends unknown[],
+> {
+  context: Context<TResult[0]>
+  build(): Plugin<TName, TResult, TArgs>
   build<TActions extends Record<string, AnyAction>>(
     actions: TActions,
-  ): Plugin<TName, TContext, TArgs, TActions>
+  ): Plugin<TName, TResult, TArgs, TActions>
+}
+
+export interface App {
+  install<TName extends string, TResult extends [unknown, unknown], TArgs extends unknown[]>(
+    plugin: Plugin<TName, TResult, TArgs>,
+    ...args: TArgs
+  ): TResult[0]
+  use: Use
 }
 
 export namespace Helpers {
-  export type InferPluginContext<T> = T extends Plugin<string, infer V> ? V : never
+  export type InferPluginContext<T> = T extends Plugin<string, infer V> ? V[0] : never
   export type InferContext<T> = T extends Context<infer V> ? V : never
 }

@@ -1,14 +1,23 @@
-import { main } from 'std:effect'
+import { run, useContext } from 'std:effect'
 import { install } from 'std:plugin'
+import { unwrap } from 'std:result'
 
-import { UserPlugin } from './users'
+import { external, UserPlugin } from './users'
 
-await main(function* () {
-  yield* install(UserPlugin, 'Sa')
+const result = await run(function* () {
+  yield* install(UserPlugin, 'Welcome')
+
+  console.log('context:', yield* useContext(external))
 
   try {
-    yield* UserPlugin.actions.greet('Asuna')
+    const greeting = yield* UserPlugin.actions.greet('Kirito')
+
+    console.log('result:', greeting)
+  } catch (error) {
+    console.log('error:', error)
   } finally {
-    console.log('here')
+    console.log('finally')
   }
 })
+
+unwrap(result)

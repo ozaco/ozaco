@@ -1,28 +1,17 @@
-import type { Context, Operation } from 'std:effect'
-import { isContext, useScope } from 'std:effect'
-import { fail } from 'std:result'
+import type { Operation } from 'std:effect'
+import { useScope } from 'std:effect'
 
-import type { Plugin, Use } from '../types'
+import type { Plugin } from '../types'
 
-import { isPlugin } from './is'
-
-export function* install<TName extends string, TContext, TArgs extends unknown[]>(
-  plugin: Plugin<TName, TContext, TArgs>,
-  ...args: TArgs
-): Operation<TContext> {
+export function* install<
+  TName extends string,
+  TResult extends [unknown, unknown],
+  TArgs extends unknown[],
+>(plugin: Plugin<TName, TResult, TArgs>, ...args: TArgs): Operation<TResult[0], TResult[1]> {
   const scope = yield* useScope()
 
-  const use: Use = (target: unknown) => {
-    if (isPlugin(target)) {
-      return scope.expect(target.context)
-    } else if (isContext(target)) {
-      return scope.expect(target as Context<unknown>)
-    }
+  const value = yield* plugin.setup(...args)
 
-    return fail(target, 'use(target: unexpected)')
-  }
-
-  const value = yield* plugin.setup(use, ...args)
   scope.set(plugin.context, value)
 
   return value
