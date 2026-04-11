@@ -5,6 +5,7 @@ export default defineConfig({
   entry: {
     effect: './src/effect.ts',
     'say-hi': './src/say-hi.ts',
+    plugin: './src/plugin/index.ts',
   },
   dts: true,
   fixedExtension: false,

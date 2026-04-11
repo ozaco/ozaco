@@ -9,9 +9,9 @@ import type { Operation } from '../types/operation'
 
 import { suspend } from './suspend'
 
-export type Provide<T> = (value: T) => Operation<void>
-
-export const resource = <T>(op: (provide: Provide<T>) => Operation<void>): Operation<T> => ({
+export const resource = <T>(
+  op: (provide: Helpers.Provide<T>) => Operation<void>,
+): Operation<T> => ({
   *[Symbol.iterator]() {
     const caller = yield* useCoroutine()
 

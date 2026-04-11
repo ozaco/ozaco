@@ -1,5 +1,7 @@
 import type { Result } from 'std:result'
 
+import type { CONTEXT, SCOPE } from '../const'
+
 import type { Helpers } from './helpers'
 
 export interface Operation<T, E = never> {
@@ -26,6 +28,7 @@ export interface Signal<T, TClose> extends Stream<T, TClose> {
 }
 
 export interface Context<T> {
+  _t: typeof CONTEXT
   name: string
   defaultValue?: T
   get(): Operation<T | undefined>
@@ -36,6 +39,7 @@ export interface Context<T> {
 }
 
 export interface Scope {
+  _t: typeof SCOPE
   run<T, E = never>(operation: () => Operation<T, E>): Task<T, E>
   spawn<T, E = never>(operation: () => Operation<T, E>): Operation<Task<T, E>>
   get<T>(context: Context<T>): T | undefined
@@ -43,4 +47,9 @@ export interface Scope {
   expect<T>(context: Context<T>): T
   delete<T>(context: Context<T>): boolean
   hasOwn<T>(context: Context<T>): boolean
+}
+
+export interface Channel<T, TClose> extends Stream<T, TClose> {
+  send(message: T): Operation<void>
+  close(value: TClose): Operation<void>
 }

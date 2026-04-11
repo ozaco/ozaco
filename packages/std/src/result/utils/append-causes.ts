@@ -1,5 +1,5 @@
-import { isPromise, isString } from 'std:shared'
 import type { AnyType } from 'std:shared'
+import { isPromise, isString } from 'std:shared'
 
 import type { Impl } from '../types/impl'
 

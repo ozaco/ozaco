@@ -21,7 +21,7 @@ export const doOp = <T>(effect: Helpers.Effect<T>): Operation<T> => ({
           if (isSuccess(result)) {
             return { done: true as const, value: result.value }
           }
-          throw result.error
+          throw result
         }
         return { done: false as const, value: perform }
       },

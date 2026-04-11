@@ -114,4 +114,6 @@ export namespace Helpers {
     contexts: Record<string, unknown>
     ensure(op: () => Operation<void>): () => void
   }
+
+  export type Provide<T> = (value: T) => Operation<void>
 }

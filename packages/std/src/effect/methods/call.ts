@@ -5,9 +5,7 @@ import type { Helpers } from '../types/helpers'
 import type { Operation } from '../types/operation'
 
 import { action } from './action'
-
-const isOperation = <T>(target: Operation<T> | Promise<T> | T): target is Operation<T> =>
-  target && typeof (target as Operation<T>)[Symbol.iterator] === 'function'
+import { isOperation } from './is'
 
 export function call<T, TArgs extends unknown[] = []>(
   fn: (...args: TArgs) => Promise<T>,

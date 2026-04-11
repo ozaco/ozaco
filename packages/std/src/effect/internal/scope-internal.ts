@@ -1,5 +1,6 @@
 import { isSuccess, succeed, unwrap } from 'std:result'
 
+import { SCOPE } from '../const'
 import { withResolvers } from '../methods/with-resolvers'
 import type { Helpers } from '../types/helpers'
 import type { Context, Operation, Scope, Task } from '../types/operation'
@@ -17,6 +18,7 @@ export function createScopeInternal(
     parent ? (parent as Helpers.ScopeInternal).contexts : null,
   )
   const scope: Helpers.ScopeInternal = Object.create({
+    _t: SCOPE,
     [Symbol.toStringTag]: 'Scope',
     contexts,
     get<T>(context: Context<T>): T | undefined {

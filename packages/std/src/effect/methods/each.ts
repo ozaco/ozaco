@@ -1,14 +1,12 @@
 // oxlint-disable import/exports-last
 
+import { EachStack } from '../internal/contexts'
 import type { Helpers } from '../types/helpers'
 import type { Operation, Stream } from '../types/operation'
 
-import { createContext } from './context'
 import { useScope } from './scope'
 import { spawn } from './spawn'
 import { withResolvers } from './with-resolvers'
-
-const EachStack = createContext<Helpers.EachLoop<unknown>[]>('each')
 
 export function each<T>(stream: Stream<T, unknown>): Operation<Iterable<T>> {
   return {

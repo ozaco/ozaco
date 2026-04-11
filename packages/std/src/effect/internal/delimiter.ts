@@ -21,7 +21,7 @@ export class Delimiter<T> implements Operation<Maybe<Result<T, unknown>>>, Helpe
   ) {}
 
   raise(error: unknown): void {
-    const failure = just(fail(error))
+    const failure = just(isFailure(error) ? error : fail(error))
     if (this.finalized) {
       this.parent?.exit(failure)
     } else {
@@ -40,14 +40,14 @@ export class Delimiter<T> implements Operation<Maybe<Result<T, unknown>>>, Helpe
     this.close = function* close() {
       const outcome = yield* done
       if (interrupted && isJust(outcome) && isFailure(outcome.value)) {
-        throw outcome.value.error
+        throw outcome.value
       }
     }
     if (!this.outcome) {
       this.interrupt()
       yield* this.close()
     } else if (interrupted && isJust(this.outcome) && isFailure(this.outcome.value)) {
-      throw this.outcome.value.error
+      throw this.outcome.value
     }
   }
 
@@ -81,7 +81,7 @@ export class Delimiter<T> implements Operation<Maybe<Result<T, unknown>>>, Helpe
       }
     } catch (error) {
       this.computed = true
-      this.outcome = just(fail(error))
+      this.outcome = just(isFailure(error) ? error : fail(error))
     } finally {
       this.finalized = true
       this.outcome = this.outcome ?? nothing()

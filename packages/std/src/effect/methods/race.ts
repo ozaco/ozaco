@@ -43,5 +43,5 @@ export function* race<T extends Operation<unknown, AnyType>>(
     return result.value
   }
 
-  throw result.error
+  throw result
 }

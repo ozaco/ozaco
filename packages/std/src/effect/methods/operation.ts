@@ -1,5 +1,5 @@
-import { isFailure } from 'std:result'
 import type { Failure, Result } from 'std:result'
+import { appendCauses, isFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import type { Helpers } from '../types/helpers'
@@ -10,6 +10,7 @@ import { run } from './run'
 export const operation =
   <Args extends AnyType[], T, E = never>(
     fn: (...args: Args) => Generator<Failure<E> | Helpers.Effect<unknown>, T, unknown>,
+    ...causes: string[]
   ): ((...args: Args) => Future<T, E>) =>
   (...args) => {
     const op = {
@@ -22,7 +23,7 @@ export const operation =
               return { done: true, value: step.value }
             }
             if (isFailure(step.value as AnyType)) {
-              throw (step.value as Failure<E>).error
+              throw appendCauses(step.value as Failure<E>, ...causes)
             }
             return { done: false, value: step.value as Helpers.Effect<unknown> }
           },
@@ -32,7 +33,7 @@ export const operation =
               throw error
             }
             if (isFailure(step.value as AnyType)) {
-              throw (step.value as Failure<E>).error
+              throw appendCauses(step.value as Failure<E>, ...causes)
             }
             return { done: false, value: step.value as Helpers.Effect<unknown> }
           },

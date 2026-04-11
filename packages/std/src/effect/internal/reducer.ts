@@ -1,4 +1,4 @@
-import { fail, isSuccess } from 'std:result'
+import { fail, isFailure, isSuccess } from 'std:result'
 import { PriorityQueue } from 'std:shared'
 
 import type { Helpers } from '../types/helpers'
@@ -58,15 +58,15 @@ export class Reducer {
               }
             }
           } else if (iterator.throw) {
-            const next = iterator.throw(result.error)
+            const next = iterator.throw(result)
             if (!next.done) {
               routine.data.exit = next.value[0](routine.next, routine)
             }
           } else {
-            throw result.error
+            throw result
           }
         } catch (error) {
-          routine.next(fail(error))
+          routine.next(isFailure(error) ? error : fail(error))
         }
         item = queue.dequeue()
       }

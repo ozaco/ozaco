@@ -1,6 +1,7 @@
 import type { Result } from 'std:result'
 import { succeed } from 'std:result'
 
+import { CONTEXT } from '../const'
 import { doOp } from '../internal/do'
 import type { Helpers } from '../types/helpers'
 import type { Context, Operation, Scope } from '../types/operation'
@@ -29,6 +30,7 @@ const deleteContext = <T>(context: Context<T>) =>
 
 export const createContext = <T>(name: string, defaultValue?: T): Context<T> => {
   const context = {
+    _t: CONTEXT,
     name,
     defaultValue,
     get: () => doOp(getContext(context)),
@@ -52,3 +54,5 @@ export const createContext = <T>(name: string, defaultValue?: T): Context<T> => 
 
   return context
 }
+
+export const useContext = <T>(ctx: Context<T>): Operation<T> => ctx.expect()

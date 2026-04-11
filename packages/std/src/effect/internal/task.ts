@@ -95,9 +95,8 @@ export const createTask = <T>(options: TaskOptions<T>): NewTask<T> => {
         if (isSuccess(result)) {
           future.resolve(result.value)
         } else {
-          const { error } = result
-          future.reject(error)
-          boundary.raise(error)
+          future.reject(result)
+          boundary.raise(result)
         }
       } else {
         const halted = new Error('halted')

@@ -1,16 +1,14 @@
 import { isSuccess } from 'std:result'
 import type { AnyType } from 'std:shared'
 
+import { ExitContext } from '../internal/contexts'
 import type { Helpers } from '../types/helpers'
 import type { Operation } from '../types/operation'
 
 import { call } from './call'
 import { callcc } from './callcc'
-import { createContext } from './context'
 import { run } from './run'
 import { useScope } from './scope'
-
-const ExitContext = createContext<(exit: Helpers.Exit) => Operation<void>>('exit')
 
 declare const Deno: AnyType
 
