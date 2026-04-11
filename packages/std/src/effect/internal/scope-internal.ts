@@ -37,7 +37,7 @@ export function createScopeInternal(
       return value
     },
     delete<T>(context: Context<T>): boolean {
-      return Reflect.deleteProperty(context, context.name)
+      return Reflect.deleteProperty(contexts, context.name)
     },
     hasOwn<T>(context: Context<T>): boolean {
       return !!Reflect.getOwnPropertyDescriptor(contexts, context.name)

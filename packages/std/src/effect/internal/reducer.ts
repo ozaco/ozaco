@@ -1,7 +1,20 @@
 import { fail, isFailure, isSuccess } from 'std:result'
 import { PriorityQueue } from 'std:shared'
 
+import { getGlobalDebug } from '../methods/debug'
 import type { Helpers } from '../types/helpers'
+
+import { DebugContext } from './contexts'
+
+function resolveDebugHandler(
+  routine: Helpers.Coroutine<unknown>,
+): ((desc: string) => void) | undefined {
+  const scoped = routine.scope.get(DebugContext)
+  if (scoped === 'force-silence') {
+    return undefined
+  }
+  return getGlobalDebug() ?? scoped
+}
 
 class InstructionQueue extends PriorityQueue<Helpers.Instruction> {
   enqueue(instruction: Helpers.Instruction): void {
@@ -49,17 +62,20 @@ export class Reducer {
             if (method === 'next') {
               const next = iterator.next(result.value)
               if (!next.done) {
+                resolveDebugHandler(routine)?.(next.value[1])
                 routine.data.exit = next.value[0](routine.next, routine)
               }
             } else if (iterator.return) {
               const next = iterator.return(result.value)
               if (!next.done) {
+                resolveDebugHandler(routine)?.(next.value[1])
                 routine.data.exit = next.value[0](routine.next, routine)
               }
             }
           } else if (iterator.throw) {
             const next = iterator.throw(result)
             if (!next.done) {
+              resolveDebugHandler(routine)?.(next.value[1])
               routine.data.exit = next.value[0](routine.next, routine)
             }
           } else {

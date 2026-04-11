@@ -6,14 +6,14 @@ import { doOp } from '../internal/do'
 import type { Helpers } from '../types/helpers'
 import type { Context, Operation, Scope } from '../types/operation'
 
-const useScope = <T>(fn: (scope: Scope) => T, cause: string): Helpers.Effect<T> => [
+const useScope = <T>(fn: (scope: Scope) => T, desc: string): Helpers.Effect<T> => [
   (rootResolve, { scope }) => {
     rootResolve(succeed(fn(scope)) as Result<T, never>)
     return resolve => {
       resolve(succeed())
     }
   },
-  cause,
+  desc,
 ]
 
 const getContext = <T>(context: Context<T>) =>

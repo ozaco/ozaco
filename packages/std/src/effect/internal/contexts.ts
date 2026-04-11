@@ -25,3 +25,7 @@ export const TaskGroupContext = createContext<TaskGroup>('std:effect:task-group'
 export const EachStack = createContext<Helpers.EachLoop<unknown>[]>('each')
 
 export const ExitContext = createContext<(exit: Helpers.Exit) => Operation<void>>('exit')
+
+export const DebugContext = createContext<((desc: string) => void) | 'force-silence'>(
+  'std:effect:debug',
+)

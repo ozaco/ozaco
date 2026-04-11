@@ -6,7 +6,7 @@ import type { Operation } from '../types/operation'
 
 import { action } from './action'
 
-export const withResolvers = <T>(cause?: string): Helpers.WithResolvers<T> => {
+export const withResolvers = <T>(desc?: string): Helpers.WithResolvers<T> => {
   const continuations = new Set<(result: Result<T, unknown>) => void>()
   let result: Result<T, unknown> | undefined = undefined
 
@@ -25,7 +25,7 @@ export const withResolvers = <T>(cause?: string): Helpers.WithResolvers<T> => {
     }
     continuations.add(settle)
     return () => continuations.delete(settle)
-  }, cause)
+  }, desc)
 
   const settle = (outcome: Result<T, unknown>) => {
     if (!result) {

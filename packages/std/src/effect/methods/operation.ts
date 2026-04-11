@@ -13,6 +13,8 @@ export const operation =
     ...causes: string[]
   ): ((...args: Args) => Future<T, E>) =>
   (...args) => {
+    const desc = causes.join(',') || 'operation'
+
     const op = {
       [Symbol.iterator](): Iterator<Helpers.Effect<unknown>, T, unknown> {
         const inner = fn(...args)
@@ -25,7 +27,11 @@ export const operation =
             if (isFailure(step.value as AnyType)) {
               throw appendCauses(step.value as Failure<E>, ...causes)
             }
-            return { done: false, value: step.value as Helpers.Effect<unknown> }
+            const effect = step.value as Helpers.Effect<unknown>
+            return {
+              done: false,
+              value: [effect[0], `${desc} > ${effect[1]}`],
+            }
           },
           throw(error: unknown) {
             const step = inner.throw?.(error)
@@ -35,7 +41,11 @@ export const operation =
             if (isFailure(step.value as AnyType)) {
               throw appendCauses(step.value as Failure<E>, ...causes)
             }
-            return { done: false, value: step.value as Helpers.Effect<unknown> }
+            const effect = step.value as Helpers.Effect<unknown>
+            return {
+              done: false,
+              value: [effect[0], `${desc} > ${effect[1]}`],
+            }
           },
           return(value: unknown) {
             inner.return?.(value as AnyType)

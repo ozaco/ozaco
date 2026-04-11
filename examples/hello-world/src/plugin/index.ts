@@ -1,13 +1,19 @@
-import { run, useContext } from 'std:effect'
+import { debug, enableGlobalDebug, run, useContext } from 'std:effect'
 import { install } from 'std:plugin'
 import { unwrap } from 'std:result'
 
 import { external, UserPlugin } from './users'
 
+enableGlobalDebug(true)
+
 const result = await run(function* () {
-  yield* install(UserPlugin, 'Welcome')
+  yield* debug('force-silence')
+
+  yield* install(UserPlugin, 'Hello')
 
   console.log('context:', yield* useContext(external))
+
+  yield* debug(false)
 
   try {
     const greeting = yield* UserPlugin.actions.greet('Kirito')
