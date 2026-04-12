@@ -5,7 +5,10 @@
       "std:result": ["./src/result/index.ts", "./dist/result.d.ts"],
       "std:effect": ["./src/effect/index.ts", "./dist/effect.d.ts"],
       "std:event": ["./src/event/index.ts", "./dist/event.d.ts"],
-      "std:plugin": ["./src/plugin/index.ts", "./dist/plugin.d.ts"]
+      "std:plugin": ["./src/plugin/index.ts", "./dist/plugin.d.ts"],
+      "std:io": ["./src/io/index.ts", "./dist/io.d.ts"],
+      "std:io/bun": ["./src/io/impl/bun.ts", "./dist/io-bun.d.ts"],
+      "std:io/node": ["./src/io/impl/node.ts", "./dist/io-node.d.ts"]
     }
   }
 }

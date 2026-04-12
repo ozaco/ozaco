@@ -58,6 +58,39 @@
       },
       "source": "./src/result/index.ts"
     },
+    "./io": {
+      "import": {
+        "types": "./dist/io.d.ts",
+        "default": "./dist/io.js"
+      },
+      "require": {
+        "types": "./dist/io.d.cts",
+        "default": "./dist/io.cjs"
+      },
+      "source": "./src/io/index.ts"
+    },
+    "./io/bun": {
+      "import": {
+        "types": "./dist/io-bun.d.ts",
+        "default": "./dist/io-bun.js"
+      },
+      "require": {
+        "types": "./dist/io-bun.d.cts",
+        "default": "./dist/io-bun.cjs"
+      },
+      "source": "./src/io/impl/bun.ts"
+    },
+    "./io/node": {
+      "import": {
+        "types": "./dist/io-node.d.ts",
+        "default": "./dist/io-node.js"
+      },
+      "require": {
+        "types": "./dist/io-node.d.cts",
+        "default": "./dist/io-node.cjs"
+      },
+      "source": "./src/io/impl/node.ts"
+    },
     "./shared": {
       "import": {
         "types": "./dist/shared.d.ts",
