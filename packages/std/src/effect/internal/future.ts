@@ -16,12 +16,7 @@ export const createFuture = <T>(): Helpers.FutureWithResolvers<T> => {
   }
 
   const reject = (error: unknown) => {
-    if (isFailure(error)) {
-      promise.resolve(error)
-      operation.reject(error)
-    }
-
-    const failure = fail(error)
+    const failure = isFailure(error) ? error : fail(error)
 
     promise.resolve(failure)
     operation.reject(failure)

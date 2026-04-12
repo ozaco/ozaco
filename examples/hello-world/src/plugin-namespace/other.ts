@@ -1,3 +1,4 @@
+import type { Future } from 'std:effect'
 import { operation } from 'std:effect'
 import { definePlugin } from 'std:plugin'
 
@@ -10,5 +11,5 @@ export const Other = definePlugin({
 }).build({
   read: operation(function* (path: string) {
     return yield* IO.actions.readFile(path)
-  }, 'read'),
+  }, 'read') as (path: string) => Future<string, 'io:error' | 'not-implemented'>,
 })

@@ -5,11 +5,19 @@ import type { NAMESPACE, PLUGIN } from '../const'
 
 import type { Helpers } from './helpers'
 
+export interface Hookable<TActions extends EmptyType = EmptyType> {
+  useHook(): Operation<Map<string, unknown>>
+  around(handlers: Helpers.Around<TActions>): Operation<void>
+  before(handlers: Helpers.Before<TActions>): Operation<void>
+  after(handlers: Helpers.After<TActions>): Operation<void>
+  error(handlers: Helpers.OnError<TActions>): Operation<void>
+}
+
 export interface Plugin<
   TResult extends [unknown, unknown] = [unknown, unknown],
   TArgs extends unknown[] = unknown[],
   TActions = unknown,
-> {
+> extends Hookable<TActions & EmptyType> {
   _t: typeof PLUGIN
   name: string
   version: string
@@ -39,7 +47,7 @@ export interface Namespace<
   TError = unknown,
   TArgs extends unknown[] = unknown[],
   TActions extends EmptyType = EmptyType,
-> {
+> extends Hookable<TActions> {
   _t: typeof NAMESPACE
   name: string
   version: string

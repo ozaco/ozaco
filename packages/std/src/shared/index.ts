@@ -3,6 +3,7 @@ export * from './types/match'
 export * from './types/pipe'
 export * from './types/schema'
 
+export * from './utils/flatten'
 export * from './utils/is'
 export * from './utils/lazy'
 export * from './utils/match'
