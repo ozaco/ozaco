@@ -1,3 +1,4 @@
+export * from './types/converge'
 export * from './types/helpers'
 export * from './types/operation'
 
@@ -8,6 +9,7 @@ export * from './methods/async'
 export * from './methods/call'
 export * from './methods/channel'
 export * from './methods/context'
+export * from './methods/converge'
 export * from './methods/debug'
 export * from './methods/each'
 export * from './methods/ensure'

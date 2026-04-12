@@ -1,13 +1,13 @@
-import { appendCauses, asFailure } from 'std:result'
+import { asFailure } from 'std:result'
 
 import type { Operation } from '../types/operation'
 
 import { action } from './action'
 
-export const until = <T>(promise: Promise<T>, cause = 'until'): Operation<T> =>
+export const until = <T>(promise: Promise<T>, cause?: string): Operation<T> =>
   action((resolve, reject) => {
     promise.then(resolve).catch(error => {
-      reject(appendCauses(asFailure(error), cause))
+      reject(asFailure(error, cause))
     })
     return () => {}
   }, cause)

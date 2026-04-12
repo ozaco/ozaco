@@ -2,7 +2,8 @@ import { run } from 'std:effect'
 import { install } from 'std:plugin'
 import { fail, unwrap } from 'std:result'
 
-import { BunIO } from './bun'
+import { BunIO } from 'std:io/bun'
+
 import { Other } from './other'
 
 const result = await run(function* () {

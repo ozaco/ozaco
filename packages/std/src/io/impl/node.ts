@@ -2,56 +2,51 @@
 
 import { operation, until } from 'std:effect'
 import type { WalkEntry } from 'std:io'
-import { IO, toPath } from 'std:io'
+import { IO, IO_TAGS, toPath } from 'std:io'
 
 import fs from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 
 import { mapStat, walkRecursive } from './node-shared'
+import { fromReadable } from './stream'
 
 export const NodeIO = IO.implement({
   name: 'node-io',
   version: '0.0.1',
   *setup() {},
 }).build({
+  fromReadable,
+
   read: operation(function* (path) {
     const buf = yield* until(fs.readFile(toPath(path)))
     return new Uint8Array(buf)
-  }, 'io:read'),
+  }, IO_TAGS.read),
 
   readText: operation(function* (path, encoding) {
     return yield* until(
       fs.readFile(toPath(path), { encoding: (encoding ?? 'utf-8') as BufferEncoding }),
     )
-  }, 'io:read'),
+  }, IO_TAGS.readText),
 
   write: operation(function* (path, data) {
     yield* until(fs.writeFile(toPath(path), data))
-  }, 'io:write'),
-
-  writeText: operation(function* (path, content) {
-    yield* until(fs.writeFile(toPath(path), content, 'utf-8'))
-  }, 'io:write'),
+  }, IO_TAGS.write),
 
   append: operation(function* (path, data) {
     yield* until(fs.appendFile(toPath(path), data))
-  }, 'io:write'),
-
-  appendText: operation(function* (path, content) {
-    yield* until(fs.appendFile(toPath(path), content, 'utf-8'))
-  }, 'io:write'),
+  }, IO_TAGS.append),
 
   copy: operation(function* (src, dest) {
     yield* until(fs.copyFile(toPath(src), toPath(dest)))
-  }, 'io:copy'),
+  }, IO_TAGS.copy),
 
   rename: operation(function* (src, dest) {
     yield* until(fs.rename(toPath(src), toPath(dest)))
-  }, 'io:rename'),
+  }, IO_TAGS.rename),
 
   rm: operation(function* (path, options) {
     yield* until(fs.rm(toPath(path), options))
-  }, 'io:rm'),
+  }, IO_TAGS.rm),
 
   exists: operation(function* (path) {
     try {
@@ -60,25 +55,25 @@ export const NodeIO = IO.implement({
     } catch {
       return false
     }
-  }, 'io:exists'),
+  }, IO_TAGS.exists),
 
   stat: operation(function* (path) {
     const s = yield* until(fs.stat(toPath(path)))
     return mapStat(s)
-  }, 'io:stat'),
+  }, IO_TAGS.stat),
 
   lstat: operation(function* (path) {
     const s = yield* until(fs.lstat(toPath(path)))
     return mapStat(s)
-  }, 'io:stat'),
+  }, IO_TAGS.lstat),
 
   readdir: operation(function* (path) {
     return yield* until(fs.readdir(toPath(path)))
-  }, 'io:dir'),
+  }, IO_TAGS.readdir),
 
   ensureDir: operation(function* (path) {
     yield* until(fs.mkdir(toPath(path), { recursive: true }))
-  }, 'io:dir'),
+  }, IO_TAGS.enureDir),
 
   ensureFile: operation(function* (path) {
     const p = toPath(path)
@@ -89,7 +84,7 @@ export const NodeIO = IO.implement({
     } catch {
       yield* until(fs.writeFile(p, ''))
     }
-  }, 'io:dir'),
+  }, IO_TAGS.enureFile),
 
   emptyDir: operation(function* (path) {
     const p = toPath(path)
@@ -98,7 +93,7 @@ export const NodeIO = IO.implement({
     for (const entry of entries) {
       yield* until(fs.rm(join(p, entry), { recursive: true, force: true }))
     }
-  }, 'io:dir'),
+  }, IO_TAGS.emptyDir),
 
   walk: operation(function* (root, options) {
     const p = toPath(root)
@@ -117,5 +112,7 @@ export const NodeIO = IO.implement({
       results,
     )
     return results
-  }, 'io:walk'),
+  }, IO_TAGS.walk),
 })
+
+export { fromReadable } from './stream'

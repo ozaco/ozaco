@@ -102,7 +102,7 @@ export namespace Impl {
   export type Nothing = <T = void>() => Maybe<T>
 
   export interface AsFailure {
-    <E>(error: Failure<E>): Failure<E>
-    (error: unknown): Failure<unknown>
+    <E>(error: Failure<E>, cause?: string): Failure<E>
+    (error: unknown, cause?: string): Failure<unknown>
   }
 }

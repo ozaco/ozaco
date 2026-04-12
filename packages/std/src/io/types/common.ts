@@ -1,15 +1,6 @@
-export type PathLike = string | URL
+import type { AnyType } from 'std:shared'
 
-export type IOErrorTag =
-  | 'io:read'
-  | 'io:write'
-  | 'io:stat'
-  | 'io:rm'
-  | 'io:dir'
-  | 'io:copy'
-  | 'io:rename'
-  | 'io:exists'
-  | 'io:walk'
+export type PathLike = string | URL
 
 export interface IOStat {
   isFile: boolean
@@ -32,6 +23,11 @@ export interface WalkEntry {
   isFile: boolean
   isDirectory: boolean
   isSymlink: boolean
+}
+
+export interface ReadableLike {
+  on(event: string, listener: (...args: AnyType[]) => void): this
+  off(event: string, listener: (...args: AnyType[]) => void): this
 }
 
 export interface WalkOptions {
