@@ -8,7 +8,7 @@ import fs from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 
 import { mapStat, walkRecursive } from './node-shared'
-import { fromReadable } from './stream'
+import { fromReadable, readFileStream, writeFileStream } from './stream'
 
 export const NodeIO = IO.implement({
   name: 'node-io',
@@ -16,6 +16,8 @@ export const NodeIO = IO.implement({
   *setup() {},
 }).build({
   fromReadable,
+  readStream: path => readFileStream(toPath(path)),
+  writeStream: (path, source) => writeFileStream(toPath(path), source),
 
   read: operation(function* (path) {
     const buf = yield* until(fs.readFile(toPath(path)))

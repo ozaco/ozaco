@@ -17,4 +17,5 @@ export enum IO_TAGS {
   emptyDir = 'io:empty-dir',
   walk = 'io:walk',
   stream = 'io:stream',
+  writeStream = 'io:write-stream',
 }

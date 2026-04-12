@@ -6,6 +6,8 @@ import type { IOStat, PathLike, ReadableLike, RmOptions, WalkEntry, WalkOptions 
 
 export type IOActions = {
   fromReadable: (target: ReadableLike) => Stream<Uint8Array, void>
+  readStream: (path: PathLike) => Stream<Uint8Array, void>
+  writeStream: (path: PathLike, source: Stream<Uint8Array, unknown>) => Future<void, unknown>
   read: (path: PathLike) => Future<Uint8Array, unknown>
   readText: (path: PathLike, encoding?: string) => Future<string, unknown>
   write: (path: PathLike, data: Uint8Array | string) => Future<void, unknown>

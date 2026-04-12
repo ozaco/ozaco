@@ -6,7 +6,7 @@ import fs from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 
 import { mapStat, walkRecursive } from './node-shared'
-import { fromReadable } from './stream'
+import { fromReadable, readFileStream, writeFileStream } from './stream'
 
 export const BunIO = IO.implement({
   name: 'bun-io',
@@ -14,6 +14,8 @@ export const BunIO = IO.implement({
   *setup() {},
 }).build({
   fromReadable,
+  readStream: path => readFileStream(toPath(path)),
+  writeStream: (path, source) => writeFileStream(toPath(path), source),
 
   read: operation(function* (path) {
     const p = toPath(path)

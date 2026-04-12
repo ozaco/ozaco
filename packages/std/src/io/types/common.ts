@@ -28,6 +28,16 @@ export interface WalkEntry {
 export interface ReadableLike {
   on(event: string, listener: (...args: AnyType[]) => void): this
   off(event: string, listener: (...args: AnyType[]) => void): this
+  destroy?(error?: Error): this
+}
+
+export interface WritableLike {
+  write(chunk: Uint8Array): boolean
+  end(): this
+  destroy?(error?: Error): this
+  on(event: string, listener: (...args: AnyType[]) => void): this
+  once(event: string, listener: (...args: AnyType[]) => void): this
+  off(event: string, listener: (...args: AnyType[]) => void): this
 }
 
 export interface WalkOptions {
