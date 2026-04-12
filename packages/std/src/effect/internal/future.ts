@@ -1,4 +1,4 @@
-import { fail, isFailure, succeed } from 'std:result'
+import { asFailure, succeed } from 'std:result'
 import type { AnyType } from 'std:shared'
 import { lazyPromiseWithResolvers } from 'std:shared'
 
@@ -16,7 +16,7 @@ export const createFuture = <T>(): Helpers.FutureWithResolvers<T> => {
   }
 
   const reject = (error: unknown) => {
-    const failure = isFailure(error) ? error : fail(error)
+    const failure = asFailure(error)
 
     promise.resolve(failure)
     operation.reject(failure)

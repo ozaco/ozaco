@@ -1,5 +1,5 @@
 import type { Result } from 'std:result'
-import { auto, fail, isFailure, isSuccess } from 'std:result'
+import { asFailure, auto, isSuccess } from 'std:result'
 
 import type { Helpers } from '../types/helpers'
 import type { Operation } from '../types/operation'
@@ -37,11 +37,7 @@ export const withResolvers = <T>(desc?: string): Helpers.WithResolvers<T> => {
   }
 
   const resolve = (value: T) => settle(auto(value) as Result<T, never>)
-  const reject = (error: unknown) => {
-    const failure = isFailure(error) ? error : fail(error)
-
-    return settle(failure)
-  }
+  const reject = (error: unknown) => settle(asFailure(error))
 
   return { operation, resolve, reject }
 }

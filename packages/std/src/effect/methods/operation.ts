@@ -1,5 +1,5 @@
 import type { Failure, Result } from 'std:result'
-import { appendCauses, fail, isFailure } from 'std:result'
+import { appendCauses, asFailure, isFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import type { Helpers } from '../types/helpers'
@@ -25,7 +25,7 @@ export const operation =
             try {
               step = inner.next(value)
             } catch (error) {
-              step = { done: false, value: isFailure(error) ? error : (fail(error) as AnyType) }
+              step = { done: false, value: asFailure(error) as AnyType }
             }
 
             if (step.done) {
@@ -48,7 +48,7 @@ export const operation =
             } catch (subError) {
               step = {
                 done: false,
-                value: isFailure(subError) ? subError : (fail(subError) as AnyType),
+                value: asFailure(subError) as AnyType,
               }
             }
 

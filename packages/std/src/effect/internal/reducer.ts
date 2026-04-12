@@ -1,4 +1,4 @@
-import { fail, isFailure, isSuccess } from 'std:result'
+import { asFailure, isSuccess } from 'std:result'
 import { PriorityQueue } from 'std:shared'
 
 import { getGlobalDebug } from '../methods/debug'
@@ -82,7 +82,7 @@ export class Reducer {
             throw result
           }
         } catch (error) {
-          routine.next(isFailure(error) ? error : fail(error))
+          routine.next(asFailure(error))
         }
         item = queue.dequeue()
       }

@@ -1,3 +1,4 @@
+export * from './utils/as-failure'
 export * from './utils/append-causes'
 export * from './utils/auto'
 export * from './utils/fail'

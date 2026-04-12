@@ -1,5 +1,5 @@
 import type { Maybe, Result } from 'std:result'
-import { fail, isFailure, isJust, just, nothing, succeed } from 'std:result'
+import { asFailure, isFailure, isJust, just, nothing, succeed } from 'std:result'
 
 import { withResolvers } from '../methods/with-resolvers'
 import type { Helpers } from '../types/helpers'
@@ -21,7 +21,7 @@ export class Delimiter<T> implements Operation<Maybe<Result<T, unknown>>>, Helpe
   ) {}
 
   raise(error: unknown): void {
-    const failure = just(isFailure(error) ? error : fail(error))
+    const failure = just(asFailure(error))
     if (this.finalized) {
       this.parent?.exit(failure)
     } else {
@@ -81,7 +81,7 @@ export class Delimiter<T> implements Operation<Maybe<Result<T, unknown>>>, Helpe
       }
     } catch (error) {
       this.computed = true
-      this.outcome = just(isFailure(error) ? error : fail(error))
+      this.outcome = just(asFailure(error))
     } finally {
       this.finalized = true
       this.outcome = this.outcome ?? nothing()

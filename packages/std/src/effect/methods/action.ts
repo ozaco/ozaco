@@ -1,5 +1,5 @@
 import type { Result } from 'std:result'
-import { auto, fail, isFailure, succeed } from 'std:result'
+import { asFailure, auto, succeed } from 'std:result'
 
 import type { Helpers } from '../types/helpers'
 import type { Operation } from '../types/operation'
@@ -12,7 +12,7 @@ export const action = <T>(executor: Helpers.Executor<T>, desc?: string): Operati
           settle(auto(value) as Result<T, never>)
         }
         const reject = (error: unknown) => {
-          settle(isFailure(error) ? error : fail(error))
+          settle(asFailure(error))
         }
         const discard = executor(resolve, reject)
         return discarded => {
@@ -20,7 +20,7 @@ export const action = <T>(executor: Helpers.Executor<T>, desc?: string): Operati
             discard()
             discarded(succeed())
           } catch (error) {
-            discarded(isFailure(error) ? error : fail(error))
+            discarded(asFailure(error))
           }
         }
       },
