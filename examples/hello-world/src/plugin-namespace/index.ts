@@ -1,4 +1,4 @@
-import { run } from 'std:effect'
+import { retry, run } from 'std:effect'
 import { install } from 'std:plugin'
 import { fail, unwrap } from 'std:result'
 
@@ -33,7 +33,11 @@ const result = await run(function* () {
   })
 
   console.log(yield* Other.actions.read('./package.json'))
-  console.log(yield* Other.actions.read('./moon.yml'))
+
+  yield* retry(() => Other.actions.read('./moon.yml'), {
+    attempts: 3,
+    delay: 1000,
+  })
 })
 
 unwrap(result)

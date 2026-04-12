@@ -2,7 +2,7 @@
 
 import type { Operation } from 'std:effect'
 import { createContext, operation } from 'std:effect'
-import { appendCauses, fail, isFailure } from 'std:result'
+import { appendCauses, asFailure, fail, isFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
 import { flatten } from 'std:shared'
 
@@ -48,7 +48,7 @@ export const createHookable = (options: {
             }
 
             if (!self) {
-              throw new Error(`No handler for "${key}" in "${options.name}"`)
+              throw fail('unexpected', `No handler for "${key}" in "${options.name}"`)
             }
             let result: unknown = yield* intercept(self(...innerArgs))
 
@@ -146,8 +146,7 @@ export const createHookable = (options: {
             try {
               return yield* action(...args) as Operation<unknown>
             } catch (error) {
-              const failure = isFailure(error) ? error : fail(error)
-              throw appendCauses(failure, tag)
+              throw asFailure(error, tag)
             }
           },
         })
@@ -196,9 +195,9 @@ export function* intercept(op: AnyType, ...causes: string[]): Operation<unknown>
     try {
       step = method === 'next' ? iter.next(value) : iter.throw!(value)
     } catch (error) {
-      throw causes.length > 0
-        ? appendCauses(isFailure(error) ? error : fail(error), ...causes)
-        : error
+      const failure = asFailure(error)
+
+      throw causes.length > 0 ? appendCauses(failure, ...causes) : failure
     }
 
     if (step.done) {

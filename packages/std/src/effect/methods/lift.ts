@@ -10,7 +10,7 @@ export function lift<TArgs extends unknown[], TReturn>(
       try {
         resolve(fn(...args))
       } catch (error) {
-        reject(error as Error)
+        reject(error)
       }
       return () => {}
     })

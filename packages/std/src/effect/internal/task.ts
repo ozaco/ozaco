@@ -1,4 +1,4 @@
-import { isJust, isSuccess, succeed } from 'std:result'
+import { fail, isJust, isSuccess, succeed } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import { useScope } from '../methods/scope'
@@ -99,9 +99,7 @@ export const createTask = <T>(options: TaskOptions<T>): NewTask<T> => {
           boundary.raise(result)
         }
       } else {
-        const halted = new Error('halted')
-        halted.name = 'OperationError'
-        future.reject(halted)
+        future.reject(fail('halted'))
       }
     }
   })

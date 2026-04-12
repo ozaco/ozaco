@@ -1,5 +1,7 @@
 // oxlint-disable import/exports-last
 
+import { fail } from 'std:result'
+
 import { EachStack } from '../internal/contexts'
 import type { Helpers } from '../types/helpers'
 import type { Operation, Stream } from '../types/operation'
@@ -48,11 +50,10 @@ export function each<T>(stream: Stream<T, unknown>): Operation<Iterable<T>> {
         [Symbol.iterator]: () => ({
           next() {
             if (context.stale) {
-              const error = new Error(
+              throw fail(
+                'iteration',
                 'for each loop did not use each.next() operation before continuing',
               )
-              error.name = 'IterationError'
-              throw error
             }
             context.stale = true
             return context.current
@@ -74,9 +75,7 @@ each.next = function next(): Operation<void> {
       const stack = yield* EachStack.expect()
       const context = stack[stack.length - 1]
       if (!context) {
-        const error = new Error('cannot call next() outside of an iteration')
-        error.name = 'IterationError'
-        throw error
+        throw fail('iteration', 'cannot call next() outside of an iteration')
       }
       const current = yield* context.subscription.next()
       delete context.stale

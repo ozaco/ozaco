@@ -1,4 +1,4 @@
-import { isSuccess, succeed, unwrap } from 'std:result'
+import { fail, isSuccess, succeed, unwrap } from 'std:result'
 
 import { SCOPE } from '../const'
 import { withResolvers } from '../methods/with-resolvers'
@@ -30,9 +30,7 @@ export function createScopeInternal(
     expect<T>(context: Context<T>): T {
       const value = scope.get(context)
       if (value === undefined) {
-        const error = new Error(context.name)
-        error.name = 'MissingContextError'
-        throw error
+        throw fail('missing-context', context.name)
       }
       return value
     },

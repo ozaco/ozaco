@@ -1,3 +1,5 @@
+import { fail } from 'std:result'
+
 import type { ConvergeOptions, ConvergeStats } from '../types/converge'
 import type { Operation } from '../types/operation'
 
@@ -28,7 +30,7 @@ export const when = <T>(
       yield* sleep(interval)
     }
 
-    throw lastError ?? new Error(`when: timed out after ${timeout}ms (${runs} runs)`)
+    throw lastError ?? fail('when', `timed out after ${timeout}ms (${runs} runs)`)
   },
 })
 
@@ -47,7 +49,7 @@ export const always = <T>(
       runs++
       const value = yield* assertion()
       if (value === false) {
-        throw new Error(`always: assertion returned false on run ${runs}`)
+        throw fail('always', `assertion returned false on run ${runs}`)
       }
       lastValue = value
       yield* sleep(interval)
