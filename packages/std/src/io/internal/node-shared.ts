@@ -1,4 +1,5 @@
 import { until } from 'std:effect'
+import { hasFlag, IO_FLAGS } from 'std:io'
 import type { IOStat, WalkEntry, WalkOptions } from 'std:io'
 import type { AnyType } from 'std:shared'
 
@@ -19,13 +20,12 @@ export const mapStat = (s: Stats): IOStat => ({
 // oxlint-disable-next-line max-params
 export function* walkRecursive(
   root: string,
-  options: Required<
-    Pick<WalkOptions, 'includeFiles' | 'includeDirs' | 'followSymlinks' | 'maxDepth'>
-  > &
-    Pick<WalkOptions, 'match' | 'skip'>,
+  options: Required<Pick<WalkOptions, 'flags' | 'maxDepth'>> & Pick<WalkOptions, 'match' | 'skip'>,
   depth: number,
   results: WalkEntry[],
 ): Generator<AnyType, void, AnyType> {
+  const flags = options.flags ?? 0
+
   if (options.maxDepth && depth > options.maxDepth) {
     return
   }
@@ -42,7 +42,7 @@ export function* walkRecursive(
 
     let s: Stats
     try {
-      s = options.followSymlinks
+      s = hasFlag(flags, IO_FLAGS.FOLLOW_SYMLINKS)
         ? yield* until(fs.stat(fullPath))
         : yield* until(fs.lstat(fullPath))
     } catch {
@@ -63,11 +63,11 @@ export function* walkRecursive(
 
     const matchesPattern = !options.match?.length || options.match.some(re => re.test(fullPath))
 
-    if (entry.isFile && options.includeFiles && matchesPattern) {
+    if (entry.isFile && hasFlag(flags, IO_FLAGS.FILES) && matchesPattern) {
       results.push(entry)
     }
     if (entry.isDirectory) {
-      if (options.includeDirs && matchesPattern) {
+      if (hasFlag(flags, IO_FLAGS.DIRS) && matchesPattern) {
         results.push(entry)
       }
       yield* walkRecursive(fullPath, options, depth + 1, results)

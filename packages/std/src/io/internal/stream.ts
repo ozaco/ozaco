@@ -1,7 +1,7 @@
 import type { Stream } from 'std:effect'
 import { action, createSignal, each, operation, resource } from 'std:effect'
 import type { ReadableLike, WritableLike } from 'std:io'
-import { IO_TAGS } from 'std:io'
+import { hasFlag, IO_FLAGS, IO_TAGS } from 'std:io'
 import { appendCauses, asFailure } from 'std:result'
 
 import { createReadStream, createWriteStream } from 'node:fs'
@@ -96,8 +96,17 @@ export const readFileStream = (path: string): Stream<Uint8Array, void> =>
 export const writeFileStream = operation(function* (
   path: string,
   source: Stream<Uint8Array, unknown>,
+  flags?: number,
 ) {
-  const writable = createWriteStream(path) as unknown as WritableLike
+  const f = flags ?? IO_FLAGS.NONE
+  const fsFlags = hasFlag(f, IO_FLAGS.APPEND)
+    ? hasFlag(f, IO_FLAGS.EXCLUSIVE)
+      ? 'ax'
+      : 'a'
+    : hasFlag(f, IO_FLAGS.EXCLUSIVE)
+      ? 'wx'
+      : 'w'
+  const writable = createWriteStream(path, { flags: fsFlags }) as unknown as WritableLike
 
   try {
     for (const chunk of yield* each(source)) {

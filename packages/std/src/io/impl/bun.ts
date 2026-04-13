@@ -1,12 +1,12 @@
 import { operation, until } from 'std:effect'
 import type { WalkEntry } from 'std:io'
-import { IO, IO_TAGS, toPath } from 'std:io'
+import { hasFlag, IO, IO_FLAGS, IO_TAGS, toPath } from 'std:io'
 
 import fs from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 
-import { mapStat, walkRecursive } from './node-shared'
-import { fromReadable, readFileStream, writeFileStream } from './stream'
+import { mapStat, walkRecursive } from '../internal/node-shared'
+import { fromReadable, readFileStream, writeFileStream } from '../internal/stream'
 
 export const BunIO = IO.implement({
   name: 'bun-io',
@@ -15,7 +15,7 @@ export const BunIO = IO.implement({
 }).build({
   fromReadable,
   readStream: path => readFileStream(toPath(path)),
-  writeStream: (path, source) => writeFileStream(toPath(path), source),
+  writeStream: (path, source, options) => writeFileStream(toPath(path), source, options?.flags),
 
   read: operation(function* (path) {
     const p = toPath(path)
@@ -34,19 +34,43 @@ export const BunIO = IO.implement({
     return yield* until(Bun.file(p).text())
   }, IO_TAGS.readText),
 
-  write: operation(function* (path, data) {
-    yield* until(Bun.write(toPath(path), data))
+  write: operation(function* (path, data, options) {
+    const flags = options?.flags
+
+    if (!flags) {
+      yield* until(Bun.write(toPath(path), data))
+      return
+    }
+    const flag = hasFlag(flags, IO_FLAGS.APPEND)
+      ? hasFlag(flags, IO_FLAGS.EXCLUSIVE)
+        ? 'ax'
+        : 'a'
+      : hasFlag(flags, IO_FLAGS.EXCLUSIVE)
+        ? 'wx'
+        : 'w'
+    yield* until(fs.writeFile(toPath(path), data, { flag }))
   }, IO_TAGS.write),
 
   append: operation(function* (path, data) {
     yield* until(fs.appendFile(toPath(path), data))
   }, IO_TAGS.append),
 
-  copy: operation(function* (src, dest) {
-    yield* until(Bun.write(toPath(dest), Bun.file(toPath(src))))
+  copy: operation(function* (src, dest, options) {
+    // oxlint-disable-next-line unicorn/prefer-ternary
+    if (hasFlag(options?.flags ?? IO_FLAGS.NONE, IO_FLAGS.EXCLUSIVE)) {
+      yield* until(fs.copyFile(toPath(src), toPath(dest), 1))
+    } else {
+      yield* until(Bun.write(toPath(dest), Bun.file(toPath(src))))
+    }
   }, IO_TAGS.copy),
 
-  rename: operation(function* (src, dest) {
+  rename: operation(function* (src, dest, options) {
+    if (hasFlag(options?.flags ?? IO_FLAGS.NONE, IO_FLAGS.EXCLUSIVE)) {
+      const destExists = yield* until(Bun.file(toPath(dest)).exists())
+      if (destExists) {
+        throw new Error('destination already exists')
+      }
+    }
     yield* until(fs.rename(toPath(src), toPath(dest)))
   }, IO_TAGS.rename),
 
@@ -68,8 +92,8 @@ export const BunIO = IO.implement({
     return mapStat(s)
   }, IO_TAGS.lstat),
 
-  readdir: operation(function* (path) {
-    return yield* until(fs.readdir(toPath(path)))
+  readdir: operation(function* (path, options) {
+    return yield* until(fs.readdir(toPath(path), options))
   }, IO_TAGS.readdir),
 
   ensureDir: operation(function* (path) {
@@ -101,10 +125,8 @@ export const BunIO = IO.implement({
     yield* walkRecursive(
       p,
       {
+        flags: options?.flags ?? IO_FLAGS.FILES | IO_FLAGS.DIRS,
         maxDepth: options?.maxDepth ?? Number.POSITIVE_INFINITY,
-        includeFiles: options?.includeFiles ?? true,
-        includeDirs: options?.includeDirs ?? true,
-        followSymlinks: options?.followSymlinks ?? false,
         match: options?.match,
         skip: options?.skip,
       },

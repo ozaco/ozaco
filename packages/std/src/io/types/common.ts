@@ -12,11 +12,6 @@ export interface IOStat {
   birthtime: Date | null
 }
 
-export interface RmOptions {
-  recursive?: boolean
-  force?: boolean
-}
-
 export interface WalkEntry {
   path: string
   name: string
@@ -41,10 +36,8 @@ export interface WritableLike {
 }
 
 export interface WalkOptions {
+  flags?: number | undefined
   maxDepth?: number | undefined
-  includeFiles?: boolean | undefined
-  includeDirs?: boolean | undefined
-  followSymlinks?: boolean | undefined
   match?: RegExp[] | undefined
   skip?: RegExp[] | undefined
 }

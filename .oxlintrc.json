@@ -28,6 +28,8 @@
     "unicorn/prefer-global-this": "off",
     "unicorn/no-nested-ternary": "off",
 
+    "eslint/no-bitwise": "off",
+    "unicorn/prefer-math-trunc": "off",
     "eslint/id-length": "off",
     "eslint/sort-keys": "off",
     "eslint/no-undefined": "off",
