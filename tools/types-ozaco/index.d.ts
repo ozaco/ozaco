@@ -26,3 +26,7 @@ declare module 'std:io/node' {
 declare module 'server:core' {
   export * from '@ozaco/server/core'
 }
+
+declare module 'server:service' {
+  export * from '@ozaco/server/service'
+}

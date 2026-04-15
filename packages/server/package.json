@@ -23,6 +23,17 @@
         "default": "./dist/core.cjs"
       },
       "source": "./src/core/index.ts"
+    },
+    "./service": {
+      "import": {
+        "types": "./dist/service.d.ts",
+        "default": "./dist/service.js"
+      },
+      "require": {
+        "types": "./dist/service.d.cts",
+        "default": "./dist/service.cjs"
+      },
+      "source": "./src/service/index.ts"
     }
   },
   "devDependencies": {

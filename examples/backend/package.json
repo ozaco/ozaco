@@ -1,9 +1,10 @@
 {
-  "name": "@ozaco/hello-world",
+  "name": "@ozaco/backend",
   "version": "0.0.0",
   "private": true,
   "type": "module",
   "dependencies": {
+    "@ozaco/server": "workspace:*",
     "@ozaco/std": "workspace:*",
     "zod": "4.3.6"
   },

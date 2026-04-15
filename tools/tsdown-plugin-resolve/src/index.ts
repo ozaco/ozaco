@@ -13,6 +13,7 @@ const STD_MODULES: Record<string, { subpath: string; source: string }> = {
 
 const SERVER_MODULES: Record<string, { subpath: string; source: string }> = {
   'server:core': { subpath: 'core', source: 'core/index.ts' },
+  'server:service': { subpath: 'service', source: 'service/index.ts' },
 }
 
 export interface StdResolveOptions {
