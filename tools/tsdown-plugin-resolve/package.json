@@ -1,0 +1,12 @@
+{
+  "name": "@ozaco/tsdown-plugin-resolve",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "devDependencies": {
+    "rolldown": "1.0.0-rc.15"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "name": "@types/std",
+  "version": "0.0.1",
+  "private": true,
+  "devDependencies": {
+    "@ozaco/std": "workspace:*"
+  },
+  "peerDependencies": {
+    "@ozaco/std": "*"
+  }
+}

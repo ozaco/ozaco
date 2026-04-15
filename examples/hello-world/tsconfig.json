@@ -1,5 +1,5 @@
 {
-  "extends": ["../../tsconfig.base.json", "../../packages/std/tsconfig.paths.json"],
+  "extends": ["../../tsconfig.base.json"],
   "compilerOptions": {
     "lib": ["esnext", "dom"],
     "composite": false,

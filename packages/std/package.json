@@ -9,8 +9,7 @@
   },
   "files": [
     "dist",
-    "src",
-    "tsconfig.paths.json"
+    "src"
   ],
   "type": "module",
   "exports": {
