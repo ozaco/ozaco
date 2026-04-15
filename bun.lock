@@ -11,7 +11,7 @@
         "@ozaco/tsdown-plugin-resolve": "workspace:*",
         "@types/bun": "^1.3.12",
         "@types/node": "^25.6.0",
-        "@types/std": "workspace:*",
+        "@types/ozaco": "workspace:*",
         "oxfmt": "^0.45.0",
         "oxlint": "^1.60.0",
         "typescript": "^6.0.2",
@@ -24,6 +24,13 @@
         "@ozaco/std": "workspace:*",
         "zod": "4.3.6",
       },
+      "devDependencies": {
+        "tsdown": "catalog:build",
+      },
+    },
+    "packages/server": {
+      "name": "@ozaco/server",
+      "version": "0.0.1",
       "devDependencies": {
         "tsdown": "catalog:build",
       },
@@ -42,13 +49,15 @@
         "rolldown": "1.0.0-rc.15",
       },
     },
-    "tools/types-std": {
-      "name": "@types/std",
+    "tools/types-ozaco": {
+      "name": "@types/ozaco",
       "version": "0.0.1",
       "devDependencies": {
+        "@ozaco/server": "workspace:*",
         "@ozaco/std": "workspace:*",
       },
       "peerDependencies": {
+        "@ozaco/server": "*",
         "@ozaco/std": "*",
       },
     },
@@ -211,6 +220,8 @@
 
     "@ozaco/hello-world": ["@ozaco/hello-world@workspace:examples/hello-world"],
 
+    "@ozaco/server": ["@ozaco/server@workspace:packages/server"],
+
     "@ozaco/std": ["@ozaco/std@workspace:packages/std"],
 
     "@ozaco/tsdown-plugin-resolve": ["@ozaco/tsdown-plugin-resolve@workspace:tools/tsdown-plugin-resolve"],
@@ -263,7 +274,7 @@
 
     "@types/node": ["@types/node@25.6.0", "", { "dependencies": { "undici-types": "~7.19.0" } }, "sha512-+qIYRKdNYJwY3vRCZMdJbPLJAtGjQBudzZzdzwQYkEPQd+PJGixUL5QfvCLDaULoLv+RhT3LDkwEfKaAkgSmNQ=="],
 
-    "@types/std": ["@types/std@workspace:tools/types-std"],
+    "@types/ozaco": ["@types/ozaco@workspace:tools/types-ozaco"],
 
     "ajv": ["ajv@8.18.0", "", { "dependencies": { "fast-deep-equal": "^3.1.3", "fast-uri": "^3.0.1", "json-schema-traverse": "^1.0.0", "require-from-string": "^2.0.2" } }, "sha512-PlXPeEWMXMZ7sPYOHqmDyCJzcfNrUr3fGNKtezX14ykXOEIvyK81d+qydx89KY5O71FKMPaQ2vBfBFI5NHR63A=="],
 

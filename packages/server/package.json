@@ -1,0 +1,31 @@
+{
+  "name": "@ozaco/server",
+  "version": "0.0.1",
+  "homepage": "https://ozaco.com/",
+  "author": "giveerr (https://github.com/giveerr)",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ozaco/ozaco.git"
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "type": "module",
+  "exports": {
+    "./core": {
+      "import": {
+        "types": "./dist/core.d.ts",
+        "default": "./dist/core.js"
+      },
+      "require": {
+        "types": "./dist/core.d.cts",
+        "default": "./dist/core.cjs"
+      },
+      "source": "./src/core/index.ts"
+    }
+  },
+  "devDependencies": {
+    "tsdown": "catalog:build"
+  }
+}

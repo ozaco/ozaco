@@ -22,3 +22,7 @@ declare module 'std:io/bun' {
 declare module 'std:io/node' {
   export * from '@ozaco/std/io/node'
 }
+
+declare module 'server:core' {
+  export * from '@ozaco/server/core'
+}

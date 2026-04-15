@@ -11,6 +11,10 @@ const STD_MODULES: Record<string, { subpath: string; source: string }> = {
   'std:io/node': { subpath: 'io/node', source: 'io/impl/node.ts' },
 }
 
+const SERVER_MODULES: Record<string, { subpath: string; source: string }> = {
+  'server:core': { subpath: 'core', source: 'core/index.ts' },
+}
+
 export interface StdResolveOptions {
   sourceDir?: string
 }
@@ -37,6 +41,22 @@ export const stdResolve = (options?: StdResolveOptions): Plugin => {
     aliases[specifier] = options?.sourceDir
       ? `${options.sourceDir}/${source}`
       : `@ozaco/std/${subpath}`
+  }
+
+  return resolveAlias({ aliases, external: !options?.sourceDir })
+}
+
+export interface ServerResolveOptions {
+  sourceDir?: string
+}
+
+export const serverResolve = (options?: ServerResolveOptions): Plugin => {
+  const aliases: Record<string, string> = {}
+
+  for (const [specifier, { subpath, source }] of Object.entries(SERVER_MODULES)) {
+    aliases[specifier] = options?.sourceDir
+      ? `${options.sourceDir}/${source}`
+      : `@ozaco/server/${subpath}`
   }
 
   return resolveAlias({ aliases, external: !options?.sourceDir })

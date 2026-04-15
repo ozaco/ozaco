@@ -24,7 +24,7 @@
     "module": "esnext",
     "moduleDetection": "force",
 
-    "types": ["node", "bun", "std"],
+    "types": ["node", "bun", "ozaco"],
 
     "moduleResolution": "bundler",
     "noEmitOnError": true,

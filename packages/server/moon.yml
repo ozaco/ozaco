@@ -1,0 +1,26 @@
+language: typescript
+layer: library
+toolchains:
+  default: bun
+
+tasks:
+  build:
+    command: bun x tsdown
+    inputs:
+      - src/**/*
+      - tsdown.config.ts
+    outputs:
+      - dist/**/*
+  dev:
+    command: bun x tsdown --watch
+    inputs:
+      - src/**/*
+      - tsdown.config.ts
+    outputs:
+      - dist/**/*
+  test:
+    command: bun test --pass-with-no-tests
+    deps:
+      - server:build
+    inputs:
+      - tests/**/*
