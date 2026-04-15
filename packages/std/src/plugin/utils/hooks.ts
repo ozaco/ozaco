@@ -129,7 +129,6 @@ export const createHookable = (options: {
       name: string
       version: string
       description?: string
-      dependencies?: readonly AnyType[]
       setup(...args: AnyType[]): Operation<unknown, unknown>
     },
     buildActions?: Record<string, Helpers.AnyAction>,
@@ -170,7 +169,6 @@ export const createHookable = (options: {
       version: opts.version,
       description: opts.description,
       context,
-      dependencies: opts.dependencies ?? [],
       setup: operation(setup as AnyType, '#setup', tag),
       actions,
       useHook: hooks.useHook,

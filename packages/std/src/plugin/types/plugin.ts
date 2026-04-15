@@ -23,7 +23,6 @@ export interface Plugin<
   version: string
   description: string
   context: Context<TResult[0]>
-  dependencies: readonly Plugin[]
   setup(...args: TArgs): Operation<TResult[0], TResult[1]>
   actions: TActions
 }
@@ -57,7 +56,6 @@ export interface Namespace<
     name: TImplName
     version: string
     description?: string
-    dependencies?: readonly Plugin[]
     setup(...args: TArgs): Operation<TContext, TError>
   }): NamespaceImpl<[TContext, TError], TArgs, TActions>
 }

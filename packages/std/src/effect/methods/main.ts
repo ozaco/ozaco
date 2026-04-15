@@ -37,7 +37,7 @@ export function* exit(status: number, message?: string): Operation<void> {
   yield* escape(payload)
 }
 
-export async function main(body: (args: string[]) => Operation<void>): Promise<void> {
+export async function main(body: (args: string[]) => Operation<void, AnyType>): Promise<void> {
   // oxlint-disable-next-line unicorn/consistent-function-scoping
   let hardexit = (_status: number) => {}
 
