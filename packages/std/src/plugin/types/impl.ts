@@ -9,7 +9,7 @@ export namespace Impl {
     version: string
     description?: string
     setup(...args: TArgs): Operation<TContext, TError>
-  }) => PluginDef<[TContext, TError], TArgs>
+  }) => PluginDef<TContext, TError, TArgs>
 
   export type DefineNamespace = <
     TContext,

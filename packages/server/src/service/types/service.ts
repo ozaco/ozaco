@@ -7,6 +7,6 @@ export interface Service<
   TError = unknown,
   TArgs extends unknown[] = unknown[],
   TActions = unknown,
-> extends Plugin<[TContext, TError], TArgs, TActions> {
+> extends Plugin<TContext, TError, TArgs, TActions> {
   _st: typeof SERVICE
 }

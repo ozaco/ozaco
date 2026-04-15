@@ -14,7 +14,8 @@ export interface Hookable<TActions extends EmptyType = EmptyType> {
 }
 
 export interface Plugin<
-  TResult extends [unknown, unknown] = [unknown, unknown],
+  TContext = unknown,
+  TError = unknown,
   TArgs extends unknown[] = unknown[],
   TActions = unknown,
 > extends Hookable<TActions & EmptyType> {
@@ -22,22 +23,22 @@ export interface Plugin<
   name: string
   version: string
   description: string
-  context: Context<TResult[0]>
-  setup(...args: TArgs): Operation<TResult[0], TResult[1]>
+  context: Context<TContext>
+  setup(...args: TArgs): Operation<TContext, TError>
   actions: TActions
 }
 
-export interface PluginDef<TResult extends [unknown, unknown], TArgs extends unknown[]> {
-  context: Context<TResult[0]>
-  build(): Plugin<TResult, TArgs>
-  build<TActions extends EmptyType>(actions: TActions): Plugin<TResult, TArgs, TActions>
+export interface PluginDef<TContext, TError, TArgs extends unknown[]> {
+  context: Context<TContext>
+  build(): Plugin<TContext, TError, TArgs>
+  build<TActions extends EmptyType>(actions: TActions): Plugin<TContext, TError, TArgs, TActions>
 }
 
 export interface App {
-  install<TResult extends [unknown, unknown], TArgs extends unknown[]>(
-    plugin: Plugin<TResult, TArgs>,
+  install<TContext, TError, TArgs extends unknown[]>(
+    plugin: Plugin<TContext, TError, TArgs>,
     ...args: TArgs
-  ): TResult[0]
+  ): TContext
   use: Helpers.Use
 }
 
@@ -57,16 +58,17 @@ export interface Namespace<
     version: string
     description?: string
     setup(...args: TArgs): Operation<TContext, TError>
-  }): NamespaceImpl<[TContext, TError], TArgs, TActions>
+  }): NamespaceImpl<TContext, TError, TArgs, TActions>
 }
 
 export interface NamespaceImpl<
-  TResult extends [unknown, unknown],
+  TContext,
+  TError,
   TArgs extends unknown[],
   TActions extends EmptyType,
 > {
-  context: Context<TResult[0]>
+  context: Context<TContext>
   build: <TBuildedActions extends TActions & Record<string | number, AnyType>>(
     actions: TBuildedActions,
-  ) => Plugin<TResult, TArgs, TBuildedActions>
+  ) => Plugin<TContext, TError, TArgs, TBuildedActions>
 }
