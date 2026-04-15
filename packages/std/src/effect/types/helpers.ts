@@ -57,9 +57,9 @@ export namespace Helpers {
   }
 
   export interface HostOperation<T> {
-    deno(): Operation<T>
-    node(): Operation<T>
-    browser(): Operation<T>
+    deno(): Operation<T, unknown>
+    node(): Operation<T, unknown>
+    browser(): Operation<T, unknown>
   }
 
   export interface FutureWithResolvers<T> {

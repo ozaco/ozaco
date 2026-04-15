@@ -1,5 +1,5 @@
-import { fail, succeed, unwrap } from 'std:result'
 import type { Result } from 'std:result'
+import { fail, succeed, unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import { encapsulate } from '../internal/task-group'
@@ -13,7 +13,7 @@ export function* callcc<T, E = unknown>(
   op: (
     resolve: (value: T) => Operation<void>,
     reject: (error: E) => Operation<void>,
-  ) => Operation<void>,
+  ) => Operation<void, E>,
 ): Operation<T> {
   const result = withResolvers<Result<T, E>>()
 

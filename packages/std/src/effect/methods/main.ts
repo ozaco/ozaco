@@ -12,7 +12,7 @@ import { useScope } from './scope'
 
 declare const Deno: AnyType
 
-function* withHost<T>(op: Helpers.HostOperation<T>): Operation<T> {
+function* withHost<T>(op: Helpers.HostOperation<T>): Operation<T, unknown> {
   const global = globalThis as Record<string, unknown>
 
   // oxlint-disable-next-line unicorn/no-typeof-undefined
@@ -37,12 +37,12 @@ export function* exit(status: number, message?: string): Operation<void> {
   yield* escape(payload)
 }
 
-export async function main(body: (args: string[]) => Operation<void, AnyType>): Promise<void> {
+export async function main(body: (args: string[]) => Operation<void, unknown>): Promise<void> {
   // oxlint-disable-next-line unicorn/consistent-function-scoping
   let hardexit = (_status: number) => {}
 
   const result = await run(() =>
-    callcc<Helpers.Exit>(function* (resolve) {
+    callcc<Helpers.Exit, unknown>(function* (resolve) {
       yield* ExitContext.set(resolve)
 
       const interval = setInterval(() => {}, 2 ** 30)
