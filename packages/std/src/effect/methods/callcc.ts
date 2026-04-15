@@ -1,5 +1,5 @@
 import type { Result } from 'std:result'
-import { fail, succeed, unwrap } from 'std:result'
+import { fail, succeed } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import { encapsulate } from '../internal/task-group'
@@ -24,6 +24,6 @@ export function* callcc<T, E = unknown>(
   return yield* encapsulate(function* () {
     yield* spawn(() => op(resolve, reject))
 
-    return unwrap(yield* result.operation) as T
+    return (yield* result.operation) as T
   })
 }

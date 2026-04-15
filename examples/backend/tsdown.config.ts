@@ -6,7 +6,7 @@ export default defineConfig({
   entry: {
     app: './src/index.ts',
   },
-  format: ['esm', 'cjs'],
+  format: ['esm'],
   dts: true,
   fixedExtension: false,
   clean: true,
