@@ -63,8 +63,12 @@ export const defineAction: Impl.DefineAction = (...args: AnyType[]) => {
 
   const action = Object.assign(wrapped, {
     _at: ACTION,
+
     input: inputSchema,
     output: outputSchema,
+
+    title: config?.title,
+    description: config?.description,
   })
 
   return action as AnyType

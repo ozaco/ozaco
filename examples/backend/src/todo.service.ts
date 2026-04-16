@@ -19,12 +19,17 @@ export const TodoService = defineService({
 
     add: defineAction(
       {
+        title: 'Add Todo',
+        description: 'adds new todo',
+
         input: z.string(),
         output: z.number(),
       },
       // oxlint-disable-next-line require-yield
-      function* (_ctx) {
-        return _ctx
+      function* (ctx) {
+        console.log(ctx)
+
+        return ctx.body
       },
     ),
   },
