@@ -8,6 +8,7 @@ export namespace Impl {
     name: string
     version: string
     description?: string
+    subtype?: symbol
     setup(...args: TArgs): Operation<TContext, TError>
   }) => PluginDef<TContext, TError, TArgs>
 
@@ -20,6 +21,7 @@ export namespace Impl {
     name: string
     version: string
     description?: string
+    subtype?: symbol
     handlers?: { [K in keyof TActions]: TActions[K] }
   }) => Namespace<TContext, TError, TArgs, TActions>
 }

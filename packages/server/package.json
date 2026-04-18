@@ -34,9 +34,24 @@
         "default": "./dist/service.cjs"
       },
       "source": "./src/service/index.ts"
+    },
+    "./bun": {
+      "import": {
+        "types": "./dist/bun.d.ts",
+        "default": "./dist/bun.js"
+      },
+      "require": {
+        "types": "./dist/bun.d.cts",
+        "default": "./dist/bun.cjs"
+      },
+      "source": "./src/impl/bun.ts"
     }
   },
   "devDependencies": {
+    "rou3": "0.8.1",
     "tsdown": "catalog:build"
+  },
+  "peerDependencies": {
+    "rou3": "*"
   }
 }

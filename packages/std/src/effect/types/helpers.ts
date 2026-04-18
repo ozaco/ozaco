@@ -56,10 +56,11 @@ export namespace Helpers {
     error?: unknown
   }
 
-  export interface HostOperation<T> {
-    deno(): Operation<T, unknown>
-    node(): Operation<T, unknown>
-    browser(): Operation<T, unknown>
+  export interface HostOperation<T, E> {
+    deno(): Operation<T, E>
+    node(): Operation<T, E>
+    bun(): Operation<T, E>
+    browser(): Operation<T, E>
   }
 
   export interface FutureWithResolvers<T> {

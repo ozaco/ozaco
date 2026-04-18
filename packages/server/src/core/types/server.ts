@@ -9,8 +9,8 @@ export interface ServerContext {
 export interface ServerActions extends Record<string, AnyType> {
   start(options: Partial<ServerContext>): Future<ServerContext, unknown>
   isStarted(): Future<boolean, unknown>
-  pause(): Future<void, unknown>
-  isPaused(): Future<boolean, unknown>
+  pause(cause: string): Future<void, unknown>
+  isPaused(): Future<false | string, unknown>
   resume(): Future<void, unknown>
   destroy(): Future<void, unknown>
 }

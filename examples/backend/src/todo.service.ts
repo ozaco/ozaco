@@ -1,7 +1,7 @@
 import { fail } from 'std:result'
 
-import { defineAction, defineService } from 'server:service'
-
+import { Router } from 'server:core'
+import { defineAction, defineService, useSelf } from 'server:service'
 // oxlint-disable-next-line import/no-named-as-default
 import z from 'zod'
 
@@ -27,15 +27,15 @@ export const TodoService = defineService({
       },
       // oxlint-disable-next-line require-yield
       function* (ctx) {
-        console.log(ctx)
-
         return ctx.body
       },
     ),
   },
 
-  // oxlint-disable-next-line require-yield
   *setup() {
+    const self = yield* useSelf()
+    yield* Router.actions.mount('/todo', self)
+
     console.log('todo: up')
   },
 })

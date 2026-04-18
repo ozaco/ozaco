@@ -2,7 +2,6 @@ import { operation } from 'std:effect'
 import { fail } from 'std:result'
 import type { AnyType, StandardSchemaV1 } from 'std:shared'
 
-import { ACTION } from '../const'
 import type { Impl } from '../types/impl'
 
 const validate = (
@@ -59,14 +58,11 @@ export const defineAction: Impl.DefineAction = (...args: AnyType[]) => {
         }
       : handler
 
-  const wrapped = operation(validated)
+  const action = operation(validated)
 
-  const action = Object.assign(wrapped, {
-    _at: ACTION,
-
+  Object.assign(action, {
     input: inputSchema,
     output: outputSchema,
-
     title: config?.title,
     description: config?.description,
   })

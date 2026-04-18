@@ -30,3 +30,7 @@ declare module 'server:core' {
 declare module 'server:service' {
   export * from '@ozaco/server/service'
 }
+
+declare module 'server:bun' {
+  export * from '@ozaco/server/bun'
+}

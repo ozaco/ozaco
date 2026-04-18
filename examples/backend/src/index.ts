@@ -1,16 +1,19 @@
-import { main } from 'std:effect'
+import { main, suspend } from 'std:effect'
 import { install } from 'std:plugin'
 
-import { Server } from 'server:core'
+import { BunServer } from 'server:bun'
+import { DefaultRouter, Server } from 'server:core'
 
 import { TodoService } from './todo.service'
 
 await main(function* () {
+  yield* install(BunServer)
+  yield* install(DefaultRouter)
   yield* install(TodoService)
 
   try {
     yield* TodoService.actions.add({
-      body: 'sa',
+      body: 'test',
     })
   } catch {
     console.log('validations working')
@@ -22,4 +25,6 @@ await main(function* () {
   })
 
   console.log(`Server is listening: http://${host}:${port}/`)
+
+  yield* suspend()
 })

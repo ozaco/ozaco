@@ -1,6 +1,9 @@
 import type { Plugin } from 'std:plugin'
+import type { AnyType } from 'std:shared'
 
 import type { SERVICE } from '../const'
+
+import type { ActionMeta } from './action'
 
 export interface Service<
   TContext = unknown,
@@ -9,4 +12,5 @@ export interface Service<
   TActions = unknown,
 > extends Plugin<TContext, TError, TArgs, TActions> {
   _st: typeof SERVICE
+  meta: Map<string, ActionMeta<AnyType>>
 }

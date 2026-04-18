@@ -41,6 +41,7 @@ export interface Context<T> {
 export interface Scope {
   _t: typeof SCOPE
   run<T, E = never>(operation: () => Operation<T, E>): Task<T, E>
+  safeRun<T, E = never>(operation: () => Operation<T, E>): Promise<Result<T, E>>
   spawn<T, E = never>(operation: () => Operation<T, E>): Operation<Task<T, E>>
   get<T>(context: Context<T>): T | undefined
   set<T>(context: Context<T>, value: T): T

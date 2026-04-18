@@ -1,4 +1,6 @@
-import { fail, isSuccess, succeed, unwrap } from 'std:result'
+import type { Result } from 'std:result'
+import { asFailure, fail, isSuccess, succeed, unwrap } from 'std:result'
+import type { AnyType } from 'std:shared'
 
 import { SCOPE } from '../const'
 import { withResolvers } from '../methods/with-resolvers'
@@ -44,6 +46,19 @@ export function createScopeInternal(
       const { task, start } = createTask({ operation, owner: scope })
       start()
       return task
+    },
+    async safeRun<T>(operation: () => Operation<T>): Promise<Result<T, unknown>> {
+      const task = scope.run(function* () {
+        try {
+          return succeed(yield* operation())
+        } catch (error) {
+          return asFailure(error)
+        }
+      })
+
+      const result = await task
+
+      return (isSuccess(result) ? result.value : result) as AnyType
     },
     spawn<T>(operation: () => Operation<T>): Operation<Task<T>> {
       return {

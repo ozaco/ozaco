@@ -9,24 +9,9 @@ import { call } from './call'
 import { callcc } from './callcc'
 import { run } from './run'
 import { useScope } from './scope'
+import { withHost } from './with-host'
 
 declare const Deno: AnyType
-
-function* withHost<T>(op: Helpers.HostOperation<T>): Operation<T, unknown> {
-  const global = globalThis as Record<string, unknown>
-
-  // oxlint-disable-next-line unicorn/no-typeof-undefined
-  if (typeof global.Deno !== 'undefined') {
-    return yield* op.deno()
-  } else if (
-    // oxlint-disable-next-line unicorn/no-typeof-undefined
-    Object.prototype.toString.call(typeof global.process === 'undefined' ? 0 : global.process) ===
-    '[object process]'
-  ) {
-    return yield* op.node()
-  }
-  return yield* op.browser()
-}
 
 export function* exit(status: number, message?: string): Operation<void> {
   const escape = yield* ExitContext.expect()
@@ -72,6 +57,26 @@ export async function main(body: (args: string[]) => Operation<void, unknown>): 
             }
           },
           *node() {
+            const { default: process } = yield* call<AnyType>(
+              // oxlint-disable-next-line no-new-func
+              () => Function('return import("node:process")')() as Promise<AnyType>,
+            )
+            // oxlint-disable-next-line unicorn/no-process-exit
+            hardexit = status => process.exit(status)
+            try {
+              process.on('SIGINT', interrupt.SIGINT)
+              if (process.platform !== 'win32') {
+                process.on('SIGTERM', interrupt.SIGTERM)
+              }
+              yield* body(process.argv.slice(2))
+            } finally {
+              process.off('SIGINT', interrupt.SIGINT)
+              if (process.platform !== 'win32') {
+                process.off('SIGTERM', interrupt.SIGINT)
+              }
+            }
+          },
+          *bun() {
             const { default: process } = yield* call<AnyType>(
               // oxlint-disable-next-line no-new-func
               () => Function('return import("node:process")')() as Promise<AnyType>,

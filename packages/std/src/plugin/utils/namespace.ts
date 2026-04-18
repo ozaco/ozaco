@@ -11,11 +11,13 @@ export const defineNamespace: Impl.DefineNamespace = (options: {
   version: string
   description?: string
   handlers?: Record<string, AnyType>
+  subtype?: symbol
 }): AnyType => {
   const { context, actions, hooks, buildPlugin } = createHookable({
     name: options.name,
     version: options.version,
     defaultHandlers: options.handlers ? flatten(options.handlers) : undefined,
+    subtype: options.subtype,
   })
 
   return {

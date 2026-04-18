@@ -21,6 +21,7 @@ export const createHookable = (options: {
   name: string
   version: string
   defaultHandlers?: Record<string, AnyType> | undefined
+  subtype?: symbol | undefined
 }) => {
   const context = createContext(options.name)
   const hookCtx = createContext<Helpers.HookStore>(`${options.name}:hooks`, DEFAULT_STORE)
@@ -163,14 +164,19 @@ export const createHookable = (options: {
           }
         : rawSetup
 
+    const knownKeys = [...Object.keys(defaultHandlers), ...Object.keys(selfHandlers)]
+
     return Object.freeze({
       _t: PLUGIN,
+      ...(options.subtype ? { _st: options.subtype } : {}),
+
       name: opts.name,
       version: opts.version,
       description: opts.description,
       context,
       setup: operation(setup as AnyType, '#setup', tag),
       actions,
+      getKeys: () => knownKeys,
       useHook: hooks.useHook,
       around: hooks.around,
       before: hooks.before,

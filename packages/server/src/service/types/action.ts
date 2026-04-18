@@ -1,11 +1,29 @@
-import type { Operation } from 'std:effect'
+import type { Stream } from 'std:effect'
 import type { StandardSchemaV1 } from 'std:shared'
 
-import type { Request, Response } from 'server:core'
+import type { ACTION_CONTEXT } from '../const'
 
-import type { ACTION, ACTION_CONTEXT } from '../const'
+export interface Request {
+  method: string
+  url: URL
 
-export interface ActionConfig<TSchema> {
+  meta: Record<string, string> // headers
+  files: Record<string, Stream<Uint8Array, void>[]>
+  body: unknown
+  rawBody: Stream<Uint8Array, void>
+
+  raw: unknown
+}
+
+export interface Response {
+  meta: Record<string, string> // headers
+  fils: Record<string, Stream<Uint8Array, void>[]>
+  body: unknown
+
+  raw: unknown
+}
+
+export interface ActionMeta<TSchema> {
   input?: TSchema
   output?: StandardSchemaV1
 
@@ -25,16 +43,4 @@ export interface ActionContext<TInput> extends Pick<Request, 'files' | 'meta'> {
   request: Request
 
   res: Response
-}
-
-export interface Action<TArgs extends unknown[] = unknown[], TReturn = unknown, TError = unknown> {
-  (...args: TArgs): Operation<TReturn, TError>
-
-  _t: typeof ACTION
-
-  input?: StandardSchemaV1
-  output?: StandardSchemaV1
-
-  title?: string
-  description?: string
 }

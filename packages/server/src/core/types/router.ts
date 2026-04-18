@@ -1,21 +1,25 @@
-import type { Stream } from 'std:effect'
+import type { Future } from 'std:effect'
+import type { AnyType } from 'std:shared'
 
-export interface Request {
-  method: string
-  url: URL
+import type { Service } from 'server:service'
 
-  meta: Record<string, string> // headers
-  files: Record<string, Stream<Uint8Array, void>[]>
-  body: unknown
-  rawBody: Stream<Uint8Array, void>
+import type { Helpers } from './helpers'
 
-  raw: unknown
+export interface RouterContext {
+  router: AnyType
+  transformer: Helpers.AnyRestTransformer
+  compiled: (method: string, path: string) => AnyType
 }
 
-export interface Response {
-  meta: Record<string, string> // headers
-  fils: Record<string, Stream<Uint8Array, void>[]>
-  body: unknown
+export interface RouterActions extends Record<string, AnyType> {
+  add: (method: string, pattern: string, payload: symbol) => Future<void, unknown>
+  remove: (method: string, pattern: string) => Future<void, unknown>
+  has: (method: string, pattern: string, payload?: symbol) => Future<boolean, unknown>
 
-  raw: unknown
+  find: (method: string, path: string) => Future<[data: symbol, params?: unknown], 'not-found'>
+
+  optimize: () => Future<void, unknown>
+
+  transformer: (transformer: Helpers.AnyRestTransformer) => Future<void, unknown>
+  mount: (prefix: string, service: Service) => Future<void, unknown>
 }

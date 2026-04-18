@@ -1,7 +1,7 @@
 import type { Future, Operation } from 'std:effect'
 import type { AnyType, StandardSchemaV1 } from 'std:shared'
 
-import type { ActionConfig, ActionContext } from './action'
+import type { ActionContext, ActionMeta } from './action'
 import type { Service } from './service'
 
 export namespace Impl {
@@ -11,7 +11,7 @@ export namespace Impl {
     ): (...args: Args) => Future<T, E>
 
     <TSchema extends StandardSchemaV1, TReturn, TError>(
-      config: ActionConfig<TSchema>,
+      config: ActionMeta<TSchema>,
       handler: (
         ctx: ActionContext<StandardSchemaV1.InferOutput<TSchema>>,
       ) => Operation<TReturn, TError>,

@@ -11,6 +11,7 @@ export const definePlugin: Impl.DefinePlugin = (options: {
   version: string
   description?: string
   setup(...args: AnyType[]): Operation<unknown, unknown>
+  subtype?: symbol
 }): AnyType => {
   const { context, buildPlugin } = createHookable(options)
 

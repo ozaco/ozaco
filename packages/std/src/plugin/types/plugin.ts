@@ -20,12 +20,14 @@ export interface Plugin<
   TActions = unknown,
 > extends Hookable<TActions & EmptyType> {
   _t: typeof PLUGIN
+  _st?: symbol | undefined
   name: string
   version: string
   description: string
   context: Context<TContext>
   setup(...args: TArgs): Operation<TContext, TError>
   actions: TActions
+  getKeys(): string[]
 }
 
 export interface PluginDef<TContext, TError, TArgs extends unknown[]> {
