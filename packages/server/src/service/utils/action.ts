@@ -17,8 +17,8 @@ const validate = (
   return result
 }
 
-const formatIssues = (type: string, issues: ReadonlyArray<StandardSchemaV1.Issue>): string =>
-  `${type}: ${issues.map(i => i.message).join(', ')}`
+const formatIssues = (issues: ReadonlyArray<StandardSchemaV1.Issue>): string =>
+  issues.map(i => `At ${i.path?.join('.') || 'root'} : ${i.message}`).join(', ')
 
 export const defineAction: Impl.DefineAction = (...args: AnyType[]) => {
   const [configOrHandler, maybeHandler] = args
@@ -39,7 +39,7 @@ export const defineAction: Impl.DefineAction = (...args: AnyType[]) => {
             const result = validate(inputSchema, ctx.body)
 
             if (result.issues) {
-              yield* fail('validation' as const, formatIssues('input', result.issues))
+              yield* fail('validation' as const, formatIssues(result.issues), 'input')
             }
             ctx.body = (result as StandardSchemaV1.SuccessResult<unknown>).value
           }
@@ -49,7 +49,7 @@ export const defineAction: Impl.DefineAction = (...args: AnyType[]) => {
           if (outputSchema) {
             const result = validate(outputSchema, output)
             if (result.issues) {
-              yield* fail('validation' as const, formatIssues('output', result.issues))
+              yield* fail('validation' as const, formatIssues(result.issues), 'output')
             }
             return (result as StandardSchemaV1.SuccessResult<unknown>).value
           }
@@ -61,10 +61,14 @@ export const defineAction: Impl.DefineAction = (...args: AnyType[]) => {
   const action = operation(validated)
 
   Object.assign(action, {
+    isRaw: !config,
     input: inputSchema,
     output: outputSchema,
     title: config?.title,
     description: config?.description,
+    allow: config?.allow,
+    deny: config?.deny,
+    settings: config?.settings,
   })
 
   return action as AnyType

@@ -12,7 +12,8 @@ await main(function* () {
   yield* install(TodoService)
 
   try {
-    yield* TodoService.actions.add({
+    yield* TodoService.actions.create({
+      // @ts-expect-error test validation
       body: 'test',
     })
   } catch {

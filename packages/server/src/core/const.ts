@@ -9,9 +9,38 @@ export enum RouterTags {
 }
 
 export enum TransformerTags {
-  parse = 'server:transformer#parse',
+  toInternal = 'server:transformer#to-internal',
+  toContext = 'server:transformer#to-context',
+  fromInternal = 'server:transformer#from-internal',
 }
 
 export const SERVER = Symbol.for('server:core:server')
 export const ROUTER = Symbol.for('server:core:router')
 export const REST_TRANSFORMER = Symbol.for('server:core:rest-transformer')
+
+export const DEFAULT_REST_METHODS = {
+  find: {
+    method: 'GET',
+    path: '/',
+  },
+  get: {
+    method: 'GET',
+    path: '/:id',
+  },
+  create: {
+    method: 'POST',
+    path: '/',
+  },
+  update: {
+    method: 'PUT',
+    path: '/:id',
+  },
+  patch: {
+    method: 'PATCH',
+    path: '/:id',
+  },
+  remove: {
+    method: 'DELETE',
+    path: '/:id',
+  },
+}

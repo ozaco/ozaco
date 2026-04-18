@@ -1,9 +1,10 @@
 import { createContext, operation, until, useContext, useScope } from 'std:effect'
-import { fail, isFailure, isSuccess } from 'std:result'
+import { asFailure, auto, fail, isFailure, isSuccess, unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import type { ServerContext } from 'server:core'
 import { Router, Server } from 'server:core'
+import type { ActionRequest, ActionResponse } from 'server:service'
 
 export enum BunServerTags {
   start = 'server:bun#start',
@@ -41,7 +42,7 @@ export const BunServer = Server.implement({
 
     try {
       server = Bun.serve({
-        port: config.port ?? ctx.host,
+        port: config.port ?? ctx.port,
         hostname: config.host ?? ctx.host,
         async fetch(req) {
           const isPaused = await scope.run(function* () {
@@ -54,24 +55,55 @@ export const BunServer = Server.implement({
             return Response.json(fail('server-paused', '', isPaused.value, tag), { status: 503 })
           }
 
+          const url = new URL(req.url)
+
           const result = await scope.safeRun(function* () {
-            // oxlint-disable-next-line unicorn/no-array-method-this-argument
-            const route = yield* Router.actions.find(req.method, req.url)
-
             const CurrentTransformer = routerCtx.transformer
+            let actionReq: ActionRequest | null = null
+            let actionRes: ActionResponse | null = null
 
-            const parsedReq = yield* CurrentTransformer.actions.parse(req, null)
+            try {
+              const [routeSymbol, routeParams] = yield* Router.actions.find(
+                // oxlint-disable-next-line unicorn/no-array-method-this-argument
+                req.method,
+                url.pathname,
+              )
 
-            console.log(route, parsedReq)
+              const entry = routerCtx.handlers.get(routeSymbol)
+              if (!entry) {
+                return yield* fail('not-found', `no handler for ${req.method}:${url.pathname}`)
+              }
 
-            return 'test'
+              const internal = yield* CurrentTransformer.actions.toInternal(req, null, {
+                entry: entry.key,
+                params: routeParams as Record<string, unknown>,
+              })
+
+              actionReq = internal[0]
+              actionRes = internal[1]
+
+              const actionCtx = yield* CurrentTransformer.actions.toContext(actionReq, actionRes, {
+                entry: entry.key,
+                params: routeParams as Record<string, unknown>,
+              })
+
+              const actionResult = yield* entry.handler(actionCtx)
+
+              return yield* CurrentTransformer.actions.fromInternal(
+                actionReq,
+                actionRes,
+                auto(actionResult),
+              )
+            } catch (error) {
+              return yield* CurrentTransformer.actions.fromInternal(
+                actionReq,
+                actionRes,
+                asFailure(error),
+              )
+            }
           })
 
-          if (isSuccess(result)) {
-            return result.value as AnyType
-          }
-
-          return Response.json(result, { status: 500 })
+          return unwrap(result)
         },
       })
     } catch (error) {
@@ -81,8 +113,8 @@ export const BunServer = Server.implement({
     ctx.host = server.hostname
     ctx.port = server.port
 
-    BunServerRef.set(server)
-    BunIsStartedRef.set(true)
+    yield* BunServerRef.set(server)
+    yield* BunIsStartedRef.set(true)
 
     return { host: server.hostname, port: server.port } as ServerContext
   }, BunServerTags.start),

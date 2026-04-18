@@ -1,6 +1,6 @@
 import { fail } from 'std:result'
 
-import { Router } from 'server:core'
+import { DefaultRouter, Router } from 'server:core'
 import { defineAction, defineService, useSelf } from 'server:service'
 // oxlint-disable-next-line import/no-named-as-default
 import z from 'zod'
@@ -9,21 +9,39 @@ export const TodoService = defineService({
   name: 'todo',
   version: '0.0.1',
   actions: {
-    get: defineAction(function* <T extends string>(id?: T) {
-      if (!id) {
-        return yield* fail('not-found', `todo ${id} not found`)
-      }
+    get: defineAction(
+      {
+        input: z.object({
+          id: z.string(),
+        }),
+      },
+      function* (ctx) {
+        if (!ctx.body.id) {
+          return yield* fail('not-found', `todo ${ctx.body.id} not found`)
+        }
 
-      return `Todo: #${id}` as const
-    }),
+        return `Todo: #${ctx.body.id}` as const
+      },
+    ),
 
-    add: defineAction(
+    create: defineAction(
       {
         title: 'Add Todo',
         description: 'adds new todo',
 
-        input: z.string(),
-        output: z.number(),
+        input: z.object({
+          id: z.string(),
+        }),
+        output: z.object({
+          id: z.string(),
+        }),
+
+        settings: {
+          [DefaultRouter]: {
+            method: 'POST',
+            path: '/create',
+          },
+        },
       },
       // oxlint-disable-next-line require-yield
       function* (ctx) {
@@ -33,8 +51,7 @@ export const TodoService = defineService({
   },
 
   *setup() {
-    const self = yield* useSelf()
-    yield* Router.actions.mount('/todo', self)
+    yield* Router.actions.mount('/todo', yield* useSelf())
 
     console.log('todo: up')
   },

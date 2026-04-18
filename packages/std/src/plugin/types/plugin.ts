@@ -51,16 +51,17 @@ export interface Namespace<
   TActions extends EmptyType = EmptyType,
 > extends Hookable<TActions> {
   _t: typeof NAMESPACE
+  _st?: symbol | undefined
   name: string
   version: string
   context: Context<TContext>
   actions: TActions
-  implement<TImplName extends string>(options: {
-    name: TImplName
+  implement<TIContext extends TContext, TIError extends TError, TIArgs extends TArgs>(options: {
+    name: string
     version: string
     description?: string
-    setup(...args: TArgs): Operation<TContext, TError>
-  }): NamespaceImpl<TContext, TError, TArgs, TActions>
+    setup(...args: TIArgs): Operation<TIContext, TIError>
+  }): NamespaceImpl<TIContext, TIError, TIArgs, TActions>
 }
 
 export interface NamespaceImpl<

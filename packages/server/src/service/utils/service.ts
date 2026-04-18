@@ -33,10 +33,14 @@ export const defineService: Impl.DefineService = options => {
     })
 
     metaMap.set(key, {
+      isRaw: rawAction.isRaw,
       input: rawAction.input,
       output: rawAction.output,
       title: rawAction.title,
       description: rawAction.description,
+      allow: rawAction.allow,
+      deny: rawAction.deny,
+      settings: rawAction.settings,
     })
   }
 

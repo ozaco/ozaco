@@ -1,10 +1,27 @@
 import type { Future } from 'std:effect'
+import type { Result } from 'std:result'
 import type { AnyType, EmptyType } from 'std:shared'
 
-import type { Request } from 'server:service'
+import type { ActionContext, ActionRequest, ActionResponse } from 'server:service'
 
 export type RestTransformerContext = EmptyType
 
 export interface RestTransformerActions extends Record<string, AnyType> {
-  parse: (req: unknown, res: unknown) => Future<Request, unknown>
+  toInternal: (
+    req: unknown,
+    res: unknown,
+    meta: unknown,
+  ) => Future<[req: ActionRequest, res: ActionResponse], unknown>
+
+  toContext: (
+    req: ActionRequest,
+    res: ActionResponse,
+    meta: unknown,
+  ) => Future<ActionContext<unknown>, unknown>
+
+  fromInternal: (
+    req: ActionRequest | null,
+    res: ActionResponse | null,
+    ret: Result<unknown, unknown>,
+  ) => Future<AnyType, unknown>
 }

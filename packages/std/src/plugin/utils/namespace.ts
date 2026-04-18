@@ -22,6 +22,7 @@ export const defineNamespace: Impl.DefineNamespace = (options: {
 
   return {
     _t: NAMESPACE,
+    _st: options.subtype,
     name: options.name,
     version: options.version,
     context,

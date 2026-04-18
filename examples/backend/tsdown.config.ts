@@ -9,7 +9,7 @@ export default defineConfig({
   format: ['esm'],
   dts: true,
   fixedExtension: false,
-  clean: true,
+  clean: false,
   outDir: './dist',
   plugins: [stdResolve(), serverResolve()],
 })
