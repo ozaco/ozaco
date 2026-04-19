@@ -3,7 +3,10 @@
   "version": "0.0.6",
   "homepage": "https://ozaco.com/",
   "author": "giveerr (https://github.com/giveerr)",
-  "repository": "https://github.com/ozaco/ozaco",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ozaco/ozaco.git"
+  },
   "files": [
     "dist",
     "src"
