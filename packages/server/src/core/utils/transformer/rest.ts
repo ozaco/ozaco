@@ -179,13 +179,16 @@ export const Rest: Helpers.DefaultRestTransformer = RestDef.build({
       *bun() {
         return {
           _t: ACTION_CONTEXT,
+
           type: 'http' as const,
           from: meta.entry,
+
           body: req.body,
-          request: req,
-          res,
           files: req.files,
           meta: req.meta,
+
+          req,
+          res,
         } satisfies ActionContext<unknown>
       },
       *node() {

@@ -18,9 +18,9 @@ export interface ActionRequest {
   meta: Record<string, string> // headers
   files: Record<string, ActionFile[]>
   body: unknown
-  rawBody: Stream<Uint8Array, void> | null
 
   raw: unknown
+  rawBody: Stream<Uint8Array, void> | null
 }
 
 export interface ActionResponse {
@@ -53,7 +53,7 @@ export interface ActionContext<TInput> extends Pick<ActionRequest, 'files' | 'me
   from: string
 
   body: TInput
-  request: ActionRequest
 
+  req: ActionRequest
   res: ActionResponse
 }

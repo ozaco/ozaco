@@ -98,7 +98,7 @@ export const BunIO = IO.implement({
 
   ensureDir: operation(function* (path) {
     yield* until(fs.mkdir(toPath(path), { recursive: true }))
-  }, IO_TAGS.enureDir),
+  }, IO_TAGS.ensureDir),
 
   ensureFile: operation(function* (path) {
     const p = toPath(path)
@@ -108,7 +108,7 @@ export const BunIO = IO.implement({
     if (!fileExists) {
       yield* until(Bun.write(p, ''))
     }
-  }, IO_TAGS.enureFile),
+  }, IO_TAGS.ensureFile),
 
   emptyDir: operation(function* (path) {
     const p = toPath(path)

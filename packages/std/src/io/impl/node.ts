@@ -96,7 +96,7 @@ export const NodeIO = IO.implement({
 
   ensureDir: operation(function* (path) {
     yield* until(fs.mkdir(toPath(path), { recursive: true }))
-  }, IO_TAGS.enureDir),
+  }, IO_TAGS.ensureDir),
 
   ensureFile: operation(function* (path) {
     const p = toPath(path)
@@ -107,7 +107,7 @@ export const NodeIO = IO.implement({
     } catch {
       yield* until(fs.writeFile(p, ''))
     }
-  }, IO_TAGS.enureFile),
+  }, IO_TAGS.ensureFile),
 
   emptyDir: operation(function* (path) {
     const p = toPath(path)

@@ -20,11 +20,11 @@ export const rawFile = defineAction(
   },
 
   function* (ctx) {
-    if (!ctx.request.rawBody) {
+    if (!ctx.req.rawBody) {
       return yield* fail('unexpected', 'send files')
     }
 
-    const chunks = yield* each(ctx.request.rawBody)
+    const chunks = yield* each(ctx.req.rawBody)
     for (const chunk of chunks) {
       decoder.decode(chunk)
 

@@ -123,7 +123,7 @@ export const BunServer = Server.implement({
 
   isStarted: operation(function* () {
     return (yield* BunIsStartedRef.get()) ?? false
-  }, BunServerTags.pause),
+  }, BunServerTags.isStarted),
 
   pause: operation(function* (cause) {
     yield* BunIsPausedRef.set(cause)
@@ -131,7 +131,7 @@ export const BunServer = Server.implement({
 
   isPaused: operation(function* () {
     return (yield* BunIsPausedRef.get()) ?? false
-  }, BunServerTags.pause),
+  }, BunServerTags.isPaused),
 
   resume: operation(function* () {
     yield* BunIsPausedRef.set(false)
