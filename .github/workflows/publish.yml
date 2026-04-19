@@ -25,10 +25,8 @@ jobs:
       - run: 'bun install --frozen-lockfile'
       - run: 'moon run std:build server:build --color'
 
-      - run: bunx npm whoami
-
-      - run: 'bun pm pack && bunx npm publish ./*.tgz --access public'
+      - run: 'bun pm pack && npm publish ./*.tgz --access public --provenance'
         working-directory: 'packages/std'
 
-      - run: 'bun pm pack && bunx npm publish ./*.tgz --access public'
+      - run: 'bun pm pack && npm publish ./*.tgz --access public --provenance'
         working-directory: 'packages/server'
