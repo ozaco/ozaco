@@ -5,7 +5,7 @@
   "author": "giveerr (https://github.com/giveerr)",
   "repository": {
     "type": "git",
-    "url": "https://github.com/ozaco/ozaco.git"
+    "url": "git+https://github.com/ozaco/ozaco.git"
   },
   "files": [
     "dist",
@@ -101,6 +101,11 @@
       },
       "source": "./src/shared/index.ts"
     }
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true,
+    "registry": "https://registry.npmjs.org/"
   },
   "devDependencies": {
     "tsdown": "catalog:build"

@@ -21,11 +21,16 @@ jobs:
         with:
           auto-install: true
 
+      - uses: 'actions/setup-node@v6'
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+
       - run: 'bun install --frozen-lockfile'
       - run: 'moon run std:build server:build --color'
 
-      - run: 'bun publish --access public --provenance'
+      - run: 'npm publish --access public'
         working-directory: 'packages/std'
 
-      - run: 'bun publish --access public --provenance'
+      - run: 'npm publish --access public'
         working-directory: 'packages/server'
