@@ -1,6 +1,7 @@
 import { operation } from 'std:effect'
 import { fail } from 'std:result'
 import type { AnyType, StandardSchemaV1 } from 'std:shared'
+import { isFunction } from 'std:shared'
 
 import type { Impl } from '../types/impl'
 
@@ -23,7 +24,7 @@ const formatIssues = (issues: ReadonlyArray<StandardSchemaV1.Issue>): string =>
 export const defineAction: Impl.DefineAction = (...args: AnyType[]) => {
   const [configOrHandler, maybeHandler] = args
   const hasConfig =
-    typeof configOrHandler === 'object' && configOrHandler !== null && 'input' in configOrHandler
+    typeof configOrHandler === 'object' && configOrHandler !== null && !isFunction(configOrHandler)
 
   const handler = hasConfig ? maybeHandler : configOrHandler
   const config = hasConfig ? configOrHandler : undefined
@@ -61,7 +62,7 @@ export const defineAction: Impl.DefineAction = (...args: AnyType[]) => {
   const action = operation(validated)
 
   Object.assign(action, {
-    isRaw: !config,
+    isRaw: !hasConfig,
     input: inputSchema,
     output: outputSchema,
     title: config?.title,

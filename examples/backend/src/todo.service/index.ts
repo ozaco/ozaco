@@ -4,6 +4,7 @@ import { defineService, useSelf } from 'server:service'
 import { create } from './create'
 import { custom } from './custom'
 import { get } from './get'
+import { rawFile } from './raw-file'
 
 export const TodoService = defineService({
   name: 'todo',
@@ -12,6 +13,7 @@ export const TodoService = defineService({
     get,
     create,
     custom,
+    rawFile,
   },
 
   *setup() {
