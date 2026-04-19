@@ -28,8 +28,8 @@ jobs:
 
       - run: 'bun pm pack'
         working-directory: 'packages/std'
-      - run: 'npm publish packages/std/*.tgz --provenance'
+      - run: 'npm publish packages/std/*.tgz'
 
       - run: 'bun pm pack'
         working-directory: 'packages/server'
-      - run: 'npm publish packages/server/*.tgz --provenance'
+      - run: 'npm publish packages/server/*.tgz'

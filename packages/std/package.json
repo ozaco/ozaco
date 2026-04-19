@@ -102,6 +102,11 @@
       "source": "./src/shared/index.ts"
     }
   },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true,
+    "registry": "https://registry.npmjs.org/"
+  },
   "devDependencies": {
     "tsdown": "catalog:build"
   }

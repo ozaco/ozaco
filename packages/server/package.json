@@ -47,6 +47,11 @@
       "source": "./src/impl/bun.ts"
     }
   },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true,
+    "registry": "https://registry.npmjs.org/"
+  },
   "devDependencies": {
     "rou3": "0.8.1",
     "tsdown": "catalog:build"
