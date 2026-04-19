@@ -1,3 +1,5 @@
+import { each } from 'std:effect'
+
 import { Rest } from 'server:core'
 import { defineAction } from 'server:service'
 // oxlint-disable-next-line import/no-named-as-default
@@ -23,8 +25,17 @@ export const custom = defineAction(
       }),
     ],
   },
-  // oxlint-disable-next-line require-yield
   function* (ctx) {
+    console.log(ctx.request.rawBody, 'here')
+
+    if (ctx.request.rawBody) {
+      const chunks = yield* each(ctx.request.rawBody)
+
+      for (const chunk of chunks) {
+        console.log(chunk)
+      }
+    }
+
     return ctx.body
   },
 )

@@ -15,7 +15,7 @@ export const withResolvers = <T>(desc?: string): Helpers.WithResolvers<T> => {
       if (isSuccess(outcome)) {
         resolve(outcome.value)
       } else {
-        reject(outcome.error)
+        reject(outcome)
       }
     }
 

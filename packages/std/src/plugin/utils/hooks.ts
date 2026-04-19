@@ -30,69 +30,70 @@ export const createHookable = (options: {
 
   const resolveAction =
     (key: string) =>
-    (...args: unknown[]) => ({
-      *[Symbol.iterator]() {
-        return yield* chainCtx.with(new Map(), function* (): Operation<unknown> {
-          const store = (yield* hookCtx.get()) ?? DEFAULT_STORE
+    (...args: unknown[]) =>
+      chainCtx.with(new Map(), function* (): Operation<unknown> {
+        const store = (yield* hookCtx.get()) ?? DEFAULT_STORE
 
-          const arounds = store.around.flatMap(e => (key in e.handlers ? [e.handlers[key]] : []))
-          const befores = store.before.flatMap(e => (key in e.handlers ? [e.handlers[key]] : []))
-          const afters = store.after.flatMap(e => (key in e.handlers ? [e.handlers[key]] : []))
-          const errors = store.error.flatMap(e => (key in e.handlers ? [e.handlers[key]] : []))
-          const self = store.self[key] ?? (defaultHandlers as AnyType)[key]
+        const arounds = store.around.flatMap(e => (key in e.handlers ? [e.handlers[key]] : []))
+        const befores = store.before.flatMap(e => (key in e.handlers ? [e.handlers[key]] : []))
+        const afters = store.after.flatMap(e => (key in e.handlers ? [e.handlers[key]] : []))
+        const errors = store.error.flatMap(e => (key in e.handlers ? [e.handlers[key]] : []))
+        const self = store.self[key] ?? (defaultHandlers as AnyType)[key]
 
-          const tag = `${options.name}@${options.version ?? 'lts'}`
+        const tag = `${options.name}@${options.version ?? 'lts'}`
 
-          const inner = function* (...innerArgs: unknown[]) {
-            for (const hook of befores) {
-              yield* intercept(hook(innerArgs), `${key}:before`, tag)
-            }
-
-            if (!self) {
-              throw fail('unexpected', `No handler for "${key}" in "${options.name}"`)
-            }
-            let result: unknown = yield* intercept(self(...innerArgs))
-
-            for (const hook of afters) {
-              const modified = yield* intercept(hook(result, innerArgs), `${key}:after`, tag)
-              if (modified !== undefined) {
-                result = modified
-              }
-            }
-
-            return result
+        const inner = function* (...innerArgs: unknown[]) {
+          for (const hook of befores) {
+            yield* intercept(hook(innerArgs), `${key}:before`, tag)
           }
 
-          const makeNext =
-            (i: number) =>
-            (...nextArgs: unknown[]): AnyType => ({
-              *[Symbol.iterator]() {
-                if (i < arounds.length) {
-                  return yield* intercept(arounds[i](nextArgs, makeNext(i + 1)))
-                }
-                return yield* intercept(inner(...nextArgs))
-              },
-            })
-
-          try {
-            if (arounds.length > 0) {
-              return yield* intercept(arounds[0](args, makeNext(1)))
-            }
-            return yield* intercept(inner(...args))
-          } catch (error) {
-            if (errors.length > 0) {
-              for (const hook of errors) {
-                yield* intercept(hook(error, args))
-              }
-            }
-            throw error
+          if (!self) {
+            return yield* fail(
+              'unexpected',
+              `No handler for "${key}" in "${options.name}", maybe forgot to install "${options.name}" plugin?`,
+            )
           }
-        })
-      },
-    })
+          let result: unknown = yield* intercept(self(...innerArgs))
+
+          for (const hook of afters) {
+            const modified = yield* intercept(hook(result, innerArgs), `${key}:after`, tag)
+            if (modified !== undefined) {
+              result = modified
+            }
+          }
+
+          return result
+        }
+
+        const makeNext =
+          (i: number) =>
+          (...nextArgs: unknown[]): AnyType => ({
+            *[Symbol.iterator]() {
+              if (i < arounds.length) {
+                return yield* intercept(arounds[i](nextArgs, makeNext(i + 1)))
+              }
+              return yield* intercept(inner(...nextArgs))
+            },
+          })
+
+        try {
+          if (arounds.length > 0) {
+            return yield* intercept(arounds[0](args, makeNext(1)))
+          }
+          return yield* intercept(inner(...args))
+        } catch (error) {
+          if (errors.length > 0) {
+            for (const hook of errors) {
+              yield* intercept(hook(error, args))
+            }
+          }
+          throw error
+        }
+      })
 
   const createProxy = (prefix: string): AnyType => {
     const invoke = (...args: unknown[]) => resolveAction(prefix)(...args)
+
     return new Proxy(invoke, {
       get(_, key: string | symbol) {
         if (typeof key === 'symbol' || key === 'then') {

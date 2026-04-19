@@ -1,6 +1,6 @@
 // oxlint-disable import/exports-last
 
-import { fail } from 'std:result'
+import { asFailure, fail } from 'std:result'
 
 import { EachStack } from '../internal/contexts'
 import type { Helpers } from '../types/helpers'
@@ -22,26 +22,30 @@ export function each<T>(stream: Stream<T, unknown>): Operation<Iterable<T>> {
       const cxt = withResolvers<Helpers.EachLoop<T>>()
 
       yield* spawn(function* () {
-        const subscription = yield* stream
-        const current = yield* subscription.next()
+        try {
+          const subscription = yield* stream
+          const current = yield* subscription.next()
 
-        const stack = scope.expect(EachStack)
+          const stack = scope.expect(EachStack)
 
-        const context: Helpers.EachLoop<T> = {
-          subscription,
-          current,
-          finish() {
-            context.finish = () => {}
-            stack.pop()
-            done.resolve()
-          },
+          const context: Helpers.EachLoop<T> = {
+            subscription,
+            current,
+            finish() {
+              context.finish = () => {}
+              stack.pop()
+              done.resolve()
+            },
+          }
+
+          stack.push(context)
+
+          cxt.resolve(context)
+        } catch (error) {
+          cxt.reject(asFailure(error))
+        } finally {
+          yield* done.operation
         }
-
-        stack.push(context)
-
-        cxt.resolve(context)
-
-        yield* done.operation
       })
 
       const context = yield* cxt.operation

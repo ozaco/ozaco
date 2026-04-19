@@ -3,10 +3,12 @@ import { install } from 'std:plugin'
 
 import { BunServer } from 'server:bun'
 import { DefaultRouter, Server } from 'server:core'
+import { BunIO } from 'std:io/bun'
 
 import { TodoService } from './todo.service'
 
 await main(function* () {
+  yield* install(BunIO)
   yield* install(BunServer)
   yield* install(DefaultRouter)
   yield* install(TodoService)

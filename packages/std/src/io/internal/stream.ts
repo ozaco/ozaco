@@ -50,6 +50,8 @@ export const fromReadable = (target: ReadableLike): Stream<Uint8Array, void> =>
 
     let ended = false
 
+    console.log(target, ended, signal)
+
     const onData = (chunk: Buffer | Uint8Array) => {
       signal.send(chunk instanceof Uint8Array ? chunk : new Uint8Array(chunk))
     }

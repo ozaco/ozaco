@@ -34,6 +34,7 @@ const RestDef = RestTransformer.implement({
 })
 
 const JSON_CONTENT = 'application/json'
+const RAW_BINARY = 'application/octet-stream'
 const BODY_METHODS = new Set(['POST', 'PUT', 'PATCH'])
 
 export const Rest: Helpers.DefaultRestTransformer = RestDef.build({
@@ -48,8 +49,9 @@ export const Rest: Helpers.DefaultRestTransformer = RestDef.build({
         if (BODY_METHODS.has(req.method.toUpperCase())) {
           const contentType = req.headers.get('content-type') ?? ''
           if (contentType.includes(JSON_CONTENT)) {
-            rawBody = IO.actions.fromReadable(req.body)
             parsedBody = yield* until(req.json())
+          } else if (contentType.included(RAW_BINARY)) {
+            rawBody = IO.actions.fromReadable(req.body.getReader())
           }
         }
 
