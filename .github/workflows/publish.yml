@@ -7,7 +7,6 @@ on:
 
 jobs:
   publish:
-    environment: production
     name: 'Publish to npm'
     runs-on: 'ubuntu-latest'
     permissions:
