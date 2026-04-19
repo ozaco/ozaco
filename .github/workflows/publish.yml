@@ -28,13 +28,17 @@ jobs:
       - run: bun install -g npm
 
       - run: |
-          echo "registry=https://registry.npmjs.org/" >> .npmrc
+          echo "registry=https://registry.npmjs.org/" > "$HOME/.npmrc"
+          echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" >> "$HOME/.npmrc"
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - run: |
           bun pm pack
-          npm publish ./*.tgz --access public
+          npm publish ./*.tgz --access public --provenance
         working-directory: 'packages/std'
 
       - run: |
-          echo "registry=https://registry.npmjs.org/" >> .npmrc
           bun pm pack
-          npm publish ./*.tgz --access public
+          npm publish ./*.tgz --access public --provenance
         working-directory: 'packages/server'
