@@ -4,12 +4,16 @@ import { defineNamespace } from 'std:plugin'
 import { fail, isFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
 
-import type { ActionContext, ActionRequest, ActionResponse } from 'server:service'
+import type { ActionContext, ActionFile, ActionRequest, ActionResponse } from 'server:service'
 import { ACTION_CONTEXT } from 'server:service'
 
 import { REST_TRANSFORMER, TransformerTags } from '../../const'
 import type { Helpers } from '../../types/helpers'
-import type { RestTransformerActions, RestTransformerContext } from '../../types/transformer'
+import type {
+  RestFileMatcher,
+  RestTransformerActions,
+  RestTransformerContext,
+} from '../../types/transformer'
 
 // oxlint-disable-next-line import/exports-last
 export const RestTransformer = defineNamespace<
@@ -35,7 +39,59 @@ const RestDef = RestTransformer.implement({
 
 const JSON_CONTENT = 'application/json'
 const RAW_BINARY = 'application/octet-stream'
+const FORM_DATA = 'multipart/form-data'
+const FORM_URLENCODED = 'application/x-www-form-urlencoded'
 const BODY_METHODS = new Set(['POST', 'PUT', 'PATCH'])
+
+const matchFileKey = (matcher: RestFileMatcher | undefined, key: string): boolean => {
+  if (!matcher) {
+    return false
+  }
+  if (Array.isArray(matcher)) {
+    return matcher.includes(key)
+  }
+  if (matcher instanceof RegExp) {
+    return matcher.test(key)
+  }
+  return matcher(key)
+}
+
+const appendField = (target: Record<string, unknown>, key: string, value: unknown): void => {
+  if (key in target) {
+    const prev = target[key]
+    target[key] = Array.isArray(prev) ? [...prev, value] : [prev, value]
+  } else {
+    target[key] = value
+  }
+}
+
+const appendFile = (target: Record<string, ActionFile[]>, key: string, file: ActionFile): void => {
+  if (!target[key]) {
+    target[key] = []
+  }
+  target[key].push(file)
+}
+
+const blobToFile = (blob: Blob, fallbackName: string): ActionFile => {
+  const maybeFile = blob as Blob & { name?: string; lastModified?: number }
+  return {
+    name: typeof maybeFile.name === 'string' ? maybeFile.name : fallbackName,
+    type: blob.type || 'application/octet-stream',
+    size: blob.size,
+    lastModified: typeof maybeFile.lastModified === 'number' ? maybeFile.lastModified : undefined,
+    stream: IO.actions.fromReadable(blob.stream().getReader()),
+  }
+}
+
+const stringToFile = (key: string, value: string): ActionFile => {
+  const blob = new Blob([value])
+  return {
+    name: key,
+    type: 'text/plain',
+    size: blob.size,
+    stream: IO.actions.fromReadable(blob.stream().getReader()),
+  }
+}
 
 export const Rest: Helpers.DefaultRestTransformer = RestDef.build({
   toInternal: operation(function* (req: AnyType, res: unknown, meta: AnyType) {
@@ -43,14 +99,33 @@ export const Rest: Helpers.DefaultRestTransformer = RestDef.build({
       *bun() {
         const url = new URL(req.url)
         const headers = Object.fromEntries(req.headers.entries())
+        const fileMatcher = meta.settings?.files as RestFileMatcher | undefined
 
         let parsedBody: unknown = null
         let rawBody: ActionRequest['rawBody'] = null
+        const files: Record<string, ActionFile[]> = {}
         if (BODY_METHODS.has(req.method.toUpperCase())) {
           const contentType = req.headers.get('content-type') ?? ''
           if (contentType.includes(JSON_CONTENT)) {
             parsedBody = yield* until(req.json())
-          } else if (contentType.included(RAW_BINARY)) {
+          } else if (contentType.includes(FORM_DATA) || contentType.includes(FORM_URLENCODED)) {
+            const form: FormData = yield* until(req.formData())
+            const fields: Record<string, unknown> = {}
+
+            for (const [key, value] of form.entries()) {
+              const isBlob = typeof value !== 'string'
+              const isMatched = matchFileKey(fileMatcher, key)
+
+              if (isBlob) {
+                appendFile(files, key, blobToFile(value as Blob, key))
+              } else if (isMatched) {
+                appendFile(files, key, stringToFile(key, value))
+              } else {
+                appendField(fields, key, value)
+              }
+            }
+            parsedBody = fields
+          } else if (contentType.includes(RAW_BINARY)) {
             rawBody = IO.actions.fromReadable(req.body.getReader())
           }
         }
@@ -71,7 +146,7 @@ export const Rest: Helpers.DefaultRestTransformer = RestDef.build({
             url,
 
             meta: headers,
-            files: {},
+            files,
             body,
 
             raw: req,

@@ -9,7 +9,7 @@ export interface RouterContext {
   router: AnyType
   transformer: Helpers.AnyRestTransformer
   compiled: (method: string, path: string) => AnyType
-  handlers: Map<symbol, { handler: AnyType; key: string }>
+  handlers: Map<symbol, { handler: AnyType; key: string; settings: AnyType }>
 }
 
 export interface RouterActions extends Record<string, AnyType> {

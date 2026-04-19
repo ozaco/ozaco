@@ -77,6 +77,7 @@ export const BunServer = Server.implement({
               const internal = yield* CurrentTransformer.actions.toInternal(req, null, {
                 entry: entry.key,
                 params: routeParams as Record<string, unknown>,
+                settings: entry.settings,
               })
 
               actionReq = internal[0]
@@ -85,6 +86,7 @@ export const BunServer = Server.implement({
               const actionCtx = yield* CurrentTransformer.actions.toContext(actionReq, actionRes, {
                 entry: entry.key,
                 params: routeParams as Record<string, unknown>,
+                settings: entry.settings,
               })
 
               const actionResult = yield* entry.handler(actionCtx)

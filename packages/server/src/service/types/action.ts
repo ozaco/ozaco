@@ -3,12 +3,20 @@ import type { AnyType, StandardSchemaV1 } from 'std:shared'
 
 import type { ACTION_CONTEXT } from '../const'
 
+export interface ActionFile {
+  name: string
+  type: string
+  size: number
+  lastModified?: number | undefined
+  stream: Stream<Uint8Array, AnyType>
+}
+
 export interface ActionRequest {
   method: string
   url: URL
 
   meta: Record<string, string> // headers
-  files: Record<string, Stream<Uint8Array, void>[]>
+  files: Record<string, ActionFile[]>
   body: unknown
   rawBody: Stream<Uint8Array, void> | null
 
@@ -17,7 +25,7 @@ export interface ActionRequest {
 
 export interface ActionResponse {
   meta: Record<string, string> // headers
-  files: Record<string, Stream<Uint8Array, void>[]>
+  files: Record<string, ActionFile[]>
   body: unknown
 
   raw: unknown

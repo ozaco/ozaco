@@ -20,11 +20,19 @@ export interface WalkEntry {
   isSymlink: boolean
 }
 
-export interface ReadableLike {
+export interface NodeReadableLike {
   on(event: string, listener: (...args: AnyType[]) => void): this
   off(event: string, listener: (...args: AnyType[]) => void): this
   destroy?(error?: Error): this
 }
+
+export interface WebReadableLike {
+  read(): Promise<ReadableStreamReadResult<Uint8Array>>
+  cancel(reason?: AnyType): Promise<void>
+  releaseLock(): void
+}
+
+export type ReadableLike = NodeReadableLike | WebReadableLike
 
 export interface WritableLike {
   write(chunk: Uint8Array): boolean

@@ -22,17 +22,22 @@ export const custom = defineAction(
       Rest.actions.settings({
         method: 'POST',
         path: '/custom',
+        files: ['avatar', 'document'],
       }),
     ],
   },
+
   function* (ctx) {
-    console.log(ctx.request.rawBody, 'here')
+    for (const [key, entries] of Object.entries(ctx.files)) {
+      for (const file of entries) {
+        console.log(key, file.name, file.type, file.size, file.lastModified)
 
-    if (ctx.request.rawBody) {
-      const chunks = yield* each(ctx.request.rawBody)
+        const chunks = yield* each(file.stream)
+        for (const chunk of chunks) {
+          console.log(key, chunk.byteLength)
 
-      for (const chunk of chunks) {
-        console.log(chunk)
+          yield* each.next()
+        }
       }
     }
 

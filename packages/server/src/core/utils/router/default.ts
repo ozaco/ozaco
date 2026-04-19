@@ -96,14 +96,11 @@ export const DefaultRouter: Helpers.DefaultRouter = DefaultRouterDef.build({
     for (const key of service.getKeys()) {
       const meta = service.meta.get(key)
 
-      if (meta?.isRaw) {
-        continue
-      }
-
-      if (meta?.allow && !meta.allow.includes(transformer)) {
-        continue
-      }
-      if (meta?.deny && meta.deny.includes(transformer)) {
+      if (
+        meta?.isRaw ||
+        (meta?.allow && !meta.allow.includes(transformer)) ||
+        (meta?.deny && meta.deny.includes(transformer))
+      ) {
         continue
       }
 
@@ -128,7 +125,7 @@ export const DefaultRouter: Helpers.DefaultRouter = DefaultRouterDef.build({
         action = action[part]
       }
 
-      ctx.handlers.set(sym, { handler: action, key })
+      ctx.handlers.set(sym, { handler: action, key, settings: restSettings })
       addRoute(ctx.router, restSettings.method, prefix + restSettings.path, sym)
     }
 
