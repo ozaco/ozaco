@@ -8,67 +8,101 @@
     "url": "https://github.com/ozaco/ozaco.git"
   },
   "files": [
-    "dist"
+    "dist",
+    "src"
   ],
   "type": "module",
   "exports": {
-    "./result": {
-      "types": "./dist/result.d.ts",
-      "source": "./src/result/index.ts",
-      "default": "./dist/result.js"
+    "./plugin": {
+      "import": {
+        "types": "./dist/plugin.d.ts",
+        "default": "./dist/plugin.js"
+      },
+      "require": {
+        "types": "./dist/plugin.d.cts",
+        "default": "./dist/plugin.cjs"
+      },
+      "source": "./src/plugin/index.ts"
     },
-    "./shared": {
-      "types": "./dist/shared.d.ts",
-      "source": "./src/shared/index.ts",
-      "default": "./dist/shared.js"
+    "./effect": {
+      "import": {
+        "types": "./dist/effect.d.ts",
+        "default": "./dist/effect.js"
+      },
+      "require": {
+        "types": "./dist/effect.d.cts",
+        "default": "./dist/effect.cjs"
+      },
+      "source": "./src/effect/index.ts"
     },
     "./event": {
-      "types": "./dist/event.d.ts",
-      "source": "./src/event/index.ts",
-      "default": "./dist/event.js"
+      "import": {
+        "types": "./dist/event.d.ts",
+        "default": "./dist/event.js"
+      },
+      "require": {
+        "types": "./dist/event.d.cts",
+        "default": "./dist/event.cjs"
+      },
+      "source": "./src/event/index.ts"
     },
-    "./plugin": {
-      "types": "./dist/plugin.d.ts",
-      "source": "./src/plugin/index.ts",
-      "default": "./dist/plugin.js"
-    },
-    "./logger": {
-      "types": "./dist/logger/index.d.ts",
-      "source": "./src/logger/index.ts",
-      "default": "./dist/logger/index.js"
-    },
-    "./logger/create-transport": {
-      "types": "./dist/logger/create-transport.d.ts",
-      "source": "./src/logger/create-transport/index.ts",
-      "default": "./dist/logger/create-transport.js"
-    },
-    "./logger/file-transport": {
-      "types": "./dist/logger/transport-file.d.ts",
-      "source": "./src/logger/transports/file/index.ts",
-      "default": "./dist/logger/transport-file.js"
-    },
-    "./color": {
-      "types": "./dist/color.d.ts",
-      "source": "./src/color/index.ts",
-      "default": "./dist/color.js"
+    "./result": {
+      "import": {
+        "types": "./dist/result.d.ts",
+        "default": "./dist/result.js"
+      },
+      "require": {
+        "types": "./dist/result.d.cts",
+        "default": "./dist/result.cjs"
+      },
+      "source": "./src/result/index.ts"
     },
     "./io": {
-      "types": "./dist/io/index.d.ts",
-      "source": "./src/io/index.ts",
-      "default": "./dist/io/index.js"
-    },
-    "./io/node": {
-      "types": "./dist/io/runtime-node.d.ts",
-      "source": "./src/io/runtime/node/index.ts",
-      "default": "./dist/io/runtime-node.js"
+      "import": {
+        "types": "./dist/io.d.ts",
+        "default": "./dist/io.js"
+      },
+      "require": {
+        "types": "./dist/io.d.cts",
+        "default": "./dist/io.cjs"
+      },
+      "source": "./src/io/index.ts"
     },
     "./io/bun": {
-      "types": "./dist/io/runtime-bun.d.ts",
-      "source": "./src/io/runtime/bun/index.ts",
-      "default": "./dist/io/runtime-bun.js"
+      "import": {
+        "types": "./dist/io-bun.d.ts",
+        "default": "./dist/io-bun.js"
+      },
+      "require": {
+        "types": "./dist/io-bun.d.cts",
+        "default": "./dist/io-bun.cjs"
+      },
+      "source": "./src/io/impl/bun.ts"
+    },
+    "./io/node": {
+      "import": {
+        "types": "./dist/io-node.d.ts",
+        "default": "./dist/io-node.js"
+      },
+      "require": {
+        "types": "./dist/io-node.d.cts",
+        "default": "./dist/io-node.cjs"
+      },
+      "source": "./src/io/impl/node.ts"
+    },
+    "./shared": {
+      "import": {
+        "types": "./dist/shared.d.ts",
+        "default": "./dist/shared.js"
+      },
+      "require": {
+        "types": "./dist/shared.d.cts",
+        "default": "./dist/shared.cjs"
+      },
+      "source": "./src/shared/index.ts"
     }
   },
   "devDependencies": {
-    "tsdown": "^0.21.0"
+    "tsdown": "catalog:build"
   }
 }

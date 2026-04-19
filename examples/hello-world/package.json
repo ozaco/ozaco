@@ -3,17 +3,12 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "source": "./src/index.ts",
-      "default": "./dist/index.js"
-    }
-  },
   "dependencies": {
-    "@ozaco/std": "workspace:*"
+    "@ozaco/std": "workspace:*",
+    "zod": "4.3.6"
   },
   "devDependencies": {
-    "tsdown": "^0.21.0"
+    "@ozaco/tsdown-plugin-resolve": "workspace:*",
+    "tsdown": "catalog:build"
   }
 }

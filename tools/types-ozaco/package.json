@@ -1,0 +1,13 @@
+{
+  "name": "@types/ozaco",
+  "version": "0.0.1",
+  "private": true,
+  "devDependencies": {
+    "@ozaco/server": "workspace:*",
+    "@ozaco/std": "workspace:*"
+  },
+  "peerDependencies": {
+    "@ozaco/server": "*",
+    "@ozaco/std": "*"
+  }
+}

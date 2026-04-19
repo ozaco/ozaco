@@ -1,52 +1,27 @@
-import type { BlobType, EmptyType, Expand, Merge, Writable } from 'std:shared'
+import type { Operation } from 'std:effect'
 
-import type { Context } from './context'
-import type { Definition } from './definition'
-import type { DependencyList, DependencyListOptions } from './dependency-list'
-import type { Extendable } from './extendable'
 import type { Helpers } from './helpers'
-import type { Plugin } from './plugin'
+import type { Namespace, PluginDef } from './plugin'
 
 export namespace Impl {
-  export type CreateContext = <const Data extends EmptyType>(
-    data: Data | (() => Data),
-    cloneAlgorithm?: () => Data,
-  ) => Context<Data>
+  export type DefinePlugin = <TContext, TError, TArgs extends unknown[] = []>(options: {
+    name: string
+    version: string
+    description?: string
+    subtype?: symbol
+    setup(...args: TArgs): Operation<TContext, TError>
+  }) => PluginDef<TContext, TError, TArgs>
 
-  export interface CreateDefinition {
-    <Value extends EmptyType>(
-      value?: (utils: {
-        use: Helpers.DefinitionUse
-        event: Helpers.AnyPlugin['event']
-        rebind: Helpers.Rebind
-      }) => Value,
-    ): Definition<unknown, Value>
-    <Value>(value?: Value): Definition<unknown, Value>
-  }
-
-  export type CreateExtendable = <const Meta extends Helpers.AnyMetadata>(
-    meta: Meta,
-  ) => Extendable<Expand<Writable<Meta>>, EmptyType>
-
-  export type CreateDependencyList = <Deps extends EmptyType = EmptyType>(
-    dependencies: DependencyListOptions<Deps>,
-    shared?: boolean,
-  ) => DependencyList<Deps>
-
-  export type CreatePlugin = <
-    Ext extends Helpers.AnyExtendable,
-    const NewMeta extends Helpers.InferIncompleteMetadata<Ext>,
-    Constructor extends Definition<BlobType, (...args: BlobType[]) => BlobType>,
-  >(
-    extendable: Ext,
-    options: NewMeta,
-    con?: Constructor,
-  ) => (
-    ...args: Parameters<Helpers.InferDefinitionValue<Constructor>>
-  ) => Plugin<Expand<Merge<Helpers.InferMetadata<Ext>, NewMeta>>, Helpers.InferDefinitions<Ext>>
-
-  // Internal
-  export type CreateRebind = (options: Helpers.CreateRebindOptions) => Helpers.Rebind
-  export type CreateUse = (options: Helpers.CreateUseOptions) => Helpers.DefinitionUse
-  export type CreateApi = <T = EmptyType>(options: Helpers.CreateApiOptions) => T
+  export type DefineNamespace = <
+    TContext,
+    TError,
+    TArgs extends unknown[] = [],
+    TActions extends Record<string, Helpers.AnyAction> = Record<never, never>,
+  >(options: {
+    name: string
+    version: string
+    description?: string
+    subtype?: symbol
+    handlers?: { [K in keyof TActions]: TActions[K] }
+  }) => Namespace<TContext, TError, TArgs, TActions>
 }

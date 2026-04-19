@@ -1,18 +1,19 @@
-import { type BlobType, isPromise } from 'std:shared'
+import { isPromise } from 'std:shared'
+import type { AnyType } from 'std:shared'
 
-import type { Impl } from '../types'
+import type { Impl } from '../types/impl'
 
 import { isFailure, isResult } from './is'
-import { succeed } from './result'
+import { succeed } from './success'
 
-export const auto: Impl.Auto = (...args: BlobType[]): BlobType => {
+export const auto: Impl.Auto = (...args: AnyType[]): AnyType => {
+  if (args.length === 0) {
+    return auto
+  }
+
   const firstArgument = args[0]
   const hasDefaultValue = args.length === 2
   const defaultValue = hasDefaultValue ? args[1] : undefined
-
-  if (args.length === 0) {
-    return (result: BlobType) => auto(result)
-  }
 
   if (isPromise(firstArgument)) {
     return firstArgument.then(newResponse => {

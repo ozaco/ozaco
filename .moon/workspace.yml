@@ -1,17 +1,21 @@
-$schema: 'https://moonrepo.dev/schemas/workspace.json'
+$schema: https://moonrepo.dev/schemas/workspace.json
 
 projects:
-  - 'apps/*'
-  - 'packages/*'
-  - 'plugins/*'
-  - 'experiments/*'
-  - 'tools/*'
+  - apps/*
+  - packages/*
+  - plugins/*
+  - experiments/*
+  - examples/*
+  - tools/*
+  - .
 
 vcs:
-  manager: 'git'
-  provider: 'github'
-  defaultBranch: 'development'
+  client: git
+  provider: github
+  defaultBranch: rewrite
   hooks:
     pre-commit:
-      - 'moon run :check --affected'
-  syncHooks: true
+      - 'moon run :check'
+    commit-msg:
+      - 'bunx --no -- commitlint --edit $ARG1'
+  sync: true

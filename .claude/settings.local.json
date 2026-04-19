@@ -19,7 +19,15 @@
       "Bash(python3:*)",
       "Bash(npx tsdown:*)",
       "WebFetch(domain:github.com)",
-      "Bash(chmod +x:*)"
+      "Bash(chmod +x:*)",
+      "Bash(npx:*)",
+      "Bash(grep:*)",
+      "Bash(xargs cat:*)",
+      "Bash(gh issue:*)",
+      "WebFetch(domain:bun.com)",
+      "WebFetch(domain:docs.npmjs.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:api.github.com)"
     ]
   }
 }

@@ -1,8 +1,9 @@
-import { EVENT } from '../const'
-import type { EventEmitter } from '../types'
+import type { AnyType } from 'std:shared'
 
-export const isEvent = <Events extends Record<string, unknown> = Record<string, unknown>>(
+import { EVENT } from '../const'
+import type { EventSource, EventSourceMap } from '../types'
+
+export const isEventEmitter = <T extends EventSourceMap = AnyType>(
   value: unknown,
-): value is EventEmitter<Events> => {
-  return typeof value === 'object' && value !== null && '_t' in value && value._t === EVENT
-}
+): value is EventSource<T> =>
+  typeof value === 'object' && value !== null && '_t' in value && value._t === EVENT

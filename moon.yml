@@ -1,0 +1,21 @@
+language: typescript
+layer: library
+toolchains:
+  default: bun
+
+tasks:
+  check:
+    options:
+      runInCI: true
+    script: bun x oxfmt --check && bun x oxlint
+    toolchains: bun
+  apply:
+    options:
+      runInCI: false
+    script: bun x oxfmt && bun x oxlint --fix
+    toolchains: bun
+  apply-unsafe:
+    options:
+      runInCI: false
+    script: bun x oxfmt && bun x oxlint --fix-dangerously
+    toolchains: bun

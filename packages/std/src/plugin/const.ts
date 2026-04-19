@@ -1,6 +1,2 @@
-export const DEPENDENCY_LIST = Symbol.for('std:plugin:dependency-list')
-export const EXTENDABLE = Symbol.for('std:plugin:extendable')
-export const DEFINITION = Symbol.for('std:plugin:definition')
-export const CONTEXT = Symbol.for('std:plugin:context')
-export const PLUGIN = Symbol.for('std:plugin:plugin')
-export const EMPTY = Symbol.for('std:plugin:empty')
+export const PLUGIN = Symbol.for('std:plugin')
+export const NAMESPACE = Symbol.for('std:namespace')

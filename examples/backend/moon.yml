@@ -1,0 +1,23 @@
+language: typescript
+layer: library
+toolchains:
+  default: bun
+
+tasks:
+  build:
+    command: bun x tsdown
+    deps:
+      - std:build
+      - server:build
+    inputs:
+      - src/**/*
+      - tsdown.config.ts
+    outputs:
+      - dist/**/*
+  dev:
+    command: bun x tsdown --watch
+    inputs:
+      - src/**/*
+      - tsdown.config.ts
+    outputs:
+      - dist/**/*

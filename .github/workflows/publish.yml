@@ -1,0 +1,31 @@
+name: 'Publish'
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  publish:
+    name: 'Publish to npm'
+    runs-on: 'ubuntu-latest'
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: 'actions/checkout@v6'
+        with:
+          fetch-depth: 0
+
+      - uses: 'moonrepo/setup-toolchain@v0'
+        with:
+          auto-install: true
+
+      - run: 'bun install --frozen-lockfile'
+      - run: 'moon run std:build server:build --color'
+
+      - run: 'bun publish --access public --provenance'
+        working-directory: 'packages/std'
+
+      - run: 'bun publish --access public --provenance'
+        working-directory: 'packages/server'

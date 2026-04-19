@@ -1,43 +1,77 @@
-import type { EventEmitter } from 'std:event'
-import type { EmptyType } from 'std:shared'
+import type { Context, Operation } from 'std:effect'
+import type { AnyType, EmptyType } from 'std:shared'
 
-import type { PLUGIN } from '../const'
+import type { NAMESPACE, PLUGIN } from '../const'
 
 import type { Helpers } from './helpers'
 
-export type PluginEvents = {
-  use: {
-    plugin: Helpers.AnyPlugin
-    dependencyList: Helpers.AnyDependencyList
-    dependency: Helpers.AnyPlugin
-  }
-  unuse: {
-    plugin: Helpers.AnyPlugin
-    dependencyList: Helpers.AnyDependencyList
-    dependency: Helpers.AnyPlugin
-  }
+export interface Hookable<TActions extends EmptyType = EmptyType> {
+  useHook(): Operation<Map<string, unknown>>
+  around(handlers: Helpers.Around<TActions>): Operation<void>
+  before(handlers: Helpers.Before<TActions>): Operation<void>
+  after(handlers: Helpers.After<TActions>): Operation<void>
+  error(handlers: Helpers.OnError<TActions>): Operation<void>
 }
 
-export interface Plugin<Meta extends Helpers.AnyMetadata, Api = EmptyType> {
+export interface Plugin<
+  TContext = unknown,
+  TError = unknown,
+  TArgs extends unknown[] = unknown[],
+  TActions = unknown,
+> extends Hookable<TActions & EmptyType> {
   _t: typeof PLUGIN
-  _e: Helpers.AnyExtendable
+  _st?: symbol | undefined
+  name: string
+  version: string
+  description: string
+  context: Context<TContext>
+  setup(...args: TArgs): Operation<TContext, TError>
+  actions: TActions
+  getKeys(): string[]
+}
 
-  namespace: Required<Meta>['namespace']
-  name: Required<Meta>['name']
-  version: Required<Meta>['version']
+export interface PluginDef<TContext, TError, TArgs extends unknown[]> {
+  context: Context<TContext>
+  build(): Plugin<TContext, TError, TArgs>
+  build<TActions extends EmptyType>(actions: TActions): Plugin<TContext, TError, TArgs, TActions>
+}
 
-  api: Api
-  event: EventEmitter<PluginEvents>
+export interface App {
+  install<TContext, TError, TArgs extends unknown[]>(
+    plugin: Plugin<TContext, TError, TArgs>,
+    ...args: TArgs
+  ): TContext
+  use: Helpers.Use
+}
 
-  get: Helpers.DefinitionUse
+export interface Namespace<
+  TContext = unknown,
+  TError = unknown,
+  TArgs extends unknown[] = unknown[],
+  TActions extends EmptyType = EmptyType,
+> extends Hookable<TActions> {
+  _t: typeof NAMESPACE
+  _st?: symbol | undefined
+  name: string
+  version: string
+  context: Context<TContext>
+  actions: TActions
+  implement<TIContext extends TContext, TIError extends TError, TIArgs extends TArgs>(options: {
+    name: string
+    version: string
+    description?: string
+    setup(...args: TIArgs): Operation<TIContext, TIError>
+  }): NamespaceImpl<TIContext, TIError, TIArgs, TActions>
+}
 
-  use: <Deps extends Helpers.AnyDependencyList = never>(
-    list: Deps,
-    deps: Partial<Helpers.InferUseFromDependencies<Deps>>,
-  ) => Plugin<Meta, Api>
-
-  unuse: <Deps extends Helpers.AnyDependencyList = never>(
-    list: Deps,
-    deps: Partial<Helpers.InferUseFromDependencies<Deps>>,
-  ) => Plugin<Meta, Api>
+export interface NamespaceImpl<
+  TContext,
+  TError,
+  TArgs extends unknown[],
+  TActions extends EmptyType,
+> {
+  context: Context<TContext>
+  build: <TBuildedActions extends TActions & Record<string | number, AnyType>>(
+    actions: TBuildedActions,
+  ) => Plugin<TContext, TError, TArgs, TBuildedActions>
 }

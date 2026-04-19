@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "paths": {
+      "server:core": ["./src/core/index.ts", "./dist/core.d.ts"],
+      "server:service": ["./src/service/index.ts", "./dist/service.d.ts"],
+      "server:bun": ["./src/impl/bun.ts", "./dist/bun.d.ts"],
+
+      "std:shared": ["./node_modules/@ozaco/std/dist/shared.d.ts"],
+      "std:result": ["./node_modules/@ozaco/std/dist/result.d.ts"],
+      "std:effect": ["./node_modules/@ozaco/std/dist/effect.d.ts"],
+      "std:event": ["./node_modules/@ozaco/std/dist/event.d.ts"],
+      "std:plugin": ["./node_modules/@ozaco/std/dist/plugin.d.ts"],
+      "std:io": ["./node_modules/@ozaco/std/dist/io.d.ts"],
+      "std:io/bun": ["./node_modules/@ozaco/std/dist/io-bun.d.ts"],
+      "std:io/node": ["./node_modules/@ozaco/std/dist/io-node.d.ts"]
+    }
+  }
+}

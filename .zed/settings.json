@@ -1,5 +1,5 @@
 {
-  "language_servers": ["!eslint", "!biome", "vtsls", "!typescript-language-server", "..."],
+  "language_servers": ["!eslint", "!biome", "vtsls", "!typescript-language-server", "!tsgo", "..."],
   "lsp": {
     "tailwindcss-language-server": {
       "settings": {
@@ -104,6 +104,9 @@
       "format_on_save": "on",
       "prettier": {
         "allowed": false
+      },
+      "code_actions_on_format": {
+        "source.organizeImports": true
       },
       "formatter": [
         {
@@ -212,6 +215,9 @@
       "prettier": {
         "allowed": false
       },
+      "code_actions_on_format": {
+        "source.organizeImports": true
+      },
       "formatter": [
         {
           "language_server": {
@@ -224,6 +230,9 @@
       "format_on_save": "on",
       "prettier": {
         "allowed": false
+      },
+      "code_actions_on_format": {
+        "source.organizeImports": true
       },
       "formatter": [
         {

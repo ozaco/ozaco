@@ -1,58 +1,31 @@
-// TODO: add deno support
-export const STATS = Symbol.for('std:io:stats')
-export const HANDLE = Symbol.for('std:io:handle')
-export const FILE = Symbol.for('std:io:file')
+// oxlint-disable typescript/prefer-literal-enum-member
+export const IO_VERSION = '0.0.1'
 
-export const POSIX_SEP = '/'
-export const WIN_SEP = '\\'
-
-export const CH_SLASH = 47 // '/'
-export const CH_COLON = 58 // ':'
-export const URL_PROTOCOLS = ['http:', 'https:', 'file:', 'ftp:', 'ws:', 'wss:']
-
-export enum Flags {
-  none = 0,
-
-  read = 1 << 0,
-  append = 1 << 1,
-  write = 1 << 2,
-
-  truncate = 1 << 3,
-  create = 1 << 4,
-  exclude = 1 << 5,
-  sync = 1 << 6,
-
-  Moderator = Flags.read | Flags.write | Flags.create,
-  Recreate = Flags.Moderator | Flags.truncate,
+export enum IO_FLAGS {
+  NONE = 0,
+  FOLLOW_SYMLINKS = 1 << 2,
+  FILES = 1 << 3,
+  DIRS = 1 << 4,
+  APPEND = 1 << 5,
+  EXCLUSIVE = 1 << 6,
 }
 
-export enum PathType {
-  url,
-  file,
-  ftp,
-  ws,
-  wss,
-
-  path,
-}
-
-export enum Runtime {
-  browser = 'browser',
-  node = 'node',
-  bun = 'bun',
-  unknown = 'unknown',
-}
-
-export enum IOErrors {
-  stats = 'io.stats.async',
-  statsSync = 'io.stats.sync',
-  handle = 'io.handle',
-  open = 'io.open',
-  read = 'io.read',
-  write = 'io.write',
-
-  // errors
-  unsupported = 'io.unsupported',
-  missingFlag = 'io.missing-flag',
-  create = 'io.create',
+export enum IO_TAGS {
+  read = 'io:read',
+  readText = 'io:read-text',
+  write = 'io:write',
+  append = 'io:append',
+  copy = 'io:copy',
+  rename = 'io:rename',
+  rm = 'io:rm',
+  exists = 'io:exists',
+  stat = 'io:stat',
+  lstat = 'io:lstat',
+  readdir = 'io:readdir',
+  ensureDir = 'io:ensure-dir',
+  ensureFile = 'io:ensure-file',
+  emptyDir = 'io:empty-dir',
+  walk = 'io:walk',
+  stream = 'io:stream',
+  writeStream = 'io:write-stream',
 }

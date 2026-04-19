@@ -1,20 +1,28 @@
-export type BlobType = any
+// oxlint-disable-next-line typescript/no-explicit-any
+export type AnyType = any
 
+// oxlint-disable-next-line no-empty-object-type
 export type EmptyType = {}
 
-export type IsPromise<T> = T extends Promise<BlobType> ? true : false
-export type HasPromise<T> = object extends T ? false : T extends Promise<BlobType> ? true : false
-
-export type MaybePromise<T> = T | Promise<T>
+export type AnyFunction = (value: AnyType) => AnyType
 
 export type Writable<T> = { -readonly [P in keyof T]: T[P] }
-export type DeepWriteable<T> = { -readonly [P in keyof T]: DeepWriteable<T[P]> }
+export type WriteableDeep<T> = { -readonly [P in keyof T]: WriteableDeep<T[P]> }
 
-export type ObjectFromKeyValue<K extends PropertyKey, V> = {
-  [P in K]: V
-}
+export type IsPromise<T> = T extends Promise<AnyType> ? true : false
+export type IsPromiseStrict<T> = object extends T
+  ? false
+  : T extends Promise<AnyType>
+    ? true
+    : false
 
-export type Expand<T> = { [K in keyof T]: T[K] } & {}
+export type GuardValue<fn> = fn extends ((value: AnyType) => value is infer b)
+  ? b
+  : fn extends (value: infer a) => unknown
+    ? a
+    : never
+
+export type PromiseWithResolvers<T> = ReturnType<typeof Promise.withResolvers<T>>
 
 export type Primitive = null | undefined | string | number | boolean | symbol | bigint
 

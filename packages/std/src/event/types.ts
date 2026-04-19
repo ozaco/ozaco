@@ -1,34 +1,29 @@
-import type { BlobType, EmptyType, IsPromise, MergeSimplified } from 'std:shared'
+import type { EmptyType } from 'std:shared'
 
 import type { EVENT } from './const'
 
-export type EventEmitterMap = Record<string, unknown>
-export type EventEmitterListener<T = unknown> = (payload: T) => void | Promise<void>
+export type EventSourceMap = Record<string, unknown[]>
 
-export interface EventEmitter<M extends EventEmitterMap = EmptyType> {
-  readonly _t: typeof EVENT
+export type EventSourceListener<T extends unknown[] = unknown[]> = (
+  ...args: T
+) => void | Promise<void>
 
-  readonly addEventType: <K extends string, P>() => EventEmitter<
-    MergeSimplified<M, { [T in K]: P }>
-  >
+export interface EventSource<T extends EventSourceMap = EmptyType> {
+  _t: typeof EVENT
 
-  readonly on: {
-    <K extends keyof M>(event: K, listener: EventEmitterListener<M[K]>): EventEmitter<M>
-    <K extends string, P>(
-      event: K,
-      listener: EventEmitterListener<P>,
-    ): EventEmitter<MergeSimplified<M, { [T in K]: P }>>
-  }
+  on<K extends keyof T & string>(name: K, listener: EventSourceListener<T[K]>): () => void
+  once<K extends keyof T & string>(name: K, listener: EventSourceListener<T[K]>): () => void
+  off<K extends keyof T & string>(name: K, listener?: EventSourceListener<T[K]>): void
+  emit<K extends keyof T & string>(name: K, ...args: T[K]): void
+  emitAsync<K extends keyof T & string>(name: K, ...args: T[K]): Promise<void>
+  clear(): void
+  listenerCount<K extends keyof T & string>(name: K): number
+}
 
-  readonly off: (listener: EventEmitterListener<BlobType>) => EventEmitter<M>
-  readonly emit: <K extends keyof M>(
-    event: K,
-    payload: M[K],
-  ) => true extends IsPromise<M[K]> ? Promise<void> : void
+export namespace Helpers {
+  export type InferEventSource<T> = T extends EventSource<infer V> ? V : never
 
-  readonly removeAllListeners: () => EventEmitter<EmptyType>
-  readonly removeListeners: <K extends keyof M>(events: K) => EventEmitter<Omit<M, K>>
-
-  readonly listeners: <K extends keyof M>(event: K) => ReadonlyArray<EventEmitterListener<M[K]>>
-  readonly listenerCount: <K extends keyof M>(event: K) => number
+  export type InferEventType<T, K> = K extends keyof Helpers.InferEventSource<T>
+    ? Helpers.InferEventSource<T>[K]
+    : never
 }

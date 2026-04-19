@@ -1,13 +1,14 @@
-import { type BlobType, isPromise, isString } from 'std:shared'
+import type { AnyType } from 'std:shared'
+import { isPromise, isString } from 'std:shared'
 
-import type { Impl } from '../types'
+import type { Impl } from '../types/impl'
 
-import { isFailure, isResult } from './is'
+import { isFailure } from './is'
 
-export const appendCauses: Impl.AppendCauses = (firstArgument, ...causes: string[]): BlobType => {
+export const appendCauses: Impl.AppendCauses = (firstArgument, ...causes): AnyType => {
   if (!isString(firstArgument) && firstArgument) {
-    const apply = (result: BlobType) => {
-      if (isResult(result) && isFailure(result)) {
+    const apply = (result: AnyType) => {
+      if (isFailure(result)) {
         result.causes.push(...causes)
       }
 
@@ -18,16 +19,16 @@ export const appendCauses: Impl.AppendCauses = (firstArgument, ...causes: string
   }
 
   if (!firstArgument) {
-    return (result: BlobType) => result
+    return (result: AnyType) => result
   }
 
-  const apply = (failure: BlobType) => {
-    if (isResult(failure) && isFailure(failure)) {
+  const apply = (failure: AnyType) => {
+    if (isFailure(failure)) {
       failure.causes.push(firstArgument, ...causes)
     }
 
     return failure
   }
 
-  return (result: BlobType) => (isPromise(result) ? result.then(apply) : apply(result))
+  return (result: AnyType) => (isPromise(result) ? result.then(apply) : apply(result))
 }

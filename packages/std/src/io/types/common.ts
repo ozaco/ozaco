@@ -1,11 +1,51 @@
-import type { Runtime } from '../const'
+import type { AnyType } from 'std:shared'
 
-export interface Options {
-  runtime?: Runtime | undefined
-  autoPerm?: boolean | undefined
+export type PathLike = string | URL
+
+export interface IOStat {
+  isFile: boolean
+  isDirectory: boolean
+  isSymlink: boolean
+  size: number
+  mtime: Date | null
+  atime: Date | null
+  birthtime: Date | null
 }
 
-export interface Context {
-  runtime: Runtime | null
-  autoPerm?: boolean
+export interface WalkEntry {
+  path: string
+  name: string
+  isFile: boolean
+  isDirectory: boolean
+  isSymlink: boolean
+}
+
+export interface NodeReadableLike {
+  on(event: string, listener: (...args: AnyType[]) => void): this
+  off(event: string, listener: (...args: AnyType[]) => void): this
+  destroy?(error?: Error): this
+}
+
+export interface WebReadableLike {
+  read(): Promise<ReadableStreamReadResult<Uint8Array>>
+  cancel(reason?: AnyType): Promise<void>
+  releaseLock(): void
+}
+
+export type ReadableLike = NodeReadableLike | WebReadableLike
+
+export interface WritableLike {
+  write(chunk: Uint8Array): boolean
+  end(): this
+  destroy?(error?: Error): this
+  on(event: string, listener: (...args: AnyType[]) => void): this
+  once(event: string, listener: (...args: AnyType[]) => void): this
+  off(event: string, listener: (...args: AnyType[]) => void): this
+}
+
+export interface WalkOptions {
+  flags?: number | undefined
+  maxDepth?: number | undefined
+  match?: RegExp[] | undefined
+  skip?: RegExp[] | undefined
 }

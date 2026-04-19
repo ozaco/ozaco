@@ -1,8 +1,11 @@
 export * from './const'
-export * from './types'
 
-export * from './utils/context'
-export * from './utils/definition'
-export * from './utils/dependency-list'
-export * from './utils/extendable'
+export * from './types/helpers'
+export * from './types/plugin'
+
+export * from './utils/app'
+export * from './utils/hooks'
+export * from './utils/install'
+export * from './utils/is'
+export * from './utils/namespace'
 export * from './utils/plugin'

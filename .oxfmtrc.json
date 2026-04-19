@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/oxfmt/configuration_schema.json",
-  "ignorePatterns": [],
+  "ignorePatterns": ["**/dist/**"],
   "sortTailwindcss": {},
   "semi": false,
   "arrowParens": "avoid",
@@ -13,4 +13,17 @@
   "quoteProps": "as-needed",
   "singleQuote": true,
   "bracketSpacing": true,
+  "sortImports": {
+    "customGroups": [
+      {
+        "groupName": "std",
+        "elementNamePattern": ["std:*"]
+      }
+    ],
+    "groups": ["std", "builtin", "external", "internal", "parent", ["sibling", "index"]],
+    "internalPattern": ["@/", "~/"],
+    "newlinesBetween": true,
+    "partitionByComment": true,
+    "sortSideEffects": false
+  }
 }

@@ -1,0 +1,13 @@
+$schema: https://moonrepo.dev/schemas/toolchain.json
+
+proto:
+  version: '0.56.4'
+
+bun:
+  version: 1.3.12
+node:
+  version: 25.9.0
+
+javascript:
+  dependencyVersionFormat: workspace
+  syncProjectWorkspaceDependencies: true

@@ -1,21 +1,22 @@
+import { stdResolve } from '@ozaco/tsdown-plugin-resolve'
 import { defineConfig } from 'tsdown'
 
+// oxlint-disable-next-line import/no-default-export
 export default defineConfig({
   entry: {
     result: './src/result/index.ts',
     shared: './src/shared/index.ts',
+    effect: './src/effect/index.ts',
     event: './src/event/index.ts',
     plugin: './src/plugin/index.ts',
-    'logger/index': './src/logger/index.ts',
-    'logger/create-transport': './src/logger/create-transport/index.ts',
-    'logger/transport-file': './src/logger/transports/file/index.ts',
-    color: './src/color/index.ts',
-    'io/index': './src/io/index.ts',
-    'io/runtime-node': './src/io/runtime/node/index.ts',
-    'io/runtime-bun': './src/io/runtime/bun/index.ts',
+    io: './src/io/index.ts',
+    'io-bun': './src/io/impl/bun.ts',
+    'io-node': './src/io/impl/node.ts',
   },
+  format: ['esm', 'cjs'],
   dts: true,
   fixedExtension: false,
   clean: true,
   outDir: './dist',
+  plugins: [stdResolve({ sourceDir: './src' })],
 })

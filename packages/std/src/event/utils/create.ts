@@ -1,77 +1,118 @@
-import { type BlobType, type EmptyType, isPromise, type Writable } from 'std:shared'
+import type { EmptyType } from 'std:shared'
 
 import { EVENT } from '../const'
-import type { EventEmitter, EventEmitterListener, EventEmitterMap } from '../types'
+import { callListener, removeFrom } from '../internal'
+import type { EventSource, EventSourceListener, EventSourceMap } from '../types'
 
-export const createEvent = <M extends EventEmitterMap = EmptyType>(): EventEmitter<M> => {
-  const event = {
-    _t: EVENT,
-  } as Writable<EventEmitter<M>>
+export const createEvent = <T extends EventSourceMap = EmptyType>(): EventSource<T> => {
+  const listeners = new Map<string, EventSourceListener[]>()
 
-  const eventListeners = new Map<string, EventEmitterListener<unknown>[]>()
-
-  event.addEventType = () => event as BlobType
-
-  event.on = (eventName: BlobType, listener: EventEmitterListener<BlobType>): BlobType => {
-    const listeners = eventListeners.get(eventName) ?? []
-
-    eventListeners.set(eventName, [...listeners, listener])
-
-    return event
+  const getList = (name: string): EventSourceListener[] => {
+    let list = listeners.get(name)
+    if (!list) {
+      list = []
+      listeners.set(name, list)
+    }
+    return list
   }
 
-  event.off = (listener: EventEmitterListener<BlobType>) => {
-    for (const [eventName, listeners] of eventListeners.entries()) {
-      if (listeners.includes(listener)) {
-        eventListeners.set(
-          eventName,
-          listeners.filter(l => l !== listener),
-        )
+  const on = <K extends keyof T & string>(
+    name: K,
+    listener: EventSourceListener<T[K]>,
+  ): (() => void) => {
+    const list = getList(name)
+    list.push(listener as EventSourceListener)
+    return () => removeFrom(list, listener as EventSourceListener)
+  }
+
+  const once = <K extends keyof T & string>(
+    name: K,
+    listener: EventSourceListener<T[K]>,
+  ): (() => void) => {
+    const list = getList(name)
+    const wrapper = ((...args: unknown[]) => {
+      removeFrom(list, wrapper)
+      return (listener as EventSourceListener)(...args)
+    }) as EventSourceListener
+    list.push(wrapper)
+    return () => removeFrom(list, wrapper)
+  }
+
+  const off = <K extends keyof T & string>(name: K, listener?: EventSourceListener<T[K]>): void => {
+    if (listener) {
+      const list = listeners.get(name)
+      if (list) {
+        removeFrom(list, listener as EventSourceListener)
+      }
+    } else {
+      listeners.delete(name)
+    }
+  }
+
+  const emit = <K extends keyof T & string>(name: K, ...args: T[K]): void => {
+    const list = listeners.get(name)
+    if (!list) {
+      return
+    }
+
+    const len = list.length
+    if (len === 0) {
+      return
+    }
+
+    if (len === 1) {
+      callListener(list[0]!, args)
+      return
+    }
+
+    const snapshots = list.slice()
+    for (const snapshot of snapshots) {
+      callListener(snapshot, args)
+    }
+  }
+
+  const emitAsync = async <K extends keyof T & string>(name: K, ...args: T[K]): Promise<void> => {
+    const list = listeners.get(name)
+    if (!list) {
+      return
+    }
+
+    const len = list.length
+    if (len === 0) {
+      return
+    }
+
+    if (len === 1) {
+      const result = callListener(list[0]!, args)
+      if (result && typeof (result as Promise<void>).then === 'function') {
+        await result
+      }
+      return
+    }
+
+    const snapshots = list.slice()
+    let promises: Promise<void>[] | undefined
+    for (const snapshot of snapshots) {
+      const result = callListener(snapshot, args)
+      if (result && typeof (result as Promise<void>).then === 'function') {
+        if (!promises) {
+          promises = []
+        }
+        promises.push(result as Promise<void>)
       }
     }
 
-    return event
-  }
-
-  event.emit = (eventName: BlobType, payload: BlobType): BlobType => {
-    const listeners = eventListeners.get(eventName) ?? []
-
-    const promises: Promise<void>[] = []
-
-    for (const listener of listeners) {
-      const result = listener(payload)
-
-      if (isPromise(result)) {
-        promises.push(result)
-      }
+    if (promises) {
+      await Promise.all(promises)
     }
-
-    if (promises.length > 0) {
-      return Promise.allSettled(promises).then(() => void 0)
-    }
-
-    return void 0
   }
 
-  event.removeAllListeners = (): BlobType => {
-    eventListeners.clear()
-
-    return event
+  const clear = (): void => {
+    listeners.clear()
   }
 
-  event.removeListeners = (eventName: BlobType): BlobType => {
-    eventListeners.delete(eventName)
+  const listenerCount = <K extends keyof T & string>(name: K): number =>
+    listeners.get(name)?.length ?? 0
 
-    return event
-  }
-
-  event.listeners = (eventName: BlobType) => {
-    return eventListeners.get(eventName) ?? []
-  }
-
-  event.listenerCount = (eventName: BlobType) => {
-    return eventListeners.get(eventName)?.length ?? 0
-  }
-
-  return event
+  return { _t: EVENT, on, once, off, emit, emitAsync, clear, listenerCount }
 }

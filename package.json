@@ -2,23 +2,35 @@
   "name": "ozaco",
   "version": "0.0.0",
   "private": true,
-  "workspaces": [
-    "{packages,plugins,apps,tools,experiments,examples}/**"
-  ],
+  "workspaces": {
+    "packages": [
+      "packages/*",
+      "plugins/*",
+      "apps/*",
+      "tools/*",
+      "experiments/*",
+      "examples/*"
+    ],
+    "catalogs": {
+      "build": {
+        "tsdown": "^0.21.9"
+      }
+    }
+  },
   "type": "module",
   "scripts": {
-    "commit": "commit",
-    "prepare": "husky || true"
+    "commit": "commit"
   },
   "devDependencies": {
-    "@commitlint/cli": "^20.4.3",
-    "@commitlint/config-conventional": "^20.4.3",
-    "@commitlint/prompt-cli": "^20.4.3",
-    "@types/bun": "^1.3.10",
-    "@types/node": "^25.3.5",
-    "husky": "^9.1.7",
-    "oxfmt": "^0.36.0",
-    "oxlint": "^1.51.0",
-    "typescript": "^5.9.3"
+    "@commitlint/cli": "^20.5.0",
+    "@commitlint/config-conventional": "^20.5.0",
+    "@commitlint/prompt-cli": "^20.5.0",
+    "@ozaco/tsdown-plugin-resolve": "workspace:*",
+    "@types/bun": "^1.3.12",
+    "@types/node": "^25.6.0",
+    "@types/ozaco": "workspace:*",
+    "oxfmt": "^0.45.0",
+    "oxlint": "^1.60.0",
+    "typescript": "^6.0.3"
   }
 }

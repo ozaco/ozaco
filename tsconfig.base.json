@@ -8,7 +8,6 @@
     "composite": true,
     "declaration": true,
     "declarationMap": true,
-    "downlevelIteration": true,
     "emitDeclarationOnly": true,
     "emitDecoratorMetadata": true,
 
@@ -24,6 +23,8 @@
     "lib": ["esnext"],
     "module": "esnext",
     "moduleDetection": "force",
+
+    "types": ["node", "bun", "ozaco"],
 
     "moduleResolution": "bundler",
     "noEmitOnError": true,
