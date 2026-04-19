@@ -12,7 +12,7 @@ projects:
 vcs:
   client: git
   provider: github
-  defaultBranch: rewrite
+  defaultBranch: development
   hooks:
     pre-commit:
       - 'moon run :check'
