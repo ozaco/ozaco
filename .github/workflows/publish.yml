@@ -1,16 +1,13 @@
 name: 'Publish'
 
 on:
-  workflow_run:
-    workflows: ['Pipeline']
-    types: [completed]
+  push:
     tags:
       - 'v*'
 
 jobs:
   publish:
     name: 'Publish to npm'
-    if: github.event.workflow_run.conclusion == 'success'
     runs-on: 'ubuntu-latest'
     permissions:
       contents: read
@@ -25,7 +22,10 @@ jobs:
           auto-install: true
 
       - run: 'bun install --frozen-lockfile'
-      - run: 'moon run std:build --color'
+      - run: 'moon run std:build server:build --color'
 
-      - run: 'bun publish --access public'
+      - run: 'bun publish --access public --provenance'
         working-directory: 'packages/std'
+
+      - run: 'bun publish --access public --provenance'
+        working-directory: 'packages/server'
