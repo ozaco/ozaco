@@ -6,6 +6,11 @@ import type { ActionContext, ActionRequest, ActionResponse } from 'server:servic
 
 export type RestTransformerContext = EmptyType
 
+export interface RestTransformerOptions {
+  method: string
+  path: string
+}
+
 export interface RestTransformerActions extends Record<string, AnyType> {
   toInternal: (
     req: unknown,
@@ -24,4 +29,8 @@ export interface RestTransformerActions extends Record<string, AnyType> {
     res: ActionResponse | null,
     ret: Result<unknown, unknown>,
   ) => Future<AnyType, unknown>
+
+  settings: <T extends RestTransformerOptions>(
+    options: T,
+  ) => Future<T & { transformer: AnyType }, unknown>
 }

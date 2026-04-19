@@ -10,7 +10,7 @@ export namespace Impl {
       fn: (...args: Args) => Operation<T, E>,
     ): (...args: Args) => Future<T, E>
 
-    <TSchema extends StandardSchemaV1, TReturn, TError>(
+    <TSchema extends StandardSchemaV1, TReturn, TError = never>(
       config: ActionMeta<TSchema>,
       handler: (
         ctx: ActionContext<StandardSchemaV1.InferOutput<TSchema>>,

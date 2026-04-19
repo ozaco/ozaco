@@ -1,4 +1,4 @@
-import type { Stream } from 'std:effect'
+import type { Future, Stream } from 'std:effect'
 import type { AnyType, StandardSchemaV1 } from 'std:shared'
 
 import type { ACTION_CONTEXT } from '../const'
@@ -33,7 +33,7 @@ export interface ActionMeta<TSchema> {
 
   allow?: AnyType[]
   deny?: AnyType[]
-  settings?: Record<AnyType, AnyType>
+  settings?: Future<unknown, unknown>[]
 }
 
 export type ActionType = 'http' | 'ws' | 'rpc'

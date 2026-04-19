@@ -1,4 +1,4 @@
-import { operation, useContext } from 'std:effect'
+import { all, operation, useContext } from 'std:effect'
 import { install } from 'std:plugin'
 import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
@@ -8,6 +8,7 @@ import { compileRouter } from 'rou3/compiler'
 
 import { DEFAULT_REST_METHODS, RouterTags } from '../../const'
 import type { Helpers } from '../../types/helpers'
+import type { RestTransformerOptions } from '../../types/transformer'
 import { Rest } from '../transformer/rest'
 
 import { Router } from './definition'
@@ -106,10 +107,15 @@ export const DefaultRouter: Helpers.DefaultRouter = DefaultRouterDef.build({
         continue
       }
 
+      const settings = yield* all(meta?.settings ?? [])
+
       const actionName = key.split('.').pop()!
-      const restSettings =
-        meta?.settings?.[transformer as keyof typeof meta.settings] ??
-        DEFAULT_REST_METHODS[actionName as keyof typeof DEFAULT_REST_METHODS]
+      const restSettings = (settings.find(
+        (setting: AnyType) => setting.transformer === transformer,
+      ) ??
+        DEFAULT_REST_METHODS[
+          actionName as keyof typeof DEFAULT_REST_METHODS
+        ]) as RestTransformerOptions
 
       if (!restSettings) {
         continue

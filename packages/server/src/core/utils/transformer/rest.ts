@@ -156,4 +156,16 @@ export const Rest: Helpers.DefaultRestTransformer = RestDef.build({
       },
     })
   }, TransformerTags.fromInternal),
+
+  // oxlint-disable-next-line require-yield
+  settings: operation(function* (options) {
+    return {
+      // oxlint-disable-next-line oxc/no-rest-spread-properties
+      ...options,
+      method: options.method ?? 'GET',
+      path: options.path ?? '/',
+
+      transformer: Rest,
+    }
+  }, TransformerTags.settings),
 })

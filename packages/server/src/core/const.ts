@@ -1,3 +1,7 @@
+export const SERVER = Symbol.for('server:core:server')
+export const ROUTER = Symbol.for('server:core:router')
+export const REST_TRANSFORMER = Symbol.for('server:core:rest-transformer')
+
 export enum RouterTags {
   add = 'server:router#add',
   find = 'server:router#find',
@@ -12,11 +16,8 @@ export enum TransformerTags {
   toInternal = 'server:transformer#to-internal',
   toContext = 'server:transformer#to-context',
   fromInternal = 'server:transformer#from-internal',
+  settings = 'server:transformer#settings',
 }
-
-export const SERVER = Symbol.for('server:core:server')
-export const ROUTER = Symbol.for('server:core:router')
-export const REST_TRANSFORMER = Symbol.for('server:core:rest-transformer')
 
 export const DEFAULT_REST_METHODS = {
   find: {
