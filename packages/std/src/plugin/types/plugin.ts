@@ -49,13 +49,14 @@ export interface Namespace<
   TError = unknown,
   TArgs extends unknown[] = unknown[],
   TActions extends EmptyType = EmptyType,
+  TSelfActions extends EmptyType = EmptyType,
 > extends Hookable<TActions> {
   _t: typeof NAMESPACE
   _st?: symbol | undefined
   name: string
   version: string
   context: Context<TContext>
-  actions: TActions
+  actions: TActions & TSelfActions
   implement<TIContext extends TContext, TIError extends TError, TIArgs extends TArgs>(options: {
     name: string
     version: string

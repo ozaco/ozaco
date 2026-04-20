@@ -17,16 +17,37 @@ const DEFAULT_STORE: Helpers.HookStore = {
   self: {},
 }
 
+const wrapAction = (action: Helpers.AnyAction, tag: string) =>
+  operation(function* (...args: AnyType[]) {
+    return yield* action(...args)
+  }, tag)
+
 export const createHookable = (options: {
   name: string
   version: string
+  handlers?: Record<string, AnyType> | undefined
   defaultHandlers?: Record<string, AnyType> | undefined
   subtype?: symbol | undefined
 }) => {
   const context = createContext(options.name)
   const hookCtx = createContext<Helpers.HookStore>(`${options.name}:hooks`, DEFAULT_STORE)
   const chainCtx = createContext<Map<string, unknown>>(`${options.name}:chain`)
-  const defaultHandlers = options.defaultHandlers ?? {}
+  const namespaceTag = `${options.name}@${options.version ?? 'lts'}`
+
+  const rootHandlers: Record<string, AnyType> = {}
+  const defaultHandlers: Record<string, AnyType> = {}
+
+  if (options.handlers) {
+    for (const key of Object.keys(options.handlers)) {
+      rootHandlers[key] = wrapAction(options.handlers[key]!, `${namespaceTag}#root`)
+    }
+  }
+
+  if (options.defaultHandlers) {
+    for (const key of Object.keys(options.defaultHandlers)) {
+      defaultHandlers[key] = wrapAction(options.defaultHandlers[key]!, `${namespaceTag}#default`)
+    }
+  }
 
   const resolveAction = (key: string) =>
     operation(function* (...args: unknown[]) {
@@ -37,13 +58,11 @@ export const createHookable = (options: {
         const befores = store.before.flatMap(e => (key in e.handlers ? [e.handlers[key]] : []))
         const afters = store.after.flatMap(e => (key in e.handlers ? [e.handlers[key]] : []))
         const errors = store.error.flatMap(e => (key in e.handlers ? [e.handlers[key]] : []))
-        const self = store.self[key] ?? (defaultHandlers as AnyType)[key]
-
-        const tag = `${options.name}@${options.version ?? 'lts'}`
+        const self = rootHandlers[key] ?? store.self[key] ?? (defaultHandlers as AnyType)[key]
 
         const inner = function* (...innerArgs: unknown[]) {
           for (const hook of befores) {
-            yield* intercept(hook(innerArgs), `${key}:before`, tag)
+            yield* intercept(hook(innerArgs), `${key}:before`, namespaceTag)
           }
 
           if (!self) {
@@ -55,7 +74,7 @@ export const createHookable = (options: {
           let result: unknown = yield* intercept(self(...innerArgs))
 
           for (const hook of afters) {
-            const modified = yield* intercept(hook(result, innerArgs), `${key}:after`, tag)
+            const modified = yield* intercept(hook(result, innerArgs), `${key}:after`, namespaceTag)
             if (modified !== undefined) {
               result = modified
             }
@@ -136,36 +155,27 @@ export const createHookable = (options: {
     buildActions?: Record<string, Helpers.AnyAction>,
   ) => {
     const tag = `${opts.name}@${opts.version ?? 'lts'}`
-    const selfHandlers: Record<string, AnyType> = {}
+    const handlers: Record<string, AnyType> = {}
 
     if (buildActions) {
       const flatActions = flatten(buildActions)
       for (const key of Object.keys(flatActions)) {
-        const action = flatActions[key]!
-        selfHandlers[key] = (...args: unknown[]) => ({
-          *[Symbol.iterator]() {
-            try {
-              return yield* action(...args) as Operation<unknown>
-            } catch (error) {
-              throw asFailure(error, tag)
-            }
-          },
-        })
+        handlers[key] = wrapAction(flatActions[key]!, tag)
       }
     }
 
     const rawSetup = opts.setup
     const setup =
-      Object.keys(selfHandlers).length > 0
+      Object.keys(handlers).length > 0
         ? function* (...args: AnyType[]) {
             const value = yield* rawSetup(...args)
             const store = (yield* hookCtx.get()) ?? DEFAULT_STORE
-            yield* hookCtx.set({ ...store, self: { ...store.self, ...selfHandlers } })
+            yield* hookCtx.set({ ...store, self: { ...store.self, ...handlers } })
             return value
           }
         : rawSetup
 
-    const knownKeys = [...Object.keys(defaultHandlers), ...Object.keys(selfHandlers)]
+    const knownKeys = [...Object.keys(defaultHandlers), ...Object.keys(handlers)]
 
     return Object.freeze({
       _t: PLUGIN,

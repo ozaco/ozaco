@@ -1,4 +1,5 @@
 import type { Operation } from 'std:effect'
+import type { EmptyType } from 'std:shared'
 
 import type { Helpers } from './helpers'
 import type { Namespace, PluginDef } from './plugin'
@@ -16,12 +17,14 @@ export namespace Impl {
     TContext,
     TError,
     TArgs extends unknown[] = [],
-    TActions extends Record<string, Helpers.AnyAction> = Record<never, never>,
+    TActions extends Record<string, Helpers.AnyAction> = EmptyType,
+    TCustomActions extends Record<string, Helpers.AnyAction> = EmptyType,
   >(options: {
     name: string
     version: string
     description?: string
     subtype?: symbol
-    handlers?: { [K in keyof TActions]: TActions[K] }
-  }) => Namespace<TContext, TError, TArgs, TActions>
+    handlers?: TCustomActions
+    defaultHandlers?: Partial<TActions>
+  }) => Namespace<TContext, TError, TArgs, TActions, TCustomActions>
 }
