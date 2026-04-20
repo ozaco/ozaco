@@ -7,7 +7,6 @@ tasks:
   build:
     command: bun x tsdown
     deps:
-      - std:build
       - server:build
     inputs:
       - src/**/*

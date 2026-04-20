@@ -4,6 +4,7 @@
       "server:core": ["./src/core/index.ts", "./dist/core.d.ts"],
       "server:service": ["./src/service/index.ts", "./dist/service.d.ts"],
       "server:bun": ["./src/impl/bun.ts", "./dist/bun.d.ts"],
+      "server:docs": ["./src/plugins/docs/index.ts", "./dist/docs.d.ts"],
 
       "std:shared": ["./node_modules/@ozaco/std/dist/shared.d.ts"],
       "std:result": ["./node_modules/@ozaco/std/dist/result.d.ts"],

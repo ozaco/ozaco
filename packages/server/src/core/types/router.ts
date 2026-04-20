@@ -23,4 +23,5 @@ export interface RouterActions extends Record<string, AnyType> {
 
   transformer: (transformer: Helpers.AnyRestTransformer) => Future<void, unknown>
   mount: (prefix: string, service: Service) => Future<void, unknown>
+  unmount: (service: Service) => Future<void, unknown>
 }

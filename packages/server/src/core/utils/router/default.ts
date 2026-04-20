@@ -131,4 +131,20 @@ export const DefaultRouter: Helpers.DefaultRouter = DefaultRouterDef.build({
 
     ctx.compiled = compileRouter(ctx.router, { normalize: true })
   }, RouterTags.mount),
+
+  unmount: operation(function* (service) {
+    const ctx = yield* useContext(DefaultRouterDef.context)
+
+    for (const [sym, entry] of ctx.handlers) {
+      if (entry.service !== service) {
+        continue
+      }
+      if (entry.method && entry.path) {
+        removeRoute(ctx.router, entry.method, entry.path)
+      }
+      ctx.handlers.delete(sym)
+    }
+
+    ctx.compiled = compileRouter(ctx.router, { normalize: true })
+  }, RouterTags.unmount),
 })

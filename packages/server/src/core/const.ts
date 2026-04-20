@@ -9,6 +9,7 @@ export enum RouterTags {
   remove = 'server:router#remove',
   optimize = 'server:router#optimize',
   mount = 'server:router#mount',
+  unmount = 'server:router#unmount',
   transformer = 'server:router#transformer',
 }
 

@@ -34,3 +34,7 @@ declare module 'server:service' {
 declare module 'server:bun' {
   export * from '@ozaco/server/bun'
 }
+
+declare module 'server:docs' {
+  export * from '@ozaco/server/docs'
+}

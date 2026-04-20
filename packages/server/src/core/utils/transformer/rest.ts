@@ -125,7 +125,7 @@ export const Rest: Helpers.DefaultRestTransformer = RestDef.build({
               }
             }
             parsedBody = fields
-          } else if (contentType.includes(RAW_BINARY)) {
+          } else if (contentType.includes(RAW_BINARY) && req.body) {
             rawBody = IO.actions.fromReadable(req.body.getReader())
           }
         }
@@ -212,8 +212,12 @@ export const Rest: Helpers.DefaultRestTransformer = RestDef.build({
           headers.set('content-type', JSON_CONTENT)
         }
 
+        const isJSON = headers.get('content-type') === JSON_CONTENT
+
         if (!ret) {
-          return Response.json(res?.body, { headers })
+          return isJSON
+            ? Response.json(res?.body, { headers })
+            : new Response((res?.body ?? '') as AnyType, { headers })
         }
         if (isFailure(ret)) {
           if (ret.error instanceof Error) {
@@ -223,7 +227,9 @@ export const Rest: Helpers.DefaultRestTransformer = RestDef.build({
           return Response.json(ret, { headers, status: 500 })
         }
 
-        return Response.json(ret.value, { headers })
+        return isJSON
+          ? Response.json(ret.value, { headers })
+          : new Response(ret.value as AnyType, { headers })
       },
       *node() {
         return yield* fail('unexpected-runtime')

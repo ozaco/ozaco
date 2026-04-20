@@ -28,10 +28,9 @@ export const createHookable = (options: {
   const chainCtx = createContext<Map<string, unknown>>(`${options.name}:chain`)
   const defaultHandlers = options.defaultHandlers ?? {}
 
-  const resolveAction =
-    (key: string) =>
-    (...args: unknown[]) =>
-      chainCtx.with(new Map(), function* (): Operation<unknown> {
+  const resolveAction = (key: string) =>
+    operation(function* (...args: unknown[]) {
+      return yield* chainCtx.with(new Map(), function* (): Operation<unknown> {
         const store = (yield* hookCtx.get()) ?? DEFAULT_STORE
 
         const arounds = store.around.flatMap(e => (key in e.handlers ? [e.handlers[key]] : []))
@@ -90,6 +89,7 @@ export const createHookable = (options: {
           throw error
         }
       })
+    })
 
   const createProxy = (prefix: string): AnyType => {
     const invoke = (...args: unknown[]) => resolveAction(prefix)(...args)

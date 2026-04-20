@@ -1,6 +1,6 @@
 {
   "name": "@ozaco/server",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "homepage": "https://ozaco.com/",
   "author": "giveerr (https://github.com/giveerr)",
   "repository": {
@@ -45,6 +45,17 @@
         "default": "./dist/bun.cjs"
       },
       "source": "./src/impl/bun.ts"
+    },
+    "./docs": {
+      "import": {
+        "types": "./dist/docs.d.ts",
+        "default": "./dist/docs.js"
+      },
+      "require": {
+        "types": "./dist/docs.d.cts",
+        "default": "./dist/docs.cjs"
+      },
+      "source": "./src/plugins/docs/index.ts"
     }
   },
   "publishConfig": {
@@ -53,10 +64,19 @@
     "registry": "https://registry.npmjs.org/"
   },
   "devDependencies": {
+    "@ozaco/std": "workspace:*",
     "rou3": "0.8.1",
-    "tsdown": "catalog:build"
+    "tsdown": "catalog:build",
+    "zod": "4.3.6"
   },
   "peerDependencies": {
-    "rou3": "*"
+    "@ozaco/std": "*",
+    "rou3": "*",
+    "zod": "^4.3.6"
+  },
+  "peerDependenciesMeta": {
+    "zod": {
+      "optional": true
+    }
   }
 }

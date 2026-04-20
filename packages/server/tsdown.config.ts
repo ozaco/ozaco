@@ -7,6 +7,7 @@ export default defineConfig({
     core: './src/core/index.ts',
     service: './src/service/index.ts',
     bun: './src/impl/bun.ts',
+    docs: './src/plugins/docs/index.ts',
   },
   format: ['esm', 'cjs'],
   dts: true,

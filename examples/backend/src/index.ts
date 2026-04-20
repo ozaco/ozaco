@@ -3,6 +3,7 @@ import { install } from 'std:plugin'
 
 import { BunServer } from 'server:bun'
 import { DefaultRouter, Server } from 'server:core'
+import { Docs } from 'server:docs'
 import { BunIO } from 'std:io/bun'
 
 import { TodoService } from './todo.service'
@@ -12,6 +13,13 @@ await main(function* () {
   yield* install(BunServer)
   yield* install(DefaultRouter)
   yield* install(TodoService)
+
+  yield* install(Docs, {
+    title: 'Backend API',
+    version: '0.0.1',
+  })
+
+  yield* Docs.actions.from(TodoService)
 
   try {
     yield* TodoService.actions.create({
