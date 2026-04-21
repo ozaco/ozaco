@@ -2,8 +2,10 @@ import type { AnyType } from 'std:shared'
 
 import { z } from 'zod'
 
+import { SECURITY_SCHEME_NAME } from '../const'
 import type { DocsContext } from '../types'
 
+import { buildSecurityScheme } from './auth'
 import type {
   CompiledEntry,
   JsonSchema,
@@ -122,10 +124,20 @@ export const buildOpenAPISpec = (entries: CompiledEntry[], docs: DocsContext): O
     paths: {},
   }
 
+  if (docs.auth) {
+    doc.components = {
+      securitySchemes: { [SECURITY_SCHEME_NAME]: buildSecurityScheme(docs.auth) },
+    }
+  }
+
   for (const entry of entries) {
     const { openapiPath, params } = extractPathParams(entry.path)
     const pathItem = doc.paths[openapiPath] ?? {}
-    pathItem[entry.method.toLowerCase()] = buildOperation(entry, params)
+    const op = buildOperation(entry, params)
+    if (docs.auth) {
+      op.security = [{ [SECURITY_SCHEME_NAME]: [] }]
+    }
+    pathItem[entry.method.toLowerCase()] = op
     doc.paths[openapiPath] = pathItem
   }
 

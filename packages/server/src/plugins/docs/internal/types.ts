@@ -27,17 +27,23 @@ export interface OperationObject {
     string,
     { description: string; content?: Record<string, { schema: JsonSchema }> }
   >
+  security?: Array<Record<string, string[]>>
+}
+
+export interface SecurityScheme {
+  type: 'http' | 'apiKey'
+  scheme?: string
+  bearerFormat?: string
+  name?: string
+  in?: 'header' | 'query' | 'cookie'
+  description?: string
 }
 
 export interface OpenAPIDocument {
   openapi: string
   info: { title: string; version: string; description?: string }
   paths: Record<string, Record<string, OperationObject>>
-}
-
-export interface SwaggerOptions {
-  openapi: string
-  title: string
+  components?: { securitySchemes?: Record<string, SecurityScheme> }
 }
 
 export interface CompiledEntry {

@@ -1,8 +1,13 @@
-import type { SwaggerOptions } from './types'
+export interface SwaggerHtmlOptions {
+  openapi: string
+  title: string
+  auth: boolean
+}
 
-export const buildSwaggerHtml = ({ openapi, title }: SwaggerOptions): string => {
+export const buildSwaggerHtml = ({ openapi, title, auth }: SwaggerHtmlOptions): string => {
   const safeTitle = title.replaceAll('<', '&lt;').replaceAll('>', '&gt;')
   const safeUrl = JSON.stringify(openapi)
+  const persistAuth = auth ? 'persistAuthorization: true,' : ''
 
   return `<!DOCTYPE html>
 <html lang='en'>
@@ -23,6 +28,7 @@ export const buildSwaggerHtml = ({ openapi, title }: SwaggerOptions): string => 
       url: ${safeUrl},
       dom_id: '#swagger-ui',
       deepLinking: true,
+      ${persistAuth}
       presets: [SwaggerUIBundle.presets.apis, SwaggerUIStandalonePreset],
       layout: 'BaseLayout',
     })
