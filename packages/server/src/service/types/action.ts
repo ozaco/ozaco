@@ -1,7 +1,7 @@
-import type { Future, Stream } from 'std:effect'
+import type { Future, Operation, Stream } from 'std:effect'
 import type { AnyType, StandardSchemaV1 } from 'std:shared'
 
-import type { ACTION_CONTEXT } from '../const'
+import type { ACTION, ACTION_CONTEXT } from '../const'
 
 export interface ActionFile {
   name: string
@@ -54,4 +54,13 @@ export interface ActionContext<TInput> extends Pick<ActionRequest, 'files' | 'me
 
   req: ActionRequest
   res: ActionResponse
+}
+
+export interface Action<
+  TArgs extends unknown[] = AnyType[],
+  TReturn = AnyType,
+  TError = unknown,
+> extends ActionMeta<AnyType> {
+  _t: typeof ACTION
+  (...args: TArgs): Operation<TReturn, TError>
 }

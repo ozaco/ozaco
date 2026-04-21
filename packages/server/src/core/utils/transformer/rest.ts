@@ -1,7 +1,7 @@
 import { operation, until, withHost } from 'std:effect'
 import { IO } from 'std:io'
 import { defineProtocol } from 'std:plugin'
-import { fail, isFailure } from 'std:result'
+import { fail, isFailure, isSuccess } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import type { ActionContext, ActionFile, ActionRequest, ActionResponse } from 'server:service'
@@ -111,7 +111,7 @@ export const Rest: Helpers.DefaultRestTransformer = RestDef.build({
             rawBody,
           } satisfies ActionRequest,
           {
-            body: null,
+            body: undefined,
             files: {},
             meta: {},
 
@@ -161,7 +161,7 @@ export const Rest: Helpers.DefaultRestTransformer = RestDef.build({
     })
   }),
 
-  fromInternal: operation(function* (_req, res, ret) {
+  fromInternal: operation(function* (_req, res, actionResponse) {
     return yield* withHost({
       // oxlint-disable-next-line require-yield
       *bun() {
@@ -172,22 +172,25 @@ export const Rest: Helpers.DefaultRestTransformer = RestDef.build({
 
         const isJSON = headers.get('content-type') === JSON_CONTENT
 
-        if (!ret) {
-          return isJSON
-            ? Response.json(res?.body, { headers })
-            : new Response((res?.body ?? '') as AnyType, { headers })
-        }
-        if (isFailure(ret)) {
-          if (ret.error instanceof Error) {
-            ;(ret as AnyType).error = String(ret.error)
+        const response = isSuccess(actionResponse) ? (actionResponse.value ?? res?.body) : res?.body
+
+        if (isFailure(actionResponse)) {
+          if (actionResponse.error instanceof Error) {
+            ;(actionResponse as AnyType).error = String(actionResponse.error)
           }
 
-          return Response.json(ret, { headers, status: 500 })
+          return Response.json(actionResponse, { headers, status: 500 })
+        }
+
+        if (response === undefined) {
+          return new Response(undefined, {
+            status: 204,
+          })
         }
 
         return isJSON
-          ? Response.json(ret.value, { headers })
-          : new Response(ret.value as AnyType, { headers })
+          ? Response.json(response, { headers })
+          : new Response(response as AnyType, { headers })
       },
       *node() {
         return yield* fail('unexpected-runtime')

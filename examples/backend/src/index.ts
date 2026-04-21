@@ -6,6 +6,7 @@ import { DefaultRouter, Server } from 'server:core'
 import { Docs } from 'server:docs'
 import { BunIO } from 'std:io/bun'
 
+import { CustomCorsPlugin } from './cors.plugin'
 import { TodoService } from './todo.service'
 
 await main(function* () {
@@ -13,6 +14,7 @@ await main(function* () {
   yield* install(BunServer)
   yield* install(DefaultRouter)
   yield* install(TodoService)
+  yield* install(CustomCorsPlugin)
 
   yield* install(Docs, {
     title: 'Backend API',

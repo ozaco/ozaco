@@ -37,11 +37,10 @@ export const defineService: Impl.DefineService = options => {
     }
   }
 
-  const def = definePlugin({ name, version, setup })
+  const def = definePlugin({ name, version, setup, subtype: SERVICE })
   const plugin = def.build(actions)
 
   const service = Object.create(plugin) as AnyType
-  service._st = SERVICE
   service.meta = metaMap
 
   serviceRef = service

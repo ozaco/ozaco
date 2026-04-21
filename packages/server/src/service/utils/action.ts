@@ -3,6 +3,7 @@ import { fail } from 'std:result'
 import type { AnyType, StandardSchemaV1 } from 'std:shared'
 import { isFunction } from 'std:shared'
 
+import { ACTION } from '../const'
 import type { Impl } from '../types/impl'
 
 import { formatIssues } from './internal/input'
@@ -49,6 +50,7 @@ export const defineAction: Impl.DefineAction = (...args: AnyType[]) => {
   const action = operation(validated)
 
   Object.assign(action, {
+    _t: ACTION,
     isRaw: !hasConfig,
     input: inputSchema,
     output: outputSchema,

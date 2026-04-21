@@ -32,35 +32,47 @@ export namespace Helpers {
     ? (error: unknown, args: A) => Operation<void, E>
     : never
 
-  export type Around<T> = {
-    [K in keyof T]?: T[K] extends (...args: AnyType[]) => AnyType
-      ? AroundFn<T[K]>
-      : T[K] extends Record<string, unknown>
-        ? Around<T[K]>
+  type KnownKeys<T> = keyof {
+    [K in keyof T as string extends K
+      ? never
+      : number extends K
+        ? never
+        : symbol extends K
+          ? never
+          : K]: T[K]
+  }
+
+  type Explicit<T> = Pick<T, KnownKeys<T> & keyof T>
+
+  export type Around<T, TE = Explicit<T>> = {
+    [K in keyof TE]?: TE[K] extends (...args: AnyType[]) => AnyType
+      ? AroundFn<TE[K]>
+      : TE[K] extends Record<string, unknown>
+        ? Around<TE[K]>
         : never
   }
 
-  export type Before<T> = {
-    [K in keyof T]?: T[K] extends (...args: AnyType[]) => AnyType
-      ? BeforeFn<T[K]>
-      : T[K] extends Record<string, unknown>
-        ? Before<T[K]>
+  export type Before<T, TE = Explicit<T>> = {
+    [K in keyof TE]?: TE[K] extends (...args: AnyType[]) => AnyType
+      ? BeforeFn<TE[K]>
+      : TE[K] extends Record<string, unknown>
+        ? Before<TE[K]>
         : never
   }
 
-  export type After<T> = {
-    [K in keyof T]?: T[K] extends (...args: AnyType[]) => AnyType
-      ? AfterFn<T[K]>
-      : T[K] extends Record<string, unknown>
-        ? After<T[K]>
+  export type After<T, TE = Explicit<T>> = {
+    [K in keyof TE]?: TE[K] extends (...args: AnyType[]) => AnyType
+      ? AfterFn<TE[K]>
+      : TE[K] extends Record<string, unknown>
+        ? After<TE[K]>
         : never
   }
 
-  export type OnError<T> = {
-    [K in keyof T]?: T[K] extends (...args: AnyType[]) => AnyType
-      ? ErrorFn<T[K]>
-      : T[K] extends Record<string, unknown>
-        ? OnError<T[K]>
+  export type OnError<T, TE = Explicit<T>> = {
+    [K in keyof TE]?: TE[K] extends (...args: AnyType[]) => AnyType
+      ? ErrorFn<TE[K]>
+      : TE[K] extends Record<string, unknown>
+        ? OnError<TE[K]>
         : never
   }
 
