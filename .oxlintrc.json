@@ -75,6 +75,7 @@
     "typescript/explicit-module-boundary-types": "off",
     "typescript/unified-signatures": "off",
     "typescript/no-explicit-any": "error",
+    "typescript/explicit-member-accessibility": "off",
 
     "promise/spec-only": "off",
     "promise/avoid-new": "off",
