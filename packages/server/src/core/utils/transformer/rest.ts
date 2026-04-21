@@ -1,6 +1,6 @@
 import { operation, until, withHost } from 'std:effect'
 import { IO } from 'std:io'
-import { defineNamespace } from 'std:plugin'
+import { defineProtocol } from 'std:plugin'
 import { fail, isFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
 
@@ -16,7 +16,7 @@ import type {
 } from '../../types/transformer'
 
 // oxlint-disable-next-line import/exports-last
-export const RestTransformer = defineNamespace<
+export const RestTransformer = defineProtocol<
   RestTransformerContext,
   unknown,
   [],

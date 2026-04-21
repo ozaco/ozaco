@@ -1,7 +1,7 @@
 import type { Stream } from 'std:effect'
 import { action, createSignal, each, operation, resource, spawn, until } from 'std:effect'
 import type { NodeReadableLike, ReadableLike, WritableLike } from 'std:io'
-import { hasFlag, IO_FLAGS, IO_TAGS } from 'std:io'
+import { hasFlag, IO_FLAGS } from 'std:io'
 import { appendCauses, asFailure } from 'std:result'
 
 import { createReadStream, createWriteStream } from 'node:fs'
@@ -14,7 +14,7 @@ const waitForFinish = (writable: WritableLike): ReturnType<typeof action<void>> 
     }
     const onError = (error: unknown) => {
       cleanup()
-      reject(appendCauses(asFailure(error), IO_TAGS.stream))
+      reject(appendCauses(asFailure(error), 'stream'))
     }
     const cleanup = () => {
       writable.off('finish', onFinish)
@@ -23,7 +23,7 @@ const waitForFinish = (writable: WritableLike): ReturnType<typeof action<void>> 
     writable.on('finish', onFinish)
     writable.on('error', onError)
     return cleanup
-  }, IO_TAGS.stream)
+  }, 'stream')
 
 const waitForDrain = (writable: WritableLike): ReturnType<typeof action<void>> =>
   action((resolve, reject) => {
@@ -33,7 +33,7 @@ const waitForDrain = (writable: WritableLike): ReturnType<typeof action<void>> =
     }
     const onError = (error: unknown) => {
       cleanup()
-      reject(appendCauses(asFailure(error), IO_TAGS.stream))
+      reject(appendCauses(asFailure(error), 'stream'))
     }
     const cleanup = () => {
       writable.off('drain', onDrain)
@@ -42,7 +42,7 @@ const waitForDrain = (writable: WritableLike): ReturnType<typeof action<void>> =
     writable.on('drain', onDrain)
     writable.on('error', onError)
     return cleanup
-  }, IO_TAGS.stream)
+  }, 'stream')
 
 const isNodeReadable = (target: ReadableLike): target is NodeReadableLike =>
   typeof (target as NodeReadableLike).on === 'function'
@@ -75,7 +75,7 @@ export const fromReadable = (target: ReadableLike): Stream<Uint8Array, void> =>
         if (error.code === 'EPIPE') {
           onClose()
         } else {
-          throw appendCauses(asFailure(error), IO_TAGS.stream)
+          throw appendCauses(asFailure(error), 'stream')
         }
       }
 
@@ -152,4 +152,4 @@ export const writeFileStream = operation(function* (
     writable.destroy?.(error instanceof Error ? error : new Error(String(error)))
     throw error
   }
-}, IO_TAGS.writeStream)
+}, 'write-stream')

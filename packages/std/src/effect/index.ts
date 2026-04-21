@@ -1,5 +1,3 @@
-export * from './const'
-
 export * from './types/converge'
 export * from './types/helpers'
 export * from './types/operation'

@@ -8,7 +8,7 @@ declare module 'std:effect' {
   export * from '@ozaco/std/effect'
 }
 declare module 'std:event' {
-  export * from '@ozaco/std/event'
+  export * from '../../packages/std/dist/const.internal'
 }
 declare module 'std:plugin' {
   export * from '@ozaco/std/plugin'

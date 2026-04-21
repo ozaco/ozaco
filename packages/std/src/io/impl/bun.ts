@@ -1,6 +1,6 @@
 import { operation, until } from 'std:effect'
 import type { WalkEntry } from 'std:io'
-import { hasFlag, IO, IO_FLAGS, IO_TAGS, toPath } from 'std:io'
+import { hasFlag, IO, IO_FLAGS, toPath } from 'std:io'
 
 import fs from 'node:fs/promises'
 import { dirname, join } from 'node:path'
@@ -21,7 +21,7 @@ export const BunIO = IO.implement({
     const p = toPath(path)
     const buf = yield* until(Bun.file(p).arrayBuffer())
     return new Uint8Array(buf)
-  }, IO_TAGS.read),
+  }),
 
   readText: operation(function* (path, encoding) {
     const p = toPath(path)
@@ -32,7 +32,7 @@ export const BunIO = IO.implement({
       return decoder.decode(buf)
     }
     return yield* until(Bun.file(p).text())
-  }, IO_TAGS.readText),
+  }),
 
   write: operation(function* (path, data, options) {
     const flags = options?.flags
@@ -49,11 +49,11 @@ export const BunIO = IO.implement({
         ? 'wx'
         : 'w'
     yield* until(fs.writeFile(toPath(path), data, { flag }))
-  }, IO_TAGS.write),
+  }),
 
   append: operation(function* (path, data) {
     yield* until(fs.appendFile(toPath(path), data))
-  }, IO_TAGS.append),
+  }),
 
   copy: operation(function* (src, dest, options) {
     // oxlint-disable-next-line unicorn/prefer-ternary
@@ -62,7 +62,7 @@ export const BunIO = IO.implement({
     } else {
       yield* until(Bun.write(toPath(dest), Bun.file(toPath(src))))
     }
-  }, IO_TAGS.copy),
+  }),
 
   rename: operation(function* (src, dest, options) {
     if (hasFlag(options?.flags ?? IO_FLAGS.NONE, IO_FLAGS.EXCLUSIVE)) {
@@ -72,33 +72,33 @@ export const BunIO = IO.implement({
       }
     }
     yield* until(fs.rename(toPath(src), toPath(dest)))
-  }, IO_TAGS.rename),
+  }),
 
   rm: operation(function* (path, options) {
     yield* until(fs.rm(toPath(path), options))
-  }, IO_TAGS.rm),
+  }),
 
   exists: operation(function* (path) {
     return yield* until(Bun.file(toPath(path)).exists())
-  }, IO_TAGS.exists),
+  }),
 
   stat: operation(function* (path) {
     const s = yield* until(fs.stat(toPath(path)))
     return mapStat(s)
-  }, IO_TAGS.stat),
+  }),
 
   lstat: operation(function* (path) {
     const s = yield* until(fs.lstat(toPath(path)))
     return mapStat(s)
-  }, IO_TAGS.lstat),
+  }),
 
   readdir: operation(function* (path, options) {
     return yield* until(fs.readdir(toPath(path), options))
-  }, IO_TAGS.readdir),
+  }),
 
   ensureDir: operation(function* (path) {
     yield* until(fs.mkdir(toPath(path), { recursive: true }))
-  }, IO_TAGS.ensureDir),
+  }),
 
   ensureFile: operation(function* (path) {
     const p = toPath(path)
@@ -108,7 +108,7 @@ export const BunIO = IO.implement({
     if (!fileExists) {
       yield* until(Bun.write(p, ''))
     }
-  }, IO_TAGS.ensureFile),
+  }),
 
   emptyDir: operation(function* (path) {
     const p = toPath(path)
@@ -117,7 +117,7 @@ export const BunIO = IO.implement({
     for (const entry of entries) {
       yield* until(fs.rm(join(p, entry), { recursive: true, force: true }))
     }
-  }, IO_TAGS.emptyDir),
+  }),
 
   walk: operation(function* (root, options) {
     const p = toPath(root)
@@ -134,5 +134,5 @@ export const BunIO = IO.implement({
       results,
     )
     return results
-  }, IO_TAGS.walk),
+  }),
 })

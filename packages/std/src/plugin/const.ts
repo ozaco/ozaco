@@ -1,2 +1,2 @@
 export const PLUGIN = Symbol.for('std:plugin')
-export const NAMESPACE = Symbol.for('std:namespace')
+export const PROTOCOL = Symbol.for('std:protocol')

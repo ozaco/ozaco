@@ -1,7 +1,7 @@
 import type { Context, Operation } from 'std:effect'
 import type { AnyType, EmptyType } from 'std:shared'
 
-import type { NAMESPACE, PLUGIN } from '../const'
+import type { PLUGIN, PROTOCOL } from '../const'
 
 import type { Helpers } from './helpers'
 
@@ -36,36 +36,29 @@ export interface PluginDef<TContext, TError, TArgs extends unknown[]> {
   build<TActions extends EmptyType>(actions: TActions): Plugin<TContext, TError, TArgs, TActions>
 }
 
-export interface App {
-  install<TContext, TError, TArgs extends unknown[]>(
-    plugin: Plugin<TContext, TError, TArgs>,
-    ...args: TArgs
-  ): TContext
-  use: Helpers.Use
-}
-
-export interface Namespace<
+export interface Protocol<
   TContext = unknown,
   TError = unknown,
   TArgs extends unknown[] = unknown[],
   TActions extends EmptyType = EmptyType,
   TSelfActions extends EmptyType = EmptyType,
 > extends Hookable<TActions> {
-  _t: typeof NAMESPACE
+  _t: typeof PROTOCOL
   _st?: symbol | undefined
   name: string
   version: string
   context: Context<TContext>
   actions: TActions & TSelfActions
+
   implement<TIContext extends TContext, TIError extends TError, TIArgs extends TArgs>(options: {
     name: string
     version: string
     description?: string
     setup(...args: TIArgs): Operation<TIContext, TIError>
-  }): NamespaceImpl<TIContext, TIError, TIArgs, TActions>
+  }): ImplementedProtocol<TIContext, TIError, TIArgs, TActions>
 }
 
-export interface NamespaceImpl<
+export interface ImplementedProtocol<
   TContext,
   TError,
   TArgs extends unknown[],
