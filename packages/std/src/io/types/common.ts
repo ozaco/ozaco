@@ -2,6 +2,8 @@ import type { AnyType } from 'std:shared'
 
 export type PathLike = string | URL
 
+export type HashAlgorithm = 'SHA-256' | 'SHA-384' | 'SHA-512'
+
 export interface IOStat {
   isFile: boolean
   isDirectory: boolean

@@ -56,6 +56,17 @@
         "default": "./dist/docs.cjs"
       },
       "source": "./src/plugins/docs/index.ts"
+    },
+    "./auth": {
+      "import": {
+        "types": "./dist/auth.d.ts",
+        "default": "./dist/auth.js"
+      },
+      "require": {
+        "types": "./dist/auth.d.cts",
+        "default": "./dist/auth.cjs"
+      },
+      "source": "./src/plugins/auth/index.ts"
     }
   },
   "publishConfig": {
@@ -65,16 +76,21 @@
   },
   "devDependencies": {
     "@ozaco/std": "workspace:*",
+    "jose": "6.2.2",
     "rou3": "0.8.1",
     "tsdown": "catalog:build",
     "zod": "4.3.6"
   },
   "peerDependencies": {
     "@ozaco/std": "*",
+    "jose": "^6.0.0",
     "rou3": "*",
     "zod": "^4.3.6"
   },
   "peerDependenciesMeta": {
+    "jose": {
+      "optional": true
+    },
     "zod": {
       "optional": true
     }

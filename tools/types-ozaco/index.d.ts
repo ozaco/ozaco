@@ -38,3 +38,7 @@ declare module 'server:bun' {
 declare module 'server:docs' {
   export * from '@ozaco/server/docs'
 }
+
+declare module 'server:auth' {
+  export * from '@ozaco/server/auth'
+}

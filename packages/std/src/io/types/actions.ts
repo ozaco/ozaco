@@ -1,10 +1,21 @@
 import type { Future, Stream } from 'std:effect'
 
-import type { IOStat, PathLike, ReadableLike, WalkEntry, WalkOptions } from './common'
+import type {
+  HashAlgorithm,
+  IOStat,
+  PathLike,
+  ReadableLike,
+  WalkEntry,
+  WalkOptions,
+} from './common'
 
 // TODO: add custom error for action
 
 export type IOActions = {
+  randomBytes: (length: number) => Future<Uint8Array, unknown>
+  hmac: (algorithm: HashAlgorithm, key: Uint8Array, data: Uint8Array) => Future<Uint8Array, unknown>
+  hash: (algorithm: HashAlgorithm, data: Uint8Array) => Future<Uint8Array, unknown>
+
   fromReadable: (target: ReadableLike) => Stream<Uint8Array, void>
   readStream: (path: PathLike) => Stream<Uint8Array, void>
   writeStream: (

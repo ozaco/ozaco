@@ -48,16 +48,19 @@
       "version": "0.0.2",
       "devDependencies": {
         "@ozaco/std": "workspace:*",
+        "jose": "6.2.2",
         "rou3": "0.8.1",
         "tsdown": "catalog:build",
         "zod": "4.3.6",
       },
       "peerDependencies": {
         "@ozaco/std": "*",
+        "jose": "^6.0.0",
         "rou3": "*",
         "zod": "^4.3.6",
       },
       "optionalPeers": [
+        "jose",
         "zod",
       ],
     },
@@ -431,6 +434,8 @@
     "is-unicode-supported": ["is-unicode-supported@0.1.0", "", {}, "sha512-knxG2q4UC3u8stRGyAVJCOdxFmv5DZiRcdlIaAQXAbSfJya+OhopNotLQrstBhququ4ZpuKbDc/8S6mgXgPFPw=="],
 
     "jiti": ["jiti@2.6.1", "", { "bin": { "jiti": "lib/jiti-cli.mjs" } }, "sha512-ekilCSN1jwRvIbgeg/57YFh8qQDNbwDb9xT/qu2DAHbFFZUicIl4ygVaAvzveMhMVr3LnpSKTNnwt8PoOfmKhQ=="],
+
+    "jose": ["jose@6.2.2", "", {}, "sha512-d7kPDd34KO/YnzaDOlikGpOurfF0ByC2sEV4cANCtdqLlTfBlw2p14O/5d/zv40gJPbIQxfES3nSx1/oYNyuZQ=="],
 
     "js-tokens": ["js-tokens@4.0.0", "", {}, "sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ=="],
 

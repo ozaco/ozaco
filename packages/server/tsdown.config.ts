@@ -8,6 +8,7 @@ export default defineConfig({
     service: './src/service/index.ts',
     bun: './src/impl/bun.ts',
     docs: './src/plugins/docs/index.ts',
+    auth: './src/plugins/auth/index.ts',
   },
   format: ['esm', 'cjs'],
   dts: true,

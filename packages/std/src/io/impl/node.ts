@@ -3,18 +3,41 @@
 import { operation, until } from 'std:effect'
 import type { WalkEntry } from 'std:io'
 import { hasFlag, IO, IO_FLAGS, toPath } from 'std:io'
+import { fail } from 'std:result'
 
+import { createHash, createHmac, randomBytes as nodeRandomBytes } from 'node:crypto'
 import fs from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 
 import { mapStat, walkRecursive } from '../internal/node-shared'
 import { fromReadable, readFileStream, writeFileStream } from '../internal/stream'
+import type { HashAlgorithm } from '../types/common'
+
+const toNodeHash = (alg: HashAlgorithm) =>
+  alg === 'SHA-256' ? 'sha256' : alg === 'SHA-384' ? 'sha384' : 'sha512'
 
 export const NodeIO = IO.implement({
   name: 'node-io',
   version: '0.0.1',
   *setup() {},
 }).build({
+  // oxlint-disable-next-line require-yield
+  randomBytes: operation(function* (length) {
+    return new Uint8Array(nodeRandomBytes(length))
+  }),
+
+  // oxlint-disable-next-line require-yield
+  hmac: operation(function* (algorithm, key, data) {
+    const mac = createHmac(toNodeHash(algorithm), key).update(data).digest()
+    return new Uint8Array(mac)
+  }),
+
+  // oxlint-disable-next-line require-yield
+  hash: operation(function* (algorithm, data) {
+    const digest = createHash(toNodeHash(algorithm)).update(data).digest()
+    return new Uint8Array(digest)
+  }),
+
   fromReadable,
   readStream: path => readFileStream(toPath(path)),
   writeStream: (path, source, options) => writeFileStream(toPath(path), source, options?.flags),
@@ -61,7 +84,7 @@ export const NodeIO = IO.implement({
         // dest doesn't exist, safe to rename
       }
       if (destExists) {
-        throw new Error('destination already exists')
+        return yield* fail('exists', `destination already exists: ${toPath(dest)}`)
       }
     }
     yield* until(fs.rename(toPath(src), toPath(dest)))

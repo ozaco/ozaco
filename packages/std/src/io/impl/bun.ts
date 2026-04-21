@@ -1,18 +1,24 @@
 import { operation, until } from 'std:effect'
 import type { WalkEntry } from 'std:io'
 import { hasFlag, IO, IO_FLAGS, toPath } from 'std:io'
+import { fail } from 'std:result'
 
 import fs from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 
 import { mapStat, walkRecursive } from '../internal/node-shared'
 import { fromReadable, readFileStream, writeFileStream } from '../internal/stream'
+import { webHash, webHmac, webRandomBytes } from '../internal/webcrypto'
 
 export const BunIO = IO.implement({
   name: 'bun-io',
   version: '0.0.1',
   *setup() {},
 }).build({
+  randomBytes: webRandomBytes,
+  hmac: webHmac,
+  hash: webHash,
+
   fromReadable,
   readStream: path => readFileStream(toPath(path)),
   writeStream: (path, source, options) => writeFileStream(toPath(path), source, options?.flags),
@@ -68,7 +74,7 @@ export const BunIO = IO.implement({
     if (hasFlag(options?.flags ?? IO_FLAGS.NONE, IO_FLAGS.EXCLUSIVE)) {
       const destExists = yield* until(Bun.file(toPath(dest)).exists())
       if (destExists) {
-        throw new Error('destination already exists')
+        return yield* fail('exists', `destination already exists: ${toPath(dest)}`)
       }
     }
     yield* until(fs.rename(toPath(src), toPath(dest)))

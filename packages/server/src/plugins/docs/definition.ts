@@ -13,7 +13,7 @@ import { buildSwaggerHtml } from './internal/swagger'
 import type { DocsContext, DocsOptions } from './types'
 
 export const Docs = definePlugin({
-  name: 'docs',
+  name: 'plugin:docs',
   version: '0.0.1',
   description: 'documentation service',
 

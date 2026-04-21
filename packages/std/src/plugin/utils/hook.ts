@@ -32,13 +32,13 @@ export const createHookable = (options: {
 
   if (options.handlers) {
     for (const key of Object.keys(options.handlers)) {
-      handlers[key] = wrapAction(options.handlers[key]!, `${key}:handler`)
+      handlers[key] = wrapAction(options.handlers[key]!, `${key}:handler`, protocolTag)
     }
   }
 
   if (options.defaultActions) {
     for (const key of Object.keys(options.defaultActions)) {
-      defaultActions[key] = wrapAction(options.defaultActions[key]!, `${key}:default`)
+      defaultActions[key] = wrapAction(options.defaultActions[key]!, `${key}:default`, protocolTag)
     }
   }
 
@@ -139,7 +139,7 @@ export const createHookable = (options: {
     if (buildActions) {
       const flatActions = flatten(buildActions)
       for (const key of Object.keys(flatActions)) {
-        wrappedActions[key] = wrapAction(flatActions[key]!, pluginTag)
+        wrappedActions[key] = wrapAction(flatActions[key]!)
       }
     }
 
