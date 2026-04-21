@@ -6,12 +6,10 @@ import type { ActionContext, ActionRequest, ActionResponse } from 'server:servic
 
 export type RestTransformerContext = EmptyType
 
-export type RestFileMatcher = string[] | RegExp | ((key: string) => boolean)
-
 export interface RestTransformerOptions {
   method: string
   path: string
-  files?: RestFileMatcher
+  files?: string[] | RegExp | ((key: string) => boolean)
 }
 
 export interface RestTransformerActions extends Record<string, AnyType> {

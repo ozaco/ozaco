@@ -1,5 +1,7 @@
 import type { AnyType } from 'std:shared'
 
+import type { ActionMeta } from 'server:service'
+
 export interface JsonSchema {
   type?: string
   properties?: Record<string, AnyType>
@@ -36,4 +38,12 @@ export interface OpenAPIDocument {
 export interface SwaggerOptions {
   openapi: string
   title: string
+}
+
+export interface CompiledEntry {
+  service: string
+  key: string
+  method: string
+  path: string
+  meta: ActionMeta<AnyType>
 }

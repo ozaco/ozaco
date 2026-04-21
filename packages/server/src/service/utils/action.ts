@@ -5,21 +5,8 @@ import { isFunction } from 'std:shared'
 
 import type { Impl } from '../types/impl'
 
-const validate = (
-  schema: StandardSchemaV1,
-  value: unknown,
-): StandardSchemaV1.SuccessResult<unknown> | StandardSchemaV1.FailureResult => {
-  const result = schema['~standard'].validate(value)
-
-  if (result instanceof Promise) {
-    throw new TypeError('Async schema validation is not supported in defineAction')
-  }
-
-  return result
-}
-
-const formatIssues = (issues: ReadonlyArray<StandardSchemaV1.Issue>): string =>
-  issues.map(i => `At ${i.path?.join('.') || 'root'} : ${i.message}`).join(', ')
+import { formatIssues } from './internal/input'
+import { validate } from './internal/validate'
 
 export const defineAction: Impl.DefineAction = (...args: AnyType[]) => {
   const [configOrHandler, maybeHandler] = args
@@ -37,7 +24,7 @@ export const defineAction: Impl.DefineAction = (...args: AnyType[]) => {
       ? function* (...callArgs: AnyType[]) {
           if (inputSchema) {
             const ctx = callArgs[0]
-            const result = validate(inputSchema, ctx.body)
+            const result = yield* validate(inputSchema, ctx.body)
 
             if (result.issues) {
               yield* fail('validation' as const, formatIssues(result.issues), 'input')
@@ -48,7 +35,7 @@ export const defineAction: Impl.DefineAction = (...args: AnyType[]) => {
           const output: AnyType = yield* handler(...callArgs)
 
           if (outputSchema) {
-            const result = validate(outputSchema, output)
+            const result = yield* validate(outputSchema, output)
             if (result.issues) {
               yield* fail('validation' as const, formatIssues(result.issues), 'output')
             }

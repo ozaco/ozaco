@@ -2,9 +2,15 @@ import type { AnyType } from 'std:shared'
 
 import { z } from 'zod'
 
-import type { CompiledEntry, DocsContext } from '../types'
+import type { DocsContext } from '../types'
 
-import type { JsonSchema, OpenAPIDocument, OperationObject, ParameterObject } from './types'
+import type {
+  CompiledEntry,
+  JsonSchema,
+  OpenAPIDocument,
+  OperationObject,
+  ParameterObject,
+} from './types'
 
 const BODY_METHODS = new Set(['POST', 'PUT', 'PATCH'])
 

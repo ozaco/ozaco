@@ -44,12 +44,10 @@ export interface ActionMeta<TSchema> {
   settings?: Future<unknown, unknown>[]
 }
 
-export type ActionType = 'http' | 'ws' | 'rpc'
-
 export interface ActionContext<TInput> extends Pick<ActionRequest, 'files' | 'meta'> {
   _t: typeof ACTION_CONTEXT
 
-  type: ActionType
+  type: 'http' | 'ws' | 'rpc'
   from: string
 
   body: TInput

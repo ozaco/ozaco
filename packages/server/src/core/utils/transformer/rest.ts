@@ -7,12 +7,26 @@ import type { AnyType } from 'std:shared'
 import type { ActionContext, ActionFile, ActionRequest, ActionResponse } from 'server:service'
 import { ACTION_CONTEXT } from 'server:service'
 
-import { REST_TRANSFORMER, TransformerTags } from '../../const'
+import {
+  BODY_METHODS,
+  FORM_DATA,
+  FORM_URLENCODED,
+  JSON_CONTENT,
+  RAW_BINARY,
+  REST_TRANSFORMER,
+} from '../../const'
+import {
+  appendField,
+  appendFile,
+  blobToFile,
+  matchFileKey,
+  stringToFile,
+} from '../../internal/form-data'
 import type { Helpers } from '../../types/helpers'
 import type {
-  RestFileMatcher,
   RestTransformerActions,
   RestTransformerContext,
+  RestTransformerOptions,
 } from '../../types/transformer'
 
 // oxlint-disable-next-line import/exports-last
@@ -37,69 +51,13 @@ const RestDef = RestTransformer.implement({
   },
 })
 
-const JSON_CONTENT = 'application/json'
-const RAW_BINARY = 'application/octet-stream'
-const FORM_DATA = 'multipart/form-data'
-const FORM_URLENCODED = 'application/x-www-form-urlencoded'
-const BODY_METHODS = new Set(['POST', 'PUT', 'PATCH'])
-
-const matchFileKey = (matcher: RestFileMatcher | undefined, key: string): boolean => {
-  if (!matcher) {
-    return false
-  }
-  if (Array.isArray(matcher)) {
-    return matcher.includes(key)
-  }
-  if (matcher instanceof RegExp) {
-    return matcher.test(key)
-  }
-  return matcher(key)
-}
-
-const appendField = (target: Record<string, unknown>, key: string, value: unknown): void => {
-  if (key in target) {
-    const prev = target[key]
-    target[key] = Array.isArray(prev) ? [...prev, value] : [prev, value]
-  } else {
-    target[key] = value
-  }
-}
-
-const appendFile = (target: Record<string, ActionFile[]>, key: string, file: ActionFile): void => {
-  if (!target[key]) {
-    target[key] = []
-  }
-  target[key].push(file)
-}
-
-const blobToFile = (blob: Blob, fallbackName: string): ActionFile => {
-  const maybeFile = blob as Blob & { name?: string; lastModified?: number }
-  return {
-    name: typeof maybeFile.name === 'string' ? maybeFile.name : fallbackName,
-    type: blob.type || 'application/octet-stream',
-    size: blob.size,
-    lastModified: typeof maybeFile.lastModified === 'number' ? maybeFile.lastModified : undefined,
-    stream: IO.actions.fromReadable(blob.stream().getReader()),
-  }
-}
-
-const stringToFile = (key: string, value: string): ActionFile => {
-  const blob = new Blob([value])
-  return {
-    name: key,
-    type: 'text/plain',
-    size: blob.size,
-    stream: IO.actions.fromReadable(blob.stream().getReader()),
-  }
-}
-
 export const Rest: Helpers.DefaultRestTransformer = RestDef.build({
   toInternal: operation(function* (req: AnyType, res: unknown, meta: AnyType) {
     return yield* withHost({
       *bun() {
         const url = new URL(req.url)
         const headers = Object.fromEntries(req.headers.entries())
-        const fileMatcher = meta.settings?.files as RestFileMatcher | undefined
+        const fileMatcher = meta.settings?.files as RestTransformerOptions['files']
 
         let parsedBody: unknown = null
         let rawBody: ActionRequest['rawBody'] = null
@@ -171,7 +129,7 @@ export const Rest: Helpers.DefaultRestTransformer = RestDef.build({
         return yield* fail('unexpected-runtime')
       },
     })
-  }, TransformerTags.toInternal),
+  }),
 
   toContext: operation(function* (req, res, meta: AnyType) {
     return yield* withHost({
@@ -201,7 +159,7 @@ export const Rest: Helpers.DefaultRestTransformer = RestDef.build({
         return yield* fail('unexpected-runtime')
       },
     })
-  }, TransformerTags.toContext),
+  }),
 
   fromInternal: operation(function* (_req, res, ret) {
     return yield* withHost({
@@ -241,7 +199,7 @@ export const Rest: Helpers.DefaultRestTransformer = RestDef.build({
         return yield* fail('unexpected-runtime')
       },
     })
-  }, TransformerTags.fromInternal),
+  }),
 
   // oxlint-disable-next-line require-yield
   settings: operation(function* (options) {
@@ -253,5 +211,5 @@ export const Rest: Helpers.DefaultRestTransformer = RestDef.build({
 
       transformer: Rest,
     }
-  }, TransformerTags.settings),
+  }),
 })

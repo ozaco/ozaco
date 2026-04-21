@@ -1,20 +1,10 @@
-import type { Operation } from 'std:effect'
-import { createContext, operation, useContext } from 'std:effect'
 import { definePlugin } from 'std:plugin'
-import { asFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
 import { flatten } from 'std:shared'
 
-import { SERVICE } from '../const'
+import { SelfContext, SERVICE } from '../const'
 import type { ActionMeta } from '../types/action'
 import type { Impl } from '../types/impl'
-import type { Service } from '../types/service'
-
-const SelfContext = createContext<Service>('server:service:self')
-
-export function* useSelf(): Operation<Service> {
-  return yield* useContext(SelfContext)
-}
 
 export const defineService: Impl.DefineService = options => {
   const { name, version, actions: rawActions, setup: rawSetup } = options
@@ -23,24 +13,18 @@ export const defineService: Impl.DefineService = options => {
   const actions: Record<string, AnyType> = {}
   const metaMap = new Map<string, ActionMeta<AnyType>>()
 
-  for (const [key, rawAction] of Object.entries(flatActions)) {
-    actions[key] = operation(function* (...args: AnyType[]) {
-      try {
-        return yield* rawAction(...args)
-      } catch (error) {
-        yield* asFailure(error, key)
-      }
-    })
+  for (const [key, action] of Object.entries(flatActions)) {
+    actions[key] = action
 
     metaMap.set(key, {
-      isRaw: rawAction.isRaw,
-      input: rawAction.input,
-      output: rawAction.output,
-      title: rawAction.title,
-      description: rawAction.description,
-      allow: rawAction.allow,
-      deny: rawAction.deny,
-      settings: rawAction.settings,
+      isRaw: action.isRaw,
+      input: action.input,
+      output: action.output,
+      title: action.title,
+      description: action.description,
+      allow: action.allow,
+      deny: action.deny,
+      settings: action.settings,
     })
   }
 

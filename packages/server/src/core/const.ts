@@ -2,23 +2,11 @@ export const SERVER = Symbol.for('server:core:server')
 export const ROUTER = Symbol.for('server:core:router')
 export const REST_TRANSFORMER = Symbol.for('server:core:rest-transformer')
 
-export enum RouterTags {
-  add = 'server:router#add',
-  find = 'server:router#find',
-  has = 'server:router#has',
-  remove = 'server:router#remove',
-  optimize = 'server:router#optimize',
-  mount = 'server:router#mount',
-  unmount = 'server:router#unmount',
-  transformer = 'server:router#transformer',
-}
-
-export enum TransformerTags {
-  toInternal = 'server:transformer#to-internal',
-  toContext = 'server:transformer#to-context',
-  fromInternal = 'server:transformer#from-internal',
-  settings = 'server:transformer#settings',
-}
+export const JSON_CONTENT = 'application/json'
+export const RAW_BINARY = 'application/octet-stream'
+export const FORM_DATA = 'multipart/form-data'
+export const FORM_URLENCODED = 'application/x-www-form-urlencoded'
+export const BODY_METHODS = new Set(['POST', 'PUT', 'PATCH'])
 
 export const DEFAULT_REST_METHODS = {
   find: {

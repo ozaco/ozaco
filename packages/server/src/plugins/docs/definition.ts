@@ -9,7 +9,8 @@ import { defineAction, defineService } from 'server:service'
 
 import { buildOpenAPISpec } from './internal/openapi'
 import { buildSwaggerHtml } from './internal/swagger'
-import type { CompiledEntry, DocsContext, DocsOptions } from './types'
+import type { CompiledEntry } from './internal/types'
+import type { DocsContext, DocsOptions } from './types'
 
 const CompiledDocs = createContext<CompiledEntry[]>('server:docs:compiled', [])
 const DocsRef = createContext<DocsContext>('server:docs:ctx')

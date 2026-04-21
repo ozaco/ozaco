@@ -6,7 +6,7 @@ import type { AnyType } from 'std:shared'
 import { addRoute, createRouter, findAllRoutes, removeRoute } from 'rou3'
 import { compileRouter } from 'rou3/compiler'
 
-import { DEFAULT_REST_METHODS, RouterTags } from '../../const'
+import { DEFAULT_REST_METHODS } from '../../const'
 import type { Helpers } from '../../types/helpers'
 import type { RestTransformerOptions } from '../../types/transformer'
 import { Rest } from '../transformer/rest'
@@ -38,7 +38,7 @@ export const DefaultRouter: Helpers.DefaultRouter = DefaultRouterDef.build({
     const ctx = yield* useContext(DefaultRouterDef.context)
 
     addRoute(ctx.router, method, pattern, sym)
-  }, RouterTags.add),
+  }),
 
   has: operation(function* (method, pattern, sym) {
     const ctx = yield* useContext(DefaultRouterDef.context)
@@ -56,13 +56,13 @@ export const DefaultRouter: Helpers.DefaultRouter = DefaultRouterDef.build({
     }
 
     return false
-  }, RouterTags.has),
+  }),
 
   remove: operation(function* (method, pattern) {
     const ctx = yield* useContext(DefaultRouterDef.context)
 
     removeRoute(ctx.router, method, pattern)
-  }, RouterTags.remove),
+  }),
 
   find: operation(function* (method, path) {
     const ctx = yield* useContext(DefaultRouterDef.context)
@@ -74,12 +74,12 @@ export const DefaultRouter: Helpers.DefaultRouter = DefaultRouterDef.build({
     }
 
     return [foundRoute.data as symbol, foundRoute.params]
-  }, RouterTags.find),
+  }),
 
   optimize: operation(function* () {
     const ctx = yield* useContext(DefaultRouterDef.context)
     ctx.compiled = compileRouter(ctx.router, { normalize: true })
-  }, RouterTags.optimize),
+  }),
 
   transformer: operation(function* (transformer) {
     const ctx = yield* useContext(DefaultRouterDef.context)
@@ -87,7 +87,7 @@ export const DefaultRouter: Helpers.DefaultRouter = DefaultRouterDef.build({
     yield* install(transformer)
 
     ctx.transformer = transformer
-  }, RouterTags.transformer),
+  }),
 
   mount: operation(function* (prefix, service) {
     const ctx = yield* useContext(DefaultRouterDef.context)
@@ -130,7 +130,7 @@ export const DefaultRouter: Helpers.DefaultRouter = DefaultRouterDef.build({
     }
 
     ctx.compiled = compileRouter(ctx.router, { normalize: true })
-  }, RouterTags.mount),
+  }),
 
   unmount: operation(function* (service) {
     const ctx = yield* useContext(DefaultRouterDef.context)
@@ -146,5 +146,5 @@ export const DefaultRouter: Helpers.DefaultRouter = DefaultRouterDef.build({
     }
 
     ctx.compiled = compileRouter(ctx.router, { normalize: true })
-  }, RouterTags.unmount),
+  }),
 })
