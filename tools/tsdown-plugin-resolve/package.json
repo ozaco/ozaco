@@ -7,6 +7,6 @@
     ".": "./src/index.ts"
   },
   "devDependencies": {
-    "rolldown": "1.0.0-rc.16"
+    "rolldown": "1.0.0-rc.17"
   }
 }
