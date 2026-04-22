@@ -12,6 +12,7 @@ export default defineConfig({
     io: './src/io/index.ts',
     'io-bun': './src/io/impl/bun.ts',
     'io-node': './src/io/impl/node.ts',
+    fetch: './src/fetch/index.ts',
   },
   format: ['esm', 'cjs'],
   dts: true,

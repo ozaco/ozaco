@@ -6,7 +6,6 @@ import { and, asc, desc, eq } from 'drizzle-orm'
 
 import { DB } from '../core'
 import { applyMigrations } from '../migration/apply'
-import type { QueryBuilder } from '../query'
 import type { DbError } from '../runtime'
 import type { SchemaDef } from '../schema/types'
 
@@ -70,12 +69,10 @@ export const PostgresDB = DB.implement({
         }
       },
       *deno() {
-        yield* fail('driver' as DbError, 'postgres: deno runtime not yet supported')
-        throw new Error('unreachable')
+        return yield* fail('driver' as DbError, 'postgres: deno runtime not yet supported')
       },
       *browser() {
-        yield* fail('driver' as DbError, 'postgres: browser runtime not supported')
-        throw new Error('unreachable')
+        return yield* fail('driver' as DbError, 'postgres: browser runtime not supported')
       },
     })
 
@@ -93,7 +90,7 @@ export const PostgresDB = DB.implement({
       execRaw: binding.execRaw,
     }
 
-    return createQueryBuilder(runtime, config.schema) as QueryBuilder & Record<string, AnyType>
+    return createQueryBuilder(runtime, config.schema)
   },
 }).build({
   close: operation(function* () {

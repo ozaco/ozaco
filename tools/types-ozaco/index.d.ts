@@ -23,6 +23,10 @@ declare module 'std:io/node' {
   export * from '@ozaco/std/io/node'
 }
 
+declare module 'std:fetch' {
+  export * from '@ozaco/std/fetch'
+}
+
 declare module 'server:core' {
   export * from '@ozaco/server/core'
 }

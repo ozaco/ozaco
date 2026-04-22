@@ -34,8 +34,7 @@ export const runPromise = <T>(fn: () => Promise<T>): Operation<T, DbError> =>
     )
     if (!outcome.ok) {
       const classified = classifyDriverError(outcome.error)
-      yield* fail(classified.kind, classified.message)
-      throw new Error('unreachable')
+      return yield* fail(classified.kind, classified.message)
     }
     return outcome.value
   })

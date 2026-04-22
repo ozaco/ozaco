@@ -1,0 +1,9 @@
+{
+  "compilerOptions": {
+    "lib": ["esnext", "dom"],
+    "types": ["node", "bun", "ozaco"]
+  },
+  "extends": ["../../tsconfig.base.json"],
+  "include": ["src"],
+  "references": []
+}

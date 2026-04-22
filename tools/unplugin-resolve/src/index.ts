@@ -15,6 +15,7 @@ const STD_MODULES: Record<string, ModuleEntry> = {
   'std:io': { subpath: 'io', source: 'io/index.ts' },
   'std:io/bun': { subpath: 'io/bun', source: 'io/impl/bun.ts' },
   'std:io/node': { subpath: 'io/node', source: 'io/impl/node.ts' },
+  'std:fetch': { subpath: 'fetch', source: 'fetch/index.ts' },
 }
 
 const SERVER_MODULES: Record<string, ModuleEntry> = {

@@ -6,7 +6,6 @@ import { and, asc, desc, eq } from 'drizzle-orm'
 
 import { DB } from '../core'
 import { applyMigrations } from '../migration/apply'
-import type { QueryBuilder } from '../query'
 import type { DbError } from '../runtime'
 import type { SchemaDef } from '../schema/types'
 
@@ -55,12 +54,10 @@ export const SqliteDB = DB.implement({
         return { raw, db: drizzle(raw, { schema: drizzleTables }) }
       },
       *deno() {
-        yield* fail('driver' as DbError, 'sqlite: deno runtime not yet supported')
-        throw new Error('unreachable')
+        return yield* fail('driver' as DbError, 'sqlite: deno runtime not yet supported')
       },
       *browser() {
-        yield* fail('driver' as DbError, 'sqlite: browser runtime not supported')
-        throw new Error('unreachable')
+        return yield* fail('driver' as DbError, 'sqlite: browser runtime not supported')
       },
     })
 
@@ -83,7 +80,7 @@ export const SqliteDB = DB.implement({
       execRaw,
     }
 
-    return createQueryBuilder(runtime, config.schema) as QueryBuilder & Record<string, AnyType>
+    return createQueryBuilder(runtime, config.schema)
   },
 }).build({
   close: operation(function* () {

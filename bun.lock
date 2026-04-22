@@ -53,6 +53,13 @@
         "@ozaco/std": "workspace:*",
       },
     },
+    "experiments/fetch-smoke": {
+      "name": "@ozaco/experiment-fetch-smoke",
+      "version": "0.0.0",
+      "dependencies": {
+        "@ozaco/std": "workspace:*",
+      },
+    },
     "packages/db": {
       "name": "@ozaco/db",
       "version": "0.0.1",
@@ -292,6 +299,8 @@
     "@ozaco/db": ["@ozaco/db@workspace:packages/db"],
 
     "@ozaco/experiment-db-smoke": ["@ozaco/experiment-db-smoke@workspace:experiments/db-smoke"],
+
+    "@ozaco/experiment-fetch-smoke": ["@ozaco/experiment-fetch-smoke@workspace:experiments/fetch-smoke"],
 
     "@ozaco/hello-world": ["@ozaco/hello-world@workspace:examples/hello-world"],
 
