@@ -1,0 +1,83 @@
+import type { UnpluginInstance } from 'unplugin'
+import { createUnplugin } from 'unplugin'
+
+interface ModuleEntry {
+  subpath: string
+  source: string
+}
+
+const STD_MODULES: Record<string, ModuleEntry> = {
+  'std:shared': { subpath: 'shared', source: 'shared/index.ts' },
+  'std:result': { subpath: 'result', source: 'result/index.ts' },
+  'std:effect': { subpath: 'effect', source: 'effect/index.ts' },
+  'std:event': { subpath: 'event', source: 'event/index.ts' },
+  'std:plugin': { subpath: 'plugin', source: 'plugin/index.ts' },
+  'std:io': { subpath: 'io', source: 'io/index.ts' },
+  'std:io/bun': { subpath: 'io/bun', source: 'io/impl/bun.ts' },
+  'std:io/node': { subpath: 'io/node', source: 'io/impl/node.ts' },
+}
+
+const SERVER_MODULES: Record<string, ModuleEntry> = {
+  'server:core': { subpath: 'core', source: 'core/index.ts' },
+  'server:service': { subpath: 'service', source: 'service/index.ts' },
+  'server:bun': { subpath: 'bun', source: 'impl/bun.ts' },
+  'server:docs': { subpath: 'plugin/docs', source: 'plugins/docs/index.ts' },
+  'server:auth': { subpath: 'plugin/auth', source: 'plugins/auth/index.ts' },
+  'server:cors': { subpath: 'plugin/cors', source: 'plugins/cors/index.ts' },
+}
+
+interface ResolveAliasOptions {
+  aliases: Record<string, string>
+  external?: boolean
+}
+
+interface ResolveOptions {
+  sourceDir?: string
+}
+
+const buildAliases = (
+  modules: Record<string, ModuleEntry>,
+  pkg: string,
+  sourceDir: string | undefined,
+): Record<string, string> => {
+  const aliases: Record<string, string> = {}
+  for (const [specifier, { subpath, source }] of Object.entries(modules)) {
+    aliases[specifier] = sourceDir ? `${sourceDir}/${source}` : `${pkg}/${subpath}`
+  }
+  return aliases
+}
+
+const resolveFactory = (name: string) => (aliases: Record<string, string>, external: boolean) => ({
+  name,
+  resolveId(source: string) {
+    const target = aliases[source]
+    if (!target) {
+      return
+    }
+    return external ? { id: target, external: true } : target
+  },
+})
+
+const resolveAlias: UnpluginInstance<ResolveAliasOptions, false> = createUnplugin(
+  (options: ResolveAliasOptions) =>
+    resolveFactory('@ozaco/unplugin-resolve:alias')(options.aliases, Boolean(options.external)),
+)
+
+const stdResolve: UnpluginInstance<ResolveOptions | undefined, false> = createUnplugin(
+  (options?: ResolveOptions) =>
+    resolveFactory('@ozaco/unplugin-resolve:std')(
+      buildAliases(STD_MODULES, '@ozaco/std', options?.sourceDir),
+      !options?.sourceDir,
+    ),
+)
+
+const serverResolve: UnpluginInstance<ResolveOptions | undefined, false> = createUnplugin(
+  (options?: ResolveOptions) =>
+    resolveFactory('@ozaco/unplugin-resolve:server')(
+      buildAliases(SERVER_MODULES, '@ozaco/server', options?.sourceDir),
+      !options?.sourceDir,
+    ),
+)
+
+export { resolveAlias, serverResolve, stdResolve }
+export type { ResolveAliasOptions, ResolveOptions }

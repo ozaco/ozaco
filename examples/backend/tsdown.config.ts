@@ -1,4 +1,4 @@
-import { serverResolve, stdResolve } from '@ozaco/tsdown-plugin-resolve'
+import { serverResolve, stdResolve } from '@ozaco/unplugin-resolve'
 import { defineConfig } from 'tsdown'
 
 // oxlint-disable-next-line import/no-default-export
@@ -11,5 +11,5 @@ export default defineConfig({
   fixedExtension: false,
   clean: false,
   outDir: './dist',
-  plugins: [stdResolve(), serverResolve()],
+  plugins: [stdResolve.rolldown(), serverResolve.rolldown()],
 })

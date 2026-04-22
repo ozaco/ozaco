@@ -1,5 +1,5 @@
 {
-  "name": "@ozaco/tsdown-plugin-resolve",
+  "name": "@ozaco/unplugin-resolve",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -7,6 +7,9 @@
     ".": "./src/index.ts"
   },
   "devDependencies": {
-    "rolldown": "1.0.0-rc.16"
+    "unplugin": "3.0.0"
+  },
+  "peerDependencies": {
+    "unplugin": "^3.0.0"
   }
 }

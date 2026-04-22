@@ -8,7 +8,7 @@
     "zod": "4.3.6"
   },
   "devDependencies": {
-    "@ozaco/tsdown-plugin-resolve": "workspace:*",
+    "@ozaco/unplugin-resolve": "workspace:*",
     "tsdown": "catalog:build"
   }
 }
