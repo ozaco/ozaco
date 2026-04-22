@@ -15,8 +15,9 @@ const SERVER_MODULES: Record<string, { subpath: string; source: string }> = {
   'server:core': { subpath: 'core', source: 'core/index.ts' },
   'server:service': { subpath: 'service', source: 'service/index.ts' },
   'server:bun': { subpath: 'bun', source: 'impl/bun.ts' },
-  'server:docs': { subpath: 'docs', source: 'plugins/docs/index.ts' },
-  'server:auth': { subpath: 'auth', source: 'plugins/auth/index.ts' },
+  'server:docs': { subpath: 'plugin/docs', source: 'plugins/docs/index.ts' },
+  'server:auth': { subpath: 'plugin/auth', source: 'plugins/auth/index.ts' },
+  'server:cors': { subpath: 'plugin/cors', source: 'plugins/cors/index.ts' },
 }
 
 export interface StdResolveOptions {

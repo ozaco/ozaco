@@ -46,27 +46,38 @@
       },
       "source": "./src/impl/bun.ts"
     },
-    "./docs": {
+    "./plugin/docs": {
       "import": {
-        "types": "./dist/docs.d.ts",
-        "default": "./dist/docs.js"
+        "types": "./dist/plugin/docs.d.ts",
+        "default": "./dist/plugin/docs.js"
       },
       "require": {
-        "types": "./dist/docs.d.cts",
-        "default": "./dist/docs.cjs"
+        "types": "./dist/plugin/docs.d.cts",
+        "default": "./dist/plugin/docs.cjs"
       },
       "source": "./src/plugins/docs/index.ts"
     },
-    "./auth": {
+    "./plugin/auth": {
       "import": {
-        "types": "./dist/auth.d.ts",
-        "default": "./dist/auth.js"
+        "types": "./dist/plugin/auth.d.ts",
+        "default": "./dist/plugin/auth.js"
       },
       "require": {
-        "types": "./dist/auth.d.cts",
-        "default": "./dist/auth.cjs"
+        "types": "./dist/plugin/auth.d.cts",
+        "default": "./dist/plugin/auth.cjs"
       },
       "source": "./src/plugins/auth/index.ts"
+    },
+    "./plugin/cors": {
+      "import": {
+        "types": "./dist/plugin/cors.d.ts",
+        "default": "./dist/plugin/cors.js"
+      },
+      "require": {
+        "types": "./dist/plugin/cors.d.cts",
+        "default": "./dist/plugin/cors.cjs"
+      },
+      "source": "./src/plugins/cors/index.ts"
     }
   },
   "publishConfig": {

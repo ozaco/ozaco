@@ -4,12 +4,12 @@ import { install } from 'std:plugin'
 import { AccessRefreshAuth } from 'server:auth'
 import { BunServer } from 'server:bun'
 import { DefaultRouter, Server } from 'server:core'
+import { Cors } from 'server:cors'
 import { Docs } from 'server:docs'
 import { BunIO } from 'std:io/bun'
 
 import { AuthService } from './auth.service'
 import { demoAuthProvider } from './auth.store'
-import { CustomCorsPlugin } from './cors.plugin'
 import { TodoService } from './todo.service'
 
 await main(function* () {
@@ -27,7 +27,7 @@ await main(function* () {
 
   yield* install(AuthService)
   yield* install(TodoService)
-  yield* install(CustomCorsPlugin)
+  yield* install(Cors, { origin: '*', credentials: true })
 
   yield* install(Docs, {
     title: 'Backend API',

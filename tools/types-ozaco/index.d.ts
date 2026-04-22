@@ -36,9 +36,13 @@ declare module 'server:bun' {
 }
 
 declare module 'server:docs' {
-  export * from '@ozaco/server/docs'
+  export * from '@ozaco/server/plugin/docs'
 }
 
 declare module 'server:auth' {
-  export * from '@ozaco/server/auth'
+  export * from '@ozaco/server/plugin/auth'
+}
+
+declare module 'server:cors' {
+  export * from '@ozaco/server/plugin/cors'
 }
