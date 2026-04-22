@@ -7,4 +7,5 @@ export interface CorsContext {
   exposedHeaders: string | null
   credentials: boolean
   maxAge: string
+  preflightStatus: number
 }

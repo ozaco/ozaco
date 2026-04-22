@@ -10,7 +10,7 @@ import { normalizeOptions } from './internal/normalize'
 import { preflightAction } from './internal/preflight'
 import type { CorsOptions } from './types'
 
-type FromInternalArgs = [ActionRequest | null, ActionResponse | null, unknown]
+type FromInternalArgs = [ActionRequest | null, ActionResponse | null, unknown, unknown]
 
 export const Cors = definePlugin({
   name: 'cors',
@@ -34,6 +34,10 @@ export const Cors = definePlugin({
 
         const origin = req?.meta.origin ?? req?.meta.Origin
         applyCorsHeaders(res.meta, cors, origin)
+
+        if (req?.method === 'OPTIONS' && res.status === null) {
+          res.status = cors.preflightStatus
+        }
       },
     })
 

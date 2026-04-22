@@ -3,7 +3,7 @@ import { asFailure, auto, fail, isFailure, isSuccess, unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import type { ServerContext } from 'server:core'
-import { Router, Server } from 'server:core'
+import { Router, Server, statusFor } from 'server:core'
 import type { ActionRequest, ActionResponse } from 'server:service'
 
 export enum BunServerTags {
@@ -50,9 +50,13 @@ export const BunServer = Server.implement({
           })
 
           if (isFailure(isPaused)) {
-            return Response.json(fail('server-internal', 'is paused failed', tag), { status: 500 })
+            return Response.json(fail('server-internal', 'is paused failed', tag), {
+              status: statusFor('server-internal'),
+            })
           } else if (isSuccess(isPaused) && isPaused.value) {
-            return Response.json(fail('server-paused', '', isPaused.value, tag), { status: 503 })
+            return Response.json(fail('server-paused', '', isPaused.value, tag), {
+              status: statusFor('server-paused'),
+            })
           }
 
           const url = new URL(req.url)
@@ -74,20 +78,26 @@ export const BunServer = Server.implement({
                 return yield* fail('not-found', `no handler for ${req.method}:${url.pathname}`)
               }
 
-              const internal = yield* CurrentTransformer.actions.toInternal(req, null, {
+              const transformerMeta = {
                 entry: entry.key,
                 params: routeParams as Record<string, unknown>,
                 settings: entry.settings,
-              })
+              }
+
+              const internal = yield* CurrentTransformer.actions.toInternal(
+                req,
+                null,
+                transformerMeta,
+              )
 
               actionReq = internal[0]
               actionRes = internal[1]
 
-              const actionCtx = yield* CurrentTransformer.actions.toContext(actionReq, actionRes, {
-                entry: entry.key,
-                params: routeParams as Record<string, unknown>,
-                settings: entry.settings,
-              })
+              const actionCtx = yield* CurrentTransformer.actions.toContext(
+                actionReq,
+                actionRes,
+                transformerMeta,
+              )
 
               const actionResult = yield* entry.handler(actionCtx)
 
@@ -95,12 +105,14 @@ export const BunServer = Server.implement({
                 actionReq,
                 actionRes,
                 auto(actionResult),
+                transformerMeta,
               )
             } catch (error) {
               return yield* CurrentTransformer.actions.fromInternal(
                 actionReq,
                 actionRes,
                 asFailure(error),
+                null,
               )
             }
           })

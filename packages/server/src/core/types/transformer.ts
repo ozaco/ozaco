@@ -1,15 +1,18 @@
 import type { Future } from 'std:effect'
 import type { Result } from 'std:result'
-import type { AnyType, EmptyType } from 'std:shared'
+import type { AnyType } from 'std:shared'
 
 import type { ActionContext, ActionRequest, ActionResponse } from 'server:service'
 
-export type RestTransformerContext = EmptyType
+export interface RestTransformerContext {
+  statusMap: Record<string, number> | null
+}
 
 export interface RestTransformerOptions {
   method: string
   path: string
   files?: string[] | RegExp | ((key: string) => boolean)
+  statusMap?: Record<string, number>
 }
 
 export interface RestTransformerActions extends Record<string, AnyType> {
@@ -25,10 +28,12 @@ export interface RestTransformerActions extends Record<string, AnyType> {
     meta: unknown,
   ) => Future<ActionContext<unknown>, unknown>
 
+  // oxlint-disable-next-line max-params
   fromInternal: (
     req: ActionRequest | null,
     res: ActionResponse | null,
     ret: Result<unknown, unknown>,
+    meta: unknown,
   ) => Future<AnyType, unknown>
 
   settings: <T extends RestTransformerOptions>(

@@ -16,3 +16,4 @@ export const DEFAULT_ALLOWED_HEADERS: readonly string[] = [
 ]
 
 export const DEFAULT_MAX_AGE = 86_400
+export const DEFAULT_PREFLIGHT_STATUS = 204

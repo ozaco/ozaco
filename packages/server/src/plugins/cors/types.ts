@@ -13,4 +13,5 @@ export interface CorsOptions {
   exposedHeaders?: readonly string[]
   credentials?: boolean
   maxAge?: number | string
+  preflightStatus?: number
 }

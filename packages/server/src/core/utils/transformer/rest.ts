@@ -1,4 +1,4 @@
-import { operation, until, withHost } from 'std:effect'
+import { operation, until, useContext, withHost } from 'std:effect'
 import { IO } from 'std:io'
 import { defineProtocol } from 'std:plugin'
 import { fail, isFailure, isSuccess } from 'std:result'
@@ -28,6 +28,7 @@ import type {
   RestTransformerContext,
   RestTransformerOptions,
 } from '../../types/transformer'
+import { statusFor } from '../http-status'
 
 // oxlint-disable-next-line import/exports-last
 export const RestTransformer = defineProtocol<
@@ -46,8 +47,8 @@ const RestDef = RestTransformer.implement({
   version: '0.0.1',
 
   // oxlint-disable-next-line require-yield
-  *setup() {
-    return {}
+  *setup(options?: { statusMap?: Record<string, number> }) {
+    return { statusMap: options?.statusMap ?? null }
   },
 })
 
@@ -111,6 +112,7 @@ export const Rest: Helpers.DefaultRestTransformer = RestDef.build({
             rawBody,
           } satisfies ActionRequest,
           {
+            status: null,
             body: undefined,
             files: {},
             meta: {},
@@ -161,7 +163,11 @@ export const Rest: Helpers.DefaultRestTransformer = RestDef.build({
     })
   }),
 
-  fromInternal: operation(function* (_req, res, actionResponse) {
+  // oxlint-disable-next-line max-params
+  fromInternal: operation(function* (_req, res, actionResponse, meta: AnyType) {
+    const ctx = yield* useContext(RestDef.context)
+    const actionStatusMap = meta?.settings?.statusMap as Record<string, number> | undefined
+
     return yield* withHost({
       // oxlint-disable-next-line require-yield
       *bun() {
@@ -172,25 +178,26 @@ export const Rest: Helpers.DefaultRestTransformer = RestDef.build({
 
         const isJSON = headers.get('content-type') === JSON_CONTENT
 
-        const response = isSuccess(actionResponse) ? (actionResponse.value ?? res?.body) : res?.body
-
         if (isFailure(actionResponse)) {
           if (actionResponse.error instanceof Error) {
             ;(actionResponse as AnyType).error = String(actionResponse.error)
           }
 
-          return Response.json(actionResponse, { headers, status: 500 })
+          const status =
+            res?.status ?? statusFor(actionResponse.error, ctx.statusMap, actionStatusMap)
+          return Response.json(actionResponse, { headers, status })
         }
 
-        if (response === undefined) {
-          return new Response(undefined, {
-            status: 204,
-          })
+        const body = isSuccess(actionResponse) ? (actionResponse.value ?? res?.body) : res?.body
+        const status = res?.status ?? (body === undefined ? 204 : 200)
+
+        if (body === undefined) {
+          return new Response(undefined, { status })
         }
 
         return isJSON
-          ? Response.json(response, { headers })
-          : new Response(response as AnyType, { headers })
+          ? Response.json(body, { headers, status })
+          : new Response(body as AnyType, { headers, status })
       },
       *node() {
         return yield* fail('unexpected-runtime')

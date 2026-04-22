@@ -24,6 +24,8 @@ export interface ActionRequest {
 }
 
 export interface ActionResponse {
+  status: number | null
+
   meta: Record<string, string> // headers
   files: Record<string, ActionFile[]>
   body: unknown

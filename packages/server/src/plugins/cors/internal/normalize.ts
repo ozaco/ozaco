@@ -1,6 +1,11 @@
 import type { CorsOptions } from '../types'
 
-import { DEFAULT_ALLOWED_HEADERS, DEFAULT_MAX_AGE, DEFAULT_METHODS } from './const'
+import {
+  DEFAULT_ALLOWED_HEADERS,
+  DEFAULT_MAX_AGE,
+  DEFAULT_METHODS,
+  DEFAULT_PREFLIGHT_STATUS,
+} from './const'
 import type { CorsContext } from './types'
 
 export const normalizeOptions = (options: CorsOptions = {}): CorsContext => {
@@ -18,5 +23,6 @@ export const normalizeOptions = (options: CorsOptions = {}): CorsContext => {
     exposedHeaders: options.exposedHeaders?.length ? options.exposedHeaders.join(', ') : null,
     credentials: Boolean(options.credentials),
     maxAge: String(maxAge),
+    preflightStatus: options.preflightStatus ?? DEFAULT_PREFLIGHT_STATUS,
   }
 }
