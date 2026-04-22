@@ -55,4 +55,12 @@ export const createContext = <T>(name: string, defaultValue?: T): Context<T> => 
   return context
 }
 
-export const useContext = <T>(ctx: Context<T>): Operation<T> => ctx.expect()
+export const useContext = <T>(ctx: Context<T> | { context: Context<T> }): Operation<T> => {
+  if ('context' in ctx && (ctx as { context: unknown }).context !== undefined) {
+    const inner = (ctx as { context: Context<T> }).context
+    if (inner && (inner as { _t?: unknown })._t === CONTEXT) {
+      return inner.expect()
+    }
+  }
+  return (ctx as Context<T>).expect()
+}

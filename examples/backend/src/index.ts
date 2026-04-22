@@ -1,6 +1,8 @@
 import { main, suspend } from 'std:effect'
+import { IO } from 'std:io'
 import { install } from 'std:plugin'
 
+import { SqliteDB } from '@ozaco/db/impl/sqlite'
 import { AccessRefreshAuth } from 'server:auth'
 import { BunServer } from 'server:bun'
 import { DefaultRouter, Server } from 'server:core'
@@ -9,13 +11,22 @@ import { Docs } from 'server:docs'
 import { BunIO } from 'std:io/bun'
 
 import { AuthService } from './auth.service'
-import { demoAuthProvider } from './auth.store'
+import { demoAuthProvider, seedIfEmpty } from './auth.store'
+import { schema } from './db.schema'
 import { TodoService } from './todo.service'
 
 await main(function* () {
   yield* install(BunIO)
   yield* install(BunServer)
   yield* install(DefaultRouter)
+
+  yield* IO.actions.ensureDir('./.ozaco/data')
+
+  yield* install(SqliteDB, {
+    url: 'file:./.ozaco/data/backend.sqlite',
+    schema,
+  })
+  yield* seedIfEmpty()
 
   yield* install(AccessRefreshAuth, {
     secret: 'dev-only-change-me',
@@ -36,15 +47,6 @@ await main(function* () {
   })
 
   yield* Docs.actions.from(AuthService, TodoService)
-
-  try {
-    yield* TodoService.actions.create({
-      // @ts-expect-error test validation
-      body: 'test',
-    })
-  } catch {
-    console.log('validations working')
-  }
 
   const { host, port } = yield* Server.actions.start({
     port: 3000,

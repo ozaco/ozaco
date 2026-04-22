@@ -46,3 +46,23 @@ declare module 'server:auth' {
 declare module 'server:cors' {
   export * from '@ozaco/server/plugin/cors'
 }
+
+declare module 'db:core' {
+  export * from '@ozaco/db/core'
+}
+
+declare module 'db:schema' {
+  export * from '@ozaco/db/schema'
+}
+
+declare module 'db:query' {
+  export * from '@ozaco/db/query'
+}
+
+declare module 'db:impl/sqlite' {
+  export * from '@ozaco/db/impl/sqlite'
+}
+
+declare module 'db:impl/postgres' {
+  export * from '@ozaco/db/impl/postgres'
+}

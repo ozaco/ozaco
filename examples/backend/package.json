@@ -4,8 +4,10 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "@ozaco/db": "workspace:*",
     "@ozaco/server": "workspace:*",
     "@ozaco/std": "workspace:*",
+    "drizzle-orm": "^0.45.2",
     "rou3": "latest",
     "zod": "4.3.6"
   },

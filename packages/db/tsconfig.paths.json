@@ -1,0 +1,33 @@
+{
+  "compilerOptions": {
+    "paths": {
+      "db:core": ["./src/core.ts", "./dist/core.d.ts"],
+      "db:schema": ["./src/schema/index.ts", "./dist/schema.d.ts"],
+      "db:query": ["./src/query.ts", "./dist/query.d.ts"],
+      "db:impl/sqlite": ["./src/impl/sqlite.ts", "./dist/impl-sqlite.d.ts"],
+      "db:impl/postgres": ["./src/impl/postgres.ts", "./dist/impl-postgres.d.ts"],
+
+      "std:shared": [
+        "./node_modules/@ozaco/std/dist/shared.d.ts",
+        "./node_modules/@ozaco/std/dist/shared.js"
+      ],
+      "std:result": [
+        "./node_modules/@ozaco/std/dist/result.d.ts",
+        "./node_modules/@ozaco/std/dist/result.js"
+      ],
+      "std:effect": [
+        "./node_modules/@ozaco/std/dist/effect.d.ts",
+        "./node_modules/@ozaco/std/dist/effect.js"
+      ],
+      "std:event": [
+        "./node_modules/@ozaco/std/dist/event.d.ts",
+        "./node_modules/@ozaco/std/dist/event.js"
+      ],
+      "std:plugin": [
+        "./node_modules/@ozaco/std/dist/plugin.d.ts",
+        "./node_modules/@ozaco/std/dist/plugin.js"
+      ],
+      "std:io": ["./node_modules/@ozaco/std/dist/io.d.ts", "./node_modules/@ozaco/std/dist/io.js"]
+    }
+  }
+}

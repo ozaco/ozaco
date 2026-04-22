@@ -148,6 +148,7 @@ export const createHookable = (options: {
       const store = (yield* hookCtx.get())!
 
       yield* hookCtx.set({ ...store, self: { ...store.self, ...wrappedActions } })
+      yield* context.set(value as AnyType)
       return value
     }
 

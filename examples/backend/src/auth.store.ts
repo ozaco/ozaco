@@ -1,8 +1,11 @@
-import { operation } from 'std:effect'
+import { operation, useContext } from 'std:effect'
 
+import { DB } from '@ozaco/db'
 import type { AuthProvider, AuthUser, RefreshRecord } from 'server:auth'
 
-interface DemoUser extends AuthUser {
+import { refreshTokens as refreshTokensTable, users as usersTable } from './db.schema'
+
+interface SeedUser {
   id: string
   email: string
   password: string
@@ -10,83 +13,106 @@ interface DemoUser extends AuthUser {
   permissions: string[]
 }
 
-const users = new Map<string, DemoUser>([
-  [
-    'u1',
-    {
-      id: 'u1',
-      email: 'admin@example.com',
-      password: 'admin',
-      roles: ['admin', 'user'],
-      permissions: ['todo:create', 'todo:read', 'todo:delete'],
-    },
-  ],
-  [
-    'u2',
-    {
-      id: 'u2',
-      email: 'user@example.com',
-      password: 'user',
-      roles: ['user'],
-      permissions: ['todo:read'],
-    },
-  ],
-])
+const seedUsers: SeedUser[] = [
+  {
+    id: 'u1',
+    email: 'admin@example.com',
+    password: 'admin',
+    roles: ['admin', 'user'],
+    permissions: ['todo:create', 'todo:read', 'todo:delete'],
+  },
+  {
+    id: 'u2',
+    email: 'user@example.com',
+    password: 'user',
+    roles: ['user'],
+    permissions: ['todo:read'],
+  },
+]
 
-const usersByEmail = new Map<string, DemoUser>()
-for (const user of users.values()) {
-  usersByEmail.set(user.email, user)
-}
-
-const refreshTokens = new Map<string, RefreshRecord>()
-
-const toPublicUser = (user: DemoUser): AuthUser => ({
-  id: user.id,
-  email: user.email,
+const toPublicUser = (row: {
+  id: string
+  email: string
+  roles: string[]
+  permissions: string[]
+}): AuthUser => ({
+  id: row.id,
+  email: row.email,
 })
 
-export const demoAuthProvider: AuthProvider = {
-  // oxlint-disable-next-line require-yield
+const seedIfEmpty = operation(function* () {
+  const db = yield* useContext(DB)
+  const existing = yield* db.from(usersTable).limit(1).all()
+  if (existing.length > 0) {
+    return
+  }
+  for (const user of seedUsers) {
+    yield* db.insert(usersTable).values(user).execute()
+  }
+})
+
+const demoAuthProvider: AuthProvider = {
   authenticate: operation(function* (credentials) {
     const { email, password } = credentials as { email: string; password: string }
-    const match = usersByEmail.get(email)
-    if (!match || match.password !== password) {
+    const db = yield* useContext(DB)
+    const row = yield* db.from(usersTable).where({ email }).first()
+    if (!row || row.password !== password) {
       return null
     }
-    return toPublicUser(match)
+    return toPublicUser(row)
   }),
 
-  // oxlint-disable-next-line require-yield
   loadUser: operation(function* (id: string) {
-    const user = users.get(id)
-    return user ? toPublicUser(user) : null
+    const db = yield* useContext(DB)
+    const row = yield* db.from(usersTable).where({ id }).first()
+    return row ? toPublicUser(row) : null
   }),
 
-  // oxlint-disable-next-line require-yield
   saveRefreshToken: operation(function* (record: RefreshRecord) {
-    refreshTokens.set(record.jti, record)
+    const db = yield* useContext(DB)
+    yield* db
+      .insert(refreshTokensTable)
+      .values({
+        jti: record.jti,
+        userId: record.userId,
+        issuedAt: record.issuedAt,
+        expiresAt: record.expiresAt,
+        revokedAt: record.revokedAt,
+      })
+      .execute()
   }),
 
-  // oxlint-disable-next-line require-yield
   findRefreshToken: operation(function* (jti: string) {
-    return refreshTokens.get(jti) ?? null
-  }),
-
-  // oxlint-disable-next-line require-yield
-  revokeRefreshToken: operation(function* (jti: string) {
-    const record = refreshTokens.get(jti)
-    if (record) {
-      record.revokedAt = Date.now()
+    const db = yield* useContext(DB)
+    const row = yield* db.from(refreshTokensTable).where({ jti }).first()
+    if (!row) {
+      return null
+    }
+    return {
+      jti: row.jti,
+      userId: row.userId,
+      issuedAt: row.issuedAt,
+      expiresAt: row.expiresAt,
+      revokedAt: row.revokedAt,
     }
   }),
 
-  // oxlint-disable-next-line require-yield
-  getRoles: operation(function* (user) {
-    return users.get(user.id)?.roles ?? []
+  revokeRefreshToken: operation(function* (jti: string) {
+    const db = yield* useContext(DB)
+    yield* db.update(refreshTokensTable).set({ revokedAt: Date.now() }).where({ jti }).execute()
   }),
 
-  // oxlint-disable-next-line require-yield
+  getRoles: operation(function* (user) {
+    const db = yield* useContext(DB)
+    const row = yield* db.from(usersTable).where({ id: user.id }).first()
+    return row?.roles ?? []
+  }),
+
   getPermissions: operation(function* (user) {
-    return users.get(user.id)?.permissions ?? []
+    const db = yield* useContext(DB)
+    const row = yield* db.from(usersTable).where({ id: user.id }).first()
+    return row?.permissions ?? []
   }),
 }
+
+export { demoAuthProvider, seedIfEmpty }

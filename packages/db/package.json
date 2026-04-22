@@ -1,0 +1,111 @@
+{
+  "name": "@ozaco/db",
+  "version": "0.0.1",
+  "homepage": "https://ozaco.com/",
+  "author": "giveerr (https://github.com/giveerr)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ozaco/ozaco.git"
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      },
+      "source": "./src/index.ts"
+    },
+    "./core": {
+      "import": {
+        "types": "./dist/core.d.ts",
+        "default": "./dist/core.js"
+      },
+      "require": {
+        "types": "./dist/core.d.cts",
+        "default": "./dist/core.cjs"
+      },
+      "source": "./src/core.ts"
+    },
+    "./schema": {
+      "import": {
+        "types": "./dist/schema.d.ts",
+        "default": "./dist/schema.js"
+      },
+      "require": {
+        "types": "./dist/schema.d.cts",
+        "default": "./dist/schema.cjs"
+      },
+      "source": "./src/schema/index.ts"
+    },
+    "./query": {
+      "import": {
+        "types": "./dist/query.d.ts",
+        "default": "./dist/query.js"
+      },
+      "require": {
+        "types": "./dist/query.d.cts",
+        "default": "./dist/query.cjs"
+      },
+      "source": "./src/query.ts"
+    },
+    "./impl/sqlite": {
+      "import": {
+        "types": "./dist/impl-sqlite.d.ts",
+        "default": "./dist/impl-sqlite.js"
+      },
+      "require": {
+        "types": "./dist/impl-sqlite.d.cts",
+        "default": "./dist/impl-sqlite.cjs"
+      },
+      "source": "./src/impl/sqlite.ts"
+    },
+    "./impl/postgres": {
+      "import": {
+        "types": "./dist/impl-postgres.d.ts",
+        "default": "./dist/impl-postgres.js"
+      },
+      "require": {
+        "types": "./dist/impl-postgres.d.cts",
+        "default": "./dist/impl-postgres.cjs"
+      },
+      "source": "./src/impl/postgres.ts"
+    }
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true,
+    "registry": "https://registry.npmjs.org/"
+  },
+  "devDependencies": {
+    "@ozaco/std": "workspace:*",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/pg": "^8.20.0",
+    "better-sqlite3": "^12.9.0",
+    "drizzle-orm": "^0.45.2",
+    "pg": "^8.20.0",
+    "tsdown": "catalog:build"
+  },
+  "peerDependencies": {
+    "@ozaco/std": "*",
+    "better-sqlite3": "^11.0.0 || ^12.0.0",
+    "drizzle-orm": "^0.45.0",
+    "pg": "^8.0.0"
+  },
+  "peerDependenciesMeta": {
+    "better-sqlite3": {
+      "optional": true
+    },
+    "pg": {
+      "optional": true
+    }
+  }
+}

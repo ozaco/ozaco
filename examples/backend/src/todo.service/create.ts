@@ -1,21 +1,49 @@
+import { useContext } from 'std:effect'
+import { fail } from 'std:result'
+
+import { DB } from '@ozaco/db'
+import { AccessRefreshAuth, authorizeBearer } from 'server:auth'
+import { Rest } from 'server:core'
 import { defineAction } from 'server:service'
 // oxlint-disable-next-line import/no-named-as-default
 import z from 'zod'
 
+import { todos } from '../db.schema'
+
 export const create = defineAction(
   {
     title: 'Add Todo',
-    description: 'adds new todo',
+    description: 'adds new todo for the authenticated user',
 
     input: z.object({
-      id: z.string(),
+      title: z.string().min(1),
     }),
     output: z.object({
       id: z.string(),
+      title: z.string(),
+      completed: z.boolean(),
     }),
+
+    settings: [Rest.actions.settings({ method: 'POST', path: '/create' })],
   },
-  // oxlint-disable-next-line require-yield
   function* (ctx) {
-    return ctx.body
+    const session = yield* authorizeBearer(AccessRefreshAuth)(ctx.req)
+    if (!session.permissions.includes('todo:create')) {
+      return yield* fail('forbidden', 'missing permission todo:create')
+    }
+
+    const db = yield* useContext(DB)
+    const row = yield* db
+      .insert(todos)
+      .values({
+        id: crypto.randomUUID(),
+        userId: session.user.id,
+        title: ctx.body.title,
+        completed: false,
+      })
+      .returning()
+      .firstOrFail()
+
+    return { id: row.id, title: row.title, completed: row.completed }
   },
 )

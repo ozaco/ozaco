@@ -1,0 +1,10 @@
+{
+  "name": "@ozaco/experiment-db-smoke",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@ozaco/db": "workspace:*",
+    "@ozaco/std": "workspace:*"
+  }
+}

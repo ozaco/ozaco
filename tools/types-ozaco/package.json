@@ -3,10 +3,12 @@
   "version": "0.0.1",
   "private": true,
   "devDependencies": {
+    "@ozaco/db": "workspace:*",
     "@ozaco/server": "workspace:*",
     "@ozaco/std": "workspace:*"
   },
   "peerDependencies": {
+    "@ozaco/db": "*",
     "@ozaco/server": "*",
     "@ozaco/std": "*"
   }

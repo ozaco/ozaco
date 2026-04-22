@@ -9,8 +9,6 @@ import type {
   WalkOptions,
 } from './common'
 
-// TODO: add custom error for action
-
 export type IOActions = {
   randomBytes: (length: number) => Future<Uint8Array, unknown>
   hmac: (algorithm: HashAlgorithm, key: Uint8Array, data: Uint8Array) => Future<Uint8Array, unknown>

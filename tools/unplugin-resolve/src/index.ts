@@ -26,6 +26,14 @@ const SERVER_MODULES: Record<string, ModuleEntry> = {
   'server:cors': { subpath: 'plugin/cors', source: 'plugins/cors/index.ts' },
 }
 
+const DB_MODULES: Record<string, ModuleEntry> = {
+  'db:core': { subpath: 'core', source: 'core.ts' },
+  'db:schema': { subpath: 'schema', source: 'schema/index.ts' },
+  'db:query': { subpath: 'query', source: 'query.ts' },
+  'db:impl/sqlite': { subpath: 'impl/sqlite', source: 'impl/sqlite.ts' },
+  'db:impl/postgres': { subpath: 'impl/postgres', source: 'impl/postgres.ts' },
+}
+
 interface ResolveAliasOptions {
   aliases: Record<string, string>
   external?: boolean
@@ -79,5 +87,13 @@ const serverResolve: UnpluginInstance<ResolveOptions | undefined, false> = creat
     ),
 )
 
-export { resolveAlias, serverResolve, stdResolve }
+const dbResolve: UnpluginInstance<ResolveOptions | undefined, false> = createUnplugin(
+  (options?: ResolveOptions) =>
+    resolveFactory('@ozaco/unplugin-resolve:db')(
+      buildAliases(DB_MODULES, '@ozaco/db', options?.sourceDir),
+      !options?.sourceDir,
+    ),
+)
+
+export { dbResolve, resolveAlias, serverResolve, stdResolve }
 export type { ResolveAliasOptions, ResolveOptions }
