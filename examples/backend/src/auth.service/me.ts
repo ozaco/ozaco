@@ -1,5 +1,5 @@
 import { Rest } from 'server:core'
-import { AccessRefreshAuth, authorizeBearer } from 'server:plugin/auth'
+import { AccessRefreshAuth, useAuth } from 'server:plugin/auth'
 import { defineAction } from 'server:service'
 
 export const me = defineAction(
@@ -10,6 +10,6 @@ export const me = defineAction(
     settings: [Rest.actions.settings({ method: 'GET', path: '/me' })],
   },
   function* (ctx) {
-    return yield* authorizeBearer(AccessRefreshAuth)(ctx.req)
+    return yield* useAuth(AccessRefreshAuth, ctx.req)
   },
 )

@@ -3,7 +3,7 @@ import { fail } from 'std:result'
 
 import { DB } from '@ozaco/db'
 import { Rest } from 'server:core'
-import { AccessRefreshAuth, authorizeBearer } from 'server:plugin/auth'
+import { AccessRefreshAuth, useAuth } from 'server:plugin/auth'
 import { defineAction } from 'server:service'
 // oxlint-disable-next-line import/no-named-as-default
 import z from 'zod'
@@ -27,7 +27,7 @@ export const create = defineAction(
     settings: [Rest.actions.settings({ method: 'POST', path: '/create' })],
   },
   function* (ctx) {
-    const session = yield* authorizeBearer(AccessRefreshAuth)(ctx.req)
+    const session = yield* useAuth(AccessRefreshAuth, ctx.req)
     if (!session.permissions.includes('todo:create')) {
       return yield* fail('forbidden', 'missing permission todo:create')
     }

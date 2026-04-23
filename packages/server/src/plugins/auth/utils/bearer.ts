@@ -20,10 +20,13 @@ const getBearerToken = operation(function* (req: ActionRequest) {
   return header.slice(BEARER_PREFIX.length)
 })
 
-const authorizeBearer = <T extends AuthorizableStrategy>(strategy: T) =>
-  operation(function* (req: ActionRequest) {
-    const token = yield* getBearerToken(req)
-    return yield* strategy.actions.authorize(token)
-  })
+const useAuth = operation(function* <T extends AuthorizableStrategy>(
+  strategy: T,
+  req: ActionRequest,
+) {
+  const token = yield* getBearerToken(req)
 
-export { authorizeBearer, getBearerToken }
+  return yield* strategy.actions.authorize(token)
+})
+
+export { getBearerToken, useAuth }
