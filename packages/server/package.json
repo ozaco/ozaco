@@ -35,14 +35,14 @@
       },
       "source": "./src/service/index.ts"
     },
-    "./bun": {
+    "./impl/bun": {
       "import": {
-        "types": "./dist/bun.d.ts",
-        "default": "./dist/bun.js"
+        "types": "./dist/impl/bun.d.ts",
+        "default": "./dist/impl/bun.js"
       },
       "require": {
-        "types": "./dist/bun.d.cts",
-        "default": "./dist/bun.cjs"
+        "types": "./dist/impl/bun.d.cts",
+        "default": "./dist/impl/bun.cjs"
       },
       "source": "./src/impl/bun.ts"
     },

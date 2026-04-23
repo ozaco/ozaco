@@ -16,11 +16,11 @@ declare module 'std:plugin' {
 declare module 'std:io' {
   export * from '@ozaco/std/io'
 }
-declare module 'std:io/bun' {
-  export * from '@ozaco/std/io/bun'
+declare module 'std:io/impl/bun' {
+  export * from '@ozaco/std/io/impl/bun'
 }
-declare module 'std:io/node' {
-  export * from '@ozaco/std/io/node'
+declare module 'std:io/impl/node' {
+  export * from '@ozaco/std/io/impl/node'
 }
 
 declare module 'std:fetch' {
@@ -35,19 +35,19 @@ declare module 'server:service' {
   export * from '@ozaco/server/service'
 }
 
-declare module 'server:bun' {
-  export * from '@ozaco/server/bun'
+declare module 'server:impl/bun' {
+  export * from '@ozaco/server/impl/bun'
 }
 
-declare module 'server:docs' {
+declare module 'server:plugin/docs' {
   export * from '@ozaco/server/plugin/docs'
 }
 
-declare module 'server:auth' {
+declare module 'server:plugin/auth' {
   export * from '@ozaco/server/plugin/auth'
 }
 
-declare module 'server:cors' {
+declare module 'server:plugin/cors' {
   export * from '@ozaco/server/plugin/cors'
 }
 

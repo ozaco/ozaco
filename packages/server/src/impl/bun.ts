@@ -6,15 +6,6 @@ import type { ServerContext } from 'server:core'
 import { Router, Server, statusFor } from 'server:core'
 import type { ActionRequest, ActionResponse } from 'server:service'
 
-export enum BunServerTags {
-  start = 'server:bun#start',
-  isStarted = 'server:bun#is-started',
-  pause = 'server:bun#pause',
-  isPaused = 'server:bun#id-paused',
-  resume = 'server:bun#resume',
-  destroy = 'server:bun#destroy',
-}
-
 export const BunServerRef = createContext<AnyType>('bun:server:ref')
 export const BunIsStartedRef = createContext<boolean>('bun:server:is-started')
 export const BunIsPausedRef = createContext<false | string>('bun:server:is-paused')
@@ -68,7 +59,6 @@ export const BunServer = Server.implement({
 
             try {
               const [routeSymbol, routeParams] = yield* Router.actions.find(
-                // oxlint-disable-next-line unicorn/no-array-method-this-argument
                 req.method,
                 url.pathname,
               )
@@ -131,23 +121,23 @@ export const BunServer = Server.implement({
     yield* BunIsStartedRef.set(true)
 
     return { host: server.hostname, port: server.port } as ServerContext
-  }, BunServerTags.start),
+  }),
 
   isStarted: operation(function* () {
     return (yield* BunIsStartedRef.get()) ?? false
-  }, BunServerTags.isStarted),
+  }),
 
   pause: operation(function* (cause) {
     yield* BunIsPausedRef.set(cause)
-  }, BunServerTags.pause),
+  }),
 
   isPaused: operation(function* () {
     return (yield* BunIsPausedRef.get()) ?? false
-  }, BunServerTags.isPaused),
+  }),
 
   resume: operation(function* () {
     yield* BunIsPausedRef.set(false)
-  }, BunServerTags.resume),
+  }),
 
   destroy: operation(function* () {
     const server = yield* BunServerRef.get()
@@ -157,5 +147,5 @@ export const BunServer = Server.implement({
     }
 
     yield* BunIsStartedRef.set(false)
-  }, BunServerTags.destroy),
+  }),
 })

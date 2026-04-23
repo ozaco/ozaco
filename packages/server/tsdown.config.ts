@@ -6,7 +6,7 @@ export default defineConfig({
   entry: {
     core: './src/core/index.ts',
     service: './src/service/index.ts',
-    bun: './src/impl/bun.ts',
+    'impl/bun': './src/impl/bun.ts',
     'plugin/docs': './src/plugins/docs/index.ts',
     'plugin/auth': './src/plugins/auth/index.ts',
     'plugin/cors': './src/plugins/cors/index.ts',

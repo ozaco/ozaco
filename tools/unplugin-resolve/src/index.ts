@@ -13,18 +13,18 @@ const STD_MODULES: Record<string, ModuleEntry> = {
   'std:event': { subpath: 'event', source: 'event/index.ts' },
   'std:plugin': { subpath: 'plugin', source: 'plugin/index.ts' },
   'std:io': { subpath: 'io', source: 'io/index.ts' },
-  'std:io/bun': { subpath: 'io/bun', source: 'io/impl/bun.ts' },
-  'std:io/node': { subpath: 'io/node', source: 'io/impl/node.ts' },
+  'std:io/impl/bun': { subpath: 'io/impl/bun', source: 'io/impl/bun.ts' },
+  'std:io/impl/node': { subpath: 'io/impl/node', source: 'io/impl/node.ts' },
   'std:fetch': { subpath: 'fetch', source: 'fetch/index.ts' },
 }
 
 const SERVER_MODULES: Record<string, ModuleEntry> = {
   'server:core': { subpath: 'core', source: 'core/index.ts' },
   'server:service': { subpath: 'service', source: 'service/index.ts' },
-  'server:bun': { subpath: 'bun', source: 'impl/bun.ts' },
-  'server:docs': { subpath: 'plugin/docs', source: 'plugins/docs/index.ts' },
-  'server:auth': { subpath: 'plugin/auth', source: 'plugins/auth/index.ts' },
-  'server:cors': { subpath: 'plugin/cors', source: 'plugins/cors/index.ts' },
+  'server:impl/bun': { subpath: 'impl/bun', source: 'impl/bun.ts' },
+  'server:plugin/docs': { subpath: 'plugin/docs', source: 'plugins/docs/index.ts' },
+  'server:plugin/auth': { subpath: 'plugin/auth', source: 'plugins/auth/index.ts' },
+  'server:plugin/cors': { subpath: 'plugin/cors', source: 'plugins/cors/index.ts' },
 }
 
 const DB_MODULES: Record<string, ModuleEntry> = {

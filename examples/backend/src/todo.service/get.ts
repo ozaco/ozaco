@@ -2,8 +2,8 @@ import { useContext } from 'std:effect'
 import { fail } from 'std:result'
 
 import { DB } from '@ozaco/db'
-import { AccessRefreshAuth, authorizeBearer } from 'server:auth'
 import { Rest } from 'server:core'
+import { AccessRefreshAuth, authorizeBearer } from 'server:plugin/auth'
 import { defineAction } from 'server:service'
 // oxlint-disable-next-line import/no-named-as-default
 import z from 'zod'

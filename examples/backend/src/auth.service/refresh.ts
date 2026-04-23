@@ -1,5 +1,5 @@
-import { AccessRefreshAuth } from 'server:auth'
 import { Rest } from 'server:core'
+import { AccessRefreshAuth } from 'server:plugin/auth'
 import { defineAction } from 'server:service'
 // oxlint-disable-next-line import/no-named-as-default
 import z from 'zod'

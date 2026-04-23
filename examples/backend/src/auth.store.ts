@@ -1,7 +1,7 @@
 import { operation, useContext } from 'std:effect'
 
 import { DB } from '@ozaco/db'
-import type { AuthProvider, AuthUser, RefreshRecord } from 'server:auth'
+import type { AuthProvider, AuthUser, RefreshRecord } from 'server:plugin/auth'
 
 import { refreshTokens as refreshTokensTable, users as usersTable } from './db.schema'
 

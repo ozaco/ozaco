@@ -3,8 +3,10 @@
     "paths": {
       "server:core": ["./src/core/index.ts", "./dist/core.d.ts"],
       "server:service": ["./src/service/index.ts", "./dist/service.d.ts"],
-      "server:bun": ["./src/impl/bun.ts", "./dist/bun.d.ts"],
-      "server:docs": ["./src/plugins/docs/index.ts", "./dist/docs.d.ts"],
+      "server:impl/bun": ["./src/impl/bun.ts", "./dist/impl/bun.d.ts"],
+      "server:plugin/docs": ["./src/plugins/docs/index.ts", "./dist/plugin/docs.d.ts"],
+      "server:plugin/auth": ["./src/plugins/auth/index.ts", "./dist/plugin/auth.d.ts"],
+      "server:plugin/cors": ["./src/plugins/cors/index.ts", "./dist/plugin/cors.d.ts"],
 
       "std:shared": ["./node_modules/@ozaco/std/dist/shared.d.ts"],
       "std:result": ["./node_modules/@ozaco/std/dist/result.d.ts"],
@@ -12,8 +14,8 @@
       "std:event": ["./node_modules/@ozaco/std/dist/event.d.ts"],
       "std:plugin": ["./node_modules/@ozaco/std/dist/plugin.d.ts"],
       "std:io": ["./node_modules/@ozaco/std/dist/io.d.ts"],
-      "std:io/bun": ["./node_modules/@ozaco/std/dist/io-bun.d.ts"],
-      "std:io/node": ["./node_modules/@ozaco/std/dist/io-node.d.ts"]
+      "std:io/impl/bun": ["./node_modules/@ozaco/std/dist/io/impl/bun.d.ts"],
+      "std:io/impl/node": ["./node_modules/@ozaco/std/dist/io/impl/node.d.ts"]
     }
   }
 }

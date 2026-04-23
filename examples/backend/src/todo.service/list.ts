@@ -1,8 +1,8 @@
 import { useContext } from 'std:effect'
 
 import { DB } from '@ozaco/db'
-import { AccessRefreshAuth, authorizeBearer } from 'server:auth'
 import { Rest } from 'server:core'
+import { AccessRefreshAuth, authorizeBearer } from 'server:plugin/auth'
 import { defineAction } from 'server:service'
 
 import { todos } from '../db.schema'

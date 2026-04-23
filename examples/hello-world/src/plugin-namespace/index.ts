@@ -2,7 +2,7 @@ import { retry, run } from 'std:effect'
 import { install } from 'std:plugin'
 import { fail, unwrap } from 'std:result'
 
-import { BunIO } from 'std:io/bun'
+import { BunIO } from 'std:io/impl/bun'
 
 import { Other } from './other'
 

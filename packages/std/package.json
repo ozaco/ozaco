@@ -68,25 +68,25 @@
       },
       "source": "./src/io/index.ts"
     },
-    "./io/bun": {
+    "./io/impl/bun": {
       "import": {
-        "types": "./dist/io-bun.d.ts",
-        "default": "./dist/io-bun.js"
+        "types": "./dist/io/impl/bun.d.ts",
+        "default": "./dist/io/impl/bun.js"
       },
       "require": {
-        "types": "./dist/io-bun.d.cts",
-        "default": "./dist/io-bun.cjs"
+        "types": "./dist/io/impl/bun.d.cts",
+        "default": "./dist/io/impl/bun.cjs"
       },
       "source": "./src/io/impl/bun.ts"
     },
-    "./io/node": {
+    "./io/impl/node": {
       "import": {
-        "types": "./dist/io-node.d.ts",
-        "default": "./dist/io-node.js"
+        "types": "./dist/io/impl/node.d.ts",
+        "default": "./dist/io/impl/node.js"
       },
       "require": {
-        "types": "./dist/io-node.d.cts",
-        "default": "./dist/io-node.cjs"
+        "types": "./dist/io/impl/node.d.cts",
+        "default": "./dist/io/impl/node.cjs"
       },
       "source": "./src/io/impl/node.ts"
     },
