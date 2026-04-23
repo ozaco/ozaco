@@ -1,5 +1,4 @@
 import { all, operation, useContext } from 'std:effect'
-import { install } from 'std:plugin'
 import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 
@@ -11,15 +10,16 @@ import { isAction, isService } from 'server:service'
 import { DEFAULT_REST_METHODS } from '../../const'
 import type { Helpers } from '../../types/helpers'
 import type { RouterContext } from '../../types/router'
-import type { RestTransformerOptions } from '../../types/transformer'
 import { Rest } from '../transformer/rest'
 
 import { Router } from './definition'
 
-const findRestSettings = (settings: unknown[], transformer: unknown) =>
-  settings.find((setting: AnyType) => setting.transformer === transformer) as
-    | RestTransformerOptions
-    | undefined
+interface ResolvedSetting {
+  method: string
+  path: string
+  transformer: Helpers.AnyRestTransformer
+  [key: string]: AnyType
+}
 
 const isDenied = (
   meta: { isRaw?: boolean; allow?: AnyType[]; deny?: AnyType[] },
@@ -39,34 +39,52 @@ interface MountEntry {
   fallbackName?: string
 }
 
+// oxlint-disable-next-line max-params
+const mountRoute = (
+  ctx: RouterContext,
+  prefix: string,
+  entry: MountEntry,
+  setting: ResolvedSetting,
+) => {
+  const sym = Symbol(`${entry.sym.description ?? entry.key}:${setting.method}`)
+  ctx.handlers.set(sym, {
+    handler: entry.handler,
+    key: entry.key,
+    settings: setting,
+  })
+  addRoute(ctx.router, setting.method, prefix + setting.path, sym)
+}
+
 const mountEntry = operation(function* (ctx: RouterContext, prefix: string, entry: MountEntry) {
-  const transformer = ctx.transformer
+  const resolvedSettings = (yield* all(entry.meta.settings ?? [])) as ResolvedSetting[]
 
-  if (isDenied(entry.meta, transformer)) {
-    return
-  }
+  const mountable = resolvedSettings.filter(s => !isDenied(entry.meta, s.transformer))
 
-  const settings = yield* all(entry.meta.settings ?? [])
-  const restSettings =
-    findRestSettings(settings, transformer) ??
-    (entry.fallbackName
-      ? (DEFAULT_REST_METHODS[entry.fallbackName as keyof typeof DEFAULT_REST_METHODS] as
-          | RestTransformerOptions
-          | undefined)
-      : undefined)
-
-  if (!restSettings) {
-    if (!entry.fallbackName) {
-      yield* fail(
-        'missing-settings',
-        `action "${entry.key}" has no settings for the current transformer`,
-      )
+  if (mountable.length > 0) {
+    for (const setting of mountable) {
+      mountRoute(ctx, prefix, entry, setting)
     }
     return
   }
 
-  ctx.handlers.set(entry.sym, { handler: entry.handler, key: entry.key, settings: restSettings })
-  addRoute(ctx.router, restSettings.method, prefix + restSettings.path, entry.sym)
+  if (entry.fallbackName && !isDenied(entry.meta, Rest)) {
+    const fallback = DEFAULT_REST_METHODS[entry.fallbackName as keyof typeof DEFAULT_REST_METHODS]
+    if (fallback) {
+      mountRoute(ctx, prefix, entry, {
+        method: fallback.method,
+        path: fallback.path,
+        transformer: Rest,
+      })
+      return
+    }
+  }
+
+  if (!entry.fallbackName) {
+    yield* fail(
+      'missing-settings',
+      `action "${entry.key}" has no transformer settings and no fallback`,
+    )
+  }
 })
 
 const mountAction = operation(function* (ctx: RouterContext, prefix: string, target: Action) {
@@ -105,15 +123,12 @@ const DefaultRouterDef = Router.implement({
   name: 'default-router',
   version: '0.0.1',
 
+  // oxlint-disable-next-line require-yield
   *setup() {
     const router = createRouter()
     const compiled = compileRouter(router, { normalize: true })
-    const transformer = Rest
-
-    yield* install(transformer)
 
     return {
-      transformer,
       router,
       compiled,
       handlers: new Map(),
@@ -169,14 +184,6 @@ export const DefaultRouter: Helpers.DefaultRouter = DefaultRouterDef.build({
     ctx.compiled = compileRouter(ctx.router, { normalize: true })
   }),
 
-  transformer: operation(function* (transformer) {
-    const ctx = yield* useContext(DefaultRouterDef.context)
-
-    yield* install(transformer)
-
-    ctx.transformer = transformer
-  }),
-
   mount: operation(function* (prefix, target) {
     const ctx = yield* useContext(DefaultRouterDef.context)
 
@@ -193,11 +200,12 @@ export const DefaultRouter: Helpers.DefaultRouter = DefaultRouterDef.build({
     const ctx = yield* useContext(DefaultRouterDef.context)
 
     for (const [sym, entry] of ctx.handlers) {
-      if (entry.service !== target && entry.handler !== target) {
+      if ((entry as AnyType).service !== target && entry.handler !== target) {
         continue
       }
-      if (entry.method && entry.path) {
-        removeRoute(ctx.router, entry.method, entry.path)
+      const settings = entry.settings as { method?: string; path?: string } | undefined
+      if (settings?.method && settings?.path) {
+        removeRoute(ctx.router, settings.method, settings.path)
       }
       ctx.handlers.delete(sym)
     }

@@ -1,6 +1,7 @@
 export const SERVER = Symbol.for('server:core:server')
 export const ROUTER = Symbol.for('server:core:router')
 export const REST_TRANSFORMER = Symbol.for('server:core:rest-transformer')
+export const WS_TRANSFORMER = Symbol.for('server:core:ws-transformer')
 
 export const JSON_CONTENT = 'application/json'
 export const RAW_BINARY = 'application/octet-stream'

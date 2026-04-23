@@ -27,7 +27,7 @@ import type {
   RestTransformerActions,
   RestTransformerContext,
   RestTransformerOptions,
-} from '../../types/transformer'
+} from '../../types/rest-transformer'
 import { statusFor } from '../http-status'
 
 // oxlint-disable-next-line import/exports-last

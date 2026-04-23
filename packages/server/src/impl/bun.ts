@@ -3,7 +3,7 @@ import { asFailure, auto, fail, isFailure, isSuccess, unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import type { ServerContext } from 'server:core'
-import { Router, Server, statusFor } from 'server:core'
+import { RestTransformer, Router, Server, WsTransformer, statusFor } from 'server:core'
 import type { ActionRequest, ActionResponse } from 'server:service'
 
 export const BunServerRef = createContext<AnyType>('bun:server:ref')
@@ -35,7 +35,8 @@ export const BunServer = Server.implement({
       server = Bun.serve({
         port: config.port ?? ctx.port,
         hostname: config.host ?? ctx.host,
-        async fetch(req) {
+
+        async fetch(req, bunServer) {
           const isPaused = await scope.run(function* () {
             return yield* BunIsPausedRef.get()
           })
@@ -53,11 +54,16 @@ export const BunServer = Server.implement({
           const url = new URL(req.url)
 
           const result = await scope.safeRun(function* () {
-            const CurrentTransformer = routerCtx.transformer
             let actionReq: ActionRequest | null = null
             let actionRes: ActionResponse | null = null
 
             try {
+              const upgradeResult = yield* WsTransformer.actions.upgrade(req, bunServer)
+
+              if (isSuccess(upgradeResult) && upgradeResult.value) {
+                return
+              }
+
               const [routeSymbol, routeParams] = yield* Router.actions.find(
                 req.method,
                 url.pathname,
@@ -74,16 +80,12 @@ export const BunServer = Server.implement({
                 settings: entry.settings,
               }
 
-              const internal = yield* CurrentTransformer.actions.toInternal(
-                req,
-                null,
-                transformerMeta,
-              )
+              const internal = yield* RestTransformer.actions.toInternal(req, null, transformerMeta)
 
               actionReq = internal[0]
               actionRes = internal[1]
 
-              const actionCtx = yield* CurrentTransformer.actions.toContext(
+              const actionCtx = yield* RestTransformer.actions.toContext(
                 actionReq,
                 actionRes,
                 transformerMeta,
@@ -91,14 +93,14 @@ export const BunServer = Server.implement({
 
               const actionResult = yield* entry.handler(actionCtx)
 
-              return yield* CurrentTransformer.actions.fromInternal(
+              return yield* RestTransformer.actions.fromInternal(
                 actionReq,
                 actionRes,
                 auto(actionResult),
                 transformerMeta,
               )
             } catch (error) {
-              return yield* CurrentTransformer.actions.fromInternal(
+              return yield* RestTransformer.actions.fromInternal(
                 actionReq,
                 actionRes,
                 asFailure(error),
@@ -108,6 +110,24 @@ export const BunServer = Server.implement({
           })
 
           return unwrap(result)
+        },
+
+        websocket: {
+          async open(ws) {
+            await scope.safeRun(function* () {
+              yield* WsTransformer.actions.onOpen(ws)
+            })
+          },
+          async message(ws, message) {
+            await scope.safeRun(function* () {
+              yield* WsTransformer.actions.onMessage(ws, message)
+            })
+          },
+          async close(ws, code, reason) {
+            await scope.safeRun(function* () {
+              yield* WsTransformer.actions.onClose(ws, code, reason)
+            })
+          },
         },
       })
     } catch (error) {

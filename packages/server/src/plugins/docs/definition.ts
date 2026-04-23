@@ -1,7 +1,7 @@
 import { operation, useContext } from 'std:effect'
 import { definePlugin } from 'std:plugin'
 
-import { Router } from 'server:core'
+import { Rest, Router } from 'server:core'
 import type { Service } from 'server:service'
 
 import { createOpenAPIAction, createSwaggerAction } from './internal/actions'
@@ -47,12 +47,12 @@ export const Docs = definePlugin({
 }).build({
   from: operation(function* (...services: Service[]) {
     const ctx = yield* useContext(DocsRef)
-    const routerCtx = yield* useContext(Router.context)
+    yield* useContext(Router.context)
     const previous = (yield* CompiledRef.get()) ?? []
 
     const names = new Set(services.map(s => s.name))
     const kept = previous.filter(entry => !names.has(entry.service))
-    const fresh = yield* compileEntries(services, routerCtx.transformer)
+    const fresh = yield* compileEntries(services, Rest)
 
     const next = [...kept, ...fresh]
 

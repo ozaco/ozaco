@@ -1,8 +1,9 @@
 import type { Plugin } from 'std:plugin'
 import type { AnyType } from 'std:shared'
 
+import type { RestTransformerActions, RestTransformerContext } from './rest-transformer'
 import type { RouterActions, RouterContext } from './router'
-import type { RestTransformerActions, RestTransformerContext } from './transformer'
+import type { WsOptions, WsTransformerActions, WsTransformerContext } from './ws-transformer'
 
 export namespace Helpers {
   export type DefaultRouter = Plugin<RouterContext, unknown, [], RouterActions>
@@ -19,5 +20,19 @@ export namespace Helpers {
     AnyType,
     AnyType,
     RestTransformerActions
+  >
+
+  export type DefaultWsTransformer = Plugin<
+    WsTransformerContext,
+    unknown,
+    [WsOptions?],
+    WsTransformerActions
+  >
+
+  export type AnyWsTransformer = Plugin<
+    WsTransformerContext,
+    AnyType,
+    AnyType,
+    WsTransformerActions
   >
 }

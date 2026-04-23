@@ -3,13 +3,16 @@ import type { AnyType } from 'std:shared'
 
 import type { Action, Service } from 'server:service'
 
-import type { Helpers } from './helpers'
+export interface RouterHandlerEntry {
+  handler: AnyType
+  key: string
+  settings: AnyType
+}
 
 export interface RouterContext {
   router: AnyType
-  transformer: Helpers.AnyRestTransformer
   compiled: (method: string, path: string) => AnyType
-  handlers: Map<symbol, { handler: AnyType; key: string; settings: AnyType }>
+  handlers: Map<symbol, RouterHandlerEntry>
 }
 
 export interface RouterActions extends Record<string, AnyType> {
@@ -21,7 +24,6 @@ export interface RouterActions extends Record<string, AnyType> {
 
   optimize: () => Future<void, unknown>
 
-  transformer: (transformer: Helpers.AnyRestTransformer) => Future<void, unknown>
   mount: (prefix: string, target: Service | Action) => Future<void, unknown | 'missing-settings'>
   unmount: (target: Service | Action) => Future<void, unknown>
 }

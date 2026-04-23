@@ -1,6 +1,6 @@
 import { each } from 'std:effect'
 
-import { Rest } from 'server:core'
+import { Rest, Ws } from 'server:core'
 import { defineAction } from 'server:service'
 // oxlint-disable-next-line import/no-named-as-default
 import z from 'zod'
@@ -8,7 +8,7 @@ import z from 'zod'
 export const custom = defineAction(
   {
     title: 'Custom Todo Method',
-    description: 'test',
+    description: 'reachable over HTTP POST and WebSocket messages',
 
     input: z.object({
       id: z.string(),
@@ -23,6 +23,9 @@ export const custom = defineAction(
         method: 'POST',
         path: '/custom',
         files: ['avatar', 'document'],
+      }),
+      Ws.actions.settings({
+        path: '/custom',
       }),
     ],
   },
@@ -40,6 +43,8 @@ export const custom = defineAction(
         }
       }
     }
+
+    console.log(`custom: via ${ctx.type}`, ctx.body)
 
     return ctx.body
   },

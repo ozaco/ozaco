@@ -2,7 +2,7 @@ import { IO } from 'std:io'
 
 import type { ActionFile } from 'server:service'
 
-import type { RestTransformerOptions } from '../types/transformer'
+import type { RestTransformerOptions } from '../types/rest-transformer'
 
 export const matchFileKey = (matcher: RestTransformerOptions['files'], key: string): boolean => {
   if (!matcher) {
