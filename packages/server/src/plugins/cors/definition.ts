@@ -5,8 +5,7 @@ import { Rest, Router } from 'server:core'
 import type { ActionRequest, ActionResponse } from 'server:service'
 
 import { applyCorsHeaders } from './internal/apply'
-import { CorsCtxRef } from './internal/contexts'
-import { normalizeOptions } from './internal/normalize'
+import { CorsCtxRef, normalizeOptions } from './internal/config'
 import { preflightAction } from './internal/preflight'
 import type { CorsOptions } from './types'
 

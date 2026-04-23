@@ -1,13 +1,10 @@
 import { operation } from 'std:effect'
-import { fail } from 'std:result'
 import type { AnyType, StandardSchemaV1 } from 'std:shared'
 import { isFunction } from 'std:shared'
 
 import { ACTION } from '../const'
+import { withValidation } from '../internal/validation'
 import type { Impl } from '../types/impl'
-
-import { formatIssues } from './internal/input'
-import { validate } from './internal/validate'
 
 export const defineAction: Impl.DefineAction = (...args: AnyType[]) => {
   const [configOrHandler, maybeHandler] = args
@@ -20,34 +17,11 @@ export const defineAction: Impl.DefineAction = (...args: AnyType[]) => {
   const inputSchema = config?.input as StandardSchemaV1 | undefined
   const outputSchema = config?.output as StandardSchemaV1 | undefined
 
-  const validated =
+  const action = operation(
     inputSchema || outputSchema
-      ? function* (...callArgs: AnyType[]) {
-          if (inputSchema) {
-            const ctx = callArgs[0]
-            const result = yield* validate(inputSchema, ctx.body)
-
-            if (result.issues) {
-              yield* fail('validation' as const, formatIssues(result.issues), 'input')
-            }
-            ctx.body = (result as StandardSchemaV1.SuccessResult<unknown>).value
-          }
-
-          const output: AnyType = yield* handler(...callArgs)
-
-          if (outputSchema) {
-            const result = yield* validate(outputSchema, output)
-            if (result.issues) {
-              yield* fail('validation' as const, formatIssues(result.issues), 'output')
-            }
-            return (result as StandardSchemaV1.SuccessResult<unknown>).value
-          }
-
-          return output
-        }
-      : handler
-
-  const action = operation(validated)
+      ? withValidation(handler, { input: inputSchema, output: outputSchema })
+      : handler,
+  )
 
   Object.assign(action, {
     _t: ACTION,

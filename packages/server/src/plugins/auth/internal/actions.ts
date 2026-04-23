@@ -4,9 +4,8 @@ import { fail } from 'std:result'
 import type { AuthProvider, AuthSession, VerificationRecord } from '../types'
 
 import { AuthBaseCtxRef, AuthEventsRef, AuthProviderRef } from './contexts'
-import { parseDuration } from './duration'
+import { getProvider, parseDuration } from './helpers'
 import { randomToken } from './jwt'
-import { getProvider } from './provider'
 import { decodePrincipalToken } from './tokens'
 
 export const provideAction = operation(function* (provider: AuthProvider) {

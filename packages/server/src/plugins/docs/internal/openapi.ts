@@ -3,16 +3,43 @@ import type { AnyType } from 'std:shared'
 import { z } from 'zod'
 
 import { SECURITY_SCHEME_NAME } from '../const'
-import type { DocsContext } from '../types'
+import type { DocsAuthOptions, DocsContext, DocsOptions } from '../types'
 
-import { buildSecurityScheme } from './auth'
 import type {
   CompiledEntry,
   JsonSchema,
   OpenAPIDocument,
   OperationObject,
   ParameterObject,
+  SecurityScheme,
 } from './types'
+
+const DEFAULT_AUTH: DocsAuthOptions = {
+  type: 'bearer',
+  bearerFormat: 'JWT',
+}
+
+const buildSecurityScheme = (auth: DocsAuthOptions): SecurityScheme => {
+  const type = auth.type ?? 'bearer'
+
+  const scheme: SecurityScheme =
+    type === 'apiKey'
+      ? {
+          type: 'apiKey',
+          name: auth.name ?? 'Authorization',
+          in: auth.in ?? 'header',
+        }
+      : { type: 'http', scheme: type === 'basic' ? 'basic' : 'bearer' }
+
+  if (type === 'bearer' && auth.bearerFormat) {
+    scheme.bearerFormat = auth.bearerFormat
+  }
+  if (auth.description) {
+    scheme.description = auth.description
+  }
+
+  return scheme
+}
 
 const BODY_METHODS = new Set(['POST', 'PUT', 'PATCH'])
 
@@ -111,6 +138,18 @@ const buildOperation = (entry: CompiledEntry, pathParams: string[]): OperationOb
   }
 
   return op
+}
+
+export const normalizeAuth = (auth: DocsOptions['auth']): DocsAuthOptions | null => {
+  if (!auth) {
+    return null
+  }
+  if (auth === true) {
+    // oxlint-disable-next-line oxc/no-rest-spread-properties
+    return { ...DEFAULT_AUTH }
+  }
+  // oxlint-disable-next-line oxc/no-rest-spread-properties
+  return { ...DEFAULT_AUTH, ...auth }
 }
 
 export const buildOpenAPISpec = (entries: CompiledEntry[], docs: DocsContext): OpenAPIDocument => {

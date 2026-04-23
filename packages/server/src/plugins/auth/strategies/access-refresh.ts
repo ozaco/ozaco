@@ -14,11 +14,9 @@ import {
   requireRoleAction,
   ssoAuthorizeAction,
 } from '../internal/actions'
-import { collectAuthz } from '../internal/authz'
 import { DEFAULT_ACCESS_TTL, DEFAULT_REFRESH_TTL, TOKEN_TYPE_ACCESS } from '../internal/const'
 import { AuthEventsRef } from '../internal/contexts'
-import { parseDuration } from '../internal/duration'
-import { getProvider } from '../internal/provider'
+import { collectAuthz, getProvider, parseDuration } from '../internal/helpers'
 import { initializeBaseAuth } from '../internal/setup'
 import {
   decodePrincipalToken,

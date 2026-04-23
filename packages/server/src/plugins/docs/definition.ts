@@ -5,10 +5,9 @@ import { Router } from 'server:core'
 import type { Service } from 'server:service'
 
 import { createOpenAPIAction, createSwaggerAction } from './internal/actions'
-import { normalizeAuth } from './internal/auth'
 import { compileEntries } from './internal/compile'
 import { CompiledRef, DocsRef, SpecRef, SwaggerHtmlRef } from './internal/contexts'
-import { buildOpenAPISpec } from './internal/openapi'
+import { buildOpenAPISpec, normalizeAuth } from './internal/openapi'
 import { buildSwaggerHtml } from './internal/swagger'
 import type { DocsContext, DocsOptions } from './types'
 

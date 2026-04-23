@@ -6,7 +6,7 @@ import type { BaseAuthOptions } from '../types'
 
 import { DEFAULT_ALGORITHM, DEFAULT_VERIFICATION_TTL } from './const'
 import { AuthBaseCtxRef, AuthEventsRef, AuthProviderRef, AuthSecretRef } from './contexts'
-import { parseDuration } from './duration'
+import { parseDuration } from './helpers'
 
 export const initializeBaseAuth = operation(function* (options: BaseAuthOptions) {
   if (!options.secret) {

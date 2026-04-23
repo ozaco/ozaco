@@ -31,61 +31,73 @@ const isDenied = (
     (meta.deny && meta.deny.includes(transformer)),
   )
 
-const mountAction = operation(function* (ctx: RouterContext, prefix: string, target: Action) {
+interface MountEntry {
+  meta: { isRaw?: boolean; allow?: AnyType[]; deny?: AnyType[]; settings?: AnyType[] }
+  key: string
+  handler: AnyType
+  sym: symbol
+  fallbackName?: string
+}
+
+const mountEntry = operation(function* (ctx: RouterContext, prefix: string, entry: MountEntry) {
   const transformer = ctx.transformer
 
-  if (isDenied(target, transformer)) {
+  if (isDenied(entry.meta, transformer)) {
     return
   }
 
-  const settings = yield* all(target.settings ?? [])
-  const restSettings = findRestSettings(settings, transformer)
+  const settings = yield* all(entry.meta.settings ?? [])
+  const restSettings =
+    findRestSettings(settings, transformer) ??
+    (entry.fallbackName
+      ? (DEFAULT_REST_METHODS[entry.fallbackName as keyof typeof DEFAULT_REST_METHODS] as
+          | RestTransformerOptions
+          | undefined)
+      : undefined)
 
   if (!restSettings) {
-    yield* fail(
-      'missing-settings',
-      `action "${target.title ?? 'anonymous'}" has no settings for the current transformer`,
-    )
+    if (!entry.fallbackName) {
+      yield* fail(
+        'missing-settings',
+        `action "${entry.key}" has no settings for the current transformer`,
+      )
+    }
     return
   }
 
-  const key = target.title ?? 'anonymous'
-  const sym = Symbol(`action:${key}`)
+  ctx.handlers.set(entry.sym, { handler: entry.handler, key: entry.key, settings: restSettings })
+  addRoute(ctx.router, restSettings.method, prefix + restSettings.path, entry.sym)
+})
 
-  ctx.handlers.set(sym, { handler: target, key, settings: restSettings })
-  addRoute(ctx.router, restSettings.method, prefix + restSettings.path, sym)
+const mountAction = operation(function* (ctx: RouterContext, prefix: string, target: Action) {
+  const key = target.title ?? 'anonymous'
+  yield* mountEntry(ctx, prefix, {
+    meta: target,
+    key,
+    handler: target,
+    sym: Symbol(`action:${key}`),
+  })
 })
 
 const mountService = operation(function* (ctx: RouterContext, prefix: string, service: Service) {
-  const transformer = ctx.transformer
-
   for (const key of service.getKeys()) {
     const meta = service.meta.get(key)
-    if (!meta || isDenied(meta, transformer)) {
+    if (!meta) {
       continue
     }
 
-    const settings = yield* all(meta.settings ?? [])
-    const actionName = key.split('.').pop()!
-    const restSettings =
-      findRestSettings(settings, transformer) ??
-      (DEFAULT_REST_METHODS[
-        actionName as keyof typeof DEFAULT_REST_METHODS
-      ] as RestTransformerOptions)
-
-    if (!restSettings) {
-      continue
-    }
-
-    const sym = Symbol(`${service.name}:${key}`)
-
-    let action: AnyType = service.actions
+    let handler: AnyType = service.actions
     for (const part of key.split('.')) {
-      action = action[part]
+      handler = handler[part]
     }
 
-    ctx.handlers.set(sym, { handler: action, key, settings: restSettings })
-    addRoute(ctx.router, restSettings.method, prefix + restSettings.path, sym)
+    yield* mountEntry(ctx, prefix, {
+      meta,
+      key,
+      handler,
+      sym: Symbol(`${service.name}:${key}`),
+      fallbackName: key.split('.').pop()!,
+    })
   }
 })
 

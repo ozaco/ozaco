@@ -1,5 +1,50 @@
-import { resolveAllowOrigin } from './origin'
-import type { CorsContext } from './types'
+import type { CorsOrigin } from '../types'
+
+import type { CorsContext } from './config'
+
+const matchOrigin = (origin: string, rule: CorsOrigin): boolean => {
+  if (rule === '*' || rule === true) {
+    return true
+  }
+  if (typeof rule === 'string') {
+    return rule === origin
+  }
+  if (rule instanceof RegExp) {
+    return rule.test(origin)
+  }
+  if (Array.isArray(rule)) {
+    return rule.includes(origin)
+  }
+  if (typeof rule === 'function') {
+    return rule(origin)
+  }
+  return false
+}
+
+interface ResolvedOrigin {
+  allow: string | null
+  vary: boolean
+}
+
+const resolveAllowOrigin = (
+  requestOrigin: string | undefined,
+  rule: CorsOrigin,
+  credentials: boolean,
+): ResolvedOrigin => {
+  if (rule === '*' && !credentials) {
+    return { allow: '*', vary: false }
+  }
+
+  if (!requestOrigin) {
+    return { allow: null, vary: rule !== '*' }
+  }
+
+  if (!matchOrigin(requestOrigin, rule)) {
+    return { allow: null, vary: true }
+  }
+
+  return { allow: requestOrigin, vary: true }
+}
 
 const appendVaryOrigin = (meta: Record<string, string>) => {
   const existingKey = Object.keys(meta).find(k => k.toLowerCase() === 'vary')
