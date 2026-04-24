@@ -192,7 +192,7 @@ export const Rest: Helpers.DefaultRestTransformer = RestDef.build({
         const status = res?.status ?? (body === undefined ? 204 : 200)
 
         if (body === undefined) {
-          return new Response(undefined, { status })
+          return new Response(undefined, { status, headers })
         }
 
         return isJSON
