@@ -62,7 +62,7 @@
     },
     "packages/db": {
       "name": "@ozaco/db",
-      "version": "0.0.1",
+      "version": "0.0.2",
       "devDependencies": {
         "@ozaco/std": "workspace:*",
         "@types/better-sqlite3": "^7.6.13",
@@ -85,7 +85,7 @@
     },
     "packages/server": {
       "name": "@ozaco/server",
-      "version": "0.0.4",
+      "version": "0.0.5",
       "devDependencies": {
         "@ozaco/std": "workspace:*",
         "jose": "6.2.2",
@@ -106,7 +106,7 @@
     },
     "packages/std": {
       "name": "@ozaco/std",
-      "version": "0.0.9",
+      "version": "0.0.10",
       "devDependencies": {
         "tsdown": "catalog:build",
       },
