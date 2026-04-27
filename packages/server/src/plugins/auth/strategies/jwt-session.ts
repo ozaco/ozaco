@@ -19,11 +19,13 @@ import { AuthEventsRef } from '../internal/contexts'
 import { collectAuthz, getProvider, parseDuration } from '../internal/helpers'
 import { initializeBaseAuth } from '../internal/setup'
 import { decodePrincipalToken, signPrincipalToken } from '../internal/tokens'
-import type { AuthSession, AuthUser, BaseAuthOptions } from '../types'
-
-interface JWTSessionContext {
-  sessionTTL: number
-}
+import type {
+  AuthSession,
+  AuthUser,
+  JWTSessionContext,
+  JWTSessionOptions,
+  JWTSessionTokens,
+} from '../types'
 
 const StrategyCtxRef = createContext<JWTSessionContext>('server:auth:jwt-session:ctx')
 
@@ -43,15 +45,6 @@ const issueSessionToken = operation(function* (user: AuthUser) {
   const tokens: JWTSessionTokens = { token: issued.token, expiresAt: issued.expiresAt }
   return { session, tokens }
 })
-
-export interface JWTSessionOptions extends BaseAuthOptions {
-  session?: { expiresIn?: string }
-}
-
-export interface JWTSessionTokens {
-  token: string
-  expiresAt: number
-}
 
 export const JWTSessionAuth = definePlugin({
   name: 'auth:jwt-session',

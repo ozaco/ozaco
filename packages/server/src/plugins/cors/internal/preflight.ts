@@ -1,5 +1,4 @@
-import { RestTransformer } from 'server:core'
-import { defineAction } from 'server:service'
+import { defineAction, RestTransformer } from 'server:core'
 
 export const preflightAction = defineAction(
   {

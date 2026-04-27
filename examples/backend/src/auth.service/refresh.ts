@@ -1,6 +1,5 @@
-import { Rest } from 'server:core'
+import { RestTransformer, defineAction } from 'server:core'
 import { AccessRefreshAuth } from 'server:plugin/auth'
-import { defineAction } from 'server:service'
 // oxlint-disable-next-line import/no-named-as-default
 import z from 'zod'
 
@@ -11,7 +10,7 @@ export const refresh = defineAction(
 
     input: z.object({ refreshToken: z.string() }),
 
-    settings: [Rest.actions.settings({ method: 'POST', path: '/refresh' })],
+    settings: [RestTransformer.actions.settings({ method: 'POST', path: '/refresh' })],
   },
   function* (ctx) {
     return yield* AccessRefreshAuth.actions.refresh(ctx.body.refreshToken)

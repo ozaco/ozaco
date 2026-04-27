@@ -1,10 +1,11 @@
 import { IO } from 'std:io'
 
-import type { ActionFile } from 'server:service'
+import type { ActionFile, Helpers as CoreHelpers } from 'server:core'
 
-import type { RestTransformerOptions } from '../types/rest-transformer'
-
-export const matchFileKey = (matcher: RestTransformerOptions['files'], key: string): boolean => {
+export const matchFileKey = (
+  matcher: CoreHelpers.RestTransformerOptions['files'],
+  key: string,
+): boolean => {
   if (!matcher) {
     return false
   }

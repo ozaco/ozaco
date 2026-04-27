@@ -24,13 +24,13 @@ import {
   signPrincipalToken,
   signRefreshToken,
 } from '../internal/tokens'
-import type { AuthSession, AuthUser, BaseAuthOptions } from '../types'
-
-interface AccessRefreshContext {
-  accessTTL: number
-  refreshTTL: number
-  rotateRefresh: boolean
-}
+import type {
+  AccessRefreshContext,
+  AccessRefreshOptions,
+  AccessRefreshTokens,
+  AuthSession,
+  AuthUser,
+} from '../types'
 
 const StrategyCtxRef = createContext<AccessRefreshContext>('server:auth:access-refresh:ctx')
 
@@ -70,18 +70,6 @@ const issueTokenPair = operation(function* (user: AuthUser) {
 
   return { session, tokens }
 })
-
-export interface AccessRefreshOptions extends BaseAuthOptions {
-  access?: { expiresIn?: string }
-  refresh?: { expiresIn?: string; rotate?: boolean }
-}
-
-export interface AccessRefreshTokens {
-  accessToken: string
-  refreshToken: string
-  accessExpiresAt: number
-  refreshExpiresAt: number
-}
 
 export const AccessRefreshAuth = definePlugin({
   name: 'auth:access-refresh',

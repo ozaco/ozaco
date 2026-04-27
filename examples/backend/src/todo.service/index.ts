@@ -1,5 +1,4 @@
-import { Router } from 'server:core'
-import { defineService, useSelf } from 'server:service'
+import { Router, defineService, useSelf } from 'server:core'
 
 import { create } from './create'
 import { custom } from './custom'

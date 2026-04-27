@@ -6,14 +6,7 @@ import type { Impl } from '../types/impl'
 
 import { createHookable } from './hook'
 
-export const defineProtocol: Impl.DefineProtocol = (options: {
-  name: string
-  version: string
-  description?: string
-  handlers?: Record<string, AnyType>
-  defaultActions?: Record<string, AnyType>
-  subtype?: symbol
-}): AnyType => {
+export const defineProtocol: Impl.DefineProtocol = (options): AnyType => {
   const { context, actions, hooks, buildPlugin } = createHookable({
     name: options.name,
     version: options.version,
@@ -27,6 +20,7 @@ export const defineProtocol: Impl.DefineProtocol = (options: {
     _st: options.subtype,
 
     name: options.name,
+    description: options.description,
     version: options.version,
 
     context,

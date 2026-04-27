@@ -1,6 +1,5 @@
-import { Rest } from 'server:core'
+import { RestTransformer, defineAction } from 'server:core'
 import { AccessRefreshAuth } from 'server:plugin/auth'
-import { defineAction } from 'server:service'
 // oxlint-disable-next-line import/no-named-as-default
 import z from 'zod'
 
@@ -11,7 +10,7 @@ export const signOut = defineAction(
 
     input: z.object({ refreshToken: z.string() }),
 
-    settings: [Rest.actions.settings({ method: 'POST', path: '/sign-out' })],
+    settings: [RestTransformer.actions.settings({ method: 'POST', path: '/sign-out' })],
   },
   function* (ctx) {
     yield* AccessRefreshAuth.actions.signOut(ctx.body.refreshToken)

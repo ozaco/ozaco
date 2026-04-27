@@ -25,11 +25,14 @@ export const defineAction: Impl.DefineAction = (...args: AnyType[]) => {
 
   Object.assign(action, {
     _t: ACTION,
-    isRaw: !hasConfig,
+    _r: !hasConfig,
+
     input: inputSchema,
     output: outputSchema,
+
     title: config?.title,
     description: config?.description,
+
     allow: config?.allow,
     deny: config?.deny,
     settings: config?.settings,

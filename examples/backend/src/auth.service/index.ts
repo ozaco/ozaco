@@ -1,5 +1,4 @@
-import { Router } from 'server:core'
-import { defineService, useSelf } from 'server:service'
+import { Router, defineService, useSelf } from 'server:core'
 
 import { me } from './me'
 import { refresh } from './refresh'

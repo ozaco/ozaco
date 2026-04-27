@@ -1,8 +1,7 @@
 import { each } from 'std:effect'
 import { fail } from 'std:result'
 
-import { Rest } from 'server:core'
-import { defineAction } from 'server:service'
+import { RestTransformer, defineAction } from 'server:core'
 
 const decoder = new TextDecoder()
 
@@ -12,7 +11,7 @@ export const rawFile = defineAction(
     description: 'test',
 
     settings: [
-      Rest.actions.settings({
+      RestTransformer.actions.settings({
         method: 'POST',
         path: '/raw-file',
       }),

@@ -8,12 +8,6 @@ export namespace Helpers {
   export type InferProtocolContext<T> = T extends Protocol<infer V> ? V : never
   export type InferContext<T> = T extends Context<infer V> ? V : never
 
-  export interface Use {
-    <T extends Context<AnyType>>(ctx: T): Helpers.InferContext<T>
-    <T extends Plugin>(plugin: T): Helpers.InferPluginContext<T>
-    <T extends Protocol>(ns: T): Helpers.InferProtocolContext<T>
-  }
-
   export type AnyAction = (...args: AnyType[]) => Operation<unknown, unknown>
 
   export type AroundFn<T> = T extends (...args: infer A) => infer R

@@ -2,17 +2,11 @@ import type { Future } from 'std:effect'
 import type { Result } from 'std:result'
 import type { AnyType } from 'std:shared'
 
-import type { ActionContext, ActionRequest, ActionResponse } from 'server:service'
+import type { ActionContext, ActionRequest, ActionResponse } from './action'
+import type { Helpers } from './helpers'
 
 export interface RestTransformerContext {
-  statusMap: Record<string, number> | null
-}
-
-export interface RestTransformerOptions {
-  method: string
-  path: string
-  files?: string[] | RegExp | ((key: string) => boolean)
-  statusMap?: Record<string, number>
+  statusMap?: Record<string, number> | undefined
 }
 
 export interface RestTransformerActions extends Record<string, AnyType> {
@@ -36,7 +30,7 @@ export interface RestTransformerActions extends Record<string, AnyType> {
     meta: unknown,
   ) => Future<AnyType, unknown>
 
-  settings: <T extends RestTransformerOptions>(
+  settings: <T extends Helpers.RestTransformerOptions>(
     options: T,
   ) => Future<T & { transformer: AnyType }, unknown>
 }

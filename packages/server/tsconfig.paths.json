@@ -2,11 +2,11 @@
   "compilerOptions": {
     "paths": {
       "server:core": ["./src/core/index.ts", "./dist/core.d.ts"],
-      "server:service": ["./src/service/index.ts", "./dist/service.d.ts"],
-      "server:impl/bun": ["./src/impl/bun.ts", "./dist/impl/bun.d.ts"],
-      "server:plugin/docs": ["./src/plugins/docs/index.ts", "./dist/plugin/docs.d.ts"],
+      "server:plugin/router": ["./src/plugins/router/index.ts", "./dist/plugin/router.d.ts"],
       "server:plugin/auth": ["./src/plugins/auth/index.ts", "./dist/plugin/auth.d.ts"],
       "server:plugin/cors": ["./src/plugins/cors/index.ts", "./dist/plugin/cors.d.ts"],
+      "server:plugin/docs": ["./src/plugins/docs/index.ts", "./dist/plugin/docs.d.ts"],
+      "server:impl/bun": ["./src/impl/bun/index.ts", "./dist/impl/bun.d.ts"],
 
       "std:shared": ["./node_modules/@ozaco/std/dist/shared.d.ts"],
       "std:result": ["./node_modules/@ozaco/std/dist/result.d.ts"],

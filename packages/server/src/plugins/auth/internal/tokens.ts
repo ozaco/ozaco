@@ -1,23 +1,10 @@
 import { operation, useContext } from 'std:effect'
 import { fail } from 'std:result'
 
-import type { AuthSession, AuthUser } from '../types'
+import type { AuthSession, PrincipalClaims } from '../types'
 
 import { AuthBaseCtxRef, AuthSecretRef } from './contexts'
 import { randomJti, signJWT, verifyJWT } from './jwt'
-
-export interface PrincipalClaims {
-  user: AuthUser
-  roles: string[]
-  permissions: string[]
-}
-
-export interface TokenIssueResult {
-  token: string
-  jti: string
-  issuedAt: number
-  expiresAt: number
-}
 
 export const signPrincipalToken = operation(function* (
   type: string,

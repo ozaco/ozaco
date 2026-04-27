@@ -1,18 +1,13 @@
 import type { Future } from 'std:effect'
 import type { AnyType } from 'std:shared'
 
-import type { Action, Service } from 'server:service'
-
-export interface RouterHandlerEntry {
-  handler: AnyType
-  key: string
-  settings: AnyType
-}
+import type { Action } from './action'
+import type { Service } from './service'
 
 export interface RouterContext {
   router: AnyType
   compiled: (method: string, path: string) => AnyType
-  handlers: Map<symbol, RouterHandlerEntry>
+  handlers: Map<symbol, Record<string, AnyType>>
 }
 
 export interface RouterActions extends Record<string, AnyType> {

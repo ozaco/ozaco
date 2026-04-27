@@ -1,7 +1,6 @@
 import { each } from 'std:effect'
 
-import { Rest, Ws } from 'server:core'
-import { defineAction } from 'server:service'
+import { RestTransformer, WsTransformer, defineAction } from 'server:core'
 // oxlint-disable-next-line import/no-named-as-default
 import z from 'zod'
 
@@ -19,12 +18,12 @@ export const custom = defineAction(
     }),
 
     settings: [
-      Rest.actions.settings({
+      RestTransformer.actions.settings({
         method: 'POST',
         path: '/custom',
         files: ['avatar', 'document'],
       }),
-      Ws.actions.settings({
+      WsTransformer.actions.settings({
         path: '/custom',
       }),
     ],

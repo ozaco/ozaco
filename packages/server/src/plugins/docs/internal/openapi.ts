@@ -3,16 +3,17 @@ import type { AnyType } from 'std:shared'
 import { z } from 'zod'
 
 import { SECURITY_SCHEME_NAME } from '../const'
-import type { DocsAuthOptions, DocsContext, DocsOptions } from '../types'
-
 import type {
   CompiledEntry,
+  DocsAuthOptions,
+  DocsContext,
+  DocsOptions,
   JsonSchema,
   OpenAPIDocument,
   OperationObject,
   ParameterObject,
   SecurityScheme,
-} from './types'
+} from '../types'
 
 const DEFAULT_AUTH: DocsAuthOptions = {
   type: 'bearer',

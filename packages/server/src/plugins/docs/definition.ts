@@ -1,8 +1,8 @@
 import { operation, useContext } from 'std:effect'
 import { definePlugin } from 'std:plugin'
 
-import { Rest, Router } from 'server:core'
-import type { Service } from 'server:service'
+import { RestTransformer, Router } from 'server:core'
+import type { Service } from 'server:core'
 
 import { createOpenAPIAction, createSwaggerAction } from './internal/actions'
 import { compileEntries } from './internal/compile'
@@ -52,7 +52,7 @@ export const Docs = definePlugin({
 
     const names = new Set(services.map(s => s.name))
     const kept = previous.filter(entry => !names.has(entry.service))
-    const fresh = yield* compileEntries(services, Rest)
+    const fresh = yield* compileEntries(services, RestTransformer)
 
     const next = [...kept, ...fresh]
 

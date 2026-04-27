@@ -6,10 +6,12 @@ import type { PluginDef, Protocol } from './plugin'
 
 export namespace Impl {
   export type DefinePlugin = <TContext, TError, TArgs extends unknown[] = []>(options: {
+    subtype?: symbol | undefined
+
     name: string
     version: string
-    description?: string
-    subtype?: symbol
+    description?: string | undefined
+
     setup(...args: TArgs): Operation<TContext, TError>
   }) => PluginDef<TContext, TError, TArgs>
 
@@ -20,10 +22,12 @@ export namespace Impl {
     TActions extends Record<string, Helpers.AnyAction> = EmptyType,
     TCustomActions extends Record<string, Helpers.AnyAction> = EmptyType,
   >(options: {
+    subtype?: symbol
+
     name: string
     version: string
     description?: string
-    subtype?: symbol
+
     handlers?: TCustomActions
     defaultActions?: Partial<TActions>
   }) => Protocol<TContext, TError, TArgs, TActions, TCustomActions>

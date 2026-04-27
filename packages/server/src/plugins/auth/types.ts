@@ -17,6 +17,14 @@ export interface BaseAuthOptions {
   verification?: { expiresIn?: string }
 }
 
+export interface BaseAuthContext {
+  issuer: string | null
+  audience: string | null
+  algorithm: JWTAlgorithm
+
+  verificationTTL: number
+}
+
 export interface AuthSession<TUser extends AuthUser = AuthUser> {
   sub: string
   jti: string
@@ -84,4 +92,48 @@ export type AuthEvents = {
   denied: [code: string, reason: string]
   verified: [userId: string, purpose: string]
   'sso-linked': [userId: string, provider: string]
+}
+
+export interface PrincipalClaims {
+  user: AuthUser
+  roles: string[]
+  permissions: string[]
+}
+
+export interface TokenIssueResult {
+  token: string
+  jti: string
+  issuedAt: number
+  expiresAt: number
+}
+
+export interface JWTSessionContext {
+  sessionTTL: number
+}
+
+export interface JWTSessionOptions extends BaseAuthOptions {
+  session?: { expiresIn?: string }
+}
+
+export interface JWTSessionTokens {
+  token: string
+  expiresAt: number
+}
+
+export interface AccessRefreshContext {
+  accessTTL: number
+  refreshTTL: number
+  rotateRefresh: boolean
+}
+
+export interface AccessRefreshOptions extends BaseAuthOptions {
+  access?: { expiresIn?: string }
+  refresh?: { expiresIn?: string; rotate?: boolean }
+}
+
+export interface AccessRefreshTokens {
+  accessToken: string
+  refreshToken: string
+  accessExpiresAt: number
+  refreshExpiresAt: number
 }

@@ -1,6 +1,4 @@
-import type { CorsOrigin } from '../types'
-
-import type { CorsContext } from './config'
+import type { CorsContext, CorsOrigin, ResolvedOrigin } from '../types'
 
 const matchOrigin = (origin: string, rule: CorsOrigin): boolean => {
   if (rule === '*' || rule === true) {
@@ -19,11 +17,6 @@ const matchOrigin = (origin: string, rule: CorsOrigin): boolean => {
     return rule(origin)
   }
   return false
-}
-
-interface ResolvedOrigin {
-  allow: string | null
-  vary: boolean
 }
 
 const resolveAllowOrigin = (

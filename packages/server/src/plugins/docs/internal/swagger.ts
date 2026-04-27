@@ -1,8 +1,4 @@
-export interface SwaggerHtmlOptions {
-  openapi: string
-  title: string
-  auth: boolean
-}
+import type { SwaggerHtmlOptions } from '../types'
 
 export const buildSwaggerHtml = ({ openapi, title, auth }: SwaggerHtmlOptions): string => {
   const safeTitle = title.replaceAll('<', '&lt;').replaceAll('>', '&gt;')

@@ -1,18 +1,15 @@
 import { useContext } from 'std:effect'
 import { definePlugin } from 'std:plugin'
 
-import { Rest, Router } from 'server:core'
-import type { ActionRequest, ActionResponse } from 'server:service'
+import { RestTransformer, Router } from 'server:core'
 
 import { applyCorsHeaders } from './internal/apply'
 import { CorsCtxRef, normalizeOptions } from './internal/config'
 import { preflightAction } from './internal/preflight'
-import type { CorsOptions } from './types'
-
-type FromInternalArgs = [ActionRequest | null, ActionResponse | null, unknown, unknown]
+import type { CorsOptions, FromInternalArgs } from './types'
 
 export const Cors = definePlugin({
-  name: 'cors',
+  name: 'plugin:cors',
   version: '0.0.1',
   description: 'Cross-Origin Resource Sharing',
 
@@ -22,7 +19,7 @@ export const Cors = definePlugin({
 
     yield* Router.actions.mount('', preflightAction)
 
-    yield* Rest.before({
+    yield* RestTransformer.before({
       *fromInternal(args: FromInternalArgs) {
         const cors = yield* useContext(CorsCtxRef)
         const req = args[0]

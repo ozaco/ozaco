@@ -24,38 +24,16 @@
       },
       "source": "./src/core/index.ts"
     },
-    "./service": {
+    "./plugin/router": {
       "import": {
-        "types": "./dist/service.d.ts",
-        "default": "./dist/service.js"
+        "types": "./dist/plugin/router.d.ts",
+        "default": "./dist/plugin/router.js"
       },
       "require": {
-        "types": "./dist/service.d.cts",
-        "default": "./dist/service.cjs"
+        "types": "./dist/plugin/router.d.cts",
+        "default": "./dist/plugin/router.cjs"
       },
-      "source": "./src/service/index.ts"
-    },
-    "./impl/bun": {
-      "import": {
-        "types": "./dist/impl/bun.d.ts",
-        "default": "./dist/impl/bun.js"
-      },
-      "require": {
-        "types": "./dist/impl/bun.d.cts",
-        "default": "./dist/impl/bun.cjs"
-      },
-      "source": "./src/impl/bun.ts"
-    },
-    "./plugin/docs": {
-      "import": {
-        "types": "./dist/plugin/docs.d.ts",
-        "default": "./dist/plugin/docs.js"
-      },
-      "require": {
-        "types": "./dist/plugin/docs.d.cts",
-        "default": "./dist/plugin/docs.cjs"
-      },
-      "source": "./src/plugins/docs/index.ts"
+      "source": "./src/plugins/router/index.ts"
     },
     "./plugin/auth": {
       "import": {
@@ -78,6 +56,28 @@
         "default": "./dist/plugin/cors.cjs"
       },
       "source": "./src/plugins/cors/index.ts"
+    },
+    "./plugin/docs": {
+      "import": {
+        "types": "./dist/plugin/docs.d.ts",
+        "default": "./dist/plugin/docs.js"
+      },
+      "require": {
+        "types": "./dist/plugin/docs.d.cts",
+        "default": "./dist/plugin/docs.cjs"
+      },
+      "source": "./src/plugins/docs/index.ts"
+    },
+    "./impl/bun": {
+      "import": {
+        "types": "./dist/impl/bun.d.ts",
+        "default": "./dist/impl/bun.js"
+      },
+      "require": {
+        "types": "./dist/impl/bun.d.cts",
+        "default": "./dist/impl/bun.cjs"
+      },
+      "source": "./src/impl/bun/index.ts"
     }
   },
   "publishConfig": {

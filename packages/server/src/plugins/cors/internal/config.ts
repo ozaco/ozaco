@@ -1,16 +1,6 @@
 import { createContext } from 'std:effect'
 
-import type { CorsOptions, CorsOrigin } from '../types'
-
-interface CorsContext {
-  origin: CorsOrigin
-  methods: string
-  allowedHeaders: string
-  exposedHeaders: string | null
-  credentials: boolean
-  maxAge: string
-  preflightStatus: number
-}
+import type { CorsContext, CorsOptions } from '../types'
 
 const DEFAULT_METHODS: readonly string[] = [
   'GET',
@@ -53,5 +43,4 @@ const normalizeOptions = (options: CorsOptions = {}): CorsContext => {
 
 const CorsCtxRef = createContext<CorsContext>('server:cors:ctx')
 
-export type { CorsContext }
 export { CorsCtxRef, normalizeOptions }

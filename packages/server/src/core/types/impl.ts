@@ -1,13 +1,14 @@
 import type { Operation } from 'std:effect'
 import type { AnyType, StandardSchemaV1 } from 'std:shared'
 
-import type { Action, ActionContext, ActionMeta } from './action'
+import type { Action, ActionContext } from './action'
+import type { Helpers } from './helpers'
 import type { Service } from './service'
 
 export namespace Impl {
   export type DefineAction = {
     <TSchema extends StandardSchemaV1, TReturn, TError = never>(
-      config: ActionMeta<TSchema>,
+      config: Omit<Helpers.ActionMeta<TSchema>, '_t' | '_r'>,
       handler: (
         ctx: ActionContext<StandardSchemaV1.InferOutput<TSchema>>,
       ) => Operation<TReturn, TError>,

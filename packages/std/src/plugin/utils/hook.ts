@@ -135,11 +135,14 @@ export const createHookable = (options: {
   ) => {
     const pluginTag = `${buildOptions.name}@${buildOptions.version ?? 'lts'}`
     const wrappedActions: Record<string, AnyType> = {}
+    const meta = new Map<string, Record<string, AnyType>>()
 
     if (buildActions) {
       const flatActions = flatten(buildActions)
       for (const key of Object.keys(flatActions)) {
-        wrappedActions[key] = wrapAction(flatActions[key]!)
+        const raw = flatActions[key]!
+        wrappedActions[key] = wrapAction(raw)
+        meta.set(key, Object.fromEntries(Object.entries(raw)))
       }
     }
 
@@ -172,6 +175,7 @@ export const createHookable = (options: {
 
       actions,
       getKeys: () => knownKeys,
+      getMeta: (key: string) => meta.get(key),
       setup: operation(setup as AnyType, 'setup', pluginTag),
     })
   }

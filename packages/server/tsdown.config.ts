@@ -5,11 +5,11 @@ import { defineConfig } from 'tsdown'
 export default defineConfig({
   entry: {
     core: './src/core/index.ts',
-    service: './src/service/index.ts',
-    'impl/bun': './src/impl/bun.ts',
-    'plugin/docs': './src/plugins/docs/index.ts',
+    'plugin/router': './src/plugins/router/index.ts',
     'plugin/auth': './src/plugins/auth/index.ts',
     'plugin/cors': './src/plugins/cors/index.ts',
+    'plugin/docs': './src/plugins/docs/index.ts',
+    'impl/bun': './src/impl/bun/index.ts',
   },
   format: ['esm', 'cjs'],
   dts: true,
