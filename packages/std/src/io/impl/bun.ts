@@ -6,6 +6,7 @@ import { fail } from 'std:result'
 import fs from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 
+import { readEnv } from '../internal/env'
 import { mapStat, walkRecursive } from '../internal/node-shared'
 import { fromReadable, readFileStream, writeFileStream } from '../internal/stream'
 import { webHash, webHmac, webRandomBytes } from '../internal/webcrypto'
@@ -15,6 +16,8 @@ export const BunIO = IO.implement({
   version: '0.0.1',
   *setup() {},
 }).build({
+  env: readEnv,
+
   randomBytes: webRandomBytes,
   hmac: webHmac,
   hash: webHash,

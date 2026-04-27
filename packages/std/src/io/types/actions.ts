@@ -10,6 +10,11 @@ import type {
 } from './common'
 
 export type IOActions = {
+  env: <R extends Record<string, unknown>, K extends keyof R = never>(
+    mapper: (data: Record<string, string | undefined>) => R,
+    optional?: readonly K[],
+  ) => Future<{ [P in keyof R]: P extends K ? R[P] : NonNullable<R[P]> }, unknown>
+
   randomBytes: (length: number) => Future<Uint8Array, unknown>
   hmac: (algorithm: HashAlgorithm, key: Uint8Array, data: Uint8Array) => Future<Uint8Array, unknown>
   hash: (algorithm: HashAlgorithm, data: Uint8Array) => Future<Uint8Array, unknown>

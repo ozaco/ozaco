@@ -9,6 +9,7 @@ import { createHash, createHmac, randomBytes as nodeRandomBytes } from 'node:cry
 import fs from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 
+import { readEnv } from '../internal/env'
 import { mapStat, walkRecursive } from '../internal/node-shared'
 import { fromReadable, readFileStream, writeFileStream } from '../internal/stream'
 import type { HashAlgorithm } from '../types/common'
@@ -21,6 +22,8 @@ export const NodeIO = IO.implement({
   version: '0.0.1',
   *setup() {},
 }).build({
+  env: readEnv,
+
   // oxlint-disable-next-line require-yield
   randomBytes: operation(function* (length) {
     return new Uint8Array(nodeRandomBytes(length))
