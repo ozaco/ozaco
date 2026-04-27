@@ -1,9 +1,9 @@
+import { Server } from 'server:core'
 import { main, suspend } from 'std:effect'
 import { IO } from 'std:io'
 import { install } from 'std:plugin'
 
 import { SqliteDB } from 'db:impl/sqlite'
-import { Server } from 'server:core'
 import { BunServer, Rest, Ws } from 'server:impl/bun'
 import { AccessRefreshAuth } from 'server:plugin/auth'
 import { Cors } from 'server:plugin/cors'

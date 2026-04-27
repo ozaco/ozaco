@@ -11,7 +11,7 @@ import {
   WS_TRANSFORMER,
 } from './const'
 import { ActionContextRef } from './internal/contexts'
-import type { Action, ActionContext } from './types/action'
+import type { ActionContext } from './types/action'
 import type { RestTransformerActions, RestTransformerContext } from './types/rest'
 import type { RouterActions, RouterContext } from './types/router'
 import type { ServerActions, ServerContext } from './types/server'
@@ -75,7 +75,7 @@ export const Transport = defineProtocol<TransportContext, unknown, unknown[], Tr
       const ctx: ActionContext<unknown> = {
         _t: ACTION_CONTEXT,
         type: 'internal',
-        from: (action as Action & { title?: string }).title ?? 'internal',
+        from: 'internal',
         body,
         files: inherited?.files ?? {},
         meta: inherited?.meta ?? {},

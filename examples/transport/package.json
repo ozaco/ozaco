@@ -1,0 +1,15 @@
+{
+  "name": "@ozaco/transport-example",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@ozaco/server": "workspace:*",
+    "@ozaco/std": "workspace:*",
+    "zod": "4.3.6"
+  },
+  "devDependencies": {
+    "@ozaco/unplugin-resolve": "workspace:*",
+    "tsdown": "catalog:build"
+  }
+}

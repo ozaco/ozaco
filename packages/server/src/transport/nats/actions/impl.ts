@@ -1,7 +1,7 @@
+import { Transport } from 'server:core'
 import { until } from 'std:effect'
 
 import { connect } from '@nats-io/transport-node'
-import { Transport } from 'server:core'
 
 import type { NatsTransportContext, NatsTransportOptions } from '../types'
 
@@ -23,8 +23,7 @@ export const NatsTransportImpl = Transport.implement<
     return {
       options,
       nc,
-      byAction: new Map(),
-      bySubject: new Map(),
+      subjects: new Map(),
       subscriptions: new Map(),
       abort: new AbortController(),
       isStarted: false,

@@ -16,11 +16,11 @@
   "sortImports": {
     "customGroups": [
       {
-        "groupName": "std",
-        "elementNamePattern": ["std:*"]
+        "groupName": "ozaco",
+        "elementNamePattern": ["std:*", "server:*", "db:*"]
       }
     ],
-    "groups": ["std", "builtin", "external", "internal", "parent", ["sibling", "index"]],
+    "groups": ["ozaco", "builtin", "external", "internal", "parent", ["sibling", "index"]],
     "internalPattern": ["@/", "~/"],
     "newlinesBetween": true,
     "partitionByComment": true,

@@ -77,4 +77,15 @@ export namespace Helpers {
     error: Array<{ handlers: Record<string, AnyType> }>
     self: Record<string, AnyType>
   }
+
+  export interface RawAction {
+    self?: AnyAction | undefined
+    context: Context<unknown>
+    options: {
+      name: string
+      version: string
+      subtype?: symbol
+    }
+    key: string
+  }
 }

@@ -1,0 +1,21 @@
+language: typescript
+layer: library
+toolchains:
+  default: bun
+
+tasks:
+  build:
+    command: bun x tsdown
+    deps:
+      - server:build
+    inputs:
+      - src/**/*
+      - tsdown.config.ts
+    outputs:
+      - dist/**/*
+  run:
+    command: bun ./dist/app.js
+    deps:
+      - server:build
+    options:
+      runInCI: false

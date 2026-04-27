@@ -1,9 +1,9 @@
-import { operation, until, useContext } from 'std:effect'
-import { fail } from 'std:result'
-import type { AnyType } from 'std:shared'
-
 import type { Action, ActionContext } from 'server:core'
 import { ACTION_CONTEXT, ActionContextRef, createEmptyReq, createEmptyRes } from 'server:core'
+import { operation, until, useContext } from 'std:effect'
+import { getService } from 'std:plugin'
+import type { AnyType } from 'std:shared'
+import { isFunction } from 'std:shared'
 
 import { decodeResult, encodeBody } from '../internal/codec'
 
@@ -19,13 +19,17 @@ export const callAction = operation(function* (
   const ctx = yield* useContext(NatsTransportImpl.context)
   const inherited = parent ?? (yield* ActionContextRef.get())
 
-  const local = ctx.byAction.get(action)
+  const rawAction = yield* getService(action)
 
-  if (local) {
+  const subject = `${rawAction.context.name}#${rawAction.key}`
+
+  const local = typeof subject === 'string' ? ctx.subjects.get(subject) : undefined
+
+  if ((typeof subject !== 'string' && !isFunction(subject)) || local) {
     const internal: ActionContext<unknown> = {
       _t: ACTION_CONTEXT,
       type: 'internal',
-      from: local.subject,
+      from: subject ?? (action as Action & { title?: string }).title ?? 'internal',
       body,
       files: inherited?.files ?? {},
       meta: inherited?.meta ?? {},
@@ -33,14 +37,6 @@ export const callAction = operation(function* (
       res: inherited?.res ?? createEmptyRes(),
     }
     return yield* (action as AnyType)(internal)
-  }
-
-  const subject = (action as Action & { _subject?: string })._subject
-  if (!subject) {
-    return yield* fail(
-      'transport',
-      'action not registered with transport — call Transport.actions.mount(service) first',
-    )
   }
 
   const msg = yield* until(

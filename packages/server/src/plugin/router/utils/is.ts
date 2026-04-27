@@ -1,8 +1,7 @@
-import type { AnyType } from 'std:shared'
-import { isObject } from 'std:shared'
-
 import type { Helpers as CoreHelpers } from 'server:core'
 import { RestTransformer } from 'server:core'
+import type { AnyType } from 'std:shared'
+import { isObject } from 'std:shared'
 
 export const isRestSetting = (value: unknown): value is CoreHelpers.TransformerSetting => {
   if (!isObject(value)) {

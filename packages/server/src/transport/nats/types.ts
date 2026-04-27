@@ -1,5 +1,6 @@
-import type { NatsConnection, Subscription } from '@nats-io/nats-core'
 import type { Action, Service } from 'server:core'
+
+import type { NatsConnection, Subscription } from '@nats-io/nats-core'
 
 import type { NatsTransport } from '.'
 
@@ -18,8 +19,7 @@ export interface NatsEntry {
 }
 
 export interface NatsTransportContext {
-  byAction: Map<Action, NatsEntry>
-  bySubject: Map<string, NatsEntry>
+  subjects: Map<string, NatsEntry>
   subscriptions: Map<string, Subscription>
   options: NatsTransportOptions
   nc: NatsConnection

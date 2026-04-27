@@ -45,6 +45,19 @@
         "tsdown": "catalog:build",
       },
     },
+    "examples/transport": {
+      "name": "@ozaco/transport-example",
+      "version": "0.0.0",
+      "dependencies": {
+        "@ozaco/server": "workspace:*",
+        "@ozaco/std": "workspace:*",
+        "zod": "4.3.6",
+      },
+      "devDependencies": {
+        "@ozaco/unplugin-resolve": "workspace:*",
+        "tsdown": "catalog:build",
+      },
+    },
     "experiments/db-smoke": {
       "name": "@ozaco/experiment-db-smoke",
       "version": "0.0.0",
@@ -321,6 +334,8 @@
     "@ozaco/server": ["@ozaco/server@workspace:packages/server"],
 
     "@ozaco/std": ["@ozaco/std@workspace:packages/std"],
+
+    "@ozaco/transport-example": ["@ozaco/transport-example@workspace:examples/transport"],
 
     "@ozaco/unplugin-resolve": ["@ozaco/unplugin-resolve@workspace:tools/unplugin-resolve"],
 

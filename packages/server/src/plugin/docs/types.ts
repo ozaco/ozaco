@@ -1,6 +1,5 @@
-import type { AnyType } from 'std:shared'
-
 import type { Helpers } from 'server:core'
+import type { AnyType } from 'std:shared'
 
 export interface DocsAuthOptions {
   type?: 'bearer' | 'basic' | 'apiKey'

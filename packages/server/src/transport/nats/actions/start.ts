@@ -1,10 +1,10 @@
+import type { ActionContext } from 'server:core'
+import { ACTION_CONTEXT } from 'server:core'
 import { createChannel, each, operation, spawn, until, useContext, useScope } from 'std:effect'
 import { asFailure, auto, fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import type { Msg } from '@nats-io/nats-core'
-import type { ActionContext } from 'server:core'
-import { ACTION_CONTEXT } from 'server:core'
 
 import { decodeBody, encodeResult } from '../internal/codec'
 
@@ -18,7 +18,7 @@ export const startAction = operation(function* () {
 
   const scope = yield* useScope()
 
-  for (const entry of ctx.bySubject.values()) {
+  for (const entry of ctx.subjects.values()) {
     if (ctx.subscriptions.has(entry.subject)) {
       continue
     }
@@ -76,6 +76,8 @@ export const startAction = operation(function* () {
         } catch (error) {
           msg.respond(encodeResult(asFailure(error)))
         }
+
+        yield* each.next()
       }
     })
   }

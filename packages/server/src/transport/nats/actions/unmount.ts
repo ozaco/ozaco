@@ -1,7 +1,6 @@
+import type { Action, Service } from 'server:core'
 import { all, operation, useContext } from 'std:effect'
 import type { AnyType } from 'std:shared'
-
-import type { Action, Service } from 'server:core'
 
 import { isNatsSetting } from '../internal/is'
 
@@ -23,20 +22,24 @@ export const unmountAction = operation(function* (service: Service) {
 
     // TODO: nested keys
     const action = (service.actions as AnyType)[key] as Action
+    const subject = (action as Action & { _subject?: string })._subject
 
-    const entry = ctx.byAction.get(action)
+    if (typeof subject !== 'string') {
+      continue
+    }
+
+    const entry = ctx.subjects.get(subject)
     if (!entry) {
       continue
     }
 
-    const sub = ctx.subscriptions.get(entry.subject)
+    const sub = ctx.subscriptions.get(subject)
     if (sub) {
       sub.unsubscribe()
-      ctx.subscriptions.delete(entry.subject)
+      ctx.subscriptions.delete(subject)
     }
 
-    ctx.byAction.delete(action)
-    ctx.bySubject.delete(entry.subject)
+    ctx.subjects.delete(subject)
     delete (action as Action & { _subject?: string })._subject
   }
 })

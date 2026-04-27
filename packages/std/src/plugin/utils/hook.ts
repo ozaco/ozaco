@@ -6,7 +6,7 @@ import { asFailure, fail, unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
 import { flatten } from 'std:shared'
 
-import { PLUGIN } from '../const'
+import { PLUGIN, RAW_ACTION } from '../const'
 import type { Helpers } from '../types/helpers'
 
 import { createDefaultHooks } from './internal/defaults'
@@ -53,6 +53,10 @@ export const createHookable = (options: {
       const self = handlers[key] ?? store.self[key] ?? (defaultActions as AnyType)[key]
 
       const inner = function* (...innerArgs: unknown[]) {
+        if (innerArgs[0] === RAW_ACTION) {
+          return { self, context, options, key }
+        }
+
         for (const hook of befores) {
           yield* intercept(hook(innerArgs), `${key}:before`)
         }

@@ -1,7 +1,6 @@
+import { RestTransformer, Router } from 'server:core'
 import { useContext } from 'std:effect'
 import { definePlugin } from 'std:plugin'
-
-import { RestTransformer, Router } from 'server:core'
 
 import { applyCorsHeaders } from './internal/apply'
 import { CorsCtxRef, normalizeOptions } from './internal/config'
