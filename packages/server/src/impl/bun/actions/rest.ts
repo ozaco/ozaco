@@ -1,5 +1,5 @@
 import type { ActionContext, ActionFile, ActionRequest, ActionResponse, Helpers } from 'server:core'
-import { ACTION_CONTEXT, RestTransformer, statusFor } from 'server:core'
+import { ACTION_CONTEXT, Rest, statusFor } from 'server:core'
 import { operation, until, useContext } from 'std:effect'
 import { IO } from 'std:io'
 import { isFailure, isSuccess } from 'std:result'
@@ -14,7 +14,7 @@ import {
   stringToFile,
 } from '../internal/form-data'
 
-export const RestImpl = RestTransformer.implement({
+export const RestImpl = Rest.implement({
   name: 'default-rest-transformer',
   version: '0.0.1',
 
@@ -32,7 +32,7 @@ export const settingsAction = operation(function* (options) {
     method: options.method ?? 'GET',
     path: options.path ?? '/',
 
-    transformer: RestTransformer,
+    transformer: Rest,
   }
 })
 

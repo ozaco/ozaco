@@ -4,7 +4,7 @@ import { IO } from 'std:io'
 import { install } from 'std:plugin'
 
 import { SqliteDB } from 'db:impl/sqlite'
-import { BunServer, Rest, Ws } from 'server:impl/bun'
+import { BunServer } from 'server:impl/bun'
 import { AccessRefreshAuth } from 'server:plugin/auth'
 import { Cors } from 'server:plugin/cors'
 import { Docs } from 'server:plugin/docs'
@@ -20,8 +20,6 @@ await main(function* () {
   yield* install(BunIO)
   yield* install(BunServer)
   yield* install(DefaultRouter)
-  yield* install(Rest)
-  yield* install(Ws)
 
   yield* IO.actions.ensureDir('./.ozaco/data')
 

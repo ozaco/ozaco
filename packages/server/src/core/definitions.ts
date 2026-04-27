@@ -31,7 +31,7 @@ export const Router = defineProtocol<RouterContext, unknown, [], RouterActions>(
   subtype: ROUTER,
 })
 
-export const RestTransformer = defineProtocol<
+export const Rest = defineProtocol<
   RestTransformerContext,
   unknown,
   [options?: RestTransformerContext],
@@ -42,7 +42,7 @@ export const RestTransformer = defineProtocol<
   subtype: REST_TRANSFORMER,
 })
 
-export const WsTransformer = defineProtocol<
+export const Ws = defineProtocol<
   WsTransformerContext,
   unknown,
   [options?: WsTransformerContext],

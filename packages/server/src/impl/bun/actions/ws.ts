@@ -1,5 +1,5 @@
 import type { ActionContext } from 'server:core'
-import { ACTION_CONTEXT, Router, WsTransformer } from 'server:core'
+import { ACTION_CONTEXT, Router, Ws } from 'server:core'
 import { operation, useContext } from 'std:effect'
 import { asFailure, auto, fail } from 'std:result'
 import type { AnyType } from 'std:shared'
@@ -7,7 +7,7 @@ import type { AnyType } from 'std:shared'
 import { buildRequest, buildResponse, sendResult } from '../internal/ws'
 import { resolveActionHandler } from '../utils/resolve'
 
-export const WsImpl = WsTransformer.implement({
+export const WsImpl = Ws.implement({
   name: 'default-ws-transformer',
   version: '0.0.1',
 
@@ -68,7 +68,7 @@ export const settingsAction = operation(function* (options) {
     path: options.path ?? '/',
     method: 'WS',
 
-    transformer: WsTransformer,
+    transformer: Ws,
   }
 })
 

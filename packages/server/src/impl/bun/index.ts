@@ -34,14 +34,14 @@ export const BunServer = BunImpl.build({
   destroy: destroyAction,
 })
 
-export const Rest: Helpers.DefaultRestTransformer = RestImpl.build({
+export const BunRest: Helpers.DefaultRestTransformer = RestImpl.build({
   toInternal: toInternalAction,
   toContext: toContextAction,
   fromInternal: fromInternalAction,
   settings: restSettingsAction,
 })
 
-export const Ws: Helpers.DefaultWsTransformer = WsImpl.build({
+export const BunWs: Helpers.DefaultWsTransformer = WsImpl.build({
   upgrade: upgradeAction,
   onOpen: onOpenAction,
   onMessage: onMessageAction,

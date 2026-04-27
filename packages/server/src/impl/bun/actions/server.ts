@@ -1,9 +1,11 @@
 import type { ActionRequest, ActionResponse, Helpers, ServerContext } from 'server:core'
-import { RestTransformer, Router, Server, WsTransformer, statusFor } from 'server:core'
+import { Rest, Router, Server, Ws, statusFor } from 'server:core'
 import { operation, until, useContext, useScope } from 'std:effect'
+import { install } from 'std:plugin'
 import { asFailure, auto, fail, isFailure, isSuccess, unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
 
+import { BunRest, BunWs } from '..'
 import { BunIsPausedRef, BunIsStartedRef, BunServerRef } from '../utils/contexts'
 import { resolveActionHandler } from '../utils/resolve'
 
@@ -11,6 +13,9 @@ export const BunImpl = Server.implement({
   name: 'bun',
   version: '0.0.1',
   *setup(options: { port?: number | undefined; host?: string | undefined } = {}) {
+    yield* install(BunRest)
+    yield* install(BunWs)
+
     yield* BunServerRef.set(null)
     yield* BunIsStartedRef.set(false)
     yield* BunIsPausedRef.set(false)
@@ -76,7 +81,7 @@ export const startAction = operation(function* (config) {
       let actionRes: ActionResponse | null = null
 
       try {
-        const upgradeResult = yield* WsTransformer.actions.upgrade(request, bunServer)
+        const upgradeResult = yield* Ws.actions.upgrade(request, bunServer)
 
         if (isSuccess(upgradeResult) && upgradeResult.value) {
           return
@@ -98,32 +103,23 @@ export const startAction = operation(function* (config) {
           params: (routeParams ?? {}) as Record<string, unknown>,
         }
 
-        const internal = yield* RestTransformer.actions.toInternal(request, null, transformerMeta)
+        const internal = yield* Rest.actions.toInternal(request, null, transformerMeta)
 
         actionReq = internal[0]
         actionRes = internal[1]
 
-        const actionCtx = yield* RestTransformer.actions.toContext(
-          actionReq,
-          actionRes,
-          transformerMeta,
-        )
+        const actionCtx = yield* Rest.actions.toContext(actionReq, actionRes, transformerMeta)
 
         const actionResult = yield* resolveActionHandler(entry.target, entry.key)(actionCtx)
 
-        return yield* RestTransformer.actions.fromInternal(
+        return yield* Rest.actions.fromInternal(
           actionReq,
           actionRes,
           auto(actionResult),
           transformerMeta,
         )
       } catch (error) {
-        return yield* RestTransformer.actions.fromInternal(
-          actionReq,
-          actionRes,
-          asFailure(error),
-          null,
-        )
+        return yield* Rest.actions.fromInternal(actionReq, actionRes, asFailure(error), null)
       }
     })
 
@@ -139,17 +135,17 @@ export const startAction = operation(function* (config) {
       websocket: {
         async open(ws) {
           await scope.safeRun(function* () {
-            yield* WsTransformer.actions.onOpen(ws)
+            yield* Ws.actions.onOpen(ws)
           })
         },
         async message(ws, message) {
           await scope.safeRun(function* () {
-            yield* WsTransformer.actions.onMessage(ws, message)
+            yield* Ws.actions.onMessage(ws, message)
           })
         },
         async close(ws, code, reason) {
           await scope.safeRun(function* () {
-            yield* WsTransformer.actions.onClose(ws, code, reason)
+            yield* Ws.actions.onClose(ws, code, reason)
           })
         },
       },

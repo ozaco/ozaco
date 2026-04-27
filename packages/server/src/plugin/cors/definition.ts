@@ -1,4 +1,4 @@
-import { RestTransformer, Router } from 'server:core'
+import { Rest, Router } from 'server:core'
 import { useContext } from 'std:effect'
 import { definePlugin } from 'std:plugin'
 
@@ -18,7 +18,7 @@ export const Cors = definePlugin({
 
     yield* Router.actions.mount('', preflightAction)
 
-    yield* RestTransformer.before({
+    yield* Rest.before({
       *fromInternal(args: FromInternalArgs) {
         const cors = yield* useContext(CorsCtxRef)
         const req = args[0]

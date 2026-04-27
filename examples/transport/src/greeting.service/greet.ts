@@ -1,6 +1,5 @@
-import { defineAction, Transport, useCall } from 'server:core'
+import { defineAction, Rest, Transport, useCall } from 'server:core'
 
-import { Rest } from 'server:impl/bun'
 // oxlint-disable-next-line import/no-named-as-default
 import z from 'zod'
 

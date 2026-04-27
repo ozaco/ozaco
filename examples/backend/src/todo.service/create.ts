@@ -1,4 +1,4 @@
-import { RestTransformer, defineAction } from 'server:core'
+import { Rest, defineAction } from 'server:core'
 import { useContext } from 'std:effect'
 import { fail } from 'std:result'
 
@@ -23,7 +23,7 @@ export const create = defineAction(
       completed: z.boolean(),
     }),
 
-    settings: [RestTransformer.actions.settings({ method: 'POST', path: '/create' })],
+    settings: [Rest.actions.settings({ method: 'POST', path: '/create' })],
   },
   function* (ctx) {
     const session = yield* useAuth(AccessRefreshAuth, ctx.req)

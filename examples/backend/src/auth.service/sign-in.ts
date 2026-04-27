@@ -1,4 +1,4 @@
-import { RestTransformer, defineAction } from 'server:core'
+import { Rest, defineAction } from 'server:core'
 
 import { AccessRefreshAuth } from 'server:plugin/auth'
 // oxlint-disable-next-line import/no-named-as-default
@@ -14,7 +14,7 @@ export const signIn = defineAction(
       password: z.string(),
     }),
 
-    settings: [RestTransformer.actions.settings({ method: 'POST', path: '/sign-in' })],
+    settings: [Rest.actions.settings({ method: 'POST', path: '/sign-in' })],
   },
   function* (ctx) {
     return yield* AccessRefreshAuth.actions.signIn(ctx.body)

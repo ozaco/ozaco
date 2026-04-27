@@ -1,4 +1,4 @@
-import { RestTransformer, defineAction } from 'server:core'
+import { Rest, defineAction } from 'server:core'
 import { useContext } from 'std:effect'
 
 import { DB } from '@ozaco/db'
@@ -11,7 +11,7 @@ export const list = defineAction(
     title: 'List Todos',
     description: 'lists todos for the authenticated user',
 
-    settings: [RestTransformer.actions.settings({ method: 'GET', path: '/list' })],
+    settings: [Rest.actions.settings({ method: 'GET', path: '/list' })],
   },
   function* (ctx) {
     const session = yield* useAuth(AccessRefreshAuth, ctx.req)

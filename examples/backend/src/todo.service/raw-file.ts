@@ -1,4 +1,4 @@
-import { RestTransformer, defineAction } from 'server:core'
+import { Rest, defineAction } from 'server:core'
 import { each } from 'std:effect'
 import { fail } from 'std:result'
 
@@ -10,7 +10,7 @@ export const rawFile = defineAction(
     description: 'test',
 
     settings: [
-      RestTransformer.actions.settings({
+      Rest.actions.settings({
         method: 'POST',
         path: '/raw-file',
       }),

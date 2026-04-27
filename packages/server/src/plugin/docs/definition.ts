@@ -1,5 +1,5 @@
-import { RestTransformer, Router } from 'server:core'
 import type { Service } from 'server:core'
+import { Rest, Router } from 'server:core'
 import { operation, useContext } from 'std:effect'
 import { definePlugin } from 'std:plugin'
 
@@ -51,7 +51,7 @@ export const Docs = definePlugin({
 
     const names = new Set(services.map(s => s.name))
     const kept = previous.filter(entry => !names.has(entry.service))
-    const fresh = yield* compileEntries(services, RestTransformer)
+    const fresh = yield* compileEntries(services, Rest)
 
     const next = [...kept, ...fresh]
 

@@ -13,9 +13,17 @@ tasks:
       - tsdown.config.ts
     outputs:
       - dist/**/*
-  run:
-    command: bun ./dist/app.js
+  dev:
+    command: bun x tsdown --watch
+    inputs:
+      - src/**/*
+      - tsdown.config.ts
+    outputs:
+      - dist/**/*
+  types:
+    command: bun x tsc -p tsconfig.json --noEmit
     deps:
       - server:build
-    options:
-      runInCI: false
+    inputs:
+      - src/**/*
+      - tsdown.config.ts
