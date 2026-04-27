@@ -75,7 +75,7 @@
     },
     "packages/db": {
       "name": "@ozaco/db",
-      "version": "0.0.2",
+      "version": "0.0.3",
       "devDependencies": {
         "@ozaco/std": "workspace:*",
         "@types/better-sqlite3": "^7.6.13",
@@ -98,7 +98,7 @@
     },
     "packages/server": {
       "name": "@ozaco/server",
-      "version": "0.0.5",
+      "version": "0.0.6",
       "devDependencies": {
         "@nats-io/nats-core": "3.3.1",
         "@nats-io/transport-node": "3.3.1",
@@ -125,7 +125,7 @@
     },
     "packages/std": {
       "name": "@ozaco/std",
-      "version": "0.0.10",
+      "version": "0.0.11",
       "devDependencies": {
         "tsdown": "catalog:build",
       },
