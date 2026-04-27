@@ -9,7 +9,7 @@ import {
   optimizeAction,
   removeAction,
   unmountAction,
-} from './actions/router'
+} from './actions'
 
 export const DefaultRouter: Helpers.DefaultRouter = DefaultRouterImpl.build({
   add: addAction,

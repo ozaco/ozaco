@@ -47,6 +47,10 @@ declare module 'server:plugin/docs' {
   export * from '@ozaco/server/plugin/docs'
 }
 
+declare module 'server:transport/nats' {
+  export * from '@ozaco/server/transport/nats'
+}
+
 declare module 'server:impl/bun' {
   export * from '@ozaco/server/impl/bun'
 }

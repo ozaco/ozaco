@@ -33,7 +33,7 @@
         "types": "./dist/plugin/router.d.cts",
         "default": "./dist/plugin/router.cjs"
       },
-      "source": "./src/plugins/router/index.ts"
+      "source": "./src/plugin/router/index.ts"
     },
     "./plugin/auth": {
       "import": {
@@ -44,7 +44,7 @@
         "types": "./dist/plugin/auth.d.cts",
         "default": "./dist/plugin/auth.cjs"
       },
-      "source": "./src/plugins/auth/index.ts"
+      "source": "./src/plugin/auth/index.ts"
     },
     "./plugin/cors": {
       "import": {
@@ -55,7 +55,7 @@
         "types": "./dist/plugin/cors.d.cts",
         "default": "./dist/plugin/cors.cjs"
       },
-      "source": "./src/plugins/cors/index.ts"
+      "source": "./src/plugin/cors/index.ts"
     },
     "./plugin/docs": {
       "import": {
@@ -66,7 +66,18 @@
         "types": "./dist/plugin/docs.d.cts",
         "default": "./dist/plugin/docs.cjs"
       },
-      "source": "./src/plugins/docs/index.ts"
+      "source": "./src/plugin/docs/index.ts"
+    },
+    "./transport/nats": {
+      "import": {
+        "types": "./dist/transport/nats.d.ts",
+        "default": "./dist/transport/nats.js"
+      },
+      "require": {
+        "types": "./dist/transport/nats.d.cts",
+        "default": "./dist/transport/nats.cjs"
+      },
+      "source": "./src/transport/nats/index.ts"
     },
     "./impl/bun": {
       "import": {
@@ -86,6 +97,8 @@
     "registry": "https://registry.npmjs.org/"
   },
   "devDependencies": {
+    "@nats-io/nats-core": "3.3.1",
+    "@nats-io/transport-node": "3.3.1",
     "@ozaco/std": "workspace:*",
     "jose": "6.2.2",
     "rou3": "0.8.1",
@@ -93,12 +106,20 @@
     "zod": "4.3.6"
   },
   "peerDependencies": {
+    "@nats-io/nats-core": "^3.0.0",
+    "@nats-io/transport-node": "^3.0.0",
     "@ozaco/std": "*",
     "jose": "^6.0.0",
     "rou3": "*",
     "zod": "^4.3.6"
   },
   "peerDependenciesMeta": {
+    "@nats-io/nats-core": {
+      "optional": true
+    },
+    "@nats-io/transport-node": {
+      "optional": true
+    },
     "jose": {
       "optional": true
     },

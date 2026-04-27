@@ -7,8 +7,8 @@ import { compileRouter } from 'rou3/compiler'
 import type { Helpers as CoreHelpers } from 'server:core'
 import { isAction, isService, Router } from 'server:core'
 
-import type { RegisteredRoute } from '../types'
-import { isRestSetting } from '../utils/is'
+import type { RegisteredRoute } from './types'
+import { isRestSetting } from './utils/is'
 
 export const DefaultRouterImpl = Router.implement({
   name: 'plugin:router',

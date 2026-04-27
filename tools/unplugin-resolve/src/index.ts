@@ -20,10 +20,11 @@ const STD_MODULES: Record<string, ModuleEntry> = {
 
 const SERVER_MODULES: Record<string, ModuleEntry> = {
   'server:core': { subpath: 'core', source: 'core/index.ts' },
-  'server:plugin/router': { subpath: 'plugin/router', source: 'plugins/router/index.ts' },
-  'server:plugin/auth': { subpath: 'plugin/auth', source: 'plugins/auth/index.ts' },
-  'server:plugin/cors': { subpath: 'plugin/cors', source: 'plugins/cors/index.ts' },
-  'server:plugin/docs': { subpath: 'plugin/docs', source: 'plugins/docs/index.ts' },
+  'server:plugin/router': { subpath: 'plugin/router', source: 'plugin/router/index.ts' },
+  'server:plugin/auth': { subpath: 'plugin/auth', source: 'plugin/auth/index.ts' },
+  'server:plugin/cors': { subpath: 'plugin/cors', source: 'plugin/cors/index.ts' },
+  'server:plugin/docs': { subpath: 'plugin/docs', source: 'plugin/docs/index.ts' },
+  'server:transport/nats': { subpath: 'transport/nats', source: 'transport/nats/index.ts' },
   'server:impl/bun': { subpath: 'impl/bun', source: 'impl/bun/index.ts' },
 }
 

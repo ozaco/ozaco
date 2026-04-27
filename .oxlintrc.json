@@ -28,6 +28,7 @@
     "unicorn/prefer-global-this": "off",
     "unicorn/no-nested-ternary": "off",
     "unicorn/no-array-method-this-argument": "off",
+    "unicorn/no-array-callback-reference": "off",
 
     "eslint/no-bitwise": "off",
     "unicorn/prefer-math-trunc": "off",
