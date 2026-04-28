@@ -20,6 +20,7 @@ export const createHookable = (options: {
   handlers?: Record<string, AnyType> | undefined
   defaultActions?: Record<string, AnyType> | undefined
   subtype?: symbol | undefined
+  cloneable?: boolean | undefined
 }) => {
   const protocolTag = `${options.name}@${options.version ?? 'lts'}`
 
@@ -42,73 +43,89 @@ export const createHookable = (options: {
     }
   }
 
-  const resolveAction = operation(function* (key: string, ...args: unknown[]) {
-    return yield* chainCtx.with(new Map(), function* (): Operation<unknown> {
-      const store = (yield* hookCtx.get())!
+  const makeResolveAction = (
+    findImpl: (store: Helpers.HookStore) => Helpers.HookSelfEntry | undefined,
+    tag: string,
+  ) =>
+    operation(function* (key: string, ...args: unknown[]) {
+      return yield* chainCtx.with(new Map(), function* (): Operation<unknown> {
+        const store = (yield* hookCtx.get())!
 
-      const arounds = store.around.flatMap(e => (key in e.handlers ? [e.handlers[key]] : []))
-      const befores = store.before.flatMap(e => (key in e.handlers ? [e.handlers[key]] : []))
-      const afters = store.after.flatMap(e => (key in e.handlers ? [e.handlers[key]] : []))
-      const errors = store.error.flatMap(e => (key in e.handlers ? [e.handlers[key]] : []))
-      const self = handlers[key] ?? store.self[key] ?? (defaultActions as AnyType)[key]
+        const arounds = store.around.flatMap(e => (key in e.handlers ? [e.handlers[key]] : []))
+        const befores = store.before.flatMap(e => (key in e.handlers ? [e.handlers[key]] : []))
+        const afters = store.after.flatMap(e => (key in e.handlers ? [e.handlers[key]] : []))
+        const errors = store.error.flatMap(e => (key in e.handlers ? [e.handlers[key]] : []))
 
-      const inner = function* (...innerArgs: unknown[]) {
-        if (innerArgs[0] === RAW_ACTION) {
-          return { self, context, options, key }
-        }
+        const myImpl = findImpl(store)
+        const self = handlers[key] ?? myImpl?.handlers[key] ?? (defaultActions as AnyType)[key]
 
-        for (const hook of befores) {
-          yield* intercept(hook(innerArgs), `${key}:before`)
-        }
-
-        if (!self) {
-          return yield* fail(
-            'unexpected',
-            `No handler for "${key}" in "${options.name}", maybe forgot to install "${options.name}" plugin?`,
-          )
-        }
-
-        let result: unknown = yield* intercept(self(...innerArgs), key)
-
-        for (const hook of afters) {
-          const modified = yield* intercept(hook(result, innerArgs), `${key}:after`)
-          if (modified !== undefined) {
-            result = modified
+        const inner = function* (...innerArgs: unknown[]) {
+          if (innerArgs[0] === RAW_ACTION) {
+            return { self, context, options, key }
           }
-        }
 
-        return result
-      }
+          for (const hook of befores) {
+            yield* intercept(hook(innerArgs), `${key}:before`)
+          }
 
-      const makeNext =
-        (i: number) =>
-        (...nextArgs: unknown[]): AnyType => ({
-          *[Symbol.iterator]() {
-            if (i < arounds.length) {
-              return yield* intercept(arounds[i](nextArgs, makeNext(i + 1)))
+          if (!self) {
+            return yield* fail(
+              'unexpected',
+              `No handler for "${key}" in "${options.name}", maybe forgot to install "${options.name}" plugin?`,
+            )
+          }
+
+          let result: unknown = yield* intercept(self(...innerArgs), key)
+
+          for (const hook of afters) {
+            const modified = yield* intercept(hook(result, innerArgs), `${key}:after`)
+            if (modified !== undefined) {
+              result = modified
             }
-            return yield* intercept(inner(...nextArgs))
-          },
-        })
+          }
 
-      try {
-        if (arounds.length > 0) {
-          return yield* intercept(arounds[0](args, makeNext(1)))
+          return result
         }
-        return yield* intercept(inner(...args))
-      } catch (error) {
-        if (errors.length > 0) {
-          for (const hook of errors) {
-            yield* intercept(hook(error, args))
+
+        const makeNext =
+          (i: number) =>
+          (...nextArgs: unknown[]): AnyType => ({
+            *[Symbol.iterator]() {
+              if (i < arounds.length) {
+                return yield* intercept(arounds[i](nextArgs, makeNext(i + 1)))
+              }
+              return yield* intercept(inner(...nextArgs))
+            },
+          })
+
+        const runChain = function* (): Operation<unknown> {
+          try {
+            if (arounds.length > 0) {
+              return yield* intercept(arounds[0](args, makeNext(1)))
+            }
+            return yield* intercept(inner(...args))
+          } catch (error) {
+            if (errors.length > 0) {
+              for (const hook of errors) {
+                yield* intercept(hook(error, args))
+              }
+            }
+
+            unwrap(asFailure(error))
           }
         }
 
-        unwrap(asFailure(error))
-      }
-    })
-  }, protocolTag)
+        if (myImpl) {
+          return yield* context.with(myImpl.contextValue as AnyType, () => runChain())
+        }
+        return yield* runChain()
+      })
+    }, tag)
 
-  const actions = createProxy('', resolveAction)
+  const actions = createProxy(
+    '',
+    makeResolveAction(store => store.self.at(-1), protocolTag),
+  )
 
   const addHook = (type: 'around' | 'before' | 'after' | 'error') =>
     function* (targetHandlers: Record<string, AnyType>) {
@@ -150,11 +167,34 @@ export const createHookable = (options: {
       }
     }
 
+    const pluginActions = createProxy(
+      '',
+      makeResolveAction(store => store.self.find(e => e.tag === pluginTag), pluginTag),
+    )
+
     const setup = function* (...args: AnyType[]) {
+      const initial = (yield* hookCtx.get())!
+
+      if (!options.cloneable) {
+        const other = initial.self.find(e => e.tag !== pluginTag)
+        if (other) {
+          return yield* fail(
+            'protocol-not-cloneable',
+            `protocol "${options.name}" is not cloneable; "${other.tag}" already installed, refusing to install "${pluginTag}"`,
+          )
+        }
+      }
+
       const value = yield* buildOptions.setup(...args)
       const store = (yield* hookCtx.get())!
 
-      yield* hookCtx.set({ ...store, self: { ...store.self, ...wrappedActions } })
+      yield* hookCtx.set({
+        ...store,
+        self: [
+          ...store.self.filter(e => e.tag !== pluginTag),
+          { tag: pluginTag, handlers: wrappedActions, contextValue: value as AnyType },
+        ],
+      })
       yield* context.set(value as AnyType)
       return value
     }
@@ -177,7 +217,7 @@ export const createHookable = (options: {
       after: hooks.after,
       error: hooks.error,
 
-      actions,
+      actions: pluginActions,
       getKeys: () => knownKeys,
       getMeta: (key: string) => meta.get(key),
       setup: operation(setup as AnyType, 'setup', pluginTag),

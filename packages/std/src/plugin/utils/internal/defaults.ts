@@ -5,5 +5,5 @@ export const createDefaultHooks = (): Helpers.HookStore => ({
   before: [],
   after: [],
   error: [],
-  self: {},
+  self: [],
 })

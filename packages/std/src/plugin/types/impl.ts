@@ -22,6 +22,7 @@ export namespace Impl {
     TCustomActions extends EmptyType = EmptyType,
   >(options: {
     subtype?: symbol
+    cloneable?: boolean
 
     name: string
     version: string

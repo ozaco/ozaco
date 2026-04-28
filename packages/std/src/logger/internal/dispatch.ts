@@ -8,11 +8,13 @@ export const dispatch = operation(function* (entry: Helpers.LogEntry) {
   if (transports.length === 0) {
     return
   }
+
   const ops = transports
     .filter(t => t.level === undefined || entry.level >= t.level)
     .map(t => t.transport.actions.write(entry))
   if (ops.length === 0) {
     return
   }
+
   yield* all(ops)
 })

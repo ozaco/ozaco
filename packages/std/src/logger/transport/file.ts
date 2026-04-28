@@ -26,8 +26,6 @@ interface FileTransportContext {
   limit: number
   format: (entry: Helpers.LogEntry) => AnyType
 
-  prepared: boolean
-
   options: FileTransportOptions
 }
 
@@ -45,9 +43,13 @@ const FileTransportImpl = LoggerTransport.implement<
 
     yield* registerTransport({ name, level: options.level, transport })
 
+    if (options.ensureDir ?? true) {
+      yield* IO.actions.ensureDir(options.path.split('/').slice(-1).join('/'))
+    }
+    yield* IO.actions.ensureFile(options.path)
+
     return {
       name,
-      prepared: false,
       buffer: [],
       limit: Math.max(0, options.bufferSize ?? 0),
       format:
@@ -59,19 +61,6 @@ const FileTransportImpl = LoggerTransport.implement<
   },
 })
 
-const prepare = operation(function* () {
-  const ctx = yield* useContext(FileTransportImpl.context)
-
-  if (ctx.prepared) {
-    return
-  }
-  ctx.prepared = true
-  if (ctx.options.ensureDir ?? true) {
-    yield* IO.actions.ensureDir(ctx.options.path)
-  }
-  yield* IO.actions.ensureFile(ctx.options.path)
-})
-
 const drain = operation(function* () {
   const ctx = yield* useContext(FileTransportImpl.context)
 
@@ -81,7 +70,6 @@ const drain = operation(function* () {
   const payload = ctx.buffer.join('')
   ctx.buffer.length = 0
 
-  yield* prepare()
   yield* IO.actions.write(ctx.options.path, encoder.encode(payload), { flags: IO_FLAGS.APPEND })
 })
 

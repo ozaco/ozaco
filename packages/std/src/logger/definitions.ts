@@ -25,4 +25,5 @@ export const LoggerTransport = defineProtocol<
   name: 'logger-transport',
   version: '0.0.1',
   subtype: LOGGER_TRANSPORT,
+  cloneable: true,
 })

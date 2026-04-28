@@ -70,12 +70,18 @@ export namespace Helpers {
         : never
   }
 
+  export interface HookSelfEntry {
+    tag: string
+    handlers: Record<string, AnyType>
+    contextValue: AnyType
+  }
+
   export interface HookStore {
     around: Array<{ handlers: Record<string, AnyType> }>
     before: Array<{ handlers: Record<string, AnyType> }>
     after: Array<{ handlers: Record<string, AnyType> }>
     error: Array<{ handlers: Record<string, AnyType> }>
-    self: Record<string, AnyType>
+    self: HookSelfEntry[]
   }
 
   export interface RawAction {
