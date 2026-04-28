@@ -1,7 +1,6 @@
 import type { Operation } from 'std:effect'
 import type { EmptyType } from 'std:shared'
 
-import type { Helpers } from './helpers'
 import type { PluginDef, Protocol } from './plugin'
 
 export namespace Impl {
@@ -19,8 +18,8 @@ export namespace Impl {
     TContext,
     TError,
     TArgs extends unknown[] = [],
-    TActions extends Record<string, Helpers.AnyAction> = EmptyType,
-    TCustomActions extends Record<string, Helpers.AnyAction> = EmptyType,
+    TActions extends EmptyType = EmptyType,
+    TCustomActions extends EmptyType = EmptyType,
   >(options: {
     subtype?: symbol
 

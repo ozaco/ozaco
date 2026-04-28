@@ -23,6 +23,16 @@ declare module 'std:io/impl/node' {
   export * from '@ozaco/std/io/impl/node'
 }
 
+declare module 'std:logger' {
+  export * from '@ozaco/std/logger'
+}
+declare module 'std:logger/transport/file' {
+  export * from '@ozaco/std/logger/transport/file'
+}
+declare module 'std:logger/transport/console' {
+  export * from '@ozaco/std/logger/transport/console'
+}
+
 declare module 'std:fetch' {
   export * from '@ozaco/std/fetch'
 }

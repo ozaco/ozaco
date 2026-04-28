@@ -9,7 +9,16 @@
       "std:io": ["./src/io/index.ts", "./dist/io.d.ts"],
       "std:io/impl/bun": ["./src/io/impl/bun.ts", "./dist/io/impl/bun.d.ts"],
       "std:io/impl/node": ["./src/io/impl/node.ts", "./dist/io/impl/node.d.ts"],
-      "std:fetch": ["./src/fetch/index.ts", "./dist/fetch.d.ts"]
+      "std:fetch": ["./src/fetch/index.ts", "./dist/fetch.d.ts"],
+      "std:logger": ["./src/logger/index.ts", "./dist/logger.d.ts"],
+      "std:logger/transport/console": [
+        "./src/logger/transport/console.ts",
+        "./dist/logger/transport/console.d.ts"
+      ],
+      "std:logger/transport/file": [
+        "./src/logger/transport/file.ts",
+        "./dist/logger/transport/file.d.ts"
+      ]
     }
   }
 }

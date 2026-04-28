@@ -111,6 +111,39 @@
         "default": "./dist/fetch.cjs"
       },
       "source": "./src/fetch/index.ts"
+    },
+    "./logger": {
+      "import": {
+        "types": "./dist/logger.d.ts",
+        "default": "./dist/logger.js"
+      },
+      "require": {
+        "types": "./dist/logger.d.cts",
+        "default": "./dist/logger.cjs"
+      },
+      "source": "./src/logger/index.ts"
+    },
+    "./logger/transport/console": {
+      "import": {
+        "types": "./dist/logger/transport/console.d.ts",
+        "default": "./dist/logger/transport/console.js"
+      },
+      "require": {
+        "types": "./dist/logger/transport/console.d.cts",
+        "default": "./dist/logger/transport/console.cjs"
+      },
+      "source": "./src/logger/transport/console.ts"
+    },
+    "./logger/transport/file": {
+      "import": {
+        "types": "./dist/logger/transport/file.d.ts",
+        "default": "./dist/logger/transport/file.js"
+      },
+      "require": {
+        "types": "./dist/logger/transport/file.d.cts",
+        "default": "./dist/logger/transport/file.cjs"
+      },
+      "source": "./src/logger/transport/file.ts"
     }
   },
   "publishConfig": {
