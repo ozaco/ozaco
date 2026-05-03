@@ -15,9 +15,9 @@ export const sumOfSquares = defineAction(
       b: z.number(),
     }),
   },
-  function* (ctx) {
-    const sqA = yield* useCall(square, { value: ctx.body.a })
-    const sqB = yield* useCall(square, { value: ctx.body.b })
+  function* (body) {
+    const sqA = yield* useCall(square, { value: body.a })
+    const sqB = yield* useCall(square, { value: body.b })
 
     return yield* useCall(add, { a: sqA, b: sqB })
   },

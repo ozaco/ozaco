@@ -2,7 +2,7 @@ import type { Future } from 'std:effect'
 import type { Result } from 'std:result'
 import type { AnyType } from 'std:shared'
 
-import type { ActionContext, ActionRequest, ActionResponse } from './action'
+import type { ActionRequest, ActionResponse } from './action'
 import type { Helpers } from './helpers'
 
 export interface RestTransformerContext {
@@ -14,13 +14,7 @@ export interface RestTransformerActions extends Record<string, AnyType> {
     req: unknown,
     res: unknown,
     meta: unknown,
-  ) => Future<[req: ActionRequest, res: ActionResponse], unknown>
-
-  toContext: (
-    req: ActionRequest,
-    res: ActionResponse,
-    meta: unknown,
-  ) => Future<ActionContext<unknown>, unknown>
+  ) => Future<[req: ActionRequest, res: ActionResponse, body: unknown], unknown>
 
   // oxlint-disable-next-line max-params
   fromInternal: (

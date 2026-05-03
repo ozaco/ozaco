@@ -1,5 +1,4 @@
-import type { ActionContext } from 'server:core'
-import { defineAction, Rest } from 'server:core'
+import { defineAction, Rest, useResponse } from 'server:core'
 
 import { SpecRef, SwaggerHtmlRef } from './contexts'
 
@@ -20,8 +19,9 @@ export const createSwaggerAction = (path: string) =>
       title: 'swagger',
       settings: [Rest.actions.settings({ method: 'GET', path })],
     },
-    function* (ctx: ActionContext<unknown>) {
-      ctx.res.meta['Content-Type'] = 'text/html; charset=utf-8'
+    function* () {
+      const res = yield* useResponse()
+      res.meta['Content-Type'] = 'text/html; charset=utf-8'
       return (yield* SwaggerHtmlRef.get()) ?? ''
     },
   )

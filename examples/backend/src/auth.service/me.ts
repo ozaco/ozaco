@@ -9,7 +9,7 @@ export const me = defineAction(
 
     settings: [Rest.actions.settings({ method: 'GET', path: '/me' })],
   },
-  function* (ctx) {
-    return yield* useAuth(AccessRefreshAuth, ctx.req)
+  function* () {
+    return yield* useAuth(AccessRefreshAuth)
   },
 )

@@ -35,7 +35,7 @@ export interface Context<T> {
   set(value: T): Operation<T>
   expect(): Operation<T>
   delete(): Operation<boolean>
-  with<R>(value: T, operation: (value: T) => Operation<R>): Operation<R>
+  with<R, E>(value: T, operation: (value: T) => Operation<R, E>): Operation<R, E>
 }
 
 export interface Scope {

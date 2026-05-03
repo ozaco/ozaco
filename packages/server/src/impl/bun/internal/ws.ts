@@ -40,7 +40,7 @@ export const encodeWsBody = (body: unknown): string | ArrayBufferView | ArrayBuf
 }
 
 // oxlint-disable-next-line require-yield
-export const buildRequest = operation(function* (ws: AnyType, payload: unknown) {
+export const buildRequest = operation(function* (ws: AnyType, payload: unknown, from: string) {
   const data = (ws?.data ?? {}) as {
     url?: string
     headers?: Record<string, string>
@@ -57,23 +57,24 @@ export const buildRequest = operation(function* (ws: AnyType, payload: unknown) 
     ...((parsedBody as Record<string, unknown>) ?? {}),
   }
 
-  return {
+  const req: ActionRequest = {
+    type: 'ws',
+    from,
     method: 'WS',
     url,
     meta: headers,
     files: {},
-    body,
-    raw: ws,
     rawBody: null,
-  } as ActionRequest
+  }
+
+  return [req, body] as [ActionRequest, unknown]
 })
 
-export const buildResponse = (ws: AnyType): ActionResponse => ({
+export const buildResponse = (): ActionResponse => ({
   status: null,
   body: undefined,
   files: {},
   meta: { 'content-type': JSON_CONTENT },
-  raw: ws,
 })
 
 // oxlint-disable-next-line require-yield
@@ -82,7 +83,7 @@ export const sendResult = operation(function* (
   res: ActionResponse | null,
   result: AnyType,
 ) {
-  const sink = (ws ?? res?.raw ?? null) as { send?: (data: AnyType) => void } | null
+  const sink = ws as { send?: (data: AnyType) => void } | null
   if (!sink?.send) {
     return null
   }

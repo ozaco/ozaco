@@ -14,9 +14,9 @@ export const add = defineAction(
     settings: [Transport.actions.settings()],
   },
   // oxlint-disable-next-line require-yield
-  function* (ctx) {
+  function* (body) {
     console.log('worker:', process.env.id)
 
-    return ctx.body.a + ctx.body.b
+    return body.a + body.b
   },
 )

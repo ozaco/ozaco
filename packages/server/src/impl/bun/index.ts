@@ -4,7 +4,6 @@ import {
   fromInternalAction,
   RestImpl,
   settingsAction as restSettingsAction,
-  toContextAction,
   toInternalAction,
 } from './actions/rest'
 import {
@@ -36,7 +35,6 @@ export const BunServer = BunImpl.build({
 
 export const BunRest: Helpers.DefaultRestTransformer = RestImpl.build({
   toInternal: toInternalAction,
-  toContext: toContextAction,
   fromInternal: fromInternalAction,
   settings: restSettingsAction,
 })

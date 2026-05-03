@@ -25,8 +25,8 @@ export const create = defineAction(
 
     settings: [Rest.actions.settings({ method: 'POST', path: '/create' })],
   },
-  function* (ctx) {
-    const session = yield* useAuth(AccessRefreshAuth, ctx.req)
+  function* (body) {
+    const session = yield* useAuth(AccessRefreshAuth)
     if (!session.permissions.includes('todo:create')) {
       return yield* fail('forbidden', 'missing permission todo:create')
     }
@@ -37,7 +37,7 @@ export const create = defineAction(
       .values({
         id: crypto.randomUUID(),
         userId: session.user.id,
-        title: ctx.body.title,
+        title: body.title,
         completed: false,
       })
       .returning()

@@ -1,5 +1,10 @@
-import type { ActionContext } from 'server:core'
-import { ACTION_CONTEXT } from 'server:core'
+import type { ActionRequest, ActionResponse } from 'server:core'
+import {
+  ActionRawRequestContext,
+  ActionRawResponseContext,
+  ActionRequestContext,
+  ActionResponseContext,
+} from 'server:core'
 import { createChannel, each, operation, spawn, until, useContext, useScope } from 'std:effect'
 import { asFailure, auto, fail } from 'std:result'
 import type { AnyType } from 'std:shared'
@@ -52,25 +57,26 @@ export const startAction = operation(function* () {
         try {
           const result = yield* scope.run(function* () {
             const body = decodeBody(msg.data)
-            const actionCtx: ActionContext<unknown> = {
-              _t: ACTION_CONTEXT,
+            const req: ActionRequest = {
               type: 'rpc',
               from: entry.subject,
-              body,
-              files: {},
+              method: 'NATS',
+              url: new URL(`nats:///${entry.subject}`),
               meta: {},
-              req: {
-                method: 'NATS',
-                url: new URL(`nats:///${entry.subject}`),
-                meta: {},
-                files: {},
-                body,
-                raw: msg,
-                rawBody: null,
-              },
-              res: { status: null, meta: {}, files: {}, body: null, raw: null },
+              files: {},
+              rawBody: null,
             }
-            return yield* (entry.action as AnyType)(actionCtx)
+            const res: ActionResponse = { status: null, meta: {}, files: {}, body: null }
+
+            return yield* ActionRequestContext.with(req, function* () {
+              return yield* ActionResponseContext.with(res, function* () {
+                return yield* ActionRawRequestContext.with(msg, function* () {
+                  return yield* ActionRawResponseContext.with(null, function* () {
+                    return yield* (entry.action as AnyType)(body)
+                  })
+                })
+              })
+            })
           })
           msg.respond(encodeResult(auto(result)))
         } catch (error) {

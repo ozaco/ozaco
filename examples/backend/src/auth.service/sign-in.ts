@@ -16,7 +16,7 @@ export const signIn = defineAction(
 
     settings: [Rest.actions.settings({ method: 'POST', path: '/sign-in' })],
   },
-  function* (ctx) {
-    return yield* AccessRefreshAuth.actions.signIn(ctx.body)
+  function* (body) {
+    return yield* AccessRefreshAuth.actions.signIn(body)
   },
 )

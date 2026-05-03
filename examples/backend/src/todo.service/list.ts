@@ -13,8 +13,8 @@ export const list = defineAction(
 
     settings: [Rest.actions.settings({ method: 'GET', path: '/list' })],
   },
-  function* (ctx) {
-    const session = yield* useAuth(AccessRefreshAuth, ctx.req)
+  function* () {
+    const session = yield* useAuth(AccessRefreshAuth)
     const db = yield* useContext(DB)
     return yield* db.from(todos).where({ userId: session.user.id }).all()
   },

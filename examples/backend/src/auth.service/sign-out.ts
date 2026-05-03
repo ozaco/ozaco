@@ -13,8 +13,8 @@ export const signOut = defineAction(
 
     settings: [Rest.actions.settings({ method: 'POST', path: '/sign-out' })],
   },
-  function* (ctx) {
-    yield* AccessRefreshAuth.actions.signOut(ctx.body.refreshToken)
+  function* (body) {
+    yield* AccessRefreshAuth.actions.signOut(body.refreshToken)
     return { ok: true }
   },
 )

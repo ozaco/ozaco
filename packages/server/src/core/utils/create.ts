@@ -1,12 +1,12 @@
 import type { ActionRequest, ActionResponse } from '../types/action'
 
-export const createEmptyReq = (body: unknown): ActionRequest => ({
+export const createEmptyReq = (): ActionRequest => ({
+  type: 'internal',
+  from: 'internal',
   method: 'INTERNAL',
   url: new URL('internal:///'),
   meta: {},
   files: {},
-  body,
-  raw: null,
   rawBody: null,
 })
 
@@ -15,5 +15,4 @@ export const createEmptyRes = (): ActionResponse => ({
   meta: {},
   files: {},
   body: null,
-  raw: null,
 })

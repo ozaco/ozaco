@@ -12,7 +12,7 @@ export const square = defineAction(
     }),
   },
   // oxlint-disable-next-line require-yield
-  function* (ctx) {
-    return ctx.body.value * ctx.body.value
+  function* (body) {
+    return body.value * body.value
   },
 )

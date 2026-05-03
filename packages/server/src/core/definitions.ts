@@ -2,16 +2,14 @@ import { operation } from 'std:effect'
 import { defineProtocol } from 'std:plugin'
 import type { AnyType } from 'std:shared'
 
+import { REST_TRANSFORMER, ROUTER, SERVER, TRANSPORT, WS_TRANSFORMER } from './const'
 import {
-  ACTION_CONTEXT,
-  REST_TRANSFORMER,
-  ROUTER,
-  SERVER,
-  TRANSPORT,
-  WS_TRANSFORMER,
-} from './const'
-import { ActionContextRef } from './internal/contexts'
-import type { ActionContext } from './types/action'
+  ActionRawRequestContext,
+  ActionRawResponseContext,
+  ActionRequestContext,
+  ActionResponseContext,
+} from './internal/contexts'
+import type { ActionRequest, ActionResponse } from './types/action'
 import type { RestTransformerActions, RestTransformerContext } from './types/rest'
 import type { RouterActions, RouterContext } from './types/router'
 import type { ServerActions, ServerContext } from './types/server'
@@ -66,23 +64,27 @@ export const Transport = defineProtocol<TransportContext, unknown, unknown[], Tr
   subtype: TRANSPORT,
 
   defaultActions: {
-    call: operation(function* (
-      action: AnyType,
-      body: unknown,
-      parent?: ActionContext<unknown>,
-    ): AnyType {
-      const inherited = parent ?? (yield* ActionContextRef.get())
-      const ctx: ActionContext<unknown> = {
-        _t: ACTION_CONTEXT,
-        type: 'internal',
-        from: 'internal',
-        body,
-        files: inherited?.files ?? {},
-        meta: inherited?.meta ?? {},
-        req: inherited?.req ?? createEmptyReq(body),
-        res: inherited?.res ?? createEmptyRes(),
-      }
-      return yield* (action as AnyType)(ctx)
+    call: operation(function* (action: AnyType, body: unknown, parent?: ActionRequest): AnyType {
+      const inheritedReq = parent ?? (yield* ActionRequestContext.get())
+      const inheritedRes = (yield* ActionResponseContext.get()) ?? null
+      const inheritedRawReq = (yield* ActionRawRequestContext.get()) ?? null
+      const inheritedRawRes = (yield* ActionRawResponseContext.get()) ?? null
+
+      const req: ActionRequest = inheritedReq
+        ? // oxlint-disable-next-line oxc/no-rest-spread-properties
+          { ...inheritedReq, type: 'internal', from: 'internal' }
+        : createEmptyReq()
+      const res: ActionResponse = inheritedRes ?? createEmptyRes()
+
+      return yield* ActionRequestContext.with(req, function* () {
+        return yield* ActionResponseContext.with(res, function* () {
+          return yield* ActionRawRequestContext.with(inheritedRawReq, function* () {
+            return yield* ActionRawResponseContext.with(inheritedRawRes, function* () {
+              return yield* (action as AnyType)(body)
+            })
+          })
+        })
+      })
     }),
 
     // oxlint-disable-next-line require-yield

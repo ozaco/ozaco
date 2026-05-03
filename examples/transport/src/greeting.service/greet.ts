@@ -22,7 +22,7 @@ export const greet = defineAction(
       Transport.actions.settings(),
     ],
   },
-  function* (ctx) {
+  function* (body) {
     console.log('worker:', process.env.id)
 
     const added = yield* useCall(MathService.actions.add, {
@@ -30,6 +30,6 @@ export const greet = defineAction(
       b: 2,
     })
 
-    return `Hi ${ctx.body.name} ${added}`
+    return `Hi ${body.name} ${added}`
   },
 )

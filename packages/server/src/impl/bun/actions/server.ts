@@ -1,5 +1,15 @@
 import type { ActionRequest, ActionResponse, Helpers, ServerContext } from 'server:core'
-import { Rest, Router, Server, Ws, statusFor } from 'server:core'
+import {
+  ActionRawRequestContext,
+  ActionRawResponseContext,
+  ActionRequestContext,
+  ActionResponseContext,
+  Rest,
+  Router,
+  Server,
+  Ws,
+  statusFor,
+} from 'server:core'
 import { operation, until, useContext, useScope } from 'std:effect'
 import { install } from 'std:plugin'
 import { asFailure, auto, fail, isFailure, isSuccess, unwrap } from 'std:result'
@@ -107,10 +117,19 @@ export const startAction = operation(function* (config) {
 
         actionReq = internal[0]
         actionRes = internal[1]
+        const body = internal[2]
 
-        const actionCtx = yield* Rest.actions.toContext(actionReq, actionRes, transformerMeta)
+        const handler = resolveActionHandler(entry.target, entry.key)
 
-        const actionResult = yield* resolveActionHandler(entry.target, entry.key)(actionCtx)
+        const actionResult = yield* ActionRequestContext.with(actionReq, function* () {
+          return yield* ActionResponseContext.with(actionRes!, function* () {
+            return yield* ActionRawRequestContext.with(request, function* () {
+              return yield* ActionRawResponseContext.with(null, function* () {
+                return yield* handler(body)
+              })
+            })
+          })
+        })
 
         return yield* Rest.actions.fromInternal(
           actionReq,

@@ -1,5 +1,11 @@
-import type { ActionContext } from 'server:core'
-import { ACTION_CONTEXT, Router, Ws } from 'server:core'
+import {
+  ActionRawRequestContext,
+  ActionRawResponseContext,
+  ActionRequestContext,
+  ActionResponseContext,
+  Router,
+  Ws,
+} from 'server:core'
 import { operation, useContext } from 'std:effect'
 import { asFailure, auto, fail } from 'std:result'
 import type { AnyType } from 'std:shared'
@@ -30,22 +36,21 @@ export const onMessageAction = operation(function* (ws: AnyType, message) {
     return
   }
 
-  const req = yield* buildRequest(ws, message)
-  const res = buildResponse(ws)
+  const [req, body] = yield* buildRequest(ws, message, entry.key ?? '')
+  const res = buildResponse()
 
   try {
-    const ctx: ActionContext<unknown> = {
-      _t: ACTION_CONTEXT,
-      type: 'ws',
-      from: entry.key ?? '',
-      body: req.body,
-      files: req.files,
-      meta: req.meta,
-      req,
-      res,
-    }
+    const handler = resolveActionHandler(entry.target, entry.key)
 
-    const actionResult = yield* resolveActionHandler(entry.target, entry.key)(ctx)
+    const actionResult = yield* ActionRequestContext.with(req, function* () {
+      return yield* ActionResponseContext.with(res, function* () {
+        return yield* ActionRawRequestContext.with(ws, function* () {
+          return yield* ActionRawResponseContext.with(ws, function* () {
+            return yield* handler(body)
+          })
+        })
+      })
+    })
 
     sendResult(ws, res, auto(actionResult))
   } catch (error) {

@@ -1,4 +1,4 @@
-import { Rest, defineAction } from 'server:core'
+import { Rest, defineAction, useRequest } from 'server:core'
 import { each } from 'std:effect'
 import { fail } from 'std:result'
 
@@ -17,18 +17,19 @@ export const rawFile = defineAction(
     ],
   },
 
-  function* (ctx) {
-    if (!ctx.req.rawBody) {
+  function* (body) {
+    const req = yield* useRequest()
+    if (!req.rawBody) {
       return yield* fail('unexpected', 'send files')
     }
 
-    const chunks = yield* each(ctx.req.rawBody)
+    const chunks = yield* each(req.rawBody)
     for (const chunk of chunks) {
       decoder.decode(chunk)
 
       yield* each.next()
     }
 
-    return ctx.body
+    return body
   },
 )

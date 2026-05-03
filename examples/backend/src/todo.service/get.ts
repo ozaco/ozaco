@@ -20,13 +20,13 @@ export const get = defineAction(
 
     settings: [Rest.actions.settings({ method: 'POST', path: '/get' })],
   },
-  function* (ctx) {
-    const session = yield* useAuth(AccessRefreshAuth, ctx.req)
+  function* (body) {
+    const session = yield* useAuth(AccessRefreshAuth)
     const db = yield* useContext(DB)
-    const row = yield* db.from(todos).where({ id: ctx.body.id }).first()
+    const row = yield* db.from(todos).where({ id: body.id }).first()
 
     if (!row) {
-      return yield* fail('not-found', `todo ${ctx.body.id} not found`)
+      return yield* fail('not-found', `todo ${body.id} not found`)
     }
     if (row.userId !== session.user.id && !session.roles.includes('admin')) {
       return yield* fail('forbidden', 'not your todo')

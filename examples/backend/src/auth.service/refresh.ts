@@ -13,7 +13,7 @@ export const refresh = defineAction(
 
     settings: [Rest.actions.settings({ method: 'POST', path: '/refresh' })],
   },
-  function* (ctx) {
-    return yield* AccessRefreshAuth.actions.refresh(ctx.body.refreshToken)
+  function* (body) {
+    return yield* AccessRefreshAuth.actions.refresh(body.refreshToken)
   },
 )

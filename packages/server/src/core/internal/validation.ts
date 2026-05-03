@@ -23,17 +23,18 @@ export const withValidation = (
   },
 ) =>
   function* (...callArgs: AnyType[]) {
+    let args = callArgs
     if (schemas.input) {
-      const ctx = callArgs[0]
-      const result = yield* validate(schemas.input, ctx.body)
+      const result = yield* validate(schemas.input, callArgs[0])
 
       if (result.issues) {
         yield* fail('validation' as const, formatIssues(result.issues), 'input')
       }
-      ctx.body = (result as StandardSchemaV1.SuccessResult<unknown>).value
+
+      args = [(result as StandardSchemaV1.SuccessResult<unknown>).value, ...callArgs.slice(1)]
     }
 
-    const output: AnyType = yield* handler(...callArgs)
+    const output: AnyType = yield* handler(...args)
 
     if (schemas.output) {
       const result = yield* validate(schemas.output, output)

@@ -1,22 +1,9 @@
-import { operation } from 'std:effect'
 import type { AnyType, StandardSchemaV1 } from 'std:shared'
 import { isFunction } from 'std:shared'
 
-import { ACTION, ACTION_CONTEXT } from '../const'
-import { ActionContextRef } from '../internal/contexts'
+import { ACTION } from '../const'
 import { withValidation } from '../internal/validation'
 import type { Impl } from '../types/impl'
-
-const withAmbientContext = (handler: AnyType) =>
-  operation(function* (...callArgs: AnyType[]) {
-    const ctx = callArgs[0]
-    if (ctx && ctx._t === ACTION_CONTEXT) {
-      return yield* ActionContextRef.with(ctx, function* () {
-        return yield* handler(...callArgs)
-      })
-    }
-    return yield* handler(...callArgs)
-  })
 
 export const defineAction: Impl.DefineAction = (...args: AnyType[]) => {
   const [configOrHandler, maybeHandler] = args
@@ -29,11 +16,10 @@ export const defineAction: Impl.DefineAction = (...args: AnyType[]) => {
   const inputSchema = config?.input as StandardSchemaV1 | undefined
   const outputSchema = config?.output as StandardSchemaV1 | undefined
 
-  const action = withAmbientContext(
+  const action =
     inputSchema || outputSchema
       ? withValidation(handler, { input: inputSchema, output: outputSchema })
-      : handler,
-  )
+      : handler
 
   Object.assign(action, {
     _t: ACTION,

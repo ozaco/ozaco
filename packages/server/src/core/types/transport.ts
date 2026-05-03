@@ -1,16 +1,16 @@
 import type { Future } from 'std:effect'
 import type { AnyType } from 'std:shared'
 
-import type { Action, ActionContext } from './action'
+import type { Action, ActionRequest } from './action'
 import type { Service } from './service'
 
 export type TransportContext = unknown
 
 export interface TransportActions extends Record<string, AnyType> {
   call<TReturn, TError>(
-    action: Action<[ActionContext<AnyType>], TReturn, TError>,
+    action: Action<[AnyType], TReturn, TError>,
     body: unknown,
-    ctx?: ActionContext<unknown> | undefined,
+    parent?: ActionRequest | undefined,
   ): Future<TReturn, TError | 'transport'>
 
   mount(service: Service): Future<void, unknown>

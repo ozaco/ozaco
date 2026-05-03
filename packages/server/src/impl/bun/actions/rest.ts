@@ -1,5 +1,5 @@
-import type { ActionContext, ActionFile, ActionRequest, ActionResponse, Helpers } from 'server:core'
-import { ACTION_CONTEXT, Rest, statusFor } from 'server:core'
+import type { ActionFile, ActionRequest, ActionResponse, Helpers } from 'server:core'
+import { Rest, statusFor } from 'server:core'
 import { operation, until, useContext } from 'std:effect'
 import { IO } from 'std:io'
 import { isFailure, isSuccess } from 'std:result'
@@ -34,23 +34,6 @@ export const settingsAction = operation(function* (options) {
 
     transformer: Rest,
   }
-})
-
-// oxlint-disable-next-line require-yield
-export const toContextAction = operation(function* (req, res, meta: AnyType) {
-  return {
-    _t: ACTION_CONTEXT,
-
-    type: 'http' as const,
-    from: (meta?.key ?? '') as string,
-
-    body: req.body,
-    files: req.files,
-    meta: req.meta,
-
-    req,
-    res,
-  } satisfies ActionContext<unknown>
 })
 
 export const toInternalAction = operation(function* (req: AnyType, _res: unknown, meta: AnyType) {
@@ -101,14 +84,14 @@ export const toInternalAction = operation(function* (req: AnyType, _res: unknown
 
   return [
     {
+      type: 'http' as const,
+      from: (meta?.key ?? '') as string,
+
       method: req.method,
       url,
 
       meta: headers,
       files,
-      body,
-
-      raw: req,
       rawBody,
     },
     {
@@ -116,10 +99,9 @@ export const toInternalAction = operation(function* (req: AnyType, _res: unknown
       body: undefined,
       files: {},
       meta: {},
-
-      raw: null,
     },
-  ] as [ActionRequest, ActionResponse]
+    body,
+  ] as [ActionRequest, ActionResponse, unknown]
 })
 
 // oxlint-disable-next-line max-params

@@ -1,8 +1,6 @@
 import type { Operation, Stream } from 'std:effect'
 import type { AnyType } from 'std:shared'
 
-import type { ACTION_CONTEXT } from '../const'
-
 import type { Helpers } from './helpers'
 
 export interface ActionFile {
@@ -13,38 +11,24 @@ export interface ActionFile {
   stream: Stream<Uint8Array, AnyType>
 }
 
-export interface ActionRequest {
-  method: string
-  url: URL
-
-  meta: Record<string, string> // headers
-  files: Record<string, ActionFile[]>
-  body: unknown
-
-  raw: unknown
-  rawBody: Stream<Uint8Array, void> | null
-}
-
 export interface ActionResponse {
   status: number | null
 
   meta: Record<string, string> // headers
   files: Record<string, ActionFile[]>
   body: unknown
-
-  raw: unknown
 }
 
-export interface ActionContext<TInput> extends Pick<ActionRequest, 'files' | 'meta'> {
-  _t: typeof ACTION_CONTEXT
-
+export interface ActionRequest {
   type: 'http' | 'ws' | 'rpc' | 'internal'
   from: string
 
-  body: TInput
+  method: string
+  url: URL
 
-  req: ActionRequest
-  res: ActionResponse
+  meta: Record<string, string> // headers
+  files: Record<string, ActionFile[]>
+  rawBody: Stream<Uint8Array, void> | null
 }
 
 export interface Action<
