@@ -9,7 +9,6 @@ const bus = createEvent<{
 
 run(function* () {
   yield* spawn(function* () {
-    // oxlint-disable-next-line require-yield
     yield* onEvent(bus, 'data', function* (name, age) {
       console.log(name, age, 'here')
     })

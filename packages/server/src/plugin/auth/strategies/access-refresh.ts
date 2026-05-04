@@ -1,7 +1,9 @@
+import { ServerErrorCode } from 'server:core'
 import { createContext, operation, useContext } from 'std:effect'
 import { definePlugin } from 'std:plugin'
 import { fail } from 'std:result'
 
+import { AuthErrorCode } from '../error-codes'
 import {
   buildAuthorize,
   confirmVerificationAction,
@@ -34,7 +36,12 @@ import type {
 
 const StrategyCtxRef = createContext<AccessRefreshContext>('server:auth:access-refresh:ctx')
 
-const issueTokenPair = operation(function* (user: AuthUser) {
+interface IssueOptions {
+  /** If set, use rotateRefreshToken to atomically swap old jti → new record. */
+  rotateFrom?: string | undefined
+}
+
+const issueTokenPair = operation(function* (user: AuthUser, opts: IssueOptions = {}) {
   const strategy = yield* useContext(StrategyCtxRef)
   const provider = yield* getProvider()
 
@@ -47,17 +54,33 @@ const issueTokenPair = operation(function* (user: AuthUser) {
   })
   const refresh = yield* signRefreshToken(user.id, strategy.refreshTTL)
 
-  if (!provider.saveRefreshToken) {
-    return yield* fail('not-provided', 'provider does not expose saveRefreshToken')
-  }
-
-  yield* provider.saveRefreshToken({
+  const newRecord = {
     jti: refresh.jti,
     userId: user.id,
     issuedAt: refresh.issuedAt,
     expiresAt: refresh.expiresAt,
     revokedAt: null,
-  })
+  }
+
+  if (opts.rotateFrom !== undefined && provider.rotateRefreshToken) {
+    yield* provider.rotateRefreshToken(opts.rotateFrom, newRecord)
+    // oxlint-disable-next-line no-negated-condition
+  } else if (opts.rotateFrom !== undefined) {
+    // legacy fallback: non-atomic rotate via revoke + save
+    if (!provider.revokeRefreshToken || !provider.saveRefreshToken) {
+      return yield* fail(
+        AuthErrorCode.NotProvided,
+        'rotation requires rotateRefreshToken or both revokeRefreshToken+saveRefreshToken',
+      )
+    }
+    yield* provider.revokeRefreshToken(opts.rotateFrom)
+    yield* provider.saveRefreshToken(newRecord)
+  } else {
+    if (!provider.saveRefreshToken) {
+      return yield* fail(AuthErrorCode.NotProvided, 'provider does not expose saveRefreshToken')
+    }
+    yield* provider.saveRefreshToken(newRecord)
+  }
 
   const session = (yield* decodePrincipalToken(access.token, TOKEN_TYPE_ACCESS)) as AuthSession
 
@@ -99,7 +122,7 @@ export const AccessRefreshAuth = definePlugin({
     const user = yield* provider.authenticate(credentials)
     if (!user) {
       events.emit('denied', 'invalid-credentials', 'authenticate returned null')
-      return yield* fail('invalid-credentials', 'authentication failed')
+      return yield* fail(AuthErrorCode.InvalidCredentials, 'authentication failed')
     }
 
     const { session, tokens } = yield* issueTokenPair(user)
@@ -114,7 +137,7 @@ export const AccessRefreshAuth = definePlugin({
     const events = yield* useContext(AuthEventsRef)
 
     if (!provider.revokeRefreshToken) {
-      return yield* fail('not-provided', 'provider does not expose revokeRefreshToken')
+      return yield* fail(AuthErrorCode.NotProvided, 'provider does not expose revokeRefreshToken')
     }
 
     const payload = yield* decodeRefreshToken(refreshToken)
@@ -128,11 +151,8 @@ export const AccessRefreshAuth = definePlugin({
     const strategy = yield* useContext(StrategyCtxRef)
     const events = yield* useContext(AuthEventsRef)
 
-    if (!provider.findRefreshToken || !provider.revokeRefreshToken || !provider.saveRefreshToken) {
-      return yield* fail(
-        'not-provided',
-        'refresh requires saveRefreshToken/findRefreshToken/revokeRefreshToken',
-      )
+    if (!provider.findRefreshToken) {
+      return yield* fail(AuthErrorCode.NotProvided, 'provider does not expose findRefreshToken')
     }
 
     const payload = yield* decodeRefreshToken(refreshToken)
@@ -140,23 +160,23 @@ export const AccessRefreshAuth = definePlugin({
     const record = yield* provider.findRefreshToken(payload.jti)
     if (!record) {
       events.emit('denied', 'revoked-token', 'refresh token not found')
-      return yield* fail('revoked-token', 'refresh token not found')
+      return yield* fail(AuthErrorCode.RevokedToken, 'refresh token not found')
     }
     if (record.revokedAt) {
       events.emit('denied', 'revoked-token', 'refresh token revoked')
-      return yield* fail('revoked-token', 'refresh token revoked')
+      return yield* fail(AuthErrorCode.RevokedToken, 'refresh token revoked')
     }
 
     const user = yield* provider.loadUser(payload.sub)
     if (!user) {
-      return yield* fail('not-found', `user "${payload.sub}" not found`)
+      return yield* fail(ServerErrorCode.NotFound, `user "${payload.sub}" not found`)
     }
 
-    if (strategy.rotateRefresh) {
-      yield* provider.revokeRefreshToken(payload.jti)
-    }
-
-    const { session, tokens } = yield* issueTokenPair(user)
+    // Rotation is atomic when provider implements rotateRefreshToken; otherwise
+    // falls back to non-atomic revoke + save (legacy).
+    const { session, tokens } = yield* issueTokenPair(user, {
+      rotateFrom: strategy.rotateRefresh ? payload.jti : undefined,
+    })
     events.emit('refreshed', session)
 
     return tokens
@@ -180,13 +200,19 @@ export const AccessRefreshAuth = definePlugin({
 
     const sso = provider.ssoProviders?.[providerName]
     if (!sso) {
-      return yield* fail('unknown-provider', `SSO provider "${providerName}" not configured`)
+      return yield* fail(
+        AuthErrorCode.UnknownProvider,
+        `SSO provider "${providerName}" not configured`,
+      )
     }
     if (!provider.linkSSO) {
-      return yield* fail('not-provided', 'provider does not expose linkSSO')
+      return yield* fail(AuthErrorCode.NotProvided, 'provider does not expose linkSSO')
     }
 
-    const profile = yield* sso.exchange(code, state)
+    // CSRF protection: provider must verify state before code exchange.
+    yield* sso.verifyState(state)
+
+    const profile = yield* sso.exchange(code)
     const user = yield* provider.linkSSO(profile)
 
     const { session, tokens } = yield* issueTokenPair(user)

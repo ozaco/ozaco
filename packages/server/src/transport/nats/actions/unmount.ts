@@ -20,7 +20,7 @@ export const unmountAction = operation(function* (service: Service) {
       continue
     }
 
-    // TODO: nested keys
+    // Nested keys (e.g. 'admin.users.list') resolve via proxy + flatten in std:plugin.
     const action = (service.actions as AnyType)[key] as Action
     const subject = (action as Action & { _subject?: string })._subject
 

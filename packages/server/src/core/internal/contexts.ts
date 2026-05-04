@@ -9,3 +9,4 @@ export const ActionRequestContext = createContext<ActionRequest>('server:action:
 export const ActionResponseContext = createContext<ActionResponse>('server:action:response')
 export const ActionRawRequestContext = createContext<unknown>('server:action:raw-request')
 export const ActionRawResponseContext = createContext<unknown>('server:action:raw-response')
+export const ActionSignalContext = createContext<AbortSignal>('server:action:signal')

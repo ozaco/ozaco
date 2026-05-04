@@ -3,7 +3,9 @@ import {
   ActionRawResponseContext,
   ActionRequestContext,
   ActionResponseContext,
+  ActionSignalContext,
   Router,
+  ServerErrorCode,
   Ws,
 } from 'server:core'
 import { operation, useContext } from 'std:effect'
@@ -17,13 +19,13 @@ export const WsImpl = Ws.implement({
   name: 'default-ws-transformer',
   version: '0.0.1',
 
-  // oxlint-disable-next-line require-yield
   *setup(options = {}) {
     return options
   },
 })
 
-export const onCloseAction = operation(function* (ws, code, reason) {
+export const onCloseAction = operation(function* (ws: AnyType, code, reason) {
+  ws?.data?.controller?.abort()
   const ctx = yield* useContext(WsImpl.context)
   if (ctx.close) {
     yield* ctx.close(ws, code, reason)
@@ -39,6 +41,9 @@ export const onMessageAction = operation(function* (ws: AnyType, message) {
   const [req, body] = yield* buildRequest(ws, message, entry.key ?? '')
   const res = buildResponse()
 
+  // ws.data.controller is set in upgrade; abort triggered on close
+  const signal: AbortSignal | undefined = ws?.data?.controller?.signal
+
   try {
     const handler = resolveActionHandler(entry.target, entry.key)
 
@@ -46,6 +51,11 @@ export const onMessageAction = operation(function* (ws: AnyType, message) {
       return yield* ActionResponseContext.with(res, function* () {
         return yield* ActionRawRequestContext.with(ws, function* () {
           return yield* ActionRawResponseContext.with(ws, function* () {
+            if (signal) {
+              return yield* ActionSignalContext.with(signal, function* () {
+                return yield* handler(body)
+              })
+            }
             return yield* handler(body)
           })
         })
@@ -65,7 +75,6 @@ export const onOpenAction = operation(function* (ws) {
   }
 })
 
-// oxlint-disable-next-line require-yield
 export const settingsAction = operation(function* (options) {
   return {
     // oxlint-disable-next-line oxc/no-rest-spread-properties
@@ -92,7 +101,7 @@ export const upgradeAction = operation(function* (req, runtime) {
   }
 
   if (!routeData) {
-    return yield* fail('not-found', `no handler for ${req.method}:${url.pathname}`)
+    return yield* fail(ServerErrorCode.NotFound, `no handler for ${req.method}:${url.pathname}`)
   }
 
   const [sym, params] = routeData
@@ -100,7 +109,7 @@ export const upgradeAction = operation(function* (req, runtime) {
   const entry = routerCtx.handlers.get(sym)
 
   if (!entry) {
-    return yield* fail('not-found', `no handler for ${req.method}:${url.pathname}`)
+    return yield* fail(ServerErrorCode.NotFound, `no handler for ${req.method}:${url.pathname}`)
   }
 
   const server = runtime as Bun.Server<unknown>
@@ -112,6 +121,7 @@ export const upgradeAction = operation(function* (req, runtime) {
       headers,
       params,
       entry,
+      controller: new AbortController(),
     },
   })
 
@@ -119,5 +129,5 @@ export const upgradeAction = operation(function* (req, runtime) {
     return true
   }
 
-  return yield* fail('server-internal', 'cannot upgrade')
+  return yield* fail(ServerErrorCode.ServerInternal, 'cannot upgrade')
 })

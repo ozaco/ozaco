@@ -9,7 +9,7 @@ import { run } from './run'
 
 export const operation =
   <Args extends AnyType[], T, E = never>(
-    fn: (...args: Args) => Generator<Failure<E> | Helpers.Effect<unknown>, T, unknown>,
+    fn: (...args: Args) => Generator<Helpers.Effect<unknown> | Helpers.FailureOf<E>, T, unknown>,
     ...causes: string[]
   ): ((...args: Args) => Future<T, E>) =>
   (...args) => {
@@ -20,7 +20,7 @@ export const operation =
         const inner = fn(...args)
         return {
           next(value: unknown) {
-            let step: IteratorResult<Failure<E> | Helpers.Effect<unknown>, T>
+            let step: IteratorResult<Helpers.Effect<unknown> | Failure<E>, T>
 
             try {
               step = inner.next(value)
@@ -37,11 +37,14 @@ export const operation =
             const effect = step.value as Helpers.Effect<unknown>
             return {
               done: false,
-              value: [effect[0], `${desc} > ${effect[1]}`],
+              value: {
+                enter: effect.enter,
+                cause: `${desc} > ${effect.cause}`,
+              },
             }
           },
           throw(error: unknown) {
-            let step: IteratorResult<Failure<E> | Helpers.Effect<unknown>, T>
+            let step: IteratorResult<Helpers.Effect<unknown> | Failure<E>, T>
 
             try {
               step = inner.throw?.(error)
@@ -61,7 +64,10 @@ export const operation =
             const effect = step.value as Helpers.Effect<unknown>
             return {
               done: false,
-              value: [effect[0], `${desc} > ${effect[1]}`],
+              value: {
+                enter: effect.enter,
+                cause: `${desc} > ${effect.cause}`,
+              },
             }
           },
           return(value: unknown) {

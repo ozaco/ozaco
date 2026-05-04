@@ -1,3 +1,5 @@
+import type { KebabToPascal } from './string'
+
 // oxlint-disable-next-line typescript/no-explicit-any
 export type AnyType = any
 
@@ -8,6 +10,10 @@ export type AnyFunction = (value: AnyType) => AnyType
 
 export type Writable<T> = { -readonly [P in keyof T]: T[P] }
 export type WriteableDeep<T> = { -readonly [P in keyof T]: WriteableDeep<T[P]> }
+
+export type Tags<T extends string | null, U extends string[]> = {
+  readonly [K in U[number] as KebabToPascal<K>]: T extends null ? K : `${T}.${K}`
+}
 
 export type IsPromise<T> = T extends Promise<AnyType> ? true : false
 export type IsPromiseStrict<T> = object extends T

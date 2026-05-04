@@ -1,9 +1,10 @@
-import type { Action, ActionRequest, ActionResponse } from 'server:core'
+import type { Action, ActionRequest, ActionResponse, CallOptions } from 'server:core'
 import {
   ActionRawRequestContext,
   ActionRawResponseContext,
   ActionRequestContext,
   ActionResponseContext,
+  ActionSignalContext,
   createEmptyReq,
   createEmptyRes,
 } from 'server:core'
@@ -21,9 +22,10 @@ const DEFAULT_TIMEOUT = 5000
 export const callAction: AnyType = operation(function* (
   action: Action,
   body: unknown,
-  parent?: ActionRequest,
+  options?: CallOptions,
 ) {
   const ctx = yield* useContext(NatsTransportImpl.context)
+  const parent = options?.parent
   const inheritedReq = parent ?? (yield* ActionRequestContext.get())
   const inheritedRes = (yield* ActionResponseContext.get()) ?? null
   const inheritedRawReq = (yield* ActionRawRequestContext.get()) ?? null
@@ -47,6 +49,11 @@ export const callAction: AnyType = operation(function* (
       return yield* ActionResponseContext.with(res, function* () {
         return yield* ActionRawRequestContext.with(inheritedRawReq, function* () {
           return yield* ActionRawResponseContext.with(inheritedRawRes, function* () {
+            if (options?.signal) {
+              return yield* ActionSignalContext.with(options.signal, function* () {
+                return yield* (action as AnyType)(body)
+              })
+            }
             return yield* (action as AnyType)(body)
           })
         })
@@ -55,9 +62,10 @@ export const callAction: AnyType = operation(function* (
     return result
   }
 
+  const timeoutMs = options?.timeoutMs ?? ctx.options.requestTimeoutMs ?? DEFAULT_TIMEOUT
   const msg = yield* until(
     ctx.nc.request(subject, encodeBody(body), {
-      timeout: ctx.options.requestTimeoutMs ?? DEFAULT_TIMEOUT,
+      timeout: timeoutMs,
     }),
   )
 

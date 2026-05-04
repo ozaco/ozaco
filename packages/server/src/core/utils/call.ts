@@ -10,5 +10,5 @@ export const useCall = operation(function* <TReturn, TError>(
   body: unknown,
 ) {
   const ambient = yield* ActionRequestContext.get()
-  return yield* Transport.actions.call(action, body, ambient ?? undefined)
+  return yield* Transport.actions.call(action, body, { parent: ambient ?? undefined })
 })

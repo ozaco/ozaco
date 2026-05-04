@@ -24,18 +24,15 @@ export const NodeIO = IO.implement({
 }).build({
   env: readEnv,
 
-  // oxlint-disable-next-line require-yield
   randomBytes: operation(function* (length) {
     return new Uint8Array(nodeRandomBytes(length))
   }),
 
-  // oxlint-disable-next-line require-yield
   hmac: operation(function* (algorithm, key, data) {
     const mac = createHmac(toNodeHash(algorithm), key).update(data).digest()
     return new Uint8Array(mac)
   }),
 
-  // oxlint-disable-next-line require-yield
   hash: operation(function* (algorithm, data) {
     const digest = createHash(toNodeHash(algorithm)).update(data).digest()
     return new Uint8Array(digest)

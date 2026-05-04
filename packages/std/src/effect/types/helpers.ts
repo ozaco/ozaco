@@ -26,19 +26,19 @@ export namespace Helpers {
 
   export type Resolve<T> = (value: T) => void
 
-  export type Effect<T> = [
+  export type Effect<T> = {
     enter: (
       resolve: Helpers.Resolve<Result<T, unknown>>,
       routine: Coroutine,
-    ) => (resolve: Helpers.Resolve<Result<void, unknown>>) => void,
-    cause: string,
-  ]
+    ) => (resolve: Helpers.Resolve<Result<void, unknown>>) => void
+    cause: string
+  }
 
   export interface Coroutine<T = unknown> {
     scope: Scope
     data: {
       exit(resolve: Helpers.Resolve<Result<unknown, unknown>>): void
-      iterator: Iterator<Effect<unknown>, T, unknown>
+      iterator: Iterator<Effect<unknown> | Failure<never>, T, unknown>
     }
     next(result: Result<unknown, unknown>): void
     return<R>(result: Result<R, unknown>): void

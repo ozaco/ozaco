@@ -19,7 +19,6 @@ const DefaultLoggerImpl = Logger.implement<
   version: '0.0.1',
   description: 'logger; reads transports from the LoggerTransport registry',
 
-  // oxlint-disable-next-line require-yield
   *setup(options = {}) {
     const level = options.level ?? LogLevel.info
 

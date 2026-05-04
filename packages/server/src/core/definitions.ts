@@ -8,6 +8,7 @@ import {
   ActionRawResponseContext,
   ActionRequestContext,
   ActionResponseContext,
+  ActionSignalContext,
 } from './internal/contexts'
 import type { ActionRequest, ActionResponse } from './types/action'
 import type { RestTransformerActions, RestTransformerContext } from './types/rest'
@@ -51,7 +52,6 @@ export const Ws = defineProtocol<
   subtype: WS_TRANSFORMER,
 
   defaultActions: {
-    // oxlint-disable-next-line require-yield
     upgrade: operation(function* () {
       return false
     }),
@@ -64,7 +64,8 @@ export const Transport = defineProtocol<TransportContext, unknown, unknown[], Tr
   subtype: TRANSPORT,
 
   defaultActions: {
-    call: operation(function* (action: AnyType, body: unknown, parent?: ActionRequest): AnyType {
+    call: operation(function* (action: AnyType, body: unknown, options?: AnyType): AnyType {
+      const parent = options?.parent as ActionRequest | undefined
       const inheritedReq = parent ?? (yield* ActionRequestContext.get())
       const inheritedRes = (yield* ActionResponseContext.get()) ?? null
       const inheritedRawReq = (yield* ActionRawRequestContext.get()) ?? null
@@ -76,10 +77,17 @@ export const Transport = defineProtocol<TransportContext, unknown, unknown[], Tr
         : createEmptyReq()
       const res: ActionResponse = inheritedRes ?? createEmptyRes()
 
+      const signal = options?.signal as AbortSignal | undefined
+
       return yield* ActionRequestContext.with(req, function* () {
         return yield* ActionResponseContext.with(res, function* () {
           return yield* ActionRawRequestContext.with(inheritedRawReq, function* () {
             return yield* ActionRawResponseContext.with(inheritedRawRes, function* () {
+              if (signal) {
+                return yield* ActionSignalContext.with(signal, function* () {
+                  return yield* (action as AnyType)(body)
+                })
+              }
               return yield* (action as AnyType)(body)
             })
           })
@@ -87,7 +95,6 @@ export const Transport = defineProtocol<TransportContext, unknown, unknown[], Tr
       })
     }),
 
-    // oxlint-disable-next-line require-yield
     settings: operation(function* (options: AnyType = {}) {
       const transport = Transport as AnyType
 

@@ -1,6 +1,7 @@
 import { operation } from 'std:effect'
 import { fail } from 'std:result'
 
+import { AuthErrorCode } from '../error-codes'
 import type { AuthProvider, AuthUser } from '../types'
 
 import { AuthProviderRef } from './contexts'
@@ -22,7 +23,7 @@ export const parseDuration = operation(function* (value: string | number) {
   const trimmed = value.trim()
   const match = /^(\d+)\s*(ms|s|m|h|d|w)?$/.exec(trimmed)
   if (!match) {
-    return yield* fail('invalid-duration', `invalid duration: "${value}"`)
+    return yield* fail(AuthErrorCode.InvalidDuration, `invalid duration: "${value}"`)
   }
 
   const n = Number(match[1])
@@ -34,7 +35,7 @@ export const getProvider = operation(function* () {
   const provider = yield* AuthProviderRef.get()
   if (!provider) {
     return yield* fail(
-      'not-provided',
+      AuthErrorCode.NotProvided,
       'Auth provider not configured. Call Auth.actions.provide(...) first.',
     )
   }

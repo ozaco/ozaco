@@ -22,3 +22,5 @@ export const NatsTransport = NatsTransportImpl.build({
   isStarted: isStartedAction,
   isPaused: isPausedAction,
 })
+
+export * from './error-codes'

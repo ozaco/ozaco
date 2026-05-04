@@ -7,6 +7,7 @@ import type { Helpers } from './helpers'
 
 export interface RestTransformerContext {
   statusMap?: Record<string, number> | undefined
+  maxBodyBytes?: number | undefined
 }
 
 export interface RestTransformerActions extends Record<string, AnyType> {

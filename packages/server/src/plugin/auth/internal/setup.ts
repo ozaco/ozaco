@@ -1,29 +1,78 @@
-import { operation } from 'std:effect'
+import { ServerErrorCode } from 'server:core'
+import { operation, until } from 'std:effect'
 import { createEvent } from 'std:event'
 import { fail } from 'std:result'
+import type { AnyType } from 'std:shared'
 
-import type { BaseAuthOptions } from '../types'
+import { importPKCS8, importSPKI } from 'jose'
+
+import type { BaseAuthOptions, JWTAlgorithm, JWTKey, ResolvedKey } from '../types'
 
 import { DEFAULT_ALGORITHM, DEFAULT_VERIFICATION_TTL } from './const'
-import { AuthBaseCtxRef, AuthEventsRef, AuthProviderRef, AuthSecretRef } from './contexts'
+import {
+  AuthBaseCtxRef,
+  AuthEventsRef,
+  AuthProviderRef,
+  AuthSignKeyRef,
+  AuthVerifyKeyRef,
+} from './contexts'
 import { parseDuration } from './helpers'
 
+const isHmac = (alg: JWTAlgorithm): boolean => alg.startsWith('HS')
+
+const importKey = operation(function* (
+  key: JWTKey,
+  algorithm: JWTAlgorithm,
+  kind: 'private' | 'public',
+): Generator<AnyType, ResolvedKey, AnyType> {
+  if (typeof key !== 'string') {
+    return key as ResolvedKey
+  }
+  const imported = yield* until(
+    kind === 'private' ? importPKCS8(key, algorithm) : importSPKI(key, algorithm),
+  )
+  return imported as ResolvedKey
+})
+
 export const initializeBaseAuth = operation(function* (options: BaseAuthOptions) {
-  if (!options.secret) {
-    return yield* fail('unexpected', 'Auth requires a non-empty secret')
+  const algorithm = options.algorithm ?? DEFAULT_ALGORITHM
+
+  let signKey: ResolvedKey
+  let verifyKey: ResolvedKey
+
+  if (isHmac(algorithm)) {
+    if (!options.secret) {
+      return yield* fail(
+        ServerErrorCode.Unexpected,
+        `Auth ${algorithm} requires a non-empty 'secret'`,
+      )
+    }
+    const bytes = new TextEncoder().encode(options.secret)
+    signKey = bytes
+    verifyKey = bytes
+  } else {
+    if (!options.privateKey || !options.publicKey) {
+      return yield* fail(
+        ServerErrorCode.Unexpected,
+        `Auth ${algorithm} requires both 'privateKey' and 'publicKey'`,
+      )
+    }
+    signKey = yield* importKey(options.privateKey, algorithm, 'private')
+    verifyKey = yield* importKey(options.publicKey, algorithm, 'public')
   }
 
   const ctx = {
     issuer: options.issuer ?? null,
     audience: options.audience ?? null,
-    algorithm: options.algorithm ?? DEFAULT_ALGORITHM,
+    algorithm,
     verificationTTL: yield* parseDuration(
       options.verification?.expiresIn ?? DEFAULT_VERIFICATION_TTL,
     ),
   }
 
   yield* AuthBaseCtxRef.set(ctx)
-  yield* AuthSecretRef.set(new TextEncoder().encode(options.secret))
+  yield* AuthSignKeyRef.set(signKey)
+  yield* AuthVerifyKeyRef.set(verifyKey)
   yield* AuthProviderRef.set(null)
   yield* AuthEventsRef.set(createEvent())
 

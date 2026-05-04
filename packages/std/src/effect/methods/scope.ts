@@ -28,11 +28,11 @@ export function createScope(
 }
 
 export function* useScope(): Operation<Scope> {
-  return (yield [
-    (rootResolve, { scope }) => {
+  return (yield {
+    enter: (rootResolve, { scope }) => {
       rootResolve(succeed(scope))
       return resolve => resolve(succeed())
     },
-    'useScope()',
-  ] as Helpers.Effect<Scope>) as Scope
+    cause: 'useScope()',
+  } as Helpers.Effect<Scope>) as Scope
 }

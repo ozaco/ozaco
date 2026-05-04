@@ -39,7 +39,6 @@ export const encodeWsBody = (body: unknown): string | ArrayBufferView | ArrayBuf
   return JSON.stringify(body)
 }
 
-// oxlint-disable-next-line require-yield
 export const buildRequest = operation(function* (ws: AnyType, payload: unknown, from: string) {
   const data = (ws?.data ?? {}) as {
     url?: string
@@ -77,7 +76,6 @@ export const buildResponse = (): ActionResponse => ({
   meta: { 'content-type': JSON_CONTENT },
 })
 
-// oxlint-disable-next-line require-yield
 export const sendResult = operation(function* (
   ws: AnyType,
   res: ActionResponse | null,

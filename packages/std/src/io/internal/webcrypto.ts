@@ -2,7 +2,6 @@ import { operation, until } from 'std:effect'
 
 import type { HashAlgorithm } from '../types/common'
 
-// oxlint-disable-next-line require-yield
 export const webRandomBytes = operation(function* (length: number) {
   const out = new Uint8Array(length)
   crypto.getRandomValues(out)

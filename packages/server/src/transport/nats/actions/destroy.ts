@@ -9,6 +9,7 @@ export const destroyAction = operation(function* () {
     sub.unsubscribe()
   }
   ctx.subscriptions.clear()
+  ctx.subjects.clear()
 
   yield* until(ctx.nc.close())
 

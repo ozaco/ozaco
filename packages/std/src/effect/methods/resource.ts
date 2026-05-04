@@ -30,10 +30,10 @@ export const resource = <T>(
 
       start()
 
-      return (yield [
-        () => (uninstalled: Helpers.Resolve<unknown>) => uninstalled(succeed()),
-        'await resource',
-      ] as Helpers.Effect<T>) as T
+      return (yield {
+        enter: () => (uninstalled: Helpers.Resolve<unknown>) => uninstalled(succeed()),
+        cause: 'await resource',
+      } as Helpers.Effect<T>) as T
     })
   },
 })

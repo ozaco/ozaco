@@ -2,6 +2,7 @@ import { createContext, operation, useContext } from 'std:effect'
 import { definePlugin } from 'std:plugin'
 import { fail } from 'std:result'
 
+import { AuthErrorCode } from '../error-codes'
 import {
   buildAuthorize,
   confirmVerificationAction,
@@ -72,7 +73,7 @@ export const JWTSessionAuth = definePlugin({
     const user = yield* provider.authenticate(credentials)
     if (!user) {
       events.emit('denied', 'invalid-credentials', 'authenticate returned null')
-      return yield* fail('invalid-credentials', 'authentication failed')
+      return yield* fail(AuthErrorCode.InvalidCredentials, 'authentication failed')
     }
 
     const { session, tokens } = yield* issueSessionToken(user)
@@ -106,13 +107,19 @@ export const JWTSessionAuth = definePlugin({
 
     const sso = provider.ssoProviders?.[providerName]
     if (!sso) {
-      return yield* fail('unknown-provider', `SSO provider "${providerName}" not configured`)
+      return yield* fail(
+        AuthErrorCode.UnknownProvider,
+        `SSO provider "${providerName}" not configured`,
+      )
     }
     if (!provider.linkSSO) {
-      return yield* fail('not-provided', 'provider does not expose linkSSO')
+      return yield* fail(AuthErrorCode.NotProvided, 'provider does not expose linkSSO')
     }
 
-    const profile = yield* sso.exchange(code, state)
+    // CSRF protection: provider must verify state before code exchange.
+    yield* sso.verifyState(state)
+
+    const profile = yield* sso.exchange(code)
     const user = yield* provider.linkSSO(profile)
 
     const { session, tokens } = yield* issueSessionToken(user)

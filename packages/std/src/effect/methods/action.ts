@@ -6,8 +6,8 @@ import type { Operation } from '../types/operation'
 
 export const action = <T>(executor: Helpers.Executor<T>, desc?: string): Operation<T> => ({
   *[Symbol.iterator]() {
-    const effect: Helpers.Effect<T> = [
-      settle => {
+    const effect: Helpers.Effect<T> = {
+      enter: settle => {
         const resolve = (value: T) => {
           settle(auto(value) as Result<T, never>)
         }
@@ -24,8 +24,8 @@ export const action = <T>(executor: Helpers.Executor<T>, desc?: string): Operati
           }
         }
       },
-      desc ?? 'action',
-    ]
+      cause: desc ?? 'action',
+    }
 
     return (yield effect) as T
   },

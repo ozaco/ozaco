@@ -1,8 +1,8 @@
 import type { ActionFile, ActionRequest, ActionResponse, Helpers } from 'server:core'
-import { Rest, statusFor } from 'server:core'
+import { Rest, ServerErrorCode, statusFor } from 'server:core'
 import { operation, until, useContext } from 'std:effect'
 import { IO } from 'std:io'
-import { isFailure, isSuccess } from 'std:result'
+import { fail, isFailure, isSuccess } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import { BODY_METHODS, FORM_DATA, FORM_URLENCODED, JSON_CONTENT, RAW_BINARY } from '../const'
@@ -18,13 +18,11 @@ export const RestImpl = Rest.implement({
   name: 'default-rest-transformer',
   version: '0.0.1',
 
-  // oxlint-disable-next-line require-yield
   *setup(options = {}) {
     return options
   },
 })
 
-// oxlint-disable-next-line require-yield
 export const settingsAction = operation(function* (options) {
   return {
     // oxlint-disable-next-line oxc/no-rest-spread-properties
@@ -37,6 +35,9 @@ export const settingsAction = operation(function* (options) {
 })
 
 export const toInternalAction = operation(function* (req: AnyType, _res: unknown, meta: AnyType) {
+  const ctx = yield* useContext(RestImpl.context)
+  const maxBytes = ctx.maxBodyBytes
+
   const url = new URL(req.url)
   const headers = Object.fromEntries(req.headers.entries())
   const fileMatcher = meta.setting?.files as Helpers.RestTransformerOptions['files']
@@ -48,8 +49,27 @@ export const toInternalAction = operation(function* (req: AnyType, _res: unknown
   if (BODY_METHODS.has(req.method.toUpperCase())) {
     const contentType = req.headers.get('content-type') ?? ''
 
+    // Up-front Content-Length guard (cheap; doesn't catch chunked uploads but limits obvious cases)
+    if (maxBytes !== undefined) {
+      const declared = req.headers.get('content-length')
+      if (declared && Number(declared) > maxBytes) {
+        return yield* fail(
+          ServerErrorCode.PayloadTooLarge,
+          `body exceeds ${maxBytes} bytes (Content-Length: ${declared})`,
+        )
+      }
+    }
+
     if (contentType.includes(JSON_CONTENT)) {
-      parsedBody = yield* until(req.json())
+      const text: string = yield* until(req.text())
+      if (maxBytes !== undefined && text.length > maxBytes) {
+        return yield* fail(ServerErrorCode.PayloadTooLarge, `body exceeds ${maxBytes} bytes`)
+      }
+      try {
+        parsedBody = text.length === 0 ? null : JSON.parse(text)
+      } catch (error) {
+        return yield* fail(ServerErrorCode.Validation, `invalid JSON: ${String(error)}`)
+      }
     } else if (contentType.includes(FORM_DATA) || contentType.includes(FORM_URLENCODED)) {
       const form: FormData = yield* until(req.formData())
       const fields: Record<string, unknown> = {}

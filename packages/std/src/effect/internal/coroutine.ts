@@ -54,11 +54,11 @@ export const createCoroutine = <T>({
 }
 
 export function* useCoroutine(): Operation<Helpers.Coroutine> {
-  return (yield [
-    (resolve, routine) => {
+  return (yield {
+    enter: (resolve, routine) => {
       resolve(succeed(routine))
       return uninstalled => uninstalled(succeed())
     },
-    'useCoroutine()',
-  ] as Helpers.Effect<Helpers.Coroutine>) as Helpers.Coroutine
+    cause: 'useCoroutine()',
+  } as Helpers.Effect<Helpers.Coroutine>) as Helpers.Coroutine
 }

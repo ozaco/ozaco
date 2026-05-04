@@ -1,9 +1,10 @@
 import { operation, useContext } from 'std:effect'
 import { fail } from 'std:result'
 
+import { AuthErrorCode } from '../error-codes'
 import type { AuthSession, PrincipalClaims } from '../types'
 
-import { AuthBaseCtxRef, AuthSecretRef } from './contexts'
+import { AuthBaseCtxRef, AuthSignKeyRef, AuthVerifyKeyRef } from './contexts'
 import { randomJti, signJWT, verifyJWT } from './jwt'
 
 export const signPrincipalToken = operation(function* (
@@ -12,7 +13,7 @@ export const signPrincipalToken = operation(function* (
   { user, roles, permissions }: PrincipalClaims,
 ) {
   const ctx = yield* useContext(AuthBaseCtxRef)
-  const secret = yield* useContext(AuthSecretRef)
+  const secret = yield* useContext(AuthSignKeyRef)
 
   const nowMs = Date.now()
   const now = Math.floor(nowMs / 1000)
@@ -43,7 +44,7 @@ export const signPrincipalToken = operation(function* (
 
 export const signRefreshToken = operation(function* (userId: string, ttlMs: number) {
   const ctx = yield* useContext(AuthBaseCtxRef)
-  const secret = yield* useContext(AuthSecretRef)
+  const secret = yield* useContext(AuthSignKeyRef)
 
   const nowMs = Date.now()
   const now = Math.floor(nowMs / 1000)
@@ -70,17 +71,17 @@ export const signRefreshToken = operation(function* (userId: string, ttlMs: numb
 })
 
 export const decodePrincipalToken = operation(function* (token: string, expectedType: string) {
-  const secret = yield* useContext(AuthSecretRef)
+  const verifyKey = yield* useContext(AuthVerifyKeyRef)
   const ctx = yield* useContext(AuthBaseCtxRef)
 
-  const payload = yield* verifyJWT(secret, token, {
+  const payload = yield* verifyJWT(verifyKey, token, {
     issuer: ctx.issuer,
     audience: ctx.audience,
   })
 
   if (payload.type !== expectedType) {
     return yield* fail(
-      'invalid-token',
+      AuthErrorCode.InvalidToken,
       `expected ${expectedType} token, got ${String(payload.type)}`,
     )
   }
@@ -89,16 +90,16 @@ export const decodePrincipalToken = operation(function* (token: string, expected
 })
 
 export const decodeRefreshToken = operation(function* (token: string) {
-  const secret = yield* useContext(AuthSecretRef)
+  const verifyKey = yield* useContext(AuthVerifyKeyRef)
   const ctx = yield* useContext(AuthBaseCtxRef)
 
-  const payload = yield* verifyJWT(secret, token, {
+  const payload = yield* verifyJWT(verifyKey, token, {
     issuer: ctx.issuer,
     audience: ctx.audience,
   })
 
   if (payload.type !== 'refresh') {
-    return yield* fail('invalid-token', 'not a refresh token')
+    return yield* fail(AuthErrorCode.InvalidToken, 'not a refresh token')
   }
 
   return payload as { sub: string; jti: string; iat: number; exp: number }

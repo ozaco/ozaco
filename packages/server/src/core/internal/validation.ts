@@ -2,6 +2,8 @@ import { operation, until } from 'std:effect'
 import { fail } from 'std:result'
 import type { AnyType, StandardSchemaV1 } from 'std:shared'
 
+import { ServerErrorCode } from '../error-codes'
+
 const validate = operation(function* (schema: StandardSchemaV1, value: unknown) {
   const result = schema['~standard'].validate(value)
 
@@ -28,21 +30,18 @@ export const withValidation = (
       const result = yield* validate(schemas.input, callArgs[0])
 
       if (result.issues) {
-        yield* fail('validation' as const, formatIssues(result.issues), 'input')
+        yield* fail(ServerErrorCode.Validation, formatIssues(result.issues), 'input')
       }
 
       args = [(result as StandardSchemaV1.SuccessResult<unknown>).value, ...callArgs.slice(1)]
     }
 
-    const output: AnyType = yield* handler(...args)
+    // Output schema is intentionally NOT validated at runtime.
+    // It exists for documentation (OpenAPI generation via getMeta(key).output)
+    // and for the user to validate explicitly inside the handler if desired.
+    // Runtime validation post-handler creates a side-effect rollback time-window
+    // that conflicts with `ensure(...)` cleanup semantics — handler can't know
+    // if validation will fail before deciding commit vs rollback.
 
-    if (schemas.output) {
-      const result = yield* validate(schemas.output, output)
-      if (result.issues) {
-        yield* fail('validation' as const, formatIssues(result.issues), 'output')
-      }
-      return (result as StandardSchemaV1.SuccessResult<unknown>).value
-    }
-
-    return output
+    return yield* handler(...args)
   }

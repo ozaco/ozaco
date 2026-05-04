@@ -62,7 +62,6 @@ export function createScopeInternal(
     },
     spawn<T>(operation: () => Operation<T>): Operation<Task<T>> {
       return {
-        // oxlint-disable-next-line require-yield
         *[Symbol.iterator]() {
           const { task, start } = createTask({ operation, owner: scope })
           start()

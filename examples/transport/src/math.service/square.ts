@@ -11,7 +11,7 @@ export const square = defineAction(
       value: z.number(),
     }),
   },
-  // oxlint-disable-next-line require-yield
+
   function* (body) {
     return body.value * body.value
   },

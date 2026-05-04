@@ -3,7 +3,6 @@ import type { AnyType } from 'std:shared'
 
 import { NatsTransport } from '..'
 
-// oxlint-disable-next-line require-yield
 export const settingsAction = operation(function* (options = {}) {
   const transport = NatsTransport as AnyType
 

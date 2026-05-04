@@ -4,6 +4,7 @@ import {
   ActionRawResponseContext,
   ActionRequestContext,
   ActionResponseContext,
+  ActionSignalContext,
 } from 'server:core'
 import { createChannel, each, operation, spawn, until, useContext, useScope } from 'std:effect'
 import { asFailure, auto, fail } from 'std:result'
@@ -11,6 +12,7 @@ import type { AnyType } from 'std:shared'
 
 import type { Msg } from '@nats-io/nats-core'
 
+import { NatsErrorCode } from '../error-codes'
 import { decodeBody, encodeResult } from '../internal/codec'
 
 import { NatsTransportImpl } from './impl'
@@ -49,7 +51,7 @@ export const startAction = operation(function* () {
     yield* spawn(function* () {
       for (const msg of yield* each(channel)) {
         if (ctx.isPaused) {
-          msg.respond(encodeResult(fail('transport-paused', String(ctx.isPaused))))
+          msg.respond(encodeResult(fail(NatsErrorCode.TransportPaused, String(ctx.isPaused))))
 
           continue
         }
@@ -68,11 +70,14 @@ export const startAction = operation(function* () {
             }
             const res: ActionResponse = { status: null, meta: {}, files: {}, body: null }
 
+            const controller = new AbortController()
             return yield* ActionRequestContext.with(req, function* () {
               return yield* ActionResponseContext.with(res, function* () {
                 return yield* ActionRawRequestContext.with(msg, function* () {
                   return yield* ActionRawResponseContext.with(null, function* () {
-                    return yield* (entry.action as AnyType)(body)
+                    return yield* ActionSignalContext.with(controller.signal, function* () {
+                      return yield* (entry.action as AnyType)(body)
+                    })
                   })
                 })
               })

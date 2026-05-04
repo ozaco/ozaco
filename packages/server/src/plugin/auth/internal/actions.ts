@@ -1,6 +1,8 @@
+import { ServerErrorCode } from 'server:core'
 import { operation, useContext } from 'std:effect'
 import { fail } from 'std:result'
 
+import { AuthErrorCode } from '../error-codes'
 import type { AuthProvider, AuthSession, VerificationRecord } from '../types'
 
 import { AuthBaseCtxRef, AuthEventsRef, AuthProviderRef } from './contexts'
@@ -24,12 +26,10 @@ export const buildAuthorize = (expectedType: string) =>
     return session
   })
 
-// oxlint-disable-next-line require-yield
 export const hasRoleAction = operation(function* (session: AuthSession, role: string) {
   return session.roles.includes(role)
 })
 
-// oxlint-disable-next-line require-yield
 export const hasPermissionAction = operation(function* (session: AuthSession, permission: string) {
   return session.permissions.includes(permission)
 })
@@ -38,7 +38,7 @@ export const requireRoleAction = operation(function* (session: AuthSession, role
   if (!session.roles.includes(role)) {
     const events = yield* useContext(AuthEventsRef)
     events.emit('denied', 'forbidden', `missing role: ${role}`)
-    return yield* fail('forbidden', `missing role: ${role}`)
+    return yield* fail(ServerErrorCode.Forbidden, `missing role: ${role}`)
   }
 })
 
@@ -49,7 +49,7 @@ export const requirePermissionAction = operation(function* (
   if (!session.permissions.includes(permission)) {
     const events = yield* useContext(AuthEventsRef)
     events.emit('denied', 'forbidden', `missing permission: ${permission}`)
-    return yield* fail('forbidden', `missing permission: ${permission}`)
+    return yield* fail(ServerErrorCode.Forbidden, `missing permission: ${permission}`)
   }
 })
 
@@ -62,7 +62,7 @@ export const issueVerificationAction = operation(function* (
   const ctx = yield* useContext(AuthBaseCtxRef)
 
   if (!provider.saveVerification) {
-    return yield* fail('not-provided', 'provider does not expose saveVerification')
+    return yield* fail(AuthErrorCode.NotProvided, 'provider does not expose saveVerification')
   }
 
   const token = yield* randomToken(32)
@@ -84,21 +84,21 @@ export const confirmVerificationAction = operation(function* (token: string, pur
   const events = yield* useContext(AuthEventsRef)
 
   if (!provider.findVerification || !provider.consumeVerification) {
-    return yield* fail('not-provided', 'provider does not expose verification hooks')
+    return yield* fail(AuthErrorCode.NotProvided, 'provider does not expose verification hooks')
   }
 
   const record = yield* provider.findVerification(token)
   if (!record) {
-    return yield* fail('invalid-token', 'verification token not found')
+    return yield* fail(AuthErrorCode.InvalidToken, 'verification token not found')
   }
   if (record.consumedAt) {
-    return yield* fail('verification-consumed', 'verification already consumed')
+    return yield* fail(AuthErrorCode.VerificationConsumed, 'verification already consumed')
   }
   if (record.expiresAt < Date.now()) {
-    return yield* fail('expired-token', 'verification expired')
+    return yield* fail(AuthErrorCode.ExpiredToken, 'verification expired')
   }
   if (record.purpose !== purpose) {
-    return yield* fail('invalid-token', 'verification purpose mismatch')
+    return yield* fail(AuthErrorCode.InvalidToken, 'verification purpose mismatch')
   }
 
   yield* provider.consumeVerification(token)
@@ -111,10 +111,14 @@ export const ssoAuthorizeAction = operation(function* (providerName: string) {
   const provider = yield* getProvider()
   const sso = provider.ssoProviders?.[providerName]
   if (!sso) {
-    return yield* fail('unknown-provider', `SSO provider "${providerName}" not configured`)
+    return yield* fail(
+      AuthErrorCode.UnknownProvider,
+      `SSO provider "${providerName}" not configured`,
+    )
   }
 
-  const state = yield* randomToken(24)
+  // Provider issues the CSRF state (and binds it to the user's pre-auth context).
+  const state = yield* sso.generateState()
   const url = yield* sso.authorize(state)
 
   return { url, state }

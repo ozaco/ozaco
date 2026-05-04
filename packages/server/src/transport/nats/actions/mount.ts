@@ -22,7 +22,7 @@ export const mountAction = operation(function* (service: Service) {
     }
 
     const setting = settings[0]!
-    // TODO: nested keys
+    // Nested keys (e.g. 'admin.users.list') resolve via proxy + flatten in std:plugin.
     const action = (service.actions as AnyType)[key] as Action
     const subject = setting.subject ?? `${service.name}@${service.version}#${key}`
 

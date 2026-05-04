@@ -1,10 +1,12 @@
 import { operation, until } from 'std:effect'
 import { IO } from 'std:io'
 import { fail, isFailure } from 'std:result'
+import type { AnyType } from 'std:shared'
 
 import { errors, jwtVerify, SignJWT } from 'jose'
 
-import type { JWTAlgorithm } from '../types'
+import { AuthErrorCode } from '../error-codes'
+import type { JWTAlgorithm, ResolvedKey } from '../types'
 
 const base64urlEncode = (bytes: Uint8Array): string => {
   let str = ''
@@ -15,16 +17,16 @@ const base64urlEncode = (bytes: Uint8Array): string => {
 }
 
 export const signJWT = operation(function* (
-  secret: Uint8Array,
+  key: ResolvedKey,
   alg: JWTAlgorithm,
   payload: Record<string, unknown>,
 ) {
   const jwt = new SignJWT(payload).setProtectedHeader({ alg, typ: 'JWT' })
-  return yield* until(jwt.sign(secret))
+  return yield* until(jwt.sign(key as AnyType))
 })
 
 export const verifyJWT = operation(function* (
-  secret: Uint8Array,
+  key: ResolvedKey,
   token: string,
   options: { issuer?: string | null; audience?: string | null } = {},
 ) {
@@ -37,12 +39,12 @@ export const verifyJWT = operation(function* (
   }
 
   try {
-    const { payload } = yield* until(jwtVerify(token, secret, verifyOptions))
+    const { payload } = yield* until(jwtVerify(token, key as AnyType, verifyOptions))
 
     return payload
   } catch (error) {
     if (error instanceof errors.JWTExpired) {
-      return yield* fail('expired-token', error.message)
+      return yield* fail(AuthErrorCode.ExpiredToken, error.message)
     }
     if (
       error instanceof errors.JWSSignatureVerificationFailed ||
@@ -50,13 +52,13 @@ export const verifyJWT = operation(function* (
       error instanceof errors.JWTInvalid ||
       error instanceof errors.JWTClaimValidationFailed
     ) {
-      return yield* fail('invalid-token', String(error.message))
+      return yield* fail(AuthErrorCode.InvalidToken, String(error.message))
     }
     if (isFailure(error)) {
-      return yield* fail('invalid-token', error.message, ...error.causes)
+      return yield* fail(AuthErrorCode.InvalidToken, error.message, ...error.causes)
     }
 
-    return yield* fail('invalid-token', String(error))
+    return yield* fail(AuthErrorCode.InvalidToken, String(error))
   }
 })
 

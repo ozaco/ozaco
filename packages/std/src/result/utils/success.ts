@@ -1,5 +1,5 @@
-import { isPromise } from 'std:shared'
 import type { AnyType, Writable } from 'std:shared'
+import { isPromise } from 'std:shared'
 
 import { RESULT_SUCCESS } from '../const'
 import type { Impl } from '../types/impl'
@@ -9,11 +9,10 @@ export const succeed: Impl.Succeed = (...args: AnyType[]) => {
   const success = {
     _t: RESULT_SUCCESS,
 
-    // oxlint-disable-next-line require-yield
     *[Symbol.iterator]() {
-      return this.value
+      return (this as AnyType).value
     },
-  } as Writable<Success<AnyType>>
+  } as unknown as Writable<Success<AnyType>>
 
   if (args.length === 0) {
     return success as AnyType

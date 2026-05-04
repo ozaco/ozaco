@@ -60,23 +60,29 @@ export class Reducer {
           const iterator = routine.data.iterator
           if (isSuccess(result)) {
             if (method === 'next') {
-              const next = iterator.next(result.value)
+              const next = iterator.next(result.value) as IteratorResult<
+                Helpers.Effect<unknown>,
+                unknown
+              >
               if (!next.done) {
-                resolveDebugHandler(routine)?.(next.value[1])
-                routine.data.exit = next.value[0](routine.next, routine)
+                resolveDebugHandler(routine)?.(next.value.cause)
+                routine.data.exit = next.value.enter(routine.next, routine)
               }
             } else if (iterator.return) {
-              const next = iterator.return(result.value)
+              const next = iterator.return(result.value) as IteratorResult<
+                Helpers.Effect<unknown>,
+                unknown
+              >
               if (!next.done) {
-                resolveDebugHandler(routine)?.(next.value[1])
-                routine.data.exit = next.value[0](routine.next, routine)
+                resolveDebugHandler(routine)?.(next.value.cause)
+                routine.data.exit = next.value.enter(routine.next, routine)
               }
             }
           } else if (iterator.throw) {
-            const next = iterator.throw(result)
+            const next = iterator.throw(result) as IteratorResult<Helpers.Effect<unknown>, unknown>
             if (!next.done) {
-              resolveDebugHandler(routine)?.(next.value[1])
-              routine.data.exit = next.value[0](routine.next, routine)
+              resolveDebugHandler(routine)?.(next.value.cause)
+              routine.data.exit = next.value.enter(routine.next, routine)
             }
           } else {
             throw result

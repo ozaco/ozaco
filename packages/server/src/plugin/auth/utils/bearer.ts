@@ -3,6 +3,7 @@ import type { Future } from 'std:effect'
 import { operation } from 'std:effect'
 import { fail } from 'std:result'
 
+import { AuthErrorCode } from '../error-codes'
 import type { AuthSession } from '../types'
 
 const BEARER_PREFIX = 'Bearer '
@@ -15,7 +16,7 @@ const getBearerToken = operation(function* () {
   const req = yield* useRequest()
   const header = req.meta.authorization ?? req.meta.Authorization
   if (!header?.startsWith(BEARER_PREFIX)) {
-    return yield* fail('missing-token', 'Bearer token required')
+    return yield* fail(AuthErrorCode.MissingToken, 'Bearer token required')
   }
   return header.slice(BEARER_PREFIX.length)
 })

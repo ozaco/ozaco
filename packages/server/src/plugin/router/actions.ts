@@ -1,6 +1,6 @@
 import type { Helpers as CoreHelpers } from 'server:core'
-import { isAction, isService, Router } from 'server:core'
-import { all, operation, useContext } from 'std:effect'
+import { isAction, isService, Router, ServerErrorCode } from 'server:core'
+import { all, ensure, operation, useContext } from 'std:effect'
 import { fail } from 'std:result'
 
 import type { MatchedRoute, RouterContext } from 'rou3'
@@ -14,7 +14,6 @@ export const DefaultRouterImpl = Router.implement({
   name: 'plugin:router',
   version: '0.0.1',
 
-  // oxlint-disable-next-line require-yield
   *setup() {
     const router: RouterContext<unknown> = createRouter()
     const compiled: (method: string, path: string) => MatchedRoute<unknown> | undefined =
@@ -65,7 +64,7 @@ export const findAction = operation(function* (method, path) {
   const foundRoute = ctx.compiled(method, path)
 
   if (!foundRoute) {
-    return yield* fail('not-found', `${method}:${path}`)
+    return yield* fail(ServerErrorCode.NotFound, `${method}:${path}`)
   }
 
   return [foundRoute.data, foundRoute.params] as [symbol, unknown]
@@ -78,6 +77,7 @@ export const optimizeAction = operation(function* () {
 
 export const mountAction = operation(function* (prefix, target) {
   const ctx = yield* useContext(DefaultRouterImpl.context)
+  const registeredSyms = new Set<symbol>()
 
   const register = (
     settings: CoreHelpers.TransformerSetting[],
@@ -97,6 +97,7 @@ export const mountAction = operation(function* (prefix, target) {
       }
 
       ctx.handlers.set(sym, route)
+      registeredSyms.add(sym)
 
       addRoute(ctx.router, setting.method, prefix + setting.path, sym)
     }
@@ -107,7 +108,7 @@ export const mountAction = operation(function* (prefix, target) {
 
     if (settings.length === 0) {
       return yield* fail(
-        'missing-settings',
+        ServerErrorCode.MissingSettings,
         `action registered with prefix "${prefix}" has no rest transformer settings`,
       )
     }
@@ -132,6 +133,20 @@ export const mountAction = operation(function* (prefix, target) {
   }
 
   ctx.compiled = compileRouter(ctx.router, { normalize: true })
+
+  // When the caller's scope unwinds (server shutdown, plugin lifetime end),
+  // strip our routes so the handlers Map can't accumulate dead entries.
+
+  yield* ensure(function* () {
+    for (const sym of registeredSyms) {
+      const route = ctx.handlers.get(sym)
+      if (route) {
+        removeRoute(ctx.router, route.setting.method, prefix + route.setting.path)
+        ctx.handlers.delete(sym)
+      }
+    }
+    ctx.compiled = compileRouter(ctx.router, { normalize: true })
+  })
 })
 
 export const unmountAction = operation(function* (target) {

@@ -6,11 +6,17 @@ import type { Service } from './service'
 
 export type TransportContext = unknown
 
+export interface CallOptions {
+  parent?: ActionRequest | undefined
+  timeoutMs?: number | undefined
+  signal?: AbortSignal | undefined
+}
+
 export interface TransportActions extends Record<string, AnyType> {
   call<TReturn, TError>(
     action: Action<[AnyType], TReturn, TError>,
     body: unknown,
-    parent?: ActionRequest | undefined,
+    options?: CallOptions,
   ): Future<TReturn, TError | 'transport'>
 
   mount(service: Service): Future<void, unknown>

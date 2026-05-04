@@ -139,8 +139,8 @@ export function* trap<T>(operation: () => Operation<T>): Operation<T> {
     scope.set(DelimiterContext, original.delimiter)
     const outcome = delimiter.outcome!
     // oxlint-disable-next-line no-unsafe-finally
-    return (yield [
-      resolve => {
+    return (yield {
+      enter: resolve => {
         if (isJust(outcome)) {
           resolve(outcome.value)
         } else {
@@ -148,7 +148,7 @@ export function* trap<T>(operation: () => Operation<T>): Operation<T> {
         }
         return didExit => didExit(succeed())
       },
-      'trap return',
-    ] as Helpers.Effect<T>) as T
+      cause: 'trap return',
+    } as Helpers.Effect<T>) as T
   }
 }

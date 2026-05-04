@@ -4,9 +4,11 @@ import {
   ActionRawResponseContext,
   ActionRequestContext,
   ActionResponseContext,
+  ActionSignalContext,
   Rest,
   Router,
   Server,
+  ServerErrorCode,
   Ws,
   statusFor,
 } from 'server:core'
@@ -50,10 +52,28 @@ export const resumeAction = operation(function* () {
   yield* BunIsPausedRef.set(false)
 })
 
-export const destroyAction = operation(function* () {
+export const destroyAction = operation(function* (opts?: { drainMs?: number }) {
   const server = yield* BunServerRef.get()
 
-  if (server) {
+  if (!server) {
+    yield* BunIsStartedRef.set(false)
+    return
+  }
+
+  const drainMs = opts?.drainMs ?? 30_000
+
+  let drained = false
+  // oxlint-disable-next-line promise/always-return
+  const stopPromise = server.stop().then(() => {
+    drained = true
+  })
+  const timeoutPromise = new Promise<void>(resolve => {
+    setTimeout(resolve, drainMs)
+  })
+
+  yield* until(Promise.race([stopPromise, timeoutPromise]))
+
+  if (!drained) {
     yield* until(server.stop(true))
   }
 
@@ -75,12 +95,12 @@ export const startAction = operation(function* (config) {
     })
 
     if (isFailure(isPaused)) {
-      return Response.json(fail('server-internal', 'is paused failed', tag), {
-        status: statusFor('server-internal'),
+      return Response.json(fail(ServerErrorCode.ServerInternal, 'is paused failed', tag), {
+        status: statusFor(ServerErrorCode.ServerInternal),
       })
     } else if (isSuccess(isPaused) && isPaused.value) {
-      return Response.json(fail('server-paused', '', isPaused.value, tag), {
-        status: statusFor('server-paused'),
+      return Response.json(fail(ServerErrorCode.ServerPaused, '', isPaused.value, tag), {
+        status: statusFor(ServerErrorCode.ServerPaused),
       })
     }
 
@@ -101,7 +121,10 @@ export const startAction = operation(function* (config) {
 
         const entry = routerCtx.handlers.get(routeSymbol)
         if (!entry) {
-          return yield* fail('not-found', `no handler for ${request.method}:${url.pathname}`)
+          return yield* fail(
+            ServerErrorCode.NotFound,
+            `no handler for ${request.method}:${url.pathname}`,
+          )
         }
 
         const transformerMeta: Helpers.TransformerMeta = {
@@ -125,7 +148,9 @@ export const startAction = operation(function* (config) {
           return yield* ActionResponseContext.with(actionRes!, function* () {
             return yield* ActionRawRequestContext.with(request, function* () {
               return yield* ActionRawResponseContext.with(null, function* () {
-                return yield* handler(body)
+                return yield* ActionSignalContext.with(request.signal, function* () {
+                  return yield* handler(body)
+                })
               })
             })
           })
@@ -170,7 +195,7 @@ export const startAction = operation(function* (config) {
       },
     })
   } catch (error) {
-    yield* fail('unexpected', String(error))
+    yield* fail(ServerErrorCode.Unexpected, String(error))
   }
 
   ctx.host = server.hostname

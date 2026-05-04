@@ -1,6 +1,22 @@
 import type { Operation } from 'std:effect'
 
-export type JWTAlgorithm = 'HS256' | 'HS384' | 'HS512'
+export type JWTAlgorithm =
+  | 'HS256'
+  | 'HS384'
+  | 'HS512'
+  | 'RS256'
+  | 'RS384'
+  | 'RS512'
+  | 'ES256'
+  | 'ES384'
+  | 'ES512'
+  | 'EdDSA'
+
+/** User-provided key material for JWT signing/verification. */
+export type JWTKey = string | Uint8Array | CryptoKey
+
+/** Internal resolved key handed to jose (after PKCS8/SPKI import for asymmetric). */
+export type ResolvedKey = Uint8Array | CryptoKey | { type: string; export: () => unknown }
 
 export interface AuthUser {
   id: string
@@ -8,7 +24,12 @@ export interface AuthUser {
 }
 
 export interface BaseAuthOptions {
-  secret: string
+  /** HMAC secret (HS256/HS384/HS512). Required when algorithm is HMAC. */
+  secret?: string
+  /** PKCS8 PEM string, raw bytes, or CryptoKey. Required for RS/ES/EdDSA algorithms. */
+  privateKey?: JWTKey
+  /** SPKI PEM string, raw bytes, or CryptoKey. Used for verification when asymmetric. */
+  publicKey?: JWTKey
 
   issuer?: string
   audience?: string
@@ -61,8 +82,24 @@ export interface SSOProfile {
 }
 
 export interface SSOProvider {
+  /**
+   * Generate an opaque CSRF token to be embedded in the OAuth2 `state` parameter
+   * and persisted alongside the redirect (cookie/session). MUST be:
+   *  - cryptographically random
+   *  - bound to the user's pre-auth context (cookie/session id) by the provider
+   * Framework will pass the same value to `authorize(state)` and later validate it
+   * via `verifyState(state)` on callback.
+   */
+  generateState: () => Operation<string, unknown>
+  /**
+   * Verify that the `state` returned by the OAuth2 callback matches the one
+   * generated for this user before authorize. MUST fail with InvalidState when
+   * the state is missing, expired, reused, or doesn't match the bound context.
+   * Calling this is mandatory; the framework invokes it before exchange().
+   */
+  verifyState: (state: string) => Operation<void, unknown>
   authorize: (state: string) => Operation<string, unknown>
-  exchange: (code: string, state: string) => Operation<SSOProfile, unknown>
+  exchange: (code: string) => Operation<SSOProfile, unknown>
 }
 
 export interface AuthProvider<TUser extends AuthUser = AuthUser, TCredentials = unknown> {
@@ -72,6 +109,13 @@ export interface AuthProvider<TUser extends AuthUser = AuthUser, TCredentials = 
   saveRefreshToken?: (record: RefreshRecord) => Operation<void, unknown>
   findRefreshToken?: (jti: string) => Operation<RefreshRecord | null, unknown>
   revokeRefreshToken?: (jti: string) => Operation<void, unknown>
+  /**
+   * Atomic refresh token rotation. Provider must guarantee that revoking the old
+   * jti and persisting the new record happen in the same transaction so
+   * concurrent rotations cannot leave the user without a valid refresh token.
+   * If absent, the framework falls back to revoke + save (non-atomic).
+   */
+  rotateRefreshToken?: (oldJti: string, newRecord: RefreshRecord) => Operation<void, unknown>
 
   saveVerification?: (record: VerificationRecord) => Operation<void, unknown>
   findVerification?: (token: string) => Operation<VerificationRecord | null, unknown>

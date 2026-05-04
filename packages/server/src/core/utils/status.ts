@@ -1,5 +1,7 @@
+import { ServerErrorCode } from '../error-codes'
+
 const DEFAULT_STATUS_MAP: Record<string, number> = {
-  validation: 400,
+  [ServerErrorCode.Validation]: 400,
   'unknown-provider': 400,
 
   'invalid-credentials': 401,
@@ -7,16 +9,19 @@ const DEFAULT_STATUS_MAP: Record<string, number> = {
   'expired-token': 401,
   'revoked-token': 401,
   'missing-token': 401,
+  [ServerErrorCode.Unauthorized]: 401,
 
-  forbidden: 403,
+  [ServerErrorCode.Forbidden]: 403,
 
-  'not-found': 404,
+  [ServerErrorCode.NotFound]: 404,
 
-  exists: 409,
+  [ServerErrorCode.Exists]: 409,
 
   'verification-consumed': 410,
 
-  'server-paused': 503,
+  [ServerErrorCode.PayloadTooLarge]: 413,
+
+  [ServerErrorCode.ServerPaused]: 503,
 }
 
 const DEFAULT_STATUS = 500

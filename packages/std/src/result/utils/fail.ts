@@ -1,5 +1,5 @@
-import { isPromise } from 'std:shared'
 import type { AnyType, Writable } from 'std:shared'
+import { isPromise } from 'std:shared'
 
 import { RESULT_FAILURE } from '../const'
 import type { Impl } from '../types/impl'
@@ -14,7 +14,7 @@ export const fail: Impl.Fail = (...args: AnyType[]) => {
       const self = this
       yield self
     },
-  } as Writable<Failure<AnyType>>
+  } as unknown as Writable<Failure<AnyType>>
 
   if (args.length === 0) {
     failure.causes = [] as string[]
