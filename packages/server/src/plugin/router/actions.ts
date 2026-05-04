@@ -8,7 +8,7 @@ import { addRoute, createRouter, findAllRoutes, removeRoute } from 'rou3'
 import { compileRouter } from 'rou3/compiler'
 
 import type { RegisteredRoute } from './types'
-import { isRestSetting } from './utils/is'
+import { isRoutableSetting } from './utils/is'
 
 export const DefaultRouterImpl = Router.implement({
   name: 'plugin:router',
@@ -84,7 +84,7 @@ export const mountAction = operation(function* (prefix, target) {
     inner: { key?: string; ident: string },
   ): void => {
     for (const setting of settings) {
-      const sym = Symbol(`${prefix}#${inner.ident}#rest`)
+      const sym = Symbol(`${prefix}#${inner.ident}#${setting.method}`)
 
       const route: RegisteredRoute = {
         sym,
@@ -104,12 +104,12 @@ export const mountAction = operation(function* (prefix, target) {
   }
 
   if (isAction(target)) {
-    const settings = (yield* all(target.settings ?? [])).filter(s => isRestSetting(s))
+    const settings = (yield* all(target.settings ?? [])).filter(s => isRoutableSetting(s))
 
     if (settings.length === 0) {
       return yield* fail(
         ServerErrorCode.MissingSettings,
-        `action registered with prefix "${prefix}" has no rest transformer settings`,
+        `action registered with prefix "${prefix}" has no rest or ws transformer settings`,
       )
     }
 
@@ -122,7 +122,7 @@ export const mountAction = operation(function* (prefix, target) {
         continue
       }
 
-      const settings = (yield* all(meta.settings ?? [])).filter(s => isRestSetting(s))
+      const settings = (yield* all(meta.settings ?? [])).filter(s => isRoutableSetting(s))
 
       if (settings.length === 0) {
         continue

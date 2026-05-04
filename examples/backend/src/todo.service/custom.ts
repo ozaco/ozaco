@@ -24,6 +24,12 @@ export const custom = defineAction(
       }),
       Ws.actions.settings({
         path: '/custom',
+        *onOpen(ws) {
+          console.log('websocket open', ws)
+        },
+        *onClose(ws) {
+          console.log('websocket open', ws)
+        },
       }),
     ],
   },

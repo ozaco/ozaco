@@ -1,4 +1,4 @@
-import type { Future } from 'std:effect'
+import type { Future, Operation } from 'std:effect'
 import type { Plugin } from 'std:plugin'
 import type { AnyType, StandardSchemaV1 } from 'std:shared'
 
@@ -51,6 +51,8 @@ export namespace Helpers {
 
   export interface WsTransformerOptions {
     path: string
+    onOpen?: (ws: unknown) => Operation<void, unknown>
+    onClose?: (ws: unknown, code: number, reason: string) => Operation<void, unknown>
   }
 
   export interface TransformerSetting {
@@ -64,7 +66,7 @@ export namespace Helpers {
     key?: string
     prefix: string
     target: Action | Service
-    setting: TransformerSetting & Partial<RestTransformerOptions>
+    setting: TransformerSetting & Partial<RestTransformerOptions> & Partial<WsTransformerOptions>
     params: Record<string, unknown>
   }
 }

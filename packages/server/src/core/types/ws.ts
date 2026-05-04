@@ -1,11 +1,11 @@
-import type { Future, Operation } from 'std:effect'
+import type { Future } from 'std:effect'
 import type { AnyType } from 'std:shared'
 
 import type { Helpers } from './helpers'
 
 export interface WsTransformerContext {
-  open?: ((ws: unknown) => Operation<void, unknown>) | undefined
-  close?: ((ws: unknown, code: number, reason: string) => Operation<void, unknown>) | undefined
+  onOpen?: ((ws: unknown) => Future<void, unknown>) | undefined
+  onClose?: ((ws: unknown, code: number, reason: string) => Future<void, unknown>) | undefined
 }
 
 export interface WsTransformerActions extends Record<string, AnyType> {

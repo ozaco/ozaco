@@ -1,3 +1,4 @@
+import type { Helpers } from 'server:core'
 import {
   ActionRawRequestContext,
   ActionRawResponseContext,
@@ -25,10 +26,17 @@ export const WsImpl = Ws.implement({
 })
 
 export const onCloseAction = operation(function* (ws: AnyType, code, reason) {
+  const setting = ws?.data?.entry?.setting as
+    | (Helpers.TransformerSetting & Partial<Helpers.WsTransformerOptions>)
+    | undefined
+  if (setting?.onClose) {
+    yield* setting.onClose(ws, code, reason)
+  }
+
   ws?.data?.controller?.abort()
   const ctx = yield* useContext(WsImpl.context)
-  if (ctx.close) {
-    yield* ctx.close(ws, code, reason)
+  if (ctx.onClose) {
+    yield* ctx.onClose(ws, code, reason)
   }
 })
 
@@ -38,7 +46,7 @@ export const onMessageAction = operation(function* (ws: AnyType, message) {
     return
   }
 
-  const [req, body] = yield* buildRequest(ws, message, entry.key ?? '')
+  const [req, body] = yield* buildRequest(ws, message)
   const res = buildResponse()
 
   // ws.data.controller is set in upgrade; abort triggered on close
@@ -68,10 +76,17 @@ export const onMessageAction = operation(function* (ws: AnyType, message) {
   }
 })
 
-export const onOpenAction = operation(function* (ws) {
+export const onOpenAction = operation(function* (ws: AnyType) {
   const ctx = yield* useContext(WsImpl.context)
-  if (ctx.open) {
-    yield* ctx.open(ws)
+  if (ctx.onOpen) {
+    yield* ctx.onOpen(ws)
+  }
+
+  const setting = ws?.data?.entry?.setting as
+    | (Helpers.TransformerSetting & Partial<Helpers.WsTransformerOptions>)
+    | undefined
+  if (setting?.onOpen) {
+    yield* setting.onOpen(ws)
   }
 })
 
