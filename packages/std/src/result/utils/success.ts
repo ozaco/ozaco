@@ -12,7 +12,7 @@ export const succeed: Impl.Succeed = (...args: AnyType[]) => {
     *[Symbol.iterator]() {
       return (this as AnyType).value
     },
-  } as unknown as Writable<Success<AnyType>>
+  } as Writable<Success<AnyType>>
 
   if (args.length === 0) {
     return success as AnyType

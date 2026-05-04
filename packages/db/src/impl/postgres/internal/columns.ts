@@ -13,9 +13,8 @@ import {
   varchar as pgVarchar,
 } from 'drizzle-orm/pg-core'
 
-import type { ColumnDef, SchemaDef, TableDef } from '../../schema/types'
-
-import type { DrizzleTableMap } from './drizzle-base'
+import type { ColumnDef, SchemaDef, TableDef } from '../../../utils/schema/types'
+import type { DrizzleTableMap } from '../../internal/drizzle-base'
 
 const bytea = customType<{ data: Uint8Array; driverData: Buffer }>({
   dataType: () => 'bytea',

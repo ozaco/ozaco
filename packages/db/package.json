@@ -24,39 +24,6 @@
       },
       "source": "./src/index.ts"
     },
-    "./core": {
-      "import": {
-        "types": "./dist/core.d.ts",
-        "default": "./dist/core.js"
-      },
-      "require": {
-        "types": "./dist/core.d.cts",
-        "default": "./dist/core.cjs"
-      },
-      "source": "./src/core.ts"
-    },
-    "./schema": {
-      "import": {
-        "types": "./dist/schema.d.ts",
-        "default": "./dist/schema.js"
-      },
-      "require": {
-        "types": "./dist/schema.d.cts",
-        "default": "./dist/schema.cjs"
-      },
-      "source": "./src/schema/index.ts"
-    },
-    "./query": {
-      "import": {
-        "types": "./dist/query.d.ts",
-        "default": "./dist/query.js"
-      },
-      "require": {
-        "types": "./dist/query.d.cts",
-        "default": "./dist/query.cjs"
-      },
-      "source": "./src/query.ts"
-    },
     "./impl/sqlite": {
       "import": {
         "types": "./dist/impl-sqlite.d.ts",
@@ -66,7 +33,7 @@
         "types": "./dist/impl-sqlite.d.cts",
         "default": "./dist/impl-sqlite.cjs"
       },
-      "source": "./src/impl/sqlite.ts"
+      "source": "./src/impl/sqlite/index.ts"
     },
     "./impl/postgres": {
       "import": {
@@ -77,7 +44,7 @@
         "types": "./dist/impl-postgres.d.cts",
         "default": "./dist/impl-postgres.cjs"
       },
-      "source": "./src/impl/postgres.ts"
+      "source": "./src/impl/postgres/index.ts"
     }
   },
   "publishConfig": {

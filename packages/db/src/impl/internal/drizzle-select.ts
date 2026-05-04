@@ -1,13 +1,14 @@
+import { operation } from 'std:effect'
 import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 
-import type { SelectQuery, WhereClause } from '../../query'
-import type { DbError } from '../../runtime'
-import type { InferRow } from '../../schema/infer'
-import type { TableDef } from '../../schema/types'
+import { DbErrorCode } from '../../error-codes'
+import type { SelectQuery, WhereClause } from '../../types/query'
+import type { InferRow } from '../../utils/schema/infer'
+import type { TableDef } from '../../utils/schema/types'
 
 import type { DrizzleRuntime } from './drizzle-base'
-import { op, runPromise } from './drizzle-base'
+import { runPromise } from './drizzle-base'
 import { buildWhere, resolveTable, tableNotFound } from './drizzle-helpers'
 
 export const createSelect = <TTable extends TableDef>(
@@ -63,37 +64,34 @@ export const createSelect = <TTable extends TableDef>(
       state.orderBy.push({ column: column as string, direction })
       return chain
     },
-    all: () =>
-      op<InferRow<TTable>[], DbError>(function* () {
-        const drizzleTable = resolveTable(runtime, table)
-        if (!drizzleTable) {
-          return yield* tableNotFound<InferRow<TTable>[]>(table.name)
-        }
-        const rows = yield* runPromise(() => build(drizzleTable))
-        return rows as InferRow<TTable>[]
-      }),
-    first: () =>
-      op<InferRow<TTable> | null, DbError>(function* () {
-        const drizzleTable = resolveTable(runtime, table)
-        if (!drizzleTable) {
-          return yield* tableNotFound<InferRow<TTable> | null>(table.name)
-        }
-        const rows = yield* runPromise(() => build(drizzleTable).limit(1))
-        return (rows as InferRow<TTable>[])[0] ?? null
-      }),
-    firstOrFail: () =>
-      op<InferRow<TTable>, DbError>(function* () {
-        const drizzleTable = resolveTable(runtime, table)
-        if (!drizzleTable) {
-          return yield* tableNotFound<InferRow<TTable>>(table.name)
-        }
-        const rows = yield* runPromise(() => build(drizzleTable).limit(1))
-        const row = (rows as InferRow<TTable>[])[0]
-        if (row === undefined) {
-          return yield* fail('not-found' as DbError, `no rows in ${table.name}`)
-        }
-        return row
-      }),
+    all: operation(function* () {
+      const drizzleTable = resolveTable(runtime, table)
+      if (!drizzleTable) {
+        return yield* tableNotFound<InferRow<TTable>[]>(table.name)
+      }
+      const rows = yield* runPromise(() => build(drizzleTable), runtime)
+      return rows as InferRow<TTable>[]
+    }),
+    first: operation(function* () {
+      const drizzleTable = resolveTable(runtime, table)
+      if (!drizzleTable) {
+        return yield* tableNotFound<InferRow<TTable> | null>(table.name)
+      }
+      const rows = yield* runPromise(() => build(drizzleTable).limit(1), runtime)
+      return (rows as InferRow<TTable>[])[0] ?? null
+    }),
+    firstOrFail: operation(function* () {
+      const drizzleTable = resolveTable(runtime, table)
+      if (!drizzleTable) {
+        return yield* tableNotFound<InferRow<TTable>>(table.name)
+      }
+      const rows = yield* runPromise(() => build(drizzleTable).limit(1), runtime)
+      const row = (rows as InferRow<TTable>[])[0]
+      if (row === undefined) {
+        return yield* fail(DbErrorCode.NotFound, `no rows in ${table.name}`)
+      }
+      return row
+    }),
   }
 
   return chain

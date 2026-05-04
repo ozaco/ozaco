@@ -14,7 +14,7 @@ export const fail: Impl.Fail = (...args: AnyType[]) => {
       const self = this
       yield self
     },
-  } as unknown as Writable<Failure<AnyType>>
+  } as Writable<Failure<AnyType>>
 
   if (args.length === 0) {
     failure.causes = [] as string[]

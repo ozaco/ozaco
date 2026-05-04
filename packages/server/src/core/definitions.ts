@@ -73,7 +73,7 @@ export const Transport = defineProtocol<TransportContext, unknown, unknown[], Tr
 
       const req: ActionRequest = inheritedReq
         ? // oxlint-disable-next-line oxc/no-rest-spread-properties
-          { ...inheritedReq, type: 'internal', from: 'internal' }
+          { ...inheritedReq, type: 'internal' }
         : createEmptyReq()
       const res: ActionResponse = inheritedRes ?? createEmptyRes()
 

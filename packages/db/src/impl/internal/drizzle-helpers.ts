@@ -1,21 +1,21 @@
-import type { Operation } from 'std:effect'
+import type { ManualOperation } from 'std:effect'
+import { operation } from 'std:effect'
 import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 
-import type { WhereClause } from '../../query'
-import type { DbError } from '../../runtime'
-import type { TableDef } from '../../schema/types'
+import { DbErrorCode } from '../../error-codes'
+import type { WhereClause } from '../../types/query'
+import type { DbError } from '../../types/runtime'
+import type { TableDef } from '../../utils/schema/types'
 
 import type { DrizzleRuntime } from './drizzle-base'
-import { op } from './drizzle-base'
 
 export const resolveTable = (runtime: DrizzleRuntime, table: TableDef): AnyType | null =>
   runtime.tables[table.name] ?? null
 
-export const tableNotFound = <T>(name: string): Operation<T, DbError> =>
-  op<T, DbError>(function* () {
-    return yield* fail('driver' as DbError, `table "${name}" not registered in driver schema`)
-  })
+export const tableNotFound = operation(function* <T>(name: string): ManualOperation<T, DbError> {
+  return yield* fail(DbErrorCode.Driver, `table "${name}" not registered in driver schema`)
+})
 
 export const buildWhere = <TTable extends TableDef>(
   runtime: DrizzleRuntime,

@@ -1,12 +1,10 @@
-import type { Operation } from 'std:effect'
-import { call, operation } from 'std:effect'
-import { fail } from 'std:result'
+import type { ManualOperation } from 'std:effect'
+import { operation, until } from 'std:effect'
+import type { Failure } from 'std:result'
+import { asFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
 
-import type { DbError } from '../../runtime'
-import { classifyDriverError } from '../../runtime'
-
-type Outcome<T> = { ok: true; value: T } | { ok: false; error: unknown }
+import type { DbError } from '../../types/runtime'
 
 export type DrizzleTableMap = Record<string, AnyType>
 
@@ -18,26 +16,28 @@ export interface DrizzleRuntime {
   readonly asc: (column: AnyType) => AnyType
   readonly desc: (column: AnyType) => AnyType
   readonly execRaw: (sql: string, params?: unknown[]) => Promise<unknown[]>
+  /** Driver-specific error classifier; default is the generic Driver fallback. */
+  readonly classify?: (raw: unknown) => Failure<DbError>
 }
 
-export const op = <T, E = never>(fn: () => Generator<AnyType, T, unknown>): Operation<T, E> =>
-  (operation(fn as AnyType) as () => Operation<T, E>)()
+export const runPromise = operation(function* <T>(
+  fn: () => Promise<T>,
+  runtime?: Pick<DrizzleRuntime, 'classify'>,
+): ManualOperation<T, DbError> {
+  try {
+    const outcome = yield* until(fn())
 
-export const runPromise = <T>(fn: () => Promise<T>): Operation<T, DbError> =>
-  op<T, DbError>(function* () {
-    const outcome: Outcome<T> = yield* call(
-      (): Promise<Outcome<T>> =>
-        fn().then(
-          (value): Outcome<T> => ({ ok: true, value }),
-          (error): Outcome<T> => ({ ok: false, error }),
-        ),
-    )
-    if (!outcome.ok) {
-      const classified = classifyDriverError(outcome.error)
-      return yield* fail(classified.kind, classified.message)
+    return outcome
+  } catch (error) {
+    const failure = asFailure<DbError>(error as AnyType)
+
+    if (runtime?.classify) {
+      return yield* runtime.classify(failure)
     }
-    return outcome.value
-  })
+
+    return yield* failure
+  }
+})
 
 export const extractChangeCount = (result: unknown): number => {
   if (typeof result === 'number') {

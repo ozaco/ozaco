@@ -61,7 +61,6 @@ export const startAction = operation(function* () {
             const body = decodeBody(msg.data)
             const req: ActionRequest = {
               type: 'rpc',
-              from: entry.subject,
               method: 'NATS',
               url: new URL(`nats:///${entry.subject}`),
               meta: {},

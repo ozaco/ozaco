@@ -39,7 +39,7 @@ export const encodeWsBody = (body: unknown): string | ArrayBufferView | ArrayBuf
   return JSON.stringify(body)
 }
 
-export const buildRequest = operation(function* (ws: AnyType, payload: unknown, from: string) {
+export const buildRequest = operation(function* (ws: AnyType, payload: unknown) {
   const data = (ws?.data ?? {}) as {
     url?: string
     headers?: Record<string, string>
@@ -58,7 +58,6 @@ export const buildRequest = operation(function* (ws: AnyType, payload: unknown, 
 
   const req: ActionRequest = {
     type: 'ws',
-    from,
     method: 'WS',
     url,
     meta: headers,

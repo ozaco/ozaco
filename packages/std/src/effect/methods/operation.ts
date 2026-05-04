@@ -7,17 +7,21 @@ import type { Future } from '../types/operation'
 
 import { run } from './run'
 
-export const operation =
-  <Args extends AnyType[], T, E = never>(
-    fn: (...args: Args) => Generator<Helpers.Effect<unknown> | Helpers.FailureOf<E>, T, unknown>,
-    ...causes: string[]
-  ): ((...args: Args) => Future<T, E>) =>
-  (...args) => {
+export function operation<Args extends AnyType[], T, E = never>(
+  fn: (...args: Args) => Generator<Helpers.Effect<unknown> | Helpers.FailureOf<E>, T, unknown>,
+  ...causes: string[]
+): (...args: Args) => Future<T, E> {
+  return (...args) => {
     const desc = causes.join(',') || 'operation'
 
     const op = {
       [Symbol.iterator](): Iterator<Helpers.Effect<unknown>, T, unknown> {
-        const inner = fn(...args)
+        const inner = fn(...args) as Generator<
+          Helpers.Effect<unknown> | Helpers.FailureOf<E>,
+          T,
+          unknown
+        >
+
         return {
           next(value: unknown) {
             let step: IteratorResult<Helpers.Effect<unknown> | Failure<E>, T>
@@ -98,3 +102,4 @@ export const operation =
       },
     })
   }
+}

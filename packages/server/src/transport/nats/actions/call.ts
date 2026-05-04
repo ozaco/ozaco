@@ -40,9 +40,8 @@ export const callAction: AnyType = operation(function* (
   if ((typeof subject !== 'string' && !isFunction(subject)) || local) {
     const req: ActionRequest = inheritedReq
       ? // oxlint-disable-next-line oxc/no-rest-spread-properties
-        { ...inheritedReq, type: 'internal', from: subject ?? 'internal' }
-      : // oxlint-disable-next-line oxc/no-rest-spread-properties
-        { ...createEmptyReq(), from: subject ?? 'internal' }
+        { ...inheritedReq, type: 'internal' }
+      : createEmptyReq()
     const res: ActionResponse = inheritedRes ?? createEmptyRes()
 
     const result: AnyType = yield* ActionRequestContext.with(req, function* () {

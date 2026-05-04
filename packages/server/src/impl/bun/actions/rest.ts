@@ -105,7 +105,6 @@ export const toInternalAction = operation(function* (req: AnyType, _res: unknown
   return [
     {
       type: 'http' as const,
-      from: (meta?.key ?? '') as string,
 
       method: req.method,
       url,

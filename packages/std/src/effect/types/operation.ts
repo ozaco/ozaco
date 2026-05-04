@@ -8,6 +8,12 @@ export interface Operation<T, E = never> {
   [Symbol.iterator](): Iterator<Helpers.Effect<unknown> | Helpers.FailureOf<E>, T, unknown>
 }
 
+export type ManualOperation<T, E = never> = Generator<
+  Helpers.Effect<unknown> | Helpers.FailureOf<E>,
+  T,
+  unknown
+>
+
 export interface Future<T, E = never> extends Operation<T, E>, Promise<Result<T, E>> {}
 
 export interface Task<T, E = never> extends Future<T, E> {

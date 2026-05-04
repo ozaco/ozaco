@@ -66,15 +66,7 @@ declare module 'server:impl/bun' {
 }
 
 declare module 'db:core' {
-  export * from '@ozaco/db/core'
-}
-
-declare module 'db:schema' {
-  export * from '@ozaco/db/schema'
-}
-
-declare module 'db:query' {
-  export * from '@ozaco/db/query'
+  export * from '@ozaco/db'
 }
 
 declare module 'db:impl/sqlite' {

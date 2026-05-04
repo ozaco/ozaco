@@ -21,9 +21,7 @@ export interface ActionResponse {
 
 export interface ActionRequest {
   type: 'http' | 'ws' | 'rpc' | 'internal'
-  from: string
-
-  method: string
+  method: string // GET, POST, WS, NATS...
   url: URL
 
   meta: Record<string, string> // headers

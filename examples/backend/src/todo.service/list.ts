@@ -1,7 +1,7 @@
+import { DB } from 'db:core'
 import { Rest, defineAction } from 'server:core'
 import { useContext } from 'std:effect'
 
-import { DB } from '@ozaco/db'
 import { AccessRefreshAuth, useAuth } from 'server:plugin/auth'
 
 import { todos } from '../db.schema'

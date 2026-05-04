@@ -38,11 +38,9 @@ const SERVER_MODULES: Record<string, ModuleEntry> = {
 }
 
 const DB_MODULES: Record<string, ModuleEntry> = {
-  'db:core': { subpath: 'core', source: 'core.ts' },
-  'db:schema': { subpath: 'schema', source: 'schema/index.ts' },
-  'db:query': { subpath: 'query', source: 'query.ts' },
-  'db:impl/sqlite': { subpath: 'impl/sqlite', source: 'impl/sqlite.ts' },
-  'db:impl/postgres': { subpath: 'impl/postgres', source: 'impl/postgres.ts' },
+  'db:core': { subpath: '', source: 'index.ts' },
+  'db:impl/sqlite': { subpath: 'impl/sqlite', source: 'impl/sqlite/index.ts' },
+  'db:impl/postgres': { subpath: 'impl/postgres', source: 'impl/postgres/index.ts' },
 }
 
 interface ResolveAliasOptions {
@@ -61,7 +59,7 @@ const buildAliases = (
 ): Record<string, string> => {
   const aliases: Record<string, string> = {}
   for (const [specifier, { subpath, source }] of Object.entries(modules)) {
-    aliases[specifier] = sourceDir ? `${sourceDir}/${source}` : `${pkg}/${subpath}`
+    aliases[specifier] = sourceDir ? `${sourceDir}/${source}` : subpath ? `${pkg}/${subpath}` : pkg
   }
   return aliases
 }

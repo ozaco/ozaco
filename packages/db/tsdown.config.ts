@@ -5,11 +5,8 @@ import { defineConfig } from 'tsdown'
 export default defineConfig({
   entry: {
     index: './src/index.ts',
-    core: './src/core.ts',
-    schema: './src/schema/index.ts',
-    query: './src/query.ts',
-    'impl-sqlite': './src/impl/sqlite.ts',
-    'impl-postgres': './src/impl/postgres.ts',
+    'impl-sqlite': './src/impl/sqlite/index.ts',
+    'impl-postgres': './src/impl/postgres/index.ts',
   },
   format: ['esm', 'cjs'],
   dts: true,

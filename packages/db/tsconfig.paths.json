@@ -1,11 +1,9 @@
 {
   "compilerOptions": {
     "paths": {
-      "db:core": ["./src/core.ts", "./dist/core.d.ts"],
-      "db:schema": ["./src/schema/index.ts", "./dist/schema.d.ts"],
-      "db:query": ["./src/query.ts", "./dist/query.d.ts"],
-      "db:impl/sqlite": ["./src/impl/sqlite.ts", "./dist/impl-sqlite.d.ts"],
-      "db:impl/postgres": ["./src/impl/postgres.ts", "./dist/impl-postgres.d.ts"],
+      "db:core": ["./src/index.ts", "./dist/index.d.ts"],
+      "db:impl/sqlite": ["./src/impl/sqlite/index.ts", "./dist/impl-sqlite.d.ts"],
+      "db:impl/postgres": ["./src/impl/postgres/index.ts", "./dist/impl-postgres.d.ts"],
 
       "std:shared": [
         "./node_modules/@ozaco/std/dist/shared.d.ts",

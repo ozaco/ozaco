@@ -3,9 +3,8 @@ import type { AnyType } from 'std:shared'
 import { sql } from 'drizzle-orm'
 import { blob, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 
-import type { ColumnDef, SchemaDef, TableDef } from '../../schema/types'
-
-import type { DrizzleTableMap } from './drizzle-base'
+import type { ColumnDef, SchemaDef, TableDef } from '../../../utils/schema/types'
+import type { DrizzleTableMap } from '../../internal/drizzle-base'
 
 const toSqliteColumn = (name: string, column: ColumnDef): AnyType => {
   let builder: AnyType

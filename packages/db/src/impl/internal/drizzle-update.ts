@@ -1,12 +1,12 @@
+import { operation } from 'std:effect'
 import type { AnyType } from 'std:shared'
 
-import type { DeleteQuery, UpdateQuery, UpdateReturning, WhereClause } from '../../query'
-import type { DbError } from '../../runtime'
-import type { InferRow } from '../../schema/infer'
-import type { TableDef } from '../../schema/types'
+import type { DeleteQuery, UpdateQuery, UpdateReturning, WhereClause } from '../../types/query'
+import type { InferRow } from '../../utils/schema/infer'
+import type { TableDef } from '../../utils/schema/types'
 
 import type { DrizzleRuntime } from './drizzle-base'
-import { extractChangeCount, op, runPromise } from './drizzle-base'
+import { extractChangeCount, runPromise } from './drizzle-base'
 import { buildWhere, resolveTable, tableNotFound } from './drizzle-helpers'
 
 export const createUpdate = <TTable extends TableDef>(
@@ -40,35 +40,32 @@ export const createUpdate = <TTable extends TableDef>(
     },
     returning(): UpdateReturning<TTable> {
       return {
-        all: () =>
-          op<InferRow<TTable>[], DbError>(function* () {
-            const drizzleTable = resolveTable(runtime, table)
-            if (!drizzleTable) {
-              return yield* tableNotFound<InferRow<TTable>[]>(table.name)
-            }
-            const rows = yield* runPromise(() => build(drizzleTable).returning())
-            return rows as InferRow<TTable>[]
-          }),
-        first: () =>
-          op<InferRow<TTable> | null, DbError>(function* () {
-            const drizzleTable = resolveTable(runtime, table)
-            if (!drizzleTable) {
-              return yield* tableNotFound<InferRow<TTable> | null>(table.name)
-            }
-            const rows = yield* runPromise(() => build(drizzleTable).returning())
-            return (rows as InferRow<TTable>[])[0] ?? null
-          }),
+        all: operation(function* () {
+          const drizzleTable = resolveTable(runtime, table)
+          if (!drizzleTable) {
+            return yield* tableNotFound<InferRow<TTable>[]>(table.name)
+          }
+          const rows = yield* runPromise(() => build(drizzleTable).returning(), runtime)
+          return rows as InferRow<TTable>[]
+        }),
+        first: operation(function* () {
+          const drizzleTable = resolveTable(runtime, table)
+          if (!drizzleTable) {
+            return yield* tableNotFound<InferRow<TTable> | null>(table.name)
+          }
+          const rows = yield* runPromise(() => build(drizzleTable).returning(), runtime)
+          return (rows as InferRow<TTable>[])[0] ?? null
+        }),
       }
     },
-    execute: () =>
-      op<number, DbError>(function* () {
-        const drizzleTable = resolveTable(runtime, table)
-        if (!drizzleTable) {
-          return yield* tableNotFound<number>(table.name)
-        }
-        const result = yield* runPromise(() => build(drizzleTable))
-        return extractChangeCount(result)
-      }),
+    execute: operation(function* () {
+      const drizzleTable = resolveTable(runtime, table)
+      if (!drizzleTable) {
+        return yield* tableNotFound<number>(table.name)
+      }
+      const result = yield* runPromise(() => build(drizzleTable), runtime)
+      return extractChangeCount(result)
+    }),
   }
 
   return chain
@@ -96,15 +93,14 @@ export const createDelete = <TTable extends TableDef>(
       state.where = clause
       return chain
     },
-    execute: () =>
-      op<number, DbError>(function* () {
-        const drizzleTable = resolveTable(runtime, table)
-        if (!drizzleTable) {
-          return yield* tableNotFound<number>(table.name)
-        }
-        const result = yield* runPromise(() => build(drizzleTable))
-        return extractChangeCount(result)
-      }),
+    execute: operation(function* () {
+      const drizzleTable = resolveTable(runtime, table)
+      if (!drizzleTable) {
+        return yield* tableNotFound<number>(table.name)
+      }
+      const result = yield* runPromise(() => build(drizzleTable), runtime)
+      return extractChangeCount(result)
+    }),
   }
 
   return chain

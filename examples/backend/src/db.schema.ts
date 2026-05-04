@@ -1,4 +1,4 @@
-import { col, defineSchema, defineTable } from 'db:schema'
+import { col, defineSchema, defineTable } from 'db:core'
 
 const users = defineTable('users', {
   id: col.text().primary(),
