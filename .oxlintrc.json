@@ -66,6 +66,7 @@
     "eslint/no-nested-ternary": "off",
     "eslint/complexity": "off",
     "eslint/require-yield": "off",
+    "eslint/no-underscore-dangle": "off",
 
     "typescript/ban-types": "off",
     "typescript/consistent-type-definitions": "off",

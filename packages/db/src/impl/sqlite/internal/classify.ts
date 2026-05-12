@@ -5,8 +5,8 @@ import type { AnyType } from 'std:shared'
 import { DbErrorCode } from '../../../error-codes'
 import type { DbError } from '../../../types/runtime'
 
-const SQLITE_UNIQUE = /UNIQUE constraint failed: (?<column>.+)/
-const SQLITE_FK = /FOREIGN KEY constraint failed/
+const SQLITE_UNIQUE = /UNIQUE constraint failed: (?<column>.+)/u
+const SQLITE_FK = /FOREIGN KEY constraint failed/u
 
 export const classifySqliteError = (raw: unknown): Failure<DbError> => {
   if (!raw || typeof raw !== 'object') {

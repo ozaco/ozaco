@@ -84,7 +84,7 @@ export class Delimiter<T> implements Operation<Maybe<Result<T, unknown>>>, Helpe
       this.outcome = just(asFailure(error))
     } finally {
       this.finalized = true
-      this.outcome = this.outcome ?? nothing()
+      this.outcome ??= nothing()
       this.future.resolve(this.outcome)
       // oxlint-disable-next-line no-unsafe-finally
       return this.outcome

@@ -1,7 +1,7 @@
 import type { PathLike } from '../types/common'
 
 const fileUrlToPath = (url: string): string => {
-  const stripped = url.replace(/^file:\/\/\//, '/')
+  const stripped = url.replace(/^file:\/\/\//u, '/')
   return decodeURIComponent(stripped)
 }
 
