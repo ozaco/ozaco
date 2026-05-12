@@ -41,30 +41,6 @@ declare module 'server:core' {
   export * from '@ozaco/server/core'
 }
 
-declare module 'server:plugin/router' {
-  export * from '@ozaco/server/plugin/router'
-}
-
-declare module 'server:plugin/auth' {
-  export * from '@ozaco/server/plugin/auth'
-}
-
-declare module 'server:plugin/cors' {
-  export * from '@ozaco/server/plugin/cors'
-}
-
-declare module 'server:plugin/docs' {
-  export * from '@ozaco/server/plugin/docs'
-}
-
-declare module 'server:transport/nats' {
-  export * from '@ozaco/server/transport/nats'
-}
-
-declare module 'server:impl/bun' {
-  export * from '@ozaco/server/impl/bun'
-}
-
 declare module 'db:core' {
   export * from '@ozaco/db'
 }

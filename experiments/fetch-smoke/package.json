@@ -1,9 +1,0 @@
-{
-  "name": "@ozaco/experiment-fetch-smoke",
-  "version": "0.0.0",
-  "private": true,
-  "type": "module",
-  "dependencies": {
-    "@ozaco/std": "workspace:*"
-  }
-}
