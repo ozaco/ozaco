@@ -3,7 +3,7 @@ import { isPromise } from 'std:shared'
 
 import { RESULT_FAILURE } from '../const'
 import type { Impl } from '../types/impl'
-import type { Failure } from '../types/result'
+import type { Result } from '../types/result'
 
 export const fail: Impl.Fail = (...args: AnyType[]) => {
   const failure = {
@@ -14,7 +14,7 @@ export const fail: Impl.Fail = (...args: AnyType[]) => {
       const self = this
       yield self
     },
-  } as Writable<Failure<AnyType>>
+  } as Writable<Result.Failure<AnyType>>
 
   if (args.length === 0) {
     failure.causes = [] as string[]

@@ -1,7 +1,6 @@
-export * from './types/converge'
 export * from './types/helpers'
 export * from './types/operation'
-export * from './types/timing'
+export * from './types/utils'
 
 export * from './methods/abort-signal'
 export * from './methods/action'

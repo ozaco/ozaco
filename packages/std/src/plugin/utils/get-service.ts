@@ -4,7 +4,7 @@ import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import { RAW_ACTION } from '../const'
-import type { Helpers } from '../types/helpers'
+import type { Hookable } from '../types/hookable'
 
 export const getService = operation(function* (
   handler: (...args: AnyType[]) => Operation<AnyType, AnyType>,
@@ -12,7 +12,7 @@ export const getService = operation(function* (
   try {
     return (yield* (handler as (...args: AnyType[]) => Operation<unknown, 'unexpected'>)(
       RAW_ACTION,
-    )) as Helpers.RawAction
+    )) as Hookable.RawAction
   } catch {
     return yield* fail('unexpected', "handler isn't part of a plugin")
   }

@@ -7,7 +7,7 @@ import type { AnyType } from 'std:shared'
 import { flatten } from 'std:shared'
 
 import { PLUGIN, RAW_ACTION } from '../const'
-import type { Helpers } from '../types/helpers'
+import type { Hookable } from '../types/hookable'
 
 import { createDefaultHooks } from './internal/defaults'
 import { intercept } from './internal/intercept'
@@ -25,7 +25,7 @@ export const createHookable = (options: {
   const protocolTag = `${options.name}@${options.version ?? 'lts'}`
 
   const context = createContext(protocolTag)
-  const hookCtx = createContext<Helpers.HookStore>(`${protocolTag}#hooks`, createDefaultHooks())
+  const hookCtx = createContext<Hookable.HookStore>(`${protocolTag}#hooks`, createDefaultHooks())
   const chainCtx = createContext<Map<string, unknown>>(`${protocolTag}#chain`)
 
   const handlers: Record<string, AnyType> = {}
@@ -44,7 +44,7 @@ export const createHookable = (options: {
   }
 
   const makeResolveAction = (
-    findImpl: (store: Helpers.HookStore) => Helpers.HookSelfEntry | undefined,
+    findImpl: (store: Hookable.HookStore) => Hookable.HookSelfEntry | undefined,
     tag: string,
   ) =>
     operation(function* (key: string, ...args: unknown[]) {
@@ -152,7 +152,7 @@ export const createHookable = (options: {
 
       setup(...args: AnyType[]): Operation<unknown, unknown>
     },
-    buildActions?: Record<string, Helpers.AnyAction>,
+    buildActions?: Record<string, Hookable.AnyAction>,
   ) => {
     const pluginTag = `${buildOptions.name}@${buildOptions.version ?? 'lts'}`
     const wrappedActions: Record<string, AnyType> = {}

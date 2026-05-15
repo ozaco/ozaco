@@ -1,4 +1,4 @@
-import type { Failure, Result } from 'std:result'
+import type { Result } from 'std:result'
 import type { AnyFunction, AnyType } from 'std:shared'
 
 import type { Future, Operation, Scope, Subscription } from './operation'
@@ -22,7 +22,7 @@ export namespace Helpers {
     'return' | 'next',
   ]
 
-  export type FailureOf<E> = [E] extends [never] ? never : Failure<E>
+  export type FailureOf<E> = [E] extends [never] ? never : Result.Failure<E>
 
   export type Resolve<T> = (value: T) => void
 
@@ -38,7 +38,7 @@ export namespace Helpers {
     scope: Scope
     data: {
       exit(resolve: Helpers.Resolve<Result<unknown, unknown>>): void
-      iterator: Iterator<Effect<unknown> | Failure<never>, T, unknown>
+      iterator: Iterator<Effect<unknown> | Result.Failure<never>, T, unknown>
     }
     next(result: Result<unknown, unknown>): void
     return<R>(result: Result<R, unknown>): void

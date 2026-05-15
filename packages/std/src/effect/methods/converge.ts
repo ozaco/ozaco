@@ -1,7 +1,7 @@
 import { fail } from 'std:result'
 
-import type { ConvergeOptions, ConvergeStats } from '../types/converge'
 import type { Operation } from '../types/operation'
+import type { ConvergeOptions, ConvergeStats } from '../types/utils'
 
 import { sleep } from './sleep'
 

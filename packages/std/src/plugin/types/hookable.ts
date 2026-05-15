@@ -1,13 +1,15 @@
 import type { Context, Operation } from 'std:effect'
-import type { AnyType } from 'std:shared'
+import type { AnyType, EmptyType, ExplicitObject } from 'std:shared'
 
-import type { Plugin, Protocol } from './plugin'
+export interface Hookable<TActions extends EmptyType = EmptyType> {
+  useHook(): Operation<Map<string, unknown>>
+  around(handlers: Hookable.Around<TActions>): Operation<void>
+  before(handlers: Hookable.Before<TActions>): Operation<void>
+  after(handlers: Hookable.After<TActions>): Operation<void>
+  error(handlers: Hookable.OnError<TActions>): Operation<void>
+}
 
-export namespace Helpers {
-  export type InferPluginContext<T> = T extends Plugin<infer V> ? V : never
-  export type InferProtocolContext<T> = T extends Protocol<infer V> ? V : never
-  export type InferContext<T> = T extends Context<infer V> ? V : never
-
+export namespace Hookable {
   export type AnyAction = (...args: AnyType[]) => Operation<unknown, unknown>
 
   export type AroundFn<T> = T extends (...args: infer A) => infer R
@@ -26,19 +28,7 @@ export namespace Helpers {
     ? (error: unknown, args: A) => Operation<void, E>
     : never
 
-  type KnownKeys<T> = keyof {
-    [K in keyof T as string extends K
-      ? never
-      : number extends K
-        ? never
-        : symbol extends K
-          ? never
-          : K]: T[K]
-  }
-
-  type Explicit<T> = Pick<T, KnownKeys<T> & keyof T>
-
-  export type Around<T, TE = Explicit<T>> = {
+  export type Around<T, TE = ExplicitObject<T>> = {
     [K in keyof TE]?: TE[K] extends (...args: AnyType[]) => AnyType
       ? AroundFn<TE[K]>
       : TE[K] extends Record<string, unknown>
@@ -46,7 +36,7 @@ export namespace Helpers {
         : never
   }
 
-  export type Before<T, TE = Explicit<T>> = {
+  export type Before<T, TE = ExplicitObject<T>> = {
     [K in keyof TE]?: TE[K] extends (...args: AnyType[]) => AnyType
       ? BeforeFn<TE[K]>
       : TE[K] extends Record<string, unknown>
@@ -54,7 +44,7 @@ export namespace Helpers {
         : never
   }
 
-  export type After<T, TE = Explicit<T>> = {
+  export type After<T, TE = ExplicitObject<T>> = {
     [K in keyof TE]?: TE[K] extends (...args: AnyType[]) => AnyType
       ? AfterFn<TE[K]>
       : TE[K] extends Record<string, unknown>
@@ -62,7 +52,7 @@ export namespace Helpers {
         : never
   }
 
-  export type OnError<T, TE = Explicit<T>> = {
+  export type OnError<T, TE = ExplicitObject<T>> = {
     [K in keyof TE]?: TE[K] extends (...args: AnyType[]) => AnyType
       ? ErrorFn<TE[K]>
       : TE[K] extends Record<string, unknown>

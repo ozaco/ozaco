@@ -1,4 +1,4 @@
-import type { Failure, Result } from 'std:result'
+import type { Result } from 'std:result'
 import { appendCauses, asFailure, isFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
 
@@ -24,7 +24,7 @@ export function operation<Args extends AnyType[], T, E = never>(
 
         return {
           next(value: unknown) {
-            let step: IteratorResult<Helpers.Effect<unknown> | Failure<E>, T>
+            let step: IteratorResult<Helpers.Effect<unknown> | Result.Failure<E>, T>
 
             try {
               step = inner.next(value)
@@ -36,7 +36,7 @@ export function operation<Args extends AnyType[], T, E = never>(
               return { done: true, value: step.value }
             }
             if (isFailure(step.value as AnyType)) {
-              throw appendCauses(step.value as Failure<E>, ...causes)
+              throw appendCauses(step.value as Result.Failure<E>, ...causes)
             }
             const effect = step.value as Helpers.Effect<unknown>
             return {
@@ -48,7 +48,7 @@ export function operation<Args extends AnyType[], T, E = never>(
             }
           },
           throw(error: unknown) {
-            let step: IteratorResult<Helpers.Effect<unknown> | Failure<E>, T>
+            let step: IteratorResult<Helpers.Effect<unknown> | Result.Failure<E>, T>
 
             try {
               step = inner.throw?.(error)
@@ -63,7 +63,7 @@ export function operation<Args extends AnyType[], T, E = never>(
               throw error
             }
             if (isFailure(step.value as AnyType)) {
-              throw appendCauses(step.value as Failure<E>, ...causes)
+              throw appendCauses(step.value as Result.Failure<E>, ...causes)
             }
             const effect = step.value as Helpers.Effect<unknown>
             return {

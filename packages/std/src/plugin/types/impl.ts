@@ -1,7 +1,8 @@
 import type { Operation } from 'std:effect'
 import type { EmptyType } from 'std:shared'
 
-import type { PluginDef, Protocol } from './plugin'
+import type { Plugin } from './plugin'
+import type { Protocol } from './protocol'
 
 export namespace Impl {
   export type DefinePlugin = <TContext, TError, TArgs extends unknown[] = []>(options: {
@@ -12,7 +13,7 @@ export namespace Impl {
     description?: string | undefined
 
     setup(...args: TArgs): Operation<TContext, TError>
-  }) => PluginDef<TContext, TError, TArgs>
+  }) => Plugin.Definition<TContext, TError, TArgs>
 
   export type DefineProtocol = <
     TContext,
