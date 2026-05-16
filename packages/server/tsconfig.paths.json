@@ -8,6 +8,7 @@
       "std:effect": ["./node_modules/@ozaco/std/dist/effect.d.ts"],
       "std:event": ["./node_modules/@ozaco/std/dist/event.d.ts"],
       "std:plugin": ["./node_modules/@ozaco/std/dist/plugin.d.ts"],
+      "std:logger": ["./node_modules/@ozaco/std/dist/logger.d.ts"],
       "std:io": ["./node_modules/@ozaco/std/dist/io.d.ts"],
       "std:io/impl/bun": ["./node_modules/@ozaco/std/dist/io/impl/bun.d.ts"],
       "std:io/impl/node": ["./node_modules/@ozaco/std/dist/io/impl/node.d.ts"]
