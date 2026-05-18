@@ -75,7 +75,7 @@
     },
     "packages/db": {
       "name": "@ozaco/db",
-      "version": "0.0.4",
+      "version": "0.0.5",
       "devDependencies": {
         "@ozaco/std": "workspace:*",
         "@types/better-sqlite3": "^7.6.13",
@@ -98,12 +98,12 @@
     },
     "packages/server": {
       "name": "@ozaco/server",
-      "version": "0.0.7",
+      "version": "0.0.9",
       "devDependencies": {
         "@nats-io/nats-core": "3.3.1",
         "@nats-io/transport-node": "3.3.1",
         "@ozaco/std": "workspace:*",
-        "jose": "6.2.2",
+        "jose": "6.2.3",
         "rou3": "0.8.1",
         "tsdown": "catalog:build",
         "zod": "4.3.6",
@@ -125,7 +125,7 @@
     },
     "packages/std": {
       "name": "@ozaco/std",
-      "version": "0.0.12",
+      "version": "0.0.13",
       "devDependencies": {
         "tsdown": "catalog:build",
       },
@@ -545,7 +545,7 @@
 
     "jiti": ["jiti@2.6.1", "", { "bin": { "jiti": "lib/jiti-cli.mjs" } }, "sha512-ekilCSN1jwRvIbgeg/57YFh8qQDNbwDb9xT/qu2DAHbFFZUicIl4ygVaAvzveMhMVr3LnpSKTNnwt8PoOfmKhQ=="],
 
-    "jose": ["jose@6.2.2", "", {}, "sha512-d7kPDd34KO/YnzaDOlikGpOurfF0ByC2sEV4cANCtdqLlTfBlw2p14O/5d/zv40gJPbIQxfES3nSx1/oYNyuZQ=="],
+    "jose": ["jose@6.2.3", "", {}, "sha512-YYVDInQKFJfR/xa3ojUTl8c2KoTwiL1R5Wg9YCydwH0x0B9grbzlg5HC7mMjCtUJjbQ/YnGEZIhI5tCgfTb4Hw=="],
 
     "js-tokens": ["js-tokens@4.0.0", "", {}, "sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ=="],
 
