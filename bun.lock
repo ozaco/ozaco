@@ -75,7 +75,7 @@
     },
     "packages/db": {
       "name": "@ozaco/db",
-      "version": "0.0.4",
+      "version": "0.0.5",
       "devDependencies": {
         "@ozaco/std": "workspace:*",
         "@types/better-sqlite3": "^7.6.13",
@@ -98,7 +98,7 @@
     },
     "packages/server": {
       "name": "@ozaco/server",
-      "version": "0.0.7",
+      "version": "0.0.9",
       "devDependencies": {
         "@nats-io/nats-core": "3.3.1",
         "@nats-io/transport-node": "3.3.1",
@@ -106,7 +106,7 @@
         "jose": "6.2.2",
         "rou3": "0.8.1",
         "tsdown": "catalog:build",
-        "zod": "4.3.6",
+        "zod": "4.4.3",
       },
       "peerDependencies": {
         "@nats-io/nats-core": "^3.0.0",
@@ -125,7 +125,7 @@
     },
     "packages/std": {
       "name": "@ozaco/std",
-      "version": "0.0.12",
+      "version": "0.0.13",
       "devDependencies": {
         "tsdown": "catalog:build",
       },
@@ -744,6 +744,8 @@
     "zod": ["zod@4.3.6", "", {}, "sha512-rftlrkhHZOcjDwkGlnUtZZkvaPHCsDATp4pGpuOOMDaTdDDXF91wuVDJoWoPsKX/3YPQ5fHuF3STjcYyKr+Qhg=="],
 
     "@babel/code-frame/@babel/helper-validator-identifier": ["@babel/helper-validator-identifier@7.28.5", "", {}, "sha512-qSs4ifwzKJSV39ucNjsvc6WVHs6b7S03sOh2OcHF9UHfVPqWWALUsNUVzhSBiItjRZoLHx7nIarVjqKVusUZ1Q=="],
+
+    "@ozaco/server/zod": ["zod@4.4.3", "", {}, "sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ=="],
 
     "cliui/wrap-ansi": ["wrap-ansi@7.0.0", "", { "dependencies": { "ansi-styles": "^4.0.0", "string-width": "^4.1.0", "strip-ansi": "^6.0.0" } }, "sha512-YVGIj2kamLSTxw6NsZjoBxfSwsn0ycdesmc4p+Q21c5zPuZ1pl+NfxVdxPtdHvmNVOQ6XSYG4AUtyt/Fi7D16Q=="],
 

@@ -103,7 +103,7 @@
     "jose": "6.2.2",
     "rou3": "0.8.1",
     "tsdown": "catalog:build",
-    "zod": "4.3.6"
+    "zod": "4.4.3"
   },
   "peerDependencies": {
     "@nats-io/nats-core": "^3.0.0",
