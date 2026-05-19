@@ -1,5 +1,3 @@
-// oxlint-disable oxc/no-rest-spread-properties
-
 import type { Operation } from 'std:effect'
 import { createContext, operation } from 'std:effect'
 import { asFailure, fail, unwrap } from 'std:result'

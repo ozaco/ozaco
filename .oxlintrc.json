@@ -16,6 +16,7 @@
     "oxc/no-optional-chaining": "off",
     "oxc/no-barrel-file": "off",
     "oxc/no-async-await": "off",
+    "oxc/no-rest-spread-properties": "off",
 
     "unicorn/no-array-for-each": "warn",
     "unicorn/no-this-assignment": "off",
@@ -29,6 +30,7 @@
     "unicorn/no-nested-ternary": "off",
     "unicorn/no-array-method-this-argument": "off",
     "unicorn/no-array-callback-reference": "off",
+    "unicorn/number-literal-case": "off",
 
     "eslint/no-bitwise": "off",
     "unicorn/prefer-math-trunc": "off",

@@ -24,7 +24,6 @@ const DefaultLoggerImpl = Logger.implement<
 
     return {
       level,
-      // oxlint-disable-next-line oxc/no-rest-spread-properties
       bindings: options.bindings ? { ...options.bindings } : {},
       timestamp: options.timestamp ?? Date.now,
       errorKey: options.errorKey ?? 'err',

@@ -1,7 +1,7 @@
 import type { Context, Operation } from 'std:effect'
-import type { AnyType, EmptyType, ExplicitObject } from 'std:shared'
+import type { AnyType, ExplicitObject } from 'std:shared'
 
-export interface Hookable<TActions extends EmptyType = EmptyType> {
+export interface Hookable<TActions> {
   useHook(): Operation<Map<string, unknown>>
   around(handlers: Hookable.Around<TActions>): Operation<void>
   before(handlers: Hookable.Before<TActions>): Operation<void>
