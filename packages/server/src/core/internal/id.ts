@@ -19,3 +19,6 @@ export const randomHex = operation(function* (length: number) {
 
 export const getNodeId = () => randomHex(36)
 export const getServiceId = () => randomHex(3)
+
+export const getTraceId = () => randomHex(16)
+export const getSpanId = () => randomHex(8)

@@ -89,7 +89,7 @@ export namespace BrokerDef {
     destroying: boolean
   }
 
-  export interface Call {
+  export interface CallContext {
     service: Service
     serviceName: string
 

@@ -10,5 +10,3 @@ export const BrokerSettingContext = createContext<BrokerDef.Settings>(
     destroying: false,
   },
 )
-
-export const CallContext = createContext<BrokerDef.Call>('server:core:call')

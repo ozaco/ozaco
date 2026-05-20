@@ -32,3 +32,19 @@ export const resolveGroups = (
   }
   return out
 }
+
+export const resolveService = (
+  services: Map<string, Service>,
+  serviceName: string,
+): { service: Service; registeredName: string } | undefined => {
+  const exact = services.get(serviceName)
+  if (exact) {
+    return { service: exact, registeredName: serviceName }
+  }
+  for (const [name, svc] of services) {
+    if (svc.name === serviceName) {
+      return { service: svc, registeredName: name }
+    }
+  }
+  return undefined
+}

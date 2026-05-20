@@ -1,27 +1,36 @@
 import { operation, useContext } from 'std:effect'
 import { createEvent } from 'std:event'
-import { Logger } from 'std:logger'
-import { getService } from 'std:plugin'
-import { fail } from 'std:result'
+import { getService, install } from 'std:plugin'
+import { asFailure, fail } from 'std:result'
 
-import { CoreErrors } from '../const'
-import { Broker } from '../definitions'
-import { BrokerSettingContext, CallContext } from '../internal/context'
+import { CoreErrors, OTEL_RPC_SYSTEM, OtelAttrs, OtelSpanKind, OtelSpanStatusCode } from '../const'
+import { Broker, Tracer, Transport } from '../definitions'
+import { BrokerSettingContext } from '../internal/context'
 import { findServiceId, resolveGroups } from '../internal/helpers'
 import { getNodeId, getServiceId } from '../internal/id'
 import type { Action } from '../types/action'
 import type { BrokerDef } from '../types/broker'
 import type { Service } from '../types/service'
 
+import { DefaultTracer } from './tracer'
+import { InternalTransport } from './transport'
+
 const DefaultBrokerImpl = Broker.implement({
   name: 'server/default-broker',
   version: '0.0.0',
-  *setup(options: BrokerDef.Options) {
-    const name = options.name ?? 'default-broker'
-    const nodeId = options.nodeId ?? (yield* getNodeId())
+  *setup(options?: BrokerDef.Options) {
+    const name = options?.name ?? 'default-broker'
+    const nodeId = options?.nodeId ?? (yield* getNodeId())
 
-    const services: BrokerDef.Context['services'] = new Map(Object.entries(options.services ?? {}))
+    const services: BrokerDef.Context['services'] = new Map(Object.entries(options?.services ?? {}))
     const bus: BrokerDef.Context['bus'] = createEvent()
+
+    if ((yield* Tracer.context.get()) === undefined) {
+      yield* install(DefaultTracer)
+    }
+    if ((yield* Transport.context.get()) === undefined) {
+      yield* install(InternalTransport)
+    }
 
     return {
       name,
@@ -150,62 +159,57 @@ export const DefaultBroker = DefaultBrokerImpl.build({
     const ctx = yield* useContext(DefaultBrokerImpl)
     const raw = yield* getService(target)
 
-    let service: Service | undefined
-    let serviceName: string | undefined
-    for (const [name, svc] of ctx.services) {
-      if (svc.name === raw.options.name) {
-        service = svc
-        serviceName = name
-        break
-      }
-    }
-
-    if (!service || !serviceName) {
-      return yield* fail(
-        CoreErrors.NotFound,
-        `service "${raw.options.name}" not registered on broker "${ctx.name}"`,
-      )
-    }
-
-    const callValue: BrokerDef.Call = {
-      service,
-      serviceName,
-
-      action: target,
-      actionKey: raw.key,
-
-      raw: { req: rawReq, res: undefined },
-    }
-
-    const hasLogger = (yield* Logger.context.get()) !== undefined
-
-    return yield* CallContext.with(callValue, function* () {
-      const runBody = function* () {
-        const result = yield* target(...params)
-        return result === undefined ? callValue.raw.res : result
-      }
-
-      if (hasLogger) {
-        return yield* Logger.actions.child({ service: serviceName, action: raw.key }, runBody)
-      }
-
-      return yield* runBody()
+    const span = yield* Tracer.actions.startSpan(`${raw.options.name}.${raw.key}`, {
+      kind: OtelSpanKind.CLIENT,
+      attributes: {
+        [OtelAttrs.RPC_SYSTEM]: OTEL_RPC_SYSTEM,
+        [OtelAttrs.RPC_SERVICE]: raw.options.name,
+        [OtelAttrs.RPC_METHOD]: raw.key,
+        [OtelAttrs.BROKER_NAME]: ctx.name,
+        [OtelAttrs.BROKER_NODE_ID]: ctx.nodeId,
+      },
     })
+
+    const spanContextValue = yield* span.spanContext()
+
+    try {
+      return yield* Transport.actions.dispatch({
+        serviceName: raw.options.name,
+        actionKey: raw.key,
+        params,
+        rawReq,
+        traceContext: spanContextValue,
+      })
+    } catch (error) {
+      const failure = asFailure(error)
+
+      yield* span.recordException(failure)
+      yield* span.setStatus({
+        code: OtelSpanStatusCode.ERROR,
+        message: failure.message,
+        cause: failure.causes,
+      })
+
+      yield* failure
+    } finally {
+      yield* span.end()
+    }
   }) as BrokerDef.Actions['call'],
 
   emit: operation(function* (name, payload, groups) {
     const ctx = yield* useContext(DefaultBrokerImpl)
     const resolved = resolveGroups(ctx.services, groups)
 
-    ctx.bus.emit('event.emit', resolved ? { name, payload, groups: resolved } : { name, payload })
+    yield* Transport.actions.emit(
+      resolved ? { name, payload, groups: resolved } : { name, payload },
+    )
   }),
 
   broadcast: operation(function* (name, payload, groups) {
     const ctx = yield* useContext(DefaultBrokerImpl)
     const resolved = resolveGroups(ctx.services, groups)
 
-    ctx.bus.emit(
-      'event.broadcast',
+    yield* Transport.actions.broadcast(
       resolved ? { name, payload, groups: resolved } : { name, payload },
     )
   }),
