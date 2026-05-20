@@ -1,6 +1,7 @@
 import { defineProtocol } from 'std:plugin'
 
 import { BROKER, TRACER, TRANSPORT } from './const'
+import { transportBroadcast, transportDispatch, transportEmit } from './internal/transport-router'
 import type { BrokerDef } from './types/broker'
 import type { TracerDef } from './types/tracer'
 import type { TransportDef } from './types/transport'
@@ -24,6 +25,12 @@ export const Transport = defineProtocol<
 
   subtype: TRANSPORT,
   cloneable: true,
+
+  handlers: {
+    dispatch: transportDispatch,
+    emit: transportEmit,
+    broadcast: transportBroadcast,
+  },
 })
 
 export const Tracer = defineProtocol<

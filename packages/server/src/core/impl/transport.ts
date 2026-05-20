@@ -10,28 +10,24 @@ import type { Action } from '../types/action'
 import type { BrokerDef } from '../types/broker'
 import type { TransportDef } from '../types/transport'
 import { CallContext, TraceContext } from '../utils/context'
+import { useService } from '../utils/hooks'
+import { registerTransport } from '../utils/transport-registry'
 
 const InternalTransportImpl = Transport.implement({
   name: 'server/internal-transport',
   version: '0.0.0',
-  *setup(options = {}) {
-    return {
-      name: options.name ?? 'internal',
-    }
+  *setup(options: TransportDef.Options = {}) {
+    const name = options.name ?? 'internal'
+    const priority = options.priority ?? 999
+    const next = options.next ?? false
+
+    yield* registerTransport(yield* useService())
+
+    return { name, next, priority }
   },
 })
 
 export const InternalTransport = InternalTransportImpl.build({
-  emit: operation(function* (req: TransportDef.EventRequest) {
-    const broker = yield* useContext(Broker)
-    broker.bus.emit('event.emit', req.groups ? req : { name: req.name, payload: req.payload })
-  }),
-
-  broadcast: operation(function* (req: TransportDef.EventRequest) {
-    const broker = yield* useContext(Broker)
-    broker.bus.emit('event.broadcast', req.groups ? req : { name: req.name, payload: req.payload })
-  }),
-
   dispatch: operation(function* (req: TransportDef.DispatchRequest) {
     const { serviceName, actionKey, params = [], rawReq, traceContext } = req
 
@@ -89,5 +85,17 @@ export const InternalTransport = InternalTransportImpl.build({
     }
 
     return yield* invoke()
+  }),
+
+  emit: operation(function* (req: TransportDef.EventRequest) {
+    const broker = yield* useContext(Broker)
+
+    broker.bus.emit('event.emit', req.groups ? req : { name: req.name, payload: req.payload })
+  }),
+
+  broadcast: operation(function* (req: TransportDef.EventRequest) {
+    const broker = yield* useContext(Broker)
+
+    broker.bus.emit('event.broadcast', req.groups ? req : { name: req.name, payload: req.payload })
   }),
 })
