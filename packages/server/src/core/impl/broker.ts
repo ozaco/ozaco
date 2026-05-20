@@ -4,7 +4,7 @@ import { getService, install } from 'std:plugin'
 import { asFailure, fail } from 'std:result'
 
 import { CoreErrors, OTEL_RPC_SYSTEM, OtelAttrs, OtelSpanKind, OtelSpanStatusCode } from '../const'
-import { Broker, Tracer, Transport } from '../definitions'
+import { Broker, Codec, Tracer, Transport } from '../definitions'
 import { BrokerSettingContext } from '../internal/context'
 import { findServiceId, resolveGroups } from '../internal/helpers'
 import { getNodeId, getServiceId } from '../internal/id'
@@ -12,6 +12,7 @@ import type { Action } from '../types/action'
 import type { BrokerDef } from '../types/broker'
 import type { Service } from '../types/service'
 
+import { JsonCodec } from './codec'
 import { DefaultTracer } from './tracer'
 import { InternalTransport } from './transport'
 
@@ -27,6 +28,9 @@ const DefaultBrokerImpl = Broker.implement({
 
     if ((yield* Tracer.context.get()) === undefined) {
       yield* install(DefaultTracer)
+    }
+    if ((yield* Codec.context.get()) === undefined) {
+      yield* install(JsonCodec)
     }
     if ((yield* Transport.context.get()) === undefined) {
       yield* install(InternalTransport)
@@ -173,7 +177,7 @@ export const DefaultBroker = DefaultBrokerImpl.build({
     const spanContextValue = yield* span.spanContext()
 
     try {
-      return yield* Transport.actions.dispatch({
+      return yield* Transport.actions.dispatchRoot({
         serviceName: raw.options.name,
         actionKey: raw.key,
         params,

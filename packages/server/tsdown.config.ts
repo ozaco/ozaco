@@ -5,6 +5,7 @@ import { defineConfig } from 'tsdown'
 export default defineConfig({
   entry: {
     core: './src/core/index.ts',
+    'transport/nats': './src/transport/nats/index.ts',
   },
   format: ['esm', 'cjs'],
   dts: true,

@@ -1,12 +1,11 @@
-import { operation, useContext } from 'std:effect'
+import { operation, toSorted, useContext } from 'std:effect'
 import { asFailure, fail } from 'std:result'
-import { toSorted } from 'std:shared'
 
 import { CoreErrors } from '../const'
 import type { TransportDef } from '../types/transport'
 import { getTransports } from '../utils/transport-registry'
 
-export const sortedEntries = operation(function* (entries: TransportDef.Anyof[]) {
+export const sortedEntries = operation(function* (entries: TransportDef[]) {
   return yield* toSorted(entries, function* (a, b) {
     const aCtx = yield* useContext(a)
     const bCtx = yield* useContext(b)
@@ -19,7 +18,7 @@ export const transportDispatch = operation(function* (req: TransportDef.Dispatch
   const entries = yield* getTransports()
 
   if (entries.length === 0) {
-    return yield* fail(CoreErrors.MissingSettings, 'no transports registered')
+    return yield* fail(CoreErrors.MissingSettings, 'no transport registered')
   }
 
   let captured: unknown

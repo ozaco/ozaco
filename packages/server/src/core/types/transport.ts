@@ -3,6 +3,8 @@ import type { Plugin } from 'std:plugin'
 
 import type { TracerDef } from './tracer'
 
+export type TransportDef = Plugin<TransportDef.Context, unknown, unknown[], TransportDef.Actions>
+
 export namespace TransportDef {
   export interface Options {
     name?: string
@@ -37,5 +39,9 @@ export namespace TransportDef {
     broadcast(req: EventRequest): Future<void, unknown>
   }
 
-  export type Anyof = Plugin<TransportDef.Context, unknown, unknown[], TransportDef.Actions>
+  export interface Handlers {
+    dispatchRoot(req: DispatchRequest): Future<unknown, unknown>
+    emitRoot(req: EventRequest): Future<void, unknown>
+    broadcastRoot(req: EventRequest): Future<void, unknown>
+  }
 }

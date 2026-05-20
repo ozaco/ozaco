@@ -7,6 +7,7 @@ export const SERVICE = Symbol.for('server:core:service')
 export const BROKER = Symbol.for('server:core:broker')
 export const TRANSPORT = Symbol.for('broker:core:transport')
 export const TRACER = Symbol.for('server:core:tracer')
+export const CODEC = Symbol.for('server:core:codec')
 
 export const CoreErrors = createTags(
   'server:core',
@@ -23,6 +24,13 @@ export const CoreErrors = createTags(
   'payload-too-large',
   'missing-settings',
   'protocol-not-cloneable',
+
+  'codec-encode',
+  'codec-decode',
+
+  'transport-dispatch',
+  'transport-emit',
+  'transport-broadcast',
 )
 
 export const CoreStatusMap = {
@@ -38,6 +46,13 @@ export const CoreStatusMap = {
   [CoreErrors.PayloadTooLarge]: 413,
   [CoreErrors.MissingSettings]: 500,
   [CoreErrors.ProtocolNotCloneable]: 500,
+
+  [CoreErrors.CodecEncode]: 500,
+  [CoreErrors.CodecDecode]: 400,
+
+  [CoreErrors.TransportDispatch]: 502,
+  [CoreErrors.TransportEmit]: 502,
+  [CoreErrors.TransportBroadcast]: 502,
 }
 
 export const OTEL_RPC_SYSTEM = 'ozaco-broker'

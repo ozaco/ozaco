@@ -1,9 +1,12 @@
 import type { Future } from 'std:effect'
 import type { EventEmitter } from 'std:event'
+import type { Plugin } from 'std:plugin'
 import type { AnyType } from 'std:shared'
 
 import type { Action } from './action'
 import type { Service } from './service'
+
+export type BrokerDef = Plugin<BrokerDef.Context, unknown, unknown[], BrokerDef.Actions>
 
 export namespace BrokerDef {
   export interface Options {

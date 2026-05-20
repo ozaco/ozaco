@@ -1,4 +1,4 @@
-import { operation, useContext } from 'std:effect'
+import { ensure, operation, useContext } from 'std:effect'
 import { Logger } from 'std:logger'
 import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
@@ -10,24 +10,28 @@ import type { Action } from '../types/action'
 import type { BrokerDef } from '../types/broker'
 import type { TransportDef } from '../types/transport'
 import { CallContext, TraceContext } from '../utils/context'
-import { useService } from '../utils/hooks'
-import { registerTransport } from '../utils/transport-registry'
+import { registerTransport, unregisterTransport } from '../utils/transport-registry'
 
-const InternalTransportImpl = Transport.implement({
+const getSelf = (): TransportDef => InternalTransport
+
+export const InternalTransport = Transport.implement({
   name: 'server/internal-transport',
   version: '0.0.0',
   *setup(options: TransportDef.Options = {}) {
-    const name = options.name ?? 'internal'
+    const name = options.name ?? 'server/internal-transport'
     const priority = options.priority ?? 999
     const next = options.next ?? false
 
-    yield* registerTransport(yield* useService())
+    const context: TransportDef.Context = { name, next, priority }
 
-    return { name, next, priority }
+    yield* registerTransport(getSelf(), context)
+    yield* ensure(function* () {
+      yield* unregisterTransport(getSelf())
+    })
+
+    return context
   },
-})
-
-export const InternalTransport = InternalTransportImpl.build({
+}).build({
   dispatch: operation(function* (req: TransportDef.DispatchRequest) {
     const { serviceName, actionKey, params = [], rawReq, traceContext } = req
 

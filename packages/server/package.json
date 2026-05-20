@@ -23,6 +23,17 @@
         "default": "./dist/core.cjs"
       },
       "source": "./src/core/index.ts"
+    },
+    "./transport/nats": {
+      "import": {
+        "types": "./dist/transport/nats.d.ts",
+        "default": "./dist/transport/nats.js"
+      },
+      "require": {
+        "types": "./dist/transport/nats.d.cts",
+        "default": "./dist/transport/nats.cjs"
+      },
+      "source": "./src/transport/nats/index.ts"
     }
   },
   "publishConfig": {
@@ -32,9 +43,16 @@
   },
   "devDependencies": {
     "@ozaco/std": "workspace:*",
+    "nats": "^2.29.0",
     "tsdown": "catalog:build"
   },
   "peerDependencies": {
-    "@ozaco/std": "*"
+    "@ozaco/std": "*",
+    "nats": "^2.29.0"
+  },
+  "peerDependenciesMeta": {
+    "nats": {
+      "optional": true
+    }
   }
 }

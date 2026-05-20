@@ -40,6 +40,9 @@ declare module 'std:fetch' {
 declare module 'server:core' {
   export * from '@ozaco/server/core'
 }
+declare module 'server:transport/nats' {
+  export * from '@ozaco/server/transport/nats'
+}
 
 declare module 'db:core' {
   export * from '@ozaco/db'

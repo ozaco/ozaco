@@ -3,15 +3,18 @@ export * from './definitions'
 
 export * from './types/action'
 export * from './types/broker'
+export * from './types/codec'
 export * from './types/service'
 export * from './types/tracer'
 export * from './types/transport'
 
 export * from './impl/broker'
+export * from './impl/codec'
 export * from './impl/tracer'
 export * from './impl/transport'
 
 export * from './utils/action'
+export * from './utils/codec-registry'
 export * from './utils/context'
 export * from './utils/hooks'
 export * from './utils/is'

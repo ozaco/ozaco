@@ -29,6 +29,10 @@ const STD_MODULES: Record<string, ModuleEntry> = {
 
 const SERVER_MODULES: Record<string, ModuleEntry> = {
   'server:core': { subpath: 'core', source: 'core/index.ts' },
+  'server:transport/nats': {
+    subpath: 'transport/nats',
+    source: 'transport/nats/index.ts',
+  },
 }
 
 const DB_MODULES: Record<string, ModuleEntry> = {

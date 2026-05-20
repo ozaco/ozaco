@@ -4,8 +4,6 @@ export * from './types/pipe'
 export * from './types/schema'
 export * from './types/string'
 
-export * from './methods/array'
-
 export * from './utils/flatten'
 export * from './utils/is'
 export * from './utils/lazy'
