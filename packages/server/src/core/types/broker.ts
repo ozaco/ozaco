@@ -13,12 +13,16 @@ export namespace BrokerDef {
     name?: string
     nodeId?: string
 
+    shortenCauses?: boolean
+
     services?: Record<string, Service> | undefined
   }
 
   export interface Context {
     name: string
     nodeId: string
+
+    shortenCauses: boolean
 
     services: Map<string, Service>
     bus: EventEmitter<BrokerDef.EventMap>

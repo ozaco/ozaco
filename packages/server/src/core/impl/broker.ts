@@ -1,4 +1,4 @@
-import { operation, useContext } from 'std:effect'
+import { mapError, operation, useContext } from 'std:effect'
 import { createEvent } from 'std:event'
 import { getService, install } from 'std:plugin'
 import { asFailure, fail } from 'std:result'
@@ -6,7 +6,7 @@ import { asFailure, fail } from 'std:result'
 import { CoreErrors, OTEL_RPC_SYSTEM, OtelAttrs, OtelSpanKind, OtelSpanStatusCode } from '../const'
 import { Broker, Codec, Tracer, Transport } from '../definitions'
 import { BrokerSettingContext } from '../internal/context'
-import { findServiceId, resolveGroups } from '../internal/helpers'
+import { findServiceId, resolveGroups, simplifyFailureCauses } from '../internal/helpers'
 import { getNodeId, getServiceId } from '../internal/id'
 import type { Action } from '../types/action'
 import type { BrokerDef } from '../types/broker'
@@ -22,6 +22,7 @@ const DefaultBrokerImpl = Broker.implement({
   *setup(options?: BrokerDef.Options) {
     const name = options?.name ?? 'default-broker'
     const nodeId = options?.nodeId ?? (yield* getNodeId())
+    const shortenCauses = options?.shortenCauses ?? true
 
     const services: BrokerDef.Context['services'] = new Map(Object.entries(options?.services ?? {}))
     const bus: BrokerDef.Context['bus'] = createEvent()
@@ -38,6 +39,8 @@ const DefaultBrokerImpl = Broker.implement({
     return {
       name,
       nodeId,
+
+      shortenCauses,
 
       services,
       bus,
@@ -175,14 +178,16 @@ export const DefaultBroker = DefaultBrokerImpl.build({
 
     const spanContextValue = yield* span.spanContext()
 
+    const dispatchOp = Transport.actions.dispatchRoot({
+      serviceName: raw.options.name,
+      actionKey: raw.key,
+      params,
+      rawReq,
+      traceContext: spanContextValue,
+    })
+
     try {
-      return yield* Transport.actions.dispatchRoot({
-        serviceName: raw.options.name,
-        actionKey: raw.key,
-        params,
-        rawReq,
-        traceContext: spanContextValue,
-      })
+      return yield* ctx.shortenCauses ? mapError(dispatchOp, simplifyFailureCauses) : dispatchOp
     } catch (error) {
       const failure = asFailure(error)
 

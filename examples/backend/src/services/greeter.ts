@@ -1,5 +1,6 @@
 import { defineAction, defineService } from 'server:core'
 import { Logger } from 'std:logger'
+import { fail } from 'std:result'
 
 export const GreeterService = defineService({
   name: 'greeter',
@@ -8,6 +9,8 @@ export const GreeterService = defineService({
   actions: {
     salute: defineAction(function* (name: string) {
       yield* Logger.actions.info('Saluting:', name)
+
+      yield* fail('test', 'sa')
 
       return `Hi ${name}` as const
     }),

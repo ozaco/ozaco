@@ -1,4 +1,21 @@
+import type { Result } from 'std:result'
+import type { AnyType } from 'std:shared'
+
 import type { Service } from '../types/service'
+
+const NOISE_TAG_NAMES = new Set([
+  'server/broker',
+  'server/transport',
+  'server/tracer',
+  'server/codec',
+  'logger',
+])
+
+const isNoiseTag = (tag: string): boolean => {
+  const at = tag.indexOf('@')
+  const name = at === -1 ? tag : tag.slice(0, at)
+  return NOISE_TAG_NAMES.has(name)
+}
 
 export const findServiceId = (
   services: Map<string, Service>,
@@ -47,4 +64,29 @@ export const resolveService = (
     }
   }
   return undefined
+}
+
+export const simplifyFailureCauses = <E>(failure: Result.Failure<E>): Result.Failure<E> => {
+  const causes = failure.causes
+  const drop = new Set<number>()
+
+  for (let i = 0; i < causes.length; i++) {
+    if (!isNoiseTag(causes[i]!)) {
+      continue
+    }
+    drop.add(i)
+    if (i > 0) {
+      drop.add(i - 1)
+    }
+  }
+
+  if (drop.size === 0) {
+    return failure
+  }
+
+  const out = causes.filter((_, i) => !drop.has(i))
+
+  ;(failure as AnyType).causes = out
+
+  return failure
 }

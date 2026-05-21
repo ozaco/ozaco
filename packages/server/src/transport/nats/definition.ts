@@ -1,6 +1,6 @@
 import type { TransportDef } from 'server:core'
 import { Transport, registerTransport, unregisterTransport } from 'server:core'
-import { ensure, operation, until } from 'std:effect'
+import { ensure, mapError, operation, until } from 'std:effect'
 
 import { connect } from 'nats'
 
@@ -9,6 +9,7 @@ import type { Nats } from './types'
 import { brokerWathcer } from './utils/broker-watcher'
 import { consume } from './utils/consume'
 import { handleBroadcast, handleEmit } from './utils/handle-event'
+import { mapNatsFailure } from './utils/map-nats-error'
 import {
   broadcastSubject,
   broadcastWildcard,
@@ -81,9 +82,12 @@ export const NatsTransport = Transport.implement({
     const subject = dispatchSubject(nats.prefix, req.serviceName, req.actionKey)
     const payload = yield* encodeMessage(req)
 
-    const reply = yield* until(
-      nats.connection.request(subject, payload, { timeout: nats.requestTimeoutMs }),
-      `nats:request ${subject}`,
+    const reply = yield* mapError(
+      until(
+        nats.connection.request(subject, payload, { timeout: nats.requestTimeoutMs }),
+        `nats:request ${subject}`,
+      ),
+      mapNatsFailure,
     )
 
     const wire = (yield* decodeMessage(reply.data)) as Nats.Wire
