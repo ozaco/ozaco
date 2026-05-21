@@ -20,7 +20,7 @@ export const registerTransport = operation(function* (
     return
   }
 
-  yield* TransportRegistryContext.set(yield* sortedEntries([...existing, entry]))
+  yield* TransportRegistryContext.set([...existing, entry])
 })
 
 export const unregisterTransport = operation(function* (entry: TransportDef) {
@@ -37,5 +37,5 @@ export const unregisterTransport = operation(function* (entry: TransportDef) {
 })
 
 export const getTransports = operation(function* () {
-  return (yield* TransportRegistryContext.get()) ?? []
+  return yield* sortedEntries((yield* TransportRegistryContext.get()) ?? [])
 })

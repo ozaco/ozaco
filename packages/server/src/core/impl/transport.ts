@@ -19,8 +19,8 @@ export const InternalTransport = Transport.implement({
   version: '0.0.0',
   *setup(options: TransportDef.Options = {}) {
     const name = options.name ?? 'server/internal-transport'
-    const priority = options.priority ?? 999
-    const next = options.next ?? false
+    const priority = options.priority ?? 0
+    const next = options.next ?? true
 
     const context: TransportDef.Context = { name, next, priority }
 

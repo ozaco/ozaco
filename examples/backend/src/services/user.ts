@@ -1,0 +1,19 @@
+import { Broker, defineAction, defineService } from 'server:core'
+import { Logger } from 'std:logger'
+
+import { GreeterService } from './greeter'
+
+export const UserService = defineService({
+  name: 'users',
+  version: '0.0.0',
+
+  actions: {
+    greet: defineAction(function* (name: string) {
+      yield* Logger.actions.info('Called greeting with:', name)
+
+      return yield* Broker.actions.call(GreeterService.actions.salute, [name])
+    }),
+  },
+
+  *setup() {},
+})

@@ -32,9 +32,8 @@ const DefaultBrokerImpl = Broker.implement({
     if ((yield* Codec.context.get()) === undefined) {
       yield* install(JsonCodec)
     }
-    if ((yield* Transport.context.get()) === undefined) {
-      yield* install(InternalTransport)
-    }
+
+    yield* install(InternalTransport)
 
     return {
       name,

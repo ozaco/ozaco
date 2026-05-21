@@ -155,6 +155,7 @@ export const createHookable = (options: {
     const pluginTag = `${buildOptions.name}@${buildOptions.version ?? 'lts'}`
     const wrappedActions: Record<string, AnyType> = {}
     const meta = new Map<string, Record<string, AnyType>>()
+    const pluginContext = options.cloneable ? createContext(pluginTag) : context
 
     if (buildActions) {
       const flatActions = flatten(buildActions)
@@ -173,7 +174,9 @@ export const createHookable = (options: {
     const setup = function* (...args: AnyType[]) {
       const initial = (yield* hookCtx.get())!
 
-      if (!options.cloneable) {
+      if (options.cloneable) {
+        yield* pluginContext.set(yield* context.get())
+      } else {
         const other = initial.self.find(e => e.tag !== pluginTag)
         if (other) {
           return yield* fail(
@@ -193,7 +196,9 @@ export const createHookable = (options: {
           { tag: pluginTag, handlers: wrappedActions, contextValue: value as AnyType },
         ],
       })
-      yield* context.set(value as AnyType)
+
+      yield* pluginContext.set(value as AnyType)
+
       return value
     }
 
@@ -203,7 +208,7 @@ export const createHookable = (options: {
       _t: PLUGIN,
       _st: options.subtype,
 
-      context,
+      context: pluginContext,
 
       name: buildOptions.name,
       version: buildOptions.version,

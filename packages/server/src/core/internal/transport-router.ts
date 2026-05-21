@@ -30,11 +30,13 @@ export const transportDispatch = operation(function* (req: TransportDef.Dispatch
     try {
       return yield* entry.actions.dispatch(req)
     } catch (error) {
+      const failure = asFailure(error)
+
       hasFailed = true
-      captured = error
+      captured = failure
 
       if (!entryContext.next) {
-        yield* asFailure(error)
+        yield* failure
       }
     }
   }
