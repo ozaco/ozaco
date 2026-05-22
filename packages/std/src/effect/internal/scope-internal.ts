@@ -7,7 +7,6 @@ import { withResolvers } from '../methods/with-resolvers'
 import type { Helpers } from '../types/helpers'
 import type { Context, Operation, Scope, Task } from '../types/operation'
 
-import { box } from './box'
 import { Children, Priority } from './contexts'
 import { createTask } from './task'
 
@@ -90,20 +89,21 @@ export function createScopeInternal(
     destruction = withResolvers<void>()
     parent?.expect(Children).delete(scope)
     unbind()
-    let outcome = succeed()
+    let outcome: Result<void, unknown> = succeed()
     try {
       for (const destructor of destructors) {
-        destructors.delete(destructor)
-        const result = yield* box(destructor)
-        if (!isSuccess(result)) {
-          outcome = result
+        try {
+          destructors.delete(destructor)
+          yield* destructor()
+        } catch (error) {
+          outcome = asFailure(error)
         }
       }
     } finally {
       if (isSuccess(outcome)) {
         destruction.resolve()
       } else {
-        destruction.reject(outcome.error)
+        destruction.reject(outcome)
       }
     }
 

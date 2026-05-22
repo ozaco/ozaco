@@ -27,24 +27,14 @@ export const createCoroutine = <T>({
     next(result) {
       routine.data.exit(exitResult => {
         routine.data.exit = didExit => didExit(succeed())
+        const delim = scope.expect(DelimiterContext)
+
         reducer.reduce([
           scope.expect(Priority),
           routine,
           isSuccess(exitResult) ? result : exitResult,
-          scope.expect(DelimiterContext).validator,
-          'next',
-        ])
-      })
-    },
-    return(result) {
-      routine.data.exit(exitResult => {
-        routine.data.exit = didExit => didExit(succeed())
-        reducer.reduce([
-          scope.expect(Priority),
-          routine,
-          isSuccess(exitResult) ? result : exitResult,
-          scope.expect(DelimiterContext).validator,
-          'return',
+          delim,
+          delim.epoch,
         ])
       })
     },
