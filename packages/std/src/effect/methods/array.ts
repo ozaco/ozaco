@@ -1,10 +1,10 @@
 import type { Operation } from 'std:effect'
 import { all } from 'std:effect'
 
-export function* map<T, U>(
+export function* map<T, U, E>(
   arr: readonly T[],
-  mapFn: (value: T, index: number) => Operation<U>,
-): Operation<U[]> {
+  mapFn: (value: T, index: number) => Operation<U, E>,
+): Operation<U[], E> {
   const result: U[] = []
   for (let i = 0; i < arr.length; i++) {
     const mapped = yield* mapFn(arr[i]!, i)

@@ -1,7 +1,7 @@
 import type { TransportDef } from 'server:core'
 import { Codec, Transport, registerTransport, unregisterTransport } from 'server:core'
 import type { Stream } from 'std:effect'
-import { ensure, mapError, operation, until, useScope } from 'std:effect'
+import { ensure, map, mapError, operation, until, useScope } from 'std:effect'
 import { fail } from 'std:result'
 
 import { connect } from 'nats'
@@ -77,9 +77,18 @@ export const NatsTransport = Transport.implement({
     yield* registerTransport(getSelf(), context)
 
     yield* ensure(function* () {
+      yield* map([...subscriptions.entries()], function* ([, sub]) {
+        yield* until(sub.drain())
+
+        yield* ensure(function* () {
+          sub.unsubscribe()
+        })
+      })
+
+      subscriptions.clear()
+
       yield* unregisterTransport(getSelf())
       yield* until(connection.close(), 'nats:unconnect')
-      subscriptions.clear()
     })
 
     return context

@@ -1,5 +1,5 @@
 import { Broker, defineAction, defineService } from 'server:core'
-import { collect, into } from 'std:effect'
+import { collect, ensure, into } from 'std:effect'
 import { Logger } from 'std:logger'
 
 import { GreeterService } from './greeter'
@@ -17,6 +17,10 @@ export const UserService = defineService({
 
     greetMany: defineAction(function* (names: string[]) {
       yield* Logger.actions.info('Called greetMany with:', names.join(', '))
+
+      yield* ensure(function* () {
+        yield* Logger.actions.info('Exiting:', names.join(', '))
+      })
 
       const input = into(names)
 

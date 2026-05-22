@@ -1,5 +1,6 @@
 import type { Result } from 'std:result'
 import { succeed } from 'std:result'
+import type { AnyType } from 'std:shared'
 
 import { Priority } from '../internal/contexts'
 import { useCoroutine } from '../internal/coroutine'
@@ -9,9 +10,9 @@ import type { Operation } from '../types/operation'
 
 import { suspend } from './suspend'
 
-export const resource = <T>(
-  op: (provide: Helpers.Provide<T>) => Operation<void>,
-): Operation<T> => ({
+export const resource = <T, E = never>(
+  op: (provide: Helpers.Provide<T>) => Operation<void, E>,
+): Operation<T, E> => ({
   *[Symbol.iterator]() {
     const caller = yield* useCoroutine()
 
@@ -23,7 +24,7 @@ export const resource = <T>(
     return yield* trap<T>(function* () {
       const { scope, start } = createTask<void>({
         owner: caller.scope as Helpers.ScopeInternal,
-        operation: () => op(provide),
+        operation: () => op(provide) as Operation<AnyType>,
       })
 
       scope.set(Priority, caller.scope.expect(Priority))

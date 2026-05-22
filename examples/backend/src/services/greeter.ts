@@ -1,5 +1,5 @@
 import { defineAction, defineService, useStream } from 'server:core'
-import { createChannel, each, spawn } from 'std:effect'
+import { createChannel, each, ensure, sleep, spawn } from 'std:effect'
 import { Logger } from 'std:logger'
 import { fail } from 'std:result'
 
@@ -23,12 +23,18 @@ export const GreeterService = defineService({
 
       yield* Logger.actions.info('Starting saluteStream with greeting:', greeting)
 
+      yield* ensure(function* () {
+        yield* Logger.actions.info('Exiting greeter', greeting)
+      })
+
       const outputChannel = createChannel<string>()
 
       yield* spawn(function* () {
         try {
           for (const name of yield* each(input)) {
             yield* Logger.actions.info('Saluting (stream):', name)
+
+            yield* sleep(60_000)
 
             yield* outputChannel.send(`${greeting} ${name}`)
             yield* each.next()

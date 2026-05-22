@@ -7,10 +7,6 @@ import type { Operation } from '../types/operation'
 
 import { useCoroutine } from './coroutine'
 
-// Ported from effection's delimiter.ts. The state + epoch combo replaces the
-// level/finalized + validator scheme. Stale instructions (epoch mismatch) are
-// dropped at reduce time, and a cancelling delimiter forces the next
-// instruction on its routine to be processed as iterator.return.
 export class Delimiter<T>
   implements Operation<Maybe<Result<T, unknown>>>, Helpers.ErrorBoundary, Helpers.DelimiterLike
 {
