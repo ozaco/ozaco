@@ -1,5 +1,6 @@
-import type { Future } from 'std:effect'
+import type { Future, Stream } from 'std:effect'
 import type { Plugin } from 'std:plugin'
+import type { Result } from 'std:result'
 
 import type { TracerDef } from './tracer'
 
@@ -9,19 +10,20 @@ export namespace TransportDef {
   export interface Options {
     name?: string
     priority?: number
-    next?: boolean
+    next?: (failure: Result.Failure<unknown>) => boolean
   }
 
   export interface Context {
     name: string
     priority: number
-    next: boolean
+    next: (failure: Result.Failure<unknown>) => boolean
   }
 
   export interface DispatchRequest {
     serviceName: string
     actionKey: string
     params?: unknown[]
+    streams?: Stream<unknown, void>[]
     rawReq?: unknown
     traceContext?: TracerDef.SpanContext
   }

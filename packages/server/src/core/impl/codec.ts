@@ -1,5 +1,10 @@
-import { ensure, operation } from 'std:effect'
-import { fail } from 'std:result'
+import type { Stream } from 'std:effect'
+import { createChannel, each, ensure, operation, spawn, useScope } from 'std:effect'
+import type { Result } from 'std:result'
+import { asFailure, fail } from 'std:result'
+import type { AnyType } from 'std:shared'
+
+import { JSONParser } from '@streamparser/json'
 
 import { CoreErrors } from '../const'
 import { Codec } from '../definitions'
@@ -48,5 +53,75 @@ export const JsonCodec = Codec.implement({
         error instanceof Error ? error.message : String(error),
       )
     }
+  }),
+
+  encodeStream: operation(function* (stream) {
+    const channel = createChannel<Uint8Array, true | Result.Failure<unknown>>()
+
+    yield* spawn(function* () {
+      try {
+        for (const chunk of yield* each(stream)) {
+          yield* channel.send(encoder.encode(JSON.stringify(chunk)))
+
+          yield* each.next()
+        }
+      } finally {
+        yield* channel.close(true)
+      }
+    })
+
+    yield* ensure(function* () {
+      yield* channel.close(true)
+    })
+
+    return channel
+  }),
+
+  decodeStream: operation(function* (stream, json = true) {
+    const channel = createChannel<unknown, true | Result.Failure<unknown>>()
+    const scope = yield* useScope()
+    let parser: JSONParser
+
+    yield* spawn(function* () {
+      if (json) {
+        parser = new JSONParser({ separator: '' })
+
+        parser.onEnd = () => {
+          void scope.run(() => channel.close(true))
+        }
+
+        parser.onError = error => {
+          void scope.run(() => channel.close(asFailure(error)))
+        }
+
+        parser.onValue = ({ value }) => {
+          void scope.run(() => channel.send(value))
+        }
+      }
+
+      try {
+        for (const chunk of yield* each(stream)) {
+          if (json) {
+            parser.write(decoder.decode(chunk))
+          } else {
+            yield* channel.send(decoder.decode(chunk))
+          }
+
+          yield* each.next()
+        }
+      } finally {
+        if (json) {
+          parser.end()
+        } else {
+          yield* channel.close(true)
+        }
+      }
+    })
+
+    yield* ensure(function* () {
+      yield* channel.close(true)
+    })
+
+    return channel as Stream<AnyType, AnyType>
   }),
 })

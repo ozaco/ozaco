@@ -1,7 +1,12 @@
 import { defineProtocol } from 'std:plugin'
 
 import { BROKER, CODEC, TRACER, TRANSPORT } from './const'
-import { codecDecode, codecEncode } from './internal/codec-router'
+import {
+  codecDecode,
+  codecDecodeStream,
+  codecEncode,
+  codecEncodeStream,
+} from './internal/codec-router'
 import { transportBroadcast, transportDispatch, transportEmit } from './internal/transport-router'
 import type { BrokerDef } from './types/broker'
 import type { CodecDef } from './types/codec'
@@ -65,5 +70,7 @@ export const Codec = defineProtocol<
   handlers: {
     encodeRoot: codecEncode,
     decodeRoot: codecDecode,
+    encodeStreamRoot: codecEncodeStream,
+    decodeStreamRoot: codecDecodeStream,
   },
 })

@@ -1,5 +1,7 @@
+import type { Stream } from 'std:effect'
 import { ensure, operation, useContext } from 'std:effect'
 import { Logger } from 'std:logger'
+import type { Result } from 'std:result'
 import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 
@@ -9,7 +11,7 @@ import { resolveService } from '../internal/helpers'
 import type { Action } from '../types/action'
 import type { BrokerDef } from '../types/broker'
 import type { TransportDef } from '../types/transport'
-import { CallContext, TraceContext } from '../utils/context'
+import { CallContext, StreamContext, TraceContext } from '../utils/context'
 import { registerTransport, unregisterTransport } from '../utils/transport-registry'
 
 const getSelf = (): TransportDef => InternalTransport
@@ -20,9 +22,14 @@ export const InternalTransport = Transport.implement({
   *setup(options: TransportDef.Options = {}) {
     const name = options.name ?? 'server/internal-transport'
     const priority = options.priority ?? 0
-    const next = options.next ?? true
+    const next =
+      options.next ?? ((failure: Result.Failure<unknown>) => failure.error === CoreErrors.NotFound)
 
-    const context: TransportDef.Context = { name, next, priority }
+    const context: TransportDef.Context = {
+      name,
+      priority,
+      next,
+    }
 
     yield* registerTransport(getSelf(), context)
     yield* ensure(function* () {
@@ -34,6 +41,7 @@ export const InternalTransport = Transport.implement({
 }).build({
   dispatch: operation(function* (req: TransportDef.DispatchRequest) {
     const { serviceName, actionKey, params = [], rawReq, traceContext } = req
+    const streams = (req.streams ?? []) as Stream<unknown, void>[]
 
     const broker = yield* useContext(Broker)
     const resolved = resolveService(broker.services, serviceName)
@@ -68,19 +76,21 @@ export const InternalTransport = Transport.implement({
 
     const invoke = function* () {
       return yield* CallContext.with(callValue, function* () {
-        const runBody = function* () {
-          const result = yield* action(...params)
-          return result === undefined ? callValue.raw.res : result
-        }
+        return yield* StreamContext.with(streams, function* () {
+          const runBody = function* () {
+            const result = yield* action(...params)
+            return result === undefined ? callValue.raw.res : result
+          }
 
-        if (hasLogger) {
-          return yield* Logger.actions.child(
-            { service: registeredName, action: actionKey },
-            runBody,
-          )
-        }
+          if (hasLogger) {
+            return yield* Logger.actions.child(
+              { service: registeredName, action: actionKey },
+              runBody,
+            )
+          }
 
-        return yield* runBody()
+          return yield* runBody()
+        })
       })
     }
 

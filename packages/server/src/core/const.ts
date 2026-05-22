@@ -27,6 +27,8 @@ export const CoreErrors = createTags(
 
   'codec-encode',
   'codec-decode',
+  'codec-encode-stream',
+  'codec-decode-stream',
 
   'transport-dispatch',
   'transport-emit',

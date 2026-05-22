@@ -1,4 +1,4 @@
-import type { Future } from 'std:effect'
+import type { Future, Stream, Subscription } from 'std:effect'
 import type { EventEmitter } from 'std:event'
 import type { Plugin } from 'std:plugin'
 import type { AnyType } from 'std:shared'
@@ -42,8 +42,8 @@ export namespace BrokerDef {
     call<TArgs extends unknown[] = AnyType[], TReturn = AnyType, TError = unknown>(
       target: Action<TArgs, TReturn, TError>,
       params?: NoInfer<TArgs>,
-      options?: unknown,
-    ): Future<NoInfer<TReturn>, unknown>
+      options?: BrokerDef.CallOptions,
+    ): Future<TReturn, unknown>
 
     emit(
       name: string,
@@ -107,5 +107,10 @@ export namespace BrokerDef {
       req: unknown
       res: unknown
     }
+  }
+
+  export interface CallOptions {
+    streams?: ReadonlyArray<Stream<AnyType, void> | Subscription<AnyType, void>>
+    rawReq?: unknown
   }
 }

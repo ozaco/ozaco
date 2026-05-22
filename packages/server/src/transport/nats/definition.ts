@@ -1,15 +1,16 @@
 import type { TransportDef } from 'server:core'
-import { Transport, registerTransport, unregisterTransport } from 'server:core'
-import { ensure, mapError, operation, until } from 'std:effect'
+import { Codec, Transport, registerTransport, unregisterTransport } from 'server:core'
+import type { Stream } from 'std:effect'
+import { ensure, mapError, operation, until, useScope } from 'std:effect'
+import { fail } from 'std:result'
 
 import { connect } from 'nats'
 
-import { getSelf, useNatsContext } from './internal'
-import type { Nats } from './types'
-import { brokerWathcer } from './utils/broker-watcher'
-import { consume } from './utils/consume'
-import { handleBroadcast, handleEmit } from './utils/handle-event'
-import { mapNatsFailure } from './utils/map-nats-error'
+import { getSelf, mapNatsFailure, useNatsContext } from './internal'
+import { brokerWathcer } from './internal/broker-watcher'
+import { consume } from './internal/consume'
+import { handleBroadcast, handleEmit } from './internal/handlers'
+import { pumpToNats, subscribeFromNats } from './internal/stream'
 import {
   broadcastSubject,
   broadcastWildcard,
@@ -17,8 +18,13 @@ import {
   emitGroupSubject,
   emitSubject,
   emitWildcard,
-} from './utils/subjects'
-import { decodeMessage, encodeMessage, unwrapWire } from './utils/wire'
+  streamInputSubject,
+  streamOutputSubject,
+} from './internal/subjects'
+import { unwrapWire } from './internal/wire'
+import type { Nats } from './types'
+
+const generateSid = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
 
 export const NatsTransport = Transport.implement({
   name: 'server/nats-transport',
@@ -27,11 +33,13 @@ export const NatsTransport = Transport.implement({
   *setup(options: Nats.Options = {}) {
     const name = options.name ?? 'nats'
     const priority = options.priority ?? 10
-    const next = options.next ?? false
+    const next = options.next ?? (() => false)
     const prefix = options.subjectPrefix ?? 'ozaco'
     const requestTimeoutMs = options.requestTimeoutMs ?? 5000
 
     yield* brokerWathcer()
+
+    const scope = yield* useScope()
 
     const connection = yield* until(
       connect({
@@ -63,6 +71,7 @@ export const NatsTransport = Transport.implement({
 
       subscriptions,
       connection,
+      scope,
     }
 
     yield* registerTransport(getSelf(), context)
@@ -80,24 +89,76 @@ export const NatsTransport = Transport.implement({
     const nats = yield* useNatsContext()
 
     const subject = dispatchSubject(nats.prefix, req.serviceName, req.actionKey)
-    const payload = yield* encodeMessage(req)
+    const hasStreams = req.streams !== undefined
+
+    const sid = hasStreams ? generateSid() : ''
+    const inputSubjects = hasStreams
+      ? (req.streams ?? []).map((_, i) => streamInputSubject(nats.prefix, sid, i))
+      : undefined
+    const outputSubject = hasStreams ? streamOutputSubject(nats.prefix, sid) : undefined
+
+    const payload: Nats.DispatchPayload = {
+      serviceName: req.serviceName,
+      actionKey: req.actionKey,
+      ...(req.params === undefined ? {} : { params: req.params }),
+      ...(inputSubjects === undefined ? {} : { inputSubjects }),
+      ...(outputSubject === undefined ? {} : { outputSubject }),
+      ...(req.rawReq === undefined ? {} : { rawReq: req.rawReq }),
+      ...(req.traceContext === undefined ? {} : { traceContext: req.traceContext }),
+    }
+
+    const startPayload = yield* Codec.actions.encode(payload)
 
     const reply = yield* mapError(
       until(
-        nats.connection.request(subject, payload, { timeout: nats.requestTimeoutMs }),
+        nats.connection.request(subject, startPayload, { timeout: nats.requestTimeoutMs }),
         `nats:request ${subject}`,
       ),
       mapNatsFailure,
     )
 
-    const wire = (yield* decodeMessage(reply.data)) as Nats.Wire
+    const wire = (yield* Codec.actions.decode(reply.data)) as Nats.Wire
 
-    return yield* unwrapWire(wire)
+    if (wire._t === '__failure__') {
+      return yield* unwrapWire(wire)
+    }
+
+    if (wire._t === '__stream__') {
+      if (outputSubject === undefined) {
+        return yield* fail(
+          'server:core.transport-dispatch',
+          'received stream reply but no output subject was set up',
+        )
+      }
+
+      const outSub = nats.connection.subscribe(outputSubject)
+      const outputStream = yield* subscribeFromNats(outSub, nats.scope)
+
+      if (inputSubjects !== undefined) {
+        const streams = (req.streams ?? []) as Stream<unknown, never>[]
+        for (let i = 0; i < streams.length; i++) {
+          const stream = streams[i]!
+          const subjectName = inputSubjects[i]!
+
+          nats.scope.run(function* () {
+            try {
+              yield* pumpToNats(nats.connection, subjectName, stream)
+            } catch {
+              /* input pump errors swallowed — receiver sees end/error */
+            }
+          })
+        }
+      }
+
+      return outputStream
+    }
+
+    return wire.value
   }),
 
   emit: operation(function* (req: TransportDef.EventRequest) {
     const nats = yield* useNatsContext()
-    const payload = yield* encodeMessage(req)
+    const payload = yield* Codec.actions.encode(req)
 
     if (req.groups && req.groups.length > 0) {
       for (const group of req.groups) {
@@ -111,7 +172,7 @@ export const NatsTransport = Transport.implement({
 
   broadcast: operation(function* (req: TransportDef.EventRequest) {
     const nats = yield* useNatsContext()
-    const payload = yield* encodeMessage(req)
+    const payload = yield* Codec.actions.encode(req)
 
     nats.connection.publish(broadcastSubject(nats.prefix, req.name), payload)
   }),

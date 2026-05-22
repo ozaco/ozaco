@@ -1,4 +1,5 @@
 import { operation, toSorted, useContext } from 'std:effect'
+import { Logger } from 'std:logger'
 import { asFailure, fail } from 'std:result'
 
 import { CoreErrors } from '../const'
@@ -35,7 +36,11 @@ export const transportDispatch = operation(function* (req: TransportDef.Dispatch
       hasFailed = true
       captured = failure
 
-      if (!entryContext.next) {
+      const hasNext = entryContext.next(failure)
+
+      yield* Logger.actions.debug('skipping', entry.name, `${hasNext}`)
+
+      if (!hasNext) {
         yield* failure
       }
     }

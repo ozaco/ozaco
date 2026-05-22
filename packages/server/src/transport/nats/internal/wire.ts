@@ -1,4 +1,3 @@
-import { Codec } from 'server:core'
 import { operation } from 'std:effect'
 import type { Result } from 'std:result'
 import { fail } from 'std:result'
@@ -6,7 +5,7 @@ import type { AnyType } from 'std:shared'
 
 import type { Nats } from '../types'
 
-const serializeError = (error: unknown): string => {
+export const serializeError = (error: unknown): string => {
   if (typeof error === 'string') {
     return error
   }
@@ -38,17 +37,14 @@ export const wireFailure = (failure: Result.Failure<unknown>): Nats.WireFailure 
   causes: failure.causes,
 })
 
-export const encodeMessage = operation(function* (value: unknown) {
-  return yield* Codec.actions.encode(value)
-})
-
-export const decodeMessage = operation(function* (data: Uint8Array) {
-  return yield* Codec.actions.decode(data)
-})
+export const wireStream = (): Nats.WireStream => ({ _t: '__stream__' })
 
 export const unwrapWire = operation(function* (wire: Nats.Wire) {
   if (wire._t === '__failure__') {
     return yield* fail(wire.error, wire.message, ...(wire.causes ?? []))
+  }
+  if (wire._t === '__stream__') {
+    return yield* fail('server:core.transport-dispatch', 'unexpected stream wire in unwrapWire')
   }
   return wire.value
 })

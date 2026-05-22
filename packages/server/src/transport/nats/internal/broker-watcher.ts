@@ -5,17 +5,11 @@ import { useBufferedEvent } from 'std:event'
 import { asFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
 
-import { getSelf } from '../internal'
-import type { Nats } from '../types'
+import { useNatsContext } from '../internal'
 
 import { consume } from './consume'
-import { handleDispatch } from './handle-dispatch'
+import { handleDispatch } from './handlers'
 import { dispatchServicePrefix, dispatchSubject } from './subjects'
-
-const useNatsContext = function* () {
-  const ctx = yield* useContext(getSelf())
-  return ctx as unknown as Nats.Context
-}
 
 const subscribeService = function* (service: Service) {
   const nats = yield* useNatsContext()

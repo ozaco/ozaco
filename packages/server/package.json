@@ -41,14 +41,17 @@
     "provenance": true,
     "registry": "https://registry.npmjs.org/"
   },
+  "dependencies": {
+    "@streamparser/json": "0.0.22"
+  },
   "devDependencies": {
     "@ozaco/std": "workspace:*",
-    "nats": "^2.29.0",
+    "nats": "^2.29.3",
     "tsdown": "catalog:build"
   },
   "peerDependencies": {
     "@ozaco/std": "*",
-    "nats": "^2.29.0"
+    "nats": "^2.29.3"
   },
   "peerDependenciesMeta": {
     "nats": {

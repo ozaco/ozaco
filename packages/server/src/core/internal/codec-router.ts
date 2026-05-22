@@ -1,3 +1,4 @@
+import type { Stream } from 'std:effect'
 import { operation, toSorted, useContext } from 'std:effect'
 import { fail } from 'std:result'
 
@@ -33,4 +34,27 @@ export const codecDecode = operation(function* (data: Uint8Array) {
   }
 
   return yield* entries[0]!.actions.decode(data)
+})
+
+export const codecEncodeStream = operation(function* <T>(stream: Stream<T, unknown>) {
+  const entries = (yield* CodecRegistryContext.get()) ?? []
+
+  if (entries.length === 0) {
+    return yield* fail(CoreErrors.MissingSettings, 'no codecs registered')
+  }
+
+  return yield* entries[0]!.actions.encodeStream<T>(stream)
+})
+
+export const codecDecodeStream = operation(function* <T>(
+  stream: Stream<Uint8Array, unknown>,
+  json = true,
+) {
+  const entries = (yield* CodecRegistryContext.get()) ?? []
+
+  if (entries.length === 0) {
+    return yield* fail(CoreErrors.MissingSettings, 'no codecs registered')
+  }
+
+  return yield* entries[0]!.actions.decodeStream<T>(stream, json)
 })

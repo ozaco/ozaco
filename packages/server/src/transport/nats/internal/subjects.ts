@@ -9,9 +9,14 @@ export const emitSubject = (prefix: string, name: string) => `${prefix}.event.em
 export const emitGroupSubject = (prefix: string, group: string, name: string) =>
   `${prefix}.event.emit.${group}.${name}`
 
+export const emitWildcard = (prefix: string) => `${prefix}.event.emit.>`
+
 export const broadcastSubject = (prefix: string, name: string) =>
   `${prefix}.event.broadcast.${name}`
 
-export const emitWildcard = (prefix: string) => `${prefix}.event.emit.>`
-
 export const broadcastWildcard = (prefix: string) => `${prefix}.event.broadcast.>`
+
+export const streamInputSubject = (prefix: string, sid: string, index: number) =>
+  `${prefix}.stream.${sid}.in.${index}`
+
+export const streamOutputSubject = (prefix: string, sid: string) => `${prefix}.stream.${sid}.out`

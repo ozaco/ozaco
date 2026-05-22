@@ -56,14 +56,17 @@
     "packages/server": {
       "name": "@ozaco/server",
       "version": "0.0.9",
+      "dependencies": {
+        "@streamparser/json": "0.0.22",
+      },
       "devDependencies": {
         "@ozaco/std": "workspace:*",
-        "nats": "^2.29.0",
+        "nats": "^2.29.3",
         "tsdown": "catalog:build",
       },
       "peerDependencies": {
         "@ozaco/std": "*",
-        "nats": "^2.29.0",
+        "nats": "^2.29.3",
       },
       "optionalPeers": [
         "nats",
@@ -306,6 +309,8 @@
     "@simple-libs/child-process-utils": ["@simple-libs/child-process-utils@1.0.2", "", { "dependencies": { "@simple-libs/stream-utils": "^1.2.0" } }, "sha512-/4R8QKnd/8agJynkNdJmNw2MBxuFTRcNFnE5Sg/G+jkSsV8/UBgULMzhizWWW42p8L5H7flImV2ATi79Ove2Tw=="],
 
     "@simple-libs/stream-utils": ["@simple-libs/stream-utils@1.2.0", "", {}, "sha512-KxXvfapcixpz6rVEB6HPjOUZT22yN6v0vI0urQSk1L8MlEWPDFCZkhw2xmkyoTGYeFw7tWTZd7e3lVzRZRN/EA=="],
+
+    "@streamparser/json": ["@streamparser/json@0.0.22", "", {}, "sha512-b6gTSBjJ8G8SuO3Gbbj+zXbVx8NSs1EbpbMKpzGLWMdkR+98McH9bEjSz3+0mPJf68c5nxa3CrJHp5EQNXM6zQ=="],
 
     "@tybys/wasm-util": ["@tybys/wasm-util@0.10.1", "", { "dependencies": { "tslib": "^2.4.0" } }, "sha512-9tTaPJLSiejZKx+Bmog4uSubteqTvFrVrURwkmHixBo0G4seD0zUxp98E1DzUBJxLQ3NPwXrGKDiVjwx/DpPsg=="],
 

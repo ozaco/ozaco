@@ -1,4 +1,5 @@
 import { Broker, defineAction, defineService } from 'server:core'
+import { collect, into } from 'std:effect'
 import { Logger } from 'std:logger'
 
 import { GreeterService } from './greeter'
@@ -12,6 +13,18 @@ export const UserService = defineService({
       yield* Logger.actions.info('Called greeting with:', name)
 
       return yield* Broker.actions.call(GreeterService.actions.salute, [name])
+    }),
+
+    greetMany: defineAction(function* (names: string[]) {
+      yield* Logger.actions.info('Called greetMany with:', names.join(', '))
+
+      const input = into(names)
+
+      const output = yield* Broker.actions.call(GreeterService.actions.saluteStream, ['Hi'], {
+        streams: [input],
+      })
+
+      return yield* collect<string>(output)
     }),
   },
 

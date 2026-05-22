@@ -1,5 +1,6 @@
-import type { Future } from 'std:effect'
+import type { Future, Stream } from 'std:effect'
 import type { Plugin } from 'std:plugin'
+import type { Result } from 'std:result'
 
 import type { CoreErrors } from '../const'
 
@@ -22,10 +23,26 @@ export namespace CodecDef {
   export interface Actions {
     encode(value: unknown): Future<Uint8Array, unknown>
     decode(data: Uint8Array): Future<unknown, unknown>
+
+    encodeStream<T>(
+      stream: Stream<T, unknown>,
+    ): Future<Stream<Uint8Array, true | Result.Failure<unknown>>, unknown>
+    decodeStream<T>(
+      stream: Stream<Uint8Array, unknown>,
+      json?: boolean,
+    ): Future<Stream<T, true | Result.Failure<unknown>>, unknown>
   }
 
   export interface Handlers {
     encodeRoot(value: unknown): Future<Uint8Array, unknown>
     decodeRoot(data: Uint8Array): Future<unknown, unknown>
+
+    encodeStreamRoot<T>(
+      stream: Stream<T, unknown>,
+    ): Future<Stream<Uint8Array, true | Result.Failure<unknown>>, unknown>
+    decodeStreamRoot<T>(
+      stream: Stream<Uint8Array, unknown>,
+      json?: boolean,
+    ): Future<Stream<T, true | Result.Failure<unknown>>, unknown>
   }
 }

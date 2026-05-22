@@ -1,10 +1,12 @@
 import { mapError, operation, useContext } from 'std:effect'
 import { createEvent } from 'std:event'
 import { getService, install } from 'std:plugin'
-import { asFailure, fail } from 'std:result'
+import { fail } from 'std:result'
+import type { AnyType } from 'std:shared'
 
-import { CoreErrors, OTEL_RPC_SYSTEM, OtelAttrs, OtelSpanKind, OtelSpanStatusCode } from '../const'
+import { CoreErrors } from '../const'
 import { Broker, Codec, Tracer, Transport } from '../definitions'
+import { checkBrokerSettings, withCallSpan } from '../internal/call-helpers'
 import { BrokerSettingContext } from '../internal/context'
 import { findServiceId, resolveGroups, simplifyFailureCauses } from '../internal/helpers'
 import { getNodeId, getServiceId } from '../internal/id'
@@ -149,59 +151,35 @@ export const DefaultBroker = DefaultBrokerImpl.build({
     ctx.bus.emit('service.unregistered', target)
   }),
 
-  call: operation(function* (target: Action, params: unknown[] = [], rawReq: unknown = undefined) {
-    const settings = (yield* BrokerSettingContext.get())!
+  call: operation(function* (
+    target: Action,
+    params: unknown[] = [],
+    options: BrokerDef.CallOptions = {},
+  ) {
+    yield* checkBrokerSettings()
 
-    if (settings.destroying) {
-      return yield* fail(CoreErrors.BrokerInternal, 'broker is being destroyed')
-    }
-    if (settings.paused) {
-      return yield* fail(CoreErrors.BrokerPaused, `broker is paused: ${settings.paused}`)
-    }
-    if (!settings.started) {
-      return yield* fail(CoreErrors.BrokerInternal, 'broker is not started')
-    }
-
-    const ctx = yield* useContext(DefaultBrokerImpl)
+    const broker = yield* useContext(DefaultBrokerImpl)
     const raw = yield* getService(target)
 
-    const span = yield* Tracer.actions.startSpan(`${raw.options.name}.${raw.key}`, {
-      kind: OtelSpanKind.CLIENT,
-      attributes: {
-        [OtelAttrs.RPC_SYSTEM]: OTEL_RPC_SYSTEM,
-        [OtelAttrs.RPC_SERVICE]: raw.options.name,
-        [OtelAttrs.RPC_METHOD]: raw.key,
-        [OtelAttrs.BROKER_NAME]: ctx.name,
-        [OtelAttrs.BROKER_NODE_ID]: ctx.nodeId,
+    return yield* withCallSpan(
+      { broker, serviceName: raw.options.name, actionKey: raw.key },
+      function* (traceContext) {
+        const op = Transport.actions.dispatchRoot({
+          serviceName: raw.options.name,
+          actionKey: raw.key,
+          params,
+          ...(options.streams === undefined
+            ? {}
+            : {
+                streams: options.streams as AnyType,
+              }),
+          rawReq: options.rawReq,
+          traceContext,
+        })
+
+        return yield* broker.shortenCauses ? mapError(op, simplifyFailureCauses) : op
       },
-    })
-
-    const spanContextValue = yield* span.spanContext()
-
-    const dispatchOp = Transport.actions.dispatchRoot({
-      serviceName: raw.options.name,
-      actionKey: raw.key,
-      params,
-      rawReq,
-      traceContext: spanContextValue,
-    })
-
-    try {
-      return yield* ctx.shortenCauses ? mapError(dispatchOp, simplifyFailureCauses) : dispatchOp
-    } catch (error) {
-      const failure = asFailure(error)
-
-      yield* span.recordException(failure)
-      yield* span.setStatus({
-        code: OtelSpanStatusCode.ERROR,
-        message: failure.message,
-        cause: failure.causes,
-      })
-
-      yield* failure
-    } finally {
-      yield* span.end()
-    }
+    )
   }) as BrokerDef.Actions['call'],
 
   emit: operation(function* (name, payload, groups) {

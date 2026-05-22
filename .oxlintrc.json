@@ -31,9 +31,10 @@
     "unicorn/no-array-method-this-argument": "off",
     "unicorn/no-array-callback-reference": "off",
     "unicorn/number-literal-case": "off",
-
-    "eslint/no-bitwise": "off",
     "unicorn/prefer-math-trunc": "off",
+
+    "eslint/max-lines": "off",
+    "eslint/no-bitwise": "off",
     "eslint/id-length": "off",
     "eslint/sort-keys": "off",
     "eslint/no-undefined": "off",

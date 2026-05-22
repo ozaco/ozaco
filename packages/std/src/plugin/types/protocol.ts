@@ -1,5 +1,5 @@
 import type { Context, Operation } from 'std:effect'
-import type { AnyType, EmptyType } from 'std:shared'
+import type { EmptyType } from 'std:shared'
 
 import type { PROTOCOL } from '../const'
 
@@ -39,7 +39,7 @@ export namespace Protocol {
   > {
     context: Context<TContext>
 
-    build: <TBuildedActions extends TActions & Record<string | number, AnyType>>(
+    build: <TBuildedActions extends TActions>(
       actions: TBuildedActions,
     ) => Plugin<TContext, TError, TArgs, TBuildedActions>
   }
