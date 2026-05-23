@@ -1,4 +1,4 @@
-import type { Failure } from 'std:result'
+import type { Result } from 'std:result'
 import { asFailure, fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 
@@ -8,7 +8,7 @@ import type { DbError } from '../../../types/runtime'
 const SQLITE_UNIQUE = /UNIQUE constraint failed: (?<column>.+)/u
 const SQLITE_FK = /FOREIGN KEY constraint failed/u
 
-export const classifySqliteError = (raw: unknown): Failure<DbError> => {
+export const classifySqliteError = (raw: unknown): Result.Failure<DbError> => {
   if (!raw || typeof raw !== 'object') {
     return asFailure<DbError>(raw as AnyType)
   }
@@ -20,10 +20,14 @@ export const classifySqliteError = (raw: unknown): Failure<DbError> => {
   const unique = SQLITE_UNIQUE.exec(err.message)
   if (unique) {
     const column = unique.groups?.column ?? ''
-    return fail(DbErrorCode.UniqueViolation, err.message, `column=${column}`) as Failure<DbError>
+    return fail(
+      DbErrorCode.UniqueViolation,
+      err.message,
+      `column=${column}`,
+    ) as Result.Failure<DbError>
   }
   if (SQLITE_FK.test(err.message)) {
-    return fail(DbErrorCode.ForeignKeyViolation, err.message) as Failure<DbError>
+    return fail(DbErrorCode.ForeignKeyViolation, err.message) as Result.Failure<DbError>
   }
 
   return asFailure<DbError>(raw as AnyType)

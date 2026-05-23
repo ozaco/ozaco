@@ -1,6 +1,6 @@
 import { isFailure, isResult } from 'std:result'
 
-import type { Helpers } from '../types/helpers'
+import type { LoggerDef } from '../types/logger'
 
 interface NormalizedPayload {
   msg: string
@@ -8,7 +8,7 @@ interface NormalizedPayload {
   error: string
 }
 
-export const normalizePayload = (args: readonly Helpers.LogPayload[]): NormalizedPayload => {
+export const normalizePayload = (args: readonly LoggerDef.Payload[]): NormalizedPayload => {
   let data: Record<string, unknown> | undefined
   let error = ''
   const messages: string[] = []

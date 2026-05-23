@@ -68,7 +68,7 @@ export function useBufferedEvent<
         target.off(name as AnyType, handler)
       })
 
-      return { next: queue.next } as Subscription<EventEmitter.InferType<T, K>, never>
+      return { next: queue.next }
     },
-  }
+  } as AnyType
 }

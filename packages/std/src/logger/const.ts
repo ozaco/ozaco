@@ -1,2 +1,13 @@
 export const LOGGER = Symbol.for('std:logger')
 export const LOGGER_TRANSPORT = Symbol.for('std:logger:transport')
+
+export enum LogLevel {
+  trace = 10,
+  debug = 20,
+  info = 30,
+  warn = 40,
+  error = 50,
+  fatal = 60,
+  // oxlint-disable-next-line typescript/prefer-literal-enum-member
+  silent = Number.POSITIVE_INFINITY,
+}

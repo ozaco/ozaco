@@ -119,6 +119,7 @@ export namespace Helpers {
 
   export interface ScopeInternal extends Scope, AsyncDisposable {
     contexts: Record<string, unknown>
+    snapshotKeys: Set<string>
     ensure(op: () => Operation<void>): () => void
   }
 

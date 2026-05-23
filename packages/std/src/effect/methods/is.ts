@@ -1,6 +1,6 @@
 import type { AnyType } from 'std:shared'
 
-import { CONTEXT, SCOPE } from '../const'
+import { CONTEXT, SCOPE, SNAPSHOT_FLAG } from '../const'
 import type { Context, Operation, Scope, Stream, Subscription } from '../types/operation'
 
 export const isOperation = <T>(value: Operation<T> | Promise<T> | T): value is Operation<T> =>
@@ -16,3 +16,6 @@ export const isSubscription = <T>(value: AnyType): value is Subscription<T, void
   value !== null && typeof value === 'object' && typeof value.next === 'function'
 
 export const isStream = isOperation as <T>(value: AnyType) => value is Stream<T, void>
+
+export const isSnapshotContext = (context: Context<unknown>): boolean =>
+  (context as Context<unknown> & { [SNAPSHOT_FLAG]?: boolean })[SNAPSHOT_FLAG] === true

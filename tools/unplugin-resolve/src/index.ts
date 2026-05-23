@@ -19,11 +19,11 @@ const STD_MODULES: Record<string, ModuleEntry> = {
   'std:logger': { subpath: 'logger', source: 'logger/index.ts' },
   'std:logger/transport/console': {
     subpath: 'logger/transport/console',
-    source: 'logger/transport/console.ts',
+    source: 'logger/transport/console/index.ts',
   },
   'std:logger/transport/file': {
     subpath: 'logger/transport/file',
-    source: 'logger/transport/file.ts',
+    source: 'logger/transport/file/index.ts',
   },
 }
 

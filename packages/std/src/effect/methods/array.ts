@@ -53,6 +53,18 @@ export function* filterPar<T>(
   return arr.filter((_, i) => results[i])
 }
 
+export function* reduce<T, U, E>(
+  arr: readonly T[],
+  reduceFn: (acc: U, value: T, index: number) => Operation<U, E>,
+  initial: U,
+): Operation<U, E> {
+  let acc = initial
+  for (let i = 0; i < arr.length; i++) {
+    acc = yield* reduceFn(acc, arr[i]!, i)
+  }
+  return acc
+}
+
 export function* toSorted<T>(
   arr: readonly T[],
   compareFn: (a: T, b: T) => Operation<number>,
