@@ -1,5 +1,5 @@
 import type { Stream } from 'std:effect'
-import { ensure, operation, useContext } from 'std:effect'
+import { ensure, operation, scoped, useContext } from 'std:effect'
 import { Logger } from 'std:logger'
 import type { Result } from 'std:result'
 import { fail } from 'std:result'
@@ -73,31 +73,24 @@ export const InternalTransport = Transport.implement({
 
     const hasLogger = (yield* Logger.context.get()) !== undefined
 
-    const invoke = function* () {
-      return yield* CallContext.with(callValue, function* () {
-        return yield* StreamContext.with(streams, function* () {
-          const runBody = function* () {
-            const result = yield* action(...params)
-            return result === undefined ? callValue.raw.res : result
-          }
+    return yield* scoped(function* () {
+      const runBody = function* () {
+        const result = yield* action(...params)
+        return result === undefined ? callValue.raw.res : result
+      }
 
-          if (hasLogger) {
-            return yield* Logger.actions.child(
-              { service: registeredName, action: actionKey },
-              runBody,
-            )
-          }
-
-          return yield* runBody()
+      const invoke = function* () {
+        return yield* CallContext.with(callValue, function* () {
+          return yield* StreamContext.with(streams, function* () {
+            return yield* hasLogger
+              ? Logger.actions.child({ service: registeredName, action: actionKey }, runBody)
+              : runBody()
+          })
         })
-      })
-    }
+      }
 
-    if (traceContext) {
-      return yield* TraceContext.with(traceContext, invoke)
-    }
-
-    return yield* invoke()
+      return yield* traceContext ? TraceContext.with(traceContext, invoke) : invoke()
+    } as AnyType)
   }),
 
   emit: operation(function* (req: TransportDef.EventRequest) {
