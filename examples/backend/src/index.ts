@@ -1,5 +1,5 @@
 import { Broker, DefaultBroker } from 'server:core'
-import { all, main, suspend } from 'std:effect'
+import { main, suspend } from 'std:effect'
 import { DefaultLogger, Logger } from 'std:logger'
 import { install } from 'std:plugin'
 
@@ -29,16 +29,22 @@ await main(function* () {
   yield* Broker.actions.start()
 
   if (env.service === 'user') {
-    const [response, response2] = yield* all([
-      Broker.actions.call(UserService.actions.greetMany, [['Alice', 'Bob', 'Carol']]),
-      Broker.actions.call(UserService.actions.greetMany, [['Kirito']]),
+    const response = yield* Broker.actions.call(UserService.actions.greetMany, [
+      ['Alice', 'Bob', 'Carol'],
     ])
-    yield* Logger.actions.info(
-      'Stream response:',
-      response.join(', '),
-      '-----',
-      response2.join(', '),
-    )
+
+    yield* Logger.actions.info('result', ...response)
+
+    // const [response, response2] = yield* all([
+    //   Broker.actions.call(UserService.actions.greetMany, [['Alice', 'Bob', 'Carol']]),
+    //   Broker.actions.call(UserService.actions.greetMany, [['Kirito']]),
+    // ])
+    // yield* Logger.actions.info(
+    //   'Stream response:',
+    //   response.join(', '),
+    //   '-----',
+    //   response2.join(', '),
+    // )
   }
 
   yield* suspend()

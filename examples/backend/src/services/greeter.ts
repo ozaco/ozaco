@@ -34,7 +34,7 @@ export const GreeterService = defineService({
           for (const name of yield* each(input)) {
             yield* Logger.actions.info('Saluting (stream):', name)
 
-            yield* sleep(60_000)
+            yield* sleep(10_000)
 
             yield* outputChannel.send(`${greeting} ${name}`)
             yield* each.next()

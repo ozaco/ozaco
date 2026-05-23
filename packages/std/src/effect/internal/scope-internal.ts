@@ -14,7 +14,6 @@ export function createScopeInternal(
   parent?: Scope,
 ): [Helpers.ScopeInternal, () => Operation<void>] {
   const destructors = new Set<() => Operation<void>>()
-  let parentClose: (() => Operation<void>) | undefined = undefined
 
   const contexts: Record<string, unknown> = Object.create(
     parent ? (parent as Helpers.ScopeInternal).contexts : null,
@@ -97,16 +96,6 @@ export function createScopeInternal(
         try {
           destructors.delete(destructor)
           yield* destructor()
-        } catch (error) {
-          outcome = asFailure(error)
-        }
-      }
-
-      if (parentClose) {
-        const close = parentClose
-        parentClose = undefined
-        try {
-          yield* close()
         } catch (error) {
           outcome = asFailure(error)
         }
