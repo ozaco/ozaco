@@ -1,10 +1,11 @@
-import { operation, toSorted, useContext } from 'std:effect'
+import { filter, operation, some, toSorted, useContext } from 'std:effect'
 import { Logger } from 'std:logger'
 import { asFailure, fail } from 'std:result'
 
 import { CoreErrors } from '../const'
 import type { TransportDef } from '../types/transport'
-import { getTransports } from '../utils/transport-registry'
+
+import { TransportRegistryContext } from './context'
 
 export const sortedEntries = operation(function* (entries: TransportDef[]) {
   return yield* toSorted(entries, function* (a, b) {
@@ -16,7 +17,7 @@ export const sortedEntries = operation(function* (entries: TransportDef[]) {
 })
 
 export const transportDispatch = operation(function* (req: TransportDef.DispatchRequest) {
-  const entries = yield* getTransports()
+  const entries = yield* transportGetTransportsHandler()
 
   if (entries.length === 0) {
     return yield* fail(CoreErrors.MissingSettings, 'no transport registered')
@@ -54,7 +55,7 @@ export const transportDispatch = operation(function* (req: TransportDef.Dispatch
 })
 
 export const transportEmit = operation(function* (req: TransportDef.EventRequest) {
-  const entries = yield* getTransports()
+  const entries = yield* transportGetTransportsHandler()
 
   for (const entry of entries) {
     yield* entry.actions.emit(req)
@@ -62,9 +63,51 @@ export const transportEmit = operation(function* (req: TransportDef.EventRequest
 })
 
 export const transportBroadcast = operation(function* (req: TransportDef.EventRequest) {
-  const entries = yield* getTransports()
+  const entries = yield* transportGetTransportsHandler()
 
   for (const entry of entries) {
     yield* entry.actions.broadcast(req)
   }
 })
+
+export const transportRegisterHandler: TransportDef.Handlers['register'] = operation(
+  function* (transport, transportCtx) {
+    const existing = (yield* TransportRegistryContext.get()) ?? []
+
+    if (
+      yield* some(existing, function* (target) {
+        const targetCtx = yield* useContext(target)
+
+        return targetCtx.name === transportCtx.name
+      })
+    ) {
+      return yield* fail(
+        'unexpected',
+        `Logger transport ${transportCtx.name} is already registered`,
+      )
+    }
+
+    yield* TransportRegistryContext.set([...existing, transport])
+  },
+)
+
+export const transportUnregisterHandler: TransportDef.Handlers['unregister'] = operation(
+  function* (transport) {
+    const existing = yield* transportGetTransportsHandler()
+    const transportCtx = yield* useContext(transport)
+
+    yield* TransportRegistryContext.set(
+      yield* filter(existing, function* (target) {
+        const targetCtx = yield* useContext(target)
+
+        return targetCtx.name === transportCtx.name
+      }),
+    )
+  },
+)
+
+export const transportGetTransportsHandler: TransportDef.Handlers['getTransports'] = operation(
+  function* () {
+    return yield* sortedEntries((yield* TransportRegistryContext.get()) ?? [])
+  },
+)

@@ -1,5 +1,5 @@
 import type { Stream } from 'std:effect'
-import { operation, toSorted, useContext } from 'std:effect'
+import { filter, operation, some, toSorted, useContext } from 'std:effect'
 import { fail } from 'std:result'
 
 import { CoreErrors } from '../const'
@@ -17,7 +17,7 @@ export const sortedCodecs = operation(function* (entries: CodecDef[]) {
 })
 
 export const codecEncode = operation(function* (value: unknown) {
-  const entries = (yield* CodecRegistryContext.get()) ?? []
+  const entries = yield* codecGetTransportsHandler()
 
   if (entries.length === 0) {
     return yield* fail(CoreErrors.MissingSettings, 'no codecs registered')
@@ -27,7 +27,7 @@ export const codecEncode = operation(function* (value: unknown) {
 })
 
 export const codecDecode = operation(function* (data: Uint8Array) {
-  const entries = (yield* CodecRegistryContext.get()) ?? []
+  const entries = yield* codecGetTransportsHandler()
 
   if (entries.length === 0) {
     return yield* fail(CoreErrors.MissingSettings, 'no codecs registered')
@@ -37,7 +37,7 @@ export const codecDecode = operation(function* (data: Uint8Array) {
 })
 
 export const codecEncodeStream = operation(function* <T>(stream: Stream<T, unknown>) {
-  const entries = (yield* CodecRegistryContext.get()) ?? []
+  const entries = yield* codecGetTransportsHandler()
 
   if (entries.length === 0) {
     return yield* fail(CoreErrors.MissingSettings, 'no codecs registered')
@@ -50,7 +50,7 @@ export const codecDecodeStream = operation(function* <T>(
   stream: Stream<Uint8Array, unknown>,
   json = true,
 ) {
-  const entries = (yield* CodecRegistryContext.get()) ?? []
+  const entries = yield* codecGetTransportsHandler()
 
   if (entries.length === 0) {
     return yield* fail(CoreErrors.MissingSettings, 'no codecs registered')
@@ -58,3 +58,45 @@ export const codecDecodeStream = operation(function* <T>(
 
   return yield* entries[0]!.actions.decodeStream<T>(stream, json)
 })
+
+export const codecRegisterHandler: CodecDef.Handlers['register'] = operation(
+  function* (transport, transportCtx) {
+    const existing = yield* codecGetTransportsHandler()
+
+    if (
+      yield* some(existing, function* (target) {
+        const targetCtx = yield* useContext(target)
+
+        return targetCtx.name === transportCtx.name
+      })
+    ) {
+      return yield* fail(
+        'unexpected',
+        `Logger transport ${transportCtx.name} is already registered`,
+      )
+    }
+
+    yield* CodecRegistryContext.set(yield* sortedCodecs([...existing, transport]))
+  },
+)
+
+export const codecUnregisterHandler: CodecDef.Handlers['unregister'] = operation(
+  function* (transport) {
+    const existing = yield* codecGetTransportsHandler()
+    const transportCtx = yield* useContext(transport)
+
+    yield* CodecRegistryContext.set(
+      yield* filter(existing, function* (target) {
+        const targetCtx = yield* useContext(target)
+
+        return targetCtx.name === transportCtx.name
+      }),
+    )
+  },
+)
+
+export const codecGetTransportsHandler: CodecDef.Handlers['getTransports'] = operation(
+  function* () {
+    return (yield* CodecRegistryContext.get()) ?? []
+  },
+)

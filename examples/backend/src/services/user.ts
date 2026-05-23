@@ -18,14 +18,14 @@ export const UserService = defineService({
     greetMany: defineAction(function* (names: string[]) {
       yield* Logger.actions.info('Called greetMany with:', names.join(', '))
 
-      yield* ensure(function* () {
-        yield* Logger.actions.info('Exiting:', names.join(', '))
-      })
-
       const input = into(names)
 
       const output = yield* Broker.actions.call(GreeterService.actions.saluteStream, ['Hi'], {
         streams: [input],
+      })
+
+      yield* ensure(function* () {
+        yield* Logger.actions.info('Exiting:', names.join(', '))
       })
 
       return yield* collect<string>(output)

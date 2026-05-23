@@ -12,7 +12,6 @@ import type { Action } from '../types/action'
 import type { BrokerDef } from '../types/broker'
 import type { TransportDef } from '../types/transport'
 import { CallContext, StreamContext, TraceContext } from '../utils/context'
-import { registerTransport, unregisterTransport } from '../utils/transport-registry'
 
 const getSelf = (): TransportDef => InternalTransport
 
@@ -31,9 +30,9 @@ export const InternalTransport = Transport.implement({
       next,
     }
 
-    yield* registerTransport(getSelf(), context)
+    yield* Transport.actions.register(getSelf(), context)
     yield* ensure(function* () {
-      yield* unregisterTransport(getSelf())
+      yield* Transport.actions.unregister(getSelf())
     })
 
     return context

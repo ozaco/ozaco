@@ -44,5 +44,9 @@ export namespace CodecDef {
       stream: Stream<Uint8Array, unknown>,
       json?: boolean,
     ): Future<Stream<T, true | Result.Failure<unknown>>, unknown>
+
+    register(transport: CodecDef, entryCtx: CodecDef.Context): Future<void, unknown>
+    unregister(transport: CodecDef): Future<void, unknown>
+    getTransports(): Future<CodecDef[], unknown>
   }
 }

@@ -6,8 +6,18 @@ import {
   codecDecodeStream,
   codecEncode,
   codecEncodeStream,
+  codecGetTransportsHandler,
+  codecRegisterHandler,
+  codecUnregisterHandler,
 } from './internal/codec-router'
-import { transportBroadcast, transportDispatch, transportEmit } from './internal/transport-router'
+import {
+  transportBroadcast,
+  transportDispatch,
+  transportEmit,
+  transportGetTransportsHandler,
+  transportRegisterHandler,
+  transportUnregisterHandler,
+} from './internal/transport-router'
 import type { BrokerDef } from './types/broker'
 import type { CodecDef } from './types/codec'
 import type { TracerDef } from './types/tracer'
@@ -38,6 +48,10 @@ export const Transport = defineProtocol<
     dispatchRoot: transportDispatch,
     emitRoot: transportEmit,
     broadcastRoot: transportBroadcast,
+
+    register: transportRegisterHandler,
+    unregister: transportUnregisterHandler,
+    getTransports: transportGetTransportsHandler,
   },
 })
 
@@ -72,5 +86,9 @@ export const Codec = defineProtocol<
     decodeRoot: codecDecode,
     encodeStreamRoot: codecEncodeStream,
     decodeStreamRoot: codecDecodeStream,
+
+    register: codecRegisterHandler,
+    unregister: codecUnregisterHandler,
+    getTransports: codecGetTransportsHandler,
   },
 })

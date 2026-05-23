@@ -9,7 +9,6 @@ import { JSONParser } from '@streamparser/json'
 import { CoreErrors } from '../const'
 import { Codec } from '../definitions'
 import type { CodecDef } from '../types/codec'
-import { registerCodec, unregisterCodec } from '../utils/codec-registry'
 
 const encoder = new TextEncoder()
 const decoder = new TextDecoder()
@@ -25,9 +24,9 @@ export const JsonCodec = Codec.implement({
 
     const context: CodecDef.Context = { name, priority }
 
-    yield* registerCodec(getSelf(), context)
+    yield* Codec.actions.register(getSelf(), context)
     yield* ensure(function* () {
-      yield* unregisterCodec(getSelf())
+      yield* Codec.actions.unregister(getSelf())
     })
 
     return context

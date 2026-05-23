@@ -45,5 +45,9 @@ export namespace TransportDef {
     dispatchRoot(req: DispatchRequest): Future<unknown, unknown>
     emitRoot(req: EventRequest): Future<void, unknown>
     broadcastRoot(req: EventRequest): Future<void, unknown>
+
+    register(transport: TransportDef, entryCtx: TransportDef.Context): Future<void, unknown>
+    unregister(transport: TransportDef): Future<void, unknown>
+    getTransports(): Future<TransportDef[], unknown>
   }
 }
