@@ -2,7 +2,7 @@ import type { Stream } from 'std:effect'
 import { ensure, operation, scoped, useContext } from 'std:effect'
 import { Logger } from 'std:logger'
 import type { Result } from 'std:result'
-import { fail } from 'std:result'
+import { asFailure, fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import { CoreErrors } from '../const'
@@ -89,7 +89,21 @@ export const InternalTransport = Transport.implement({
         })
       }
 
-      return yield* traceContext ? TraceContext.with(traceContext, invoke) : invoke()
+      let completed = false
+      try {
+        const result = yield* traceContext ? TraceContext.with(traceContext, invoke) : invoke()
+        completed = true
+        return result
+      } finally {
+        if (!completed && hasLogger) {
+          yield* Logger.actions.child({ service: registeredName, action: actionKey }, function* () {
+            yield* Logger.actions.warn(
+              'internal:handler-cancelled',
+              asFailure(fail('cancelled', 'handler cancelled')),
+            )
+          })
+        }
+      }
     } as AnyType)
   }),
 

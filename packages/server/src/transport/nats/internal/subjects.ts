@@ -20,3 +20,5 @@ export const streamInputSubject = (prefix: string, sid: string, index: number) =
   `${prefix}.stream.${sid}.in.${index}`
 
 export const streamOutputSubject = (prefix: string, sid: string) => `${prefix}.stream.${sid}.out`
+
+export const cancelSubject = (prefix: string, cid: string) => `${prefix}.cancel.${cid}`

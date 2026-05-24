@@ -85,10 +85,6 @@ export const JsonCodec = Codec.implement({
       if (json) {
         parser = new JSONParser({ separator: '' })
 
-        parser.onEnd = () => {
-          void scope.run(() => channel.close(true))
-        }
-
         parser.onError = error => {
           void scope.run(() => channel.close(asFailure(error)))
         }
@@ -98,27 +94,29 @@ export const JsonCodec = Codec.implement({
         }
       }
 
-      try {
-        for (const chunk of yield* each(stream)) {
-          if (json) {
-            parser.write(decoder.decode(chunk))
-          } else {
-            yield* channel.send(decoder.decode(chunk))
-          }
+      const subscription = yield* stream
+      let closeValue: true | Result.Failure<unknown> = asFailure(fail('cancelled', 'stream halted'))
 
-          yield* each.next()
+      try {
+        while (true) {
+          const next = yield* subscription.next()
+          if (next.done) {
+            closeValue = (next.value ?? true) as true | Result.Failure<unknown>
+            break
+          }
+          if (json) {
+            parser.write(decoder.decode(next.value))
+          } else {
+            yield* channel.send(decoder.decode(next.value))
+          }
         }
       } finally {
         if (json) {
           parser.end()
-        } else {
-          yield* channel.close(true)
         }
-      }
-    })
 
-    yield* ensure(function* () {
-      yield* channel.close(true)
+        yield* channel.close(closeValue)
+      }
     })
 
     return channel as Stream<AnyType, AnyType>

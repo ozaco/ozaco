@@ -42,17 +42,48 @@ export const pumpToNats = function* (
   subject: string,
   source: Stream<unknown, unknown>,
 ): Operation<void, unknown> {
+  let outcome: 'end' | Result.Failure<unknown> | undefined
+
   try {
     for (const chunk of yield* each(yield* Codec.actions.encodeStream(source))) {
       connection.publish(subject, chunk)
 
       yield* each.next()
     }
-
-    connection.publish(subject, EMPTY, { headers: endHeaders() })
+    outcome = 'end'
   } catch (error) {
-    const payload = yield* Codec.actions.encode(failureToPayload(asFailure(error)))
-    connection.publish(subject, payload, { headers: errorHeaders() })
+    outcome = asFailure(error)
+  } finally {
+    try {
+      if (outcome === 'end') {
+        connection.publish(subject, EMPTY, { headers: endHeaders() })
+      } else {
+        const failure = outcome ?? (fail('cancelled', 'pump halted') as Result.Failure<unknown>)
+        const payload = yield* Codec.actions.encode(failureToPayload(failure))
+        connection.publish(subject, payload, { headers: errorHeaders() })
+      }
+    } catch {
+      /* connection may already be torn down */
+    }
+  }
+}
+
+export const pumpInputStreams = (
+  target: { connection: NatsConnection; scope: Scope },
+  inputSubjects: readonly string[],
+  streams: readonly Stream<unknown, unknown>[],
+): void => {
+  for (let i = 0; i < streams.length; i++) {
+    const stream = streams[i]!
+    const subjectName = inputSubjects[i]!
+
+    target.scope.run(function* () {
+      try {
+        yield* pumpToNats(target.connection, subjectName, stream)
+      } catch {
+        /* input pump errors swallowed — receiver sees end/error */
+      }
+    })
   }
 }
 
@@ -63,6 +94,7 @@ export const subscribeFromNats = function* (
   const raw = createChannel<Uint8Array, true | Result.Failure<unknown>>()
 
   const reader = function* () {
+    let closed = false
     try {
       const natsStream = into<Msg>(sub as AsyncIterable<Msg>)
 
@@ -71,12 +103,14 @@ export const subscribeFromNats = function* (
 
         if (event === EVENT_END) {
           yield* raw.close(true)
+          closed = true
           return
         }
 
         if (event === EVENT_ERROR) {
           const payload = (yield* Codec.actions.decode(msg.data)) as Nats.StreamErrorPayload
           yield* raw.close(failureFromPayload(payload))
+          closed = true
           return
         }
 
@@ -85,7 +119,10 @@ export const subscribeFromNats = function* (
         yield* each.next()
       }
     } finally {
-      yield* raw.close(true)
+      if (!closed) {
+        yield* raw.close(asFailure(fail('cancelled', 'reader halted')))
+      }
+
       if (!sub.isClosed()) {
         sub.unsubscribe()
       }

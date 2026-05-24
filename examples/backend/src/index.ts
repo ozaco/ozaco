@@ -33,7 +33,7 @@ await main(function* () {
       ['Alice', 'Bob', 'Carol'],
     ])
 
-    yield* Logger.actions.info('result', ...response)
+    yield* Logger.actions.info('result here', ...response)
 
     // const [response, response2] = yield* all([
     //   Broker.actions.call(UserService.actions.greetMany, [['Alice', 'Bob', 'Carol']]),

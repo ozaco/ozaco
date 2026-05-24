@@ -1,3 +1,4 @@
+import { isFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
 import { isAsyncIterable } from 'std:shared'
 
@@ -59,6 +60,9 @@ export const collect = operation(function* <R>(
     const next = yield* subscription.next()
 
     if (next.done) {
+      if (isFailure(next.value)) {
+        yield* next.value
+      }
       return items
     }
     items.push(yield* map(next.value) as AnyType)

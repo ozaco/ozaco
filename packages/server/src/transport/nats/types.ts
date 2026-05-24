@@ -21,6 +21,7 @@ export namespace Nats {
   }
 
   export interface DispatchPayload {
+    cid: string
     serviceName: string
     actionKey: string
     params?: unknown[]

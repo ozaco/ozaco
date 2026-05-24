@@ -1,7 +1,7 @@
 import type { Action, BrokerDef, Service, TransportDef } from 'server:core'
 import { Broker, CallContext, Codec, CoreErrors, StreamContext, TraceContext } from 'server:core'
 import type { Stream } from 'std:effect'
-import { isStream, operation, useContext } from 'std:effect'
+import { ensure, into, isStream, operation, spawn, useContext } from 'std:effect'
 import { Logger } from 'std:logger'
 import type { Result } from 'std:result'
 import { asFailure, fail, isSuccess, succeed } from 'std:result'
@@ -13,6 +13,7 @@ import { useNatsContext } from '../internal'
 import type { Nats } from '../types'
 
 import { pumpToNats, subscribeFromNats } from './stream'
+import { cancelSubject } from './subjects'
 import { wireFailure, wireStream, wireSuccess } from './wire'
 
 interface InvokeArgs {
@@ -131,66 +132,110 @@ export const handleDispatch = (service: Service, actionKey: string) =>
     }
 
     const req = decoded.value as Nats.DispatchPayload
+
+    const cid = req.cid
     const inputSubjects = req.inputSubjects ?? []
     const outputSubject = req.outputSubject
 
-    const { streams, subs } = yield* captureInputStreams(inputSubjects)
+    const nats = yield* useNatsContext()
+    const cancelSub = nats.connection.subscribe(cancelSubject(nats.prefix, cid))
 
-    let outcome: Result<unknown, unknown>
-    try {
-      outcome = succeed(
-        yield* invokeAction({
-          service,
-          actionKey,
-          params: req.params ?? [],
-          streams,
-          rawReq: req.rawReq,
-          traceContext: req.traceContext,
-        }),
-      )
-    } catch (error) {
-      outcome = asFailure(error)
-    }
+    yield* ensure(function* () {
+      if (!cancelSub.isClosed()) {
+        cancelSub.unsubscribe()
+      }
+    })
 
-    if (!isSuccess(outcome)) {
-      for (const sub of subs) {
-        if (!sub.isClosed()) {
-          sub.unsubscribe()
+    const handlerTask = yield* spawn(function* () {
+      let responded = false
+
+      const respond = function* (wire: Nats.Wire) {
+        if (responded || !msg.reply) {
+          return
+        }
+        responded = true
+        try {
+          msg.respond(yield* encodeReply(wire))
+        } catch {
+          /* connection may already be torn down */
         }
       }
-      if (msg.reply) {
-        msg.respond(yield* encodeReply(wireFailure(outcome)))
-      }
-      return
-    }
 
-    if (outputSubject !== undefined && isStream(outcome.value)) {
-      const nats = yield* useNatsContext()
-      const output = outcome.value
+      yield* ensure(function* () {
+        yield* respond(wireFailure(asFailure(fail('cancelled', 'handler cancelled'))))
+      })
 
-      if (msg.reply) {
-        msg.respond(yield* encodeReply(wireStream()))
-      }
+      const { streams, subs } = yield* captureInputStreams(inputSubjects)
 
-      try {
-        yield* pumpToNats(nats.connection, outputSubject, output)
-      } finally {
+      const unsubscribeInputs = () => {
         for (const sub of subs) {
           if (!sub.isClosed()) {
             sub.unsubscribe()
           }
         }
       }
-      return
-    }
 
-    for (const sub of subs) {
-      if (!sub.isClosed()) {
-        sub.unsubscribe()
+      let outcome: Result<unknown, unknown>
+      try {
+        outcome = succeed(
+          yield* invokeAction({
+            service,
+            actionKey,
+            params: req.params ?? [],
+            streams,
+            rawReq: req.rawReq,
+            traceContext: req.traceContext,
+          }),
+        )
+      } catch (error) {
+        outcome = asFailure(error)
       }
-    }
 
-    if (msg.reply) {
-      msg.respond(yield* encodeReply(wireSuccess(outcome.value)))
+      if (!isSuccess(outcome)) {
+        unsubscribeInputs()
+        yield* respond(wireFailure(outcome))
+        return
+      }
+
+      if (outputSubject !== undefined && isStream(outcome.value)) {
+        const output = outcome.value
+        yield* respond(wireStream())
+        try {
+          yield* pumpToNats(nats.connection, outputSubject, output)
+        } finally {
+          unsubscribeInputs()
+        }
+        return
+      }
+
+      unsubscribeInputs()
+      yield* respond(wireSuccess(outcome.value))
+    })
+
+    yield* spawn(function* () {
+      const subscription = yield* into(cancelSub as AsyncIterable<Msg>)
+      const next = yield* subscription.next()
+      if (!next.done) {
+        yield* handlerTask.halt()
+      }
+    })
+
+    let completed = false
+    try {
+      try {
+        yield* handlerTask
+        completed = true
+      } catch {
+        /* swallow halt — logged below */
+      }
+    } finally {
+      if (!completed && (yield* Logger.context.get()) !== undefined) {
+        yield* Logger.actions.child({ service: service.name, action: actionKey }, function* () {
+          yield* Logger.actions.warn(
+            'nats:handler-cancelled',
+            asFailure(fail('cancelled', 'handler cancelled')),
+          )
+        })
+      }
     }
   })

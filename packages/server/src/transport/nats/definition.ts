@@ -10,10 +10,11 @@ import { getSelf, mapNatsFailure, useNatsContext } from './internal'
 import { brokerWathcer } from './internal/broker-watcher'
 import { consume } from './internal/consume'
 import { handleBroadcast, handleEmit } from './internal/handlers'
-import { pumpToNats, subscribeFromNats } from './internal/stream'
+import { pumpInputStreams, subscribeFromNats } from './internal/stream'
 import {
   broadcastSubject,
   broadcastWildcard,
+  cancelSubject,
   dispatchSubject,
   emitGroupSubject,
   emitSubject,
@@ -37,8 +38,6 @@ export const NatsTransport = Transport.implement({
     const prefix = options.subjectPrefix ?? 'ozaco'
     const requestTimeoutMs = options.requestTimeoutMs ?? 5000
 
-    yield* brokerWathcer()
-
     const scope = yield* useScope()
 
     const connection = yield* until(
@@ -50,6 +49,23 @@ export const NatsTransport = Transport.implement({
     )
 
     const subscriptions: Nats.Context['subscriptions'] = new Map()
+
+    yield* ensure(function* () {
+      yield* map([...subscriptions.entries()], function* ([, sub]) {
+        yield* until(sub.drain())
+
+        yield* ensure(function* () {
+          sub.unsubscribe()
+        })
+      })
+
+      subscriptions.clear()
+
+      yield* Transport.actions.unregister(getSelf())
+      yield* until(connection.close(), 'nats:unconnect')
+    })
+
+    yield* brokerWathcer()
 
     const emitSub = connection.subscribe(emitWildcard(prefix))
     subscriptions.set(emitWildcard(prefix), emitSub)
@@ -76,21 +92,6 @@ export const NatsTransport = Transport.implement({
 
     yield* Transport.actions.register(getSelf(), context)
 
-    yield* ensure(function* () {
-      yield* map([...subscriptions.entries()], function* ([, sub]) {
-        yield* until(sub.drain())
-
-        yield* ensure(function* () {
-          sub.unsubscribe()
-        })
-      })
-
-      subscriptions.clear()
-
-      yield* Transport.actions.unregister(getSelf())
-      yield* until(connection.close(), 'nats:unconnect')
-    })
-
     return context
   },
 }).build({
@@ -100,13 +101,18 @@ export const NatsTransport = Transport.implement({
     const subject = dispatchSubject(nats.prefix, req.serviceName, req.actionKey)
     const hasStreams = req.streams !== undefined
 
-    const sid = hasStreams ? generateSid() : ''
+    const cid = generateSid()
     const inputSubjects = hasStreams
-      ? (req.streams ?? []).map((_, i) => streamInputSubject(nats.prefix, sid, i))
+      ? (req.streams ?? []).map((_, i) => streamInputSubject(nats.prefix, cid, i))
       : undefined
-    const outputSubject = hasStreams ? streamOutputSubject(nats.prefix, sid) : undefined
+    const outputSubject = hasStreams ? streamOutputSubject(nats.prefix, cid) : undefined
+
+    yield* ensure(function* () {
+      nats.connection.publish(cancelSubject(nats.prefix, cid), new Uint8Array(0))
+    })
 
     const payload: Nats.DispatchPayload = {
+      cid,
       serviceName: req.serviceName,
       actionKey: req.actionKey,
       ...(req.params === undefined ? {} : { params: req.params }),
@@ -144,19 +150,7 @@ export const NatsTransport = Transport.implement({
       const outputStream = yield* subscribeFromNats(outSub, nats.scope)
 
       if (inputSubjects !== undefined) {
-        const streams = (req.streams ?? []) as Stream<unknown, never>[]
-        for (let i = 0; i < streams.length; i++) {
-          const stream = streams[i]!
-          const subjectName = inputSubjects[i]!
-
-          nats.scope.run(function* () {
-            try {
-              yield* pumpToNats(nats.connection, subjectName, stream)
-            } catch {
-              /* input pump errors swallowed — receiver sees end/error */
-            }
-          })
-        }
+        pumpInputStreams(nats, inputSubjects, (req.streams ?? []) as Stream<unknown, never>[])
       }
 
       return outputStream
