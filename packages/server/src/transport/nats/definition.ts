@@ -6,11 +6,13 @@ import { fail } from 'std:result'
 
 import { connect } from 'nats'
 
-import { getSelf, mapNatsFailure, useNatsContext } from './internal'
+import { EMPTY_PAYLOAD } from './const'
 import { brokerWathcer } from './internal/broker-watcher'
 import { consume } from './internal/consume'
+import { getSelf, useNatsContext } from './internal/context'
+import { mapNatsFailure } from './internal/error-map'
 import { handleBroadcast, handleEmit } from './internal/handlers'
-import { pumpInputStreams, subscribeFromNats } from './internal/stream'
+import { pumpInputStreams } from './internal/pump'
 import {
   broadcastSubject,
   broadcastWildcard,
@@ -22,6 +24,7 @@ import {
   streamInputSubject,
   streamOutputSubject,
 } from './internal/subjects'
+import { subscribeFromNats } from './internal/subscribe'
 import { unwrapWire } from './internal/wire'
 import type { Nats } from './types'
 
@@ -40,12 +43,15 @@ export const NatsTransport = Transport.implement({
 
     const scope = yield* useScope()
 
-    const connection = yield* until(
-      connect({
-        servers: options.servers ?? 'nats://localhost:4222',
-        reconnect: true,
-      }),
-      'nats:connect',
+    const connection = yield* mapError(
+      until(
+        connect({
+          servers: options.servers ?? 'nats://localhost:4222',
+          reconnect: true,
+        }),
+        'nats:connect',
+      ),
+      mapNatsFailure,
     )
 
     const subscriptions: Nats.Context['subscriptions'] = new Map()
@@ -108,7 +114,7 @@ export const NatsTransport = Transport.implement({
     const outputSubject = hasStreams ? streamOutputSubject(nats.prefix, cid) : undefined
 
     yield* ensure(function* () {
-      nats.connection.publish(cancelSubject(nats.prefix, cid), new Uint8Array(0))
+      nats.connection.publish(cancelSubject(nats.prefix, cid), EMPTY_PAYLOAD)
     })
 
     const payload: Nats.DispatchPayload = {

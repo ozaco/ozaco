@@ -5,9 +5,8 @@ import { useBufferedEvent } from 'std:event'
 import { asFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
 
-import { useNatsContext } from '../internal'
-
 import { consume } from './consume'
+import { useNatsContext } from './context'
 import { handleDispatch } from './handlers'
 import { dispatchServicePrefix, dispatchSubject } from './subjects'
 

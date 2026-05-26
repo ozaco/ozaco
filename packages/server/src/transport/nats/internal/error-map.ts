@@ -1,21 +1,10 @@
-import type { TransportDef } from 'server:core'
-import { useContext } from 'std:effect'
 import type { Result } from 'std:result'
 import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 
-import { NatsTransport } from './definition'
-import { NatsErrors } from './errors'
-import type { Nats } from './types'
+import { NatsErrors } from '../errors'
 
-export const getSelf = (): TransportDef => NatsTransport
-
-export const useNatsContext = function* () {
-  const ctx = yield* useContext(getSelf())
-  return ctx as unknown as Nats.Context
-}
-
-export const CODE_TO_TAG: Record<string, string> = {
+const CODE_TO_TAG: Record<string, string> = {
   '503': NatsErrors.NoResponders,
   TIMEOUT: NatsErrors.Timeout,
   REQUEST_ERROR: NatsErrors.RequestError,
@@ -42,7 +31,7 @@ export const CODE_TO_TAG: Record<string, string> = {
   SUB_DRAINING: NatsErrors.SubscriptionDraining,
 }
 
-export const isNatsErrorLike = (
+const isNatsErrorLike = (
   error: unknown,
 ): error is { name: string; code: string; message: string } =>
   error !== null &&
