@@ -22,9 +22,9 @@
     "commit": "commit"
   },
   "devDependencies": {
-    "@commitlint/cli": "^20.5.2",
-    "@commitlint/config-conventional": "^20.5.0",
-    "@commitlint/prompt-cli": "^20.5.2",
+    "@commitlint/cli": "^21.0.0",
+    "@commitlint/config-conventional": "^21.0.0",
+    "@commitlint/prompt-cli": "^21.0.0",
     "@ozaco/unplugin-resolve": "workspace:*",
     "@types/bun": "^1.3.13",
     "@types/node": "^25.6.0",
