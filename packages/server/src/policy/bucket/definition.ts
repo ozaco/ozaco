@@ -9,11 +9,11 @@ import { getSelf, scheduleCleanup, tearDown } from './utils'
 export const BucketPolicy = Policy.implement({
   name: 'server/policy-bucket',
   version: '0.0.0',
-  *setup(options: Bucket.Options) {
-    const name = options.name ?? 'policy/bucket'
-    const priority = options.priority ?? 10
-    const interval = options.interval ?? 20
-    const max = options.max
+  *setup(options?: Bucket.Options) {
+    const name = options?.name ?? 'policy/bucket'
+    const priority = options?.priority ?? 10
+    const interval = options?.interval ?? 20
+    const max = options?.max ?? 100
 
     const scope = yield* useScope()
 

@@ -3,7 +3,7 @@
     "paths": {
       "server:core": ["./src/core/index.ts", "./dist/core.d.ts"],
       "server:transport/nats": ["./src/transport/nats/index.ts", "./dist/transport/nats.d.ts"],
-      "server:policies/bucket": ["./src/policies/bucket/index.ts", "./dist/policies/bucket.d.ts"],
+      "server:policy/bucket": ["./src/policy/bucket/index.ts", "./dist/policy/bucket.d.ts"],
 
       "std:shared": ["./node_modules/@ozaco/std/dist/shared.d.ts"],
       "std:result": ["./node_modules/@ozaco/std/dist/result.d.ts"],

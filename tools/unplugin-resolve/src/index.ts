@@ -33,9 +33,9 @@ const SERVER_MODULES: Record<string, ModuleEntry> = {
     subpath: 'transport/nats',
     source: 'transport/nats/index.ts',
   },
-  'server:policies/bucket': {
-    subpath: 'policies/bucket',
-    source: 'policies/bucket/index.ts',
+  'server:policy/bucket': {
+    subpath: 'policy/bucket',
+    source: 'policy/bucket/index.ts',
   },
 }
 

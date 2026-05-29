@@ -35,16 +35,16 @@
       },
       "source": "./src/transport/nats/index.ts"
     },
-    "./policies/bucket": {
+    "./policy/bucket": {
       "import": {
-        "types": "./dist/policies/bucket.d.ts",
-        "default": "./dist/policies/bucket.js"
+        "types": "./dist/policy/bucket.d.ts",
+        "default": "./dist/policy/bucket.js"
       },
       "require": {
-        "types": "./dist/policies/bucket.d.cts",
-        "default": "./dist/policies/bucket.cjs"
+        "types": "./dist/policy/bucket.d.cts",
+        "default": "./dist/policy/bucket.cjs"
       },
-      "source": "./src/policies/bucket/index.ts"
+      "source": "./src/policy/bucket/index.ts"
     }
   },
   "publishConfig": {

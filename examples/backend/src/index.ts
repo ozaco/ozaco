@@ -3,6 +3,7 @@ import { main, suspend } from 'std:effect'
 import { DefaultLogger, Logger } from 'std:logger'
 import { install } from 'std:plugin'
 
+import { BucketPolicy } from 'server:policy/bucket'
 import { NatsTransport } from 'server:transport/nats'
 import { BunIO } from 'std:io/impl/bun'
 import { ConsoleTransport } from 'std:logger/transport/console'
@@ -18,6 +19,7 @@ await main(function* () {
 
   yield* install(DefaultBroker)
   yield* install(NatsTransport)
+  yield* install(BucketPolicy)
 
   yield* install(GreeterService)
   yield* install(UserService)

@@ -4,7 +4,7 @@ import type { Helpers, Scope } from 'std:effect'
 export namespace Bucket {
   export interface Options extends PolicyDef.Options {
     interval?: number
-    max: number
+    max?: number
   }
 
   export interface Entry {
