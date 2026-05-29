@@ -5,13 +5,14 @@ import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import { CoreErrors } from '../const'
-import { Broker, Codec, Tracer, Transport } from '../definitions'
+import { Broker, Codec, Policy, Tracer, Transport } from '../definitions'
 import { checkBrokerSettings, withCallSpan } from '../internal/call-helpers'
 import { BrokerSettingContext } from '../internal/context'
 import { findServiceId, resolveGroups, simplifyFailureCauses } from '../internal/helpers'
 import { getNodeId, getServiceId } from '../internal/id'
 import type { Action } from '../types/action'
 import type { BrokerDef } from '../types/broker'
+import type { PolicyDef } from '../types/policy'
 import type { Service } from '../types/service'
 
 import { JsonCodec } from './codec'
@@ -164,7 +165,7 @@ export const DefaultBroker = DefaultBrokerImpl.build({
     return yield* withCallSpan(
       { broker, serviceName: raw.options.name, actionKey: raw.key },
       function* (traceContext) {
-        const op = Transport.actions.dispatchRoot({
+        const req = {
           serviceName: raw.options.name,
           actionKey: raw.key,
           params,
@@ -175,9 +176,23 @@ export const DefaultBroker = DefaultBrokerImpl.build({
               }),
           rawReq: options.rawReq,
           traceContext,
-        })
+        }
 
-        return yield* broker.shortenCauses ? mapError(op, simplifyFailureCauses) : op
+        const core = () => {
+          const op = Transport.actions.dispatchRoot(req)
+          return broker.shortenCauses ? mapError(op, simplifyFailureCauses) : op
+        }
+
+        const policyCtx: PolicyDef.DispatchContext = {
+          req,
+          serviceName: raw.options.name,
+          actionKey: raw.key,
+          params,
+          key: `${raw.options.name}${raw.key}${JSON.stringify(params)}`,
+          isStreaming: options.streams !== undefined,
+        }
+
+        return yield* Policy.actions.dispatchRoot(policyCtx, core)
       },
     )
   }) as BrokerDef.Actions['call'],

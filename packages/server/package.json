@@ -34,6 +34,17 @@
         "default": "./dist/transport/nats.cjs"
       },
       "source": "./src/transport/nats/index.ts"
+    },
+    "./policies/bucket": {
+      "import": {
+        "types": "./dist/policies/bucket.d.ts",
+        "default": "./dist/policies/bucket.js"
+      },
+      "require": {
+        "types": "./dist/policies/bucket.d.cts",
+        "default": "./dist/policies/bucket.cjs"
+      },
+      "source": "./src/policies/bucket/index.ts"
     }
   },
   "publishConfig": {

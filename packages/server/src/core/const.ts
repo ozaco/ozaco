@@ -8,6 +8,7 @@ export const BROKER = Symbol.for('server:core:broker')
 export const TRANSPORT = Symbol.for('broker:core:transport')
 export const TRACER = Symbol.for('server:core:tracer')
 export const CODEC = Symbol.for('server:core:codec')
+export const POLICY = Symbol.for('server:core:policy')
 
 export const CoreErrors = createTags(
   'server:core',
