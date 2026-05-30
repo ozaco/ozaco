@@ -24,8 +24,10 @@ tasks:
     command: bun x tsc -p tsconfig.json --noEmit
     deps:
       - std:build
+      - server:build
     inputs:
       - src/**/*
+      - tests/**/*
       - tsdown.config.ts
   test:
     command: bun test --pass-with-no-tests

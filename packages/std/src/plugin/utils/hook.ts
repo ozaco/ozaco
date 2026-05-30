@@ -59,7 +59,7 @@ export const createHookable = (options: {
 
         const inner = function* (...innerArgs: unknown[]) {
           if (innerArgs[0] === RAW_ACTION) {
-            return { self, context, options, key }
+            return { self, context, options, key, meta: myImpl?.meta?.get(key) }
           }
 
           for (const hook of befores) {
@@ -193,7 +193,7 @@ export const createHookable = (options: {
         ...store,
         self: [
           ...store.self.filter(e => e.tag !== pluginTag),
-          { tag: pluginTag, handlers: wrappedActions, contextValue: value as AnyType },
+          { tag: pluginTag, handlers: wrappedActions, contextValue: value as AnyType, meta },
         ],
       })
 

@@ -29,7 +29,7 @@ export const defineAction: Impl.DefineAction = (...args: AnyType[]) => {
 
     allow: config?.allow,
     deny: config?.deny,
-    settings: config?.settings,
+    settings: config?.settings ?? [],
   })
 
   return action

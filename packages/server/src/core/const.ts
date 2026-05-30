@@ -9,6 +9,7 @@ export const TRANSPORT = Symbol.for('broker:core:transport')
 export const TRACER = Symbol.for('server:core:tracer')
 export const CODEC = Symbol.for('server:core:codec')
 export const POLICY = Symbol.for('server:core:policy')
+export const POLICY_SETTING = Symbol.for('server:core:policy-setting')
 
 export const CoreErrors = createTags(
   'server:core',
@@ -34,6 +35,11 @@ export const CoreErrors = createTags(
   'transport-dispatch',
   'transport-emit',
   'transport-broadcast',
+
+  'circuit-open',
+  'bulk-queue-full',
+  'bulk-queue-timeout',
+  'timeout',
 )
 
 export const CoreStatusMap = {
@@ -56,6 +62,11 @@ export const CoreStatusMap = {
   [CoreErrors.TransportDispatch]: 502,
   [CoreErrors.TransportEmit]: 502,
   [CoreErrors.TransportBroadcast]: 502,
+
+  [CoreErrors.CircuitOpen]: 503,
+  [CoreErrors.BulkQueueFull]: 503,
+  [CoreErrors.BulkQueueTimeout]: 504,
+  [CoreErrors.Timeout]: 504,
 }
 
 export const OTEL_RPC_SYSTEM = 'ozaco-broker'

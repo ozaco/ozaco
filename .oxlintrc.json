@@ -32,6 +32,7 @@
     "unicorn/no-array-callback-reference": "off",
     "unicorn/number-literal-case": "off",
     "unicorn/prefer-math-trunc": "off",
+    "unicorn/import-style": "off",
 
     "eslint/max-lines": "off",
     "eslint/no-bitwise": "off",

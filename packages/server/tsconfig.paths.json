@@ -4,6 +4,16 @@
       "server:core": ["./src/core/index.ts", "./dist/core.d.ts"],
       "server:transport/nats": ["./src/transport/nats/index.ts", "./dist/transport/nats.d.ts"],
       "server:policy/bucket": ["./src/policy/bucket/index.ts", "./dist/policy/bucket.d.ts"],
+      "server:policy/retry": ["./src/policy/retry/index.ts", "./dist/policy/retry.d.ts"],
+      "server:policy/cache": ["./src/policy/cache/index.ts", "./dist/policy/cache.d.ts"],
+      "server:policy/circuit-breaker": [
+        "./src/policy/circuit-breaker/index.ts",
+        "./dist/policy/circuit-breaker.d.ts"
+      ],
+      "server:policy/bulk": ["./src/policy/bulk/index.ts", "./dist/policy/bulk.d.ts"],
+      "server:policy/timeout": ["./src/policy/timeout/index.ts", "./dist/policy/timeout.d.ts"],
+      "server:policy/fallback": ["./src/policy/fallback/index.ts", "./dist/policy/fallback.d.ts"],
+      "server:policy/metrics": ["./src/policy/metrics/index.ts", "./dist/policy/metrics.d.ts"],
 
       "std:shared": ["./node_modules/@ozaco/std/dist/shared.d.ts"],
       "std:result": ["./node_modules/@ozaco/std/dist/result.d.ts"],

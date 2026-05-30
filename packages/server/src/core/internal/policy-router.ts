@@ -18,7 +18,7 @@ export const policyDispatch = operation(function* <T>(
   ctx: PolicyDef.DispatchContext,
   core: PolicyDef.Next<T>,
 ) {
-  const entries = yield* policyGetPoliciesHandler()
+  const entries = yield* sortedPolicies(yield* policyGetPoliciesHandler())
 
   let chain: PolicyDef.Next<T> = core
   for (let i = entries.length - 1; i >= 0; i--) {
@@ -46,7 +46,7 @@ export const policyRegisterHandler: PolicyDef.Handlers['register'] = operation(
       return yield* fail('unexpected', `Policy ${policyCtx.name} is already registered`)
     }
 
-    yield* PolicyRegistryContext.set(yield* sortedPolicies([...existing, policy]))
+    yield* PolicyRegistryContext.set([...existing, policy])
   },
 )
 

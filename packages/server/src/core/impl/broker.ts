@@ -183,12 +183,15 @@ export const DefaultBroker = DefaultBrokerImpl.build({
           return broker.shortenCauses ? mapError(op, simplifyFailureCauses) : op
         }
 
+        const actionMeta = raw.meta as Action.Meta<unknown> | undefined
+
         const policyCtx: PolicyDef.DispatchContext = {
           req,
           serviceName: raw.options.name,
           actionKey: raw.key,
+          action: actionMeta,
           params,
-          key: `${raw.options.name}${raw.key}${JSON.stringify(params)}`,
+          key: `${raw.options.name}\u0000${raw.key}\u0000${JSON.stringify(params)}`,
           isStreaming: options.streams !== undefined,
         }
 

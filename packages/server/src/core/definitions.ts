@@ -41,7 +41,7 @@ export const Broker = defineProtocol<BrokerDef.Context, unknown, unknown[], Brok
 export const Transport = defineProtocol<
   TransportDef.Context,
   unknown,
-  [options?: TransportDef.Options],
+  unknown[],
   TransportDef.Actions,
   TransportDef.Handlers
 >({
@@ -62,12 +62,7 @@ export const Transport = defineProtocol<
   },
 })
 
-export const Tracer = defineProtocol<
-  TracerDef.Context,
-  unknown,
-  [options?: TracerDef.Options],
-  TracerDef.Actions
->({
+export const Tracer = defineProtocol<TracerDef.Context, unknown, unknown[], TracerDef.Actions>({
   name: 'server/tracer',
   version: '0.0.0',
 
@@ -78,7 +73,7 @@ export const Tracer = defineProtocol<
 export const Codec = defineProtocol<
   CodecDef.Context,
   unknown,
-  [options?: CodecDef.Options],
+  unknown[],
   CodecDef.Actions,
   CodecDef.Handlers
 >({
@@ -103,7 +98,7 @@ export const Codec = defineProtocol<
 export const Policy = defineProtocol<
   PolicyDef.Context,
   unknown,
-  [options?: PolicyDef.Options],
+  unknown[],
   PolicyDef.Actions,
   PolicyDef.Handlers
 >({

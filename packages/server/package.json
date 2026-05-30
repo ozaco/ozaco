@@ -45,6 +45,83 @@
         "default": "./dist/policy/bucket.cjs"
       },
       "source": "./src/policy/bucket/index.ts"
+    },
+    "./policy/retry": {
+      "import": {
+        "types": "./dist/policy/retry.d.ts",
+        "default": "./dist/policy/retry.js"
+      },
+      "require": {
+        "types": "./dist/policy/retry.d.cts",
+        "default": "./dist/policy/retry.cjs"
+      },
+      "source": "./src/policy/retry/index.ts"
+    },
+    "./policy/cache": {
+      "import": {
+        "types": "./dist/policy/cache.d.ts",
+        "default": "./dist/policy/cache.js"
+      },
+      "require": {
+        "types": "./dist/policy/cache.d.cts",
+        "default": "./dist/policy/cache.cjs"
+      },
+      "source": "./src/policy/cache/index.ts"
+    },
+    "./policy/circuit-breaker": {
+      "import": {
+        "types": "./dist/policy/circuit-breaker.d.ts",
+        "default": "./dist/policy/circuit-breaker.js"
+      },
+      "require": {
+        "types": "./dist/policy/circuit-breaker.d.cts",
+        "default": "./dist/policy/circuit-breaker.cjs"
+      },
+      "source": "./src/policy/circuit-breaker/index.ts"
+    },
+    "./policy/bulk": {
+      "import": {
+        "types": "./dist/policy/bulk.d.ts",
+        "default": "./dist/policy/bulk.js"
+      },
+      "require": {
+        "types": "./dist/policy/bulk.d.cts",
+        "default": "./dist/policy/bulk.cjs"
+      },
+      "source": "./src/policy/bulk/index.ts"
+    },
+    "./policy/timeout": {
+      "import": {
+        "types": "./dist/policy/timeout.d.ts",
+        "default": "./dist/policy/timeout.js"
+      },
+      "require": {
+        "types": "./dist/policy/timeout.d.cts",
+        "default": "./dist/policy/timeout.cjs"
+      },
+      "source": "./src/policy/timeout/index.ts"
+    },
+    "./policy/fallback": {
+      "import": {
+        "types": "./dist/policy/fallback.d.ts",
+        "default": "./dist/policy/fallback.js"
+      },
+      "require": {
+        "types": "./dist/policy/fallback.d.cts",
+        "default": "./dist/policy/fallback.cjs"
+      },
+      "source": "./src/policy/fallback/index.ts"
+    },
+    "./policy/metrics": {
+      "import": {
+        "types": "./dist/policy/metrics.d.ts",
+        "default": "./dist/policy/metrics.js"
+      },
+      "require": {
+        "types": "./dist/policy/metrics.d.cts",
+        "default": "./dist/policy/metrics.cjs"
+      },
+      "source": "./src/policy/metrics/index.ts"
     }
   },
   "publishConfig": {

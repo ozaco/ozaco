@@ -7,7 +7,7 @@ import type { Service } from './service'
 export namespace Impl {
   export type DefineAction = {
     <TSchema extends StandardSchemaV1, TReturn, TError = never>(
-      config: Partial<Omit<Action.Meta<TSchema>, '_t'>>,
+      config: { input: TSchema } & Partial<Omit<Action.Meta<TSchema>, '_t' | 'input'>>,
       handler: (body: StandardSchemaV1.InferOutput<TSchema>) => Operation<TReturn, TError>,
     ): Action<[StandardSchemaV1.InferOutput<TSchema>], TReturn, TError | 'validation'>
 

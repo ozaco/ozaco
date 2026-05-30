@@ -37,6 +37,34 @@ const SERVER_MODULES: Record<string, ModuleEntry> = {
     subpath: 'policy/bucket',
     source: 'policy/bucket/index.ts',
   },
+  'server:policy/retry': {
+    subpath: 'policy/retry',
+    source: 'policy/retry/index.ts',
+  },
+  'server:policy/cache': {
+    subpath: 'policy/cache',
+    source: 'policy/cache/index.ts',
+  },
+  'server:policy/circuit-breaker': {
+    subpath: 'policy/circuit-breaker',
+    source: 'policy/circuit-breaker/index.ts',
+  },
+  'server:policy/bulk': {
+    subpath: 'policy/bulk',
+    source: 'policy/bulk/index.ts',
+  },
+  'server:policy/timeout': {
+    subpath: 'policy/timeout',
+    source: 'policy/timeout/index.ts',
+  },
+  'server:policy/fallback': {
+    subpath: 'policy/fallback',
+    source: 'policy/fallback/index.ts',
+  },
+  'server:policy/metrics': {
+    subpath: 'policy/metrics',
+    source: 'policy/metrics/index.ts',
+  },
 }
 
 const DB_MODULES: Record<string, ModuleEntry> = {

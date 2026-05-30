@@ -64,6 +64,7 @@ export namespace Hookable {
     tag: string
     handlers: Record<string, AnyType>
     contextValue: AnyType
+    meta?: Map<string, Record<string, AnyType>>
   }
 
   export interface HookStore {
@@ -83,5 +84,6 @@ export namespace Hookable {
       subtype?: symbol
     }
     key: string
+    meta?: Record<string, AnyType>
   }
 }

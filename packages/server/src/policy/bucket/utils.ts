@@ -6,12 +6,16 @@ import type { Bucket } from './types'
 
 export const getSelf = (): PolicyDef => BucketPolicy
 
-export const scheduleCleanup = (ctx: Bucket.Context, key: string, entry: Bucket.Entry) => {
+export const scheduleCleanup = (
+  ctx: Bucket.Context,
+  args: { key: string; entry: Bucket.Entry; interval?: number },
+) => {
+  const { key, entry, interval } = args
   entry.timer = setTimeout(() => {
     if (ctx.entries.get(key) === entry) {
       ctx.entries.delete(key)
     }
-  }, ctx.interval)
+  }, interval ?? ctx.interval)
 }
 
 export const tearDown = (ctx: Bucket.Context) => {

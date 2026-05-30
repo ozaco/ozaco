@@ -46,6 +46,27 @@ declare module 'server:transport/nats' {
 declare module 'server:policy/bucket' {
   export * from '@ozaco/server/policy/bucket'
 }
+declare module 'server:policy/retry' {
+  export * from '@ozaco/server/policy/retry'
+}
+declare module 'server:policy/cache' {
+  export * from '@ozaco/server/policy/cache'
+}
+declare module 'server:policy/circuit-breaker' {
+  export * from '@ozaco/server/policy/circuit-breaker'
+}
+declare module 'server:policy/bulk' {
+  export * from '@ozaco/server/policy/bulk'
+}
+declare module 'server:policy/timeout' {
+  export * from '@ozaco/server/policy/timeout'
+}
+declare module 'server:policy/fallback' {
+  export * from '@ozaco/server/policy/fallback'
+}
+declare module 'server:policy/metrics' {
+  export * from '@ozaco/server/policy/metrics'
+}
 
 declare module 'db:core' {
   export * from '@ozaco/db'

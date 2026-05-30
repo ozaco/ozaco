@@ -1,6 +1,8 @@
 import type { PolicyDef } from 'server:core'
 import type { Helpers, Scope } from 'std:effect'
 
+export const BucketPolicyKey = 'bucket' as const
+
 export namespace Bucket {
   export interface Options extends PolicyDef.Options {
     interval?: number
