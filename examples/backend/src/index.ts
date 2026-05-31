@@ -1,6 +1,6 @@
 import { Broker, DefaultBroker } from 'server:core'
 import { main, suspend } from 'std:effect'
-import { DefaultLogger, Logger } from 'std:logger'
+import { DefaultLogger, Logger, LogLevel } from 'std:logger'
 import { install } from 'std:plugin'
 
 import { BucketPolicy } from 'server:policy/bucket'
@@ -9,22 +9,32 @@ import { BunIO } from 'std:io/impl/bun'
 import { ConsoleTransport } from 'std:logger/transport/console'
 
 import { ENV } from './env'
+import { runResilienceDemo } from './resilience'
 import { GreeterService } from './services/greeter'
 import { UserService } from './services/user'
 
 await main(function* () {
   yield* install(BunIO)
-  yield* install(DefaultLogger)
+  // debug level so the per-policy dispatch trace (broker `trace: true`) is visible
+  yield* install(DefaultLogger, { level: LogLevel.debug })
   yield* install(ConsoleTransport)
 
+  const env = yield* ENV
+
+  // self-contained resilience showcase (no NATS): `SERVICE=resilient bun run ...`
+  if (env.service === 'resilient') {
+    yield* runResilienceDemo()
+    yield* suspend()
+    return
+  }
+
+  // distributed services over NATS — run one process per SERVICE (e.g. user + greeter)
   yield* install(DefaultBroker)
   yield* install(NatsTransport)
   yield* install(BucketPolicy)
 
   yield* install(GreeterService)
   yield* install(UserService)
-
-  const env = yield* ENV
 
   yield* Broker.actions.register(env.services[env.service as keyof typeof env.services])
 

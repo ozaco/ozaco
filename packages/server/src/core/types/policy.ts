@@ -37,9 +37,22 @@ export namespace PolicyDef {
     serviceName: string
     actionKey: string
     action: Action.Meta<unknown> | undefined
+    /** per-policy settings resolved once for this dispatch (see `resolvePolicySettings`) */
+    settings: ReadonlyMap<string, Setting>
     params: ReadonlyArray<unknown>
     key: string
     isStreaming: boolean
+    /** whether to emit a per-policy-layer trace (log + OTel spans) for this dispatch */
+    trace: boolean
+  }
+
+  export interface PolicyChainEntry {
+    name: string
+    priority: number
+  }
+
+  export interface DisableablePolicy {
+    actions: { disable(): Future<PolicyDef.Setting<unknown>, unknown> }
   }
 
   export type Next<T> = () => Operation<T, unknown>

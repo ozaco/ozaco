@@ -14,6 +14,8 @@ import type { Action } from '../types/action'
 import type { BrokerDef } from '../types/broker'
 import type { PolicyDef } from '../types/policy'
 import type { Service } from '../types/service'
+import { TraceContext } from '../utils/context'
+import { resolvePolicySettings } from '../utils/policy'
 
 import { JsonCodec } from './codec'
 import { DefaultTracer } from './tracer'
@@ -26,6 +28,7 @@ const DefaultBrokerImpl = Broker.implement({
     const name = options?.name ?? 'default-broker'
     const nodeId = options?.nodeId ?? (yield* getNodeId())
     const shortenCauses = options?.shortenCauses ?? true
+    const trace = options?.trace ?? false
 
     const services: BrokerDef.Context['services'] = new Map(Object.entries(options?.services ?? {}))
     const bus: BrokerDef.Context['bus'] = createEvent()
@@ -44,6 +47,7 @@ const DefaultBrokerImpl = Broker.implement({
       nodeId,
 
       shortenCauses,
+      trace,
 
       services,
       bus,
@@ -184,18 +188,25 @@ export const DefaultBroker = DefaultBrokerImpl.build({
         }
 
         const actionMeta = raw.meta as Action.Meta<unknown> | undefined
+        const settings = yield* resolvePolicySettings(actionMeta)
 
         const policyCtx: PolicyDef.DispatchContext = {
           req,
           serviceName: raw.options.name,
           actionKey: raw.key,
           action: actionMeta,
+          settings,
           params,
           key: `${raw.options.name}\u0000${raw.key}\u0000${JSON.stringify(params)}`,
           isStreaming: options.streams !== undefined,
+          trace: broker.trace,
         }
 
-        return yield* Policy.actions.dispatchRoot(policyCtx, core)
+        // when tracing, run the policy chain under the call span so per-policy spans nest beneath
+        // it; otherwise dispatch directly (byte-identical to the untraced path)
+        return yield* broker.trace
+          ? TraceContext.with(traceContext, () => Policy.actions.dispatchRoot(policyCtx, core))
+          : Policy.actions.dispatchRoot(policyCtx, core)
       },
     )
   }) as BrokerDef.Actions['call'],

@@ -1,49 +1,28 @@
-import type { PolicyDef } from 'server:core'
-import { CoreErrors, findPolicySetting, makePolicySetting, Policy } from 'server:core'
-import { ensure, operation, useContext, withResolvers } from 'std:effect'
+import { CoreErrors, definePolicy, PolicyPriority } from 'server:core'
+import { withResolvers } from 'std:effect'
 import { fail } from 'std:result'
 
-import { BulkPolicyKey } from './types'
 import type { Bulk } from './types'
-import { getSelf, release, tearDown } from './utils'
+import { BulkPolicyKey } from './types'
+import { release, tearDown } from './utils'
 
-export const BulkPolicy = Policy.implement({
+export const BulkPolicy = definePolicy<Bulk.Options, Bulk.Context>({
+  key: BulkPolicyKey,
   name: 'server/policy-bulk',
-  version: '0.0.0',
-  *setup(options?: Bulk.Options) {
-    const context: Bulk.Context = {
-      name: options?.name ?? 'policy/bulk',
-      priority: options?.priority ?? 20,
+  contextName: 'policy/bulk',
+  priority: PolicyPriority.Bulk,
+  *setup(options, base) {
+    return {
+      ...base,
       maxConcurrent: options?.maxConcurrent ?? 20,
       maxQueue: options?.maxQueue ?? 0,
       queueTimeout: options?.queueTimeout ?? 0,
       inflight: 0,
       queue: [],
     }
-
-    yield* Policy.actions.register(getSelf(), context)
-    yield* ensure(function* () {
-      tearDown(context)
-      yield* Policy.actions.unregister(getSelf())
-    })
-
-    return context
   },
-}).build({
-  config: operation(function* (options?: Partial<Bulk.Options>) {
-    return makePolicySetting<Bulk.Options>(BulkPolicyKey, { value: options ?? {} })
-  }),
-  disable: operation(function* () {
-    return makePolicySetting<Bulk.Options>(BulkPolicyKey, { disabled: true })
-  }),
-  apply: operation(function* <T>(dispatchCtx: PolicyDef.DispatchContext, next: PolicyDef.Next<T>) {
-    const setting = yield* findPolicySetting<Bulk.Options>(dispatchCtx, BulkPolicyKey)
-    if (setting?.disabled) {
-      return yield* next()
-    }
-    const override = setting?.value
-
-    const ctx = (yield* useContext(getSelf())) as Bulk.Context
+  teardown: tearDown,
+  *apply({ ctx, override, next }) {
     const maxConcurrent = override?.maxConcurrent ?? ctx.maxConcurrent
     const maxQueue = override?.maxQueue ?? ctx.maxQueue
     const queueTimeout = override?.queueTimeout ?? ctx.queueTimeout
@@ -79,5 +58,5 @@ export const BulkPolicy = Policy.implement({
     } finally {
       release(ctx)
     }
-  }),
+  },
 })

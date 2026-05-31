@@ -33,5 +33,6 @@ tasks:
     command: bun test --pass-with-no-tests
     deps:
       - server:build
+      - server:types
     inputs:
       - tests/**/*

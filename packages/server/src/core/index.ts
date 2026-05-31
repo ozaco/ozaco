@@ -16,6 +16,7 @@ export * from './impl/transport'
 
 export * from './utils/action'
 export * from './utils/context'
+export * from './utils/define-policy'
 export * from './utils/hooks'
 export * from './utils/is'
 export * from './utils/policy'

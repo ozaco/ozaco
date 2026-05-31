@@ -1,60 +1,35 @@
-import type { PolicyDef } from 'server:core'
-import { CoreErrors, findPolicySetting, makePolicySetting, Policy } from 'server:core'
-import { ensure, operation, spawn, useContext, withResolvers } from 'std:effect'
+import { CoreErrors, definePolicy, PolicyPriority } from 'server:core'
+import { spawn, withResolvers } from 'std:effect'
 import { asFailure, fail } from 'std:result'
 
-import { TimeoutPolicyKey } from './types'
 import type { Timeout } from './types'
-import { getSelf } from './utils'
+import { TimeoutPolicyKey } from './types'
 
 const TIMEOUT_SENTINEL = Symbol('timeout-sentinel')
 
-export const TimeoutPolicy = Policy.implement({
+export const TimeoutPolicy = definePolicy<Timeout.Options, Timeout.Context>({
+  key: TimeoutPolicyKey,
   name: 'server/policy-timeout',
-  version: '0.0.0',
-  *setup(options?: Timeout.Options) {
-    const context: Timeout.Context = {
-      name: options?.name ?? 'policy/timeout',
-      // innermost by default (highest priority number): the timeout bounds only the actual
-      // dispatch and surfaces as a normal CoreErrors.Timeout failure that outer policies
-      // (circuit-breaker, metrics, retry, fallback) observe through their catch blocks. If the
-      // timeout sat outside them it would halt their generators, and a halt does NOT run catch
-      // or finally (only scope `ensure` cleanup runs) — so they could neither record nor recover.
-      priority: options?.priority ?? 60,
+  contextName: 'policy/timeout',
+  // innermost by default (see PolicyPriority): the timeout bounds only the actual dispatch and
+  // surfaces as a normal CoreErrors.Timeout failure that outer policies observe through catch.
+  priority: PolicyPriority.Timeout,
+  *setup(options, base) {
+    return {
+      ...base,
       timeoutMs: options?.timeoutMs ?? 30_000,
       timeoutStreams: options?.timeoutStreams ?? false,
     }
-
-    yield* Policy.actions.register(getSelf(), context)
-    yield* ensure(function* () {
-      yield* Policy.actions.unregister(getSelf())
-    })
-
-    return context
   },
-}).build({
-  config: operation(function* (options?: Partial<Timeout.Options>) {
-    return makePolicySetting<Timeout.Options>(TimeoutPolicyKey, { value: options ?? {} })
-  }),
-  disable: operation(function* () {
-    return makePolicySetting<Timeout.Options>(TimeoutPolicyKey, { disabled: true })
-  }),
-  apply: operation(function* <T>(dispatchCtx: PolicyDef.DispatchContext, next: PolicyDef.Next<T>) {
-    const setting = yield* findPolicySetting<Timeout.Options>(dispatchCtx, TimeoutPolicyKey)
-    if (setting?.disabled) {
-      return yield* next()
-    }
-    const override = setting?.value
-
-    const ctx = (yield* useContext(getSelf())) as Timeout.Context
+  *apply({ dispatch, ctx, override, next }) {
     const timeoutMs = override?.timeoutMs ?? ctx.timeoutMs
     const timeoutStreams = override?.timeoutStreams ?? ctx.timeoutStreams
 
-    if (dispatchCtx.isStreaming && !timeoutStreams) {
+    if (dispatch.isStreaming && !timeoutStreams) {
       return yield* next()
     }
 
-    const winner = withResolvers<T | typeof TIMEOUT_SENTINEL>('policy:timeout')
+    const winner = withResolvers<unknown>('policy:timeout')
     const timer = setTimeout(() => winner.resolve(TIMEOUT_SENTINEL), timeoutMs)
 
     const task = yield* spawn(function* () {
@@ -74,10 +49,10 @@ export const TimeoutPolicy = Policy.implement({
       yield* task.halt()
       return yield* fail(
         CoreErrors.Timeout,
-        `dispatch exceeded ${timeoutMs}ms for ${dispatchCtx.serviceName}.${dispatchCtx.actionKey}`,
+        `dispatch exceeded ${timeoutMs}ms for ${dispatch.serviceName}.${dispatch.actionKey}`,
       )
     }
 
     return result
-  }),
+  },
 })

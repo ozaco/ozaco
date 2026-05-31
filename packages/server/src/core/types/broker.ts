@@ -15,6 +15,9 @@ export namespace BrokerDef {
 
     shortenCauses?: boolean
 
+    /** emit a per-policy-layer trace (log + OTel child spans) for every dispatch — off by default */
+    trace?: boolean
+
     services?: Record<string, Service> | undefined
   }
 
@@ -23,6 +26,7 @@ export namespace BrokerDef {
     nodeId: string
 
     shortenCauses: boolean
+    trace: boolean
 
     services: Map<string, Service>
     bus: EventEmitter<BrokerDef.EventMap>

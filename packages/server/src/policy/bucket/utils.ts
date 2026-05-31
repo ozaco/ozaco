@@ -1,10 +1,6 @@
-import type { PolicyDef } from 'server:core'
-import { fail } from 'std:result'
+import { asFailure, fail } from 'std:result'
 
-import { BucketPolicy } from './definition'
 import type { Bucket } from './types'
-
-export const getSelf = (): PolicyDef => BucketPolicy
 
 export const scheduleCleanup = (
   ctx: Bucket.Context,
@@ -23,7 +19,11 @@ export const tearDown = (ctx: Bucket.Context) => {
     if (entry.timer) {
       clearTimeout(entry.timer)
     }
-    entry.resolvers.reject(fail('cancelled', 'bucket policy torn down'))
+    // resolve (don't reject) with a failure-outcome so any joiner re-throws it in its own coroutine
+    entry.resolvers.resolve({
+      ok: false,
+      failure: asFailure(fail('cancelled', 'bucket policy torn down')),
+    })
   }
   ctx.entries.clear()
 }

@@ -1,10 +1,6 @@
-import type { PolicyDef } from 'server:core'
 import { fail } from 'std:result'
 
-import { BulkPolicy } from './definition'
 import type { Bulk } from './types'
-
-export const getSelf = (): PolicyDef => BulkPolicy
 
 export const release = (ctx: Bulk.Context) => {
   ctx.inflight = Math.max(0, ctx.inflight - 1)

@@ -1,9 +1,4 @@
-import type { PolicyDef } from 'server:core'
-
-import { CachePolicy } from './definition'
 import type { Cache } from './types'
-
-export const getSelf = (): PolicyDef => CachePolicy
 
 export const evictOldest = (ctx: Cache.Context) => {
   const oldestKey = ctx.entries.keys().next().value

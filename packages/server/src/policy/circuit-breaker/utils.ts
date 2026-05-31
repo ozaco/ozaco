@@ -1,9 +1,4 @@
-import type { PolicyDef } from 'server:core'
-
-import { CircuitBreakerPolicy } from './definition'
 import type { CircuitBreaker } from './types'
-
-export const getSelf = (): PolicyDef => CircuitBreakerPolicy
 
 export interface EffectiveConfig {
   threshold: number

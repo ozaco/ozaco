@@ -11,6 +11,23 @@ export const CODEC = Symbol.for('server:core:codec')
 export const POLICY = Symbol.for('server:core:policy')
 export const POLICY_SETTING = Symbol.for('server:core:policy-setting')
 
+// Default layering of the built-in policies. Policies are applied as an onion sorted ascending by
+// priority: the LOWEST number is the OUTERMOST layer. Timeout is innermost (highest) on purpose —
+// a timeout must surface as a normal thrown CoreErrors.Timeout that the outer stateful policies
+// (circuit-breaker, metrics, retry, fallback) observe through their catch blocks. If timeout sat
+// outside them it would HALT their generators, and a halt runs neither catch nor finally (only
+// scope `ensure` cleanup) — so they could neither record the failure nor release their state.
+export const PolicyPriority = {
+  Cache: 0,
+  Fallback: 5,
+  Bucket: 10,
+  Bulk: 20,
+  Retry: 30,
+  CircuitBreaker: 40,
+  Metrics: 50,
+  Timeout: 60,
+} as const
+
 export const CoreErrors = createTags(
   'server:core',
 

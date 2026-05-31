@@ -1,62 +1,35 @@
-import type { PolicyDef } from 'server:core'
-import { CoreErrors, findPolicySetting, makePolicySetting, Policy } from 'server:core'
-import { ensure, operation, useContext } from 'std:effect'
+import { CoreErrors, definePolicy, PolicyPriority } from 'server:core'
 import { asFailure, fail } from 'std:result'
 
-import { CircuitBreakerPolicyKey } from './types'
 import type { CircuitBreaker } from './types'
-import { getOrCreate, getSelf, onFailure, onSuccess, resolveConfig, tryAdmit } from './utils'
+import { CircuitBreakerPolicyKey } from './types'
+import { getOrCreate, onFailure, onSuccess, resolveConfig, tryAdmit } from './utils'
 
-export const CircuitBreakerPolicy = Policy.implement({
+export const CircuitBreakerPolicy = definePolicy<CircuitBreaker.Options, CircuitBreaker.Context>({
+  key: CircuitBreakerPolicyKey,
   name: 'server/policy-circuit-breaker',
-  version: '0.0.0',
-  *setup(options?: CircuitBreaker.Options) {
-    const context: CircuitBreaker.Context = {
-      name: options?.name ?? 'policy/circuit-breaker',
-      priority: options?.priority ?? 40,
+  contextName: 'policy/circuit-breaker',
+  priority: PolicyPriority.CircuitBreaker,
+  *setup(options, base) {
+    return {
+      ...base,
       threshold: options?.threshold ?? 5,
       resetTimeout: options?.resetTimeout ?? 30_000,
       halfOpenMax: options?.halfOpenMax ?? 1,
       entries: new Map(),
       ...(options?.isFailure === undefined ? {} : { isFailure: options.isFailure }),
     }
-
-    yield* Policy.actions.register(getSelf(), context)
-    yield* ensure(function* () {
-      context.entries.clear()
-      yield* Policy.actions.unregister(getSelf())
-    })
-
-    return context
   },
-}).build({
-  config: operation(function* (options?: Partial<CircuitBreaker.Options>) {
-    return makePolicySetting<CircuitBreaker.Options>(CircuitBreakerPolicyKey, {
-      value: options ?? {},
-    })
-  }),
-  disable: operation(function* () {
-    return makePolicySetting<CircuitBreaker.Options>(CircuitBreakerPolicyKey, { disabled: true })
-  }),
-  apply: operation(function* <T>(dispatchCtx: PolicyDef.DispatchContext, next: PolicyDef.Next<T>) {
-    const setting = yield* findPolicySetting<CircuitBreaker.Options>(
-      dispatchCtx,
-      CircuitBreakerPolicyKey,
-    )
-    if (setting?.disabled) {
-      return yield* next()
-    }
-    const override = setting?.value
-
-    const ctx = (yield* useContext(getSelf())) as CircuitBreaker.Context
+  teardown: ctx => ctx.entries.clear(),
+  *apply({ dispatch, ctx, override, next }) {
     const cfg = resolveConfig(ctx, override)
     const isFailurePred = override?.isFailure ?? ctx.isFailure
-    const entry = getOrCreate(ctx, `${dispatchCtx.serviceName}\u0000${dispatchCtx.actionKey}`)
+    const entry = getOrCreate(ctx, `${dispatch.serviceName}\u0000${dispatch.actionKey}`)
 
     if (!tryAdmit(cfg, entry)) {
       return yield* fail(
         CoreErrors.CircuitOpen,
-        `circuit open for ${dispatchCtx.serviceName}.${dispatchCtx.actionKey}`,
+        `circuit open for ${dispatch.serviceName}.${dispatch.actionKey}`,
       )
     }
 
@@ -77,5 +50,5 @@ export const CircuitBreakerPolicy = Policy.implement({
       }
       throw failure
     }
-  }),
+  },
 })

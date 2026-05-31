@@ -1,63 +1,41 @@
-import type { PolicyDef } from 'server:core'
-import { findPolicySetting, makePolicySetting, Policy } from 'server:core'
-import { ensure, operation, useContext } from 'std:effect'
+import { definePolicy, PolicyPriority } from 'server:core'
 
-import { CachePolicyKey } from './types'
 import type { Cache } from './types'
-import { evictOldest, getSelf, tearDown } from './utils'
+import { CachePolicyKey } from './types'
+import { evictOldest, tearDown } from './utils'
 
-export const CachePolicy = Policy.implement({
+export const CachePolicy = definePolicy<Cache.Options, Cache.Context>({
+  key: CachePolicyKey,
   name: 'server/policy-cache',
-  version: '0.0.0',
-  *setup(options?: Cache.Options) {
-    const context: Cache.Context = {
-      name: options?.name ?? 'policy/cache',
-      priority: options?.priority ?? 0,
+  contextName: 'policy/cache',
+  priority: PolicyPriority.Cache,
+  *setup(options, base) {
+    return {
+      ...base,
       ttl: options?.ttl ?? 30_000,
       max: options?.max ?? 1000,
       entries: new Map(),
       ...(options?.shouldCache === undefined ? {} : { shouldCache: options.shouldCache }),
     }
-
-    yield* Policy.actions.register(getSelf(), context)
-    yield* ensure(function* () {
-      tearDown(context)
-      yield* Policy.actions.unregister(getSelf())
-    })
-
-    return context
   },
-}).build({
-  config: operation(function* (options?: Partial<Cache.Options>) {
-    return makePolicySetting<Cache.Options>(CachePolicyKey, { value: options ?? {} })
-  }),
-  disable: operation(function* () {
-    return makePolicySetting<Cache.Options>(CachePolicyKey, { disabled: true })
-  }),
-  apply: operation(function* <T>(dispatchCtx: PolicyDef.DispatchContext, next: PolicyDef.Next<T>) {
-    if (dispatchCtx.isStreaming) {
+  teardown: tearDown,
+  *apply({ dispatch, ctx, override, next }) {
+    if (dispatch.isStreaming) {
       return yield* next()
     }
 
-    const setting = yield* findPolicySetting<Cache.Options>(dispatchCtx, CachePolicyKey)
-    if (setting?.disabled) {
-      return yield* next()
-    }
-    const override = setting?.value
-
-    const ctx = (yield* useContext(getSelf())) as Cache.Context
     const ttl = override?.ttl ?? ctx.ttl
     const max = override?.max ?? ctx.max
     const shouldCache = override?.shouldCache ?? ctx.shouldCache
 
-    if (shouldCache && !shouldCache(dispatchCtx)) {
+    if (shouldCache && !shouldCache(dispatch)) {
       return yield* next()
     }
 
-    const key = dispatchCtx.key
+    const key = dispatch.key
     const existing = ctx.entries.get(key)
     if (existing && existing.expiresAt > Date.now()) {
-      return existing.value as T
+      return existing.value
     }
     if (existing) {
       clearTimeout(existing.timer)
@@ -88,5 +66,5 @@ export const CachePolicy = Policy.implement({
     ctx.entries.set(key, entry)
 
     return value
-  }),
+  },
 })
