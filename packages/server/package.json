@@ -122,6 +122,61 @@
         "default": "./dist/policy/metrics.cjs"
       },
       "source": "./src/policy/metrics/index.ts"
+    },
+    "./gateway/bun": {
+      "import": {
+        "types": "./dist/gateway/bun.d.ts",
+        "default": "./dist/gateway/bun.js"
+      },
+      "require": {
+        "types": "./dist/gateway/bun.d.cts",
+        "default": "./dist/gateway/bun.cjs"
+      },
+      "source": "./src/gateway/bun/index.ts"
+    },
+    "./gateway/node": {
+      "import": {
+        "types": "./dist/gateway/node.d.ts",
+        "default": "./dist/gateway/node.js"
+      },
+      "require": {
+        "types": "./dist/gateway/node.d.cts",
+        "default": "./dist/gateway/node.cjs"
+      },
+      "source": "./src/gateway/node/index.ts"
+    },
+    "./plugin/cors": {
+      "import": {
+        "types": "./dist/plugin/cors.d.ts",
+        "default": "./dist/plugin/cors.js"
+      },
+      "require": {
+        "types": "./dist/plugin/cors.d.cts",
+        "default": "./dist/plugin/cors.cjs"
+      },
+      "source": "./src/plugin/cors/index.ts"
+    },
+    "./plugin/docs": {
+      "import": {
+        "types": "./dist/plugin/docs.d.ts",
+        "default": "./dist/plugin/docs.js"
+      },
+      "require": {
+        "types": "./dist/plugin/docs.d.cts",
+        "default": "./dist/plugin/docs.cjs"
+      },
+      "source": "./src/plugin/docs/index.ts"
+    },
+    "./plugin/auth": {
+      "import": {
+        "types": "./dist/plugin/auth.d.ts",
+        "default": "./dist/plugin/auth.js"
+      },
+      "require": {
+        "types": "./dist/plugin/auth.d.cts",
+        "default": "./dist/plugin/auth.cjs"
+      },
+      "source": "./src/plugin/auth/index.ts"
     }
   },
   "publishConfig": {
@@ -130,7 +185,10 @@
     "registry": "https://registry.npmjs.org/"
   },
   "dependencies": {
-    "@streamparser/json": "0.0.22"
+    "@streamparser/json": "0.0.22",
+    "jose": "^6.0.0",
+    "rou3": "0.8.1",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@ozaco/std": "workspace:*",

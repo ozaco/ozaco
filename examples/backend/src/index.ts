@@ -10,6 +10,7 @@ import { ConsoleTransport } from 'std:logger/transport/console'
 
 import { ENV } from './env'
 import { runResilienceDemo } from './resilience'
+import { runServerDemo } from './server'
 import { GreeterService } from './services/greeter'
 import { UserService } from './services/user'
 
@@ -24,6 +25,13 @@ await main(function* () {
   // self-contained resilience showcase (no NATS): `SERVICE=resilient bun run ...`
   if (env.service === 'resilient') {
     yield* runResilienceDemo()
+    yield* suspend()
+    return
+  }
+
+  // self-contained layered HTTP + WebSocket server over the broker (no NATS): `SERVICE=server ...`
+  if (env.service === 'server') {
+    yield* runServerDemo()
     yield* suspend()
     return
   }

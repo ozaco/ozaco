@@ -11,6 +11,8 @@ export const CODEC = Symbol.for('server:core:codec')
 export const POLICY = Symbol.for('server:core:policy')
 export const POLICY_SETTING = Symbol.for('server:core:policy-setting')
 
+export const GATEWAY = Symbol.for('server:core:gateway')
+
 // Default layering of the built-in policies. Policies are applied as an onion sorted ascending by
 // priority: the LOWEST number is the OUTERMOST layer. Timeout is innermost (highest) on purpose —
 // a timeout must surface as a normal thrown CoreErrors.Timeout that the outer stateful policies

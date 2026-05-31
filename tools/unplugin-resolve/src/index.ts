@@ -65,6 +65,26 @@ const SERVER_MODULES: Record<string, ModuleEntry> = {
     subpath: 'policy/metrics',
     source: 'policy/metrics/index.ts',
   },
+  'server:gateway/bun': {
+    subpath: 'gateway/bun',
+    source: 'gateway/bun/index.ts',
+  },
+  'server:gateway/node': {
+    subpath: 'gateway/node',
+    source: 'gateway/node/index.ts',
+  },
+  'server:plugin/cors': {
+    subpath: 'plugin/cors',
+    source: 'plugin/cors/index.ts',
+  },
+  'server:plugin/docs': {
+    subpath: 'plugin/docs',
+    source: 'plugin/docs/index.ts',
+  },
+  'server:plugin/auth': {
+    subpath: 'plugin/auth',
+    source: 'plugin/auth/index.ts',
+  },
 }
 
 const DB_MODULES: Record<string, ModuleEntry> = {

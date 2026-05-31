@@ -14,6 +14,11 @@
       "server:policy/timeout": ["./src/policy/timeout/index.ts", "./dist/policy/timeout.d.ts"],
       "server:policy/fallback": ["./src/policy/fallback/index.ts", "./dist/policy/fallback.d.ts"],
       "server:policy/metrics": ["./src/policy/metrics/index.ts", "./dist/policy/metrics.d.ts"],
+      "server:gateway/bun": ["./src/gateway/bun/index.ts", "./dist/gateway/bun.d.ts"],
+      "server:gateway/node": ["./src/gateway/node/index.ts", "./dist/gateway/node.d.ts"],
+      "server:plugin/cors": ["./src/plugin/cors/index.ts", "./dist/plugin/cors.d.ts"],
+      "server:plugin/docs": ["./src/plugin/docs/index.ts", "./dist/plugin/docs.d.ts"],
+      "server:plugin/auth": ["./src/plugin/auth/index.ts", "./dist/plugin/auth.d.ts"],
 
       "std:shared": ["./node_modules/@ozaco/std/dist/shared.d.ts"],
       "std:result": ["./node_modules/@ozaco/std/dist/result.d.ts"],

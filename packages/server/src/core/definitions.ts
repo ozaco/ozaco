@@ -1,6 +1,6 @@
 import { defineProtocol } from 'std:plugin'
 
-import { BROKER, CODEC, POLICY, TRACER, TRANSPORT } from './const'
+import { BROKER, CODEC, GATEWAY, POLICY, TRACER, TRANSPORT } from './const'
 import {
   codecDecode,
   codecDecodeStream,
@@ -26,6 +26,7 @@ import {
 } from './internal/transport-router'
 import type { BrokerDef } from './types/broker'
 import type { CodecDef } from './types/codec'
+import type { GatewayDef } from './types/gateway'
 import type { PolicyDef } from './types/policy'
 import type { TracerDef } from './types/tracer'
 import type { TransportDef } from './types/transport'
@@ -115,4 +116,20 @@ export const Policy = defineProtocol<
     unregister: policyUnregisterHandler,
     getPolicies: policyGetPoliciesHandler,
   },
+})
+
+// The single web protocol. Server lifecycle + routing + REST/WS transformer signatures all live on
+// `Gateway`, so a platform impl (BunGateway/NodeGateway) owns server/router/rest/ws internally and
+// plugins hook one surface (cors: `Gateway.before({ fromInternal })`, docs: `Gateway.actions.mount`).
+export const Gateway = defineProtocol<
+  GatewayDef.Context,
+  unknown,
+  [options?: GatewayDef.Options],
+  GatewayDef.Actions
+>({
+  name: 'server/gateway',
+  version: '0.0.0',
+
+  subtype: GATEWAY,
+  cloneable: false,
 })

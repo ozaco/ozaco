@@ -67,6 +67,21 @@ declare module 'server:policy/fallback' {
 declare module 'server:policy/metrics' {
   export * from '@ozaco/server/policy/metrics'
 }
+declare module 'server:gateway/bun' {
+  export * from '@ozaco/server/gateway/bun'
+}
+declare module 'server:gateway/node' {
+  export * from '@ozaco/server/gateway/node'
+}
+declare module 'server:plugin/cors' {
+  export * from '@ozaco/server/plugin/cors'
+}
+declare module 'server:plugin/docs' {
+  export * from '@ozaco/server/plugin/docs'
+}
+declare module 'server:plugin/auth' {
+  export * from '@ozaco/server/plugin/auth'
+}
 
 declare module 'db:core' {
   export * from '@ozaco/db'
