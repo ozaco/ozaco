@@ -26,6 +26,7 @@
         "@ozaco/std": "workspace:*",
       },
       "devDependencies": {
+        "@ozaco/unplugin-client": "workspace:*",
         "@ozaco/unplugin-resolve": "workspace:*",
         "tsdown": "catalog:build",
         "zod": "latest",
@@ -95,6 +96,22 @@
         "@ozaco/db": "*",
         "@ozaco/server": "*",
         "@ozaco/std": "*",
+      },
+    },
+    "tools/unplugin-client": {
+      "name": "@ozaco/unplugin-client",
+      "version": "0.0.1",
+      "dependencies": {
+        "@ozaco/server": "workspace:*",
+        "@ozaco/std": "workspace:*",
+        "@ozaco/unplugin-resolve": "workspace:*",
+      },
+      "devDependencies": {
+        "rolldown": "1.0.3",
+        "unplugin": "3.0.0",
+      },
+      "peerDependencies": {
+        "unplugin": "^3.0.0",
       },
     },
     "tools/unplugin-resolve": {
@@ -273,6 +290,8 @@
     "@ozaco/server": ["@ozaco/server@workspace:packages/server"],
 
     "@ozaco/std": ["@ozaco/std@workspace:packages/std"],
+
+    "@ozaco/unplugin-client": ["@ozaco/unplugin-client@workspace:tools/unplugin-client"],
 
     "@ozaco/unplugin-resolve": ["@ozaco/unplugin-resolve@workspace:tools/unplugin-resolve"],
 

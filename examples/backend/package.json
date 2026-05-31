@@ -9,6 +9,7 @@
     "@ozaco/std": "workspace:*"
   },
   "devDependencies": {
+    "@ozaco/unplugin-client": "workspace:*",
     "@ozaco/unplugin-resolve": "workspace:*",
     "tsdown": "catalog:build",
     "zod": "latest"

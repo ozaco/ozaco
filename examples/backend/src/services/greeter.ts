@@ -1,18 +1,33 @@
-import { defineAction, defineService, useStream } from 'server:core'
+import { defineAction, defineService, Gateway, useStream } from 'server:core'
 import { createChannel, each, ensure, sleep, spawn } from 'std:effect'
 import { Logger } from 'std:logger'
 import { fail } from 'std:result'
+
+import z from 'zod'
 
 export const GreeterService = defineService({
   name: 'greeter',
   version: '0.0.0',
 
   actions: {
-    salute: defineAction(function* (name: string) {
-      yield* Logger.actions.info('Saluting:', name)
+    salute: defineAction(
+      {
+        input: z.object({
+          name: z.string(),
+        }),
+        settings: [
+          Gateway.actions.rest({
+            method: 'GET',
+            path: '/:name',
+          }),
+        ],
+      },
+      function* (body) {
+        yield* Logger.actions.info('Saluting:', body.name)
 
-      return `Hi ${name}` as const
-    }),
+        return `Hi ${body.name}` as const
+      },
+    ),
 
     saluteStream: defineAction(function* (greeting: string) {
       const [input] = yield* useStream<string>()

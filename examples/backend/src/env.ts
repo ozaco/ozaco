@@ -4,7 +4,7 @@ import { GreeterService } from './services/greeter'
 import { UserService } from './services/user'
 
 export const ENV = IO.actions.env(data => ({
-  service: data.SERVICE,
+  service: data.SERVICE ?? false,
 
   services: {
     user: UserService,

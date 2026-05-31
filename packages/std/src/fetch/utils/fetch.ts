@@ -1,6 +1,7 @@
 import { operation, until, useAbortSignal } from 'std:effect'
 import { asFailure, fail } from 'std:result'
 
+import { fetchImpl } from '../context'
 import { errorMessage, isAbortError } from '../internal/common'
 import { createFetchResponse } from '../internal/response'
 import type { FetchInit, FetchOperation } from '../types'
@@ -12,9 +13,9 @@ export const fetch = (
 ): FetchOperation => {
   const runFetch = operation(function* () {
     try {
+      const impl = yield* fetchImpl.get()
       const signal = yield* useAbortSignal()
-      // oxlint-disable-next-line oxc/no-rest-spread-properties
-      const response = yield* until(globalThis.fetch(input, { ...init, signal }))
+      const response = yield* until(impl!(input, { ...init, signal }))
       const wrapped = createFetchResponse(response)
       if (shouldExpect && !response.ok) {
         return yield* fail(

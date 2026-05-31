@@ -3,14 +3,13 @@ import { main, suspend } from 'std:effect'
 import { DefaultLogger, Logger, LogLevel } from 'std:logger'
 import { install } from 'std:plugin'
 
+import { BunGateway } from 'server:gateway/bun'
 import { BucketPolicy } from 'server:policy/bucket'
 import { NatsTransport } from 'server:transport/nats'
 import { BunIO } from 'std:io/impl/bun'
 import { ConsoleTransport } from 'std:logger/transport/console'
 
 import { ENV } from './env'
-import { runResilienceDemo } from './resilience'
-import { runServerDemo } from './server'
 import { GreeterService } from './services/greeter'
 import { UserService } from './services/user'
 
@@ -20,22 +19,6 @@ await main(function* () {
   yield* install(DefaultLogger, { level: LogLevel.debug })
   yield* install(ConsoleTransport)
 
-  const env = yield* ENV
-
-  // self-contained resilience showcase (no NATS): `SERVICE=resilient bun run ...`
-  if (env.service === 'resilient') {
-    yield* runResilienceDemo()
-    yield* suspend()
-    return
-  }
-
-  // self-contained layered HTTP + WebSocket server over the broker (no NATS): `SERVICE=server ...`
-  if (env.service === 'server') {
-    yield* runServerDemo()
-    yield* suspend()
-    return
-  }
-
   // distributed services over NATS — run one process per SERVICE (e.g. user + greeter)
   yield* install(DefaultBroker)
   yield* install(NatsTransport)
@@ -43,6 +26,18 @@ await main(function* () {
 
   yield* install(GreeterService)
   yield* install(UserService)
+
+  yield* install(BunGateway)
+
+  const env = yield* ENV
+
+  if (!env.service) {
+    yield* Logger.actions.info(
+      'Set SERVICE=user|greeter to run a service. The client SDK is generated at build time by ' +
+        '@ozaco/unplugin-client (see its tsdown.config.ts usage), not at runtime.',
+    )
+    return
+  }
 
   yield* Broker.actions.register(env.services[env.service as keyof typeof env.services])
 

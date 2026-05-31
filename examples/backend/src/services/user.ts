@@ -18,7 +18,7 @@ export const UserService = defineService({
       function* (name) {
         yield* Logger.actions.info('Called greeting with:', name)
 
-        return yield* Broker.actions.call(GreeterService.actions.salute, [name])
+        return yield* Broker.actions.call(GreeterService.actions.salute, [{ name }])
       },
     ),
 

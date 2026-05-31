@@ -177,6 +177,17 @@
         "default": "./dist/plugin/auth.cjs"
       },
       "source": "./src/plugin/auth/index.ts"
+    },
+    "./client": {
+      "import": {
+        "types": "./dist/client.d.ts",
+        "default": "./dist/client.js"
+      },
+      "require": {
+        "types": "./dist/client.d.cts",
+        "default": "./dist/client.cjs"
+      },
+      "source": "./src/client/index.ts"
     }
   },
   "publishConfig": {

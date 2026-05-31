@@ -1,0 +1,21 @@
+{
+  "name": "@ozaco/unplugin-client",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@ozaco/server": "workspace:*",
+    "@ozaco/std": "workspace:*",
+    "@ozaco/unplugin-resolve": "workspace:*"
+  },
+  "devDependencies": {
+    "rolldown": "1.0.3",
+    "unplugin": "3.0.0"
+  },
+  "peerDependencies": {
+    "unplugin": "^3.0.0"
+  }
+}

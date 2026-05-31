@@ -19,10 +19,12 @@
       "server:plugin/cors": ["./src/plugin/cors/index.ts", "./dist/plugin/cors.d.ts"],
       "server:plugin/docs": ["./src/plugin/docs/index.ts", "./dist/plugin/docs.d.ts"],
       "server:plugin/auth": ["./src/plugin/auth/index.ts", "./dist/plugin/auth.d.ts"],
+      "server:client": ["./src/client/index.ts", "./dist/client.d.ts"],
 
       "std:shared": ["./node_modules/@ozaco/std/dist/shared.d.ts"],
       "std:result": ["./node_modules/@ozaco/std/dist/result.d.ts"],
       "std:effect": ["./node_modules/@ozaco/std/dist/effect.d.ts"],
+      "std:fetch": ["./node_modules/@ozaco/std/dist/fetch.d.ts"],
       "std:event": ["./node_modules/@ozaco/std/dist/event.d.ts"],
       "std:plugin": ["./node_modules/@ozaco/std/dist/plugin.d.ts"],
       "std:logger": ["./node_modules/@ozaco/std/dist/logger.d.ts"],

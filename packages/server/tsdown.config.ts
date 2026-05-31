@@ -19,6 +19,7 @@ export default defineConfig({
     'plugin/cors': './src/plugin/cors/index.ts',
     'plugin/docs': './src/plugin/docs/index.ts',
     'plugin/auth': './src/plugin/auth/index.ts',
+    client: './src/client/index.ts',
   },
   format: ['esm', 'cjs'],
   dts: true,

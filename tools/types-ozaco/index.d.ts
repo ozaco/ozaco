@@ -82,6 +82,9 @@ declare module 'server:plugin/docs' {
 declare module 'server:plugin/auth' {
   export * from '@ozaco/server/plugin/auth'
 }
+declare module 'server:client' {
+  export * from '@ozaco/server/client'
+}
 
 declare module 'db:core' {
   export * from '@ozaco/db'

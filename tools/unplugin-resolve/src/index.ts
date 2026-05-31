@@ -85,6 +85,10 @@ const SERVER_MODULES: Record<string, ModuleEntry> = {
     subpath: 'plugin/auth',
     source: 'plugin/auth/index.ts',
   },
+  'server:client': {
+    subpath: 'client',
+    source: 'client/index.ts',
+  },
 }
 
 const DB_MODULES: Record<string, ModuleEntry> = {

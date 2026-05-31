@@ -4,6 +4,9 @@ export type FetchError = 'http-status' | 'network' | 'parse' | 'abort'
 
 export type FetchInit = Omit<RequestInit, 'signal'> & { signal?: never }
 
+/** The underlying fetch implementation `fetch()` dispatches through (injectable via `fetchImpl`). */
+export type FetchImpl = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
+
 export interface FetchResponse {
   readonly raw: Response
   readonly ok: boolean
