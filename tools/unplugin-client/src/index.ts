@@ -72,28 +72,33 @@ interface Binding {
   clientModule: string
 }
 
-/** Source `client.ts` (typed binding, manifest inlined) — written to `outDir` for inspection. */
+/**
+ * Source `client.ts` (manifest inlined + a `createClient` bound to it) — written to `outDir` for
+ * inspection. `createClient` installs the broker over the manifest and returns the typed services.
+ */
 const renderSource = (manifest: ClientDef.Manifest, b: Binding): string =>
-  `${HEADER}import { createClient } from ${lit(b.clientModule)}\n` +
+  `${HEADER}import { connect } from ${lit(b.clientModule)}\n` +
   `import type { ClientDef } from ${lit(b.clientModule)}\n\n` +
   `import type { ${b.servicesType} } from ${lit(b.servicesModule)}\n\n` +
-  `const manifest = ${serializeManifest(manifest)} satisfies ClientDef.Manifest\n\n` +
-  `export type AppClient = ClientDef.Client<${b.servicesType}>\n\n` +
-  `export const createAppClient = (options: ClientDef.Options): AppClient =>\n` +
-  `  createClient<${b.servicesType}>(manifest, options)\n`
+  `export const manifest = ${serializeManifest(manifest)} satisfies ClientDef.Manifest\n\n` +
+  `export const createClient = (options: Omit<ClientDef.Options, 'manifest'>) =>\n` +
+  `  connect<${b.servicesType}>({ ...options, manifest })\n`
 
 /** Built `client.js` (runtime only). */
 const renderDistJs = (manifest: ClientDef.Manifest, clientModule: string): string =>
-  `${HEADER}import { createClient } from ${lit(clientModule)}\n\n` +
-  `const manifest = ${serializeManifest(manifest)}\n\n` +
-  `export const createAppClient = options => createClient(manifest, options)\n`
+  `${HEADER}import { connect } from ${lit(clientModule)}\n\n` +
+  `export const manifest = ${serializeManifest(manifest)}\n\n` +
+  `export const createClient = options => connect({ ...options, manifest })\n`
 
 /** Built `client.d.ts` (types only). */
 const renderDistDts = (b: Binding): string =>
   `${HEADER}import type { ClientDef } from ${lit(b.clientModule)}\n` +
+  `import type { Operation } from '@ozaco/std/effect'\n\n` +
   `import type { ${b.servicesType} } from ${lit(b.servicesModule)}\n\n` +
-  `export type AppClient = ClientDef.Client<${b.servicesType}>\n` +
-  `export declare const createAppClient: (options: ClientDef.Options) => AppClient\n`
+  `export declare const manifest: ClientDef.Manifest\n` +
+  `export declare const createClient: (\n` +
+  `  options: Omit<ClientDef.Options, 'manifest'>,\n` +
+  `) => Operation<${b.servicesType}, unknown>\n`
 
 // unique temp name per generate() so a watch rebuild never imports a stale module from cache
 let tempSeq = 0

@@ -22,6 +22,9 @@ declare module 'std:io/impl/bun' {
 declare module 'std:io/impl/node' {
   export * from '@ozaco/std/io/impl/node'
 }
+declare module 'std:io/impl/web' {
+  export * from '@ozaco/std/io/impl/web'
+}
 
 declare module 'std:logger' {
   export * from '@ozaco/std/logger'

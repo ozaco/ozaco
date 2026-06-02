@@ -19,19 +19,18 @@ describe('@ozaco/unplugin-client — generate', () => {
       const source = readFileSync(join(dir, 'client.ts'), 'utf8')
       expect(source).toContain('"get": { method: "GET", path: "/users/:id" }')
       expect(source).toContain('satisfies ClientDef.Manifest')
-      expect(source).toContain('export const createAppClient')
+      expect(source).toContain('connect<Services>({ ...options, manifest })')
 
       const js = readFileSync(join(dir, 'client.js'), 'utf8')
       expect(js).toContain('"get": { method: "GET", path: "/users/:id" }')
       expect(js).toContain(
-        'export const createAppClient = options => createClient(manifest, options)',
+        'export const createClient = options => connect({ ...options, manifest })',
       )
       expect(js).not.toContain('satisfies')
 
       const dts = readFileSync(join(dir, 'client.d.ts'), 'utf8')
-      expect(dts).toContain(
-        'export declare const createAppClient: (options: ClientDef.Options) => AppClient',
-      )
+      expect(dts).toContain('export declare const createClient:')
+      expect(dts).toContain('Operation<Services, unknown>')
       expect(dts).toContain('"@ozaco/server/client"')
     } finally {
       rmSync(dir, { recursive: true, force: true })

@@ -90,6 +90,17 @@
       },
       "source": "./src/io/impl/node.ts"
     },
+    "./io/impl/web": {
+      "import": {
+        "types": "./dist/io/impl/web.d.ts",
+        "default": "./dist/io/impl/web.js"
+      },
+      "require": {
+        "types": "./dist/io/impl/web.d.cts",
+        "default": "./dist/io/impl/web.cjs"
+      },
+      "source": "./src/io/impl/web.ts"
+    },
     "./shared": {
       "import": {
         "types": "./dist/shared.d.ts",

@@ -1,137 +1,74 @@
-import { operation, until } from 'std:effect'
-import type { FetchInit } from 'std:fetch'
-import { fetch as httpFetch } from 'std:fetch'
-import { fail } from 'std:result'
+import { Broker, defineAction, defineService } from 'server:core'
+import type { Operation } from 'std:effect'
+import { install } from 'std:plugin'
 import type { AnyType } from 'std:shared'
 
+import { ClientBroker } from './definition'
 import type { ClientDef } from './types'
 
-const PARAM = /:([A-Za-z0-9_]+)/gu
+/**
+ * Build the client's stub services from an emitted route `Manifest`. Each stub is a real
+ * `defineService`/`defineAction` whose body dispatches itself through the broker
+ * (`Broker.actions.call`), so the call flows policy → tracer → the std:fetch dispatch core. The
+ * result is typed as the app's own `services` (`TServices`) — full input/output inference with no
+ * runtime coupling to the backend. Install `ClientBroker` (or use `connect`) to make it callable.
+ *
+ *   yield* install(ClientBroker, { baseUrl, manifest })
+ *   yield* Broker.actions.start()
+ *   const user = yield* api.users.actions.get({ id })
+ */
+/**
+ * One stub service: real `defineService`/`defineAction` whose every action body dispatches ITSELF
+ * through the broker. `ref` is a stable const holder so each action can reach the built service (and
+ * thus its own `{ serviceName, actionKey }`, which `Broker.actions.call` resolves via `getService`)
+ * — the service can only exist after its actions, so the reference is necessarily late-bound.
+ */
+const buildStubService = (name: string, actionKeys: readonly string[]): AnyType => {
+  const ref: { service?: AnyType } = {}
 
-const isPlainObject = (value: unknown): value is Record<string, unknown> =>
-  value !== null && typeof value === 'object' && !Array.isArray(value)
-
-const safeJson = (text: string): unknown => {
-  try {
-    return JSON.parse(text)
-  } catch {
-    return text
-  }
-}
-
-interface BuiltRequest {
-  url: string
-  method: string
-  headers: Record<string, string>
-  body: string | undefined
-}
-
-const buildRequest = (baseUrl: string, route: ClientDef.Route, input: unknown): BuiltRequest => {
-  const headers: Record<string, string> = {}
-  const method = route.method.toUpperCase()
-  const writes = method !== 'GET' && method !== 'HEAD'
-
-  // Fill `:param` segments from the input object; remaining fields become body/query.
-  const consumed = new Set<string>()
-  const path = route.path.replace(PARAM, (_match, name: string) => {
-    consumed.add(name)
-    return encodeURIComponent(String(isPlainObject(input) ? input[name] : input))
-  })
-
-  let url = baseUrl.replace(/\/$/u, '') + path
-  let body: string | undefined
-
-  const payload = isPlainObject(input)
-    ? Object.fromEntries(Object.entries(input).filter(([key]) => !consumed.has(key)))
-    : input
-
-  if (writes) {
-    const present = isPlainObject(payload) ? Object.keys(payload).length > 0 : payload !== undefined
-    if (present) {
-      headers['content-type'] = 'application/json'
-      body = JSON.stringify(payload)
-    }
-  } else if (isPlainObject(payload)) {
-    const query = new URLSearchParams()
-    for (const [key, value] of Object.entries(payload)) {
-      if (value !== undefined) {
-        query.set(key, typeof value === 'string' ? value : JSON.stringify(value))
-      }
-    }
-    const search = query.toString()
-    if (search) {
-      url += (url.includes('?') ? '&' : '?') + search
-    }
+  const actions: Record<string, AnyType> = {}
+  for (const key of actionKeys) {
+    actions[key] = defineAction(function* (...args: unknown[]) {
+      return yield* Broker.actions.call(
+        (ref.service!.actions as Record<string, AnyType>)[key],
+        args,
+      )
+    })
   }
 
-  return { url, method, headers, body }
+  ref.service = defineService({ name, version: '0.0.0', actions, *setup() {} } as AnyType)
+  return ref.service
+}
+
+const defineClient = <TServices>(manifest: ClientDef.Manifest): TServices => {
+  const services: Record<string, AnyType> = {}
+  for (const [name, routes] of Object.entries(manifest)) {
+    services[name] = buildStubService(name, Object.keys(routes))
+  }
+  return services as TServices
 }
 
 /**
- * Build a typed client from an emitted route `Manifest`. `TServices` is the app's `services`
- * object *type* (`typeof services`), supplied by the generated binding — full input/output
- * inference with no runtime coupling to the backend. Each method is an `operation` that dispatches
- * through `std:fetch` (so it composes with the effect runtime — cancellation via the scope's abort
- * signal — and never throws): non-2xx becomes the decoded `fail(error, message)`, transport faults
- * surface as `std:fetch`'s typed `FetchError` (`'network'`/`'abort'`/`'parse'`). Override the
- * underlying fetch (tests, SSR) via `std:fetch`'s `fetchImpl` context.
+ * Sugar over `defineClient` + broker setup: install `ClientBroker` with the manifest, install the
+ * stub services (so their actions are callable), start the broker, and return the ready-to-call
+ * services. Standalone — no server runtime. Install any policies (retry/cache/timeout/…) before or
+ * after; they apply on the next call.
+ *
+ *   const api = yield* connect<Services>({ baseUrl: 'https://api.example.com', manifest })
+ *   const user = yield* api.users.actions.get({ id })
  */
-const createClient = <TServices>(
-  manifest: ClientDef.Manifest,
-  options: ClientDef.Options,
-): ClientDef.Client<TServices> => {
-  const call = operation(function* (service: string, action: string, input: unknown) {
-    const route = manifest[service]?.[action]
-    if (!route) {
-      return yield* fail('client/no-route', `no route emitted for ${service}.${action}`)
-    }
+const connect = function* <TServices>(options: ClientDef.Options): Operation<TServices, unknown> {
+  yield* install(ClientBroker, options)
 
-    const built = buildRequest(options.baseUrl, route, input)
-    const headers = new Headers(built.headers)
-    const extra =
-      typeof options.headers === 'function'
-        ? yield* until(Promise.resolve(options.headers()))
-        : options.headers
-    if (extra) {
-      for (const [key, value] of new Headers(extra)) {
-        headers.set(key, value)
-      }
-    }
+  const services = defineClient<TServices>(options.manifest)
+  for (const service of Object.values(services as Record<string, AnyType>)) {
+    yield* install(service)
+  }
 
-    const init: FetchInit = { method: built.method, headers }
-    if (built.body !== undefined) {
-      init.body = built.body
-    }
-
-    const response = yield* httpFetch(built.url, init)
-    const text = yield* response.text()
-    const data = text ? safeJson(text) : undefined
-
-    if (!response.ok) {
-      const code = (data as AnyType)?.error ?? `http/${response.status}`
-      const message = (data as AnyType)?.message ?? response.statusText
-      return yield* fail(code, message)
-    }
-
-    return data
-  })
-
-  const serviceProxy = (service: string): AnyType =>
-    new Proxy(
-      {},
-      {
-        get: (_target, action: PropertyKey) => (input: unknown) =>
-          call(service, String(action), input),
-      },
-    )
-
-  return new Proxy(
-    {},
-    {
-      get: (_target, service: PropertyKey) => serviceProxy(String(service)),
-    },
-  ) as ClientDef.Client<TServices>
+  yield* Broker.actions.start()
+  return services
 }
 
+export { connect, defineClient }
+export { ClientBroker } from './definition'
 export type { ClientDef } from './types'
-export { createClient }

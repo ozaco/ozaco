@@ -9,6 +9,7 @@
       "std:io": ["./src/io/index.ts", "./dist/io.d.ts"],
       "std:io/impl/bun": ["./src/io/impl/bun.ts", "./dist/io/impl/bun.d.ts"],
       "std:io/impl/node": ["./src/io/impl/node.ts", "./dist/io/impl/node.d.ts"],
+      "std:io/impl/web": ["./src/io/impl/web.ts", "./dist/io/impl/web.d.ts"],
       "std:fetch": ["./src/fetch/index.ts", "./dist/fetch.d.ts"],
       "std:logger": ["./src/logger/index.ts", "./dist/logger.d.ts"],
       "std:logger/transport/console": [
