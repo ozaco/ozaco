@@ -1,6 +1,6 @@
 import { createContext } from 'std:effect'
 
-import type { FetchImpl } from './types'
+import type { FetchDef } from './types'
 
 /**
  * The underlying fetch implementation `fetch()` dispatches through. Defaults to `globalThis.fetch`;
@@ -8,6 +8,6 @@ import type { FetchImpl } from './types'
  * `fetchImpl.with(impl, op)` in the running scope. Read with `fetchImpl.get()` so the default
  * applies when unset.
  */
-export const fetchImpl = createContext<FetchImpl>('std:fetch', (input, init) =>
+export const fetchImpl = createContext<FetchDef.Impl>('std:fetch', (input, init) =>
   globalThis.fetch(input, init),
 )

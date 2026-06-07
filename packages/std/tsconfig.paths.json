@@ -11,6 +11,7 @@
       "std:io/impl/node": ["./src/io/impl/node.ts", "./dist/io/impl/node.d.ts"],
       "std:io/impl/web": ["./src/io/impl/web.ts", "./dist/io/impl/web.d.ts"],
       "std:fetch": ["./src/fetch/index.ts", "./dist/fetch.d.ts"],
+      "std:codec": ["./src/codec/index.ts", "./dist/codec.d.ts"],
       "std:logger": ["./src/logger/index.ts", "./dist/logger.d.ts"],
       "std:logger/transport/console": [
         "./src/logger/transport/console/index.ts",

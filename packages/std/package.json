@@ -123,6 +123,17 @@
       },
       "source": "./src/fetch/index.ts"
     },
+    "./codec": {
+      "import": {
+        "types": "./dist/codec.d.ts",
+        "default": "./dist/codec.js"
+      },
+      "require": {
+        "types": "./dist/codec.d.cts",
+        "default": "./dist/codec.cjs"
+      },
+      "source": "./src/codec/index.ts"
+    },
     "./logger": {
       "import": {
         "types": "./dist/logger.d.ts",
@@ -161,6 +172,9 @@
     "access": "public",
     "provenance": true,
     "registry": "https://registry.npmjs.org/"
+  },
+  "dependencies": {
+    "@streamparser/json": "0.0.22"
   },
   "devDependencies": {
     "tsdown": "catalog:build"

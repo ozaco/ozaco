@@ -1,15 +1,6 @@
 import { defineProtocol } from 'std:plugin'
 
-import { BROKER, CODEC, GATEWAY, POLICY, TRACER, TRANSPORT } from './const'
-import {
-  codecDecode,
-  codecDecodeStream,
-  codecEncode,
-  codecEncodeStream,
-  codecGetTransportsHandler,
-  codecRegisterHandler,
-  codecUnregisterHandler,
-} from './internal/codec-router'
+import { BROKER, GATEWAY, POLICY, TRACER, TRANSPORT } from './const'
 import {
   policyDispatch,
   policyGetPoliciesHandler,
@@ -25,7 +16,6 @@ import {
   transportUnregisterHandler,
 } from './internal/transport-router'
 import type { BrokerDef } from './types/broker'
-import type { CodecDef } from './types/codec'
 import type { GatewayDef } from './types/gateway'
 import type { PolicyDef } from './types/policy'
 import type { TracerDef } from './types/tracer'
@@ -69,31 +59,6 @@ export const Tracer = defineProtocol<TracerDef.Context, unknown, unknown[], Trac
 
   subtype: TRACER,
   cloneable: false,
-})
-
-export const Codec = defineProtocol<
-  CodecDef.Context,
-  unknown,
-  unknown[],
-  CodecDef.Actions,
-  CodecDef.Handlers
->({
-  name: 'server/codec',
-  version: '0.0.0',
-
-  subtype: CODEC,
-  cloneable: true,
-
-  handlers: {
-    encodeRoot: codecEncode,
-    decodeRoot: codecDecode,
-    encodeStreamRoot: codecEncodeStream,
-    decodeStreamRoot: codecDecodeStream,
-
-    register: codecRegisterHandler,
-    unregister: codecUnregisterHandler,
-    getTransports: codecGetTransportsHandler,
-  },
 })
 
 export const Policy = defineProtocol<

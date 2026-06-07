@@ -1,5 +1,6 @@
 import type { ActionFile, ActionRequest, ActionResponse, GatewayDef } from 'server:core'
-import { Codec, CoreErrors, Gateway, statusFor } from 'server:core'
+import { CoreErrors, Gateway, statusFor } from 'server:core'
+import { Codec } from 'std:codec'
 import { operation, until, useContext } from 'std:effect'
 import { fail, isFailure, isSuccess } from 'std:result'
 import type { AnyType } from 'std:shared'
@@ -44,7 +45,7 @@ export const toInternalAction = operation(function* (req: AnyType, _res: unknown
 
     if (contentType.includes(JSON_CONTENT)) {
       // route JSON through the registered codec (JsonCodec) so HTTP bodies and the broker's transport
-      // wire share one serializer (bad JSON → CoreErrors.CodecDecode)
+      // wire share one serializer (bad JSON → CodecErrors.Decode)
       const buffer = new Uint8Array(yield* until(req.arrayBuffer()))
       if (maxBytes !== undefined && buffer.byteLength > maxBytes) {
         return yield* fail(CoreErrors.PayloadTooLarge, `body exceeds ${maxBytes} bytes`)

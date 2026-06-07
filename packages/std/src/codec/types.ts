@@ -2,7 +2,7 @@ import type { Future, Stream } from 'std:effect'
 import type { Plugin } from 'std:plugin'
 import type { Result } from 'std:result'
 
-import type { CoreErrors } from '../const'
+import type { CodecErrors } from './errors'
 
 export type CodecDef = Plugin<CodecDef.Context, unknown, unknown[], CodecDef.Actions>
 
@@ -17,8 +17,8 @@ export namespace CodecDef {
     priority: number
   }
 
-  export type EncodeError = (typeof CoreErrors)['CodecEncode']
-  export type DecodeError = (typeof CoreErrors)['CodecDecode']
+  export type EncodeError = (typeof CodecErrors)['Encode']
+  export type DecodeError = (typeof CodecErrors)['Decode']
 
   export interface Actions {
     encode(value: unknown): Future<Uint8Array, unknown>

@@ -1,3 +1,4 @@
+import { Codec, JsonCodec } from 'std:codec'
 import { mapError, operation, useContext } from 'std:effect'
 import { createEvent } from 'std:event'
 import { getService, install } from 'std:plugin'
@@ -5,7 +6,7 @@ import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import { CoreErrors } from '../const'
-import { Broker, Codec, Policy, Tracer, Transport } from '../definitions'
+import { Broker, Policy, Tracer, Transport } from '../definitions'
 import { checkBrokerSettings, withCallSpan } from '../internal/call-helpers'
 import { BrokerSettingContext } from '../internal/context'
 import { findServiceId, resolveGroups, simplifyFailureCauses } from '../internal/helpers'
@@ -17,7 +18,6 @@ import type { Service } from '../types/service'
 import { TraceContext } from '../utils/context'
 import { resolvePolicySettings } from '../utils/policy'
 
-import { JsonCodec } from './codec'
 import { DefaultTracer } from './tracer'
 import { InternalTransport } from './transport'
 

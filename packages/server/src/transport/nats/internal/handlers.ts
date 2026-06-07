@@ -1,5 +1,6 @@
 import type { Service, TransportDef } from 'server:core'
-import { Broker, Codec } from 'server:core'
+import { Broker } from 'server:core'
+import { Codec } from 'std:codec'
 import { ensure, into, isStream, operation, spawn, useContext } from 'std:effect'
 import { Logger } from 'std:logger'
 import type { Result } from 'std:result'

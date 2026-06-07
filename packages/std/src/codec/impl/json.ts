@@ -6,9 +6,9 @@ import type { AnyType } from 'std:shared'
 
 import { JSONParser } from '@streamparser/json'
 
-import { CoreErrors } from '../const'
 import { Codec } from '../definitions'
-import type { CodecDef } from '../types/codec'
+import { CodecErrors } from '../errors'
+import type { CodecDef } from '../types'
 
 const encoder = new TextEncoder()
 const decoder = new TextDecoder()
@@ -16,10 +16,10 @@ const decoder = new TextDecoder()
 const getSelf = (): CodecDef => JsonCodec
 
 export const JsonCodec = Codec.implement({
-  name: 'server/json-codec',
+  name: 'std/json-codec',
   version: '0.0.0',
   *setup(options: CodecDef.Options = {}) {
-    const name = options.name ?? 'server/json-codec'
+    const name = options.name ?? 'std/json-codec'
     const priority = options.priority ?? 999
 
     const context: CodecDef.Context = { name, priority }
@@ -36,10 +36,7 @@ export const JsonCodec = Codec.implement({
     try {
       return encoder.encode(JSON.stringify(value))
     } catch (error) {
-      return yield* fail(
-        CoreErrors.CodecEncode,
-        error instanceof Error ? error.message : String(error),
-      )
+      return yield* fail(CodecErrors.Encode, error instanceof Error ? error.message : String(error))
     }
   }),
 
@@ -47,10 +44,7 @@ export const JsonCodec = Codec.implement({
     try {
       return JSON.parse(decoder.decode(data))
     } catch (error) {
-      return yield* fail(
-        CoreErrors.CodecDecode,
-        error instanceof Error ? error.message : String(error),
-      )
+      return yield* fail(CodecErrors.Decode, error instanceof Error ? error.message : String(error))
     }
   }),
 
@@ -89,7 +83,12 @@ export const JsonCodec = Codec.implement({
           void scope.run(() => channel.close(asFailure(error)))
         }
 
-        parser.onValue = ({ value }) => {
+        // emit one value per top-level (concatenated/NDJSON) document only — `@streamparser/json`
+        // fires onValue for every node, so skip nested values (those sit inside a non-empty stack).
+        parser.onValue = ({ value, stack }) => {
+          if (stack.length > 0) {
+            return
+          }
           void scope.run(() => channel.send(value))
         }
       }

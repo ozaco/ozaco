@@ -3,7 +3,6 @@ export * from './definitions'
 
 export * from './types/action'
 export * from './types/broker'
-export * from './types/codec'
 export * from './types/gateway'
 export * from './types/policy'
 export * from './types/service'
@@ -11,7 +10,6 @@ export * from './types/tracer'
 export * from './types/transport'
 
 export * from './impl/broker'
-export * from './impl/codec'
 export * from './impl/tracer'
 export * from './impl/transport'
 

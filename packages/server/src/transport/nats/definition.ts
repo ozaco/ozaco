@@ -1,5 +1,6 @@
 import type { TransportDef } from 'server:core'
-import { Codec, Transport } from 'server:core'
+import { Transport } from 'server:core'
+import { Codec } from 'std:codec'
 import type { Stream } from 'std:effect'
 import { ensure, map, mapError, operation, until, useScope } from 'std:effect'
 import { fail } from 'std:result'

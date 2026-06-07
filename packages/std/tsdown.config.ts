@@ -14,6 +14,7 @@ export default defineConfig({
     'io/impl/node': './src/io/impl/node.ts',
     'io/impl/web': './src/io/impl/web.ts',
     fetch: './src/fetch/index.ts',
+    codec: './src/codec/index.ts',
     logger: './src/logger/index.ts',
     'logger/transport/console': './src/logger/transport/console/index.ts',
     'logger/transport/file': './src/logger/transport/file/index.ts',

@@ -1,4 +1,4 @@
-import { Codec } from 'server:core'
+import { Codec } from 'std:codec'
 import type { Operation, Scope, Stream } from 'std:effect'
 import { each } from 'std:effect'
 import type { Result } from 'std:result'
