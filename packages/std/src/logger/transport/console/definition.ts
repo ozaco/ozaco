@@ -24,9 +24,11 @@ const ConsoleTransportImpl = LoggerTransport.implement<
     const msgKey = options.msgKey ?? 'msg'
     const errorKey = options.errorKey ?? 'err'
 
+    const loggerCtx = yield* useContext(Logger)
+
     const context: ConsoleDef.Context = {
       name,
-      level: options.level ?? LogLevel.info,
+      level: options.level ?? loggerCtx.level,
       format:
         options.format ??
         (pretty ? entry => prettyFormat(entry, color) : entry => toJson(entry, msgKey, errorKey)),

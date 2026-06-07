@@ -25,24 +25,27 @@ export const startAction = operation(function* (config: Partial<{ port: number; 
       )
     }
 
-    const result = await scope.safeRun(() =>
-      operation(function* () {
-        try {
-          const upgraded = yield* Gateway.actions.upgrade(request, bunServer)
-          if (upgraded) {
-            return undefined
-          }
-        } catch {
-          // upgrade negotiation failed (e.g. no ws route) — fall through to REST (which 404s)
+    const result = await scope.safeRun(function* () {
+      try {
+        const upgraded = yield* Gateway.actions.upgrade(request, bunServer)
+        if (upgraded) {
+          return undefined
         }
+      } catch {
+        // upgrade negotiation failed (e.g. no ws route) — fall through to REST (which 404s)
+      }
 
-        return yield* dispatchRequest(request, null)
-      })(),
-    )
+      return yield* dispatchRequest(request, null)
+    })
 
     if (isSuccess(result)) {
       return result.value as Response | undefined
     }
+
+    if (isFailure(result)) {
+      return Response.json(result, { status: statusFor(CoreErrors.BrokerInternal) })
+    }
+
     return Response.json(
       { error: CoreErrors.BrokerInternal, message: 'request failed' },
       { status: statusFor(CoreErrors.BrokerInternal) },

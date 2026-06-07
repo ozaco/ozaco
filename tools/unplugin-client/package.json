@@ -12,7 +12,7 @@
     "@ozaco/unplugin-resolve": "workspace:*"
   },
   "devDependencies": {
-    "rolldown": "1.0.3",
+    "rolldown": "1.1.0",
     "unplugin": "3.0.0"
   },
   "peerDependencies": {

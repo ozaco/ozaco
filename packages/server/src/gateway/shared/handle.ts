@@ -16,8 +16,9 @@ export const dispatchRequest = operation(function* (request: Request, rawRes: un
   let actionReq: ActionRequest | null = null
   let actionRes: ActionResponse | null = null
 
+  const ctx = yield* useContext(Gateway.context)
+
   try {
-    const ctx = yield* useContext(Gateway.context)
     const url = new URL(request.url)
     const [sym, params] = yield* Gateway.actions.find(request.method, url.pathname)
 
@@ -53,10 +54,13 @@ export const dispatchRequest = operation(function* (request: Request, rawRes: un
 
     return (yield* Gateway.actions.fromInternal(actionReq, actionRes, auto(ret), meta)) as Response
   } catch (error) {
+    const failure = asFailure(error)
+    const simplifiedFailure = ctx.simplify ? yield* ctx.simplify(failure) : failure
+
     return (yield* Gateway.actions.fromInternal(
       actionReq,
       actionRes,
-      asFailure(error),
+      simplifiedFailure,
       null,
     )) as Response
   }

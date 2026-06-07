@@ -1,5 +1,5 @@
 import type { Result } from 'std:result'
-import { appendCauses, asFailure, isFailure } from 'std:result'
+import { appendCauses, asFailure, isFailure, isSuccess } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import type { Helpers } from '../types/helpers'
@@ -12,75 +12,21 @@ export function operation<Args extends AnyType[], T, E = never>(
   ...causes: string[]
 ): (...args: Args) => Future<T, E> {
   return (...args) => {
-    const desc = causes.join(',') || 'operation'
-
     const op = {
-      [Symbol.iterator](): Iterator<Helpers.Effect<unknown>, T, unknown> {
-        const inner = fn(...args) as Generator<
-          Helpers.Effect<unknown> | Helpers.FailureOf<E>,
-          T,
-          unknown
-        >
+      *[Symbol.iterator]() {
+        try {
+          const result = yield* fn(...args)
 
-        return {
-          next(value: unknown) {
-            let step: IteratorResult<Helpers.Effect<unknown> | Result.Failure<E>, T>
+          if (isFailure(result)) {
+            throw result
+          }
 
-            try {
-              step = inner.next(value)
-            } catch (error) {
-              step = { done: false, value: asFailure(error) as AnyType }
-            }
-
-            if (step.done) {
-              return { done: true, value: step.value }
-            }
-            if (isFailure(step.value as AnyType)) {
-              throw appendCauses(step.value as Result.Failure<E>, ...causes)
-            }
-            const effect = step.value as Helpers.Effect<unknown>
-            return {
-              done: false,
-              value: {
-                enter: effect.enter,
-                cause: `${desc} > ${effect.cause}`,
-              },
-            }
-          },
-          throw(error: unknown) {
-            let step: IteratorResult<Helpers.Effect<unknown> | Result.Failure<E>, T>
-
-            try {
-              step = inner.throw?.(error)
-            } catch (subError) {
-              step = {
-                done: false,
-                value: asFailure(subError) as AnyType,
-              }
-            }
-
-            if (!step || step.done) {
-              throw error
-            }
-            if (isFailure(step.value as AnyType)) {
-              throw appendCauses(step.value as Result.Failure<E>, ...causes)
-            }
-            const effect = step.value as Helpers.Effect<unknown>
-            return {
-              done: false,
-              value: {
-                enter: effect.enter,
-                cause: `${desc} > ${effect.cause}`,
-              },
-            }
-          },
-          return(value: unknown) {
-            inner.return?.(value as AnyType)
-            return { done: true, value: value as AnyType }
-          },
+          return isSuccess(result) ? result.value : result
+        } catch (error) {
+          yield* appendCauses(asFailure(error), ...causes)
         }
       },
-    } as Future<T, E>
+    } as unknown as Future<T, E>
 
     const settled = () => run(() => op) as Promise<Result<T, E>>
 

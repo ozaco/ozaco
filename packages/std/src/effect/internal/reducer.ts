@@ -1,4 +1,4 @@
-import { asFailure, isSuccess } from 'std:result'
+import { asFailure, isFailure, isSuccess } from 'std:result'
 import { PriorityQueue } from 'std:shared'
 
 import { getGlobalDebug } from '../methods/debug'
@@ -73,8 +73,12 @@ export class Reducer {
             }
           }
           if (!next.done) {
-            resolveDebugHandler(routine)?.(next.value.cause)
-            routine.data.exit = next.value.enter(routine.next, routine)
+            if (isFailure(next.value)) {
+              routine.next(next.value)
+            } else {
+              resolveDebugHandler(routine)?.(next.value.cause)
+              routine.data.exit = next.value.enter(routine.next, routine)
+            }
           }
         } catch (error) {
           routine.next(asFailure(error))

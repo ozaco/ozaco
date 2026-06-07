@@ -1,66 +1,86 @@
-import { Broker, DefaultBroker } from 'server:core'
-import { main, suspend } from 'std:effect'
-import { DefaultLogger, Logger, LogLevel } from 'std:logger'
+import { Broker, DefaultBroker, Gateway } from 'server:core'
+import { ensure, main, suspend } from 'std:effect'
+import { DefaultLogger, Logger } from 'std:logger'
 import { install } from 'std:plugin'
 
 import { BunGateway } from 'server:gateway/bun'
-import { BucketPolicy } from 'server:policy/bucket'
-import { NatsTransport } from 'server:transport/nats'
+import { AccessRefreshAuth } from 'server:plugin/auth'
+import { Cors } from 'server:plugin/cors'
+import { Docs } from 'server:plugin/docs'
 import { BunIO } from 'std:io/impl/bun'
 import { ConsoleTransport } from 'std:logger/transport/console'
 
-import { ENV } from './env'
-import { GreeterService } from './services/greeter'
-import { UserService } from './services/user'
+import { ENV, STATUS_MAP } from './const'
+import { AuthService } from './services/auth'
+import { TodoService } from './services/todo'
+import { cleanupErrors } from './utils/cleanup'
+import { memoryAuthProvider } from './utils/store'
 
 await main(function* () {
   yield* install(BunIO)
-  // debug level so the per-policy dispatch trace (broker `trace: true`) is visible
-  yield* install(DefaultLogger, { level: LogLevel.debug })
-  yield* install(ConsoleTransport)
-
-  // distributed services over NATS — run one process per SERVICE (e.g. user + greeter)
-  yield* install(DefaultBroker)
-  yield* install(NatsTransport)
-  yield* install(BucketPolicy)
-
-  yield* install(GreeterService)
-  yield* install(UserService)
-
-  yield* install(BunGateway)
 
   const env = yield* ENV
 
-  if (!env.service) {
-    yield* Logger.actions.info(
-      'Set SERVICE=user|greeter to run a service. The client SDK is generated at build time by ' +
-        '@ozaco/unplugin-client (see its tsdown.config.ts usage), not at runtime.',
-    )
-    return
-  }
+  yield* install(DefaultLogger, { level: env.level })
+  yield* install(ConsoleTransport)
 
-  yield* Broker.actions.register(env.services[env.service as keyof typeof env.services])
+  yield* Logger.actions.info(`LogLevel: ${env.level}`)
 
+  // A local, in-process broker. DefaultBroker auto-installs the internal transport, so actions are
+  // dispatched in-memory — no NATS or other broker is required to run this example.
+  yield* install(DefaultBroker)
+
+  // Real JWT auth: signed HS256 access + refresh tokens, backed by the in-memory provider.
+  yield* install(AccessRefreshAuth, {
+    secret: 'dev-only-secret-change-me',
+    issuer: 'ozaco-backend',
+    access: { expiresIn: '15m' },
+    refresh: { expiresIn: '7d' },
+  })
+  yield* AccessRefreshAuth.actions.provide(memoryAuthProvider)
+
+  yield* install(AuthService)
+  yield* install(TodoService)
+
+  yield* Broker.actions.register(AuthService)
+  yield* Broker.actions.register(TodoService)
   yield* Broker.actions.start()
 
-  if (env.service === 'user') {
-    const response = yield* Broker.actions.call(UserService.actions.greetMany, [
-      ['Alice', 'Bob', 'Carol'],
-    ])
+  // HTTP gateway + CORS + OpenAPI/Swagger docs.
+  yield* install(BunGateway, {
+    statusMap: STATUS_MAP,
+    simplify: cleanupErrors.bind(null, 'gateway'),
+  })
+  yield* install(Cors, { origin: '*', credentials: true })
+  yield* install(Docs, {
+    title: 'Ozaco Todo API',
+    description: 'A tiny todo API with real JWT login, backed by in-memory Maps.',
+    version: '0.0.0',
+    auth: { type: 'bearer', bearerFormat: 'JWT' },
+  })
 
-    yield* Logger.actions.info('result here', ...response)
+  // Mount each service under `/<service.name>` so the routes match the generated client + docs.
+  yield* Gateway.actions.mount('/auth', AuthService)
+  yield* Gateway.actions.mount('/todos', TodoService)
 
-    // const [response, response2] = yield* all([
-    //   Broker.actions.call(UserService.actions.greetMany, [['Alice', 'Bob', 'Carol']]),
-    //   Broker.actions.call(UserService.actions.greetMany, [['Kirito']]),
-    // ])
-    // yield* Logger.actions.info(
-    //   'Stream response:',
-    //   response.join(', '),
-    //   '-----',
-    //   response2.join(', '),
-    // )
-  }
+  yield* Docs.actions.from(AuthService, TodoService)
+
+  const { host, port } = yield* Gateway.actions.start({ port: env.port, host: env.host })
+
+  // the Docs plugin logs the swagger/openapi URLs itself once the gateway is listening
+  yield* Logger.actions.info(`Todo api ready  → http://${host}:${port}`)
+  yield* Logger.actions.info(
+    'Seed users      → admin@example.com / admin  ·  user@example.com / user',
+  )
+
+  yield* ensure(function* () {
+    yield* Logger.actions.debug('Shutting down')
+
+    yield* Gateway.actions.destroy()
+    yield* Broker.actions.destroy()
+
+    yield* Logger.actions.info('Bye')
+  })
 
   yield* suspend()
 })

@@ -1,6 +1,7 @@
 import type { Service } from 'server:core'
 import { Gateway } from 'server:core'
 import { operation, useContext } from 'std:effect'
+import { Logger } from 'std:logger'
 import { definePlugin } from 'std:plugin'
 
 import { createOpenAPIAction, createSwaggerAction } from './internal/actions'
@@ -40,6 +41,23 @@ export const Docs = definePlugin({
 
     yield* Gateway.actions.mount('', createOpenAPIAction(ctx.openapi))
     yield* Gateway.actions.mount('', createSwaggerAction(ctx.swagger))
+
+    // Once the gateway is listening we know the host/port, so log where the docs live. Runs only
+    // when a Logger is installed; returns nothing so the gateway's start result is left untouched.
+    yield* Gateway.after({
+      *start(result: { host: string; port: number }) {
+        if ((yield* Logger.context.get()) === undefined) {
+          return
+        }
+
+        const host = result.host === '0.0.0.0' || result.host === '::' ? 'localhost' : result.host
+        const base = `http://${host}:${result.port}`
+
+        yield* Logger.actions.info(`Docs "${ctx.title}" ready`)
+        yield* Logger.actions.info(`  Swagger → ${base}${ctx.swagger}`)
+        yield* Logger.actions.info(`  Openapi → ${base}${ctx.openapi}`)
+      },
+    })
 
     return ctx
   },

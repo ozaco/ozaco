@@ -99,6 +99,10 @@ export namespace GatewayDef {
 
     statusMap?: Record<string, number> | undefined
     maxBodyBytes?: number | undefined
+
+    simplify?:
+      | ((failure: Result.Failure<unknown>) => Operation<Result.Failure<unknown>, unknown>)
+      | undefined
   }
 
   export interface Options {
@@ -106,6 +110,10 @@ export namespace GatewayDef {
     host?: string
     statusMap?: Record<string, number>
     maxBodyBytes?: number
+
+    simplify?:
+      | ((failure: Result.Failure<unknown>) => Operation<Result.Failure<unknown>, unknown>)
+      | undefined
   }
 
   export interface Actions {

@@ -6,7 +6,7 @@ import { defineConfig } from 'tsdown'
 export default defineConfig({
   entry: {
     app: './src/index.ts',
-    services: './src/services.ts',
+    services: './src/utils/services.ts',
   },
   format: ['esm'],
   dts: true,
@@ -18,8 +18,7 @@ export default defineConfig({
     serverResolve.rolldown(),
     dbResolve.rolldown(),
     clientPlugin.rolldown({
-      entry: './src/services',
-      clientModule: 'server:client',
+      entry: './src/utils/services',
     }),
   ],
 })

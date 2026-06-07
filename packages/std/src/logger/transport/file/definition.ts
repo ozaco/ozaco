@@ -27,7 +27,7 @@ const FileTransportImpl = LoggerTransport.implement<
 
     const context: FileDef.Context = {
       name,
-      level: options.level ?? LogLevel.info,
+      level: options.level ?? LogLevel.trace,
 
       buffer: [],
       limit: Math.max(0, options.bufferSize ?? 0),

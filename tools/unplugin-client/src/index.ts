@@ -144,11 +144,13 @@ const generate = async (options: ClientPluginOptions): Promise<void> => {
   const resolveEntry = operation(function* (entry: string) {
     const base = resolve(process.cwd(), entry)
     const candidates = [base, `${base}.ts`, `${base}.js`, `${base}/index.ts`, `${base}/index.js`]
+
     for (const candidate of candidates) {
       if (yield* IO.actions.exists(candidate)) {
         return candidate
       }
     }
+
     return yield* result.fail('client/entry', `cannot resolve entry ${lit(entry)}`)
   })
 

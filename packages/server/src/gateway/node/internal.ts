@@ -84,12 +84,18 @@ export const startAction = operation(function* (config: Partial<{ port: number; 
     const request = await toRequest(req)
     const result = await scope.safeRun(() => dispatchRequest(request, res))
 
-    const response = isSuccess(result)
-      ? result.value
-      : Response.json(
-          { error: CoreErrors.BrokerInternal, message: 'request failed' },
-          { status: statusFor(CoreErrors.BrokerInternal) },
-        )
+    let response: Response
+
+    if (isSuccess(result)) {
+      response = result.value
+    } else if (isFailure(result)) {
+      response = Response.json(result, { status: statusFor(CoreErrors.BrokerInternal) })
+    } else {
+      response = Response.json(
+        { error: CoreErrors.BrokerInternal, message: 'request failed' },
+        { status: statusFor(CoreErrors.BrokerInternal) },
+      )
+    }
 
     await writeResponse(res, response)
   }
