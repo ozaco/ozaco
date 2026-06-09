@@ -1,3 +1,5 @@
+// --------- STD ---------
+
 declare module 'std:shared' {
   export * from '@ozaco/std/shared'
 }
@@ -25,7 +27,6 @@ declare module 'std:io/impl/node' {
 declare module 'std:io/impl/web' {
   export * from '@ozaco/std/io/impl/web'
 }
-
 declare module 'std:logger' {
   export * from '@ozaco/std/logger'
 }
@@ -35,10 +36,11 @@ declare module 'std:logger/transport/file' {
 declare module 'std:logger/transport/console' {
   export * from '@ozaco/std/logger/transport/console'
 }
-
 declare module 'std:fetch' {
   export * from '@ozaco/std/fetch'
 }
+
+// --------- SERVER ---------
 
 declare module 'server:core' {
   export * from '@ozaco/server/core'
@@ -92,14 +94,14 @@ declare module 'server:client' {
   export * from '@ozaco/server/client'
 }
 
+// --------- DB ---------
+
 declare module 'db:core' {
   export * from '@ozaco/db'
 }
-
 declare module 'db:impl/sqlite' {
   export * from '@ozaco/db/impl/sqlite'
 }
-
 declare module 'db:impl/postgres' {
   export * from '@ozaco/db/impl/postgres'
 }

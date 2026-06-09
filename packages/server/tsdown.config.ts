@@ -1,4 +1,4 @@
-import { serverResolve, stdResolve } from '@ozaco/unplugin-resolve'
+import { serverResolve, stdResolve } from '@ozaco/devkit/resolve'
 import { defineConfig } from 'tsdown'
 
 // oxlint-disable-next-line import/no-default-export

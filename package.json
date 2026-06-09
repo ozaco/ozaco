@@ -25,10 +25,9 @@
     "@commitlint/cli": "^21.0.2",
     "@commitlint/config-conventional": "^21.0.2",
     "@commitlint/prompt-cli": "^21.0.2",
-    "@ozaco/unplugin-resolve": "workspace:*",
+    "@ozaco/devkit": "workspace:*",
     "@types/bun": "^1.3.14",
     "@types/node": "^25.9.1",
-    "@types/ozaco": "workspace:*",
     "oxfmt": "^0.53.0",
     "oxlint": "^1.68.0",
     "typescript": "^6.0.3"

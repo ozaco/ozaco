@@ -1,5 +1,5 @@
-import { clientPlugin } from '@ozaco/unplugin-client'
-import { dbResolve, serverResolve, stdResolve } from '@ozaco/unplugin-resolve'
+import { clientPlugin } from '@ozaco/devkit/client'
+import { dbResolve, serverResolve, stdResolve } from '@ozaco/devkit/resolve'
 import { defineConfig } from 'tsdown'
 
 // oxlint-disable-next-line import/no-default-export

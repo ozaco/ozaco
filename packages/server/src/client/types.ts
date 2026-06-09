@@ -22,7 +22,7 @@ export namespace ClientDef {
   export interface Options extends BrokerDef.Options {
     /** Origin the remote server is served from, e.g. `https://api.example.com`. */
     baseUrl: string
-    /** The route table emitted by `@ozaco/unplugin-client`. */
+    /** The route table emitted by `@ozaco/devkit`. */
     manifest: Manifest
     /** Static or lazily-resolved headers (auth, tracing) merged into every request. */
     headers?: HeadersInit | (() => HeadersInit | Promise<HeadersInit>)

@@ -137,12 +137,12 @@ const resolveFactory = (name: string) => (aliases: Record<string, string>, exter
 
 const resolveAlias: UnpluginInstance<ResolveAliasOptions, false> = createUnplugin(
   (options: ResolveAliasOptions) =>
-    resolveFactory('@ozaco/unplugin-resolve:alias')(options.aliases, Boolean(options.external)),
+    resolveFactory('@ozaco/devkit:resolve:alias')(options.aliases, Boolean(options.external)),
 )
 
 const stdResolve: UnpluginInstance<ResolveOptions | undefined, false> = createUnplugin(
   (options?: ResolveOptions) =>
-    resolveFactory('@ozaco/unplugin-resolve:std')(
+    resolveFactory('@ozaco/devkit:resolve:std')(
       buildAliases(STD_MODULES, '@ozaco/std', options?.sourceDir),
       !options?.sourceDir,
     ),
@@ -150,7 +150,7 @@ const stdResolve: UnpluginInstance<ResolveOptions | undefined, false> = createUn
 
 const serverResolve: UnpluginInstance<ResolveOptions | undefined, false> = createUnplugin(
   (options?: ResolveOptions) =>
-    resolveFactory('@ozaco/unplugin-resolve:server')(
+    resolveFactory('@ozaco/devkit:resolve:server')(
       buildAliases(SERVER_MODULES, '@ozaco/server', options?.sourceDir),
       !options?.sourceDir,
     ),
@@ -158,7 +158,7 @@ const serverResolve: UnpluginInstance<ResolveOptions | undefined, false> = creat
 
 const dbResolve: UnpluginInstance<ResolveOptions | undefined, false> = createUnplugin(
   (options?: ResolveOptions) =>
-    resolveFactory('@ozaco/unplugin-resolve:db')(
+    resolveFactory('@ozaco/devkit:resolve:db')(
       buildAliases(DB_MODULES, '@ozaco/db', options?.sourceDir),
       !options?.sourceDir,
     ),
