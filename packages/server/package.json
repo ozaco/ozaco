@@ -35,6 +35,17 @@
       },
       "source": "./src/transport/nats/index.ts"
     },
+    "./transport/worker": {
+      "import": {
+        "types": "./dist/transport/worker.d.ts",
+        "default": "./dist/transport/worker.js"
+      },
+      "require": {
+        "types": "./dist/transport/worker.d.cts",
+        "default": "./dist/transport/worker.cjs"
+      },
+      "source": "./src/transport/worker/index.ts"
+    },
     "./policy/bucket": {
       "import": {
         "types": "./dist/policy/bucket.d.ts",

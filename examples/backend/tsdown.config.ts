@@ -7,6 +7,8 @@ export default defineConfig({
   entry: {
     app: './src/index.ts',
     services: './src/utils/services.ts',
+    'worker/main': './src/worker/main.ts',
+    'worker/entry': './src/worker/entry.ts',
   },
   format: ['esm'],
   dts: true,

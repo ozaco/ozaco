@@ -6,6 +6,7 @@ export default defineConfig({
   entry: {
     core: './src/core/index.ts',
     'transport/nats': './src/transport/nats/index.ts',
+    'transport/worker': './src/transport/worker/index.ts',
     'policy/bucket': './src/policy/bucket/index.ts',
     'policy/retry': './src/policy/retry/index.ts',
     'policy/cache': './src/policy/cache/index.ts',

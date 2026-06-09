@@ -46,6 +46,9 @@ declare module 'server:core' {
 declare module 'server:transport/nats' {
   export * from '@ozaco/server/transport/nats'
 }
+declare module 'server:transport/worker' {
+  export * from '@ozaco/server/transport/worker'
+}
 declare module 'server:policy/bucket' {
   export * from '@ozaco/server/policy/bucket'
 }

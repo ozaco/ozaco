@@ -15,6 +15,11 @@ export interface InvokeArgs {
   traceContext: unknown
 }
 
+/**
+ * Invoke a registered service action with the full server context stack — `CallContext`,
+ * `StreamContext`, an optional `TraceContext`, and a `Logger.child` span. Shared by every transport
+ * that serves local actions (internal, nats, worker) so the invocation semantics stay identical.
+ */
 export const invokeAction = operation(function* (args: InvokeArgs) {
   const { service, actionKey, params, streams, rawReq, traceContext } = args
 

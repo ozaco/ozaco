@@ -8,10 +8,10 @@ import { asFailure, fail, isSuccess, succeed } from 'std:result'
 
 import type { Msg } from 'nats'
 
+import { invokeAction } from '../../shared/invoke'
 import type { Nats } from '../types'
 
 import { useNatsContext } from './context'
-import { invokeAction } from './invoke'
 import { pumpToNats } from './pump'
 import { cancelSubject } from './subjects'
 import { captureInputStreams } from './subscribe'
