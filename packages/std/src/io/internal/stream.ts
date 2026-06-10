@@ -1,6 +1,6 @@
 import type { Stream } from 'std:effect'
 import { action, each, operation } from 'std:effect'
-import type { WritableLike } from 'std:io'
+import type { StreamClose, WritableLike } from 'std:io'
 import { hasFlag, IO_FLAGS } from 'std:io'
 import { appendCauses, asFailure } from 'std:result'
 
@@ -46,7 +46,7 @@ const waitForDrain = (writable: WritableLike): ReturnType<typeof action<void>> =
     return cleanup
   }, 'stream')
 
-export const readFileStream = (path: string): Stream<Uint8Array, void> =>
+export const readFileStream = (path: string): Stream<Uint8Array, StreamClose> =>
   fromReadable(createReadStream(path))
 
 export const writeFileStream = operation(function* (

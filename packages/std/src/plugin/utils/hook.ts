@@ -1,6 +1,6 @@
 import type { Operation } from 'std:effect'
 import { createContext, operation } from 'std:effect'
-import { asFailure, fail, unwrap } from 'std:result'
+import { appendCauses, asFailure, fail, unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
 import { flatten } from 'std:shared'
 
@@ -103,13 +103,21 @@ export const createHookable = (options: {
             }
             return yield* intercept(inner(...args))
           } catch (error) {
-            if (errors.length > 0) {
-              for (const hook of errors) {
-                yield* intercept(hook(error, args))
+            let failure = asFailure(error)
+
+            for (const hook of errors) {
+              try {
+                yield* intercept(hook(error, args), `${key}:error`)
+              } catch (hookError) {
+                failure = appendCauses(
+                  asFailure(hookError),
+                  `masked: ${failure.message || String(failure.error)}`,
+                  ...failure.causes,
+                )
               }
             }
 
-            unwrap(asFailure(error))
+            unwrap(failure)
           }
         }
 

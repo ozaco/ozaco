@@ -1,6 +1,10 @@
+import type { Result } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 export type PathLike = string | URL
+
+/** The close value an IO byte stream settles with: `true` on a clean end, or the failure that interrupted it. */
+export type StreamClose = true | Result.Failure<unknown>
 
 export type HashAlgorithm = 'SHA-256' | 'SHA-384' | 'SHA-512'
 

@@ -77,6 +77,11 @@ export const JsonCodec = Codec.implement({
     let parseError: Result.Failure<unknown> | undefined
 
     yield* spawn(function* () {
+      // per-stream decoder in streaming mode: a multi-byte UTF-8 sequence split across chunk
+      // boundaries stays buffered until its remaining bytes arrive (the shared module-level
+      // decoder would emit replacement characters and interleave state across streams)
+      const streamDecoder = new TextDecoder()
+
       if (json) {
         parser = new JSONParser({ separator: '' })
 
@@ -102,8 +107,9 @@ export const JsonCodec = Codec.implement({
             closeValue = (next.value ?? true) as true | Result.Failure<unknown>
             break
           }
+          const text = streamDecoder.decode(next.value, { stream: true })
           if (json) {
-            parser.write(decoder.decode(next.value))
+            parser.write(text)
             while (pending.length > 0) {
               yield* channel.send(pending.shift())
             }
@@ -111,13 +117,18 @@ export const JsonCodec = Codec.implement({
               closeValue = parseError
               break
             }
-          } else {
-            yield* channel.send(decoder.decode(next.value))
+          } else if (text.length > 0) {
+            yield* channel.send(text)
           }
         }
       } finally {
+        const tail = streamDecoder.decode()
+
         if (json) {
           try {
+            if (tail.length > 0) {
+              parser.write(tail)
+            }
             parser.end()
             // oxlint-disable-next-line no-empty
           } catch {}
@@ -129,6 +140,8 @@ export const JsonCodec = Codec.implement({
           if (parseError) {
             closeValue = parseError
           }
+        } else if (tail.length > 0) {
+          yield* channel.send(tail)
         }
 
         yield* channel.close(closeValue)

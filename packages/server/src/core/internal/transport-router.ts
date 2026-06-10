@@ -100,7 +100,7 @@ export const transportUnregisterHandler: TransportDef.Handlers['unregister'] = o
       yield* filter(existing, function* (target) {
         const targetCtx = yield* useContext(target)
 
-        return targetCtx.name === transportCtx.name
+        return targetCtx.name !== transportCtx.name
       }),
     )
   },

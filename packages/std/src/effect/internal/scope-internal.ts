@@ -28,7 +28,7 @@ export function createScopeInternal(
     contexts,
     snapshotKeys,
     get<T>(context: Context<T>): T | undefined {
-      return (contexts[context.name] ?? context.defaultValue) as T | undefined
+      return context.name in contexts ? (contexts[context.name] as T) : context.defaultValue
     },
     set<T>(context: Context<T>, value: T): T {
       contexts[context.name] = value

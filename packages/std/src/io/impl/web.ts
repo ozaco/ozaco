@@ -1,5 +1,6 @@
 import type { Stream } from 'std:effect'
 import { operation, resource } from 'std:effect'
+import type { StreamClose } from 'std:io'
 import { IO } from 'std:io'
 import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
@@ -14,10 +15,10 @@ const unsupported = (action: string): AnyType =>
     return yield* fail('io-unsupported', `IO.${action} is not available in a web environment`)
   })
 
-const unsupportedStream = (action: string): Stream<Uint8Array, void> =>
+const unsupportedStream = (action: string): Stream<Uint8Array, StreamClose> =>
   resource(function* () {
     return yield* fail('io-unsupported', `IO.${action} is not available in a web environment`)
-  }) as Stream<Uint8Array, void>
+  }) as Stream<Uint8Array, StreamClose>
 
 /**
  * The web implementation of `std:io`. Crypto (`randomBytes`/`hmac`/`hash`) runs on the Web Crypto

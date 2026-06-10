@@ -34,7 +34,7 @@ export const unregisterHandler: LoggerDef.Handlers['unregister'] = operation(fun
     yield* filter(existing, function* (target) {
       const targetCtx = yield* useContext(target)
 
-      return targetCtx.name === transportCtx.name
+      return targetCtx.name !== transportCtx.name
     }),
   )
 })

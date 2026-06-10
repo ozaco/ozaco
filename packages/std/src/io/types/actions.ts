@@ -5,6 +5,7 @@ import type {
   IOStat,
   PathLike,
   ReadableLike,
+  StreamClose,
   WalkEntry,
   WalkOptions,
 } from './common'
@@ -19,8 +20,8 @@ export type IOActions = {
   hmac: (algorithm: HashAlgorithm, key: Uint8Array, data: Uint8Array) => Future<Uint8Array, unknown>
   hash: (algorithm: HashAlgorithm, data: Uint8Array) => Future<Uint8Array, unknown>
 
-  fromReadable: (target: ReadableLike) => Stream<Uint8Array, void>
-  readStream: (path: PathLike) => Stream<Uint8Array, void>
+  fromReadable: (target: ReadableLike) => Stream<Uint8Array, StreamClose>
+  readStream: (path: PathLike) => Stream<Uint8Array, StreamClose>
   writeStream: (
     path: PathLike,
     source: Stream<Uint8Array, unknown>,
