@@ -8,6 +8,7 @@ import type { Result } from '../types/result'
 export const fail: Impl.Fail = (...args: AnyType[]) => {
   const failure = {
     _t: RESULT_FAILURE,
+    _d: Date.now(),
 
     *[Symbol.iterator]() {
       // oxlint-disable-next-line no-this-alias
@@ -26,8 +27,6 @@ export const fail: Impl.Fail = (...args: AnyType[]) => {
   const error = args[0]
   const message = args[1] ?? ''
   const causes = args.slice(2)
-
-  failure._d = Date.now()
 
   if (isPromise(error)) {
     return error.then(resolved => {

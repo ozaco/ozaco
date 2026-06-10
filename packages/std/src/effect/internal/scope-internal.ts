@@ -1,5 +1,5 @@
 import type { Result } from 'std:result'
-import { asFailure, fail, isSuccess, succeed, unwrap } from 'std:result'
+import { appendCauses, asFailure, fail, isSuccess, succeed, unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import { SCOPE } from '../const'
@@ -116,7 +116,8 @@ export function createScopeInternal(
           destructors.delete(destructor)
           yield* destructor()
         } catch (error) {
-          outcome = asFailure(error)
+          const failure = asFailure(error)
+          outcome = isSuccess(outcome) ? failure : appendCauses(outcome, ...failure.causes)
         }
       }
     } finally {

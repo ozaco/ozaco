@@ -3,6 +3,7 @@ import { isFunction } from 'std:shared'
 
 import { ACTION } from '../const'
 import { withValidation } from '../internal/validation'
+import type { Action } from '../types/action'
 import type { Impl } from '../types/impl'
 
 export const defineAction: Impl.DefineAction = (...args: AnyType[]) => {
@@ -16,7 +17,7 @@ export const defineAction: Impl.DefineAction = (...args: AnyType[]) => {
   const input = config?.input as StandardSchemaV1 | undefined
   const output = config?.output as StandardSchemaV1 | undefined
 
-  const action = withValidation(handler, { input, output }) as AnyType
+  const action = withValidation(handler, { input, output }) as unknown as Action
 
   Object.assign(action, {
     _t: ACTION,

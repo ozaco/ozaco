@@ -1,5 +1,5 @@
 import type { Result } from 'std:result'
-import { isSuccess } from 'std:result'
+import { fail, isSuccess } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import { box } from '../internal/box'
@@ -13,6 +13,10 @@ import { withResolvers } from './with-resolvers'
 export function* race<T extends Operation<unknown, AnyType>>(
   operations: readonly T[],
 ): Operation<Helpers.Yielded<T>, Helpers.YieldedError<T>> {
+  if (operations.length === 0) {
+    throw fail('race', 'race() requires at least one operation')
+  }
+
   const winner = withResolvers<Result<Helpers.Yielded<T>, unknown>>('await winner')
 
   const tasks: Task<unknown, unknown>[] = []

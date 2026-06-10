@@ -35,7 +35,7 @@ export const FallbackPolicy = definePolicy<Fallback.Options, Fallback.Context>({
       // any thrown value is treated as a failure — a raw error is wrapped into one via asFailure
       const failure = asFailure(error)
       if (when && !when(failure)) {
-        throw failure
+        yield* failure
       }
 
       if (handler) {
@@ -44,7 +44,7 @@ export const FallbackPolicy = definePolicy<Fallback.Options, Fallback.Context>({
       if (hasValue) {
         return fallbackValue
       }
-      throw failure
+      yield* failure
     }
   },
 })

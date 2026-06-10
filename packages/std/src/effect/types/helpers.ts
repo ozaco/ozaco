@@ -45,7 +45,7 @@ export namespace Helpers {
     scope: Scope
     data: {
       exit(resolve: Helpers.Resolve<Result<unknown, unknown>>): void
-      iterator: Iterator<Effect<unknown> | Result.Failure<never>, T, unknown>
+      iterator: Iterator<Effect<unknown> | Result.Failure<unknown>, T, unknown>
     }
     next(result: Result<unknown, unknown>): void
   }

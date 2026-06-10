@@ -48,7 +48,7 @@ export const CircuitBreakerPolicy = definePolicy<CircuitBreaker.Options, Circuit
         // a failure the predicate excludes still frees the probe slot it consumed
         entry.halfOpenInflight = Math.max(0, entry.halfOpenInflight - 1)
       }
-      throw failure
+      yield* failure
     }
   },
 })

@@ -1,6 +1,5 @@
 import type { Result } from 'std:result'
 import { asFailure, fail } from 'std:result'
-import type { AnyType } from 'std:shared'
 
 import { DbErrorCode } from '../../../error-codes'
 import type { DbError } from '../../../types/runtime'
@@ -10,11 +9,11 @@ const SQLITE_FK = /FOREIGN KEY constraint failed/u
 
 export const classifySqliteError = (raw: unknown): Result.Failure<DbError> => {
   if (!raw || typeof raw !== 'object') {
-    return asFailure<DbError>(raw as AnyType)
+    return asFailure(raw) as Result.Failure<DbError>
   }
   const err = raw as { message?: string }
   if (typeof err.message !== 'string') {
-    return asFailure<DbError>(raw as AnyType)
+    return asFailure(raw) as Result.Failure<DbError>
   }
 
   const unique = SQLITE_UNIQUE.exec(err.message)
@@ -30,5 +29,5 @@ export const classifySqliteError = (raw: unknown): Result.Failure<DbError> => {
     return fail(DbErrorCode.ForeignKeyViolation, err.message) as Result.Failure<DbError>
   }
 
-  return asFailure<DbError>(raw as AnyType)
+  return asFailure(raw) as Result.Failure<DbError>
 }

@@ -97,7 +97,7 @@ export const tracePolicyApply = function* (a: TracedApply): Operation<unknown, u
       })
     }
 
-    throw error
+    yield* failure
   } finally {
     yield* span.end()
   }

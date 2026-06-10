@@ -1,5 +1,5 @@
 import type { Stream } from 'std:effect'
-import { createChannel, each, ensure, operation, spawn, useScope } from 'std:effect'
+import { createChannel, each, ensure, operation, spawn } from 'std:effect'
 import type { Result } from 'std:result'
 import { asFailure, fail } from 'std:result'
 import type { AnyType } from 'std:shared'
@@ -72,24 +72,23 @@ export const JsonCodec = Codec.implement({
 
   decodeStream: operation(function* (stream, json = true) {
     const channel = createChannel<unknown, true | Result.Failure<unknown>>()
-    const scope = yield* useScope()
     let parser: JSONParser
+    const pending: unknown[] = []
+    let parseError: Result.Failure<unknown> | undefined
 
     yield* spawn(function* () {
       if (json) {
         parser = new JSONParser({ separator: '' })
 
         parser.onError = error => {
-          void scope.run(() => channel.close(asFailure(error)))
+          parseError ??= asFailure(error)
         }
 
-        // emit one value per top-level (concatenated/NDJSON) document only — `@streamparser/json`
-        // fires onValue for every node, so skip nested values (those sit inside a non-empty stack).
         parser.onValue = ({ value, stack }) => {
           if (stack.length > 0) {
             return
           }
-          void scope.run(() => channel.send(value))
+          pending.push(value)
         }
       }
 
@@ -105,13 +104,31 @@ export const JsonCodec = Codec.implement({
           }
           if (json) {
             parser.write(decoder.decode(next.value))
+            while (pending.length > 0) {
+              yield* channel.send(pending.shift())
+            }
+            if (parseError) {
+              closeValue = parseError
+              break
+            }
           } else {
             yield* channel.send(decoder.decode(next.value))
           }
         }
       } finally {
         if (json) {
-          parser.end()
+          try {
+            parser.end()
+            // oxlint-disable-next-line no-empty
+          } catch {}
+
+          while (pending.length > 0) {
+            yield* channel.send(pending.shift())
+          }
+
+          if (parseError) {
+            closeValue = parseError
+          }
         }
 
         yield* channel.close(closeValue)

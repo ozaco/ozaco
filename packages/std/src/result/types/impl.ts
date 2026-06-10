@@ -75,21 +75,6 @@ export namespace Impl {
       : Result.InferSuccess<R> | T
   }
 
-  export interface Guard {
-    <Args extends AnyType[], U, V>(
-      fn: (...args: Args) => Generator<U, V>,
-      ...causes: string[]
-    ): (...args: Args) => Result.ResultFromUnion<V | U>
-    <Args extends AnyType[], U, V>(
-      fn: (...args: Args) => AsyncGenerator<U, V>,
-      ...causes: string[]
-    ): (...args: Args) => Result.ResultFromUnion<Promise<V | U>>
-    <Args extends AnyType[], R>(
-      fn: (...args: Args) => R,
-      ...causes: string[]
-    ): (...args: Args) => Result.ResultFromUnion<R>
-  }
-
   export interface Just {
     (): Maybe<void>
     <T>(value: T): Maybe<T>

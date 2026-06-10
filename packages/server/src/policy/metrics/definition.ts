@@ -40,7 +40,7 @@ export const MetricsPolicy = definePolicy<Metrics.Options, Metrics.Context>({
     } catch (error) {
       const failure = asFailure(error)
       runHook(() => onFailure?.({ ...event, durationMs: Date.now() - startedAt, failure }))
-      throw error
+      yield* failure
     }
   },
 })

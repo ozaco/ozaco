@@ -18,7 +18,7 @@ export function operation<Args extends AnyType[], T, E = never>(
           const result = yield* fn(...args)
 
           if (isFailure(result)) {
-            throw result
+            return yield* result
           }
 
           return isSuccess(result) ? result.value : result

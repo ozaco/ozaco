@@ -20,9 +20,6 @@ const FileTransportImpl = LoggerTransport.implement<
   *setup(options) {
     const name = `file:${options.path}`
 
-    if (options.ensureDir ?? true) {
-      yield* IO.actions.ensureDir(options.path.split('/').slice(-1).join('/'))
-    }
     yield* IO.actions.ensureFile(options.path)
 
     const context: FileDef.Context = {

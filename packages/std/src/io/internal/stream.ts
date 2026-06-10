@@ -76,7 +76,8 @@ export const writeFileStream = operation(function* (
     yield* waitForFinish(writable)
   } catch (error) {
     writable.destroy?.(error instanceof Error ? error : new Error(String(error)))
-    throw error
+
+    yield* appendCauses(asFailure(error), 'write-stream')
   }
 }, 'write-stream')
 

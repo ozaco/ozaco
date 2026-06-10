@@ -28,7 +28,7 @@ export function* retry<T, E>(
         if (currentDelay > 0) {
           yield* sleep(Math.min(currentDelay, maxDelay))
         }
-        currentDelay *= backoff
+        currentDelay = Math.min(currentDelay * backoff, maxDelay)
       } else {
         throw result
       }

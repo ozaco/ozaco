@@ -37,7 +37,7 @@ export const BucketPolicy = definePolicy<Bucket.Options, Bucket.Context>({
       if (outcome.ok) {
         return outcome.value
       }
-      throw outcome.failure
+      yield* outcome.failure
     }
 
     // the first caller of a batch runs the dispatch INLINE in its own scope — so a failure (or a
@@ -62,7 +62,7 @@ export const BucketPolicy = definePolicy<Bucket.Options, Bucket.Context>({
       const failure = asFailure(error)
       resolvers.resolve({ ok: false, failure })
       scheduleCleanup(ctx, cleanup)
-      throw failure
+      yield* failure
     }
   },
 })

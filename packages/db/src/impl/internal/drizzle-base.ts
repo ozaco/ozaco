@@ -29,7 +29,7 @@ export const runPromise = operation(function* <T>(
 
     return outcome
   } catch (error) {
-    const failure = asFailure<DbError>(error as AnyType)
+    const failure = asFailure(error) as Result.Failure<DbError>
 
     if (runtime?.classify) {
       return yield* runtime.classify(failure)

@@ -31,7 +31,7 @@ export const normalizePayload = (args: readonly LoggerDef.Payload[]): Normalized
     }
     if (typeof arg === 'object') {
       const record = arg as Record<string, unknown>
-      data = data ? Object.assign(data, record) : record
+      data = data ? { ...data, ...record } : { ...record }
     }
   }
 

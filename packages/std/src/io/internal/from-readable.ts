@@ -1,7 +1,6 @@
 import type { Stream } from 'std:effect'
 import { createSignal, resource, spawn, until } from 'std:effect'
 import type { NodeReadableLike, ReadableLike } from 'std:io'
-import { appendCauses, asFailure } from 'std:result'
 
 const isNodeReadable = (target: ReadableLike): target is NodeReadableLike =>
   typeof (target as NodeReadableLike).on === 'function'
@@ -36,18 +35,10 @@ export const fromReadable = (target: ReadableLike): Stream<Uint8Array, void> =>
         }
       }
 
-      const onError = (error: Error & { code?: string }) => {
-        if (error.code === 'EPIPE') {
-          onClose()
-        } else {
-          throw appendCauses(asFailure(error), 'stream')
-        }
-      }
-
       target.on('data', onData)
       target.on('end', onEnd)
       target.on('close', onClose)
-      target.on('error', onError)
+      target.on('error', onClose)
 
       try {
         yield* provide(subscription)
@@ -55,7 +46,7 @@ export const fromReadable = (target: ReadableLike): Stream<Uint8Array, void> =>
         target.off('data', onData)
         target.off('end', onEnd)
         target.off('close', onClose)
-        target.off('error', onError)
+        target.off('error', onClose)
         target.destroy?.()
       }
       return

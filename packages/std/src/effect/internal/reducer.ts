@@ -1,4 +1,4 @@
-import { asFailure, isFailure, isSuccess } from 'std:result'
+import { asFailure, fail, isFailure, isSuccess } from 'std:result'
 import { PriorityQueue } from 'std:shared'
 
 import { getGlobalDebug } from '../methods/debug'
@@ -75,9 +75,13 @@ export class Reducer {
           if (!next.done) {
             if (isFailure(next.value)) {
               routine.next(next.value)
-            } else {
+            } else if (next.value && typeof next.value.enter === 'function') {
               resolveDebugHandler(routine)?.(next.value.cause)
               routine.data.exit = next.value.enter(routine.next, routine)
+            } else {
+              // a generator yielded something that is neither a failure nor an Effect — raise a
+              // proper failure instead of throwing a TypeError on `.enter`/`.cause` off the hot path
+              routine.next(fail('effect', `yielded a non-effect value: ${String(next.value)}`))
             }
           }
         } catch (error) {

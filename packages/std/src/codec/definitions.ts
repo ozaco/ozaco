@@ -15,10 +15,11 @@ import type { CodecDef } from './types'
 export const CODEC = Symbol.for('std:codec')
 
 /**
- * Whether any codec is registered in the current scope. Use this (not `Codec.context.get()`) to
- * decide whether to auto-install a default codec — installing an impl populates the shared registry,
- * never the protocol's own context. The registry is keyed by a stable string, so this reflects
- * registrations made by any module instance (e.g. a broker in another bundle).
+ * Whether any codec is registered in the CURRENT scope. Use this (not `Codec.context.get()`) to
+ * decide whether to auto-install a default codec. The registry is a scope-local effect Context
+ * (`CodecRegistryContext`, inherited DOWNWARD through the protocol context) — NOT a global
+ * string-keyed table. It reflects registrations visible in the current scope chain only, not those
+ * made in unrelated scopes/bundles.
  */
 export const hasCodec = operation(function* () {
   return (yield* codecGetTransportsHandler()).length > 0

@@ -1,6 +1,5 @@
 import type { Result } from 'std:result'
 import { asFailure, fail } from 'std:result'
-import type { AnyType } from 'std:shared'
 
 import { DbErrorCode } from '../../../error-codes'
 import type { DbError } from '../../../types/runtime'
@@ -12,13 +11,13 @@ const PG_CONNECTION_CODES = new Set(['08000', '08003', '08006', '08001', '08004'
 
 export const classifyPostgresError = (raw: unknown): Result.Failure<DbError> => {
   if (!raw || typeof raw !== 'object') {
-    return asFailure<DbError>(raw as AnyType)
+    return asFailure(raw) as Result.Failure<DbError>
   }
   const err = raw as { code?: string; message?: string }
   const message = err.message ?? 'driver error'
 
   if (typeof err.code !== 'string') {
-    return asFailure<DbError>(raw as AnyType)
+    return asFailure(raw) as Result.Failure<DbError>
   }
   if (err.code === PG_UNIQUE_CODE) {
     return fail(
@@ -48,5 +47,5 @@ export const classifyPostgresError = (raw: unknown): Result.Failure<DbError> => 
       `sqlstate=${err.code}`,
     ) as Result.Failure<DbError>
   }
-  return asFailure<DbError>(raw as AnyType)
+  return asFailure(raw) as Result.Failure<DbError>
 }

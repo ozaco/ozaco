@@ -7,6 +7,15 @@ export const debounce = <T>(source: Stream<T, unknown>, ms: number): Stream<T, n
   resource(function* (provide) {
     const output = createSignal<T, never>()
     let timerId: ReturnType<typeof setTimeout> | undefined
+    let pending: { value: T } | undefined
+
+    // declared outside the loop (no closure-over-loop-var); emits the latest buffered value once
+    const fire = () => {
+      if (pending !== undefined) {
+        output.send(pending.value)
+        pending = undefined
+      }
+    }
 
     yield* provide(yield* output)
 
@@ -21,13 +30,15 @@ export const debounce = <T>(source: Stream<T, unknown>, ms: number): Stream<T, n
         if (timerId !== undefined) {
           clearTimeout(timerId)
         }
-        const value = next.value
-        timerId = setTimeout(() => output.send(value), ms)
+        pending = { value: next.value }
+        timerId = setTimeout(fire, ms)
       }
     }
 
+    // flush the trailing value if the source completed inside the debounce window
     if (timerId !== undefined) {
       clearTimeout(timerId)
     }
+    fire()
     output.close(undefined as never)
   })
