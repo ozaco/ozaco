@@ -99,7 +99,12 @@ export const WorkerTransport = Transport.implement({
       endpoint.post({ kind: 'cancel', cid })
     })
 
-    endpoint.post(envelope)
+    if (!endpoint.post(envelope)) {
+      return yield* fail(
+        CoreErrors.TransportDispatch,
+        `worker endpoint failed to post dispatch for "${req.serviceName}.${req.actionKey}"`,
+      )
+    }
     if (inputStreams) {
       for (let i = 0; i < inputStreams.length; i++) {
         const sid = inputStreams[i]!

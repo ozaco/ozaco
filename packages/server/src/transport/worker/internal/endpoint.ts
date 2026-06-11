@@ -35,12 +35,13 @@ const wrapPort = (
     post: message => {
       if (!ready) {
         outbox.push(message)
-        return
+        return true
       }
       try {
         port.postMessage(message)
+        return true
       } catch {
-        /* peer already torn down */
+        return false
       }
     },
     recv: streamOf(queue),
@@ -50,7 +51,10 @@ const wrapPort = (
       }
       ready = true
       for (const message of outbox.splice(0)) {
-        port.postMessage(message)
+        try {
+          port.postMessage(message)
+          // oxlint-disable-next-line no-empty
+        } catch {}
       }
     },
     close: () => {

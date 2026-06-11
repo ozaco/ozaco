@@ -27,18 +27,18 @@ export const buildAuthorize = (expectedType: string) =>
   })
 
 export const hasRoleAction = operation(function* (session: AuthDef.Session, role: string) {
-  return session.roles.includes(role)
+  return session.roles?.includes(role) ?? false
 })
 
 export const hasPermissionAction = operation(function* (
   session: AuthDef.Session,
   permission: string,
 ) {
-  return session.permissions.includes(permission)
+  return session.permissions?.includes(permission) ?? false
 })
 
 export const requireRoleAction = operation(function* (session: AuthDef.Session, role: string) {
-  if (!session.roles.includes(role)) {
+  if (!session.roles?.includes(role)) {
     const events = yield* useContext(AuthEventsRef)
     events.emit('denied', 'forbidden', `missing role: ${role}`)
     return yield* fail(CoreErrors.Forbidden, `missing role: ${role}`)
@@ -49,7 +49,7 @@ export const requirePermissionAction = operation(function* (
   session: AuthDef.Session,
   permission: string,
 ) {
-  if (!session.permissions.includes(permission)) {
+  if (!session.permissions?.includes(permission)) {
     const events = yield* useContext(AuthEventsRef)
     events.emit('denied', 'forbidden', `missing permission: ${permission}`)
     return yield* fail(CoreErrors.Forbidden, `missing permission: ${permission}`)

@@ -72,10 +72,22 @@ export const toInternalAction = operation(function* (req: AnyType, _res: unknown
   }
 
   const queryParams = Object.fromEntries(url.searchParams.entries())
-  const body = {
-    ...(meta.params as Record<string, unknown> | undefined),
-    ...queryParams,
-    ...(parsedBody as Record<string, unknown> | null),
+  const pathParams = meta.params as Record<string, unknown> | undefined
+
+  const isPlainObject = (v: unknown): v is Record<string, unknown> =>
+    v !== null && typeof v === 'object' && !Array.isArray(v)
+
+  const hasParamsOrQuery =
+    (pathParams !== undefined && Object.keys(pathParams).length > 0) ||
+    Object.keys(queryParams).length > 0
+
+  let body: unknown
+  if (isPlainObject(parsedBody)) {
+    body = { ...pathParams, ...queryParams, ...parsedBody }
+  } else if (parsedBody === null || parsedBody === undefined) {
+    body = { ...pathParams, ...queryParams }
+  } else {
+    body = hasParamsOrQuery ? { ...pathParams, ...queryParams } : parsedBody
   }
 
   return [

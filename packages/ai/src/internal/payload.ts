@@ -1,5 +1,12 @@
 import type { AnyType } from 'std:shared'
 
+import {
+  DEFAULT_CHAT_MODEL,
+  DEFAULT_EMBED_MODEL,
+  DEFAULT_STT_MODEL,
+  DEFAULT_TTS_MODEL,
+  DEFAULT_TTS_VOICE,
+} from '../const'
 import type { AiDef } from '../types'
 
 /** Drop `undefined` entries so we never send `null`/`undefined` fields the provider may reject. */
@@ -57,7 +64,7 @@ export const buildChatBody = (
   options: ChatBodyOptions = {},
 ): Record<string, unknown> =>
   compact({
-    model: options.model ?? ctx.model,
+    model: options.model ?? ctx.model ?? DEFAULT_CHAT_MODEL,
     messages: messages.map(serializeMessage),
     temperature: options.temperature,
     top_p: options.topP,
@@ -84,7 +91,7 @@ export const buildEmbedBody = (
   options: AiDef.EmbedOptions = {},
 ): Record<string, unknown> =>
   compact({
-    model: options.model ?? ctx.model,
+    model: options.model ?? ctx.model ?? DEFAULT_EMBED_MODEL,
     input,
     dimensions: options.dimensions,
     ...options.extra,
@@ -97,9 +104,9 @@ export const buildTtsBody = (
   options: AiDef.TtsOptions = {},
 ): Record<string, unknown> =>
   compact({
-    model: options.model ?? ctx.model,
+    model: options.model ?? ctx.model ?? DEFAULT_TTS_MODEL,
     input: text,
-    voice: options.voice,
+    voice: options.voice ?? DEFAULT_TTS_VOICE,
     response_format: options.format,
     speed: options.speed,
     ...options.extra,
@@ -121,10 +128,7 @@ export const buildSttForm = (
       : new Blob([audio as AnyType], { type: options.contentType ?? 'application/octet-stream' })
 
   form.append('file', blob, options.filename ?? 'audio')
-  const model = options.model ?? ctx.model
-  if (model !== undefined) {
-    form.append('model', model)
-  }
+  form.append('model', options.model ?? ctx.model ?? DEFAULT_STT_MODEL)
   if (options.language !== undefined) {
     form.append('language', options.language)
   }

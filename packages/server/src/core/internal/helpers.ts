@@ -66,6 +66,16 @@ export const resolveService = (
   return undefined
 }
 
+export const principalDiscriminator = (rawReq: unknown): string => {
+  if (rawReq && typeof rawReq === 'object' && 'meta' in rawReq) {
+    const meta = (rawReq as { meta?: Record<string, string> }).meta
+    if (meta && typeof meta === 'object') {
+      return `${meta.authorization ?? ''}\u0000${meta.cookie ?? ''}`
+    }
+  }
+  return ''
+}
+
 export const simplifyFailureCauses = <E>(failure: Result.Failure<E>): Result.Failure<E> => {
   const causes = failure.causes
   const drop = new Set<number>()

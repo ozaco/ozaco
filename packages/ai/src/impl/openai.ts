@@ -1,7 +1,7 @@
 import { operation, useContext } from 'std:effect'
 import { fail } from 'std:result'
 
-import { DEFAULT_BASE_URL } from '../const'
+import { DEFAULT_BASE_URL, DEFAULT_CHAT_MODEL } from '../const'
 import { AI_PROTOCOL } from '../definitions'
 import { AiErrors } from '../errors'
 import { parseChatResponse, parseEmbedResponse, parseSttResponse } from '../internal/parse'
@@ -42,6 +42,7 @@ export const OpenAICompatible = AI_PROTOCOL.implement({
 }).build({
   chat: operation(function* (messages: AiDef.Message[], options: AiDef.ChatOptions = {}) {
     const ctx = yield* useContext(AI_PROTOCOL)
+
     const { url, response } = yield* postJson(
       ctx,
       'chat/completions',
@@ -51,11 +52,13 @@ export const OpenAICompatible = AI_PROTOCOL.implement({
       return yield* failStatus(url, response)
     }
     const body = yield* response.json()
-    return parseChatResponse(body, options.model ?? ctx.model ?? '')
+
+    return parseChatResponse(body, options.model ?? ctx.model ?? DEFAULT_CHAT_MODEL)
   }),
 
   chatStream: operation(function* (messages: AiDef.Message[], options: AiDef.ChatOptions = {}) {
     const ctx = yield* useContext(AI_PROTOCOL)
+
     const { url, response } = yield* postJson(
       ctx,
       'chat/completions',
@@ -64,12 +67,14 @@ export const OpenAICompatible = AI_PROTOCOL.implement({
     if (!response.ok) {
       return yield* failStatus(url, response)
     }
+
     const raw = yield* response.raw()
     return yield* chatChunkStream(raw)
   }),
 
   embed: operation(function* (input: string | string[], options: AiDef.EmbedOptions = {}) {
     const ctx = yield* useContext(AI_PROTOCOL)
+
     const { url, response } = yield* postJson(
       ctx,
       'embeddings',
@@ -78,31 +83,37 @@ export const OpenAICompatible = AI_PROTOCOL.implement({
     if (!response.ok) {
       return yield* failStatus(url, response)
     }
+
     const body = yield* response.json()
     return parseEmbedResponse(body)
   }),
 
   tts: operation(function* (text: string, options: AiDef.TtsOptions = {}) {
     const ctx = yield* useContext(AI_PROTOCOL)
+
     const { url, response } = yield* postJson(ctx, 'audio/speech', buildTtsBody(ctx, text, options))
     if (!response.ok) {
       return yield* failStatus(url, response)
     }
+
     return yield* response.bytes()
   }),
 
   ttsStream: operation(function* (text: string, options: AiDef.TtsOptions = {}) {
     const ctx = yield* useContext(AI_PROTOCOL)
+
     const { url, response } = yield* postJson(ctx, 'audio/speech', buildTtsBody(ctx, text, options))
     if (!response.ok) {
       return yield* failStatus(url, response)
     }
+
     const raw = yield* response.raw()
     return yield* byteStream(raw)
   }),
 
   stt: operation(function* (audio: Uint8Array | Blob, options: AiDef.SttOptions = {}) {
     const ctx = yield* useContext(AI_PROTOCOL)
+
     const { url, response } = yield* postForm(
       ctx,
       'audio/transcriptions',
@@ -111,12 +122,14 @@ export const OpenAICompatible = AI_PROTOCOL.implement({
     if (!response.ok) {
       return yield* failStatus(url, response)
     }
+
     const body = yield* response.json()
     return parseSttResponse(body)
   }),
 
   sttStream: operation(function* (audio: Uint8Array | Blob, options: AiDef.SttOptions = {}) {
     const ctx = yield* useContext(AI_PROTOCOL)
+
     const { url, response } = yield* postForm(
       ctx,
       'audio/transcriptions',
@@ -125,6 +138,7 @@ export const OpenAICompatible = AI_PROTOCOL.implement({
     if (!response.ok) {
       return yield* failStatus(url, response)
     }
+
     const raw = yield* response.raw()
     return yield* transcriptStream(raw)
   }),

@@ -40,6 +40,10 @@ export const BucketPolicy = definePolicy<Bucket.Options, Bucket.Context>({
       yield* outcome.failure
     }
 
+    if (existing) {
+      return yield* next()
+    }
+
     // the first caller of a batch runs the dispatch INLINE in its own scope — so a failure (or a
     // sub-task it spawns) propagates normally to the outer policies and the caller — and shares
     // the outcome with the joiners above through the resolvers. (Running it detached on the policy

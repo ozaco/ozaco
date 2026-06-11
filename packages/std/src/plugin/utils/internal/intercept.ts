@@ -1,5 +1,5 @@
 import type { Operation } from 'std:effect'
-import { appendCauses, asFailure, isFailure } from 'std:result'
+import { appendCauses, asFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 export function* intercept(op: AnyType, ...causes: string[]): Operation<unknown> {
@@ -20,9 +20,6 @@ export function* intercept(op: AnyType, ...causes: string[]): Operation<unknown>
 
     if (step.done) {
       return step.value
-    }
-    if (isFailure(step.value)) {
-      throw causes.length > 0 ? appendCauses(step.value, ...causes) : step.value
     }
 
     try {

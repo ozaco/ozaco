@@ -1,8 +1,8 @@
 import { Codec, hasCodec } from 'std:codec'
-import { operation } from 'std:effect'
+import { attempt, operation } from 'std:effect'
 import type { FetchDef } from 'std:fetch'
 import { fetch } from 'std:fetch'
-import { fail } from 'std:result'
+import { fail, isSuccess } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import { AiErrors } from '../errors'
@@ -32,27 +32,11 @@ const refineTag = (base: AiDef.Error, error: ProviderError['error']): AiDef.Erro
 }
 
 /**
- * A `Codec.actions.decode` failure (an undecodable body) is raised through the plugin dispatch's own
- * error boundary, so it can't be contained by an inline `try/catch` (or `attempt`) here. We therefore
- * gate the codec on a cheap synchronous decodability probe and only invoke it when it will succeed; an
- * undecodable body skips the codec and falls back to the raw text. We probe with `JSON.parse` because
- * OpenAI-compatible providers return JSON errors and the default `JsonCodec` decodes with the same
- * parser — a body that parses here decodes cleanly through the codec.
- */
-const looksDecodable = (text: string): boolean => {
-  try {
-    JSON.parse(text)
-    return true
-  } catch {
-    return false
-  }
-}
-
-/**
  * Decode the provider's structured error body via the registered CODEC and return the refined tag and
- * a human message. When a codec is registered AND the body is decodable it surfaces `error.message`;
- * otherwise (no codec / not decodable / no `error.message`) it falls back to the body text, then
- * `statusText`.
+ * a human message. When a codec is registered AND the body decodes it surfaces `error.message`;
+ * otherwise (no codec / decode failure / no `error.message`) it falls back to the body text, then
+ * `statusText`. The decode runs inside `attempt` so an undecodable body degrades to the text fallback
+ * instead of replacing the HTTP failure.
  */
 const readError = operation(function* (
   response: FetchDef.Response,
@@ -61,12 +45,15 @@ const readError = operation(function* (
   const bytes = yield* response.bytes()
   const text = decoder.decode(bytes) || response.statusText
 
-  if (bytes.length === 0 || !looksDecodable(text) || !(yield* hasCodec())) {
+  if (bytes.length === 0 || !(yield* hasCodec())) {
     return { tag: base, message: text }
   }
 
-  const decoded = yield* Codec.actions.decode(bytes)
-  const provider = (decoded ?? {}) as ProviderError
+  const decoded = yield* attempt(Codec.actions.decode(bytes))
+  if (!isSuccess(decoded)) {
+    return { tag: base, message: text }
+  }
+  const provider = (decoded.value ?? {}) as ProviderError
   const message = provider.error?.message
   return message ? { tag: refineTag(base, provider.error), message } : { tag: base, message: text }
 })

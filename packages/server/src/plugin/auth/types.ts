@@ -13,7 +13,13 @@ export namespace AuthDef {
     | 'ES512'
     | 'EdDSA'
 
-  /** User-provided key material for JWT signing/verification. */
+  /**
+   * User-provided key material for JWT signing/verification. For asymmetric algorithms (RS/ES/EdDSA)
+   * this must be a PKCS8/SPKI **PEM string** or a `CryptoKey` — a raw `Uint8Array` is rejected at
+   * setup (jose cannot import raw asymmetric bytes). Raw HMAC secrets are supplied via `secret`, not
+   * here, so `Uint8Array` carries no supported meaning today; it remains in the union only for
+   * forward compatibility.
+   */
   export type JWTKey = string | Uint8Array | CryptoKey
 
   /** Internal resolved key handed to jose (after PKCS8/SPKI import for asymmetric). */
@@ -27,9 +33,9 @@ export namespace AuthDef {
   export interface BaseOptions {
     /** HMAC secret (HS256/HS384/HS512). Required when algorithm is HMAC. */
     secret?: string
-    /** PKCS8 PEM string, raw bytes, or CryptoKey. Required for RS/ES/EdDSA algorithms. */
+    /** PKCS8 PEM string or CryptoKey. Required for RS/ES/EdDSA algorithms (raw bytes are rejected). */
     privateKey?: JWTKey
-    /** SPKI PEM string, raw bytes, or CryptoKey. Used for verification when asymmetric. */
+    /** SPKI PEM string or CryptoKey. Used for verification when asymmetric (raw bytes are rejected). */
     publicKey?: JWTKey
 
     issuer?: string

@@ -7,8 +7,6 @@ import type { AiDef } from '../types'
 
 import { parseChatChunk, parseTranscriptDelta } from './parse'
 
-const decoder = new TextDecoder()
-
 /** Split a buffered SSE text region into complete events, returning the unconsumed tail. */
 const splitEvents = (buffer: string): { events: string[]; rest: string } => {
   const parts = buffer.split(/\r?\n\r?\n/u)
@@ -42,6 +40,7 @@ const sseStream = operation(function* <T>(
   const channel = createChannel<T, AiDef.StreamClose>()
 
   yield* spawn(function* () {
+    const decoder = new TextDecoder()
     let buffer = ''
     let close: AiDef.StreamClose = true
     try {
@@ -60,6 +59,7 @@ const sseStream = operation(function* <T>(
         }
         yield* each.next()
       }
+      buffer += decoder.decode()
       const tail = parseEvent(eventData(buffer))
       if (tail !== undefined && keep(tail)) {
         yield* channel.send(tail)

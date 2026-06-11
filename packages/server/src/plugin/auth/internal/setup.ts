@@ -25,13 +25,22 @@ const importKey = operation(function* (
   algorithm: AuthDef.JWTAlgorithm,
   kind: 'private' | 'public',
 ): Generator<AnyType, AuthDef.ResolvedKey, AnyType> {
-  if (typeof key !== 'string') {
-    return key as AuthDef.ResolvedKey
+  if (typeof key === 'string') {
+    const imported = yield* until(
+      kind === 'private' ? importPKCS8(key, algorithm) : importSPKI(key, algorithm),
+    )
+    return imported as AuthDef.ResolvedKey
   }
-  const imported = yield* until(
-    kind === 'private' ? importPKCS8(key, algorithm) : importSPKI(key, algorithm),
-  )
-  return imported as AuthDef.ResolvedKey
+  // jose's asymmetric sign/verify reject a raw `Uint8Array` (it would throw a TypeError deep inside
+  // SignJWT.sign). Fail early with an actionable message instead of advertising support we lack —
+  // raw bytes here would need PKCS8/SPKI DER import, which jose's PEM importers do not accept.
+  if (key instanceof Uint8Array) {
+    return yield* fail(
+      CoreErrors.BrokerInternal,
+      `Auth ${algorithm}: raw Uint8Array keys are not supported for asymmetric algorithms — provide a PKCS8/SPKI PEM string or a CryptoKey`,
+    )
+  }
+  return key as AuthDef.ResolvedKey
 })
 
 export const initializeBaseAuth = operation(function* (options: AuthDef.BaseOptions) {

@@ -23,7 +23,7 @@ export namespace WorkerDef {
 
   export interface Endpoint {
     wire: WireMode
-    post(message: Envelope): void
+    post(message: Envelope): boolean
     recv: Stream<unknown, void>
     markReady(): void
     close(): void
@@ -48,6 +48,7 @@ export namespace WorkerDef {
   export interface WireFailure {
     _t: '__failure__'
     error: string
+    errorValue?: unknown
     message: string
     causes?: string[]
   }
@@ -60,6 +61,7 @@ export namespace WorkerDef {
 
   export interface StreamErrorPayload {
     error: string
+    errorValue?: unknown
     message: string
     causes?: string[]
   }

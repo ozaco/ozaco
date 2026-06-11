@@ -9,7 +9,12 @@ import { CoreErrors } from '../const'
 import { Broker, Policy, Tracer, Transport } from '../definitions'
 import { checkBrokerSettings, withCallSpan } from '../internal/call-helpers'
 import { BrokerSettingContext } from '../internal/context'
-import { findServiceId, resolveGroups, simplifyFailureCauses } from '../internal/helpers'
+import {
+  findServiceId,
+  principalDiscriminator,
+  resolveGroups,
+  simplifyFailureCauses,
+} from '../internal/helpers'
 import { getNodeId, getServiceId } from '../internal/id'
 import type { Action } from '../types/action'
 import type { BrokerDef } from '../types/broker'
@@ -197,7 +202,7 @@ export const DefaultBroker = DefaultBrokerImpl.build({
           action: actionMeta,
           settings,
           params,
-          key: `${raw.options.name}\u0000${raw.key}\u0000${JSON.stringify(params)}`,
+          key: `${raw.options.name}\u0000${raw.key}\u0000${principalDiscriminator(options.rawReq)}\u0000${JSON.stringify(params)}`,
           isStreaming: options.streams !== undefined,
           trace: broker.trace,
         }

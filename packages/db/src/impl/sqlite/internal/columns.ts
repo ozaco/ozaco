@@ -1,17 +1,42 @@
 import type { AnyType } from 'std:shared'
 
 import { sql } from 'drizzle-orm'
-import { blob, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'
+import { blob, customType, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 
 import type { ColumnDef, SchemaDef, TableDef } from '../../../utils/schema/types'
 import type { DrizzleTableMap } from '../../internal/drizzle-base'
 
+// The sqlite connection runs with safeIntegers on (see host.ts), so the driver hands every INTEGER
+// back as a BigInt — int64 values round-trip losslessly. These custom types normalize the driver
+// value to each column's JS contract; drizzle's own integer modes would either pass the BigInt
+// through (`number` mode) or throw on it (`timestamp_ms` mode).
+const sqliteInt = customType<{ data: number; driverData: number | bigint }>({
+  dataType: () => 'integer',
+  fromDriver: Number,
+  toDriver: value => value,
+})
+
+const sqliteBigint = customType<{ data: bigint; driverData: number | bigint }>({
+  dataType: () => 'integer',
+  fromDriver: value => (typeof value === 'bigint' ? value : BigInt(value)),
+  toDriver: value => value,
+})
+
+const sqliteTimestamp = customType<{ data: Date; driverData: number | bigint }>({
+  dataType: () => 'integer',
+  fromDriver: value => new Date(Number(value)),
+  toDriver: value => value.getTime(),
+})
+
 const toSqliteColumn = (name: string, column: ColumnDef): AnyType => {
   let builder: AnyType
   switch (column.type) {
-    case 'int':
+    case 'int': {
+      builder = sqliteInt(name)
+      break
+    }
     case 'bigint': {
-      builder = integer(name, { mode: 'number' })
+      builder = sqliteBigint(name)
       break
     }
     case 'boolean': {
@@ -19,7 +44,7 @@ const toSqliteColumn = (name: string, column: ColumnDef): AnyType => {
       break
     }
     case 'timestamp': {
-      builder = integer(name, { mode: 'timestamp_ms' })
+      builder = sqliteTimestamp(name)
       break
     }
     case 'text':

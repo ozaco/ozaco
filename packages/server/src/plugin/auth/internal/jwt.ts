@@ -1,6 +1,6 @@
-import { operation, until } from 'std:effect'
+import { mapError, operation, until } from 'std:effect'
 import { IO } from 'std:io'
-import { fail, isFailure } from 'std:result'
+import { asFailure, fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import { errors, jwtVerify, SignJWT } from 'jose'
@@ -43,22 +43,26 @@ export const verifyJWT = operation(function* (
 
     return payload
   } catch (error) {
-    if (error instanceof errors.JWTExpired) {
-      return yield* fail(AuthErrorCode.ExpiredToken, error.message)
+    const failure = asFailure(error)
+
+    if (failure.error instanceof errors.JWTExpired) {
+      return yield* fail(AuthErrorCode.ExpiredToken, failure.error.message)
     }
     if (
-      error instanceof errors.JWSSignatureVerificationFailed ||
-      error instanceof errors.JWSInvalid ||
-      error instanceof errors.JWTInvalid ||
-      error instanceof errors.JWTClaimValidationFailed
+      failure.error instanceof errors.JWSSignatureVerificationFailed ||
+      failure.error instanceof errors.JWSInvalid ||
+      failure.error instanceof errors.JWTInvalid ||
+      failure.error instanceof errors.JWTClaimValidationFailed
     ) {
-      return yield* fail(AuthErrorCode.InvalidToken, String(error.message))
-    }
-    if (isFailure(error)) {
-      return yield* fail(AuthErrorCode.InvalidToken, error.message, ...error.causes)
+      return yield* mapError(failure, f => {
+        ;(f as AnyType).message = (f.error as AnyType).message
+        ;(f as AnyType).error = AuthErrorCode.InvalidToken
+
+        return f
+      })
     }
 
-    return yield* fail(AuthErrorCode.InvalidToken, String(error))
+    return yield* fail(AuthErrorCode.InvalidToken, String((failure.error as AnyType).message))
   }
 })
 
