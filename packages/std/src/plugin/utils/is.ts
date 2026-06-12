@@ -1,5 +1,6 @@
 import { PLUGIN, PROTOCOL } from '../const'
-import type { Plugin, Protocol } from '../types/plugin'
+import type { Plugin } from '../types/plugin'
+import type { Protocol } from '../types/protocol'
 
 export const isPlugin = (value: unknown): value is Plugin =>
   value !== null && typeof value === 'object' && '_t' in value && value._t === PLUGIN

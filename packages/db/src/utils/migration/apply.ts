@@ -23,6 +23,38 @@ const listExistingColumns = async (
   }
 }
 
+/**
+ * Order tables so foreign-key targets are created before the tables referencing them (postgres
+ * rejects a `REFERENCES` to a table that does not exist yet). Cycles fall back to definition order.
+ */
+const sortByForeignKeys = (tables: TableDef[]): TableDef[] => {
+  const remaining = new Map(tables.map(table => [table.name, table]))
+  const sorted: TableDef[] = []
+
+  while (remaining.size > 0) {
+    let progressed = false
+    for (const [name, table] of remaining) {
+      const blocked = Object.values(table.columns).some(
+        column =>
+          column.foreignKey &&
+          column.foreignKey.table !== name &&
+          remaining.has(column.foreignKey.table),
+      )
+      if (!blocked) {
+        sorted.push(table)
+        remaining.delete(name)
+        progressed = true
+      }
+    }
+    if (!progressed) {
+      sorted.push(...remaining.values())
+      break
+    }
+  }
+
+  return sorted
+}
+
 export type RawExec = (sql: string, params?: unknown[]) => Promise<unknown[]>
 
 export const schemaTag = (schema: SchemaDef): string => {
@@ -49,8 +81,7 @@ export const applyMigrations = async (
 ): Promise<void> => {
   await exec(migrationsTableDdl(dialect))
 
-  for (const tableDef of Object.values(schema.tables)) {
-    const table = tableDef as TableDef
+  for (const table of sortByForeignKeys(Object.values(schema.tables) as TableDef[])) {
     const existing = await listExistingColumns(exec, table.name, dialect)
 
     if (existing.size === 0) {

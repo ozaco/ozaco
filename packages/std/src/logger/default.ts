@@ -1,116 +1,86 @@
 import type { Operation } from 'std:effect'
 import { all, operation, useContext } from 'std:effect'
 
+import { LogLevel } from './const'
 import { Logger } from './definitions'
-import { buildEntry } from './internal/build-entry'
-import { dispatch } from './internal/dispatch'
-import { logAt } from './internal/log-at'
-import type { Helpers } from './types/helpers'
-import type { LoggerContext } from './types/logger'
-import { LogLevel } from './utils/level'
-import { getTransports } from './utils/register'
+import { LoggerBindingsContext } from './internal/context'
+import { buildEntry, dispatch, logAt } from './internal/helpers'
+import type { LoggerDef } from './types/logger'
 
-const DefaultLoggerImpl = Logger.implement<
-  LoggerContext,
-  unknown,
-  [options?: Helpers.LoggerOptions]
->({
+export const DefaultLogger = Logger.implement({
   name: 'default-logger',
   version: '0.0.1',
   description: 'logger; reads transports from the LoggerTransport registry',
 
-  *setup(options = {}) {
-    const level = options.level ?? LogLevel.info
+  *setup(options: LoggerDef.Options = {}) {
+    if (options.bindings) {
+      yield* LoggerBindingsContext.set({ ...options.bindings })
+    }
 
     return {
-      level,
-      // oxlint-disable-next-line oxc/no-rest-spread-properties
-      bindings: options.bindings ? { ...options.bindings } : {},
+      level: options.level ?? LogLevel.info,
       timestamp: options.timestamp ?? Date.now,
       errorKey: options.errorKey ?? 'err',
       msgKey: options.msgKey ?? 'msg',
     }
   },
-})
+}).build({
+  log: operation(function* (level: LogLevel, ...args: LoggerDef.Payload[]) {
+    const ctx = yield* useContext(Logger)
+    if (level < ctx.level) {
+      return
+    }
+    const bindings = (yield* LoggerBindingsContext.get()) ?? {}
+    const entry = buildEntry({ ctx, bindings }, level, args)
+    yield* dispatch(entry)
+  }),
 
-const logAction = operation(function* (level: LogLevel, ...args: Helpers.LogPayload[]) {
-  const ctx = yield* useContext(Logger)
-  if (level < ctx.level) {
-    return
-  }
-  const entry = buildEntry(ctx, level, args)
-  yield* dispatch(entry)
-})
+  trace: logAt(LogLevel.trace),
+  debug: logAt(LogLevel.debug),
+  info: logAt(LogLevel.info),
+  warn: logAt(LogLevel.warn),
+  error: logAt(LogLevel.error),
+  fatal: logAt(LogLevel.fatal),
 
-const traceAction = logAt(LogLevel.trace)
-const debugAction = logAt(LogLevel.debug)
-const infoAction = logAt(LogLevel.info)
-const warnAction = logAt(LogLevel.warn)
-const errorAction = logAt(LogLevel.error)
-const fatalAction = logAt(LogLevel.fatal)
+  child: operation(function* <R, E>(bindings: Record<string, unknown>, fn: () => Operation<R, E>) {
+    const previous = (yield* LoggerBindingsContext.get()) ?? {}
+    return yield* LoggerBindingsContext.with({ ...previous, ...bindings }, () => fn())
+  }),
 
-const flushAction = operation(function* () {
-  const transports = yield* getTransports()
-  const ops = transports.map(t => t.transport.actions.flush())
-  if (ops.length === 0) {
-    return
-  }
-  yield* all(ops)
-})
+  bind: operation(function* (bindings: Record<string, unknown>) {
+    const previous = (yield* LoggerBindingsContext.get()) ?? {}
+    yield* LoggerBindingsContext.set({ ...previous, ...bindings })
+  }),
 
-const bindAction = operation(function* (bindings: Record<string, unknown>) {
-  const ctx = yield* useContext(Logger)
+  setLevel: operation(function* (level: LogLevel) {
+    const ctx = yield* useContext(Logger)
+    ctx.level = level
+  }),
 
-  Object.assign(ctx.bindings, bindings)
-})
+  isLevelEnabled: operation(function* (level: LogLevel) {
+    const ctx = yield* useContext(Logger)
+    return level >= ctx.level
+  }),
 
-const childAction = operation(function* <R, E>(
-  bindings: Record<string, unknown>,
-  fn: () => Operation<R, E>,
-) {
-  const ctx = yield* useContext(Logger)
-  const previous = ctx.bindings
-  // oxlint-disable-next-line prefer-object-spread
-  ctx.bindings = Object.assign({}, previous, bindings)
-  try {
-    return yield* fn()
-  } finally {
-    ctx.bindings = previous
-  }
-})
+  flush: operation(function* () {
+    const transports = yield* Logger.actions.getTransports()
+    const ops = transports.map(transport => transport.actions.flush())
 
-const setLevelAction = operation(function* (level: LogLevel) {
-  const ctx = yield* useContext(Logger)
-  ctx.level = level
-})
+    if (ops.length === 0) {
+      return
+    }
 
-const isLevelEnabledAction = operation(function* (level: LogLevel) {
-  const ctx = yield* useContext(Logger)
+    yield* all(ops)
+  }),
 
-  return level >= ctx.level
-})
+  close: operation(function* () {
+    const transports = yield* Logger.actions.getTransports()
+    const ops = transports.map(transport => transport.actions.close())
 
-const closeAction = operation(function* () {
-  const transports = yield* getTransports()
-  const ops = transports.map(t => t.transport.actions.close())
-  if (ops.length === 0) {
-    return
-  }
-  yield* all(ops)
-})
+    if (ops.length === 0) {
+      return
+    }
 
-export const DefaultLogger = DefaultLoggerImpl.build({
-  log: logAction,
-  trace: traceAction,
-  debug: debugAction,
-  info: infoAction,
-  warn: warnAction,
-  error: errorAction,
-  fatal: fatalAction,
-  child: childAction,
-  bind: bindAction,
-  setLevel: setLevelAction,
-  isLevelEnabled: isLevelEnabledAction,
-  flush: flushAction,
-  close: closeAction,
+    yield* all(ops)
+  }),
 })

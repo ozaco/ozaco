@@ -1,4 +1,4 @@
-import { ServerErrorCode } from 'server:core'
+import { CoreErrors } from 'server:core'
 import { operation, until } from 'std:effect'
 import { createEvent } from 'std:event'
 import { fail } from 'std:result'
@@ -6,7 +6,7 @@ import type { AnyType } from 'std:shared'
 
 import { importPKCS8, importSPKI } from 'jose'
 
-import type { BaseAuthOptions, JWTAlgorithm, JWTKey, ResolvedKey } from '../types'
+import type { AuthDef } from '../types'
 
 import { DEFAULT_ALGORITHM, DEFAULT_VERIFICATION_TTL } from './const'
 import {
@@ -18,32 +18,41 @@ import {
 } from './contexts'
 import { parseDuration } from './helpers'
 
-const isHmac = (alg: JWTAlgorithm): boolean => alg.startsWith('HS')
+const isHmac = (alg: AuthDef.JWTAlgorithm): boolean => alg.startsWith('HS')
 
 const importKey = operation(function* (
-  key: JWTKey,
-  algorithm: JWTAlgorithm,
+  key: AuthDef.JWTKey,
+  algorithm: AuthDef.JWTAlgorithm,
   kind: 'private' | 'public',
-): Generator<AnyType, ResolvedKey, AnyType> {
-  if (typeof key !== 'string') {
-    return key as ResolvedKey
+): Generator<AnyType, AuthDef.ResolvedKey, AnyType> {
+  if (typeof key === 'string') {
+    const imported = yield* until(
+      kind === 'private' ? importPKCS8(key, algorithm) : importSPKI(key, algorithm),
+    )
+    return imported as AuthDef.ResolvedKey
   }
-  const imported = yield* until(
-    kind === 'private' ? importPKCS8(key, algorithm) : importSPKI(key, algorithm),
-  )
-  return imported as ResolvedKey
+  // jose's asymmetric sign/verify reject a raw `Uint8Array` (it would throw a TypeError deep inside
+  // SignJWT.sign). Fail early with an actionable message instead of advertising support we lack —
+  // raw bytes here would need PKCS8/SPKI DER import, which jose's PEM importers do not accept.
+  if (key instanceof Uint8Array) {
+    return yield* fail(
+      CoreErrors.BrokerInternal,
+      `Auth ${algorithm}: raw Uint8Array keys are not supported for asymmetric algorithms — provide a PKCS8/SPKI PEM string or a CryptoKey`,
+    )
+  }
+  return key as AuthDef.ResolvedKey
 })
 
-export const initializeBaseAuth = operation(function* (options: BaseAuthOptions) {
+export const initializeBaseAuth = operation(function* (options: AuthDef.BaseOptions) {
   const algorithm = options.algorithm ?? DEFAULT_ALGORITHM
 
-  let signKey: ResolvedKey
-  let verifyKey: ResolvedKey
+  let signKey: AuthDef.ResolvedKey
+  let verifyKey: AuthDef.ResolvedKey
 
   if (isHmac(algorithm)) {
     if (!options.secret) {
       return yield* fail(
-        ServerErrorCode.Unexpected,
+        CoreErrors.BrokerInternal,
         `Auth ${algorithm} requires a non-empty 'secret'`,
       )
     }
@@ -53,7 +62,7 @@ export const initializeBaseAuth = operation(function* (options: BaseAuthOptions)
   } else {
     if (!options.privateKey || !options.publicKey) {
       return yield* fail(
-        ServerErrorCode.Unexpected,
+        CoreErrors.BrokerInternal,
         `Auth ${algorithm} requires both 'privateKey' and 'publicKey'`,
       )
     }

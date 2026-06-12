@@ -7,11 +7,13 @@ import type { Operation } from '../types/operation'
 
 import { useCoroutine } from './coroutine'
 
-export class Delimiter<T> implements Operation<Maybe<Result<T, unknown>>>, Helpers.ErrorBoundary {
-  level = 0
-  finalized = false
-  future = withResolvers<Maybe<Result<T, unknown>>>()
+export class Delimiter<T>
+  implements Operation<Maybe<Result<T, unknown>>>, Helpers.ErrorBoundary, Helpers.DelimiterLike
+{
+  state: 'running' | 'cancelling' | 'finalized' = 'running'
+  epoch = 0
   computed = false
+  future = withResolvers<Maybe<Result<T, unknown>>>()
   routine?: Helpers.Coroutine
   outcome?: Maybe<Result<T, unknown>>
 
@@ -20,62 +22,70 @@ export class Delimiter<T> implements Operation<Maybe<Result<T, unknown>>>, Helpe
     public readonly parent?: Delimiter<unknown>,
   ) {}
 
+  nextStep(result: Result<unknown, unknown>, epoch: number): Helpers.StepType {
+    if (this.epoch !== epoch || this.state === 'finalized') {
+      return 'drop'
+    }
+    if (isFailure(result)) {
+      return 'throw'
+    }
+    if (this.state === 'cancelling') {
+      this.state = 'running'
+      return 'return'
+    }
+    return 'next'
+  }
+
   raise(error: unknown): void {
     const failure = just(asFailure(error))
-    if (this.finalized) {
-      this.parent?.exit(failure)
+    if (this.state === 'finalized') {
+      this.parent?.signal(failure)
     } else {
-      this.exit(failure)
+      this.signal(failure)
     }
   }
 
   interrupt(): void {
-    this.exit(nothing())
+    this.signal(nothing())
   }
 
   *close(): Operation<void> {
     const done = this.future.operation
-    const interrupted = !this.computed
 
     this.close = function* close() {
       const outcome = yield* done
-      if (interrupted && isJust(outcome) && isFailure(outcome.value)) {
+      if (this.epoch > 0 && isJust(outcome) && isFailure(outcome.value)) {
         throw outcome.value
       }
     }
     if (!this.outcome) {
       this.interrupt()
       yield* this.close()
-    } else if (interrupted && isJust(this.outcome) && isFailure(this.outcome.value)) {
+    } else if (this.epoch > 0 && isJust(this.outcome) && isFailure(this.outcome.value)) {
       throw this.outcome.value
     }
   }
 
-  private exit(outcome: Maybe<Result<T, unknown>>): void {
-    if (this.finalized) {
+  private signal(outcome: Maybe<Result<T, unknown>>): void {
+    if (this.state === 'finalized' || this.epoch > 0) {
       return
     }
-    this.outcome = isJust(this.outcome) && isFailure(this.outcome.value) ? this.outcome : outcome
-    this.level++
+    this.outcome = outcome
+    this.state = 'cancelling'
+    this.epoch++
     if (this.routine) {
-      this.routine.return(succeed(this.outcome))
+      this.routine.next(succeed(this.outcome))
     } else {
-      this.finalized = true
+      this.state = 'finalized'
       this.future.resolve(this.outcome)
     }
   }
 
-  get validator(): () => boolean {
-    const { level } = this
-    return () => !this.finalized && this.level === level
-  }
-
   [Symbol.iterator] = function* delimiter(this: Delimiter<T>) {
-    this.routine = yield* useCoroutine()
-
     try {
+      this.routine = yield* useCoroutine()
       const value = yield* this.operation()
-      if (this.level === 0) {
+      if (this.epoch === 0) {
         this.computed = true
         this.outcome = just(succeed(value as T) as Result<T, unknown>)
       }
@@ -83,8 +93,8 @@ export class Delimiter<T> implements Operation<Maybe<Result<T, unknown>>>, Helpe
       this.computed = true
       this.outcome = just(asFailure(error))
     } finally {
-      this.finalized = true
-      this.outcome = this.outcome ?? nothing()
+      this.state = 'finalized'
+      this.outcome ??= nothing()
       this.future.resolve(this.outcome)
       // oxlint-disable-next-line no-unsafe-finally
       return this.outcome

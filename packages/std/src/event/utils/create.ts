@@ -2,12 +2,12 @@ import type { EmptyType } from 'std:shared'
 
 import { EVENT } from '../const'
 import { callListener, removeFrom } from '../internal'
-import type { EventSource, EventSourceListener, EventSourceMap } from '../types'
+import type { EventEmitter } from '../types'
 
-export const createEvent = <T extends EventSourceMap = EmptyType>(): EventSource<T> => {
-  const listeners = new Map<string, EventSourceListener[]>()
+export const createEvent = <T extends EventEmitter.Map = EmptyType>(): EventEmitter<T> => {
+  const listeners = new Map<string, EventEmitter.Listener[]>()
 
-  const getList = (name: string): EventSourceListener[] => {
+  const getList = (name: string): EventEmitter.Listener[] => {
     let list = listeners.get(name)
     if (!list) {
       list = []
@@ -18,31 +18,34 @@ export const createEvent = <T extends EventSourceMap = EmptyType>(): EventSource
 
   const on = <K extends keyof T & string>(
     name: K,
-    listener: EventSourceListener<T[K]>,
+    listener: EventEmitter.Listener<T[K]>,
   ): (() => void) => {
     const list = getList(name)
-    list.push(listener as EventSourceListener)
-    return () => removeFrom(list, listener as EventSourceListener)
+    list.push(listener as EventEmitter.Listener)
+    return () => removeFrom(list, listener as EventEmitter.Listener)
   }
 
   const once = <K extends keyof T & string>(
     name: K,
-    listener: EventSourceListener<T[K]>,
+    listener: EventEmitter.Listener<T[K]>,
   ): (() => void) => {
     const list = getList(name)
     const wrapper = ((...args: unknown[]) => {
       removeFrom(list, wrapper)
-      return (listener as EventSourceListener)(...args)
-    }) as EventSourceListener
+      return (listener as EventEmitter.Listener)(...args)
+    }) as EventEmitter.Listener
     list.push(wrapper)
     return () => removeFrom(list, wrapper)
   }
 
-  const off = <K extends keyof T & string>(name: K, listener?: EventSourceListener<T[K]>): void => {
+  const off = <K extends keyof T & string>(
+    name: K,
+    listener?: EventEmitter.Listener<T[K]>,
+  ): void => {
     if (listener) {
       const list = listeners.get(name)
       if (list) {
-        removeFrom(list, listener as EventSourceListener)
+        removeFrom(list, listener as EventEmitter.Listener)
       }
     } else {
       listeners.delete(name)

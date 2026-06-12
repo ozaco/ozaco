@@ -2,6 +2,12 @@ import type { ColumnDef, TableDef } from '../schema/types'
 
 type Dialect = 'sqlite' | 'postgres'
 
+/** Quote an identifier for SQL, escaping embedded double quotes (`"` → `""`). */
+const quoteIdent = (name: string): string => `"${name.replaceAll('"', '""')}"`
+
+/** Quote a string literal for SQL, escaping embedded single quotes (`'` → `''`). */
+const quoteLiteral = (value: string): string => `'${value.replaceAll("'", "''")}'`
+
 const sqliteType = (column: ColumnDef): string => {
   switch (column.type) {
     case 'int':
@@ -93,6 +99,11 @@ const columnConstraints = (column: ColumnDef, dialect: Dialect): string[] => {
   } else if (column.hasDefault && !column.isAutoIncrement && column.defaultValue !== undefined) {
     parts.push(`DEFAULT ${renderDefault(column.defaultValue)}`)
   }
+  if (column.foreignKey) {
+    parts.push(
+      `REFERENCES ${quoteIdent(column.foreignKey.table)}(${quoteIdent(column.foreignKey.column)})`,
+    )
+  }
   return parts
 }
 
@@ -114,9 +125,11 @@ export const createTableStatement = (table: TableDef, dialect: Dialect): string 
   for (const [name, column] of Object.entries(table.columns)) {
     const type = dialectColumnType(column, dialect)
     const constraints = columnConstraints(column, dialect)
-    parts.push(`  "${name}" ${type}${constraints.length > 0 ? ` ${constraints.join(' ')}` : ''}`)
+    parts.push(
+      `  ${quoteIdent(name)} ${type}${constraints.length > 0 ? ` ${constraints.join(' ')}` : ''}`,
+    )
   }
-  return `CREATE TABLE IF NOT EXISTS "${table.name}" (\n${parts.join(',\n')}\n)`
+  return `CREATE TABLE IF NOT EXISTS ${quoteIdent(table.name)} (\n${parts.join(',\n')}\n)`
 }
 
 export const addColumnStatement = ({
@@ -127,13 +140,13 @@ export const addColumnStatement = ({
 }: AddColumnArgs): string => {
   const type = dialectColumnType(column, dialect)
   const constraints = columnConstraints(column, dialect).filter(c => !c.includes('PRIMARY KEY'))
-  return `ALTER TABLE "${tableName}" ADD COLUMN "${columnName}" ${type}${constraints.length > 0 ? ` ${constraints.join(' ')}` : ''}`
+  return `ALTER TABLE ${quoteIdent(tableName)} ADD COLUMN ${quoteIdent(columnName)} ${type}${constraints.length > 0 ? ` ${constraints.join(' ')}` : ''}`
 }
 
 export const existingColumnsQuery = (tableName: string, dialect: Dialect): string =>
   dialect === 'sqlite'
-    ? `SELECT name FROM pragma_table_info('${tableName}')`
-    : `SELECT column_name AS name FROM information_schema.columns WHERE table_name = '${tableName}'`
+    ? `SELECT name FROM pragma_table_info(${quoteLiteral(tableName)})`
+    : `SELECT column_name AS name FROM information_schema.columns WHERE table_name = ${quoteLiteral(tableName)}`
 
 export const migrationsTableDdl = (dialect: Dialect): string =>
   dialect === 'sqlite'

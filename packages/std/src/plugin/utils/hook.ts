@@ -1,13 +1,11 @@
-// oxlint-disable oxc/no-rest-spread-properties
-
 import type { Operation } from 'std:effect'
 import { createContext, operation } from 'std:effect'
-import { asFailure, fail, unwrap } from 'std:result'
+import { appendCauses, asFailure, fail, unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
 import { flatten } from 'std:shared'
 
 import { PLUGIN, RAW_ACTION } from '../const'
-import type { Helpers } from '../types/helpers'
+import type { Hookable } from '../types/hookable'
 
 import { createDefaultHooks } from './internal/defaults'
 import { intercept } from './internal/intercept'
@@ -25,7 +23,7 @@ export const createHookable = (options: {
   const protocolTag = `${options.name}@${options.version ?? 'lts'}`
 
   const context = createContext(protocolTag)
-  const hookCtx = createContext<Helpers.HookStore>(`${protocolTag}#hooks`, createDefaultHooks())
+  const hookCtx = createContext<Hookable.HookStore>(`${protocolTag}#hooks`, createDefaultHooks())
   const chainCtx = createContext<Map<string, unknown>>(`${protocolTag}#chain`)
 
   const handlers: Record<string, AnyType> = {}
@@ -44,7 +42,7 @@ export const createHookable = (options: {
   }
 
   const makeResolveAction = (
-    findImpl: (store: Helpers.HookStore) => Helpers.HookSelfEntry | undefined,
+    findImpl: (store: Hookable.HookStore) => Hookable.HookSelfEntry | undefined,
     tag: string,
   ) =>
     operation(function* (key: string, ...args: unknown[]) {
@@ -61,7 +59,7 @@ export const createHookable = (options: {
 
         const inner = function* (...innerArgs: unknown[]) {
           if (innerArgs[0] === RAW_ACTION) {
-            return { self, context, options, key }
+            return { self, context, options, key, meta: myImpl?.meta?.get(key) }
           }
 
           for (const hook of befores) {
@@ -105,13 +103,21 @@ export const createHookable = (options: {
             }
             return yield* intercept(inner(...args))
           } catch (error) {
-            if (errors.length > 0) {
-              for (const hook of errors) {
-                yield* intercept(hook(error, args))
+            let failure = asFailure(error)
+
+            for (const hook of errors) {
+              try {
+                yield* intercept(hook(error, args), `${key}:error`)
+              } catch (hookError) {
+                failure = appendCauses(
+                  asFailure(hookError),
+                  `masked: ${failure.message || String(failure.error)}`,
+                  ...failure.causes,
+                )
               }
             }
 
-            unwrap(asFailure(error))
+            unwrap(failure)
           }
         }
 
@@ -152,11 +158,12 @@ export const createHookable = (options: {
 
       setup(...args: AnyType[]): Operation<unknown, unknown>
     },
-    buildActions?: Record<string, Helpers.AnyAction>,
+    buildActions?: Record<string, Hookable.AnyAction>,
   ) => {
     const pluginTag = `${buildOptions.name}@${buildOptions.version ?? 'lts'}`
     const wrappedActions: Record<string, AnyType> = {}
     const meta = new Map<string, Record<string, AnyType>>()
+    const pluginContext = options.cloneable ? createContext(pluginTag) : context
 
     if (buildActions) {
       const flatActions = flatten(buildActions)
@@ -175,7 +182,9 @@ export const createHookable = (options: {
     const setup = function* (...args: AnyType[]) {
       const initial = (yield* hookCtx.get())!
 
-      if (!options.cloneable) {
+      if (options.cloneable) {
+        yield* pluginContext.set(yield* context.get())
+      } else {
         const other = initial.self.find(e => e.tag !== pluginTag)
         if (other) {
           return yield* fail(
@@ -192,10 +201,12 @@ export const createHookable = (options: {
         ...store,
         self: [
           ...store.self.filter(e => e.tag !== pluginTag),
-          { tag: pluginTag, handlers: wrappedActions, contextValue: value as AnyType },
+          { tag: pluginTag, handlers: wrappedActions, contextValue: value as AnyType, meta },
         ],
       })
-      yield* context.set(value as AnyType)
+
+      yield* pluginContext.set(value as AnyType)
+
       return value
     }
 
@@ -205,7 +216,7 @@ export const createHookable = (options: {
       _t: PLUGIN,
       _st: options.subtype,
 
-      context,
+      context: pluginContext,
 
       name: buildOptions.name,
       version: buildOptions.version,

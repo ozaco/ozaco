@@ -47,3 +47,6 @@ export const isSharedArrayBuffer = (x: unknown): x is SharedArrayBuffer =>
 
 export const isArrayBufferView = (x: unknown): x is ArrayBufferView =>
   typeof x === 'object' && x !== null && ArrayBuffer.isView(x)
+
+export const isAsyncIterable = (value: AnyType): value is AsyncIterable<unknown> =>
+  value !== null && typeof value === 'object' && typeof value[Symbol.asyncIterator] === 'function'

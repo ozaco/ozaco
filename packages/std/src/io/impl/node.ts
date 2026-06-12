@@ -10,8 +10,10 @@ import fs from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 
 import { readEnv } from '../internal/env'
+import { fromReadable } from '../internal/from-readable'
 import { mapStat, walkRecursive } from '../internal/node-shared'
-import { fromReadable, readFileStream, writeFileStream } from '../internal/stream'
+import { readFileStream, writeFileStream } from '../internal/stream'
+import { toReadable } from '../internal/to-readable'
 import type { HashAlgorithm } from '../types/common'
 
 const toNodeHash = (alg: HashAlgorithm) =>
@@ -39,6 +41,7 @@ export const NodeIO = IO.implement({
   }),
 
   fromReadable,
+  toReadable,
   readStream: path => readFileStream(toPath(path)),
   writeStream: (path, source, options) => writeFileStream(toPath(path), source, options?.flags),
 

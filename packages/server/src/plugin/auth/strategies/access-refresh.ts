@@ -1,5 +1,5 @@
-import { ServerErrorCode } from 'server:core'
-import { createContext, operation, useContext } from 'std:effect'
+import { CoreErrors } from 'server:core'
+import { operation, useContext } from 'std:effect'
 import { definePlugin } from 'std:plugin'
 import { fail } from 'std:result'
 
@@ -17,7 +17,7 @@ import {
   ssoAuthorizeAction,
 } from '../internal/actions'
 import { DEFAULT_ACCESS_TTL, DEFAULT_REFRESH_TTL, TOKEN_TYPE_ACCESS } from '../internal/const'
-import { AuthEventsRef } from '../internal/contexts'
+import { AccessStrategyCtxRef, AuthEventsRef } from '../internal/contexts'
 import { collectAuthz, getProvider, parseDuration } from '../internal/helpers'
 import { initializeBaseAuth } from '../internal/setup'
 import {
@@ -26,23 +26,10 @@ import {
   signPrincipalToken,
   signRefreshToken,
 } from '../internal/tokens'
-import type {
-  AccessRefreshContext,
-  AccessRefreshOptions,
-  AccessRefreshTokens,
-  AuthSession,
-  AuthUser,
-} from '../types'
+import type { AuthDef } from '../types'
 
-const StrategyCtxRef = createContext<AccessRefreshContext>('server:auth:access-refresh:ctx')
-
-interface IssueOptions {
-  /** If set, use rotateRefreshToken to atomically swap old jti → new record. */
-  rotateFrom?: string | undefined
-}
-
-const issueTokenPair = operation(function* (user: AuthUser, opts: IssueOptions = {}) {
-  const strategy = yield* useContext(StrategyCtxRef)
+const issueTokenPair = operation(function* (user: AuthDef.User, opts: AuthDef.IssueOptions = {}) {
+  const strategy = yield* useContext(AccessStrategyCtxRef)
   const provider = yield* getProvider()
 
   const { roles, permissions } = yield* collectAuthz(provider, user)
@@ -64,7 +51,8 @@ const issueTokenPair = operation(function* (user: AuthUser, opts: IssueOptions =
 
   if (opts.rotateFrom !== undefined && provider.rotateRefreshToken) {
     yield* provider.rotateRefreshToken(opts.rotateFrom, newRecord)
-    // oxlint-disable-next-line no-negated-condition
+    // the rotate branch deliberately does not saveRefreshToken, so the trailing save is not shared
+    // oxlint-disable-next-line no-negated-condition, oxc/branches-sharing-code
   } else if (opts.rotateFrom !== undefined) {
     // legacy fallback: non-atomic rotate via revoke + save
     if (!provider.revokeRefreshToken || !provider.saveRefreshToken) {
@@ -82,9 +70,9 @@ const issueTokenPair = operation(function* (user: AuthUser, opts: IssueOptions =
     yield* provider.saveRefreshToken(newRecord)
   }
 
-  const session = (yield* decodePrincipalToken(access.token, TOKEN_TYPE_ACCESS)) as AuthSession
+  const session = (yield* decodePrincipalToken(access.token, TOKEN_TYPE_ACCESS)) as AuthDef.Session
 
-  const tokens: AccessRefreshTokens = {
+  const tokens: AuthDef.AccessRefreshTokens = {
     accessToken: access.token,
     refreshToken: refresh.token,
     accessExpiresAt: access.expiresAt,
@@ -95,20 +83,20 @@ const issueTokenPair = operation(function* (user: AuthUser, opts: IssueOptions =
 })
 
 export const AccessRefreshAuth = definePlugin({
-  name: 'auth:access-refresh',
-  version: '0.0.1',
+  name: 'server/plugin-auth-access-refresh',
+  version: '0.0.0',
   description: 'JWT access + refresh token strategy',
 
-  *setup(options: AccessRefreshOptions) {
+  *setup(options: AuthDef.AccessRefreshOptions) {
     yield* initializeBaseAuth(options)
 
-    const ctx: AccessRefreshContext = {
+    const ctx: AuthDef.AccessRefreshContext = {
       accessTTL: yield* parseDuration(options.access?.expiresIn ?? DEFAULT_ACCESS_TTL),
       refreshTTL: yield* parseDuration(options.refresh?.expiresIn ?? DEFAULT_REFRESH_TTL),
       rotateRefresh: options.refresh?.rotate ?? true,
     }
 
-    yield* StrategyCtxRef.set(ctx)
+    yield* AccessStrategyCtxRef.set(ctx)
     return ctx
   },
 }).build({
@@ -128,7 +116,6 @@ export const AccessRefreshAuth = definePlugin({
     const { session, tokens } = yield* issueTokenPair(user)
     events.emit('signed-in', user, session)
 
-    // oxlint-disable-next-line oxc/no-rest-spread-properties
     return { user, session, ...tokens }
   }),
 
@@ -148,7 +135,7 @@ export const AccessRefreshAuth = definePlugin({
 
   refresh: operation(function* (refreshToken: string) {
     const provider = yield* getProvider()
-    const strategy = yield* useContext(StrategyCtxRef)
+    const strategy = yield* useContext(AccessStrategyCtxRef)
     const events = yield* useContext(AuthEventsRef)
 
     if (!provider.findRefreshToken) {
@@ -169,7 +156,7 @@ export const AccessRefreshAuth = definePlugin({
 
     const user = yield* provider.loadUser(payload.sub)
     if (!user) {
-      return yield* fail(ServerErrorCode.NotFound, `user "${payload.sub}" not found`)
+      return yield* fail(CoreErrors.NotFound, `user "${payload.sub}" not found`)
     }
 
     // Rotation is atomic when provider implements rotateRefreshToken; otherwise
@@ -220,7 +207,6 @@ export const AccessRefreshAuth = definePlugin({
     events.emit('sso-linked', user.id, providerName)
     events.emit('signed-in', user, session)
 
-    // oxlint-disable-next-line oxc/no-rest-spread-properties
     return { user, session, ...tokens }
   }),
 })

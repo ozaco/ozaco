@@ -1,7 +1,7 @@
-import type { Failure, Result } from 'std:result'
+import type { Result } from 'std:result'
 import type { AnyFunction, AnyType } from 'std:shared'
 
-import type { Future, Operation, Scope, Subscription } from './operation'
+import type { Future, Operation, Scope, Subscription, Task } from './operation'
 
 export namespace Helpers {
   export type Yielded<T extends Operation<unknown, AnyType>> =
@@ -14,15 +14,22 @@ export namespace Helpers {
     raise(error: unknown): void
   }
 
+  export type StepType = 'next' | 'return' | 'throw' | 'drop'
+
+  export interface DelimiterLike {
+    epoch: number
+    nextStep(result: Result<unknown, unknown>, epoch: number): Helpers.StepType
+  }
+
   export type Instruction = [
     number,
     Helpers.Coroutine<unknown>,
     Result<unknown, unknown>,
-    () => boolean,
-    'return' | 'next',
+    Helpers.DelimiterLike,
+    number,
   ]
 
-  export type FailureOf<E> = [E] extends [never] ? never : Failure<E>
+  export type FailureOf<E> = [E] extends [never] ? never : Result.Failure<E>
 
   export type Resolve<T> = (value: T) => void
 
@@ -38,10 +45,9 @@ export namespace Helpers {
     scope: Scope
     data: {
       exit(resolve: Helpers.Resolve<Result<unknown, unknown>>): void
-      iterator: Iterator<Effect<unknown> | Failure<never>, T, unknown>
+      iterator: Iterator<Effect<unknown> | Result.Failure<unknown>, T, unknown>
     }
     next(result: Result<unknown, unknown>): void
-    return<R>(result: Result<R, unknown>): void
   }
 
   export interface CoroutineOptions<T> {
@@ -113,8 +119,21 @@ export namespace Helpers {
 
   export interface ScopeInternal extends Scope, AsyncDisposable {
     contexts: Record<string, unknown>
+    snapshotKeys: Set<string>
     ensure(op: () => Operation<void>): () => void
   }
 
   export type Provide<T> = (value: T) => Operation<void>
+
+  export interface TaskOptions<T> {
+    owner: Helpers.ScopeInternal
+    operation(): Operation<T>
+  }
+
+  export interface NewTask<T> {
+    scope: Scope
+    routine: Helpers.Coroutine
+    task: Task<T>
+    start(): void
+  }
 }

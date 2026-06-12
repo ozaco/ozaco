@@ -3,7 +3,7 @@ import type { AnyType } from 'std:shared'
 
 import { useScope } from '../methods/scope'
 import type { Helpers } from '../types/helpers'
-import type { Operation, Scope, Task } from '../types/operation'
+import type { Operation, Task } from '../types/operation'
 
 import { DelimiterContext, ErrorContext, TaskGroupContext } from './contexts'
 import { createCoroutine } from './coroutine'
@@ -12,19 +12,7 @@ import { createFuture } from './future'
 import { createScopeInternal } from './scope-internal'
 import { encapsulate } from './task-group'
 
-export interface TaskOptions<T> {
-  owner: Helpers.ScopeInternal
-  operation(): Operation<T>
-}
-
-export interface NewTask<T> {
-  scope: Scope
-  routine: Helpers.Coroutine
-  task: Task<T>
-  start(): void
-}
-
-export const createTask = <T>(options: TaskOptions<T>): NewTask<T> => {
+export const createTask = <T>(options: Helpers.TaskOptions<T>): Helpers.NewTask<T> => {
   const { owner, operation } = options
   const [scope, destroy] = createScopeInternal(owner)
   const future = createFuture<T>()

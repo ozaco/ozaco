@@ -1,96 +1,78 @@
 import type { AnyType, IsPromiseStrict } from 'std:shared'
 
-import type { Helpers } from './helpers'
 import type { Maybe } from './maybe'
-import type { Failure, Result, ResultAsync, ResultBoth, ResultFor } from './result'
+import type { Result } from './result'
 
 export namespace Impl {
   export interface Succeed {
     (): Result<void, never>
 
-    <T extends `${string}`>(value: PromiseLike<T>): ResultAsync<T, never>
+    <T extends `${string}`>(value: PromiseLike<T>): Result.Async<T, never>
     <T extends `${string}`>(value: T): Result<T, never>
-    <const T>(value: T): ResultFor<T, Awaited<T>, never>
+    <const T>(value: T): Result.For<T, Awaited<T>, never>
   }
 
   export interface Fail {
     (): Result<never, void>
 
-    <E extends `${string}`>(error: PromiseLike<E>): ResultAsync<never, E>
+    <E extends `${string}`>(error: PromiseLike<E>): Result.Async<never, E>
     <E extends `${string}`>(error: E): Result<never, E>
-    <const E>(error: E, message?: string, ...causes: string[]): ResultFor<E, never, Awaited<E>>
+    <const E>(error: E, message?: string, ...causes: string[]): Result.For<E, never, Awaited<E>>
   }
 
   export interface Auto {
-    <R extends ResultBoth<AnyType, AnyType>>(
+    <R extends Result.Both<AnyType, AnyType>>(
       result: R,
     ): true extends IsPromiseStrict<R>
-      ? ResultAsync<Helpers.InferSuccess<R>, Helpers.InferFailure<R>>
-      : Result<Helpers.InferSuccess<R>, Helpers.InferFailure<R>>
-    <R extends ResultBoth<AnyType, AnyType>, T>(
+      ? Result.Async<Result.InferSuccess<R>, Result.InferFailure<R>>
+      : Result<Result.InferSuccess<R>, Result.InferFailure<R>>
+    <R extends Result.Both<AnyType, AnyType>, T>(
       result: R,
       defaultValue: T,
     ): true extends IsPromiseStrict<R>
-      ? ResultAsync<Helpers.InferSuccess<R> | T, never>
-      : Result<Helpers.InferSuccess<R> | T, never>
+      ? Result.Async<Result.InferSuccess<R> | T, never>
+      : Result<Result.InferSuccess<R> | T, never>
 
-    <const T>(): (value: T) => Helpers.ResultFromUnion<T>
+    <const T>(): (value: T) => Result.ResultFromUnion<T>
 
-    <T extends `${string}`>(value: PromiseLike<T>): ResultAsync<T, never>
+    <T extends `${string}`>(value: PromiseLike<T>): Result.Async<T, never>
     <T extends `${string}`>(value: T): Result<T, never>
-    <const T>(value: T): Helpers.ResultFromUnion<T>
+    <const T>(value: T): Result.ResultFromUnion<T>
   }
 
-  export type Throwable = <R, E extends Helpers.ErrorConstructor>(
+  export type Throwable = <R, E extends Result.ErrorConstructor>(
     cb: () => R,
     errorClass?: E,
     ...causes: string[]
-  ) => Helpers.ResultFromUnion<R | Failure<E['prototype']>>
+  ) => Result.ResultFromUnion<R | Result.Failure<E['prototype']>>
 
   export interface AppendCauses {
-    <T extends ResultBoth<AnyType, AnyType>>(result: T, ...causes: string[]): T
-    <T extends ResultBoth<AnyType, AnyType>>(...causes: string[]): (result: T) => T
+    <T extends Result.Both<AnyType, AnyType>>(result: T, ...causes: string[]): T
+    <T extends Result.Both<AnyType, AnyType>>(...causes: string[]): (result: T) => T
   }
 
   export interface Unwrap {
-    <R extends ResultBoth<never, AnyType>>(result: R): never
+    <R extends Result.Both<never, AnyType>>(result: R): never
 
-    <R extends ResultBoth<AnyType, AnyType>>(
+    <R extends Result.Both<AnyType, AnyType>>(
       result: R,
-    ): true extends IsPromiseStrict<R> ? Promise<Helpers.InferSuccess<R>> : Helpers.InferSuccess<R>
-    <R extends ResultBoth<AnyType, AnyType>, T>(
+    ): true extends IsPromiseStrict<R> ? Promise<Result.InferSuccess<R>> : Result.InferSuccess<R>
+    <R extends Result.Both<AnyType, AnyType>, T>(
       result: R,
       defaultValue: T,
     ): true extends IsPromiseStrict<R>
-      ? Promise<Helpers.InferSuccess<R> | T>
-      : Helpers.InferSuccess<R> | T
-    <R extends ResultBoth<AnyType, AnyType>>(): (
+      ? Promise<Result.InferSuccess<R> | T>
+      : Result.InferSuccess<R> | T
+    <R extends Result.Both<AnyType, AnyType>>(): (
       result: R,
-    ) => true extends IsPromiseStrict<R>
-      ? Promise<Helpers.InferSuccess<R>>
-      : Helpers.InferSuccess<R>
-    <R extends ResultBoth<AnyType, AnyType>, T>(
+    ) => true extends IsPromiseStrict<R> ? Promise<Result.InferSuccess<R>> : Result.InferSuccess<R>
+    <R extends Result.Both<AnyType, AnyType>, T>(
       defaultValue: T,
     ): (
       result: R,
     ) => true extends IsPromiseStrict<R>
-      ? Promise<Helpers.InferSuccess<R> | T>
-      : Helpers.InferSuccess<R> | T
-  }
-
-  export interface Guard {
-    <Args extends AnyType[], U, V>(
-      fn: (...args: Args) => Generator<U, V>,
-      ...causes: string[]
-    ): (...args: Args) => Helpers.ResultFromUnion<V | U>
-    <Args extends AnyType[], U, V>(
-      fn: (...args: Args) => AsyncGenerator<U, V>,
-      ...causes: string[]
-    ): (...args: Args) => Helpers.ResultFromUnion<Promise<V | U>>
-    <Args extends AnyType[], R>(
-      fn: (...args: Args) => R,
-      ...causes: string[]
-    ): (...args: Args) => Helpers.ResultFromUnion<R>
+      ? Promise<Result.InferSuccess<R> | T>
+      : Result.InferSuccess<R> | T
   }
 
   export interface Just {
@@ -102,7 +84,7 @@ export namespace Impl {
   export type Nothing = <T = void>() => Maybe<T>
 
   export interface AsFailure {
-    <E>(error: Failure<E>, cause?: string): Failure<E>
-    (error: unknown, cause?: string): Failure<unknown>
+    <E>(error: Result.Failure<E>, cause?: string): Result.Failure<E>
+    (error: unknown, cause?: string): Result.Failure<unknown>
   }
 }

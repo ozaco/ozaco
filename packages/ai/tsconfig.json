@@ -1,0 +1,9 @@
+{
+  "compilerOptions": {
+    "lib": ["esnext"]
+  },
+  "extends": ["../../tsconfig.base.json"],
+  "include": ["src", "tests", "tsdown.config.ts"],
+  "exclude": ["**/dist/**", "tests/fixtures"],
+  "references": []
+}

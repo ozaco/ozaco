@@ -3,18 +3,19 @@ import { isPromise } from 'std:shared'
 
 import { RESULT_FAILURE } from '../const'
 import type { Impl } from '../types/impl'
-import type { Failure } from '../types/result'
+import type { Result } from '../types/result'
 
 export const fail: Impl.Fail = (...args: AnyType[]) => {
   const failure = {
     _t: RESULT_FAILURE,
+    _d: Date.now(),
 
     *[Symbol.iterator]() {
       // oxlint-disable-next-line no-this-alias
       const self = this
       yield self
     },
-  } as Writable<Failure<AnyType>>
+  } as Writable<Result.Failure<AnyType>>
 
   if (args.length === 0) {
     failure.causes = [] as string[]
@@ -26,8 +27,6 @@ export const fail: Impl.Fail = (...args: AnyType[]) => {
   const error = args[0]
   const message = args[1] ?? ''
   const causes = args.slice(2)
-
-  failure._d = Date.now()
 
   if (isPromise(error)) {
     return error.then(resolved => {

@@ -1,4 +1,4 @@
-import { createContext, operation, useContext } from 'std:effect'
+import { operation, useContext } from 'std:effect'
 import { definePlugin } from 'std:plugin'
 import { fail } from 'std:result'
 
@@ -16,22 +16,14 @@ import {
   ssoAuthorizeAction,
 } from '../internal/actions'
 import { DEFAULT_SESSION_TTL, TOKEN_TYPE_SESSION } from '../internal/const'
-import { AuthEventsRef } from '../internal/contexts'
+import { AuthEventsRef, JwtStrategyCtxRef } from '../internal/contexts'
 import { collectAuthz, getProvider, parseDuration } from '../internal/helpers'
 import { initializeBaseAuth } from '../internal/setup'
 import { decodePrincipalToken, signPrincipalToken } from '../internal/tokens'
-import type {
-  AuthSession,
-  AuthUser,
-  JWTSessionContext,
-  JWTSessionOptions,
-  JWTSessionTokens,
-} from '../types'
+import type { AuthDef } from '../types'
 
-const StrategyCtxRef = createContext<JWTSessionContext>('server:auth:jwt-session:ctx')
-
-const issueSessionToken = operation(function* (user: AuthUser) {
-  const strategy = yield* useContext(StrategyCtxRef)
+const issueSessionToken = operation(function* (user: AuthDef.User) {
+  const strategy = yield* useContext(JwtStrategyCtxRef)
   const provider = yield* getProvider()
 
   const { roles, permissions } = yield* collectAuthz(provider, user)
@@ -41,25 +33,25 @@ const issueSessionToken = operation(function* (user: AuthUser) {
     roles,
     permissions,
   })
-  const session = (yield* decodePrincipalToken(issued.token, TOKEN_TYPE_SESSION)) as AuthSession
+  const session = (yield* decodePrincipalToken(issued.token, TOKEN_TYPE_SESSION)) as AuthDef.Session
 
-  const tokens: JWTSessionTokens = { token: issued.token, expiresAt: issued.expiresAt }
+  const tokens: AuthDef.JWTSessionTokens = { token: issued.token, expiresAt: issued.expiresAt }
   return { session, tokens }
 })
 
 export const JWTSessionAuth = definePlugin({
-  name: 'auth:jwt-session',
-  version: '0.0.1',
+  name: 'server/plugin-auth-jwt-session',
+  version: '0.0.0',
   description: 'classic single-token JWT session strategy',
 
-  *setup(options: JWTSessionOptions) {
+  *setup(options: AuthDef.JWTSessionOptions) {
     yield* initializeBaseAuth(options)
 
-    const ctx: JWTSessionContext = {
+    const ctx: AuthDef.JWTSessionContext = {
       sessionTTL: yield* parseDuration(options.session?.expiresIn ?? DEFAULT_SESSION_TTL),
     }
 
-    yield* StrategyCtxRef.set(ctx)
+    yield* JwtStrategyCtxRef.set(ctx)
     return ctx
   },
 }).build({
@@ -79,7 +71,6 @@ export const JWTSessionAuth = definePlugin({
     const { session, tokens } = yield* issueSessionToken(user)
     events.emit('signed-in', user, session)
 
-    // oxlint-disable-next-line oxc/no-rest-spread-properties
     return { user, session, ...tokens }
   }),
 
@@ -127,7 +118,6 @@ export const JWTSessionAuth = definePlugin({
     events.emit('sso-linked', user.id, providerName)
     events.emit('signed-in', user, session)
 
-    // oxlint-disable-next-line oxc/no-rest-spread-properties
     return { user, session, ...tokens }
   }),
 })

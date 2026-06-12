@@ -1,6 +1,6 @@
-import type { SwaggerHtmlOptions } from '../types'
+import type { DocsDef } from '../types'
 
-export const buildSwaggerHtml = ({ openapi, title, auth }: SwaggerHtmlOptions): string => {
+export const buildSwaggerHtml = ({ openapi, title, auth }: DocsDef.SwaggerHtmlOptions): string => {
   const safeTitle = title.replaceAll('<', '&lt;').replaceAll('>', '&gt;')
   const safeUrl = JSON.stringify(openapi)
   const persistAuth = auth ? 'persistAuthorization: true,' : ''

@@ -1,25 +1,24 @@
-import { Rest, Router } from 'server:core'
+import { Gateway } from 'server:core'
 import { useContext } from 'std:effect'
 import { definePlugin } from 'std:plugin'
 
 import { applyCorsHeaders } from './internal/apply'
-import { CorsCtxRef, normalizeOptions } from './internal/config'
-import { preflightAction } from './internal/preflight'
-import type { CorsOptions, FromInternalArgs } from './types'
+import { CorsCtxRef, normalizeOptions, preflightAction } from './internal/utils'
+import type { CorsDef } from './types'
 
 export const Cors = definePlugin({
-  name: 'plugin:cors',
-  version: '0.0.1',
+  name: 'server/plugin-cors',
+  version: '0.0.0',
   description: 'Cross-Origin Resource Sharing',
 
-  *setup(options?: CorsOptions) {
+  *setup(options?: CorsDef.Options) {
     const ctx = normalizeOptions(options)
     yield* CorsCtxRef.set(ctx)
 
-    yield* Router.actions.mount('', preflightAction)
+    yield* Gateway.actions.mount('', preflightAction)
 
-    yield* Rest.before({
-      *fromInternal(args: FromInternalArgs) {
+    yield* Gateway.before({
+      *fromInternal(args: CorsDef.FromInternalArgs) {
         const cors = yield* useContext(CorsCtxRef)
         const req = args[0]
         const res = args[1]

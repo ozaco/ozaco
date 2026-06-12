@@ -16,6 +16,7 @@
     "oxc/no-optional-chaining": "off",
     "oxc/no-barrel-file": "off",
     "oxc/no-async-await": "off",
+    "oxc/no-rest-spread-properties": "off",
 
     "unicorn/no-array-for-each": "warn",
     "unicorn/no-this-assignment": "off",
@@ -29,9 +30,13 @@
     "unicorn/no-nested-ternary": "off",
     "unicorn/no-array-method-this-argument": "off",
     "unicorn/no-array-callback-reference": "off",
-
-    "eslint/no-bitwise": "off",
+    "unicorn/number-literal-case": "off",
     "unicorn/prefer-math-trunc": "off",
+    "unicorn/import-style": "off",
+    "unicorn/consistent-function-scoping": "off",
+
+    "eslint/max-lines": "off",
+    "eslint/no-bitwise": "off",
     "eslint/id-length": "off",
     "eslint/sort-keys": "off",
     "eslint/no-undefined": "off",
@@ -66,6 +71,8 @@
     "eslint/no-nested-ternary": "off",
     "eslint/complexity": "off",
     "eslint/require-yield": "off",
+    "eslint/no-underscore-dangle": "off",
+    "prefer-named-capture-group": "off",
 
     "typescript/ban-types": "off",
     "typescript/consistent-type-definitions": "off",
@@ -80,6 +87,7 @@
     "typescript/unified-signatures": "off",
     "typescript/no-explicit-any": "error",
     "typescript/explicit-member-accessibility": "off",
+    "typescript/method-signature-style": "off",
 
     "promise/spec-only": "off",
     "promise/avoid-new": "off",

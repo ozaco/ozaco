@@ -10,7 +10,7 @@ export const withResolvers = <T>(desc?: string): Helpers.WithResolvers<T> => {
   const continuations = new Set<(result: Result<T, unknown>) => void>()
   let result: Result<T, unknown> | undefined = undefined
 
-  const operation: Operation<T> = action<T>(function (resolve, reject) {
+  const operation: Operation<T> = action<T>((resolve, reject) => {
     const settle = (outcome: Result<T, unknown>) => {
       if (isSuccess(outcome)) {
         resolve(outcome.value)

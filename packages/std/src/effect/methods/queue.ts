@@ -1,12 +1,7 @@
 import type { Helpers } from '../types/helpers'
-import type { Subscription } from '../types/operation'
+import type { Queue } from '../types/operation'
 
 import { action } from './action'
-
-export interface Queue<T, TClose> extends Subscription<T, TClose> {
-  add(item: T): void
-  close(value: TClose): void
-}
 
 export const createQueue = <T, TClose>(): Queue<T, TClose> => {
   type Item = IteratorResult<T, TClose>

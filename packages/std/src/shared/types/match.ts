@@ -1,6 +1,6 @@
-import type { Failure } from 'std:result'
+import type { Result } from 'std:result'
 
-import type { GuardValue, AnyType } from './common'
+import type { AnyType, GuardValue } from './common'
 import type { StandardSchemaV1 } from './schema'
 
 export type MatchCase = {
@@ -28,7 +28,7 @@ export interface MatchBuilder<Input, Remaining, Output> {
 
   otherwise: <R>(handler: (value: Remaining) => R) => Output | R
 
-  exhaustive: [Remaining] extends [never] ? () => Output : Failure<Remaining>
+  exhaustive: [Remaining] extends [never] ? () => Output : Result.Failure<Remaining>
 
   run: () => Output | null
 }

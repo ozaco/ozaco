@@ -1,0 +1,9 @@
+{
+  "compilerOptions": {
+    "lib": ["esnext"],
+    "types": ["node", "bun"]
+  },
+  "extends": ["../../tsconfig.base.json"],
+  "include": ["src", "ambient.d.ts", "tests", "tsdown.config.ts"],
+  "references": []
+}

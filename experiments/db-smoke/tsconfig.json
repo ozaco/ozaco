@@ -1,9 +1,0 @@
-{
-  "compilerOptions": {
-    "lib": ["esnext"],
-    "types": ["node", "bun", "ozaco"]
-  },
-  "extends": ["../../tsconfig.base.json"],
-  "include": ["src"],
-  "references": []
-}

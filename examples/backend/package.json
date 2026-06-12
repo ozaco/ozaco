@@ -4,15 +4,14 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "@ozaco/ai": "workspace:*",
     "@ozaco/db": "workspace:*",
     "@ozaco/server": "workspace:*",
-    "@ozaco/std": "workspace:*",
-    "drizzle-orm": "^0.45.2",
-    "rou3": "latest",
-    "zod": "4.3.6"
+    "@ozaco/std": "workspace:*"
   },
   "devDependencies": {
-    "@ozaco/unplugin-resolve": "workspace:*",
-    "tsdown": "catalog:build"
+    "@ozaco/devkit": "workspace:*",
+    "tsdown": "catalog:build",
+    "zod": "latest"
   }
 }

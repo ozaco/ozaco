@@ -1,6 +1,6 @@
 import type { ManualOperation } from 'std:effect'
 import { operation, until } from 'std:effect'
-import type { Failure } from 'std:result'
+import type { Result } from 'std:result'
 import { asFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
 
@@ -17,7 +17,7 @@ export interface DrizzleRuntime {
   readonly desc: (column: AnyType) => AnyType
   readonly execRaw: (sql: string, params?: unknown[]) => Promise<unknown[]>
   /** Driver-specific error classifier; default is the generic Driver fallback. */
-  readonly classify?: (raw: unknown) => Failure<DbError>
+  readonly classify?: (raw: unknown) => Result.Failure<DbError>
 }
 
 export const runPromise = operation(function* <T>(
@@ -29,7 +29,7 @@ export const runPromise = operation(function* <T>(
 
     return outcome
   } catch (error) {
-    const failure = asFailure<DbError>(error as AnyType)
+    const failure = asFailure(error) as Result.Failure<DbError>
 
     if (runtime?.classify) {
       return yield* runtime.classify(failure)

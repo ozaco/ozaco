@@ -2,28 +2,14 @@ import type { AnyType } from 'std:shared'
 
 import { z } from 'zod'
 
-import { SECURITY_SCHEME_NAME } from '../const'
-import type {
-  CompiledEntry,
-  DocsAuthOptions,
-  DocsContext,
-  DocsOptions,
-  JsonSchema,
-  OpenAPIDocument,
-  OperationObject,
-  ParameterObject,
-  SecurityScheme,
-} from '../types'
+import type { DocsDef } from '../types'
 
-const DEFAULT_AUTH: DocsAuthOptions = {
-  type: 'bearer',
-  bearerFormat: 'JWT',
-}
+import { DEFAULT_AUTH, SECURITY_SCHEME_NAME } from './const'
 
-const buildSecurityScheme = (auth: DocsAuthOptions): SecurityScheme => {
+const buildSecurityScheme = (auth: DocsDef.AuthOptions): DocsDef.SecurityScheme => {
   const type = auth.type ?? 'bearer'
 
-  const scheme: SecurityScheme =
+  const scheme: DocsDef.SecurityScheme =
     type === 'apiKey'
       ? {
           type: 'apiKey',
@@ -46,14 +32,14 @@ const BODY_METHODS = new Set(['POST', 'PUT', 'PATCH'])
 
 const extractPathParams = (path: string): { openapiPath: string; params: string[] } => {
   const params: string[] = []
-  const openapiPath = path.replaceAll(/:([A-Za-z_][A-Za-z0-9_]*)/g, (_, name: string) => {
+  const openapiPath = path.replaceAll(/:([A-Za-z_][A-Za-z0-9_]*)/gu, (_, name: string) => {
     params.push(name)
     return `{${name}}`
   })
   return { openapiPath, params }
 }
 
-const toJsonSchema = (schema: unknown): JsonSchema | undefined => {
+const toJsonSchema = (schema: unknown): DocsDef.JsonSchema | undefined => {
   if (!schema) {
     return undefined
   }
@@ -61,21 +47,22 @@ const toJsonSchema = (schema: unknown): JsonSchema | undefined => {
     return z.toJSONSchema(schema as AnyType, {
       unrepresentable: 'any',
       io: 'input',
-    }) as JsonSchema
+    }) as DocsDef.JsonSchema
   } catch {
+    // schema is not zod-representable; skip emitting a body/query schema
     return undefined
   }
 }
 
 const pickQueryParams = (
-  jsonSchema: JsonSchema | undefined,
+  jsonSchema: DocsDef.JsonSchema | undefined,
   pathParams: string[],
-): ParameterObject[] => {
+): DocsDef.ParameterObject[] => {
   if (!jsonSchema?.properties) {
     return []
   }
   const required = new Set(jsonSchema.required)
-  const out: ParameterObject[] = []
+  const out: DocsDef.ParameterObject[] = []
   for (const [name, propSchema] of Object.entries(jsonSchema.properties)) {
     if (pathParams.includes(name)) {
       continue
@@ -84,32 +71,34 @@ const pickQueryParams = (
       name,
       in: 'query',
       required: required.has(name),
-      schema: propSchema as JsonSchema,
+      schema: propSchema as DocsDef.JsonSchema,
     })
   }
   return out
 }
 
-const buildOperation = (entry: CompiledEntry, pathParams: string[]): OperationObject => {
+const buildOperation = (
+  entry: DocsDef.CompiledEntry,
+  pathParams: string[],
+): DocsDef.OperationObject => {
   const { meta, method, service, key } = entry
 
   const inputSchema = toJsonSchema(meta.input)
   const outputSchema = toJsonSchema(meta.output)
 
-  const parameters: ParameterObject[] = pathParams.map(name => ({
+  const parameters: DocsDef.ParameterObject[] = pathParams.map(name => ({
     name,
     in: 'path',
     required: true,
     schema: { type: 'string' },
   }))
 
-  const op: OperationObject = {
+  const op: DocsDef.OperationObject = {
     tags: [service],
     operationId: `${service}.${key}`,
     responses: {
       '200': {
         description: 'Success',
-        // oxlint-disable-next-line oxc/no-rest-spread-properties
         ...(outputSchema ? { content: { 'application/json': { schema: outputSchema } } } : {}),
       },
       '500': { description: 'Failure' },
@@ -141,20 +130,21 @@ const buildOperation = (entry: CompiledEntry, pathParams: string[]): OperationOb
   return op
 }
 
-export const normalizeAuth = (auth: DocsOptions['auth']): DocsAuthOptions | null => {
+export const normalizeAuth = (auth: DocsDef.Options['auth']): DocsDef.AuthOptions | null => {
   if (!auth) {
     return null
   }
   if (auth === true) {
-    // oxlint-disable-next-line oxc/no-rest-spread-properties
     return { ...DEFAULT_AUTH }
   }
-  // oxlint-disable-next-line oxc/no-rest-spread-properties
   return { ...DEFAULT_AUTH, ...auth }
 }
 
-export const buildOpenAPISpec = (entries: CompiledEntry[], docs: DocsContext): OpenAPIDocument => {
-  const doc: OpenAPIDocument = {
+export const buildOpenAPISpec = (
+  entries: DocsDef.CompiledEntry[],
+  docs: DocsDef.Context,
+): DocsDef.OpenAPIDocument => {
+  const doc: DocsDef.OpenAPIDocument = {
     openapi: '3.1.0',
     info: {
       title: docs.title,

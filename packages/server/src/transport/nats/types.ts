@@ -1,38 +1,57 @@
-import type { Action, Service } from 'server:core'
+import type { TransportDef } from 'server:core'
+import type { Scope } from 'std:effect'
 
-import type { NatsConnection, Subscription } from '@nats-io/nats-core'
+import type { NatsConnection, Subscription as NatsSubscription } from 'nats'
 
-import type { NatsTransport } from '.'
+export namespace Nats {
+  export interface Options extends TransportDef.Options {
+    servers?: string | string[]
+    subjectPrefix?: string
+    queueGroup?: string
+    requestTimeoutMs?: number
+  }
 
-export interface NatsTransportOptions {
-  servers: string | string[]
-  prefix?: string
-  requestTimeoutMs?: number
-}
+  export interface Context extends TransportDef.Context {
+    connection: NatsConnection
+    prefix: string
+    queueGroup?: string
+    requestTimeoutMs: number
+    subscriptions: Map<string, NatsSubscription>
+    scope: Scope
+  }
 
-export interface NatsEntry {
-  service: Service
-  key: string
-  action: Action
-  subject: string
-  queueGroup?: string | undefined
-}
+  export interface DispatchPayload {
+    cid: string
+    serviceName: string
+    actionKey: string
+    params?: unknown[]
+    inputSubjects?: string[]
+    outputSubject?: string
+    rawReq?: unknown
+    traceContext?: unknown
+  }
 
-export interface NatsTransportContext {
-  subjects: Map<string, NatsEntry>
-  subscriptions: Map<string, Subscription>
-  options: NatsTransportOptions
-  nc: NatsConnection
-  abort: AbortController
-  isStarted: boolean
-  isPaused: false | string
-}
+  export interface WireSuccess {
+    _t: '__success__'
+    value: unknown
+  }
 
-export interface NatsSettingOptions {
-  subject?: string
-  queueGroup?: string
-}
+  export interface WireFailure {
+    _t: '__failure__'
+    error: string
+    message: string
+    causes?: string[]
+  }
 
-export interface NatsSetting extends NatsSettingOptions {
-  transport: typeof NatsTransport
+  export interface WireStream {
+    _t: '__stream__'
+  }
+
+  export type Wire = WireSuccess | WireFailure | WireStream
+
+  export interface StreamErrorPayload {
+    error: string
+    message: string
+    causes?: string[]
+  }
 }

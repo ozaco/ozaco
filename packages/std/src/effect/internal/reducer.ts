@@ -1,4 +1,4 @@
-import { asFailure, isSuccess } from 'std:result'
+import { asFailure, fail, isFailure, isSuccess } from 'std:result'
 import { PriorityQueue } from 'std:shared'
 
 import { getGlobalDebug } from '../methods/debug'
@@ -23,17 +23,7 @@ class InstructionQueue extends PriorityQueue<Helpers.Instruction> {
   }
 
   dequeue(): Helpers.Instruction | undefined {
-    while (true) {
-      const top = this.pop()
-      if (!top) {
-        return undefined
-      }
-      const validate = top[3]
-      if (!validate()) {
-        continue
-      }
-      return top
-    }
+    return this.pop()
   }
 }
 
@@ -53,44 +43,50 @@ export class Reducer {
     try {
       this.reducing = true
 
-      let item = queue.dequeue()
-      while (item) {
-        const [, routine, result, _, method = 'next' as const] = item
+      for (let item = queue.dequeue(); item; item = queue.dequeue()) {
+        const [, routine, result, delim, epoch] = item
+        const step = delim.nextStep(result, epoch)
+        if (step === 'drop') {
+          continue
+        }
         try {
           const iterator = routine.data.iterator
-          if (isSuccess(result)) {
-            if (method === 'next') {
-              const next = iterator.next(result.value) as IteratorResult<
-                Helpers.Effect<unknown>,
-                unknown
-              >
-              if (!next.done) {
-                resolveDebugHandler(routine)?.(next.value.cause)
-                routine.data.exit = next.value.enter(routine.next, routine)
-              }
-            } else if (iterator.return) {
-              const next = iterator.return(result.value) as IteratorResult<
-                Helpers.Effect<unknown>,
-                unknown
-              >
-              if (!next.done) {
-                resolveDebugHandler(routine)?.(next.value.cause)
-                routine.data.exit = next.value.enter(routine.next, routine)
-              }
+          let next: IteratorResult<Helpers.Effect<unknown>, unknown>
+          if (step === 'next') {
+            next = iterator.next(isSuccess(result) ? result.value : undefined) as IteratorResult<
+              Helpers.Effect<unknown>,
+              unknown
+            >
+          } else if (step === 'return') {
+            next = iterator.return
+              ? (iterator.return(isSuccess(result) ? result.value : undefined) as IteratorResult<
+                  Helpers.Effect<unknown>,
+                  unknown
+                >)
+              : { done: true, value: undefined }
+          } else {
+            const value = isSuccess(result) ? result.value : result
+            if (iterator.throw) {
+              next = iterator.throw(value) as IteratorResult<Helpers.Effect<unknown>, unknown>
+            } else {
+              throw value
             }
-          } else if (iterator.throw) {
-            const next = iterator.throw(result) as IteratorResult<Helpers.Effect<unknown>, unknown>
-            if (!next.done) {
+          }
+          if (!next.done) {
+            if (isFailure(next.value)) {
+              routine.next(next.value)
+            } else if (next.value && typeof next.value.enter === 'function') {
               resolveDebugHandler(routine)?.(next.value.cause)
               routine.data.exit = next.value.enter(routine.next, routine)
+            } else {
+              // a generator yielded something that is neither a failure nor an Effect — raise a
+              // proper failure instead of throwing a TypeError on `.enter`/`.cause` off the hot path
+              routine.next(fail('effect', `yielded a non-effect value: ${String(next.value)}`))
             }
-          } else {
-            throw result
           }
         } catch (error) {
           routine.next(asFailure(error))
         }
-        item = queue.dequeue()
       }
     } finally {
       this.reducing = false

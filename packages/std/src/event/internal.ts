@@ -1,13 +1,13 @@
-import type { EventSourceListener } from './types'
+import type { EventEmitter } from './types'
 
-export const removeFrom = (list: EventSourceListener[], fn: EventSourceListener): void => {
+export const removeFrom = (list: EventEmitter.Listener[], fn: EventEmitter.Listener): void => {
   const i = list.indexOf(fn)
   if (i !== -1) {
     list.splice(i, 1)
   }
 }
 
-export const callListener = (fn: EventSourceListener, args: unknown[]): unknown => {
+export const callListener = (fn: EventEmitter.Listener, args: unknown[]): unknown => {
   switch (args.length) {
     case 0: {
       return fn()

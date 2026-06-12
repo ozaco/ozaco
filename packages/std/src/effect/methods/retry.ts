@@ -2,7 +2,7 @@ import { fail, isFailure } from 'std:result'
 
 import { box } from '../internal/box'
 import type { Operation } from '../types/operation'
-import type { RetryOptions } from '../types/timing'
+import type { RetryOptions } from '../types/utils'
 
 import { sleep } from './sleep'
 
@@ -28,7 +28,7 @@ export function* retry<T, E>(
         if (currentDelay > 0) {
           yield* sleep(Math.min(currentDelay, maxDelay))
         }
-        currentDelay *= backoff
+        currentDelay = Math.min(currentDelay * backoff, maxDelay)
       } else {
         throw result
       }

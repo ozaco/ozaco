@@ -1,16 +1,16 @@
-import { ServerErrorCode } from 'server:core'
+import { CoreErrors } from 'server:core'
 import { operation, useContext } from 'std:effect'
 import { fail } from 'std:result'
 
 import { AuthErrorCode } from '../error-codes'
-import type { AuthProvider, AuthSession, VerificationRecord } from '../types'
+import type { AuthDef } from '../types'
 
 import { AuthBaseCtxRef, AuthEventsRef, AuthProviderRef } from './contexts'
 import { getProvider, parseDuration } from './helpers'
 import { randomToken } from './jwt'
 import { decodePrincipalToken } from './tokens'
 
-export const provideAction = operation(function* (provider: AuthProvider) {
+export const provideAction = operation(function* (provider: AuthDef.Provider) {
   yield* AuthProviderRef.set(provider)
 })
 
@@ -26,30 +26,33 @@ export const buildAuthorize = (expectedType: string) =>
     return session
   })
 
-export const hasRoleAction = operation(function* (session: AuthSession, role: string) {
-  return session.roles.includes(role)
+export const hasRoleAction = operation(function* (session: AuthDef.Session, role: string) {
+  return session.roles?.includes(role) ?? false
 })
 
-export const hasPermissionAction = operation(function* (session: AuthSession, permission: string) {
-  return session.permissions.includes(permission)
+export const hasPermissionAction = operation(function* (
+  session: AuthDef.Session,
+  permission: string,
+) {
+  return session.permissions?.includes(permission) ?? false
 })
 
-export const requireRoleAction = operation(function* (session: AuthSession, role: string) {
-  if (!session.roles.includes(role)) {
+export const requireRoleAction = operation(function* (session: AuthDef.Session, role: string) {
+  if (!session.roles?.includes(role)) {
     const events = yield* useContext(AuthEventsRef)
     events.emit('denied', 'forbidden', `missing role: ${role}`)
-    return yield* fail(ServerErrorCode.Forbidden, `missing role: ${role}`)
+    return yield* fail(CoreErrors.Forbidden, `missing role: ${role}`)
   }
 })
 
 export const requirePermissionAction = operation(function* (
-  session: AuthSession,
+  session: AuthDef.Session,
   permission: string,
 ) {
-  if (!session.permissions.includes(permission)) {
+  if (!session.permissions?.includes(permission)) {
     const events = yield* useContext(AuthEventsRef)
     events.emit('denied', 'forbidden', `missing permission: ${permission}`)
-    return yield* fail(ServerErrorCode.Forbidden, `missing permission: ${permission}`)
+    return yield* fail(CoreErrors.Forbidden, `missing permission: ${permission}`)
   }
 })
 
@@ -67,7 +70,7 @@ export const issueVerificationAction = operation(function* (
 
   const token = yield* randomToken(32)
   const lifetime = ttl === undefined ? ctx.verificationTTL : yield* parseDuration(ttl)
-  const record: VerificationRecord = {
+  const record: AuthDef.VerificationRecord = {
     token,
     userId,
     purpose,

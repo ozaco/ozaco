@@ -1,26 +1,33 @@
 import { defineProtocol } from 'std:plugin'
 
 import { LOGGER, LOGGER_TRANSPORT } from './const'
-import type { Helpers } from './types/helpers'
-import type { LoggerActions, LoggerContext } from './types/logger'
-import type { LoggerTransportActions, LoggerTransportContext } from './types/transport'
+import { getTransportsHandler, registerHandler, unregisterHandler } from './internal/handlers'
+import type { LoggerDef } from './types/logger'
+import type { LoggerTransportDef } from './types/transport'
 
 export const Logger = defineProtocol<
-  LoggerContext,
+  LoggerDef.Context,
   unknown,
-  [options?: Helpers.LoggerOptions],
-  LoggerActions
+  [options?: LoggerDef.Options],
+  LoggerDef.Actions,
+  LoggerDef.Handlers
 >({
   name: 'logger',
   version: '0.0.1',
   subtype: LOGGER,
+
+  handlers: {
+    register: registerHandler,
+    unregister: unregisterHandler,
+    getTransports: getTransportsHandler,
+  },
 })
 
 export const LoggerTransport = defineProtocol<
-  LoggerTransportContext,
+  LoggerTransportDef.Context,
   unknown,
   unknown[],
-  LoggerTransportActions
+  LoggerTransportDef.Actions
 >({
   name: 'logger-transport',
   version: '0.0.1',

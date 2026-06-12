@@ -1,7 +1,6 @@
-import type { Context, Signal, Subscription } from '../types/operation'
+import type { Context, Queue, Signal, Subscription } from '../types/operation'
 
 import { createContext } from './context'
-import type { Queue } from './queue'
 import { createQueue } from './queue'
 import { resource } from './resource'
 

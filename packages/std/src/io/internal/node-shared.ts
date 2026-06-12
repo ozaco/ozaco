@@ -1,6 +1,6 @@
 import { until } from 'std:effect'
-import { hasFlag, IO_FLAGS } from 'std:io'
 import type { IOStat, WalkEntry, WalkOptions } from 'std:io'
+import { hasFlag, IO_FLAGS } from 'std:io'
 import type { AnyType } from 'std:shared'
 
 import type { Stats } from 'node:fs'

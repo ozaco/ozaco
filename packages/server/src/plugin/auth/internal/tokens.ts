@@ -1,16 +1,33 @@
 import { operation, useContext } from 'std:effect'
 import { fail } from 'std:result'
+import type { AnyType } from 'std:shared'
 
 import { AuthErrorCode } from '../error-codes'
-import type { AuthSession, PrincipalClaims } from '../types'
+import type { AuthDef } from '../types'
 
 import { AuthBaseCtxRef, AuthSignKeyRef, AuthVerifyKeyRef } from './contexts'
 import { randomJti, signJWT, verifyJWT } from './jwt'
 
+/**
+ * A verified JWT only proves the signature; it does NOT prove the payload carries the claims a
+ * `Session` requires. Validate the shape before casting, otherwise a token signed with the same
+ * key but missing `user`/`roles`/`permissions` (schema drift, a refresh token routed through the
+ * principal path, a key-sharing misconfig) would be accepted by `authorize` and then crash the
+ * authorization checks with a `TypeError` on `session.permissions.includes`.
+ */
+const isValidSession = (payload: AnyType): payload is AuthDef.Session =>
+  payload !== null &&
+  typeof payload === 'object' &&
+  typeof payload.sub === 'string' &&
+  payload.user !== null &&
+  typeof payload.user === 'object' &&
+  Array.isArray(payload.roles) &&
+  Array.isArray(payload.permissions)
+
 export const signPrincipalToken = operation(function* (
   type: string,
   ttlMs: number,
-  { user, roles, permissions }: PrincipalClaims,
+  { user, roles, permissions }: AuthDef.PrincipalClaims,
 ) {
   const ctx = yield* useContext(AuthBaseCtxRef)
   const secret = yield* useContext(AuthSignKeyRef)
@@ -86,7 +103,14 @@ export const decodePrincipalToken = operation(function* (token: string, expected
     )
   }
 
-  return payload as unknown as AuthSession
+  if (!isValidSession(payload)) {
+    return yield* fail(
+      AuthErrorCode.InvalidToken,
+      'token payload is not a valid session (missing or malformed user/roles/permissions)',
+    )
+  }
+
+  return payload
 })
 
 export const decodeRefreshToken = operation(function* (token: string) {
@@ -100,6 +124,13 @@ export const decodeRefreshToken = operation(function* (token: string) {
 
   if (payload.type !== 'refresh') {
     return yield* fail(AuthErrorCode.InvalidToken, 'not a refresh token')
+  }
+
+  if (typeof payload.sub !== 'string' || typeof payload.jti !== 'string') {
+    return yield* fail(
+      AuthErrorCode.InvalidToken,
+      'refresh token payload is missing or malformed sub/jti',
+    )
   }
 
   return payload as { sub: string; jti: string; iat: number; exp: number }

@@ -1,7 +1,7 @@
 import type { Result } from 'std:result'
 import { succeed } from 'std:result'
 
-import { CONTEXT } from '../const'
+import { CONTEXT, SNAPSHOT_FLAG } from '../const'
 import { doOp } from '../internal/do'
 import type { Helpers } from '../types/helpers'
 import type { Context, Operation, Scope } from '../types/operation'
@@ -63,4 +63,9 @@ export const useContext = <T>(ctx: Context<T> | { context: Context<T> }): Operat
     }
   }
   return (ctx as Context<T>).expect()
+}
+
+export const markContextAsSnapshot = <T>(context: Context<T>): Context<T> => {
+  ;(context as Context<T> & { [SNAPSHOT_FLAG]?: true })[SNAPSHOT_FLAG] = true
+  return context
 }

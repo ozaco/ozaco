@@ -1,34 +1,53 @@
-import type { Future } from 'std:effect'
-import type { AnyType } from 'std:shared'
+import type { Future, Stream } from 'std:effect'
+import type { Plugin } from 'std:plugin'
+import type { Result } from 'std:result'
 
-import type { Action, ActionRequest } from './action'
-import type { Service } from './service'
+import type { TracerDef } from './tracer'
 
-export type TransportContext = unknown
+export type TransportDef = Plugin<TransportDef.Context, unknown, unknown[], TransportDef.Actions>
 
-export interface CallOptions {
-  parent?: ActionRequest | undefined
-  timeoutMs?: number | undefined
-  signal?: AbortSignal | undefined
-}
+export namespace TransportDef {
+  export interface Options {
+    name?: string
+    priority?: number
+    next?: (failure: Result.Failure<unknown>) => boolean
+  }
 
-export interface TransportActions extends Record<string, AnyType> {
-  call<TReturn, TError>(
-    action: Action<[AnyType], TReturn, TError>,
-    body: unknown,
-    options?: CallOptions,
-  ): Future<TReturn, TError | 'transport'>
+  export interface Context {
+    name: string
+    priority: number
+    next: (failure: Result.Failure<unknown>) => boolean
+  }
 
-  mount(service: Service): Future<void, unknown>
-  unmount(service: Service): Future<void, unknown>
-  settings<T extends Record<string, AnyType>>(
-    options?: T,
-  ): Future<T & { transport: AnyType }, unknown>
+  export interface DispatchRequest {
+    serviceName: string
+    actionKey: string
+    params?: unknown[]
+    streams?: Stream<unknown, void>[]
+    rawReq?: unknown
+    traceContext?: TracerDef.SpanContext
+  }
 
-  start(): Future<void, unknown>
-  isStarted(): Future<boolean, unknown>
-  pause(cause: string): Future<void, unknown>
-  isPaused(): Future<false | string, unknown>
-  resume(): Future<void, unknown>
-  destroy(): Future<void, unknown>
+  export interface EventRequest {
+    name: string
+    payload: unknown
+    groups?: ReadonlyArray<string>
+    traceContext?: TracerDef.SpanContext
+  }
+
+  export interface Actions {
+    dispatch(req: DispatchRequest): Future<unknown, unknown>
+    emit(req: EventRequest): Future<void, unknown>
+    broadcast(req: EventRequest): Future<void, unknown>
+  }
+
+  export interface Handlers {
+    dispatchRoot(req: DispatchRequest): Future<unknown, unknown>
+    emitRoot(req: EventRequest): Future<void, unknown>
+    broadcastRoot(req: EventRequest): Future<void, unknown>
+
+    register(transport: TransportDef, entryCtx: TransportDef.Context): Future<void, unknown>
+    unregister(transport: TransportDef): Future<void, unknown>
+    getTransports(): Future<TransportDef[], unknown>
+  }
 }

@@ -1,20 +1,21 @@
 import { operation, until, useAbortSignal } from 'std:effect'
 import { asFailure, fail } from 'std:result'
 
+import { fetchImpl } from '../context'
 import { errorMessage, isAbortError } from '../internal/common'
 import { createFetchResponse } from '../internal/response'
-import type { FetchInit, FetchOperation } from '../types'
+import type { FetchDef } from '../types'
 
 export const fetch = (
   input: RequestInfo | URL,
-  init?: FetchInit | undefined,
+  init?: FetchDef.Init | undefined,
   shouldExpect = false,
-): FetchOperation => {
+): FetchDef.Operation => {
   const runFetch = operation(function* () {
     try {
+      const impl = yield* fetchImpl.get()
       const signal = yield* useAbortSignal()
-      // oxlint-disable-next-line oxc/no-rest-spread-properties
-      const response = yield* until(globalThis.fetch(input, { ...init, signal }))
+      const response = yield* until(impl!(input, { ...init, signal }))
       const wrapped = createFetchResponse(response)
       if (shouldExpect && !response.ok) {
         return yield* fail(
@@ -62,10 +63,20 @@ export const fetch = (
     return yield* response.bytes()
   }, 'bytes')
 
-  const body = operation(function* () {
+  const body = operation(function* <T>() {
     const response = yield* runFetch()
-    return yield* response.body()
+    return yield* response.body<T>()
   }, 'body')
+
+  const stream = operation(function* <T>() {
+    const response = yield* runFetch()
+    return yield* response.stream<T>()
+  }, 'stream')
+
+  const raw = operation(function* () {
+    const response = yield* runFetch()
+    return yield* response.raw()
+  }, 'raw')
 
   return Object.assign(base, {
     json: <T = unknown>() => json<T>(),
@@ -74,7 +85,9 @@ export const fetch = (
     blob,
     formData,
     bytes,
-    body,
+    body: <T = unknown>() => body<T>(),
+    stream: <T = unknown>() => stream<T>(),
+    raw,
     expect: () => fetch(input, init, true),
   })
 }

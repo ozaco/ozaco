@@ -1,7 +1,7 @@
-import type { Helpers } from '../types/helpers'
+import type { LoggerDef } from '../types/logger'
 
 export const toRecord = (
-  entry: Helpers.LogEntry,
+  entry: LoggerDef.Entry,
   msgKey = 'msg',
   errorKey = 'err',
 ): Record<string, unknown> => {
@@ -28,8 +28,8 @@ export const toRecord = (
   return record
 }
 
-export const toJson = (entry: Helpers.LogEntry, msgKey = 'msg', errorKey = 'err'): string =>
+export const toJson = (entry: LoggerDef.Entry, msgKey = 'msg', errorKey = 'err'): string =>
   JSON.stringify(toRecord(entry, msgKey, errorKey))
 
-export const toNdjson = (entry: Helpers.LogEntry, msgKey = 'msg', errorKey = 'err'): string =>
+export const toNdjson = (entry: LoggerDef.Entry, msgKey = 'msg', errorKey = 'err'): string =>
   `${toJson(entry, msgKey, errorKey)}\n`

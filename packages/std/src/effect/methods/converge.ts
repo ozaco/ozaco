@@ -1,20 +1,21 @@
-import { fail } from 'std:result'
+import type { Result } from 'std:result'
+import { asFailure, fail } from 'std:result'
 
-import type { ConvergeOptions, ConvergeStats } from '../types/converge'
 import type { Operation } from '../types/operation'
+import type { ConvergeOptions, ConvergeStats } from '../types/utils'
 
 import { sleep } from './sleep'
 
 export const when = <T>(
   assertion: () => Operation<T>,
   options?: ConvergeOptions,
-): Operation<ConvergeStats<T>> => ({
+): Operation<ConvergeStats<T>, unknown> => ({
   *[Symbol.iterator]() {
     const timeout = options?.timeout ?? 2000
     const interval = options?.interval ?? 10
     const start = Date.now()
     let runs = 0
-    let lastError: unknown
+    let lastError: Result.Failure<unknown> | null = null
 
     while (Date.now() - start < timeout) {
       runs++
@@ -25,19 +26,19 @@ export const when = <T>(
           return { start, end, elapsed: end - start, runs, timeout, interval, value }
         }
       } catch (error) {
-        lastError = error
+        lastError = asFailure(error)
       }
       yield* sleep(interval)
     }
 
-    throw lastError ?? fail('when', `timed out after ${timeout}ms (${runs} runs)`)
+    return yield* lastError ?? fail('when', `timed out after ${timeout}ms (${runs} runs)`)
   },
 })
 
 export const always = <T>(
   assertion: () => Operation<T>,
   options?: ConvergeOptions,
-): Operation<ConvergeStats<T>> => ({
+): Operation<ConvergeStats<T>, unknown> => ({
   *[Symbol.iterator]() {
     const timeout = options?.timeout ?? 200
     const interval = options?.interval ?? 10
@@ -49,7 +50,7 @@ export const always = <T>(
       runs++
       const value = yield* assertion()
       if (value === false) {
-        throw fail('always', `assertion returned false on run ${runs}`)
+        return yield* fail('always', `assertion returned false on run ${runs}`)
       }
       lastValue = value
       yield* sleep(interval)

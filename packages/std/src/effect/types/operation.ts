@@ -60,3 +60,8 @@ export interface Channel<T, TClose> extends Stream<T, TClose> {
   send(message: T): Operation<void>
   close(value: TClose): Operation<void>
 }
+
+export interface Queue<T, TClose> extends Subscription<T, TClose> {
+  add(item: T): void
+  close(value: TClose): void
+}

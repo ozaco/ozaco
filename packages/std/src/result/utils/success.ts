@@ -3,7 +3,7 @@ import { isPromise } from 'std:shared'
 
 import { RESULT_SUCCESS } from '../const'
 import type { Impl } from '../types/impl'
-import type { Success } from '../types/result'
+import type { Result } from '../types/result'
 
 export const succeed: Impl.Succeed = (...args: AnyType[]) => {
   const success = {
@@ -12,7 +12,7 @@ export const succeed: Impl.Succeed = (...args: AnyType[]) => {
     *[Symbol.iterator]() {
       return (this as AnyType).value
     },
-  } as Writable<Success<AnyType>>
+  } as Writable<Result.Success<AnyType>>
 
   if (args.length === 0) {
     return success as AnyType

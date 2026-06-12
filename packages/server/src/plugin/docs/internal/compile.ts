@@ -1,19 +1,21 @@
-import type { Helpers, Service } from 'server:core'
+import type { Action, GatewayDef, Service } from 'server:core'
 import { all, operation } from 'std:effect'
 import type { AnyType } from 'std:shared'
 
-import type { CompiledEntry } from '../types'
+import type { DocsDef } from '../types'
 
 const isAllowed = (
-  meta: { allow?: AnyType[]; deny?: AnyType[]; isRaw?: boolean },
+  meta: { allow?: AnyType[]; deny?: AnyType[]; isPrivate?: boolean },
   transformer: unknown,
 ) =>
-  !meta.isRaw &&
-  !(meta.allow && !meta.allow.includes(transformer)) &&
-  !(meta.deny && meta.deny.includes(transformer))
+  // current-branch Action.Meta uses isPrivate (not the old isRaw) and defaults allow/deny to [] (not
+  // undefined), so guard on length — an empty allow list must NOT exclude the action
+  !meta.isPrivate &&
+  !(meta.allow?.length && !meta.allow.includes(transformer)) &&
+  !(meta.deny?.length && meta.deny.includes(transformer))
 
 export const compileEntries = operation(function* (services: Service[], transformer: unknown) {
-  const out: CompiledEntry[] = []
+  const out: DocsDef.CompiledEntry[] = []
 
   for (const service of services) {
     for (const key of service.getKeys()) {
@@ -26,7 +28,7 @@ export const compileEntries = operation(function* (services: Service[], transfor
       const settings = yield* all(meta.settings ?? [])
 
       const rest = settings.find((s: AnyType) => s?.transformer === transformer) as
-        | Helpers.RestTransformerOptions
+        | GatewayDef.RestOptions
         | undefined
 
       if (!rest) {
@@ -38,7 +40,7 @@ export const compileEntries = operation(function* (services: Service[], transfor
         key,
         method: rest.method,
         path: `/${service.name}${rest.path === '/' ? '' : rest.path}`,
-        meta: meta as Helpers.ActionMeta<AnyType>,
+        meta: meta as Action.Meta<AnyType>,
       })
     }
   }

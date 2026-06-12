@@ -7,15 +7,14 @@ tasks:
   build:
     command: bun x tsdown
     deps:
-      - server:build
-      - db:build
+      - devkit:build
     inputs:
       - src/**/*
       - tsdown.config.ts
     outputs:
       - dist/**/*
   dev:
-    command: bun x tsdown --watch
+    script: 'sleep 3 && bun x tsdown --watch'
     inputs:
       - src/**/*
       - tsdown.config.ts
@@ -24,8 +23,7 @@ tasks:
   types:
     command: bun x tsc -p tsconfig.json --noEmit
     deps:
-      - server:build
-      - db:build
+      - devkit:build
     inputs:
       - src/**/*
       - tsdown.config.ts

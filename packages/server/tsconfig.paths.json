@@ -2,21 +2,41 @@
   "compilerOptions": {
     "paths": {
       "server:core": ["./src/core/index.ts", "./dist/core.d.ts"],
-      "server:plugin/router": ["./src/plugin/router/index.ts", "./dist/plugin/router.d.ts"],
-      "server:plugin/auth": ["./src/plugin/auth/index.ts", "./dist/plugin/auth.d.ts"],
+      "server:transport/nats": ["./src/transport/nats/index.ts", "./dist/transport/nats.d.ts"],
+      "server:transport/worker": [
+        "./src/transport/worker/index.ts",
+        "./dist/transport/worker.d.ts"
+      ],
+      "server:policy/bucket": ["./src/policy/bucket/index.ts", "./dist/policy/bucket.d.ts"],
+      "server:policy/retry": ["./src/policy/retry/index.ts", "./dist/policy/retry.d.ts"],
+      "server:policy/cache": ["./src/policy/cache/index.ts", "./dist/policy/cache.d.ts"],
+      "server:policy/circuit-breaker": [
+        "./src/policy/circuit-breaker/index.ts",
+        "./dist/policy/circuit-breaker.d.ts"
+      ],
+      "server:policy/bulk": ["./src/policy/bulk/index.ts", "./dist/policy/bulk.d.ts"],
+      "server:policy/timeout": ["./src/policy/timeout/index.ts", "./dist/policy/timeout.d.ts"],
+      "server:policy/fallback": ["./src/policy/fallback/index.ts", "./dist/policy/fallback.d.ts"],
+      "server:policy/metrics": ["./src/policy/metrics/index.ts", "./dist/policy/metrics.d.ts"],
+      "server:gateway/bun": ["./src/gateway/bun/index.ts", "./dist/gateway/bun.d.ts"],
+      "server:gateway/node": ["./src/gateway/node/index.ts", "./dist/gateway/node.d.ts"],
       "server:plugin/cors": ["./src/plugin/cors/index.ts", "./dist/plugin/cors.d.ts"],
       "server:plugin/docs": ["./src/plugin/docs/index.ts", "./dist/plugin/docs.d.ts"],
-      "server:transport/nats": ["./src/transport/nats/index.ts", "./dist/transport/nats.d.ts"],
-      "server:impl/bun": ["./src/impl/bun/index.ts", "./dist/impl/bun.d.ts"],
+      "server:plugin/auth": ["./src/plugin/auth/index.ts", "./dist/plugin/auth.d.ts"],
+      "server:client": ["./src/client/index.ts", "./dist/client.d.ts"],
 
       "std:shared": ["./node_modules/@ozaco/std/dist/shared.d.ts"],
       "std:result": ["./node_modules/@ozaco/std/dist/result.d.ts"],
       "std:effect": ["./node_modules/@ozaco/std/dist/effect.d.ts"],
+      "std:fetch": ["./node_modules/@ozaco/std/dist/fetch.d.ts"],
+      "std:codec": ["./node_modules/@ozaco/std/dist/codec.d.ts"],
       "std:event": ["./node_modules/@ozaco/std/dist/event.d.ts"],
       "std:plugin": ["./node_modules/@ozaco/std/dist/plugin.d.ts"],
+      "std:logger": ["./node_modules/@ozaco/std/dist/logger.d.ts"],
       "std:io": ["./node_modules/@ozaco/std/dist/io.d.ts"],
       "std:io/impl/bun": ["./node_modules/@ozaco/std/dist/io/impl/bun.d.ts"],
-      "std:io/impl/node": ["./node_modules/@ozaco/std/dist/io/impl/node.d.ts"]
+      "std:io/impl/node": ["./node_modules/@ozaco/std/dist/io/impl/node.d.ts"],
+      "std:io/impl/web": ["./node_modules/@ozaco/std/dist/io/impl/web.d.ts"]
     }
   }
 }

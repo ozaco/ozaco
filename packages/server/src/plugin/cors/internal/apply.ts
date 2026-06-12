@@ -1,6 +1,6 @@
-import type { CorsContext, CorsOrigin, ResolvedOrigin } from '../types'
+import type { CorsDef } from '../types'
 
-const matchOrigin = (origin: string, rule: CorsOrigin): boolean => {
+const matchOrigin = (origin: string, rule: CorsDef.Origin): boolean => {
   if (rule === '*' || rule === true) {
     return true
   }
@@ -21,9 +21,9 @@ const matchOrigin = (origin: string, rule: CorsOrigin): boolean => {
 
 const resolveAllowOrigin = (
   requestOrigin: string | undefined,
-  rule: CorsOrigin,
+  rule: CorsDef.Origin,
   credentials: boolean,
-): ResolvedOrigin => {
+): CorsDef.ResolvedOrigin => {
   if (rule === '*' && !credentials) {
     return { allow: '*', vary: false }
   }
@@ -55,7 +55,7 @@ const appendVaryOrigin = (meta: Record<string, string>) => {
 
 export const applyCorsHeaders = (
   meta: Record<string, string>,
-  ctx: CorsContext,
+  ctx: CorsDef.Context,
   requestOrigin: string | undefined,
 ): void => {
   const { allow, vary } = resolveAllowOrigin(requestOrigin, ctx.origin, ctx.credentials)

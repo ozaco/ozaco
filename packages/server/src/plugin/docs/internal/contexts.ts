@@ -1,8 +1,8 @@
 import { createContext } from 'std:effect'
 
-import type { CompiledEntry, DocsContext, OpenAPIDocument } from '../types'
+import type { DocsDef } from '../types'
 
-export const DocsRef = createContext<DocsContext>('server:docs:ctx')
-export const SpecRef = createContext<OpenAPIDocument>('server:docs:spec')
+export const DocsRef = createContext<DocsDef.Context>('server:docs:ctx')
+export const SpecRef = createContext<DocsDef.OpenAPIDocument>('server:docs:spec')
 export const SwaggerHtmlRef = createContext<string>('server:docs:swagger-html', '')
-export const CompiledRef = createContext<CompiledEntry[]>('server:docs:compiled', [])
+export const CompiledRef = createContext<DocsDef.CompiledEntry[]>('server:docs:compiled', [])

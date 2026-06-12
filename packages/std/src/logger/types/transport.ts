@@ -1,11 +1,26 @@
 import type { Future } from 'std:effect'
+import type { Plugin } from 'std:plugin'
 
-import type { Helpers } from './helpers'
+import type { LogLevel } from '../const'
 
-export type LoggerTransportContext = unknown
+import type { LoggerDef } from './logger'
 
-export interface LoggerTransportActions {
-  write(entry: Helpers.LogEntry): Future<void, unknown>
-  flush(): Future<void, unknown>
-  close(): Future<void, unknown>
+export type LoggerTransportDef = Plugin<
+  LoggerTransportDef.Context,
+  unknown,
+  unknown[],
+  LoggerTransportDef.Actions
+>
+
+export namespace LoggerTransportDef {
+  export interface Context {
+    name: string
+    level: LogLevel
+  }
+
+  export interface Actions {
+    write(entry: LoggerDef.Entry): Future<void, unknown>
+    flush(): Future<void, unknown>
+    close(): Future<void, unknown>
+  }
 }

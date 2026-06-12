@@ -10,3 +10,5 @@ export interface Service<
 > extends Plugin<TContext, TError, TArgs, TActions> {
   _st: typeof SERVICE
 }
+
+export namespace Service {}

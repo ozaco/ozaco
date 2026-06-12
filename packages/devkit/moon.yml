@@ -1,0 +1,45 @@
+language: typescript
+layer: library
+toolchains:
+  default: bun
+
+tasks:
+  build:
+    command: bun x tsdown
+    deps:
+      - std:build
+      - server:build
+      - db:build
+      - ai:build
+    inputs:
+      - src/**/*
+      - ambient.d.ts
+      - tsdown.config.ts
+    outputs:
+      - dist/**/*
+  dev:
+    command: bun x tsdown --watch
+    inputs:
+      - src/**/*
+      - tsdown.config.ts
+    outputs:
+      - dist/**/*
+  types:
+    command: bun x tsc -p tsconfig.json --noEmit
+    deps:
+      - std:build
+      - server:build
+      - db:build
+      - ai:build
+    inputs:
+      - src/**/*
+      - ambient.d.ts
+      - tests/**/*
+      - tsdown.config.ts
+  test:
+    command: bun test --pass-with-no-tests
+    deps:
+      - devkit:build
+    inputs:
+      - src/**/*
+      - tests/**/*
