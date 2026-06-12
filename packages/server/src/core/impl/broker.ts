@@ -8,7 +8,7 @@ import type { AnyType } from 'std:shared'
 import { CoreErrors } from '../const'
 import { Broker, Policy, Tracer, Transport } from '../definitions'
 import { checkBrokerSettings, withCallSpan } from '../internal/call-helpers'
-import { BrokerSettingContext } from '../internal/context'
+import { BrokerSettingContext, patchSetting } from '../internal/context'
 import {
   findServiceId,
   principalDiscriminator,
@@ -20,7 +20,7 @@ import type { Action } from '../types/action'
 import type { BrokerDef } from '../types/broker'
 import type { PolicyDef } from '../types/policy'
 import type { Service } from '../types/service'
-import { TraceContext } from '../utils/context'
+import { ActionRequestContext, TraceContext } from '../utils/context'
 import { resolvePolicySettings } from '../utils/policy'
 
 import { DefaultTracer } from './tracer'
@@ -62,11 +62,7 @@ const DefaultBrokerImpl = Broker.implement({
 
 export const DefaultBroker = DefaultBrokerImpl.build({
   start: operation(function* () {
-    yield* BrokerSettingContext.set({
-      ...(yield* BrokerSettingContext.get())!,
-
-      started: true,
-    })
+    yield* patchSetting({ started: true })
 
     const ctx = yield* useContext(DefaultBrokerImpl)
     ctx.bus.emit('broker.started')
@@ -78,11 +74,7 @@ export const DefaultBroker = DefaultBrokerImpl.build({
   }),
 
   pause: operation(function* (cause) {
-    yield* BrokerSettingContext.set({
-      ...(yield* BrokerSettingContext.get())!,
-
-      paused: cause,
-    })
+    yield* patchSetting({ paused: cause })
 
     const ctx = yield* useContext(DefaultBrokerImpl)
     ctx.bus.emit('broker.paused')
@@ -99,23 +91,14 @@ export const DefaultBroker = DefaultBrokerImpl.build({
   }),
 
   resume: operation(function* () {
-    yield* BrokerSettingContext.set({
-      ...(yield* BrokerSettingContext.get())!,
-
-      paused: false,
-    })
+    yield* patchSetting({ paused: false })
 
     const ctx = yield* useContext(DefaultBrokerImpl)
     ctx.bus.emit('broker.resumed')
   }),
 
   destroy: operation(function* () {
-    yield* BrokerSettingContext.set({
-      ...(yield* BrokerSettingContext.get())!,
-
-      started: false,
-      destroying: true,
-    })
+    yield* patchSetting({ started: false, destroying: true })
 
     const ctx = yield* useContext(DefaultBrokerImpl)
 
@@ -195,6 +178,12 @@ export const DefaultBroker = DefaultBrokerImpl.build({
         const actionMeta = raw.meta as Action.Meta<unknown> | undefined
         const settings = yield* resolvePolicySettings(actionMeta)
 
+        // derive the caller identity from the ActionRequest's headers (the request envelope that
+        // actually carries `.meta`; the raw host Request does not). Kept SEPARATE from `key` so a
+        // policy can opt out of per-principal isolation (vary:'none') — by default Cache/Bucket fold
+        // it in, so identical-param calls from different principals never share a cache slot / batch.
+        const principal = principalDiscriminator(yield* ActionRequestContext.get())
+
         const policyCtx: PolicyDef.DispatchContext = {
           req,
           serviceName: raw.options.name,
@@ -202,7 +191,8 @@ export const DefaultBroker = DefaultBrokerImpl.build({
           action: actionMeta,
           settings,
           params,
-          key: `${raw.options.name}\u0000${raw.key}\u0000${principalDiscriminator(options.rawReq)}\u0000${JSON.stringify(params)}`,
+          key: `${raw.options.name}\u0000${raw.key}\u0000${JSON.stringify(params)}`,
+          principal,
           isStreaming: options.streams !== undefined,
           trace: broker.trace,
         }

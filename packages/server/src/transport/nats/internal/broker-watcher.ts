@@ -1,6 +1,6 @@
 import type { BrokerDef, Service } from 'server:core'
 import { Broker } from 'server:core'
-import { spawn, useContext } from 'std:effect'
+import { forEachSubscriptionEvent, spawn, useContext } from 'std:effect'
 import { useBufferedEvent } from 'std:event'
 import { asFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
@@ -61,25 +61,8 @@ export const brokerWathcer = function* () {
   const onRegister = yield* useBufferedEvent(brokerCtx.bus, 'service.registered')
   const onUnregister = yield* useBufferedEvent(brokerCtx.bus, 'service.unregistered')
 
-  yield* spawn(function* () {
-    while (true) {
-      const next = yield* onRegister.next()
-      if (next.done) {
-        return
-      }
-      const [service] = next.value
-      yield* subscribeService(service)
-    }
-  })
-
-  yield* spawn(function* () {
-    while (true) {
-      const next = yield* onUnregister.next()
-      if (next.done) {
-        return
-      }
-      const [target] = next.value
-      yield* unsubscribeService(target)
-    }
-  })
+  yield* spawn(() => forEachSubscriptionEvent(onRegister, ([service]) => subscribeService(service)))
+  yield* spawn(() =>
+    forEachSubscriptionEvent(onUnregister, ([target]) => unsubscribeService(target)),
+  )
 }

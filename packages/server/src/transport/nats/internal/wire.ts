@@ -2,36 +2,13 @@ import { Codec } from 'std:codec'
 import { operation } from 'std:effect'
 import type { Result } from 'std:result'
 import { fail } from 'std:result'
-import type { AnyType } from 'std:shared'
+import { serializeError } from 'std:shared'
 
 import type { MsgHdrs } from 'nats'
 import { headers as createHeaders } from 'nats'
 
 import { STREAM_EVENT, STREAM_EVENT_END, STREAM_EVENT_ERROR } from '../const'
 import type { Nats } from '../types'
-
-export const serializeError = (error: unknown): string => {
-  if (typeof error === 'string') {
-    return error
-  }
-  if (error instanceof Error) {
-    const code = (error as AnyType).code
-    return code
-      ? `${error.name}: ${error.message} (${String(code)})`
-      : `${error.name}: ${error.message}`
-  }
-  if (error === null || error === undefined) {
-    return String(error)
-  }
-  if (typeof error === 'object') {
-    try {
-      return JSON.stringify(error)
-    } catch {
-      return Object.prototype.toString.call(error)
-    }
-  }
-  return String(error)
-}
 
 export const wireSuccess = (value: unknown): Nats.WireSuccess => ({ _t: '__success__', value })
 
@@ -55,6 +32,8 @@ export const unwrapWire = operation(function* (wire: Nats.Wire) {
 })
 
 export const encodeReply = operation(function* (wire: Nats.Wire) {
+  // the fallback encode is itself fallible, so this stays a try/catch (recover's handler must be
+  // infallible); everything else in this file's callers moved to attempt/mapError
   try {
     return yield* Codec.actions.encode(wire)
   } catch (error) {

@@ -1,11 +1,12 @@
 import type { Operation } from 'std:effect'
 import { Logger } from 'std:logger'
-import { asFailure } from 'std:result'
 
 import { OtelAttrs, OtelSpanKind, OtelSpanStatusCode } from '../const'
 import { Tracer } from '../definitions'
 import type { PolicyDef } from '../types/policy'
 import { TraceContext } from '../utils/context'
+
+import { withSpan } from './span'
 
 export interface TracedApply {
   /** the policy's setting key */
@@ -50,55 +51,46 @@ export const tracePolicyApply = function* (a: TracedApply): Operation<unknown, u
     return yield* a.next()
   }
 
-  try {
-    const value = yield* TraceContext.with(spanCtx, () =>
-      a.disabled ? countingNext() : a.apply(countingNext),
-    )
+  return yield* withSpan(
+    span,
+    function* () {
+      const value = yield* TraceContext.with(spanCtx, () =>
+        a.disabled ? countingNext() : a.apply(countingNext),
+      )
 
-    const decision = a.disabled
-      ? 'disabled'
-      : calls === 0
-        ? 'short-circuit'
-        : calls > 1
-          ? 'retried'
-          : 'applied'
+      const decision = a.disabled
+        ? 'disabled'
+        : calls === 0
+          ? 'short-circuit'
+          : calls > 1
+            ? 'retried'
+            : 'applied'
 
-    yield* span.setAttributes({ 'policy.decision': decision, 'policy.next.calls': calls })
-    yield* span.setStatus({ code: OtelSpanStatusCode.OK })
+      yield* span.setAttributes({ 'policy.decision': decision, 'policy.next.calls': calls })
+      yield* span.setStatus({ code: OtelSpanStatusCode.OK })
 
-    if (hasLogger) {
-      yield* Logger.actions.debug('policy', {
-        policy: a.name,
-        key: a.dispatch.key,
-        decision,
-        calls,
-        durationMs: Math.round(performance.now() - startedAt),
-      })
-    }
+      if (hasLogger) {
+        yield* Logger.actions.debug('policy', {
+          policy: a.name,
+          key: a.dispatch.key,
+          decision,
+          calls,
+          durationMs: Math.round(performance.now() - startedAt),
+        })
+      }
 
-    return value
-  } catch (error) {
-    const failure = asFailure(error)
-
-    yield* span.recordException(failure)
-    yield* span.setStatus({
-      code: OtelSpanStatusCode.ERROR,
-      message: failure.message,
-      cause: failure.causes,
-    })
-
-    if (hasLogger) {
-      yield* Logger.actions.debug('policy', {
-        policy: a.name,
-        key: a.dispatch.key,
-        decision: 'failed',
-        calls,
-        durationMs: Math.round(performance.now() - startedAt),
-      })
-    }
-
-    yield* failure
-  } finally {
-    yield* span.end()
-  }
+      return value
+    },
+    function* () {
+      if (hasLogger) {
+        yield* Logger.actions.debug('policy', {
+          policy: a.name,
+          key: a.dispatch.key,
+          decision: 'failed',
+          calls,
+          durationMs: Math.round(performance.now() - startedAt),
+        })
+      }
+    },
+  )
 }

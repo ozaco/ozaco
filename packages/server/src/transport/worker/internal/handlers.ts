@@ -1,9 +1,9 @@
 import type { Service, TransportDef } from 'server:core'
 import { Broker, CoreErrors, isStreamResult } from 'server:core'
 import type { Stream } from 'std:effect'
-import { ensure, operation, useContext } from 'std:effect'
+import { attempt, ensure, operation, useContext } from 'std:effect'
 import type { Result } from 'std:result'
-import { asFailure, fail, isSuccess, succeed } from 'std:result'
+import { asFailure, fail, isSuccess } from 'std:result'
 
 import { invokeAction } from '../../shared/invoke'
 import type { WorkerDef } from '../types'
@@ -27,6 +27,13 @@ const resolveService = (
   }
   return undefined
 }
+
+const handleEvent = (kind: 'event.emit' | 'event.broadcast') =>
+  operation(function* (ctx: WorkerDef.Context, rawReq: unknown) {
+    const broker = yield* useContext(Broker)
+    const req = yield* decodeValue(ctx.wire, rawReq)
+    broker.bus.emit(kind, req as TransportDef.EventRequest)
+  })
 
 export const handleDispatch = (
   ctx: WorkerDef.Context,
@@ -65,21 +72,16 @@ export const handleDispatch = (
     const rawReq =
       env.rawReq === undefined ? undefined : yield* decodeValue(endpoint.wire, env.rawReq)
 
-    let outcome: Result<unknown, unknown>
-    try {
-      outcome = succeed(
-        yield* invokeAction({
-          service,
-          actionKey: env.actionKey,
-          params,
-          streams,
-          rawReq,
-          traceContext: env.traceContext,
-        }),
-      )
-    } catch (error) {
-      outcome = asFailure(error)
-    }
+    const outcome: Result<unknown, unknown> = yield* attempt(
+      invokeAction({
+        service,
+        actionKey: env.actionKey,
+        params,
+        streams,
+        rawReq,
+        traceContext: env.traceContext,
+      }),
+    )
 
     if (!isSuccess(outcome)) {
       respond(wireFailure(outcome))
@@ -95,14 +97,5 @@ export const handleDispatch = (
     respond(wireSuccess(yield* encodeValue(endpoint.wire, outcome.value)))
   })
 
-export const handleEmit = operation(function* (ctx: WorkerDef.Context, rawReq: unknown) {
-  const broker = yield* useContext(Broker)
-  const req = yield* decodeValue(ctx.wire, rawReq)
-  broker.bus.emit('event.emit', req as TransportDef.EventRequest)
-})
-
-export const handleBroadcast = operation(function* (ctx: WorkerDef.Context, rawReq: unknown) {
-  const broker = yield* useContext(Broker)
-  const req = yield* decodeValue(ctx.wire, rawReq)
-  broker.bus.emit('event.broadcast', req as TransportDef.EventRequest)
-})
+export const handleEmit = handleEvent('event.emit')
+export const handleBroadcast = handleEvent('event.broadcast')

@@ -1,10 +1,10 @@
 import type { Service, TransportDef } from 'server:core'
 import { Broker, isStreamResult } from 'server:core'
 import { Codec } from 'std:codec'
-import { ensure, into, operation, spawn, useContext } from 'std:effect'
+import { attempt, ensure, into, operation, spawn, useContext } from 'std:effect'
 import { Logger } from 'std:logger'
 import type { Result } from 'std:result'
-import { asFailure, fail, isSuccess, succeed } from 'std:result'
+import { asFailure, fail, isSuccess } from 'std:result'
 
 import type { Msg } from 'nats'
 
@@ -17,28 +17,20 @@ import { cancelSubject } from './subjects'
 import { captureInputStreams } from './subscribe'
 import { encodeReply, wireFailure, wireStream, wireSuccess } from './wire'
 
-export const handleEmit = operation(function* (msg: Msg) {
-  const decoded = (yield* Codec.actions.decode(msg.data)) as TransportDef.EventRequest
-  const broker = yield* useContext(Broker)
+const handleEvent = (kind: 'event.emit' | 'event.broadcast') =>
+  operation(function* (msg: Msg) {
+    const decoded = (yield* Codec.actions.decode(msg.data)) as TransportDef.EventRequest
+    const broker = yield* useContext(Broker)
 
-  broker.bus.emit('event.emit', decoded)
-})
+    broker.bus.emit(kind, decoded)
+  })
 
-export const handleBroadcast = operation(function* (msg: Msg) {
-  const decoded = (yield* Codec.actions.decode(msg.data)) as TransportDef.EventRequest
-  const broker = yield* useContext(Broker)
-
-  broker.bus.emit('event.broadcast', decoded)
-})
+export const handleEmit = handleEvent('event.emit')
+export const handleBroadcast = handleEvent('event.broadcast')
 
 export const handleDispatch = (service: Service, actionKey: string) =>
   operation(function* (msg: Msg) {
-    let decoded: Result<unknown, unknown>
-    try {
-      decoded = succeed(yield* Codec.actions.decode(msg.data))
-    } catch (error) {
-      decoded = asFailure(error)
-    }
+    const decoded = yield* attempt(Codec.actions.decode(msg.data))
 
     if (!isSuccess(decoded)) {
       if (msg.reply) {
@@ -91,21 +83,16 @@ export const handleDispatch = (service: Service, actionKey: string) =>
         }
       }
 
-      let outcome: Result<unknown, unknown>
-      try {
-        outcome = succeed(
-          yield* invokeAction({
-            service,
-            actionKey,
-            params: req.params ?? [],
-            streams,
-            rawReq: req.rawReq,
-            traceContext: req.traceContext,
-          }),
-        )
-      } catch (error) {
-        outcome = asFailure(error)
-      }
+      const outcome: Result<unknown, unknown> = yield* attempt(
+        invokeAction({
+          service,
+          actionKey,
+          params: req.params ?? [],
+          streams,
+          rawReq: req.rawReq,
+          traceContext: req.traceContext,
+        }),
+      )
 
       if (!isSuccess(outcome)) {
         unsubscribeInputs()

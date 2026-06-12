@@ -1,9 +1,10 @@
 import { Codec } from 'std:codec'
 import type { Operation, Stream } from 'std:effect'
-import { each } from 'std:effect'
+import { streamForEach } from 'std:effect'
 import type { Result } from 'std:result'
 import { asFailure, fail } from 'std:result'
 
+import type { PumpOutcome } from '../../shared/types'
 import type { WorkerDef } from '../types'
 
 import { failureToPayload } from './wire'
@@ -13,15 +14,11 @@ export const pumpStream = function* (
   sid: string,
   source: Stream<unknown, unknown>,
 ): Operation<void, unknown> {
-  let outcome: 'end' | Result.Failure<unknown> | undefined
+  let outcome: PumpOutcome
 
   try {
     const chunks = endpoint.wire === 'codec' ? yield* Codec.actions.encodeStream(source) : source
-    for (const data of yield* each(chunks)) {
-      endpoint.post({ kind: 'chunk', sid, data })
-
-      yield* each.next()
-    }
+    yield* streamForEach(chunks, data => endpoint.post({ kind: 'chunk', sid, data }))
     outcome = 'end'
   } catch (error) {
     outcome = asFailure(error)

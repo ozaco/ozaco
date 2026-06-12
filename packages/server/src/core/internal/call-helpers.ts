@@ -1,13 +1,14 @@
 import type { Operation } from 'std:effect'
 import { operation } from 'std:effect'
-import { asFailure, fail } from 'std:result'
+import { fail } from 'std:result'
 
-import { CoreErrors, OTEL_RPC_SYSTEM, OtelAttrs, OtelSpanKind, OtelSpanStatusCode } from '../const'
+import { CoreErrors, OTEL_RPC_SYSTEM, OtelAttrs, OtelSpanKind } from '../const'
 import { Tracer } from '../definitions'
 import type { BrokerDef } from '../types/broker'
 import type { TracerDef } from '../types/tracer'
 
 import { BrokerSettingContext } from './context'
+import { withSpan } from './span'
 
 interface CallSpanContext {
   broker: BrokerDef.Context
@@ -46,22 +47,5 @@ export const withCallSpan = function* <T>(
 
   const spanContextValue = yield* span.spanContext()
 
-  try {
-    return yield* body(spanContextValue)
-  } catch (error) {
-    const failure = asFailure(error)
-
-    yield* span.recordException(failure)
-    yield* span.setStatus({
-      code: OtelSpanStatusCode.ERROR,
-      message: failure.message,
-      cause: failure.causes,
-    })
-
-    yield* failure
-
-    return undefined as never
-  } finally {
-    yield* span.end()
-  }
+  return yield* withSpan(span, () => body(spanContextValue))
 }

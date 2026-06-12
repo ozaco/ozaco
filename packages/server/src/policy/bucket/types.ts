@@ -8,6 +8,9 @@ export namespace Bucket {
   export interface Options extends PolicyDef.Options {
     interval?: number
     max?: number
+    /** `'principal'` (default) coalesces only same-identity callers; `'none'` coalesces all callers
+     * with identical params (explicit opt-in to cross-principal single-flight). */
+    vary?: 'principal' | 'none'
   }
 
   // the shared dispatch outcome, carried as a resolved value (never a rejection) so that each
@@ -25,6 +28,7 @@ export namespace Bucket {
   export interface Context extends PolicyDef.Context {
     interval: number
     max: number
+    vary: 'principal' | 'none'
     entries: Map<string, Entry>
   }
 }

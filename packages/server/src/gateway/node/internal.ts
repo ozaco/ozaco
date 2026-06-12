@@ -1,6 +1,6 @@
 import { CoreErrors, Gateway, statusFor } from 'server:core'
-import { operation, until, useContext, useScope } from 'std:effect'
-import { asFailure, isFailure, isSuccess } from 'std:result'
+import { action, operation, useContext, useScope } from 'std:effect'
+import { asFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import type { IncomingMessage, ServerResponse } from 'node:http'
@@ -8,6 +8,7 @@ import { createServer } from 'node:http'
 import { Readable } from 'node:stream'
 
 import { dispatchRequest } from '../shared/handle'
+import { haltInflight, pauseGate, trackRequest } from '../shared/serve'
 
 // adapt a Node request into a web-standard Request the shared transformer understands
 const toRequest = async (req: IncomingMessage): Promise<Request> => {
@@ -84,25 +85,9 @@ export const startAction = operation(function* (config: Partial<{ port: number; 
       return
     }
 
-    const paused = await scope.safeRun(() => Gateway.actions.isPaused())
-    if (isFailure(paused)) {
-      await writeResponse(
-        res,
-        Response.json(
-          { error: CoreErrors.BrokerInternal, message: 'pause check failed' },
-          { status: statusFor(CoreErrors.BrokerInternal) },
-        ),
-      )
-      return
-    }
-    if (isSuccess(paused) && paused.value) {
-      await writeResponse(
-        res,
-        Response.json(
-          { error: CoreErrors.BrokerPaused, message: String(paused.value) },
-          { status: statusFor(CoreErrors.BrokerPaused) },
-        ),
-      )
+    const paused = await pauseGate(scope)
+    if (paused) {
+      await writeResponse(res, paused)
       return
     }
 
@@ -110,8 +95,8 @@ export const startAction = operation(function* (config: Partial<{ port: number; 
 
     // `dispatchRequest` delivers the Response via `deliver` — for a streaming action as soon as the
     // headers are known (while the body drains in the background), for a normal action once the value
-    // is transformed. Run dispatch in the background on the gateway scope (kept alive; the stream
-    // paced by the socket's drain) and write the response when it arrives.
+    // is transformed. `trackRequest` runs dispatch in the background on the gateway scope (kept alive;
+    // the stream paced by the socket's drain); we write the response when it arrives.
     let responded = false
     const deliver = (response: Response): void => {
       if (responded) {
@@ -121,21 +106,12 @@ export const startAction = operation(function* (config: Partial<{ port: number; 
       void writeResponse(res, response)
     }
 
-    // track the background task so destroy() can halt a still-streaming request instead of hanging
-    const task = scope.run(function* () {
+    trackRequest(scope, ctx, deliver, function* () {
       try {
         yield* dispatchRequest(request, res, deliver)
       } catch (error) {
         deliver(Response.json(asFailure(error), { status: statusFor(CoreErrors.BrokerInternal) }))
       }
-    })
-    ctx.inflight.add(task)
-    // oxlint-disable-next-line promise/always-return
-    void task.then(() => {
-      ctx.inflight.delete(task)
-      // if the task ended without delivering (e.g. it was halted on shutdown before the action even
-      // returned), write a final response so the socket doesn't stay open
-      deliver(new Response(null, { status: 503 }))
     })
   }
 
@@ -143,13 +119,10 @@ export const startAction = operation(function* (config: Partial<{ port: number; 
     void handle(req, res)
   })
 
-  yield* until(
-    new Promise<void>(resolve => {
-      server.listen(config.port ?? ctx.port, config.host ?? ctx.host, () => {
-        resolve()
-      })
-    }),
-  )
+  yield* action<void>(resolve => {
+    server.listen(config.port ?? ctx.port, config.host ?? ctx.host, () => resolve())
+    return () => {}
+  })
 
   ctx.port = config.port ?? ctx.port
   ctx.host = config.host ?? ctx.host
@@ -168,26 +141,22 @@ export const destroyAction = operation(function* () {
     return
   }
 
-  // abort in-flight request pumps first: halting aborts each upstream fetch and (via the pump's
-  // ensure) closes its response stream, so an active stream cannot block close() below
-  const inflight = [...ctx.inflight]
-  ctx.inflight.clear()
-  yield* until(Promise.all(inflight.map(task => task.halt())))
+  // abort in-flight request pumps first so an active stream cannot block close() below
+  yield* haltInflight(ctx)
 
   // force-close any sockets still open so a slow/streaming client cannot keep close() hanging
   ;(server as AnyType).closeAllConnections?.()
 
-  yield* until(
-    new Promise<void>((resolve, reject) => {
-      ;(server as AnyType).close((error: unknown) => {
-        if (error) {
-          reject(error instanceof Error ? error : new Error(String(error)))
-        } else {
-          resolve()
-        }
-      })
-    }),
-  )
+  yield* action<void>((resolve, reject) => {
+    ;(server as AnyType).close((error: unknown) => {
+      if (error) {
+        reject(error instanceof Error ? error : new Error(String(error)))
+      } else {
+        resolve()
+      }
+    })
+    return () => {}
+  })
 
   ctx.started = false
 })

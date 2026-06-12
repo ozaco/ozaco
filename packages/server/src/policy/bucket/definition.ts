@@ -16,6 +16,7 @@ export const BucketPolicy = definePolicy<Bucket.Options, Bucket.Context>({
       ...base,
       interval: options?.interval ?? 20,
       max: options?.max ?? 100,
+      vary: options?.vary ?? 'principal',
       entries: new Map(),
     }
   },
@@ -26,7 +27,8 @@ export const BucketPolicy = definePolicy<Bucket.Options, Bucket.Context>({
     }
 
     const max = override?.max ?? ctx.max
-    const key = dispatch.key
+    const vary = override?.vary ?? ctx.vary
+    const key = vary === 'none' ? dispatch.key : `${dispatch.key}\u0000${dispatch.principal}`
 
     // a concurrent identical request that is still within the batch joins the in-flight dispatch;
     // it re-throws a shared failure inside its OWN coroutine so its own outer policies see it

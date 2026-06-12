@@ -14,6 +14,7 @@ export const CachePolicy = definePolicy<Cache.Options, Cache.Context>({
       ...base,
       ttl: options?.ttl ?? 30_000,
       max: options?.max ?? 1000,
+      vary: options?.vary ?? 'principal',
       entries: new Map(),
       ...(options?.shouldCache === undefined ? {} : { shouldCache: options.shouldCache }),
     }
@@ -32,7 +33,8 @@ export const CachePolicy = definePolicy<Cache.Options, Cache.Context>({
       return yield* next()
     }
 
-    const key = dispatch.key
+    const vary = override?.vary ?? ctx.vary
+    const key = vary === 'none' ? dispatch.key : `${dispatch.key}\u0000${dispatch.principal}`
     const existing = ctx.entries.get(key)
     if (existing && existing.expiresAt > Date.now()) {
       return existing.value

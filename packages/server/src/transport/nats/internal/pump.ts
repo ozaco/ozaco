@@ -1,11 +1,12 @@
 import { Codec } from 'std:codec'
 import type { Operation, Scope, Stream } from 'std:effect'
-import { each } from 'std:effect'
+import { streamForEach } from 'std:effect'
 import type { Result } from 'std:result'
 import { asFailure, fail } from 'std:result'
 
 import type { NatsConnection } from 'nats'
 
+import type { PumpOutcome } from '../../shared/types'
 import { EMPTY_PAYLOAD } from '../const'
 
 import { endHeaders, errorHeaders, failureToPayload } from './wire'
@@ -15,14 +16,12 @@ export const pumpToNats = function* (
   subject: string,
   source: Stream<unknown, unknown>,
 ): Operation<void, unknown> {
-  let outcome: 'end' | Result.Failure<unknown> | undefined
+  let outcome: PumpOutcome
 
   try {
-    for (const chunk of yield* each(yield* Codec.actions.encodeStream(source))) {
-      connection.publish(subject, chunk)
-
-      yield* each.next()
-    }
+    yield* streamForEach(yield* Codec.actions.encodeStream(source), chunk =>
+      connection.publish(subject, chunk),
+    )
     outcome = 'end'
   } catch (error) {
     outcome = asFailure(error)

@@ -1,6 +1,6 @@
 import { CoreErrors, definePolicy, PolicyPriority } from 'server:core'
-import { spawn, withResolvers } from 'std:effect'
-import { asFailure, fail } from 'std:result'
+import { race, sleep } from 'std:effect'
+import { fail } from 'std:result'
 
 import type { Timeout } from './types'
 import { TimeoutPolicyKey } from './types'
@@ -29,24 +29,17 @@ export const TimeoutPolicy = definePolicy<Timeout.Options, Timeout.Context>({
       return yield* next()
     }
 
-    const winner = withResolvers<unknown>('policy:timeout')
-    const timer = setTimeout(() => winner.resolve(TIMEOUT_SENTINEL), timeoutMs)
-
-    const task = yield* spawn(function* () {
-      try {
-        const value = yield* next()
-        winner.resolve(value)
-      } catch (error) {
-        winner.reject(asFailure(error))
-      } finally {
-        clearTimeout(timer)
-      }
-    })
-
-    const result = yield* winner.operation
+    // race the dispatch against a timer; the loser is halted automatically (on timeout this cancels
+    // the in-flight dispatch, on success it cancels the timer) — no manual winner/halt bookkeeping
+    const result = yield* race([
+      next(),
+      (function* () {
+        yield* sleep(timeoutMs)
+        return TIMEOUT_SENTINEL
+      })(),
+    ])
 
     if (result === TIMEOUT_SENTINEL) {
-      yield* task.halt()
       return yield* fail(
         CoreErrors.Timeout,
         `dispatch exceeded ${timeoutMs}ms for ${dispatch.serviceName}.${dispatch.actionKey}`,

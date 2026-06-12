@@ -1,4 +1,4 @@
-import { each, spawn } from 'std:effect'
+import { spawn, streamForEach } from 'std:effect'
 import type { Result } from 'std:result'
 
 import type { WorkerDef } from '../types'
@@ -84,9 +84,5 @@ const route = function* (
 
 export const startReader = (ctx: WorkerDef.Context, endpoint: WorkerDef.Endpoint) =>
   spawn(function* () {
-    for (const next of yield* each(endpoint.recv)) {
-      yield* route(ctx, endpoint, next as WorkerDef.Envelope)
-
-      yield* each.next()
-    }
+    yield* streamForEach(endpoint.recv, next => route(ctx, endpoint, next as WorkerDef.Envelope))
   })

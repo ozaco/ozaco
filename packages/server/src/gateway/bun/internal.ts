@@ -1,34 +1,25 @@
 import { CoreErrors, Gateway, statusFor } from 'server:core'
 import { operation, until, useContext, useScope } from 'std:effect'
-import { asFailure, fail, isFailure, isSuccess } from 'std:result'
+import { asFailure, fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import { dispatchRequest } from '../shared/handle'
+import { haltInflight, pauseGate, trackRequest } from '../shared/serve'
 
 export const startAction = operation(function* (config: Partial<{ port: number; host: string }>) {
   const ctx = yield* useContext(Gateway.context)
   const scope = yield* useScope()
 
   const fetch = async (request: Request, bunServer: AnyType): Promise<Response | undefined> => {
-    const paused = await scope.safeRun(() => Gateway.actions.isPaused())
-
-    if (isFailure(paused)) {
-      return Response.json(
-        { error: CoreErrors.BrokerInternal, message: 'pause check failed' },
-        { status: statusFor(CoreErrors.BrokerInternal) },
-      )
-    }
-    if (isSuccess(paused) && paused.value) {
-      return Response.json(
-        { error: CoreErrors.BrokerPaused, message: String(paused.value) },
-        { status: statusFor(CoreErrors.BrokerPaused) },
-      )
+    const paused = await pauseGate(scope)
+    if (paused) {
+      return paused
     }
 
     // `dispatchRequest` delivers the Response via `deliver` — for a streaming action as soon as the
     // headers are known (while the body drains in the background), for a normal action once the value
-    // is transformed. So we run dispatch IN THE BACKGROUND on the gateway scope (kept alive, and the
-    // stream paced by Bun's reads) and return as soon as the Response is ready. We do NOT await it.
+    // is transformed. `trackRequest` runs dispatch IN THE BACKGROUND on the gateway scope (kept alive,
+    // the stream paced by Bun's reads); we return as soon as the Response is ready.
     let resolveReady: (response: Response | undefined) => void = () => {}
     const ready = new Promise<Response | undefined>(resolve => {
       resolveReady = resolve
@@ -41,8 +32,7 @@ export const startAction = operation(function* (config: Partial<{ port: number; 
       }
     }
 
-    // track the background task so destroy() can halt a still-streaming request instead of hanging
-    const task = scope.run(function* () {
+    trackRequest(scope, ctx, deliver, function* () {
       try {
         const upgraded = yield* Gateway.actions.upgrade(request, bunServer)
         if (upgraded) {
@@ -58,14 +48,6 @@ export const startAction = operation(function* (config: Partial<{ port: number; 
       } catch (error) {
         deliver(Response.json(asFailure(error), { status: statusFor(CoreErrors.BrokerInternal) }))
       }
-    })
-    ctx.inflight.add(task)
-    // oxlint-disable-next-line promise/always-return
-    void task.then(() => {
-      ctx.inflight.delete(task)
-      // if the task ended without delivering (e.g. it was halted on shutdown before the action even
-      // returned), unblock the handler so Bun doesn't keep the request in-flight forever
-      deliver(new Response(null, { status: 503 }))
     })
 
     return await ready
@@ -112,11 +94,8 @@ export const destroyAction = operation(function* (opts?: { drainMs?: number }) {
     return
   }
 
-  // abort in-flight request pumps first: halting aborts each upstream fetch and (via the pump's
-  // ensure) closes its response stream, so an active stream cannot block the drain below
-  const inflight = [...ctx.inflight]
-  ctx.inflight.clear()
-  yield* until(Promise.all(inflight.map(task => task.halt())))
+  // abort in-flight request pumps first so an active stream cannot block the drain below
+  yield* haltInflight(ctx)
 
   const drainMs = opts?.drainMs ?? 30_000
 

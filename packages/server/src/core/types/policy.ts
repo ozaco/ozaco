@@ -40,7 +40,11 @@ export namespace PolicyDef {
     /** per-policy settings resolved once for this dispatch (see `resolvePolicySettings`) */
     settings: ReadonlyMap<string, Setting>
     params: ReadonlyArray<unknown>
+    /** the dispatch identity key WITHOUT the caller principal: `service\0action\0params` */
     key: string
+    /** the caller-identity discriminator (derived from the request credentials); identity-keying
+     * policies (cache/bucket) fold this into their lookup key unless `vary: 'none'` */
+    principal: string
     isStreaming: boolean
     /** whether to emit a per-policy-layer trace (log + OTel spans) for this dispatch */
     trace: boolean
