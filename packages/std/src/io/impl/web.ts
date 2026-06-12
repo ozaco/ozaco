@@ -7,6 +7,7 @@ import type { AnyType } from 'std:shared'
 
 import { readWebEnv } from '../internal/env'
 import { fromReadable } from '../internal/from-readable'
+import { toReadable } from '../internal/to-readable'
 import { webHash, webHmac, webRandomBytes } from '../internal/webcrypto'
 
 /** The browser has no filesystem — these actions fail clearly instead of pretending to work. */
@@ -38,6 +39,7 @@ export const WebIO = IO.implement({
   hash: webHash,
 
   fromReadable,
+  toReadable,
   readStream: () => unsupportedStream('readStream'),
   writeStream: unsupported('writeStream'),
 

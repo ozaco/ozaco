@@ -7,8 +7,10 @@ import fs from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 
 import { readEnv } from '../internal/env'
+import { fromReadable } from '../internal/from-readable'
 import { mapStat, walkRecursive } from '../internal/node-shared'
-import { fromReadable, readFileStream, writeFileStream } from '../internal/stream'
+import { readFileStream, writeFileStream } from '../internal/stream'
+import { toReadable } from '../internal/to-readable'
 import { webHash, webHmac, webRandomBytes } from '../internal/webcrypto'
 
 export const BunIO = IO.implement({
@@ -23,6 +25,7 @@ export const BunIO = IO.implement({
   hash: webHash,
 
   fromReadable,
+  toReadable,
   readStream: path => readFileStream(toPath(path)),
   writeStream: (path, source, options) => writeFileStream(toPath(path), source, options?.flags),
 

@@ -103,6 +103,11 @@ const DB_MODULES: Record<string, ModuleEntry> = {
   'db:impl/postgres': { subpath: 'impl/postgres', source: 'impl/postgres/index.ts' },
 }
 
+const AI_MODULES: Record<string, ModuleEntry> = {
+  'ai:core': { subpath: 'core', source: 'index.ts' },
+  'ai:impl/openai': { subpath: 'impl/openai', source: 'impl/openai.ts' },
+}
+
 interface ResolveAliasOptions {
   aliases: Record<string, string>
   external?: boolean
@@ -164,5 +169,13 @@ const dbResolve: UnpluginInstance<ResolveOptions | undefined, false> = createUnp
     ),
 )
 
-export { dbResolve, resolveAlias, serverResolve, stdResolve }
+const aiResolve: UnpluginInstance<ResolveOptions | undefined, false> = createUnplugin(
+  (options?: ResolveOptions) =>
+    resolveFactory('@ozaco/devkit:resolve:ai')(
+      buildAliases(AI_MODULES, '@ozaco/ai', options?.sourceDir),
+      !options?.sourceDir,
+    ),
+)
+
+export { aiResolve, dbResolve, resolveAlias, serverResolve, stdResolve }
 export type { ResolveAliasOptions, ResolveOptions }

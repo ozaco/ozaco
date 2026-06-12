@@ -1,4 +1,4 @@
-import type { Future, Stream } from 'std:effect'
+import type { Future, Operation, Stream } from 'std:effect'
 
 import type {
   HashAlgorithm,
@@ -21,6 +21,9 @@ export type IOActions = {
   hash: (algorithm: HashAlgorithm, data: Uint8Array) => Future<Uint8Array, unknown>
 
   fromReadable: (target: ReadableLike) => Stream<Uint8Array, StreamClose>
+  toReadable: (
+    source: Stream<Uint8Array, unknown>,
+  ) => Future<{ readable: ReadableStream<Uint8Array>; pump: Operation<void, unknown> }>
   readStream: (path: PathLike) => Stream<Uint8Array, StreamClose>
   writeStream: (
     path: PathLike,

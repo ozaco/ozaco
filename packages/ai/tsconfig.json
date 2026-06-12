@@ -1,10 +1,6 @@
 {
   "compilerOptions": {
-    "lib": ["esnext"],
-    "types": ["node", "bun"],
-    "paths": {
-      "std:*": ["./node_modules/@ozaco/std/dist/*"]
-    }
+    "lib": ["esnext"]
   },
   "extends": ["../../tsconfig.base.json"],
   "include": ["src", "tests", "tsdown.config.ts"],

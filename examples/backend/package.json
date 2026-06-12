@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "@ozaco/ai": "workspace:*",
     "@ozaco/db": "workspace:*",
     "@ozaco/server": "workspace:*",
     "@ozaco/std": "workspace:*"

@@ -1,7 +1,7 @@
 import type { Service, TransportDef } from 'server:core'
-import { Broker, CoreErrors } from 'server:core'
+import { Broker, CoreErrors, isStreamResult } from 'server:core'
 import type { Stream } from 'std:effect'
-import { ensure, isStream, operation, useContext } from 'std:effect'
+import { ensure, operation, useContext } from 'std:effect'
 import type { Result } from 'std:result'
 import { asFailure, fail, isSuccess, succeed } from 'std:result'
 
@@ -86,7 +86,7 @@ export const handleDispatch = (
       return
     }
 
-    if (isStream(outcome.value)) {
+    if (isStreamResult(outcome.value)) {
       respond(wireStream())
       yield* pumpStream(endpoint, env.outputStream, outcome.value as Stream<unknown, unknown>)
       return

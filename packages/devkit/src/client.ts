@@ -1,6 +1,6 @@
 import { basename, dirname, join, relative, resolve } from 'node:path'
 
-import { dbResolve, serverResolve, stdResolve } from '@ozaco/devkit/resolve'
+import { aiResolve, dbResolve, serverResolve, stdResolve } from '@ozaco/devkit/resolve'
 import type { ClientDef } from '@ozaco/server/client'
 import type { Service } from '@ozaco/server/core'
 import type { AnyType } from '@ozaco/std/shared'
@@ -158,7 +158,12 @@ const generate = async (options: ClientPluginOptions): Promise<void> => {
     const bundle = yield* until(
       rolldown({
         input: entryFile,
-        plugins: [stdResolve.rolldown(), serverResolve.rolldown(), dbResolve.rolldown()],
+        plugins: [
+          stdResolve.rolldown(),
+          serverResolve.rolldown(),
+          dbResolve.rolldown(),
+          aiResolve.rolldown(),
+        ],
         external: [/^@ozaco\//u],
       }),
     )

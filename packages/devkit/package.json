@@ -46,6 +46,7 @@
     "rolldown": "1.1.0"
   },
   "devDependencies": {
+    "@ozaco/ai": "workspace:*",
     "@ozaco/db": "workspace:*",
     "@ozaco/server": "workspace:*",
     "@ozaco/std": "workspace:*",
@@ -53,6 +54,7 @@
     "unplugin": "3.0.0"
   },
   "peerDependencies": {
+    "@ozaco/ai": "*",
     "@ozaco/db": "*",
     "@ozaco/server": "*",
     "@ozaco/std": "*",

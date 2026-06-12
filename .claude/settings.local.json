@@ -27,7 +27,9 @@
       "WebFetch(domain:bun.com)",
       "WebFetch(domain:docs.npmjs.com)",
       "WebFetch(domain:raw.githubusercontent.com)",
-      "WebFetch(domain:api.github.com)"
+      "WebFetch(domain:api.github.com)",
+      "mcp__honcho__query_conclusions",
+      "mcp__honcho__create_conclusions"
     ]
   }
 }

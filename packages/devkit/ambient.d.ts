@@ -39,6 +39,9 @@ declare module 'std:logger/transport/console' {
 declare module 'std:fetch' {
   export * from '@ozaco/std/fetch'
 }
+declare module 'std:codec' {
+  export * from '@ozaco/std/codec'
+}
 
 // --------- SERVER ---------
 
@@ -104,4 +107,12 @@ declare module 'db:impl/sqlite' {
 }
 declare module 'db:impl/postgres' {
   export * from '@ozaco/db/impl/postgres'
+}
+
+// --------- AI ---------
+declare module 'ai:core' {
+  export * from '@ozaco/ai/core'
+}
+declare module 'ai:impl/openai' {
+  export * from '@ozaco/ai/impl/openai'
 }

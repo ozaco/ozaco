@@ -11,7 +11,8 @@ import { resolveService } from '../internal/helpers'
 import type { Action } from '../types/action'
 import type { BrokerDef } from '../types/broker'
 import type { TransportDef } from '../types/transport'
-import { CallContext, StreamContext, TraceContext } from '../utils/context'
+import { CallContext, ResponseSinkContext, StreamContext, TraceContext } from '../utils/context'
+import { isStreamResult } from '../utils/is'
 
 const getSelf = (): TransportDef => InternalTransport
 
@@ -92,6 +93,18 @@ export const InternalTransport = Transport.implement({
       let completed = false
       try {
         const result = yield* traceContext ? TraceContext.with(traceContext, invoke) : invoke()
+
+        // streaming response: a gateway installed a sink and the action returned a Stream — hand it
+        // back to the gateway HERE, inside this still-open scope, so the producer (and any upstream
+        // request feeding it) stays alive while the body drains. completed is set first so a mid-stream
+        // client disconnect (which halts the pump) is not logged as a fault.
+        const sink = yield* ResponseSinkContext.get()
+        if (sink && isStreamResult(result)) {
+          completed = true
+          yield* sink.respond(result as Stream<Uint8Array, unknown>)
+          return undefined
+        }
+
         completed = true
         return result
       } finally {

@@ -1,4 +1,4 @@
-import type { Future, Operation, Stream } from 'std:effect'
+import type { Future, Operation, Stream, Task } from 'std:effect'
 import type { Plugin } from 'std:plugin'
 import type { Result } from 'std:result'
 import type { AnyType } from 'std:shared'
@@ -22,6 +22,18 @@ export interface ActionResponse {
   meta: Record<string, string> // headers
   files: Record<string, ActionFile[]>
   body: unknown
+}
+
+/**
+ * A streaming-response sink the gateway installs (via `ResponseSinkContext`) so a transport can hand
+ * an action's byte `Stream` back to the gateway for streaming. `respond` builds the `Response`
+ * through the normal `fromInternal` transformer (so cors and other response hooks apply), delivers it
+ * to the platform handler immediately, then drains `stream` into the body. The transport `yield*`s it
+ * INSIDE the action's scope, so the producer (and any in-flight upstream request) stays alive until
+ * the body is fully sent, paced by backpressure.
+ */
+export interface ResponseSink {
+  respond(stream: Stream<Uint8Array, unknown>): Operation<void, unknown>
 }
 
 /** The transport-agnostic request envelope an action reads via useRequest(). */
@@ -96,6 +108,10 @@ export namespace GatewayDef {
     router: AnyType
     compiled: (method: string, path: string) => AnyType
     handlers: Map<symbol, RegisteredRoute>
+
+    /** in-flight background request tasks (streaming pumps live here); halted on destroy so an
+     * active stream cannot block shutdown — halting aborts the pump + its upstream fetch */
+    inflight: Set<Task<unknown, unknown>>
 
     statusMap?: Record<string, number> | undefined
     maxBodyBytes?: number | undefined

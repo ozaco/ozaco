@@ -13,7 +13,7 @@
   ],
   "type": "module",
   "exports": {
-    ".": {
+    "./core": {
       "import": {
         "types": "./dist/index.d.ts",
         "default": "./dist/index.js"
@@ -23,6 +23,17 @@
         "default": "./dist/index.cjs"
       },
       "source": "./src/index.ts"
+    },
+    "./impl/openai": {
+      "import": {
+        "types": "./dist/openai.d.ts",
+        "default": "./dist/openai.js"
+      },
+      "require": {
+        "types": "./dist/openai.d.cts",
+        "default": "./dist/openai.cjs"
+      },
+      "source": "./src/impl/openai.ts"
     }
   },
   "publishConfig": {

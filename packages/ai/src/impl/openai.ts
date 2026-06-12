@@ -1,27 +1,26 @@
 import { operation, useContext } from 'std:effect'
 import { fail } from 'std:result'
 
-import { DEFAULT_BASE_URL, DEFAULT_CHAT_MODEL } from '../const'
-import { AI_PROTOCOL } from '../definitions'
-import { AiErrors } from '../errors'
+import type { AiDef } from 'ai:core'
+import { AI, AiErrors, DEFAULT_BASE_URL, DEFAULT_CHAT_MODEL } from 'ai:core'
+
 import { parseChatResponse, parseEmbedResponse, parseSttResponse } from '../internal/parse'
 import { buildChatBody, buildEmbedBody, buildSttForm, buildTtsBody } from '../internal/payload'
 import { failStatus, postForm, postJson } from '../internal/request'
 import { byteStream, chatChunkStream, transcriptStream } from '../internal/sse'
-import type { AiDef } from '../types'
 
 /**
- * OpenAI-compatible AI implementation. Install with provider config:
+ * OpenAI AI implementation. Install with provider config:
  *
  * ```ts
- * yield* install(OpenAICompatible, { apiKey, baseURL, model })
+ * yield* install(OpenAI, { apiKey, baseURL, model })
  * const out = yield* AI.actions.chat([{ role: 'user', content: 'hi' }])
  * ```
  *
  * Works against api.openai.com and any OpenAI-compatible server (incl. local) via `baseURL`.
  */
-export const OpenAICompatible = AI_PROTOCOL.implement({
-  name: 'ozaco/openai-compatible',
+export const OpenAI = AI.implement({
+  name: 'ozaco/openai',
   version: '0.0.1',
   description: 'OpenAI-compatible AI client over std:fetch',
 
@@ -41,7 +40,7 @@ export const OpenAICompatible = AI_PROTOCOL.implement({
   },
 }).build({
   chat: operation(function* (messages: AiDef.Message[], options: AiDef.ChatOptions = {}) {
-    const ctx = yield* useContext(AI_PROTOCOL)
+    const ctx = yield* useContext(AI)
 
     const { url, response } = yield* postJson(
       ctx,
@@ -57,7 +56,7 @@ export const OpenAICompatible = AI_PROTOCOL.implement({
   }),
 
   chatStream: operation(function* (messages: AiDef.Message[], options: AiDef.ChatOptions = {}) {
-    const ctx = yield* useContext(AI_PROTOCOL)
+    const ctx = yield* useContext(AI)
 
     const { url, response } = yield* postJson(
       ctx,
@@ -73,7 +72,7 @@ export const OpenAICompatible = AI_PROTOCOL.implement({
   }),
 
   embed: operation(function* (input: string | string[], options: AiDef.EmbedOptions = {}) {
-    const ctx = yield* useContext(AI_PROTOCOL)
+    const ctx = yield* useContext(AI)
 
     const { url, response } = yield* postJson(
       ctx,
@@ -89,7 +88,7 @@ export const OpenAICompatible = AI_PROTOCOL.implement({
   }),
 
   tts: operation(function* (text: string, options: AiDef.TtsOptions = {}) {
-    const ctx = yield* useContext(AI_PROTOCOL)
+    const ctx = yield* useContext(AI)
 
     const { url, response } = yield* postJson(ctx, 'audio/speech', buildTtsBody(ctx, text, options))
     if (!response.ok) {
@@ -100,7 +99,7 @@ export const OpenAICompatible = AI_PROTOCOL.implement({
   }),
 
   ttsStream: operation(function* (text: string, options: AiDef.TtsOptions = {}) {
-    const ctx = yield* useContext(AI_PROTOCOL)
+    const ctx = yield* useContext(AI)
 
     const { url, response } = yield* postJson(ctx, 'audio/speech', buildTtsBody(ctx, text, options))
     if (!response.ok) {
@@ -112,7 +111,7 @@ export const OpenAICompatible = AI_PROTOCOL.implement({
   }),
 
   stt: operation(function* (audio: Uint8Array | Blob, options: AiDef.SttOptions = {}) {
-    const ctx = yield* useContext(AI_PROTOCOL)
+    const ctx = yield* useContext(AI)
 
     const { url, response } = yield* postForm(
       ctx,
@@ -128,7 +127,7 @@ export const OpenAICompatible = AI_PROTOCOL.implement({
   }),
 
   sttStream: operation(function* (audio: Uint8Array | Blob, options: AiDef.SttOptions = {}) {
-    const ctx = yield* useContext(AI_PROTOCOL)
+    const ctx = yield* useContext(AI)
 
     const { url, response } = yield* postForm(
       ctx,

@@ -1,7 +1,7 @@
 import type { Service, TransportDef } from 'server:core'
-import { Broker } from 'server:core'
+import { Broker, isStreamResult } from 'server:core'
 import { Codec } from 'std:codec'
-import { ensure, into, isStream, operation, spawn, useContext } from 'std:effect'
+import { ensure, into, operation, spawn, useContext } from 'std:effect'
 import { Logger } from 'std:logger'
 import type { Result } from 'std:result'
 import { asFailure, fail, isSuccess, succeed } from 'std:result'
@@ -113,7 +113,7 @@ export const handleDispatch = (service: Service, actionKey: string) =>
         return
       }
 
-      if (outputSubject !== undefined && isStream(outcome.value)) {
+      if (outputSubject !== undefined && isStreamResult(outcome.value)) {
         const output = outcome.value
         yield* respond(wireStream())
         try {

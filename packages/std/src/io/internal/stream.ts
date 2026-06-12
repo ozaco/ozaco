@@ -80,5 +80,3 @@ export const writeFileStream = operation(function* (
     yield* appendCauses(asFailure(error), 'write-stream')
   }
 }, 'write-stream')
-
-export { fromReadable }

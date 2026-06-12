@@ -142,6 +142,12 @@ export const fromInternalAction = operation(function* (
     return new Response(undefined, { status, headers })
   }
 
+  // a streaming body (the gateway converts an action's byte Stream into a ReadableStream) goes out
+  // verbatim — never through the codec — so it streams to the client instead of being buffered/encoded
+  if (body instanceof ReadableStream) {
+    return new Response(body, { status, headers })
+  }
+
   // JSON responses go back out through the same codec; other content-types pass through verbatim
   if (isJSON) {
     const encoded = (yield* Codec.actions.encode(body)) as BodyInit

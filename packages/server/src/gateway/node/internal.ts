@@ -1,10 +1,11 @@
 import { CoreErrors, Gateway, statusFor } from 'server:core'
 import { operation, until, useContext, useScope } from 'std:effect'
-import { isFailure, isSuccess } from 'std:result'
+import { asFailure, isFailure, isSuccess } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { createServer } from 'node:http'
+import { Readable } from 'node:stream'
 
 import { dispatchRequest } from '../shared/handle'
 
@@ -33,12 +34,36 @@ const toRequest = async (req: IncomingMessage): Promise<Request> => {
   })
 }
 
+// stream the response body to the node socket — works for both a buffered Response (JSON/text) and a
+// live streaming body (the gateway's ReadableStream), and never corrupts binary. Backpressure flows:
+// res.write() returning false parks the read loop until 'drain', which in turn parks the upstream
+// pump via the body's desiredSize.
 const writeResponse = async (res: ServerResponse, response: Response): Promise<void> => {
   res.statusCode = response.status
   for (const [key, value] of response.headers) {
     res.setHeader(key, value)
   }
-  res.end(await response.text())
+
+  if (!response.body) {
+    res.end()
+    return
+  }
+
+  // pipe the body to the socket — `.pipe` handles backpressure (a slow socket pauses the source,
+  // which parks the upstream pump via the body's desiredSize) and ends `res` when the source ends
+  const source = Readable.fromWeb(response.body as AnyType)
+  try {
+    await new Promise<void>((resolve, reject) => {
+      source.on('error', reject)
+      res.on('error', reject)
+      res.on('finish', resolve)
+      source.pipe(res)
+    })
+  } catch {
+    // body errored mid-stream (after headers are already sent) — drop the connection so the client
+    // sees a truncated transfer rather than a clean, silently-incomplete response
+    res.destroy()
+  }
 }
 
 export const startAction = operation(function* (config: Partial<{ port: number; host: string }>) {
@@ -82,22 +107,36 @@ export const startAction = operation(function* (config: Partial<{ port: number; 
     }
 
     const request = await toRequest(req)
-    const result = await scope.safeRun(() => dispatchRequest(request, res))
 
-    let response: Response
-
-    if (isSuccess(result)) {
-      response = result.value
-    } else if (isFailure(result)) {
-      response = Response.json(result, { status: statusFor(CoreErrors.BrokerInternal) })
-    } else {
-      response = Response.json(
-        { error: CoreErrors.BrokerInternal, message: 'request failed' },
-        { status: statusFor(CoreErrors.BrokerInternal) },
-      )
+    // `dispatchRequest` delivers the Response via `deliver` — for a streaming action as soon as the
+    // headers are known (while the body drains in the background), for a normal action once the value
+    // is transformed. Run dispatch in the background on the gateway scope (kept alive; the stream
+    // paced by the socket's drain) and write the response when it arrives.
+    let responded = false
+    const deliver = (response: Response): void => {
+      if (responded) {
+        return
+      }
+      responded = true
+      void writeResponse(res, response)
     }
 
-    await writeResponse(res, response)
+    // track the background task so destroy() can halt a still-streaming request instead of hanging
+    const task = scope.run(function* () {
+      try {
+        yield* dispatchRequest(request, res, deliver)
+      } catch (error) {
+        deliver(Response.json(asFailure(error), { status: statusFor(CoreErrors.BrokerInternal) }))
+      }
+    })
+    ctx.inflight.add(task)
+    // oxlint-disable-next-line promise/always-return
+    void task.then(() => {
+      ctx.inflight.delete(task)
+      // if the task ended without delivering (e.g. it was halted on shutdown before the action even
+      // returned), write a final response so the socket doesn't stay open
+      deliver(new Response(null, { status: 503 }))
+    })
   }
 
   const server = createServer((req, res) => {
@@ -128,6 +167,15 @@ export const destroyAction = operation(function* () {
     ctx.started = false
     return
   }
+
+  // abort in-flight request pumps first: halting aborts each upstream fetch and (via the pump's
+  // ensure) closes its response stream, so an active stream cannot block close() below
+  const inflight = [...ctx.inflight]
+  ctx.inflight.clear()
+  yield* until(Promise.all(inflight.map(task => task.halt())))
+
+  // force-close any sockets still open so a slow/streaming client cannot keep close() hanging
+  ;(server as AnyType).closeAllConnections?.()
 
   yield* until(
     new Promise<void>((resolve, reject) => {

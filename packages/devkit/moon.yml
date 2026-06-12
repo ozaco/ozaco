@@ -9,6 +9,8 @@ tasks:
     deps:
       - std:build
       - server:build
+      - db:build
+      - ai:build
     inputs:
       - src/**/*
       - ambient.d.ts
@@ -28,6 +30,7 @@ tasks:
       - std:build
       - server:build
       - db:build
+      - ai:build
     inputs:
       - src/**/*
       - ambient.d.ts
@@ -36,9 +39,7 @@ tasks:
   test:
     command: bun test --pass-with-no-tests
     deps:
-      - std:build
-      - server:build
-      - db:build
+      - devkit:build
     inputs:
       - src/**/*
       - tests/**/*

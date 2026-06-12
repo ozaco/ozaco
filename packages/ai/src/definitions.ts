@@ -10,12 +10,7 @@ import type { AiDef } from './types'
  * shape — all actions are effect-native (`operation` returning `Future`) and surface failures as
  * `Result` via the `ai.*` error tags.
  */
-export const AI_PROTOCOL = defineProtocol<
-  AiDef.Context,
-  unknown,
-  [config: AiDef.Config],
-  AiDef.Actions
->({
+export const AI = defineProtocol<AiDef.Context, unknown, [config: AiDef.Config], AiDef.Actions>({
   name: 'ozaco/ai',
   version: '0.0.1',
   subtype: AI_SUBTYPE,

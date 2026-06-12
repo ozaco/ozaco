@@ -1,6 +1,6 @@
 import { CoreErrors, Gateway, statusFor } from 'server:core'
 import { operation, until, useContext, useScope } from 'std:effect'
-import { fail, isFailure, isSuccess } from 'std:result'
+import { asFailure, fail, isFailure, isSuccess } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import { dispatchRequest } from '../shared/handle'
@@ -25,31 +25,50 @@ export const startAction = operation(function* (config: Partial<{ port: number; 
       )
     }
 
-    const result = await scope.safeRun(function* () {
+    // `dispatchRequest` delivers the Response via `deliver` — for a streaming action as soon as the
+    // headers are known (while the body drains in the background), for a normal action once the value
+    // is transformed. So we run dispatch IN THE BACKGROUND on the gateway scope (kept alive, and the
+    // stream paced by Bun's reads) and return as soon as the Response is ready. We do NOT await it.
+    let resolveReady: (response: Response | undefined) => void = () => {}
+    const ready = new Promise<Response | undefined>(resolve => {
+      resolveReady = resolve
+    })
+    let settled = false
+    const deliver = (response: Response | undefined) => {
+      if (!settled) {
+        settled = true
+        resolveReady(response)
+      }
+    }
+
+    // track the background task so destroy() can halt a still-streaming request instead of hanging
+    const task = scope.run(function* () {
       try {
         const upgraded = yield* Gateway.actions.upgrade(request, bunServer)
         if (upgraded) {
-          return undefined
+          deliver(undefined)
+          return
         }
       } catch {
         // upgrade negotiation failed (e.g. no ws route) — fall through to REST (which 404s)
       }
 
-      return yield* dispatchRequest(request, null)
+      try {
+        yield* dispatchRequest(request, null, deliver)
+      } catch (error) {
+        deliver(Response.json(asFailure(error), { status: statusFor(CoreErrors.BrokerInternal) }))
+      }
+    })
+    ctx.inflight.add(task)
+    // oxlint-disable-next-line promise/always-return
+    void task.then(() => {
+      ctx.inflight.delete(task)
+      // if the task ended without delivering (e.g. it was halted on shutdown before the action even
+      // returned), unblock the handler so Bun doesn't keep the request in-flight forever
+      deliver(new Response(null, { status: 503 }))
     })
 
-    if (isSuccess(result)) {
-      return result.value as Response | undefined
-    }
-
-    if (isFailure(result)) {
-      return Response.json(result, { status: statusFor(CoreErrors.BrokerInternal) })
-    }
-
-    return Response.json(
-      { error: CoreErrors.BrokerInternal, message: 'request failed' },
-      { status: statusFor(CoreErrors.BrokerInternal) },
-    )
+    return await ready
   }
 
   let server: AnyType
@@ -57,6 +76,7 @@ export const startAction = operation(function* (config: Partial<{ port: number; 
     server = Bun.serve({
       port: config.port ?? ctx.port,
       hostname: config.host ?? ctx.host,
+      idleTimeout: -1,
 
       fetch,
       websocket: {
@@ -91,6 +111,12 @@ export const destroyAction = operation(function* (opts?: { drainMs?: number }) {
     ctx.started = false
     return
   }
+
+  // abort in-flight request pumps first: halting aborts each upstream fetch and (via the pump's
+  // ensure) closes its response stream, so an active stream cannot block the drain below
+  const inflight = [...ctx.inflight]
+  ctx.inflight.clear()
+  yield* until(Promise.all(inflight.map(task => task.halt())))
 
   const drainMs = opts?.drainMs ?? 30_000
 
