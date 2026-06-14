@@ -1,6 +1,6 @@
 {
   "name": "@ozaco/devkit",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "homepage": "https://ozaco.com/",
   "author": "giveerr (https://github.com/giveerr)",
   "repository": {
@@ -18,27 +18,30 @@
     ".": {
       "types": "./ambient.d.ts"
     },
-    "./resolve": "./src/resolve.ts",
-    "./client": "./src/client.ts"
+    "./resolve": {
+      "import": {
+        "types": "./dist/resolve.d.ts",
+        "default": "./dist/resolve.js"
+      },
+      "require": {
+        "types": "./dist/resolve.d.cts",
+        "default": "./dist/resolve.cjs"
+      },
+      "source": "./src/resolve.ts"
+    },
+    "./client": {
+      "import": {
+        "types": "./dist/client.d.ts",
+        "default": "./dist/client.js"
+      },
+      "require": {
+        "types": "./dist/client.d.cts",
+        "default": "./dist/client.cjs"
+      },
+      "source": "./src/client.ts"
+    }
   },
   "publishConfig": {
-    "exports": {
-      ".": {
-        "types": "./ambient.d.ts"
-      },
-      "./resolve": {
-        "import": {
-          "types": "./dist/resolve.d.ts",
-          "default": "./dist/resolve.js"
-        }
-      },
-      "./client": {
-        "import": {
-          "types": "./dist/client.d.ts",
-          "default": "./dist/client.js"
-        }
-      }
-    },
     "access": "public",
     "provenance": true,
     "registry": "https://registry.npmjs.org/"
