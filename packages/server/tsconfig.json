@@ -4,6 +4,6 @@
     "types": ["node", "bun"]
   },
   "extends": ["../../tsconfig.base.json", "./tsconfig.paths.json"],
-  "include": ["src", "experimental", "tests", "examples", "local", "tsdown.config.ts"],
+  "include": ["src", "experimental", "tests", "examples", "local"],
   "references": []
 }

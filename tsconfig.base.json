@@ -2,7 +2,7 @@
   "compilerOptions": {
     /* Moonrepo */
     "allowArbitraryExtensions": true,
-    "allowImportingTsExtensions": false,
+    "allowImportingTsExtensions": true,
     "allowJs": true,
     /* Moonrepo */
     "composite": true,

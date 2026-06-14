@@ -5,14 +5,14 @@ toolchains:
 
 tasks:
   build:
-    command: bun x tsdown
+    command: bun x tsdown --config-loader unrun
     inputs:
       - src/**/*
       - tsdown.config.ts
     outputs:
       - dist/**/*
   dev:
-    command: bun x tsdown --watch
+    command: bun x tsdown --config-loader unrun --watch
     inputs:
       - src/**/*
       - tsdown.config.ts
