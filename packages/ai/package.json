@@ -43,7 +43,8 @@
   },
   "devDependencies": {
     "@ozaco/std": "workspace:*",
-    "tsdown": "catalog:build"
+    "tsdown": "catalog:build",
+    "unrun": "catalog:build"
   },
   "peerDependencies": {
     "@ozaco/std": "*"

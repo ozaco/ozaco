@@ -177,6 +177,7 @@
     "@streamparser/json": "0.0.22"
   },
   "devDependencies": {
-    "tsdown": "catalog:build"
+    "tsdown": "catalog:build",
+    "unrun": "catalog:build"
   }
 }

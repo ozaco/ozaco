@@ -214,7 +214,8 @@
   "devDependencies": {
     "@ozaco/std": "workspace:*",
     "nats": "^2.29.3",
-    "tsdown": "catalog:build"
+    "tsdown": "catalog:build",
+    "unrun": "catalog:build"
   },
   "peerDependencies": {
     "@ozaco/std": "*",

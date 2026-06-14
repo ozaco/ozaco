@@ -59,7 +59,8 @@
     "better-sqlite3": "^12.9.0",
     "drizzle-orm": "^0.45.2",
     "pg": "^8.20.0",
-    "tsdown": "catalog:build"
+    "tsdown": "catalog:build",
+    "unrun": "catalog:build"
   },
   "peerDependencies": {
     "@ozaco/std": "*",
