@@ -6,9 +6,12 @@ export default defineConfig({
     resolve: './src/resolve.ts',
     client: './src/client.ts',
   },
-  format: ['esm'],
+  format: ['esm', 'cjs'],
   dts: true,
   fixedExtension: false,
   clean: true,
   outDir: './dist',
+  deps: {
+    onlyBundle: [],
+  },
 })
