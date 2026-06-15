@@ -7,42 +7,29 @@ import { isFailure, isResult } from './is'
 
 export const unwrap: Impl.Unwrap = ((...args: AnyType[]): AnyType => {
   const firstArgument = args[0]
+  const hasDefault = args.length === 2
+  const defaultValue = hasDefault ? args[1] : undefined
 
-  if (isResult(firstArgument) || isPromise(firstArgument)) {
-    const hasDefault = args.length === 2
-    const defaultValue = hasDefault ? args[1] : undefined
-
-    const apply = (r: AnyType) => {
-      if (isFailure(r)) {
-        if (hasDefault) {
-          return defaultValue
-        }
-
-        throw r
+  const apply = (r: AnyType) => {
+    if (isFailure(r)) {
+      if (hasDefault) {
+        return defaultValue
       }
 
-      return r.value
+      throw r
     }
 
-    return isPromise(firstArgument) ? firstArgument.then(apply) : apply(firstArgument)
+    return r.value
   }
 
-  const hasDefault = args.length === 1
-  const defaultValue = hasDefault ? args[0] : undefined
-
-  return (result: AnyType) => {
-    const apply = (r: AnyType) => {
-      if (isFailure(r)) {
-        if (hasDefault) {
-          return defaultValue
-        }
-
-        throw r
-      }
-
-      return r.value
-    }
-
-    return isPromise(result) ? result.then(apply) : apply(result)
+  if (isPromise(firstArgument)) {
+    return firstArgument.then(apply)
   }
+
+  if (isResult(firstArgument)) {
+    return apply(firstArgument)
+  }
+
+  // not a Result/Promise — already a plain value; hand it back as-is (never a curried function)
+  return firstArgument
 }) as AnyType

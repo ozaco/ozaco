@@ -7,10 +7,6 @@ import { isFailure, isResult } from './is'
 import { succeed } from './success'
 
 export const auto: Impl.Auto = (...args: AnyType[]): AnyType => {
-  if (args.length === 0) {
-    return auto
-  }
-
   const firstArgument = args[0]
   const hasDefaultValue = args.length === 2
   const defaultValue = hasDefaultValue ? args[1] : undefined

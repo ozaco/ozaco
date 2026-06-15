@@ -5,7 +5,19 @@ import { RESULT_SUCCESS } from '../const'
 import type { Impl } from '../types/impl'
 import type { Result } from '../types/result'
 
+const UNIT = Object.freeze({
+  _t: RESULT_SUCCESS,
+
+  *[Symbol.iterator]() {
+    return (this as AnyType).value
+  },
+}) as unknown as Result.Success<AnyType>
+
 export const succeed: Impl.Succeed = (...args: AnyType[]) => {
+  if (args.length === 0) {
+    return UNIT as AnyType
+  }
+
   const success = {
     _t: RESULT_SUCCESS,
 
@@ -13,10 +25,6 @@ export const succeed: Impl.Succeed = (...args: AnyType[]) => {
       return (this as AnyType).value
     },
   } as Writable<Result.Success<AnyType>>
-
-  if (args.length === 0) {
-    return success as AnyType
-  }
 
   const value = args[0]
 

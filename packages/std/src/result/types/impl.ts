@@ -33,8 +33,6 @@ export namespace Impl {
       ? Result.Async<Result.InferSuccess<R> | T, never>
       : Result<Result.InferSuccess<R> | T, never>
 
-    <const T>(): (value: T) => Result.ResultFromUnion<T>
-
     <T extends `${string}`>(value: PromiseLike<T>): Result.Async<T, never>
     <T extends `${string}`>(value: T): Result<T, never>
     <const T>(value: T): Result.ResultFromUnion<T>
@@ -46,10 +44,10 @@ export namespace Impl {
     ...causes: string[]
   ) => Result.ResultFromUnion<R | Result.Failure<E['prototype']>>
 
-  export interface AppendCauses {
-    <T extends Result.Both<AnyType, AnyType>>(result: T, ...causes: string[]): T
-    <T extends Result.Both<AnyType, AnyType>>(...causes: string[]): (result: T) => T
-  }
+  export type AppendCauses = <T extends Result.Both<AnyType, AnyType>>(
+    result: T,
+    ...causes: string[]
+  ) => T
 
   export interface Unwrap {
     <R extends Result.Both<never, AnyType>>(result: R): never
@@ -61,16 +59,6 @@ export namespace Impl {
       result: R,
       defaultValue: T,
     ): true extends IsPromiseStrict<R>
-      ? Promise<Result.InferSuccess<R> | T>
-      : Result.InferSuccess<R> | T
-    <R extends Result.Both<AnyType, AnyType>>(): (
-      result: R,
-    ) => true extends IsPromiseStrict<R> ? Promise<Result.InferSuccess<R>> : Result.InferSuccess<R>
-    <R extends Result.Both<AnyType, AnyType>, T>(
-      defaultValue: T,
-    ): (
-      result: R,
-    ) => true extends IsPromiseStrict<R>
       ? Promise<Result.InferSuccess<R> | T>
       : Result.InferSuccess<R> | T
   }
