@@ -14,7 +14,7 @@ export function* callcc<T, E = unknown>(
     resolve: (value: T) => Operation<void>,
     reject: (error: E) => Operation<void>,
   ) => Operation<void, E>,
-): Operation<T> {
+): Operation<T, E> {
   const result = withResolvers<Result<T, E>>()
 
   const resolve = lift((value: T) => result.resolve(succeed(value) as Result<T, never>))

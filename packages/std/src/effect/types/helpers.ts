@@ -1,7 +1,7 @@
-import type { Result } from 'std:result'
+import type { Maybe, Result } from 'std:result'
 import type { AnyFunction, AnyType } from 'std:shared'
 
-import type { Future, Operation, Scope, Subscription, Task } from './operation'
+import type { Future, Operation, Scope, Subscription } from './operation'
 
 export namespace Helpers {
   export type Yielded<T extends Operation<unknown, AnyType>> =
@@ -14,22 +14,15 @@ export namespace Helpers {
     raise(error: unknown): void
   }
 
-  export type StepType = 'next' | 'return' | 'throw' | 'drop'
-
-  export interface DelimiterLike {
-    epoch: number
-    nextStep(result: Result<unknown, unknown>, epoch: number): Helpers.StepType
-  }
-
-  export type Instruction = [
-    number,
-    Helpers.Coroutine<unknown>,
-    Result<unknown, unknown>,
-    Helpers.DelimiterLike,
-    number,
-  ]
-
   export type FailureOf<E> = [E] extends [never] ? never : Result.Failure<E>
+
+  export type CoroutineFuture<T> = Promise<Maybe<Result<T, unknown>>> &
+    Operation<Maybe<Result<T, unknown>>>
+
+  export type Settleware = (
+    outcome: Maybe<Result<unknown, unknown>>,
+    next: (outcome: Maybe<Result<unknown, unknown>>) => void,
+  ) => void
 
   export type Resolve<T> = (value: T) => void
 
@@ -43,11 +36,24 @@ export namespace Helpers {
 
   export interface Coroutine<T = unknown> {
     scope: Scope
+    future: Helpers.CoroutineFuture<T>
+    settle(outcome: Maybe<Result<unknown, unknown>>): void
     data: {
-      exit(resolve: Helpers.Resolve<Result<unknown, unknown>>): void
       iterator: Iterator<Effect<unknown> | Result.Failure<unknown>, T, unknown>
+      exit(resolve: Helpers.Resolve<Result<unknown, unknown>>): void
+      resumeWith: Result<unknown, unknown>
+      enqueued: boolean
+      critical: boolean
+      unwinding: boolean
     }
-    next(result: Result<unknown, unknown>): void
+    // resume the coroutine with `result` once any active effect's exit has run
+    resume(result: Result<unknown, unknown>): void
+    // begin unwinding (early return) the coroutine — used to halt/cancel
+    unwind(): void
+    // advance the underlying iterator one step (next / return / throw, per resumeWith + unwinding)
+    step(): IteratorResult<Effect<unknown>, T>
+    // enter an effect, wiring its single-shot resolve back into resume
+    perform(effect: Effect<unknown>): void
   }
 
   export interface CoroutineOptions<T> {
@@ -128,12 +134,10 @@ export namespace Helpers {
   export interface TaskOptions<T> {
     owner: Helpers.ScopeInternal
     operation(): Operation<T>
+    prioritize?: boolean
   }
 
-  export interface NewTask<T> {
-    scope: Scope
-    routine: Helpers.Coroutine
-    task: Task<T>
-    start(): void
+  export type AllSettled<T extends readonly Operation<unknown, AnyType>[] | []> = {
+    -readonly [P in keyof T]: Result<Helpers.Yielded<T[P]>, Helpers.YieldedError<T[P]>>
   }
 }

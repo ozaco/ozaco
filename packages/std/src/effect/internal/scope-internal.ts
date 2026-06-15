@@ -52,9 +52,7 @@ export function createScopeInternal(
       return !!Reflect.getOwnPropertyDescriptor(contexts, context.name)
     },
     run<T>(operation: () => Operation<T>): Task<T> {
-      const { task, start } = createTask({ operation, owner: scope })
-      start()
-      return task
+      return createTask({ operation, owner: scope })
     },
     async safeRun<T>(operation: () => Operation<T>): Promise<Result<T, unknown>> {
       const task = scope.run(function* () {
@@ -72,9 +70,7 @@ export function createScopeInternal(
     spawn<T>(operation: () => Operation<T>): Operation<Task<T>> {
       return {
         *[Symbol.iterator]() {
-          const { task, start } = createTask({ operation, owner: scope })
-          start()
-          return task
+          return createTask({ operation, owner: scope })
         },
       }
     },

@@ -1,9 +1,10 @@
 import type { AnyType } from 'std:shared'
 
-import { trap } from '../internal/task'
+import { trap } from '../internal/trap'
 import type { Helpers } from '../types/helpers'
 import type { Operation, Task } from '../types/operation'
 
+import { attempt } from './attempt'
 import { spawn } from './spawn'
 
 export function* all<T extends readonly Operation<unknown, AnyType>[] | []>(
@@ -29,4 +30,10 @@ export function* all<T extends readonly Operation<unknown, AnyType>[] | []>(
     }
     throw error
   }
+}
+
+export function* allSettled<T extends readonly Operation<unknown, AnyType>[] | []>(
+  ops: T,
+): Operation<Helpers.AllSettled<T>, unknown> {
+  return (yield* all(ops.map(operation => attempt(() => operation)))) as Helpers.AllSettled<T>
 }

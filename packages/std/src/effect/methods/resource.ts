@@ -1,40 +1,38 @@
-import type { Result } from 'std:result'
-import { succeed } from 'std:result'
 import type { AnyType } from 'std:shared'
 
-import { Priority } from '../internal/contexts'
-import { useCoroutine } from '../internal/coroutine'
-import { createTask, trap } from '../internal/task'
+import { createTask } from '../internal/task'
+import { trap } from '../internal/trap'
 import type { Helpers } from '../types/helpers'
 import type { Operation } from '../types/operation'
 
+import { useScope } from './scope'
 import { suspend } from './suspend'
+import { withResolvers } from './with-resolvers'
 
 export const resource = <T, E = never>(
   op: (provide: Helpers.Provide<T>) => Operation<void, E>,
 ): Operation<T, E> => ({
   *[Symbol.iterator]() {
-    const caller = yield* useCoroutine()
+    const ready = withResolvers<T>('await resource')
 
     function* provide(value: T): Operation<void> {
-      caller.next(succeed(value) as Result<T, never>)
+      ready.resolve(value)
       yield* suspend()
     }
 
+    const caller = yield* useScope()
+
+    // a control boundary lets us surface an error thrown by the resource initializer to the caller
     return yield* trap<T>(function* () {
-      const { scope, start } = createTask<void>({
-        owner: caller.scope as Helpers.ScopeInternal,
+      // the resource lifecycle runs as a child task of the caller's scope, prioritized so it settles
+      // in step with the caller; it stays suspended at provide() until the caller's scope tears down
+      createTask<void>({
+        owner: caller as Helpers.ScopeInternal,
         operation: () => op(provide) as Operation<AnyType>,
+        prioritize: true,
       })
 
-      scope.set(Priority, caller.scope.expect(Priority))
-
-      start()
-
-      return (yield {
-        enter: () => (uninstalled: Helpers.Resolve<unknown>) => uninstalled(succeed()),
-        cause: 'await resource',
-      } as Helpers.Effect<T>) as T
+      return yield* ready.operation
     })
   },
 })

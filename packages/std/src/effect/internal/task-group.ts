@@ -1,9 +1,9 @@
 import type { Result } from 'std:result'
 import { isFailure, succeed, unwrap } from 'std:result'
 
+import { attempt } from '../methods/attempt'
 import type { Operation, Task } from '../types/operation'
 
-import { box } from './box'
 import { TaskGroupContext } from './contexts'
 
 export class TaskGroup {
@@ -23,7 +23,7 @@ export class TaskGroup {
       const tasks = [...this.tasks].toReversed()
       this.tasks.clear()
       for (const task of tasks) {
-        const result = yield* box(task.halt)
+        const result = yield* attempt(task.halt)
         if (isFailure(result)) {
           total = result
         }

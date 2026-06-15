@@ -1,9 +1,8 @@
 import type { Result } from 'std:result'
-import { fail, isSuccess } from 'std:result'
+import { asFailure, fail, succeed, unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
 
-import { box } from '../internal/box'
-import { trap } from '../internal/task'
+import { trap } from '../internal/trap'
 import type { Helpers } from '../types/helpers'
 import type { Operation, Task } from '../types/operation'
 
@@ -21,12 +20,16 @@ export function* race<T extends Operation<unknown, AnyType>>(
 
   const tasks: Task<unknown, unknown>[] = []
 
-  const result = yield* trap(function* () {
+  const settled = yield* trap(function* () {
     for (const operation of operations.slice()) {
       tasks.push(
         yield* spawn(function* candidate() {
-          const outcome = yield* box(() => operation)
-          winner.resolve(outcome as Result<Helpers.Yielded<T>, unknown>)
+          try {
+            const value = yield* operation
+            winner.resolve(succeed(value) as Result<Helpers.Yielded<T>, unknown>)
+          } catch (error) {
+            winner.resolve(asFailure(error))
+          }
         }),
       )
     }
@@ -43,9 +46,5 @@ export function* race<T extends Operation<unknown, AnyType>>(
     yield* task
   }
 
-  if (isSuccess(result)) {
-    return result.value
-  }
-
-  throw result
+  return unwrap(settled)
 }

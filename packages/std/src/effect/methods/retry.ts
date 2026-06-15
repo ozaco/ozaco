@@ -1,9 +1,9 @@
 import { fail, isFailure } from 'std:result'
 
-import { box } from '../internal/box'
 import type { Operation } from '../types/operation'
 import type { RetryOptions } from '../types/utils'
 
+import { attempt } from './attempt'
 import { sleep } from './sleep'
 
 export function* retry<T, E>(
@@ -16,7 +16,7 @@ export function* retry<T, E>(
   let lastError: unknown
 
   for (let i = 0; i < attempts; i++) {
-    const result = yield* box(op)
+    const result = yield* attempt(op)
 
     if (isFailure(result)) {
       lastError = result.error
