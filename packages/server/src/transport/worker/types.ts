@@ -14,8 +14,10 @@ export namespace WorkerDef {
     close?: () => void
   }
 
+  export type SpawnSpec = string | URL | { script: string | URL; count?: number }
+
   export interface Options extends TransportDef.Options {
-    script?: string | URL
+    script?: SpawnSpec | SpawnSpec[]
     count?: number
     endpoint?: PortLike | PortLike[]
     wire?: WireMode
@@ -23,6 +25,7 @@ export namespace WorkerDef {
 
   export interface Endpoint {
     wire: WireMode
+    services: Set<string>
     post(message: Envelope): boolean
     recv: Stream<unknown, void>
     markReady(): void
@@ -37,7 +40,7 @@ export namespace WorkerDef {
     streams: Map<string, Queue<unknown, true | Result.Failure<unknown>>>
     handlers: Map<string, Task<unknown, unknown>>
     scope: Scope
-    rr: { index: number }
+    rr: Map<string, number>
   }
 
   export interface WireSuccess {
@@ -74,13 +77,13 @@ export namespace WorkerDef {
     outputStream: string
     params?: unknown
     inputStreams?: string[]
-    rawReq?: unknown
-    traceContext?: unknown
+    /** The dispatch contexts, codec-encoded as one blob (decoded back to DispatchContexts on receipt). */
+    contexts?: unknown
   }
 
   export type Envelope =
     | DispatchEnvelope
-    | { kind: 'ready'; wire: WireMode }
+    | { kind: 'ready'; wire: WireMode; services?: string[] }
     | { kind: 'reply'; cid: string; wire: Wire }
     | { kind: 'cancel'; cid: string }
     | { kind: 'emit'; req: unknown }

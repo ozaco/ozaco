@@ -69,8 +69,9 @@ export const handleDispatch = (
 
     const params =
       env.params === undefined ? [] : ((yield* decodeValue(endpoint.wire, env.params)) as unknown[])
-    const rawReq =
-      env.rawReq === undefined ? undefined : yield* decodeValue(endpoint.wire, env.rawReq)
+    const contexts = (
+      env.contexts === undefined ? undefined : yield* decodeValue(endpoint.wire, env.contexts)
+    ) as TransportDef.DispatchContexts | undefined
 
     const outcome: Result<unknown, unknown> = yield* attempt(
       invokeAction({
@@ -78,8 +79,7 @@ export const handleDispatch = (
         actionKey: env.actionKey,
         params,
         streams,
-        rawReq,
-        traceContext: env.traceContext,
+        contexts,
       }),
     )
 

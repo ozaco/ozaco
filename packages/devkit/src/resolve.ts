@@ -95,6 +95,10 @@ const SERVER_MODULES: Record<string, ModuleEntry> = {
     subpath: 'client',
     source: 'client/index.ts',
   },
+  'server:daemon': {
+    subpath: 'daemon',
+    source: 'daemon/index.ts',
+  },
 }
 
 const DB_MODULES: Record<string, ModuleEntry> = {

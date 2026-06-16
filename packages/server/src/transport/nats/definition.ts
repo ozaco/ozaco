@@ -31,6 +31,11 @@ import type { Nats } from './types'
 
 const generateSid = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
 
+// NATS core request/reply needs a finite timer; `requestTimeoutMs <= 0` (timeout disabled) maps to the
+// largest value `setTimeout` accepts (~24.8 days), so in practice the action TimeoutPolicy always
+// fires first — but a NATS connection/responder fault still can't hang the dispatch forever.
+const MAX_REQUEST_TIMEOUT = 2_147_483_647
+
 export const NatsTransport = Transport.implement({
   name: 'server/nats-transport',
   version: '0.0.0',
@@ -40,7 +45,7 @@ export const NatsTransport = Transport.implement({
     const priority = options.priority ?? 10
     const next = options.next ?? (() => false)
     const prefix = options.subjectPrefix ?? 'ozaco'
-    const requestTimeoutMs = options.requestTimeoutMs ?? 5000
+    const requestTimeoutMs = options.requestTimeoutMs ?? 1000 * 30
 
     const scope = yield* useScope()
 
@@ -125,15 +130,16 @@ export const NatsTransport = Transport.implement({
       ...(req.params === undefined ? {} : { params: req.params }),
       ...(inputSubjects === undefined ? {} : { inputSubjects }),
       ...(outputSubject === undefined ? {} : { outputSubject }),
-      ...(req.rawReq === undefined ? {} : { rawReq: req.rawReq }),
-      ...(req.traceContext === undefined ? {} : { traceContext: req.traceContext }),
+      ...(req.contexts === undefined ? {} : { contexts: req.contexts }),
     }
 
     const startPayload = yield* Codec.actions.encode(payload)
 
+    const requestTimeout = nats.requestTimeoutMs <= 0 ? MAX_REQUEST_TIMEOUT : nats.requestTimeoutMs
+
     const reply = yield* mapError(
       until(
-        nats.connection.request(subject, startPayload, { timeout: nats.requestTimeoutMs }),
+        nats.connection.request(subject, startPayload, { timeout: requestTimeout }),
         `nats:request ${subject}`,
       ),
       mapNatsFailure,

@@ -40,7 +40,8 @@ export const InternalTransport = Transport.implement({
   },
 }).build({
   dispatch: operation(function* (req: TransportDef.DispatchRequest) {
-    const { serviceName, actionKey, params = [], rawReq, traceContext } = req
+    const { serviceName, actionKey, params = [] } = req
+    const { raw: rawReq, trace: traceContext } = req.contexts ?? {}
     const streams = (req.streams ?? []) as Stream<unknown, void>[]
 
     const broker = yield* useContext(Broker)

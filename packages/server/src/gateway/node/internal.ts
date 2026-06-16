@@ -67,7 +67,9 @@ const writeResponse = async (res: ServerResponse, response: Response): Promise<v
   }
 }
 
-export const startAction = operation(function* (config: Partial<{ port: number; host: string }>) {
+export const startAction = operation(function* (
+  config: Partial<{ port: number; host: string; reusePort: boolean }>,
+) {
   const ctx = yield* useContext(Gateway.context)
   const scope = yield* useScope()
 
@@ -119,8 +121,17 @@ export const startAction = operation(function* (config: Partial<{ port: number; 
     void handle(req, res)
   })
 
+  // Under node:cluster the primary shares one listening handle across workers automatically; for
+  // standalone multi-process shared-port, `reusePort` enables kernel-level SO_REUSEPORT balancing.
   yield* action<void>(resolve => {
-    server.listen(config.port ?? ctx.port, config.host ?? ctx.host, () => resolve())
+    server.listen(
+      {
+        port: config.port ?? ctx.port,
+        host: config.host ?? ctx.host,
+        reusePort: config.reusePort ?? ctx.reusePort ?? false,
+      },
+      () => resolve(),
+    )
     return () => {}
   })
 

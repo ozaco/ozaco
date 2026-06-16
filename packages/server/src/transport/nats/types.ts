@@ -8,6 +8,8 @@ export namespace Nats {
     servers?: string | string[]
     subjectPrefix?: string
     queueGroup?: string
+    /** How long request/reply waits for a reply. Default 5000ms. Set `0` (or negative) to DISABLE the
+     * transport timeout and let the action `TimeoutPolicy` be the sole authority. */
     requestTimeoutMs?: number
   }
 
@@ -27,8 +29,7 @@ export namespace Nats {
     params?: unknown[]
     inputSubjects?: string[]
     outputSubject?: string
-    rawReq?: unknown
-    traceContext?: unknown
+    contexts?: TransportDef.DispatchContexts
   }
 
   export interface WireSuccess {

@@ -32,6 +32,7 @@ const wrapPort = (
 
   return {
     wire,
+    services: new Set<string>(),
     post: message => {
       if (!ready) {
         outbox.push(message)
@@ -104,6 +105,14 @@ const parentEndpoint = withHost<WorkerDef.PortLike, unknown>({
   },
 })
 
+const isSpecObject = (
+  spec: WorkerDef.SpawnSpec,
+): spec is { script: string | URL; count?: number } =>
+  typeof spec === 'object' && spec !== null && !(spec instanceof URL) && 'script' in spec
+
+const normalizeSpecs = (script: WorkerDef.Options['script']): WorkerDef.SpawnSpec[] =>
+  script === undefined ? [] : Array.isArray(script) ? script : [script]
+
 export const createEndpoints = operation(function* (options: WorkerDef.Options) {
   const wire = options.wire ?? 'structured'
 
@@ -112,10 +121,16 @@ export const createEndpoints = operation(function* (options: WorkerDef.Options) 
     return ports.map(port => wrapPort(port, wire, true))
   }
 
-  if (options.script !== undefined) {
+  const specs = normalizeSpecs(options.script)
+  if (specs.length > 0) {
     const endpoints: WorkerDef.Endpoint[] = []
-    for (let i = 0; i < (options.count ?? 1); i++) {
-      endpoints.push(wrapPort(yield* spawnWorker(options.script), wire, false))
+    for (const spec of specs) {
+      const script = isSpecObject(spec) ? spec.script : spec
+      // bare entries inherit the top-level `count`; the object form overrides it per script.
+      const count = isSpecObject(spec) ? (spec.count ?? options.count ?? 1) : (options.count ?? 1)
+      for (let i = 0; i < count; i++) {
+        endpoints.push(wrapPort(yield* spawnWorker(script), wire, false))
+      }
     }
     return endpoints
   }

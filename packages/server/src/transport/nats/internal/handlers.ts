@@ -89,8 +89,7 @@ export const handleDispatch = (service: Service, actionKey: string) =>
           actionKey,
           params: req.params ?? [],
           streams,
-          rawReq: req.rawReq,
-          traceContext: req.traceContext,
+          contexts: req.contexts,
         }),
       )
 

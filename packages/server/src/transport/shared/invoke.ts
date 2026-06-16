@@ -1,5 +1,12 @@
-import type { Action, BrokerDef, Service } from 'server:core'
-import { CallContext, CoreErrors, StreamContext, TraceContext } from 'server:core'
+import type { Action, BrokerDef, Service, TransportDef } from 'server:core'
+import {
+  ActionRequestContext,
+  CallContext,
+  CoreErrors,
+  fromRequestEnvelope,
+  StreamContext,
+  TraceContext,
+} from 'server:core'
 import type { Stream } from 'std:effect'
 import { operation } from 'std:effect'
 import { Logger } from 'std:logger'
@@ -11,8 +18,7 @@ export interface InvokeArgs {
   actionKey: string
   params: unknown[]
   streams: Stream<unknown, void>[]
-  rawReq: unknown
-  traceContext: unknown
+  contexts?: TransportDef.DispatchContexts | undefined
 }
 
 /**
@@ -21,7 +27,8 @@ export interface InvokeArgs {
  * that serves local actions (internal, nats, worker) so the invocation semantics stay identical.
  */
 export const invokeAction = operation(function* (args: InvokeArgs) {
-  const { service, actionKey, params, streams, rawReq, traceContext } = args
+  const { service, actionKey, params, streams, contexts } = args
+  const { raw: rawReq, request, trace: traceContext } = contexts ?? {}
 
   const action = (service.actions as Record<string, AnyType>)[actionKey]
 
@@ -61,9 +68,17 @@ export const invokeAction = operation(function* (args: InvokeArgs) {
     })
   }
 
+  // rebuild the caller's request context (auth headers etc.) when the transport carried it across the
+  // wire — local transports already inherit it through the scope, but remote ones (nats/worker) do not.
+  const withRequest = request
+    ? function* () {
+        return yield* ActionRequestContext.with(fromRequestEnvelope(request), invoke)
+      }
+    : invoke
+
   if (traceContext) {
-    return yield* TraceContext.with(traceContext as AnyType, invoke)
+    return yield* TraceContext.with(traceContext as AnyType, withRequest)
   }
 
-  return yield* invoke()
+  return yield* withRequest()
 })

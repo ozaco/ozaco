@@ -1,5 +1,5 @@
 import type { TransportDef } from 'server:core'
-import { CoreErrors, Transport } from 'server:core'
+import { Broker, CoreErrors, Transport } from 'server:core'
 import type { Stream } from 'std:effect'
 import { ensure, operation, useScope, withResolvers } from 'std:effect'
 import { fail } from 'std:result'
@@ -35,7 +35,7 @@ export const WorkerTransport = Transport.implement({
       streams: new Map(),
       handlers: new Map(),
       scope,
-      rr: { index: 0 },
+      rr: new Map(),
     }
 
     yield* Transport.actions.register(getSelf(), context)
@@ -50,8 +50,13 @@ export const WorkerTransport = Transport.implement({
       yield* startReader(context, endpoint)
     }
 
+    const broker = yield* Broker.context.get()
+    const services = broker
+      ? [...new Set([...broker.services.values()].map(service => service.name))]
+      : []
+
     for (const endpoint of endpoints) {
-      endpoint.post({ kind: 'ready', wire: context.wire })
+      endpoint.post({ kind: 'ready', wire: context.wire, services })
     }
 
     return context
@@ -60,12 +65,19 @@ export const WorkerTransport = Transport.implement({
   dispatch: operation(function* (req: TransportDef.DispatchRequest) {
     const worker = yield* useWorkerContext()
 
-    if (worker.endpoints.length === 0) {
-      return yield* fail(CoreErrors.NotFound, 'worker transport has no endpoints')
+    const candidates = worker.endpoints.filter(
+      endpoint => endpoint.services.size === 0 || endpoint.services.has(req.serviceName),
+    )
+    if (candidates.length === 0) {
+      return yield* fail(
+        CoreErrors.NotFound,
+        `worker transport has no endpoint hosting "${req.serviceName}"`,
+      )
     }
 
-    const endpoint = worker.endpoints[worker.rr.index % worker.endpoints.length]!
-    worker.rr.index += 1
+    const cursor = worker.rr.get(req.serviceName) ?? 0
+    const endpoint = candidates[cursor % candidates.length]!
+    worker.rr.set(req.serviceName, cursor + 1)
 
     const cid = generateId('c')
     const inputs = (req.streams ?? []) as Stream<unknown, void>[]
@@ -84,10 +96,9 @@ export const WorkerTransport = Transport.implement({
         ? {}
         : { params: yield* encodeValue(endpoint.wire, req.params) }),
       ...(inputStreams === undefined ? {} : { inputStreams }),
-      ...(req.rawReq === undefined
+      ...(req.contexts === undefined
         ? {}
-        : { rawReq: yield* encodeValue(endpoint.wire, req.rawReq) }),
-      ...(req.traceContext === undefined ? {} : { traceContext: req.traceContext }),
+        : { contexts: yield* encodeValue(endpoint.wire, req.contexts) }),
     }
 
     const reply = withResolvers<WorkerDef.Wire>('worker:reply')

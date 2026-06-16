@@ -6,7 +6,9 @@ import type { AnyType } from 'std:shared'
 import { dispatchRequest } from '../shared/handle'
 import { haltInflight, pauseGate, trackRequest } from '../shared/serve'
 
-export const startAction = operation(function* (config: Partial<{ port: number; host: string }>) {
+export const startAction = operation(function* (
+  config: Partial<{ port: number; host: string; reusePort: boolean }>,
+) {
   const ctx = yield* useContext(Gateway.context)
   const scope = yield* useScope()
 
@@ -58,6 +60,7 @@ export const startAction = operation(function* (config: Partial<{ port: number; 
     server = Bun.serve({
       port: config.port ?? ctx.port,
       hostname: config.host ?? ctx.host,
+      reusePort: config.reusePort ?? ctx.reusePort ?? false,
       idleTimeout: -1,
 
       fetch,

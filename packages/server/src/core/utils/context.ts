@@ -6,6 +6,7 @@ import type { BrokerDef } from '../types/broker'
 import type { ActionRequest, ActionResponse, ResponseSink } from '../types/gateway'
 import type { Service } from '../types/service'
 import type { TracerDef } from '../types/tracer'
+import type { TransportDef } from '../types/transport'
 
 export const ActionContext = createContext<Action>('server:core:action')
 export const ServiceContext = createContext<Service>('server:core:service')
@@ -22,3 +23,21 @@ export const ActionSignalContext = createContext<AbortSignal>('server:action:sig
 /** Optional: when a gateway sets this, a transport streams an action's byte `Stream` result straight
  * to the client through the sink instead of returning it as a buffered value. */
 export const ResponseSinkContext = createContext<ResponseSink>('server:action:response-sink')
+
+/** Flatten an `ActionRequest` into the serializable envelope carried over a transport. */
+export const toRequestEnvelope = (req: ActionRequest): TransportDef.RequestEnvelope => ({
+  type: req.type,
+  method: req.method,
+  url: req.url.toString(),
+  meta: req.meta,
+})
+
+/** Rebuild an `ActionRequest` on the far side of a transport. File streams cannot cross the wire, so
+ * `files` comes back empty; `url` is re-parsed from its string form. */
+export const fromRequestEnvelope = (envelope: TransportDef.RequestEnvelope): ActionRequest => ({
+  type: envelope.type as ActionRequest['type'],
+  method: envelope.method,
+  url: new URL(envelope.url),
+  meta: envelope.meta,
+  files: {},
+})

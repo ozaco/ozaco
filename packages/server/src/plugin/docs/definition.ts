@@ -24,6 +24,7 @@ export const Docs = definePlugin({
 
       openapi: options.openapi ?? '/docs/openapi',
       swagger: options.swagger ?? '/docs/swagger',
+      silent: options.silent ?? false,
 
       auth: normalizeAuth(options.auth),
     }
@@ -46,7 +47,7 @@ export const Docs = definePlugin({
     // when a Logger is installed; returns nothing so the gateway's start result is left untouched.
     yield* Gateway.after({
       *start(result: { host: string; port: number }) {
-        if ((yield* Logger.context.get()) === undefined) {
+        if ((yield* Logger.context.get()) === undefined || options.silent) {
           return
         }
 

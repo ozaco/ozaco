@@ -20,7 +20,8 @@ import type { Action } from '../types/action'
 import type { BrokerDef } from '../types/broker'
 import type { PolicyDef } from '../types/policy'
 import type { Service } from '../types/service'
-import { ActionRequestContext, TraceContext } from '../utils/context'
+import type { TransportDef } from '../types/transport'
+import { ActionRequestContext, toRequestEnvelope, TraceContext } from '../utils/context'
 import { resolvePolicySettings } from '../utils/policy'
 
 import { DefaultTracer } from './tracer'
@@ -157,6 +158,17 @@ export const DefaultBroker = DefaultBrokerImpl.build({
     return yield* withCallSpan(
       { broker, serviceName: raw.options.name, actionKey: raw.key },
       function* (traceContext) {
+        // the ActionRequest envelope that carries `.meta` (auth headers etc.); propagated to remote
+        // transports so a cross-node action can rebuild its request context, and reused below as the
+        // per-principal policy discriminator.
+        const actionRequest = yield* ActionRequestContext.get()
+
+        const contexts: TransportDef.DispatchContexts = {
+          trace: traceContext,
+          ...(options.rawReq === undefined ? {} : { raw: options.rawReq }),
+          ...(actionRequest === undefined ? {} : { request: toRequestEnvelope(actionRequest) }),
+        }
+
         const req = {
           serviceName: raw.options.name,
           actionKey: raw.key,
@@ -166,8 +178,7 @@ export const DefaultBroker = DefaultBrokerImpl.build({
             : {
                 streams: options.streams as AnyType,
               }),
-          rawReq: options.rawReq,
-          traceContext,
+          contexts,
         }
 
         const core = () => {
@@ -182,7 +193,7 @@ export const DefaultBroker = DefaultBrokerImpl.build({
         // actually carries `.meta`; the raw host Request does not). Kept SEPARATE from `key` so a
         // policy can opt out of per-principal isolation (vary:'none') — by default Cache/Bucket fold
         // it in, so identical-param calls from different principals never share a cache slot / batch.
-        const principal = principalDiscriminator(yield* ActionRequestContext.get())
+        const principal = principalDiscriminator(actionRequest)
 
         const policyCtx: PolicyDef.DispatchContext = {
           req,

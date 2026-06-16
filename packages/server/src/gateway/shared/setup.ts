@@ -25,6 +25,7 @@ export const setup = function* (options: GatewayDef.Options = {}) {
 
     statusMap: options.statusMap,
     maxBodyBytes: options.maxBodyBytes,
+    reusePort: options.reusePort,
     simplify: options.simplify,
   }
 

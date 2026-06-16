@@ -1,10 +1,12 @@
-import { CoreErrors, defineAction, defineService, Gateway, useResponse } from 'server:core'
+import { Broker, CoreErrors, defineAction, defineService, Gateway, useResponse } from 'server:core'
 import { fail } from 'std:result'
 
 import { AccessRefreshAuth, useAuth } from 'server:plugin/auth'
 import { z } from 'zod'
 
 import { createTodo, getTodo, listTodos, removeTodo, updateTodo } from '../utils/store'
+
+import { AiService } from './ai'
 
 /**
  * Todo CRUD, scoped to the signed-in user. Every action authenticates the Bearer access token via
@@ -65,7 +67,15 @@ export const TodoService = defineService({
         const session = yield* useAuth(AccessRefreshAuth)
         yield* AccessRefreshAuth.actions.requirePermission(session, 'todo:write')
 
-        const todo = createTodo(session.sub, body.title)
+        const extendedTitle = yield* Broker.actions.call(AiService.actions.chat, [
+          {
+            prompt: body.title,
+            system:
+              'Verilen promptu daha geniş bir todo maddesine dönüştür (sonuç tek madde olmalı)',
+          },
+        ])
+
+        const todo = createTodo(session.sub, extendedTitle.text)
 
         const res = yield* useResponse()
         res.status = 201

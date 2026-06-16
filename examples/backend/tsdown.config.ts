@@ -6,6 +6,7 @@ import { defineConfig } from 'tsdown'
 export default defineConfig({
   entry: {
     app: './src/index.ts',
+    deamon: './src/deamon.ts',
     'worker/main': './src/worker/main.ts',
     'worker/entry': './src/worker/entry.ts',
   },

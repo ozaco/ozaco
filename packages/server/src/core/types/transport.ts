@@ -19,13 +19,34 @@ export namespace TransportDef {
     next: (failure: Result.Failure<unknown>) => boolean
   }
 
+  /** Serializable subset of the gateway `ActionRequest`, carried across transports so a remote action
+   * can rebuild its `ActionRequestContext` (e.g. for auth headers / per-principal policy keys). The
+   * non-serializable parts of `ActionRequest` (file streams, the URL object) are reconstructed on the
+   * far side — `url` travels as a string, `files` come back empty. */
+  export interface RequestEnvelope {
+    type: string
+    method: string
+    url: string
+    meta: Record<string, string>
+  }
+
+  /** Per-call context propagated alongside a dispatch so a remote action can rebuild its environment.
+   * Grouped under one key so new context kinds can be added without widening DispatchRequest. */
+  export interface DispatchContexts {
+    /** Raw platform request (feeds CallContext.raw.req). */
+    raw?: unknown
+    /** Serializable ActionRequest — rebuilds ActionRequestContext (auth headers, per-principal keys). */
+    request?: RequestEnvelope
+    /** Tracing span context. */
+    trace?: TracerDef.SpanContext
+  }
+
   export interface DispatchRequest {
     serviceName: string
     actionKey: string
     params?: unknown[]
     streams?: Stream<unknown, void>[]
-    rawReq?: unknown
-    traceContext?: TracerDef.SpanContext
+    contexts?: DispatchContexts
   }
 
   export interface EventRequest {

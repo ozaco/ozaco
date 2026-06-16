@@ -31,6 +31,7 @@ const route = function* (
         ctx.wire = env.wire
         endpoint.wire = env.wire
       }
+      endpoint.services = new Set(env.services)
       endpoint.markReady()
       return
     }

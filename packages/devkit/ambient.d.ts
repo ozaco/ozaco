@@ -97,6 +97,10 @@ declare module 'server:client' {
   export * from '@ozaco/server/client'
 }
 
+declare module 'server:daemon' {
+  export * from '@ozaco/server/daemon'
+}
+
 // --------- DB ---------
 
 declare module 'db:core' {

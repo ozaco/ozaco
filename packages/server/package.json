@@ -199,6 +199,17 @@
         "default": "./dist/client.cjs"
       },
       "source": "./src/client/index.ts"
+    },
+    "./daemon": {
+      "import": {
+        "types": "./dist/daemon.d.ts",
+        "default": "./dist/daemon.js"
+      },
+      "require": {
+        "types": "./dist/daemon.d.cts",
+        "default": "./dist/daemon.cjs"
+      },
+      "source": "./src/daemon/index.ts"
     }
   },
   "publishConfig": {

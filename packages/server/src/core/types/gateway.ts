@@ -115,6 +115,7 @@ export namespace GatewayDef {
 
     statusMap?: Record<string, number> | undefined
     maxBodyBytes?: number | undefined
+    reusePort?: boolean | undefined
 
     simplify?:
       | ((failure: Result.Failure<unknown>) => Operation<Result.Failure<unknown>, unknown>)
@@ -126,6 +127,7 @@ export namespace GatewayDef {
     host?: string
     statusMap?: Record<string, number>
     maxBodyBytes?: number
+    reusePort?: boolean
 
     simplify?:
       | ((failure: Result.Failure<unknown>) => Operation<Result.Failure<unknown>, unknown>)
@@ -135,7 +137,7 @@ export namespace GatewayDef {
   export interface Actions {
     // listener lifecycle
     start(
-      options: Partial<{ port: number; host: string }>,
+      options: Partial<{ port: number; host: string; reusePort: boolean }>,
     ): Future<{ port: number; host: string }, unknown>
     isStarted(): Future<boolean, unknown>
     pause(cause: string): Future<void, unknown>

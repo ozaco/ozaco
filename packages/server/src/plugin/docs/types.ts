@@ -17,6 +17,7 @@ export namespace DocsDef {
 
     swagger?: string
     openapi?: string
+    silent?: boolean
 
     auth?: boolean | AuthOptions
   }
@@ -28,6 +29,7 @@ export namespace DocsDef {
 
     swagger: string
     openapi: string
+    silent?: boolean
 
     auth: AuthOptions | null
   }

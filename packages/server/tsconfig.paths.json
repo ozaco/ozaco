@@ -24,6 +24,7 @@
       "server:plugin/docs": ["./src/plugin/docs/index.ts", "./dist/plugin/docs.d.ts"],
       "server:plugin/auth": ["./src/plugin/auth/index.ts", "./dist/plugin/auth.d.ts"],
       "server:client": ["./src/client/index.ts", "./dist/client.d.ts"],
+      "server:daemon": ["./src/daemon/index.ts", "./dist/daemon.d.ts"],
 
       "std:shared": ["./node_modules/@ozaco/std/dist/shared.d.ts"],
       "std:result": ["./node_modules/@ozaco/std/dist/result.d.ts"],
