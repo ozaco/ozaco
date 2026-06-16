@@ -8,7 +8,9 @@ import type { AiErrors } from './errors'
 export type AiDef = Plugin<AiDef.Context, unknown, [config: AiDef.Config], AiDef.Actions>
 
 export namespace AiDef {
-  /** An `ai.*` tag plus the transport errors `std:fetch` can surface (network/parse/abort/…). */
+  /** An `ai.*` tag for a mapped non-2xx, plus whatever `std:fetch` surfaces raw (it no longer re-tags
+   * thrown errors — `FetchDef.Error` is `unknown`), so this widens to `unknown`. The `ai.*` tags are
+   * still produced at runtime by `failStatus`/`statusTag`; match them by value. */
   export type Error = (typeof AiErrors)[keyof typeof AiErrors] | FetchDef.Error
 
   /** Install-time configuration for an OpenAI-compatible provider. */

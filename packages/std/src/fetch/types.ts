@@ -2,7 +2,11 @@ import type { Future, Stream } from 'std:effect'
 import type { Result } from 'std:result'
 
 export namespace FetchDef {
-  export type Error = 'http-status' | 'network' | 'parse' | 'abort'
+  /** Thrown errors (network faults, aborts, body-read failures) pass through UNTOUCHED — reified with
+   * `asFailure` so their original name + cause chain survive — hence `unknown`. The only string tags
+   * fetch raises itself are the deliberate, non-thrown conditions: `'http-status'` (a non-ok response
+   * under `.expect()`) and `'parse'` (a response with no body). */
+  export type Error = unknown
 
   export type Init = Omit<RequestInit, 'signal'> & { signal?: never }
 

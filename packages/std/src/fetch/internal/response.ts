@@ -7,17 +7,12 @@ import type { AnyType } from 'std:shared'
 
 import type { FetchDef } from '../types'
 
-import { errorMessage } from './common'
-
 export const createFetchResponse = (raw: Response): FetchDef.Response => {
   const readJson = operation(function* <T>() {
     try {
       return (yield* until(raw.json())) as T
     } catch (error) {
-      return yield* fail(
-        'parse',
-        `${raw.url}: json parse failed: ${errorMessage(asFailure(error))}`,
-      )
+      return yield* asFailure(error)
     }
   })
 
@@ -25,7 +20,7 @@ export const createFetchResponse = (raw: Response): FetchDef.Response => {
     try {
       return yield* until(raw.text())
     } catch (error) {
-      return yield* fail('parse', `${raw.url}: text read failed: ${errorMessage(asFailure(error))}`)
+      return yield* asFailure(error)
     }
   })
 
@@ -33,10 +28,7 @@ export const createFetchResponse = (raw: Response): FetchDef.Response => {
     try {
       return yield* until(raw.arrayBuffer())
     } catch (error) {
-      return yield* fail(
-        'parse',
-        `${raw.url}: arrayBuffer read failed: ${errorMessage(asFailure(error))}`,
-      )
+      return yield* asFailure(error)
     }
   })
 
@@ -44,7 +36,7 @@ export const createFetchResponse = (raw: Response): FetchDef.Response => {
     try {
       return yield* until(raw.blob())
     } catch (error) {
-      return yield* fail('parse', `${raw.url}: blob read failed: ${errorMessage(asFailure(error))}`)
+      return yield* asFailure(error)
     }
   })
 
@@ -52,10 +44,7 @@ export const createFetchResponse = (raw: Response): FetchDef.Response => {
     try {
       return yield* until(raw.formData())
     } catch (error) {
-      return yield* fail(
-        'parse',
-        `${raw.url}: formData read failed: ${errorMessage(asFailure(error))}`,
-      )
+      return yield* asFailure(error)
     }
   })
 
@@ -64,10 +53,7 @@ export const createFetchResponse = (raw: Response): FetchDef.Response => {
       const buf = yield* until(raw.arrayBuffer())
       return new Uint8Array(buf)
     } catch (error) {
-      return yield* fail(
-        'parse',
-        `${raw.url}: bytes read failed: ${errorMessage(asFailure(error))}`,
-      )
+      return yield* asFailure(error)
     }
   })
 

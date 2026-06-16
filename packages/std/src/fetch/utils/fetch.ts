@@ -2,7 +2,6 @@ import { operation, until, useAbortSignal } from 'std:effect'
 import { asFailure, fail } from 'std:result'
 
 import { fetchImpl } from '../context'
-import { errorMessage, isAbortError } from '../internal/common'
 import { createFetchResponse } from '../internal/response'
 import type { FetchDef } from '../types'
 
@@ -25,9 +24,7 @@ export const fetch = (
       }
       return wrapped
     } catch (error) {
-      const failure = asFailure(error)
-      const kind = isAbortError(failure) ? 'abort' : 'network'
-      return yield* fail(kind, `${String(input)}: ${errorMessage(failure)}`)
+      return yield* asFailure(error)
     }
   }, 'fetch')
 
