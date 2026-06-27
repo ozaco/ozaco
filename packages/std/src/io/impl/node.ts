@@ -22,7 +22,9 @@ const toNodeHash = (alg: HashAlgorithm) =>
 export const NodeIO = IO.implement({
   name: 'node-io',
   version: '0.0.1',
-  *setup() {},
+  *setup() {
+    return null
+  },
 }).build({
   env: readEnv,
 

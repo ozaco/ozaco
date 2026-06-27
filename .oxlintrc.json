@@ -34,6 +34,7 @@
     "unicorn/prefer-math-trunc": "off",
     "unicorn/import-style": "off",
     "unicorn/consistent-function-scoping": "off",
+    "unicorn/max-nested-calls": "off",
 
     "eslint/max-lines": "off",
     "eslint/no-bitwise": "off",

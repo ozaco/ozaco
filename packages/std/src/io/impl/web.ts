@@ -30,7 +30,9 @@ const unsupportedStream = (action: string): Stream<Uint8Array, StreamClose> =>
 export const WebIO = IO.implement({
   name: 'web-io',
   version: '0.0.1',
-  *setup() {},
+  *setup() {
+    return null
+  },
 }).build({
   env: readWebEnv,
 

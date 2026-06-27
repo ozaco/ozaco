@@ -1,5 +1,5 @@
 import type { Result } from 'std:result'
-import { asFailure, isJust, just, nothing, succeed } from 'std:result'
+import { asFailure, isJust, isNothing, just, nothing, succeed } from 'std:result'
 
 import { useScope } from '../methods/scope'
 import type { Helpers } from '../types/helpers'
@@ -8,7 +8,7 @@ import type { Operation } from '../types/operation'
 import { ErrorContext } from './contexts'
 import { useCoroutine } from './coroutine'
 
-export function* trap<T>(operation: () => Operation<T>): Operation<T> {
+export function* trap<T, E = never>(operation: () => Operation<T, E>): Operation<T, E> {
   const scope = yield* useScope()
   const original = scope.expect(ErrorContext)
   const routine = yield* useCoroutine()
@@ -18,7 +18,7 @@ export function* trap<T>(operation: () => Operation<T>): Operation<T> {
 
   try {
     const value = yield* operation()
-    if (!isJust(boundary.outcome)) {
+    if (isNothing(boundary.outcome)) {
       boundary.outcome = just(succeed(value) as Result<T, unknown>)
     }
   } catch (error) {

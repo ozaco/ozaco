@@ -53,12 +53,14 @@ export const dispatch = operation(function* (entry: LoggerDef.Entry) {
 
   yield* all(ops)
 })
+
 export const buildEntry = (
   source: BuildEntrySource,
   level: LogLevel,
   args: readonly LoggerDef.Payload[],
 ): LoggerDef.Entry => {
   const { msg, data, error } = normalizePayload(args)
+
   return {
     level,
     time: source.ctx.timestamp(),

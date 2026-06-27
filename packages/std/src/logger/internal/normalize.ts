@@ -13,20 +13,25 @@ export const normalizePayload = (args: readonly LoggerDef.Payload[]): Normalized
   let error = ''
   const messages: string[] = []
 
-  for (const arg of args) {
+  for (const rawArg of args) {
+    let arg: unknown = rawArg
+
     if (arg === undefined || arg === null) {
       continue
     }
-    if (typeof arg === 'string') {
-      messages.push(arg)
-      continue
-    }
+
     if (isResult(arg)) {
       if (isFailure(arg)) {
         const causes = arg.causes.length > 0 ? `: ${arg.causes.join(' > ')}` : ''
         const message = arg.message ? `: ${arg.message}` : ''
         error = `${String(arg.error)}${message}${causes}`
+      } else {
+        arg = arg.value
       }
+    }
+
+    if (typeof arg === 'string') {
+      messages.push(arg)
       continue
     }
     if (typeof arg === 'object') {

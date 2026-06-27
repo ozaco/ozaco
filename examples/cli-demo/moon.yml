@@ -1,0 +1,29 @@
+language: typescript
+layer: application
+toolchains:
+  default: bun
+
+tasks:
+  build:
+    command: bun x tsdown
+    deps:
+      - devkit:build
+    inputs:
+      - src/**/*
+      - tsdown.config.ts
+    outputs:
+      - dist/**/*
+  dev:
+    script: 'sleep 3 && bun x tsdown --watch'
+    inputs:
+      - src/**/*
+      - tsdown.config.ts
+    outputs:
+      - dist/**/*
+  types:
+    command: bun x tsc -p tsconfig.json --noEmit
+    deps:
+      - devkit:build
+    inputs:
+      - src/**/*
+      - tsdown.config.ts

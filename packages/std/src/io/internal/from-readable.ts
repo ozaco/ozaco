@@ -2,6 +2,7 @@ import type { Stream } from 'std:effect'
 import { createSignal, resource, spawn, until } from 'std:effect'
 import type { NodeReadableLike, ReadableLike, StreamClose } from 'std:io'
 import { asFailure } from 'std:result'
+import { isBoolean } from 'std:shared'
 
 const isNodeReadable = (target: ReadableLike): target is NodeReadableLike =>
   typeof (target as NodeReadableLike).on === 'function'
@@ -13,8 +14,17 @@ const isNodeReadable = (target: ReadableLike): target is NodeReadableLike =>
  * `./stream.ts`. The close value is `true` on a clean end and the failure when the source errored
  * mid-stream — consumers must check it, or truncation is indistinguishable from completion.
  */
-export const fromReadable = (target: ReadableLike): Stream<Uint8Array, StreamClose> =>
+export const fromReadable = (
+  target: ReadableLike,
+  options: {
+    destroy?: boolean
+  } = {},
+): Stream<Uint8Array, StreamClose> =>
   resource(function* (provide) {
+    if (!isBoolean(options.destroy)) {
+      options.destroy = true
+    }
+
     const signal = createSignal<Uint8Array, StreamClose>()
     const subscription = yield* signal
 
@@ -48,7 +58,10 @@ export const fromReadable = (target: ReadableLike): Stream<Uint8Array, StreamClo
         target.off('end', onEnd)
         target.off('close', onClose)
         target.off('error', onError)
-        target.destroy?.()
+
+        if (options.destroy) {
+          target.destroy?.()
+        }
       }
       return
     }
@@ -70,13 +83,18 @@ export const fromReadable = (target: ReadableLike): Stream<Uint8Array, StreamClo
         throw error
       } finally {
         signal.close(close)
-        target.releaseLock()
+
+        if (options.destroy) {
+          target.releaseLock()
+        }
       }
     })
 
     try {
       yield* provide(subscription)
     } finally {
-      yield* until(target.cancel().catch(() => {}))
+      if (options.destroy) {
+        yield* until(target.cancel().catch(() => {}))
+      }
     }
   })

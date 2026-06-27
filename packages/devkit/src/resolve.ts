@@ -112,6 +112,11 @@ const AI_MODULES: Record<string, ModuleEntry> = {
   'ai:impl/openai': { subpath: 'impl/openai', source: 'impl/openai.ts' },
 }
 
+const CLI_MODULES: Record<string, ModuleEntry> = {
+  'cli:core': { subpath: 'core', source: 'core/index.ts' },
+  'cli:impl/bun': { subpath: 'impl/bun', source: 'impl/bun.ts' },
+}
+
 interface ResolveAliasOptions {
   aliases: Record<string, string>
   external?: boolean
@@ -181,5 +186,13 @@ const aiResolve: UnpluginInstance<ResolveOptions | undefined, false> = createUnp
     ),
 )
 
-export { aiResolve, dbResolve, resolveAlias, serverResolve, stdResolve }
+const cliResolve: UnpluginInstance<ResolveOptions | undefined, false> = createUnplugin(
+  (options?: ResolveOptions) =>
+    resolveFactory('@ozaco/devkit:resolve:cli')(
+      buildAliases(CLI_MODULES, '@ozaco/cli', options?.sourceDir),
+      !options?.sourceDir,
+    ),
+)
+
+export { aiResolve, cliResolve, dbResolve, resolveAlias, serverResolve, stdResolve }
 export type { ResolveAliasOptions, ResolveOptions }

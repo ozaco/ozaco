@@ -27,7 +27,7 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
 
       - run: 'bun install --frozen-lockfile'
-      - run: 'moon run std:build server:build db:build ai:build devkit:build --color'
+      - run: 'moon run std:build server:build db:build ai:build devkit:build cli:build --color'
 
       - run: 'npm publish --access public || true'
         working-directory: 'packages/std'
@@ -43,3 +43,6 @@ jobs:
 
       - run: 'npm publish --access public || true'
         working-directory: 'packages/devkit'
+
+      - run: 'npm publish --access public || true'
+        working-directory: 'packages/cli'

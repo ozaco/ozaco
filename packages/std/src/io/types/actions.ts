@@ -20,7 +20,10 @@ export type IOActions = {
   hmac: (algorithm: HashAlgorithm, key: Uint8Array, data: Uint8Array) => Future<Uint8Array, unknown>
   hash: (algorithm: HashAlgorithm, data: Uint8Array) => Future<Uint8Array, unknown>
 
-  fromReadable: (target: ReadableLike) => Stream<Uint8Array, StreamClose>
+  fromReadable: (
+    target: ReadableLike,
+    options?: { destroy?: boolean },
+  ) => Stream<Uint8Array, StreamClose>
   toReadable: (
     source: Stream<Uint8Array, unknown>,
   ) => Future<{ readable: ReadableStream<Uint8Array>; pump: Operation<void, unknown> }>

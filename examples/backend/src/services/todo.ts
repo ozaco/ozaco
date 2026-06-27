@@ -71,7 +71,7 @@ export const TodoService = defineService({
           {
             prompt: body.title,
             system:
-              'Verilen promptu daha geniş bir todo maddesine dönüştür (sonuç tek madde olmalı)',
+              'Convert the given prompt into a broader todo list item (the result should be a single item).',
           },
         ])
 

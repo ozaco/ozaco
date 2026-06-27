@@ -12,7 +12,7 @@ export const Priority = createContext<number>('std:effect:scope.generation', 0)
 export const Children = createContext<Set<Scope>>('std:effect:scope.children')
 
 export const ErrorContext = createContext<Helpers.ErrorBoundary>('std:effect:boundary', {
-  raise: () => {},
+  raise() {},
 })
 
 export const SettleContext = createContext<Helpers.Settleware>(

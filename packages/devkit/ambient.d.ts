@@ -120,3 +120,12 @@ declare module 'ai:core' {
 declare module 'ai:impl/openai' {
   export * from '@ozaco/ai/impl/openai'
 }
+
+// --------- CLI ---------
+declare module 'cli:core' {
+  export * from '@ozaco/cli/core'
+}
+
+declare module 'cli:impl/bun' {
+  export * from '@ozaco/cli/impl/bun'
+}

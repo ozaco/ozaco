@@ -16,7 +16,9 @@ import { webHash, webHmac, webRandomBytes } from '../internal/webcrypto'
 export const BunIO = IO.implement({
   name: 'bun-io',
   version: '0.0.1',
-  *setup() {},
+  *setup() {
+    return null
+  },
 }).build({
   env: readEnv,
 
