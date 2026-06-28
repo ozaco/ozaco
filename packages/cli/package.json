@@ -24,16 +24,49 @@
       },
       "source": "./src/core/index.ts"
     },
-    "./impl/bun": {
+    "./palette": {
       "import": {
-        "types": "./dist/impl/bun.d.ts",
-        "default": "./dist/impl/bun.js"
+        "types": "./dist/palette.d.ts",
+        "default": "./dist/palette.js"
       },
       "require": {
-        "types": "./dist/impl/bun.d.cts",
-        "default": "./dist/impl/bun.cjs"
+        "types": "./dist/palette.d.cts",
+        "default": "./dist/palette.cjs"
       },
-      "source": "./src/impl/bun.ts"
+      "source": "./src/palette/definition.ts"
+    },
+    "./spinner": {
+      "import": {
+        "types": "./dist/spinner.d.ts",
+        "default": "./dist/spinner.js"
+      },
+      "require": {
+        "types": "./dist/spinner.d.cts",
+        "default": "./dist/spinner.cjs"
+      },
+      "source": "./src/spinner/definition.ts"
+    },
+    "./prompt": {
+      "import": {
+        "types": "./dist/prompt.d.ts",
+        "default": "./dist/prompt.js"
+      },
+      "require": {
+        "types": "./dist/prompt.d.cts",
+        "default": "./dist/prompt.cjs"
+      },
+      "source": "./src/prompt/definition.ts"
+    },
+    "./terminal/bun": {
+      "import": {
+        "types": "./dist/terminal/bun.d.ts",
+        "default": "./dist/terminal/bun.js"
+      },
+      "require": {
+        "types": "./dist/terminal/bun.d.cts",
+        "default": "./dist/terminal/bun.cjs"
+      },
+      "source": "./src/terminal/bun.ts"
     }
   },
   "publishConfig": {

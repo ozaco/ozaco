@@ -5,6 +5,9 @@ const ESC = String.fromCodePoint(27)
 const CSI = `${ESC}[`
 
 export const TERMINAL = Symbol.for('cli:core:terminal')
+export const SPINNER = Symbol.for('cli:core:spinner')
+export const PALETTE = Symbol.for('cli:core:palette')
+export const PROMPT = Symbol.for('cli:core:prompt')
 
 export const DEFAULT_COLUMNS = 80
 export const DEFAULT_ROWS = 24

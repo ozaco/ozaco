@@ -6,12 +6,13 @@ import { cliResolve, stdResolve } from '../devkit/src/resolve'
 export default defineConfig({
   entry: {
     core: './src/core/index.ts',
+    palette: './src/palette/definition.ts',
+    prompt: './src/prompt/definition.ts',
+    spinner: './src/spinner/definition.ts',
     // command: './src/command/index.ts',
-    // prompt: './src/prompt/index.ts',
-    // spinner: './src/spinner/index.ts',
-    'impl/bun': './src/impl/bun.ts',
-    // 'impl/web': './src/impl/web.ts',
-    // 'impl/memory': './src/impl/memory.ts',
+    'terminal/bun': './src/terminal/bun.ts',
+    // 'terminal/web': './src/terminal/web.ts',
+    // 'terminal/memory': './src/terminal/memory.ts',
   },
   format: ['esm', 'cjs'],
   dts: true,

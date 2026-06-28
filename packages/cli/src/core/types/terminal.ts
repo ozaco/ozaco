@@ -1,9 +1,7 @@
 import type { Future, Operation, Stream } from 'std:effect'
 import type { Plugin } from 'std:plugin'
 
-import type { Key } from 'cli:core'
-
-import type { InputStream, OutputStream, Size } from './common'
+import type { InputStream, Key, OutputStream, Size } from './common'
 
 export type TerminalDef = Plugin<
   TerminalDef.Context,
@@ -66,6 +64,12 @@ export namespace TerminalDef {
     ambiguousIsNarrow?: boolean
   }
 
+  export interface Renderer {
+    render(frame: string): Future<void, unknown>
+    clear(): Future<void, unknown>
+    done(frame?: string): Future<void, unknown>
+  }
+
   export interface Actions {
     /** Current terminal size. */
     size(): Future<Size, unknown>
@@ -91,5 +95,8 @@ export namespace TerminalDef {
       columns: number,
       options: TerminalDef.WrapAnsiOptions,
     ): Future<string, unknown>
+    displayWidth(line: string): Future<number, unknown>
+
+    renderer(columns: number): Future<TerminalDef.Renderer, unknown>
   }
 }

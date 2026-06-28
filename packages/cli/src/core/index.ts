@@ -4,4 +4,7 @@ export * from './definitions'
 export * from './utils/context'
 
 export * from './types/common'
+export * from './types/palette'
+export * from './types/prompt'
+export * from './types/spinner'
 export * from './types/terminal'

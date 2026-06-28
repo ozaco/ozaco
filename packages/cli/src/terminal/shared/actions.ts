@@ -6,7 +6,7 @@ import type { AnyType } from 'std:shared'
 import { emitKeypressEvents } from 'node:readline'
 import { PassThrough } from 'node:stream'
 
-import type { Key } from 'cli:core'
+import type { Key, TerminalDef } from 'cli:core'
 import { ansi, KeyStreamContext, Terminal } from 'cli:core'
 
 const encoder = new TextEncoder()
@@ -75,4 +75,53 @@ export const terminalSession = operation(function* <R, E>(fn: () => Operation<R,
 
 export const terminalKeys = operation(function* () {
   return yield* KeyStreamContext.expect()
+})
+
+export const terminalDisplayWidth = operation(function* (line: string) {
+  return Array.from(yield* Terminal.actions.stripAnsi(line)).length
+})
+
+export const terminalRenderer = operation(function* (columns: number) {
+  const ctx = yield* useContext(Terminal)
+  let trackedRows = 0
+
+  const rowsOf = function* (text: string) {
+    if (text === '') {
+      return 0
+    }
+
+    let rows = 0
+    for (const line of text.split('\n')) {
+      rows += Math.max(1, Math.ceil((yield* terminalDisplayWidth(line)) / Math.max(1, columns)))
+    }
+    return rows
+  }
+
+  const clear = operation(function* () {
+    if (trackedRows === 0) {
+      return
+    }
+
+    ctx.output.write(ansi.cursorToColumn(0))
+    ctx.output.write(ansi.cursorUp(trackedRows - 1))
+    ctx.output.write(ansi.eraseDown)
+    trackedRows = 0
+  })
+
+  return {
+    render: operation(function* (frame) {
+      yield* clear()
+      ctx.output.write(frame)
+      trackedRows = yield* rowsOf(frame)
+    }),
+    clear,
+    done: operation(function* (frame) {
+      if (frame !== undefined) {
+        yield* clear()
+        ctx.output.write(frame)
+      }
+      ctx.output.write('\n')
+      trackedRows = 0
+    }),
+  } satisfies TerminalDef.Renderer
 })

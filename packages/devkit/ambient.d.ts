@@ -126,6 +126,18 @@ declare module 'cli:core' {
   export * from '@ozaco/cli/core'
 }
 
-declare module 'cli:impl/bun' {
-  export * from '@ozaco/cli/impl/bun'
+declare module 'cli:palette' {
+  export * from '@ozaco/cli/palette'
+}
+
+declare module 'cli:prompt' {
+  export * from '@ozaco/cli/prompt'
+}
+
+declare module 'cli:spinner' {
+  export * from '@ozaco/cli/spinner'
+}
+
+declare module 'cli:terminal/bun' {
+  export * from '@ozaco/cli/terminal/bun'
 }

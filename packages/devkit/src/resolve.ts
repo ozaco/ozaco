@@ -114,7 +114,10 @@ const AI_MODULES: Record<string, ModuleEntry> = {
 
 const CLI_MODULES: Record<string, ModuleEntry> = {
   'cli:core': { subpath: 'core', source: 'core/index.ts' },
-  'cli:impl/bun': { subpath: 'impl/bun', source: 'impl/bun.ts' },
+  'cli:palette': { subpath: 'palette', source: 'palette/definition.ts' },
+  'cli:prompt': { subpath: 'prompt', source: 'prompt/definition.ts' },
+  'cli:spinner': { subpath: 'spinner', source: 'spinner/definition.ts' },
+  'cli:terminal/bun': { subpath: 'terminal/bun', source: 'terminal/bun.ts' },
 }
 
 interface ResolveAliasOptions {

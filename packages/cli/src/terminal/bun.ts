@@ -2,7 +2,13 @@ import { operation, useContext } from 'std:effect'
 
 import { Terminal } from 'cli:core'
 
-import { terminalKeys, terminalSession, terminalWrite } from './shared/actions'
+import {
+  terminalDisplayWidth,
+  terminalKeys,
+  terminalRenderer,
+  terminalSession,
+  terminalWrite,
+} from './shared/actions'
 import { nodelikeSetup } from './shared/setup'
 import { terminalSize } from './shared/size'
 
@@ -20,6 +26,8 @@ export const BunTerminal = Terminal.implement({
   write: terminalWrite,
   keys: terminalKeys,
   session: terminalSession,
+  displayWidth: terminalDisplayWidth,
+  renderer: terminalRenderer,
 
   stripAnsi: operation(function* (text) {
     return Bun.stripANSI(text)
