@@ -1,8 +1,7 @@
-import { operation } from 'std:effect'
-import { fail } from 'std:result'
-
 import type { PromptDef } from 'cli:core'
 import { CoreErrors } from 'cli:core'
+import { operation } from 'std:effect'
+import { fail } from 'std:result'
 
 import type { AutocompleteState, PromptSpec } from '../../types'
 import { labelOf } from '../choice'

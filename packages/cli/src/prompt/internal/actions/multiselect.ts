@@ -1,6 +1,5 @@
-import { operation } from 'std:effect'
-
 import type { PromptDef } from 'cli:core'
+import { operation } from 'std:effect'
 
 import type { MultiSelectState, PromptSpec } from '../../types'
 import { firstEnabled, indicesToValues, labelOf, resolveSelected } from '../choice'

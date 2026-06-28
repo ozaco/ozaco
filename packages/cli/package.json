@@ -1,6 +1,6 @@
 {
   "name": "@ozaco/cli",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "homepage": "https://ozaco.com/",
   "author": "giveerr (https://github.com/giveerr)",
   "repository": {
@@ -46,6 +46,17 @@
       },
       "source": "./src/spinner/definition.ts"
     },
+    "./command": {
+      "import": {
+        "types": "./dist/command.d.ts",
+        "default": "./dist/command.js"
+      },
+      "require": {
+        "types": "./dist/command.d.cts",
+        "default": "./dist/command.cjs"
+      },
+      "source": "./src/command/definition.ts"
+    },
     "./prompt": {
       "import": {
         "types": "./dist/prompt.d.ts",
@@ -77,9 +88,16 @@
   "devDependencies": {
     "@ozaco/std": "workspace:*",
     "tsdown": "catalog:build",
-    "unrun": "catalog:build"
+    "unrun": "catalog:build",
+    "zod": "^4.3.6"
   },
   "peerDependencies": {
-    "@ozaco/std": "*"
+    "@ozaco/std": "*",
+    "zod": "*"
+  },
+  "peerDependenciesMeta": {
+    "zod": {
+      "optional": true
+    }
   }
 }

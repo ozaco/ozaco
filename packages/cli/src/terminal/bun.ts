@@ -1,6 +1,5 @@
-import { operation, useContext } from 'std:effect'
-
 import { Terminal } from 'cli:core'
+import { operation, useContext } from 'std:effect'
 
 import {
   terminalDisplayWidth,

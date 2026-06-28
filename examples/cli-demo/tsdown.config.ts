@@ -5,6 +5,7 @@ import { defineConfig } from 'tsdown'
 export default defineConfig({
   entry: {
     app: './src/index.ts',
+    scaffold: './src/scaffold.ts',
   },
   format: ['esm'],
   dts: true,

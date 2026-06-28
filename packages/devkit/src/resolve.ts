@@ -117,6 +117,7 @@ const CLI_MODULES: Record<string, ModuleEntry> = {
   'cli:palette': { subpath: 'palette', source: 'palette/definition.ts' },
   'cli:prompt': { subpath: 'prompt', source: 'prompt/definition.ts' },
   'cli:spinner': { subpath: 'spinner', source: 'spinner/definition.ts' },
+  'cli:command': { subpath: 'command', source: 'command/definition.ts' },
   'cli:terminal/bun': { subpath: 'terminal/bun', source: 'terminal/bun.ts' },
 }
 

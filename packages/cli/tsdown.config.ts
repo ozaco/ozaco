@@ -9,7 +9,7 @@ export default defineConfig({
     palette: './src/palette/definition.ts',
     prompt: './src/prompt/definition.ts',
     spinner: './src/spinner/definition.ts',
-    // command: './src/command/index.ts',
+    command: './src/command/definition.ts',
     'terminal/bun': './src/terminal/bun.ts',
     // 'terminal/web': './src/terminal/web.ts',
     // 'terminal/memory': './src/terminal/memory.ts',

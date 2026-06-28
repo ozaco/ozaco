@@ -66,10 +66,15 @@
         "@ozaco/std": "workspace:*",
         "tsdown": "catalog:build",
         "unrun": "catalog:build",
+        "zod": "^4.3.6",
       },
       "peerDependencies": {
         "@ozaco/std": "*",
+        "zod": "*",
       },
+      "optionalPeers": [
+        "zod",
+      ],
     },
     "packages/db": {
       "name": "@ozaco/db",

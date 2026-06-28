@@ -1,9 +1,8 @@
+import type { InputStream, OutputStream, TerminalDef } from 'cli:core'
 import { attempt, useContext } from 'std:effect'
 import { IO } from 'std:io'
 import { Logger } from 'std:logger'
 import { isFailure, isSuccess } from 'std:result'
-
-import type { InputStream, OutputStream, TerminalDef } from 'cli:core'
 
 export const nodelikeSetup = function* (options: TerminalDef.Options = {}) {
   const input = options.input ?? (process.stdin as unknown as InputStream)

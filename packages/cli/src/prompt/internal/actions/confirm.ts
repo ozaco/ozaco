@@ -1,6 +1,5 @@
-import { operation } from 'std:effect'
-
 import type { PromptDef } from 'cli:core'
+import { operation } from 'std:effect'
 
 import type { ConfirmState, PromptSpec } from '../../types'
 import { activeLine, cancelledLine, hint, submittedLine } from '../chrome'

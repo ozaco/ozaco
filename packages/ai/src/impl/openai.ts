@@ -1,8 +1,7 @@
-import { operation, useContext } from 'std:effect'
-import { fail } from 'std:result'
-
 import type { AiDef } from 'ai:core'
 import { AI, AiErrors, DEFAULT_BASE_URL, DEFAULT_CHAT_MODEL } from 'ai:core'
+import { operation, useContext } from 'std:effect'
+import { fail } from 'std:result'
 
 import { parseChatResponse, parseEmbedResponse, parseSttResponse } from '../internal/parse'
 import { buildChatBody, buildEmbedBody, buildSttForm, buildTtsBody } from '../internal/payload'

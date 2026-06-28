@@ -138,6 +138,10 @@ declare module 'cli:spinner' {
   export * from '@ozaco/cli/spinner'
 }
 
+declare module 'cli:command' {
+  export * from '@ozaco/cli/command'
+}
+
 declare module 'cli:terminal/bun' {
   export * from '@ozaco/cli/terminal/bun'
 }

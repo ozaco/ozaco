@@ -1,3 +1,5 @@
+import type { Size } from 'cli:core'
+import { DEFAULT_COLUMNS, DEFAULT_ROWS, Terminal } from 'cli:core'
 import { attempt, call, operation, useContext } from 'std:effect'
 import { IO } from 'std:io'
 import { isSuccess } from 'std:result'
@@ -6,9 +8,6 @@ import type { AnyType } from 'std:shared'
 import { execFileSync } from 'node:child_process'
 import { constants, openSync } from 'node:fs'
 import { WriteStream } from 'node:tty'
-
-import type { Size } from 'cli:core'
-import { DEFAULT_COLUMNS, DEFAULT_ROWS, Terminal } from 'cli:core'
 
 const create = operation(function* (columns?: string | number, rows?: string | number) {
   return {

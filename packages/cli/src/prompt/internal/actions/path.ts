@@ -1,9 +1,8 @@
+import type { PromptDef } from 'cli:core'
 import { operation } from 'std:effect'
 
 import { readdirSync } from 'node:fs'
 import { basename, dirname, isAbsolute, join } from 'node:path'
-
-import type { PromptDef } from 'cli:core'
 
 import type { FieldState, PathEntry, PromptSpec } from '../../types'
 import { cancelledLine, inlineFrame, submittedLine } from '../chrome'

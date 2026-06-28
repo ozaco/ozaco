@@ -1,9 +1,8 @@
+import type { PaletteDef } from 'cli:core'
+import { Palette, Terminal } from 'cli:core'
 import { attempt, useContext } from 'std:effect'
 import { IO } from 'std:io'
 import { isSuccess } from 'std:result'
-
-import type { PaletteDef } from 'cli:core'
-import { Palette, Terminal } from 'cli:core'
 
 import { colorsAction, symbolsAction } from './internal/actions'
 import type { DefinePaletteOptions, ResolveOptions } from './types'

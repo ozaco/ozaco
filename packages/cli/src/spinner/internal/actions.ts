@@ -1,8 +1,7 @@
-import type { Task } from 'std:effect'
-import { ensure, operation, sleep, spawn, useContext } from 'std:effect'
-
 import type { SpinnerDef } from 'cli:core'
 import { ansi, Palette, Terminal } from 'cli:core'
+import type { Task } from 'std:effect'
+import { ensure, operation, sleep, spawn, useContext } from 'std:effect'
 
 import type { TreeNode, TreeRunnerOptions } from '../types'
 

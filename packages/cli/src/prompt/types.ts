@@ -1,6 +1,5 @@
-import type { Operation } from 'std:effect'
-
 import type { Key, PaletteDef } from 'cli:core'
+import type { Operation } from 'std:effect'
 
 export interface PromptContext {
   palette: PaletteDef.Context

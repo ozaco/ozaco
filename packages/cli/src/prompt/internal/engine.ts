@@ -1,9 +1,8 @@
+import type { Key } from 'cli:core'
+import { CoreErrors, Palette, Terminal } from 'cli:core'
 import type { Operation } from 'std:effect'
 import { each, useContext } from 'std:effect'
 import { fail } from 'std:result'
-
-import type { Key } from 'cli:core'
-import { CoreErrors, Palette, Terminal } from 'cli:core'
 
 import type { PromptContext, PromptSpec } from '../types'
 

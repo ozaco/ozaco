@@ -1,3 +1,5 @@
+import type { Key, TerminalDef } from 'cli:core'
+import { ansi, KeyStreamContext, Terminal } from 'cli:core'
 import type { Operation } from 'std:effect'
 import { createSignal, each, ensure, operation, scoped, spawn, useContext } from 'std:effect'
 import { IO } from 'std:io'
@@ -5,9 +7,6 @@ import type { AnyType } from 'std:shared'
 
 import { emitKeypressEvents } from 'node:readline'
 import { PassThrough } from 'node:stream'
-
-import type { Key, TerminalDef } from 'cli:core'
-import { ansi, KeyStreamContext, Terminal } from 'cli:core'
 
 const encoder = new TextEncoder()
 
