@@ -56,7 +56,7 @@
     "@ozaco/server": "workspace:*",
     "@ozaco/std": "workspace:*",
     "tsdown": "catalog:build",
-    "unplugin": "3.0.0"
+    "unplugin": "3.3.0"
   },
   "peerDependencies": {
     "@ozaco/ai": "*",
