@@ -1,4 +1,4 @@
-import type { Future, Stream } from 'std:effect'
+import type { Future, Operation, Stream } from 'std:effect'
 import type { Result } from 'std:result'
 import type { AnyType } from 'std:shared'
 
@@ -108,4 +108,70 @@ export interface ProcessHandle {
   closeStdin: () => Future<void, unknown>
   /** Send a termination signal (default `SIGTERM`). */
   kill: (signal?: number | string) => Future<void, unknown>
+}
+
+/** Options for {@link IOActions.tcpListen}. */
+export interface TcpListenOptions {
+  port: number
+  /** Interface to bind. Defaults to `0.0.0.0`. */
+  hostname?: string
+  /** Enable kernel-level `SO_REUSEPORT` load balancing across processes. */
+  reusePort?: boolean
+}
+
+/** Options for {@link IOActions.tcpConnect}. */
+export interface TcpConnectOptions {
+  port: number
+  /** Host to connect to. Defaults to `127.0.0.1`. */
+  hostname?: string
+}
+
+/** A bidirectional TCP byte channel (an accepted connection or a client socket). */
+export interface TcpSocket {
+  readonly remoteAddress: string
+  readonly remotePort: number
+  readonly localPort: number
+  /** Inbound bytes; the close value is `true` on a clean end or the failure that interrupted it. */
+  data: Stream<Uint8Array, StreamClose>
+  /** Write a chunk, resolving once it has been flushed (honors backpressure). */
+  write: (chunk: Uint8Array | string) => Future<void, unknown>
+  /** Half-close the socket's write side and tear it down. */
+  close: () => Future<void, unknown>
+}
+
+/** A per-connection handler; runs as a child of the scope that called {@link IOActions.tcpListen}. */
+export type TcpHandler = (socket: TcpSocket) => Operation<void, unknown>
+
+/** A handle to a listening TCP server (see {@link IOActions.tcpListen}). */
+export interface TcpServer {
+  readonly port: number
+  readonly hostname: string
+  /** Stop accepting connections and shut the server down. */
+  close: () => Future<void, unknown>
+}
+
+/** Options for {@link IOActions.udpBind}. */
+export interface UdpBindOptions {
+  /** Local port to bind. Omit or `0` for an ephemeral port. */
+  port?: number
+  /** Interface to bind. */
+  hostname?: string
+}
+
+/** A single received UDP datagram plus its sender. */
+export interface UdpDatagram {
+  data: Uint8Array
+  address: string
+  port: number
+}
+
+/** A handle to a bound UDP socket (see {@link IOActions.udpBind}). */
+export interface UdpSocket {
+  readonly port: number
+  /** Inbound datagrams, buffered from bind time. */
+  messages: Stream<UdpDatagram, StreamClose>
+  /** Send a datagram to an explicit destination. */
+  send: (data: Uint8Array | string, port: number, address: string) => Future<void, unknown>
+  /** Close the socket. */
+  close: () => Future<void, unknown>
 }

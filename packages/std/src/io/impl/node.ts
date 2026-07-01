@@ -11,6 +11,7 @@ import { dirname, join } from 'node:path'
 
 import { readEnv } from '../internal/env'
 import { fromReadable } from '../internal/from-readable'
+import { tcpConnect, tcpListen, udpBind } from '../internal/net'
 import { mapStat, walkRecursive } from '../internal/node-shared'
 import { nodeExec, nodeSpawn } from '../internal/process-node'
 import { readFileStream, writeFileStream } from '../internal/stream'
@@ -170,4 +171,8 @@ export const NodeIO = IO.implement({
 
   exec: nodeExec,
   spawn: nodeSpawn,
+
+  tcpListen,
+  tcpConnect,
+  udpBind,
 })

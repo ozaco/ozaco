@@ -10,6 +10,13 @@ import type {
   ReadableLike,
   SpawnOptions,
   StreamClose,
+  TcpConnectOptions,
+  TcpHandler,
+  TcpListenOptions,
+  TcpServer,
+  TcpSocket,
+  UdpBindOptions,
+  UdpSocket,
   WalkEntry,
   WalkOptions,
 } from './common'
@@ -95,4 +102,8 @@ export type IOActions = {
     args?: readonly string[],
     options?: SpawnOptions,
   ) => Future<ProcessHandle, unknown>
+
+  tcpListen: (options: TcpListenOptions, onConnection: TcpHandler) => Future<TcpServer, unknown>
+  tcpConnect: (options: TcpConnectOptions) => Future<TcpSocket, unknown>
+  udpBind: (options?: UdpBindOptions) => Future<UdpSocket, unknown>
 }

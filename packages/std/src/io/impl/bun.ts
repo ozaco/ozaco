@@ -8,6 +8,7 @@ import { dirname, join } from 'node:path'
 
 import { readEnv } from '../internal/env'
 import { fromReadable } from '../internal/from-readable'
+import { tcpConnect, tcpListen, udpBind } from '../internal/net'
 import { mapStat, walkRecursive } from '../internal/node-shared'
 import { bunExec, bunSpawn } from '../internal/process-bun'
 import { readFileStream, writeFileStream } from '../internal/stream'
@@ -157,4 +158,8 @@ export const BunIO = IO.implement({
 
   exec: bunExec,
   spawn: bunSpawn,
+
+  tcpListen,
+  tcpConnect,
+  udpBind,
 })

@@ -64,4 +64,8 @@ export const WebIO = IO.implement({
   chmod: unsupported('chmod'),
   exec: unsupported('exec'),
   spawn: unsupported('spawn'),
+
+  tcpListen: unsupported('tcpListen'),
+  tcpConnect: unsupported('tcpConnect'),
+  udpBind: unsupported('udpBind'),
 })
