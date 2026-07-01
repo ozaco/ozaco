@@ -108,23 +108,12 @@ export function* runCommand(
     return
   }
 
-  const booleanFields = new Set(
-    infos.filter(info => info.type === 'boolean' && !info.array).map(info => info.name),
-  )
-  const aliases = new Map<string, string>()
-  for (const info of infos) {
-    aliases.set(info.name, info.name)
-  }
-  for (const [field, flag] of Object.entries(short)) {
-    aliases.set(flag, field)
-  }
-
-  const raw = tokenize(actionArgv, booleanFields, aliases)
+  const raw = yield* tokenize(actionArgv, infos, short)
   const built = build(infos, raw, argsOrder)
   const errors = [...raw.errors]
   let ctx: unknown = built
 
-  if (meta.input !== undefined) {
+  if (meta.input !== undefined && errors.length === 0) {
     const result = yield* validate(meta.input, built)
     if (result.issues) {
       errors.push(formatIssues(result.issues))

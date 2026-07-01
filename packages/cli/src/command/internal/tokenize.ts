@@ -1,123 +1,69 @@
+import type { Operation } from 'std:effect'
+import { attempt, call } from 'std:effect'
+import { isFailure } from 'std:result'
+
+import { parseArgs } from 'node:util'
+
+import type { CommandDef } from '../types/command'
 import type { RawParse } from '../types/internal'
 
-const looksLikeValue = (token: string | undefined): token is string =>
-  token !== undefined && (token === '-' || !token.startsWith('-'))
+interface OptionSpec {
+  type: 'string' | 'boolean'
+  multiple?: boolean
+  short?: string
+}
+
+const stringify = (value: string | boolean): string =>
+  typeof value === 'boolean' ? String(value) : value
 
 /**
- * Split argv into option values, positionals, and a `--` rest. `booleanFields` (which never consume
- * a value) and `aliases` (token → canonical field, covering both long names and short flags) come
- * from the action's schema + `short` map. Supports `--flag`, `--flag=v`, `--no-flag`, `-abc`, `-n5`,
- * repeated flags (→ array), and `-vvv`.
+ * Tokenize argv with Node's built-in `util.parseArgs` (no hand-rolled parser). The action's option
+ * `infos` + `short` map become the parseArgs option config: boolean fields take no value, array
+ * fields are `multiple`, everything else is a string the schema later coerces. Tokens after `--` are
+ * kept as `rest` (parseArgs would otherwise fold them into positionals). parseArgs throws on a bad
+ * parse (unknown option, missing value, value on a boolean); we run it through `attempt(call(...))`
+ * so the throw is reified into a `Result` inside the effect runtime — never a bare `try/catch` — and
+ * surfaced as `errors`, letting the caller render help instead of unwinding.
  */
-export const tokenize = (
+export function* tokenize(
   args: string[],
-  booleanFields: ReadonlySet<string>,
-  aliases: ReadonlyMap<string, string>,
-): RawParse => {
-  const options = new Map<string, string[]>()
-  const positionals: string[] = []
-  const rest: string[] = []
-  const errors: string[] = []
+  infos: readonly CommandDef.OptionInfo[],
+  short: Record<string, string>,
+): Operation<RawParse> {
+  const separator = args.indexOf('--')
+  const head = separator === -1 ? args : args.slice(0, separator)
+  const rest = separator === -1 ? [] : args.slice(separator + 1)
 
-  const push = (name: string, value: string): void => {
-    const list = options.get(name) ?? []
-    list.push(value)
-    options.set(name, list)
+  const options: Record<string, OptionSpec> = {}
+  for (const info of infos) {
+    const spec: OptionSpec = {
+      type: info.type === 'boolean' && !info.array ? 'boolean' : 'string',
+      multiple: info.array,
+    }
+    const flag = short[info.name]
+    if (flag !== undefined) {
+      spec.short = flag
+    }
+    options[info.name] = spec
   }
 
-  let i = 0
-  while (i < args.length) {
-    const token = args[i]!
-
-    if (token === '--') {
-      rest.push(...args.slice(i + 1))
-      break
-    }
-
-    if (token.startsWith('--')) {
-      let body = token.slice(2)
-
-      if (body.startsWith('no-')) {
-        const negated = aliases.get(body.slice(3))
-        if (negated !== undefined && booleanFields.has(negated)) {
-          push(negated, 'false')
-          i += 1
-          continue
-        }
-      }
-
-      let inlineValue: string | undefined
-      const equals = body.indexOf('=')
-      if (equals !== -1) {
-        inlineValue = body.slice(equals + 1)
-        body = body.slice(0, equals)
-      }
-
-      const name = aliases.get(body)
-      if (name === undefined) {
-        errors.push(`unknown option --${body}`)
-        i += 1
-        continue
-      }
-
-      if (booleanFields.has(name)) {
-        push(name, inlineValue ?? 'true')
-        i += 1
-        continue
-      }
-      if (inlineValue !== undefined) {
-        push(name, inlineValue)
-        i += 1
-        continue
-      }
-      if (!looksLikeValue(args[i + 1])) {
-        errors.push(`option --${body} requires a value`)
-        i += 1
-        continue
-      }
-      push(name, args[i + 1]!)
-      i += 2
-      continue
-    }
-
-    if (token.startsWith('-') && token !== '-') {
-      const chars = token.slice(1)
-      let consumedNext = false
-
-      for (let c = 0; c < chars.length; c += 1) {
-        const flag = chars[c]!
-        const name = aliases.get(flag)
-        if (name === undefined) {
-          errors.push(`unknown option -${flag}`)
-          continue
-        }
-
-        if (booleanFields.has(name)) {
-          push(name, 'true')
-          continue
-        }
-
-        const remainder = chars.slice(c + 1)
-        if (remainder.length > 0) {
-          push(name, remainder.startsWith('=') ? remainder.slice(1) : remainder)
-          break
-        }
-        if (!looksLikeValue(args[i + 1])) {
-          errors.push(`option -${flag} requires a value`)
-          break
-        }
-        push(name, args[i + 1]!)
-        consumedNext = true
-        break
-      }
-
-      i += consumedNext ? 2 : 1
-      continue
-    }
-
-    positionals.push(token)
-    i += 1
+  const parsed = yield* attempt(
+    call(() => parseArgs({ args: head, options, strict: true, allowPositionals: true })),
+  )
+  if (isFailure(parsed)) {
+    // attempt() types this Failure as `Failure<never>`, but the thrown parseArgs error is the value.
+    const cause: unknown = parsed.error
+    const message = cause instanceof Error ? cause.message : String(cause)
+    return { options: new Map(), positionals: [], rest, errors: [message] }
   }
 
-  return { options, positionals, rest, errors }
+  const parsedOptions = new Map<string, string[]>()
+  for (const [name, value] of Object.entries(parsed.value.values)) {
+    if (value === undefined) {
+      continue
+    }
+    parsedOptions.set(name, Array.isArray(value) ? value.map(stringify) : [stringify(value)])
+  }
+
+  return { options: parsedOptions, positionals: [...parsed.value.positionals], rest, errors: [] }
 }

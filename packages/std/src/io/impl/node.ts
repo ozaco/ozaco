@@ -12,6 +12,7 @@ import { dirname, join } from 'node:path'
 import { readEnv } from '../internal/env'
 import { fromReadable } from '../internal/from-readable'
 import { mapStat, walkRecursive } from '../internal/node-shared'
+import { nodeExec, nodeSpawn } from '../internal/process-node'
 import { readFileStream, writeFileStream } from '../internal/stream'
 import { toReadable } from '../internal/to-readable'
 import type { HashAlgorithm } from '../types/common'
@@ -162,4 +163,11 @@ export const NodeIO = IO.implement({
     )
     return results
   }),
+
+  chmod: operation(function* (path, mode) {
+    yield* until(fs.chmod(toPath(path), mode))
+  }),
+
+  exec: nodeExec,
+  spawn: nodeSpawn,
 })

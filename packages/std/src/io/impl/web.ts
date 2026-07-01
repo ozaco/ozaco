@@ -60,4 +60,8 @@ export const WebIO = IO.implement({
   ensureFile: unsupported('ensureFile'),
   emptyDir: unsupported('emptyDir'),
   walk: unsupported('walk'),
+
+  chmod: unsupported('chmod'),
+  exec: unsupported('exec'),
+  spawn: unsupported('spawn'),
 })

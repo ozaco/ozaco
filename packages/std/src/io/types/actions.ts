@@ -1,10 +1,14 @@
 import type { Future, Operation, Stream } from 'std:effect'
 
 import type {
+  ExecOptions,
+  ExecResult,
   HashAlgorithm,
   IOStat,
   PathLike,
+  ProcessHandle,
   ReadableLike,
+  SpawnOptions,
   StreamClose,
   WalkEntry,
   WalkOptions,
@@ -79,4 +83,16 @@ export type IOActions = {
   ensureFile: (path: PathLike) => Future<void, unknown>
   emptyDir: (path: PathLike) => Future<void, unknown>
   walk: (root: PathLike, options?: WalkOptions) => Future<WalkEntry[], unknown>
+
+  chmod: (path: PathLike, mode: number) => Future<void, unknown>
+  exec: (
+    cmd: string,
+    args?: readonly string[],
+    options?: ExecOptions,
+  ) => Future<ExecResult, unknown>
+  spawn: (
+    cmd: string,
+    args?: readonly string[],
+    options?: SpawnOptions,
+  ) => Future<ProcessHandle, unknown>
 }

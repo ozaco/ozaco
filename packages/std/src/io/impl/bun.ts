@@ -9,6 +9,7 @@ import { dirname, join } from 'node:path'
 import { readEnv } from '../internal/env'
 import { fromReadable } from '../internal/from-readable'
 import { mapStat, walkRecursive } from '../internal/node-shared'
+import { bunExec, bunSpawn } from '../internal/process-bun'
 import { readFileStream, writeFileStream } from '../internal/stream'
 import { toReadable } from '../internal/to-readable'
 import { webHash, webHmac, webRandomBytes } from '../internal/webcrypto'
@@ -149,4 +150,11 @@ export const BunIO = IO.implement({
     )
     return results
   }),
+
+  chmod: operation(function* (path, mode) {
+    yield* until(fs.chmod(toPath(path), mode))
+  }),
+
+  exec: bunExec,
+  spawn: bunSpawn,
 })
