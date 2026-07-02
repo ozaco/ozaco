@@ -110,6 +110,26 @@ export interface ProcessHandle {
   kill: (signal?: number | string) => Future<void, unknown>
 }
 
+/** An Ed25519 key pair (DER bytes: public = SPKI, private = PKCS8), from {@link IOActions.generateKeyPair}. */
+export interface KeyPair {
+  publicKey: Uint8Array
+  privateKey: Uint8Array
+}
+
+/** A single network interface address, as reported by {@link IOActions.ip}. */
+export interface NetworkInterface {
+  /** Interface name (e.g. `en0`, `lo0`, `eth0`). */
+  name: string
+  address: string
+  family: 'IPv4' | 'IPv6'
+  /** `true` for loopback / internal interfaces. */
+  internal: boolean
+  mac: string
+  netmask: string
+  /** Address in CIDR notation (e.g. `192.168.1.5/24`), or `null` if unavailable. */
+  cidr: string | null
+}
+
 /** Options for {@link IOActions.tcpListen}. */
 export interface TcpListenOptions {
   port: number

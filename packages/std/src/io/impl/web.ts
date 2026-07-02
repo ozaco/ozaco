@@ -39,6 +39,11 @@ export const WebIO = IO.implement({
   randomBytes: webRandomBytes,
   hmac: webHmac,
   hash: webHash,
+  encrypt: unsupported('encrypt'),
+  decrypt: unsupported('decrypt'),
+  generateKeyPair: unsupported('generateKeyPair'),
+  sign: unsupported('sign'),
+  verify: unsupported('verify'),
 
   fromReadable,
   toReadable,
@@ -62,10 +67,13 @@ export const WebIO = IO.implement({
   walk: unsupported('walk'),
 
   chmod: unsupported('chmod'),
+  symlink: unsupported('symlink'),
+  readlink: unsupported('readlink'),
   exec: unsupported('exec'),
   spawn: unsupported('spawn'),
 
   tcpListen: unsupported('tcpListen'),
   tcpConnect: unsupported('tcpConnect'),
   udpBind: unsupported('udpBind'),
+  ip: unsupported('ip'),
 })

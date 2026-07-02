@@ -6,12 +6,20 @@ import { fail } from 'std:result'
 import fs from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 
+import {
+  decryptSecret,
+  encryptSecret,
+  generateSignKeyPair,
+  signData,
+  verifyData,
+} from '../internal/crypto'
 import { readEnv } from '../internal/env'
 import { fromReadable } from '../internal/from-readable'
 import { tcpConnect, tcpListen, udpBind } from '../internal/net'
 import { mapStat, walkRecursive } from '../internal/node-shared'
 import { bunExec, bunSpawn } from '../internal/process-bun'
 import { readFileStream, writeFileStream } from '../internal/stream'
+import { readInterfaces } from '../internal/sys'
 import { toReadable } from '../internal/to-readable'
 import { webHash, webHmac, webRandomBytes } from '../internal/webcrypto'
 
@@ -27,6 +35,11 @@ export const BunIO = IO.implement({
   randomBytes: webRandomBytes,
   hmac: webHmac,
   hash: webHash,
+  encrypt: encryptSecret,
+  decrypt: decryptSecret,
+  generateKeyPair: generateSignKeyPair,
+  sign: signData,
+  verify: verifyData,
 
   fromReadable,
   toReadable,
@@ -155,6 +168,12 @@ export const BunIO = IO.implement({
   chmod: operation(function* (path, mode) {
     yield* until(fs.chmod(toPath(path), mode))
   }),
+  symlink: operation(function* (target, path, type) {
+    yield* until(fs.symlink(toPath(target), toPath(path), type))
+  }),
+  readlink: operation(function* (path) {
+    return yield* until(fs.readlink(toPath(path)))
+  }),
 
   exec: bunExec,
   spawn: bunSpawn,
@@ -162,4 +181,5 @@ export const BunIO = IO.implement({
   tcpListen,
   tcpConnect,
   udpBind,
+  ip: readInterfaces,
 })

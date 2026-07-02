@@ -5,6 +5,8 @@ import type {
   ExecResult,
   HashAlgorithm,
   IOStat,
+  KeyPair,
+  NetworkInterface,
   PathLike,
   ProcessHandle,
   ReadableLike,
@@ -30,6 +32,22 @@ export type IOActions = {
   randomBytes: (length: number) => Future<Uint8Array, unknown>
   hmac: (algorithm: HashAlgorithm, key: Uint8Array, data: Uint8Array) => Future<Uint8Array, unknown>
   hash: (algorithm: HashAlgorithm, data: Uint8Array) => Future<Uint8Array, unknown>
+
+  /** Encrypt with a secret (AES-256-GCM, key derived from the secret via scrypt). Reversible via {@link decrypt}. */
+  encrypt: (data: Uint8Array | string, secret: string) => Future<Uint8Array, unknown>
+  /** Decrypt what {@link encrypt} produced; fails on a wrong secret or tampered data. */
+  decrypt: (data: Uint8Array, secret: string) => Future<Uint8Array, unknown>
+
+  /** Generate an Ed25519 key pair for {@link sign} / {@link verify}. */
+  generateKeyPair: () => Future<KeyPair, unknown>
+  /** Sign data with an Ed25519 private key (from {@link generateKeyPair}); returns a 64-byte signature. */
+  sign: (data: Uint8Array | string, privateKey: Uint8Array) => Future<Uint8Array, unknown>
+  /** Verify an Ed25519 signature against the public key; `true` if valid, `false` if not. */
+  verify: (
+    data: Uint8Array | string,
+    signature: Uint8Array,
+    publicKey: Uint8Array,
+  ) => Future<boolean, unknown>
 
   fromReadable: (
     target: ReadableLike,
@@ -92,6 +110,12 @@ export type IOActions = {
   walk: (root: PathLike, options?: WalkOptions) => Future<WalkEntry[], unknown>
 
   chmod: (path: PathLike, mode: number) => Future<void, unknown>
+  symlink: (
+    target: PathLike,
+    path: PathLike,
+    type?: 'file' | 'dir' | 'junction',
+  ) => Future<void, unknown>
+  readlink: (path: PathLike) => Future<string, unknown>
   exec: (
     cmd: string,
     args?: readonly string[],
@@ -106,4 +130,7 @@ export type IOActions = {
   tcpListen: (options: TcpListenOptions, onConnection: TcpHandler) => Future<TcpServer, unknown>
   tcpConnect: (options: TcpConnectOptions) => Future<TcpSocket, unknown>
   udpBind: (options?: UdpBindOptions) => Future<UdpSocket, unknown>
+
+  /** List the machine's network interface addresses (via `node:os`). */
+  ip: () => Future<NetworkInterface[], unknown>
 }

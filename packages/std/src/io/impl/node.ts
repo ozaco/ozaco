@@ -9,12 +9,20 @@ import { createHash, createHmac, randomBytes as nodeRandomBytes } from 'node:cry
 import fs from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 
+import {
+  decryptSecret,
+  encryptSecret,
+  generateSignKeyPair,
+  signData,
+  verifyData,
+} from '../internal/crypto'
 import { readEnv } from '../internal/env'
 import { fromReadable } from '../internal/from-readable'
 import { tcpConnect, tcpListen, udpBind } from '../internal/net'
 import { mapStat, walkRecursive } from '../internal/node-shared'
 import { nodeExec, nodeSpawn } from '../internal/process-node'
 import { readFileStream, writeFileStream } from '../internal/stream'
+import { readInterfaces } from '../internal/sys'
 import { toReadable } from '../internal/to-readable'
 import type { HashAlgorithm } from '../types/common'
 
@@ -43,6 +51,11 @@ export const NodeIO = IO.implement({
     const digest = createHash(toNodeHash(algorithm)).update(data).digest()
     return new Uint8Array(digest)
   }),
+  encrypt: encryptSecret,
+  decrypt: decryptSecret,
+  generateKeyPair: generateSignKeyPair,
+  sign: signData,
+  verify: verifyData,
 
   fromReadable,
   toReadable,
@@ -168,6 +181,12 @@ export const NodeIO = IO.implement({
   chmod: operation(function* (path, mode) {
     yield* until(fs.chmod(toPath(path), mode))
   }),
+  symlink: operation(function* (target, path, type) {
+    yield* until(fs.symlink(toPath(target), toPath(path), type))
+  }),
+  readlink: operation(function* (path) {
+    return yield* until(fs.readlink(toPath(path)))
+  }),
 
   exec: nodeExec,
   spawn: nodeSpawn,
@@ -175,4 +194,5 @@ export const NodeIO = IO.implement({
   tcpListen,
   tcpConnect,
   udpBind,
+  ip: readInterfaces,
 })
