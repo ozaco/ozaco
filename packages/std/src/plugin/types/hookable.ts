@@ -89,6 +89,15 @@ export namespace Hookable {
 
   export type Exec = (
     entries: Hookable.HookSelfEntry[],
-    run: (entry: Hookable.HookSelfEntry | undefined) => Operation<unknown>,
-  ) => Operation<unknown>
+    run: (entry: Hookable.HookSelfEntry | undefined) => Operation<unknown, unknown>,
+  ) => Operation<unknown, unknown>
+
+  export interface Call {
+    key: string
+    args: unknown[]
+    arounds: AnyType[]
+    befores: AnyType[]
+    afters: AnyType[]
+    errors: AnyType[]
+  }
 }

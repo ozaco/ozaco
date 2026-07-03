@@ -1,6 +1,6 @@
 import type { Operation } from 'std:effect'
 import { createContext, operation } from 'std:effect'
-import { appendCauses, asFailure, fail, unwrap } from 'std:result'
+import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 import { flatten } from 'std:shared'
 
@@ -10,6 +10,7 @@ import type { Hookable } from '../types/hookable'
 import { createDefaultHooks } from './internal/defaults'
 import { intercept } from './internal/intercept'
 import { createProxy } from './internal/proxy'
+import { pickHooks, runAround, runWithErrorHooks } from './internal/utils'
 
 export const createHookable = (options: {
   name: string
@@ -43,27 +44,33 @@ export const createHookable = (options: {
 
   const makeResolveAction = (dispatch: Hookable.Exec, tag: string) =>
     operation(function* (key: string, ...args: unknown[]) {
-      return yield* chainCtx.with(new Map(), function* (): Operation<unknown> {
+      return yield* chainCtx.with(new Map(), function* (): Operation<unknown, unknown> {
         const store = (yield* hookCtx.get())!
 
-        const arounds = store.around.flatMap(e => (key in e.handlers ? [e.handlers[key]] : []))
-        const befores = store.before.flatMap(e => (key in e.handlers ? [e.handlers[key]] : []))
-        const afters = store.after.flatMap(e => (key in e.handlers ? [e.handlers[key]] : []))
-        const errors = store.error.flatMap(e => (key in e.handlers ? [e.handlers[key]] : []))
+        const call: Hookable.Call = {
+          key,
+          args,
+          arounds: pickHooks(store.around, key),
+          befores: pickHooks(store.before, key),
+          afters: pickHooks(store.after, key),
+          errors: pickHooks(store.error, key),
+        }
 
         // Runs the action against ONE impl entry (or, when `entry` is undefined, a protocol-level
         // handler / default action with no impl context). `dispatch` decides which entries flow
         // through here: the default runs the last-installed impl; the codec runs the highest-priority
         // one; a fan-out protocol (e.g. logger) can run every entry.
-        const run = function* (entry: Hookable.HookSelfEntry | undefined): Operation<unknown> {
-          const self = handlers[key] ?? entry?.handlers[key] ?? (defaultActions as AnyType)[key]
+        const run = function* (
+          entry: Hookable.HookSelfEntry | undefined,
+        ): Operation<unknown, unknown> {
+          const self = handlers[key] ?? entry?.handlers[key] ?? defaultActions[key]
 
           const inner = function* (...innerArgs: unknown[]) {
             if (innerArgs[0] === RAW_ACTION) {
               return { self, context, options, key, meta: entry?.meta?.get(key) }
             }
 
-            for (const hook of befores) {
+            for (const hook of call.befores) {
               yield* intercept(hook(innerArgs), `${key}:before`)
             }
 
@@ -76,7 +83,7 @@ export const createHookable = (options: {
 
             let result: unknown = yield* intercept(self(...innerArgs), key)
 
-            for (const hook of afters) {
+            for (const hook of call.afters) {
               const modified = yield* intercept(hook(result, innerArgs), `${key}:after`)
               if (modified !== undefined) {
                 result = modified
@@ -86,46 +93,12 @@ export const createHookable = (options: {
             return result
           }
 
-          const makeNext =
-            (i: number) =>
-            (...nextArgs: unknown[]): AnyType => ({
-              *[Symbol.iterator]() {
-                if (i < arounds.length) {
-                  return yield* intercept(arounds[i](nextArgs, makeNext(i + 1)))
-                }
-                return yield* intercept(inner(...nextArgs))
-              },
-            })
-
-          const runChain = function* (): Operation<unknown> {
-            try {
-              if (arounds.length > 0) {
-                return yield* intercept(arounds[0](args, makeNext(1)))
-              }
-              return yield* intercept(inner(...args))
-            } catch (error) {
-              let failure = asFailure(error)
-
-              for (const hook of errors) {
-                try {
-                  yield* intercept(hook(error, args), `${key}:error`)
-                } catch (hookError) {
-                  failure = appendCauses(
-                    asFailure(hookError),
-                    `masked: ${failure.message || String(failure.error)}`,
-                    ...failure.causes,
-                  )
-                }
-              }
-
-              unwrap(failure)
-            }
-          }
+          const chain = () => runWithErrorHooks(call, () => runAround(call, inner))
 
           if (entry) {
-            return yield* context.with(entry.contextValue as AnyType, () => runChain())
+            return yield* context.with(entry.contextValue, chain)
           }
-          return yield* runChain()
+          return yield* chain()
         }
 
         // Protocol-level handlers (register/getTransports/...) aren't tied to an installed impl and
