@@ -1,7 +1,8 @@
-import { Codec } from 'std:codec'
 import type { Queue, Stream } from 'std:effect'
 import { createQueue, operation } from 'std:effect'
 import type { Result } from 'std:result'
+
+import { JsonCodec } from 'std:codec/impl/json'
 
 import type { WorkerDef } from '../types'
 
@@ -20,7 +21,7 @@ export const consumeInbound = operation(function* (
   queue: InboundQueue,
 ) {
   if (endpoint.wire === 'codec') {
-    return (yield* Codec.actions.decodeStream(
+    return (yield* JsonCodec.actions.decodeStream(
       streamOf(queue) as Stream<Uint8Array, unknown>,
     )) as Stream<unknown, true | Result.Failure<unknown>>
   }

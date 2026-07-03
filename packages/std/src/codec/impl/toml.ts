@@ -38,12 +38,12 @@ export const TomlCodec = Codec.implement({
 
     return context
   },
-}).build({
+}).build<CodecDef.Actions>({
   encode: operation(function* (value: unknown) {
     try {
       const result = stringify(value, {
         maxDepth: 100,
-        numbersAsFloat: true,
+        numbersAsFloat: false,
       })
 
       return encoder.encode(result)
@@ -73,7 +73,7 @@ export const TomlCodec = Codec.implement({
             encoder.encode(
               stringify(chunk, {
                 maxDepth: 100,
-                numbersAsFloat: true,
+                numbersAsFloat: false,
               }),
             ),
           )

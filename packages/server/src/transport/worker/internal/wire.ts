@@ -5,6 +5,8 @@ import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 import { serializeError } from 'std:shared'
 
+import { JsonCodec } from 'std:codec/impl/json'
+
 import type { WorkerDef } from '../types'
 
 const PLAIN_PROTO: unknown = Object.getPrototypeOf({})
@@ -93,5 +95,5 @@ export const encodeValue = operation(function* (mode: WorkerDef.WireMode, value:
 })
 
 export const decodeValue = operation(function* (mode: WorkerDef.WireMode, data: unknown) {
-  return mode === 'codec' ? yield* Codec.actions.decode(data as Uint8Array) : data
+  return mode === 'codec' ? yield* JsonCodec.actions.decode(data as Uint8Array) : data
 })

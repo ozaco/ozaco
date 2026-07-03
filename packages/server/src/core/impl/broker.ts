@@ -1,9 +1,11 @@
-import { Codec, JsonCodec } from 'std:codec'
+import { Codec } from 'std:codec'
 import { mapError, operation, useContext } from 'std:effect'
 import { createEvent } from 'std:event'
 import { getService, install } from 'std:plugin'
 import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
+
+import { JsonCodec } from 'std:codec/impl/json'
 
 import { CoreErrors } from '../const'
 import { Broker, Policy, Tracer, Transport } from '../definitions'

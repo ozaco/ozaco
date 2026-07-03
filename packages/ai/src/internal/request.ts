@@ -1,9 +1,11 @@
-import { Codec, hasCodec } from 'std:codec'
+import { hasCodec } from 'std:codec'
 import { attempt, operation } from 'std:effect'
 import type { FetchDef } from 'std:fetch'
 import { fetch } from 'std:fetch'
 import { fail, isSuccess } from 'std:result'
 import type { AnyType } from 'std:shared'
+
+import { JsonCodec } from 'std:codec/impl/json'
 
 import { AiErrors } from '../errors'
 import type { AiDef } from '../types'
@@ -49,7 +51,7 @@ const readError = operation(function* (
     return { tag: base, message: text }
   }
 
-  const decoded = yield* attempt(Codec.actions.decode(bytes))
+  const decoded = yield* attempt(JsonCodec.actions.decode(bytes))
   if (!isSuccess(decoded)) {
     return { tag: base, message: text }
   }

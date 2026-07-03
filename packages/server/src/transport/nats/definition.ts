@@ -6,6 +6,7 @@ import { ensure, map, mapError, operation, until, useScope } from 'std:effect'
 import { fail } from 'std:result'
 
 import { connect } from 'nats'
+import { JsonCodec } from 'std:codec/impl/json'
 
 import { EMPTY_PAYLOAD } from './const'
 import { brokerWathcer } from './internal/broker-watcher'
@@ -145,7 +146,7 @@ export const NatsTransport = Transport.implement({
       mapNatsFailure,
     )
 
-    const wire = (yield* Codec.actions.decode(reply.data)) as Nats.Wire
+    const wire = (yield* JsonCodec.actions.decode(reply.data)) as Nats.Wire
 
     if (wire._t === '__failure__') {
       return yield* unwrapWire(wire)

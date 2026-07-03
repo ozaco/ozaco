@@ -8,10 +8,14 @@ import type { CodecDef } from '../types'
 
 import { CodecRegistryContext } from './context'
 
-export const sortedCodecs = operation(function* (entries: CodecDef[]) {
+export const sortedCodecs = operation(function* (
+  entries: CodecDef[],
+  transport: CodecDef,
+  transportCtx: CodecDef.Context,
+) {
   return yield* toSorted(entries, function* (a, b) {
-    const aCtx = yield* useContext(a)
-    const bCtx = yield* useContext(b)
+    const aCtx = a === transport ? transportCtx : yield* useContext(a)
+    const bCtx = b === transport ? transportCtx : yield* useContext(b)
 
     return aCtx.priority - bCtx.priority
   })
@@ -74,7 +78,7 @@ export const codecRegisterHandler: CodecDef.Handlers['register'] = operation(
       return yield* fail('unexpected', `codec ${transportCtx.name} is already registered`)
     }
 
-    yield* CodecRegistryContext.set(yield* sortedCodecs([...existing, transport]))
+    yield* CodecRegistryContext.set(yield* sortedCodecs(existing, transport, transportCtx))
   },
 )
 

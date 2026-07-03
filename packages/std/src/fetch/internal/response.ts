@@ -1,9 +1,9 @@
-import { Codec, hasCodec, JsonCodec } from 'std:codec'
 import type { Stream } from 'std:effect'
 import { operation, stream, until } from 'std:effect'
-import { install } from 'std:plugin'
 import { asFailure, fail } from 'std:result'
 import type { AnyType } from 'std:shared'
+
+import { JsonCodec } from 'std:codec/impl/json'
 
 import type { FetchDef } from '../types'
 
@@ -57,14 +57,6 @@ export const createFetchResponse = (raw: Response): FetchDef.Response => {
     }
   })
 
-  // a codec is needed to decode body()/stream(); auto-install JsonCodec when the consumer hasn't
-  // installed one (the server broker installs its own first, so this is a no-op there).
-  const ensureCodec = operation(function* () {
-    if (!(yield* hasCodec())) {
-      yield* install(JsonCodec)
-    }
-  })
-
   const readRaw = operation(function* () {
     if (!raw.body) {
       return yield* fail('parse', 'response has no body')
@@ -74,20 +66,16 @@ export const createFetchResponse = (raw: Response): FetchDef.Response => {
   })
 
   const readBody = operation(function* () {
-    yield* ensureCodec()
-
     const bytes = yield* readBytes()
-    return bytes.length > 0 ? yield* Codec.actions.decode(bytes) : undefined
+    return bytes.length > 0 ? yield* JsonCodec.actions.decode(bytes) : undefined
   })
 
   const readStream = operation(function* () {
-    yield* ensureCodec()
-
     if (!raw.body) {
       return yield* fail('parse', 'response has no body')
     }
 
-    return yield* Codec.actions.decodeStream(stream(raw.body as AnyType), true)
+    return yield* JsonCodec.actions.decodeStream(stream(raw.body as AnyType), true)
   })
 
   const self: FetchDef.Response = {

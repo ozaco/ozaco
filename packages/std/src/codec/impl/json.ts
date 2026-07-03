@@ -31,7 +31,7 @@ export const JsonCodec = Codec.implement({
 
     return context
   },
-}).build({
+}).build<CodecDef.Actions>({
   encode: operation(function* (value: unknown) {
     try {
       return encoder.encode(JSON.stringify(value))

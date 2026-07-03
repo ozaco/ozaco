@@ -5,6 +5,8 @@ import { operation, until, useContext } from 'std:effect'
 import { fail, isFailure, isSuccess } from 'std:result'
 import type { AnyType } from 'std:shared'
 
+import { JsonCodec } from 'std:codec/impl/json'
+
 import { BODY_METHODS, FORM_DATA, FORM_URLENCODED, JSON_CONTENT } from './const'
 import { appendField, appendFile, blobToFile, matchFileKey, stringToFile } from './form-data'
 
@@ -50,7 +52,7 @@ export const toInternalAction = operation(function* (req: AnyType, _res: unknown
       if (maxBytes !== undefined && buffer.byteLength > maxBytes) {
         return yield* fail(CoreErrors.PayloadTooLarge, `body exceeds ${maxBytes} bytes`)
       }
-      parsedBody = buffer.byteLength === 0 ? null : yield* Codec.actions.decode(buffer)
+      parsedBody = buffer.byteLength === 0 ? null : yield* JsonCodec.actions.decode(buffer)
     } else if (contentType.includes(FORM_DATA) || contentType.includes(FORM_URLENCODED)) {
       const form: FormData = yield* until(req.formData())
       const fields: Record<string, unknown> = {}

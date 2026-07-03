@@ -1,10 +1,10 @@
-import { Codec } from 'std:codec'
 import type { Operation, Scope, Stream } from 'std:effect'
 import { createChannel, each, into, spawn } from 'std:effect'
 import type { Result } from 'std:result'
 import { asFailure, fail } from 'std:result'
 
 import type { Msg, Subscription as NatsSubscription } from 'nats'
+import { JsonCodec } from 'std:codec/impl/json'
 
 import { STREAM_EVENT, STREAM_EVENT_END, STREAM_EVENT_ERROR } from '../const'
 import type { Nats } from '../types'
@@ -33,7 +33,7 @@ export const subscribeFromNats = function* (
         }
 
         if (event === STREAM_EVENT_ERROR) {
-          const payload = (yield* Codec.actions.decode(msg.data)) as Nats.StreamErrorPayload
+          const payload = (yield* JsonCodec.actions.decode(msg.data)) as Nats.StreamErrorPayload
           yield* raw.close(failureFromPayload(payload))
           closed = true
           return
@@ -60,7 +60,7 @@ export const subscribeFromNats = function* (
     yield* spawn(reader)
   }
 
-  return yield* Codec.actions.decodeStream(raw)
+  return yield* JsonCodec.actions.decodeStream(raw)
 }
 
 export const captureInputStreams = function* (inputSubjects: readonly string[]) {

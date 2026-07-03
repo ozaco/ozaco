@@ -10,7 +10,6 @@ import type { Hookable } from '../types/hookable'
 import { createDefaultHooks } from './internal/defaults'
 import { intercept } from './internal/intercept'
 import { createProxy } from './internal/proxy'
-import { wrapAction } from './internal/wrap'
 
 export const createHookable = (options: {
   name: string
@@ -31,13 +30,13 @@ export const createHookable = (options: {
 
   if (options.handlers) {
     for (const key of Object.keys(options.handlers)) {
-      handlers[key] = wrapAction(options.handlers[key]!, `${key}:handler`, protocolTag)
+      handlers[key] = operation(options.handlers[key]!, `${key}:handler`, protocolTag)
     }
   }
 
   if (options.defaultActions) {
     for (const key of Object.keys(options.defaultActions)) {
-      defaultActions[key] = wrapAction(options.defaultActions[key]!, `${key}:default`, protocolTag)
+      defaultActions[key] = operation(options.defaultActions[key]!, `${key}:default`, protocolTag)
     }
   }
 
@@ -169,7 +168,7 @@ export const createHookable = (options: {
       const flatActions = flatten(buildActions)
       for (const key of Object.keys(flatActions)) {
         const raw = flatActions[key]!
-        wrappedActions[key] = wrapAction(raw)
+        wrappedActions[key] = operation(raw)
         meta.set(key, Object.fromEntries(Object.entries(raw)))
       }
     }

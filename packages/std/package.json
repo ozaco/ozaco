@@ -134,6 +134,17 @@
       },
       "source": "./src/codec/index.ts"
     },
+    "./codec/impl/json": {
+      "import": {
+        "types": "./dist/codec/impl/json.d.ts",
+        "default": "./dist/codec/impl/json.js"
+      },
+      "require": {
+        "types": "./dist/codec/impl/json.d.cts",
+        "default": "./dist/codec/impl/json.cjs"
+      },
+      "source": "./src/codec/impl/json.ts"
+    },
     "./codec/impl/toml": {
       "import": {
         "types": "./dist/codec/impl/toml.d.ts",

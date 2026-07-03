@@ -1,12 +1,12 @@
 import type { Service, TransportDef } from 'server:core'
 import { Broker, isStreamResult } from 'server:core'
-import { Codec } from 'std:codec'
 import { attempt, ensure, into, operation, spawn, useContext } from 'std:effect'
 import { Logger } from 'std:logger'
 import type { Result } from 'std:result'
 import { asFailure, fail, isSuccess } from 'std:result'
 
 import type { Msg } from 'nats'
+import { JsonCodec } from 'std:codec/impl/json'
 
 import { invokeAction } from '../../shared/invoke'
 import type { Nats } from '../types'
@@ -19,7 +19,7 @@ import { encodeReply, wireFailure, wireStream, wireSuccess } from './wire'
 
 const handleEvent = (kind: 'event.emit' | 'event.broadcast') =>
   operation(function* (msg: Msg) {
-    const decoded = (yield* Codec.actions.decode(msg.data)) as TransportDef.EventRequest
+    const decoded = (yield* JsonCodec.actions.decode(msg.data)) as TransportDef.EventRequest
     const broker = yield* useContext(Broker)
 
     broker.bus.emit(kind, decoded)
@@ -30,7 +30,7 @@ export const handleBroadcast = handleEvent('event.broadcast')
 
 export const handleDispatch = (service: Service, actionKey: string) =>
   operation(function* (msg: Msg) {
-    const decoded = yield* attempt(Codec.actions.decode(msg.data))
+    const decoded = yield* attempt(JsonCodec.actions.decode(msg.data))
 
     if (!isSuccess(decoded)) {
       if (msg.reply) {

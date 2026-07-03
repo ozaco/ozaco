@@ -8,6 +8,8 @@ import { install } from 'std:plugin'
 import { isFailure } from 'std:result'
 
 import { BunTerminal } from 'cli:terminal/bun'
+import { JsonCodec } from 'std:codec/impl/json'
+import { TomlCodec } from 'std:codec/impl/toml'
 import { BunIO } from 'std:io/impl/bun'
 import { ConsoleTransport } from 'std:logger/transport/console'
 
@@ -20,6 +22,9 @@ await main(function* () {
   yield* install(DefaultPalette)
   yield* install(DefaultSpinner)
   yield* install(DefaultPrompt)
+
+  yield* install(TomlCodec)
+  yield* install(JsonCodec)
 
   yield* Logger.actions.info('ozaco · interactive cli demo')
 
