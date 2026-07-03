@@ -48,6 +48,9 @@ declare module 'std:codec/impl/json' {
 declare module 'std:codec/impl/toml' {
   export * from '@ozaco/std/codec/impl/toml'
 }
+declare module 'std:codec/impl/yaml' {
+  export * from '@ozaco/std/codec/impl/yaml'
+}
 
 // --------- SERVER ---------
 

@@ -14,6 +14,7 @@
       "std:codec": ["./src/codec/index.ts", "./dist/codec.d.ts"],
       "std:codec/impl/json": ["./src/codec/impl/json.ts", "./dist/codec/impl/json.d.ts"],
       "std:codec/impl/toml": ["./src/codec/impl/toml.ts", "./dist/codec/impl/toml.d.ts"],
+      "std:codec/impl/yaml": ["./src/codec/impl/yaml.ts", "./dist/codec/impl/yaml.d.ts"],
       "std:logger": ["./src/logger/index.ts", "./dist/logger.d.ts"],
       "std:logger/transport/console": [
         "./src/logger/transport/console/index.ts",

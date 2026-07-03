@@ -20,6 +20,7 @@ const STD_MODULES: Record<string, ModuleEntry> = {
   'std:codec': { subpath: 'codec', source: 'codec/index.ts' },
   'std:codec/impl/json': { subpath: 'codec/impl/json', source: 'codec/impl/json.ts' },
   'std:codec/impl/toml': { subpath: 'codec/impl/toml', source: 'codec/impl/toml.ts' },
+  'std:codec/impl/yaml': { subpath: 'codec/impl/yaml', source: 'codec/impl/yaml.ts' },
   'std:logger': { subpath: 'logger', source: 'logger/index.ts' },
   'std:logger/transport/console': {
     subpath: 'logger/transport/console',
