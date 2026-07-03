@@ -134,6 +134,17 @@
       },
       "source": "./src/codec/index.ts"
     },
+    "./codec/impl/toml": {
+      "import": {
+        "types": "./dist/codec/impl/toml.d.ts",
+        "default": "./dist/codec/impl/toml.js"
+      },
+      "require": {
+        "types": "./dist/codec/impl/toml.d.cts",
+        "default": "./dist/codec/impl/toml.cjs"
+      },
+      "source": "./src/codec/impl/toml.ts"
+    },
     "./logger": {
       "import": {
         "types": "./dist/logger.d.ts",
@@ -177,7 +188,16 @@
     "@streamparser/json": "0.0.22"
   },
   "devDependencies": {
+    "smol-toml": "1.7.0",
     "tsdown": "catalog:build",
     "unrun": "catalog:build"
+  },
+  "peerDependencies": {
+    "smol-toml": "*"
+  },
+  "peerDependenciesMeta": {
+    "smol-toml": {
+      "optional": true
+    }
   }
 }

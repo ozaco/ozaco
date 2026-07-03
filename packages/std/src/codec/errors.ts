@@ -8,4 +8,6 @@ export const CodecErrors = createTags(
   'encode-stream',
   'decode-stream',
   'no-codec',
+
+  'no-match',
 )

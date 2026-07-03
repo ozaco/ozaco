@@ -22,7 +22,7 @@ export namespace CodecDef {
 
   export interface Actions {
     encode(value: unknown): Future<Uint8Array, unknown>
-    decode(data: Uint8Array): Future<unknown, unknown>
+    decode<T>(data: Uint8Array): Future<T, unknown>
 
     encodeStream<T>(
       stream: Stream<T, unknown>,
@@ -35,7 +35,7 @@ export namespace CodecDef {
 
   export interface Handlers {
     encodeRoot(value: unknown): Future<Uint8Array, unknown>
-    decodeRoot(data: Uint8Array): Future<unknown, unknown>
+    decodeRoot<T>(data: Uint8Array): Future<T, unknown>
 
     encodeStreamRoot<T>(
       stream: Stream<T, unknown>,

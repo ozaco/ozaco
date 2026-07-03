@@ -42,6 +42,9 @@ declare module 'std:fetch' {
 declare module 'std:codec' {
   export * from '@ozaco/std/codec'
 }
+declare module 'std:codec/impl/toml' {
+  export * from '@ozaco/std/codec/impl/toml'
+}
 
 // --------- SERVER ---------
 

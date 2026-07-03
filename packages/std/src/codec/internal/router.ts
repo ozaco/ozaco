@@ -1,6 +1,7 @@
 import type { Stream } from 'std:effect'
 import { filter, operation, some, toSorted, useContext } from 'std:effect'
 import { fail } from 'std:result'
+import type { AnyType } from 'std:shared'
 
 import { CodecErrors } from '../errors'
 import type { CodecDef } from '../types'
@@ -33,7 +34,7 @@ export const codecDecode = operation(function* (data: Uint8Array) {
     return yield* fail(CodecErrors.NoCodec, 'no codecs registered')
   }
 
-  return yield* entries[0]!.actions.decode(data)
+  return yield* entries[0]!.actions.decode(data) as AnyType
 })
 
 export const codecEncodeStream = operation(function* <T>(stream: Stream<T, unknown>) {
