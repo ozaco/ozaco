@@ -1,6 +1,7 @@
 import type { Operation } from 'std:effect'
 import type { EmptyType } from 'std:shared'
 
+import type { Hookable } from './hookable'
 import type { Plugin } from './plugin'
 import type { Protocol } from './protocol'
 
@@ -31,5 +32,15 @@ export namespace Impl {
 
     handlers?: TCustomActions
     defaultActions?: Partial<TActions>
+
+    /**
+     * Controls how the PROTOCOL-level actions execute across installed impls (default: run the
+     * last-installed impl and return its result). `run(entry)` executes the action against one impl
+     * (applying its context + hooks) and returns the result; `exec` decides which/how many to run —
+     * e.g. the codec protocol runs the highest-priority codec, while a fan-out protocol (logger)
+     * runs every transport. Per-plugin proxies (`SomePlugin.actions.*`) ignore this and target
+     * their own impl.
+     */
+    exec?: Hookable.Exec
   }) => Protocol<TContext, TError, TArgs, TActions, TCustomActions>
 }

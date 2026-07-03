@@ -1,8 +1,8 @@
 import type { Operation } from 'std:effect'
-import { all, operation, useContext } from 'std:effect'
+import { operation, useContext } from 'std:effect'
 
 import { LogLevel } from './const'
-import { Logger } from './definitions'
+import { Logger, LoggerTransport } from './definitions'
 import { LoggerBindingsContext } from './internal/context'
 import { buildEntry, dispatch, logAt } from './internal/helpers'
 import type { LoggerDef } from './types/logger'
@@ -63,24 +63,10 @@ export const DefaultLogger = Logger.implement({
   }),
 
   flush: operation(function* () {
-    const transports = yield* Logger.actions.getTransports()
-    const ops = transports.map(transport => transport.actions.flush())
-
-    if (ops.length === 0) {
-      return
-    }
-
-    yield* all(ops)
+    yield* LoggerTransport.actions.flush()
   }),
 
   close: operation(function* () {
-    const transports = yield* Logger.actions.getTransports()
-    const ops = transports.map(transport => transport.actions.close())
-
-    if (ops.length === 0) {
-      return
-    }
-
-    yield* all(ops)
+    yield* LoggerTransport.actions.close()
   }),
 })

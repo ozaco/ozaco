@@ -2,11 +2,6 @@
 
 import { LogLevel } from '../../const'
 import type { LoggerDef } from '../../types/logger'
-import type { LoggerTransportDef } from '../../types/transport'
-
-import { ConsoleTransport } from './definition'
-
-export const getTransport = (): LoggerTransportDef => ConsoleTransport
 
 export const ANSI = {
   reset: '\x1B[0m',

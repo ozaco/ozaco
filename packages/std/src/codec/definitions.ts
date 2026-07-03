@@ -44,6 +44,26 @@ export const Codec = defineProtocol<
   subtype: CODEC,
   cloneable: true,
 
+  // `Codec.actions.encode/decode/...` run the HIGHEST-priority installed codec (ties: the most
+  // recently installed). Installing JSON (priority 999) + TOML/YAML (500) keeps JSON active; install
+  // a codec with a higher `{ priority }` to prefer it. A direct `SomeCodec.actions.*` call is
+  // unaffected — it always targets that specific codec (used by the server/ai to force JSON).
+  *exec(entries, run) {
+    let best: (typeof entries)[number] | undefined
+
+    for (const entry of entries) {
+      if (
+        !best ||
+        (entry.contextValue as CodecDef.Context).priority >=
+          (best.contextValue as CodecDef.Context).priority
+      ) {
+        best = entry
+      }
+    }
+
+    return yield* run(best)
+  },
+
   handlers: {
     encodeRoot: codecEncode,
     decodeRoot: codecDecode,

@@ -80,13 +80,4 @@ export namespace LoggerDef {
     flush(): Future<void, unknown>
     close(): Future<void, unknown>
   }
-
-  export interface Handlers {
-    register(
-      transport: LoggerTransportDef,
-      entryCtx: LoggerTransportDef.Context,
-    ): Future<void, unknown>
-    unregister(transport: LoggerTransportDef): Future<void, unknown>
-    getTransports(): Future<LoggerTransportDef[], unknown>
-  }
 }

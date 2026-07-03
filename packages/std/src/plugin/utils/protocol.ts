@@ -14,6 +14,7 @@ export const defineProtocol: Impl.DefineProtocol = (options): AnyType => {
     defaultActions: options.defaultActions ? flatten(options.defaultActions) : undefined,
     subtype: options.subtype,
     cloneable: options.cloneable,
+    exec: options.exec,
   })
 
   return {

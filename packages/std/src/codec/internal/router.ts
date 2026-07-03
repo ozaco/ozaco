@@ -78,7 +78,9 @@ export const codecRegisterHandler: CodecDef.Handlers['register'] = operation(
       return yield* fail('unexpected', `codec ${transportCtx.name} is already registered`)
     }
 
-    yield* CodecRegistryContext.set(yield* sortedCodecs(existing, transport, transportCtx))
+    yield* CodecRegistryContext.set(
+      yield* sortedCodecs([...existing, transport], transport, transportCtx),
+    )
   },
 )
 

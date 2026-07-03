@@ -2,11 +2,11 @@ import { operation, useContext } from 'std:effect'
 import { IO, IO_FLAGS } from 'std:io'
 
 import { LogLevel } from '../../const'
-import { Logger, LoggerTransport } from '../../definitions'
+import { LoggerTransport } from '../../definitions'
 import { toNdjson } from '../../internal/serialize'
 import type { LoggerDef } from '../../types/logger'
 
-import { encoder, getTranport } from './internal'
+import { encoder } from './internal'
 import type { FileDef } from './types'
 
 const FileTransportImpl = LoggerTransport.implement<
@@ -35,8 +35,6 @@ const FileTransportImpl = LoggerTransport.implement<
       options,
     }
 
-    yield* Logger.actions.register(getTranport(), context)
-
     return context
   },
 })
@@ -57,6 +55,10 @@ export const FileTransport = FileTransportImpl.build({
   write: operation(function* (entry: LoggerDef.Entry) {
     const ctx = yield* useContext(FileTransportImpl.context)
 
+    if (entry.level < ctx.level) {
+      return
+    }
+
     ctx.buffer.push(ctx.format(entry))
     if (ctx.buffer.length >= ctx.limit) {
       yield* drain()
@@ -67,6 +69,5 @@ export const FileTransport = FileTransportImpl.build({
 
   close: operation(function* () {
     yield* drain()
-    yield* Logger.actions.unregister(getTranport())
   }),
 })

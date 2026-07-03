@@ -86,4 +86,9 @@ export namespace Hookable {
     key: string
     meta?: Record<string, AnyType>
   }
+
+  export type Exec = (
+    entries: Hookable.HookSelfEntry[],
+    run: (entry: Hookable.HookSelfEntry | undefined) => Operation<unknown>,
+  ) => Operation<unknown>
 }

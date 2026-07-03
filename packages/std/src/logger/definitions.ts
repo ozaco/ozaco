@@ -1,7 +1,7 @@
+import { all } from 'std:effect'
 import { defineProtocol } from 'std:plugin'
 
 import { LOGGER, LOGGER_TRANSPORT } from './const'
-import { getTransportsHandler, registerHandler, unregisterHandler } from './internal/handlers'
 import type { LoggerDef } from './types/logger'
 import type { LoggerTransportDef } from './types/transport'
 
@@ -9,18 +9,11 @@ export const Logger = defineProtocol<
   LoggerDef.Context,
   unknown,
   [options?: LoggerDef.Options],
-  LoggerDef.Actions,
-  LoggerDef.Handlers
+  LoggerDef.Actions
 >({
   name: 'logger',
   version: '0.0.1',
   subtype: LOGGER,
-
-  handlers: {
-    register: registerHandler,
-    unregister: unregisterHandler,
-    getTransports: getTransportsHandler,
-  },
 })
 
 export const LoggerTransport = defineProtocol<
@@ -33,4 +26,11 @@ export const LoggerTransport = defineProtocol<
   version: '0.0.1',
   subtype: LOGGER_TRANSPORT,
   cloneable: true,
+
+  // Every LoggerTransport action (write/flush/close) fans out to ALL installed transports — the
+  // transports are tracked simply by being installed, so there is no separate registry. Runs them
+  // concurrently, mirroring the previous manual `all(transports.map(...))` dispatch.
+  *exec(entries, run) {
+    return yield* all(entries.map(entry => run(entry)))
+  },
 })

@@ -5,7 +5,7 @@ import { Logger, LoggerTransport } from '../../definitions'
 import { toJson } from '../../internal/serialize'
 import type { LoggerDef } from '../../types/logger'
 
-import { detectColor, getTransport, prettyFormat } from './internal'
+import { detectColor, prettyFormat } from './internal'
 import type { ConsoleDef } from './types'
 
 const ConsoleTransportImpl = LoggerTransport.implement<
@@ -35,8 +35,6 @@ const ConsoleTransportImpl = LoggerTransport.implement<
       options,
     }
 
-    yield* Logger.actions.register(getTransport(), context)
-
     return context
   },
 })
@@ -44,6 +42,11 @@ const ConsoleTransportImpl = LoggerTransport.implement<
 export const ConsoleTransport = ConsoleTransportImpl.build({
   write: operation(function* (entry: LoggerDef.Entry) {
     const ctx = yield* useContext(ConsoleTransportImpl.context)
+
+    if (entry.level < ctx.level) {
+      return
+    }
+
     const text = ctx.format(entry)
 
     if (entry.level >= LogLevel.error) {
@@ -59,7 +62,5 @@ export const ConsoleTransport = ConsoleTransportImpl.build({
 
   flush: operation(function* () {}),
 
-  close: operation(function* () {
-    yield* Logger.actions.unregister(getTransport())
-  }),
+  close: operation(function* () {}),
 })

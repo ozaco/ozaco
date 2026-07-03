@@ -18,6 +18,7 @@ export const createHookable = (options: {
   defaultActions?: Record<string, AnyType> | undefined
   subtype?: symbol | undefined
   cloneable?: boolean | undefined
+  exec?: Hookable.Exec | undefined
 }) => {
   const protocolTag = `${options.name}@${options.version ?? 'lts'}`
 
@@ -40,10 +41,7 @@ export const createHookable = (options: {
     }
   }
 
-  const makeResolveAction = (
-    findImpl: (store: Hookable.HookStore) => Hookable.HookSelfEntry | undefined,
-    tag: string,
-  ) =>
+  const makeResolveAction = (dispatch: Hookable.Exec, tag: string) =>
     operation(function* (key: string, ...args: unknown[]) {
       return yield* chainCtx.with(new Map(), function* (): Operation<unknown> {
         const store = (yield* hookCtx.get())!
@@ -53,84 +51,102 @@ export const createHookable = (options: {
         const afters = store.after.flatMap(e => (key in e.handlers ? [e.handlers[key]] : []))
         const errors = store.error.flatMap(e => (key in e.handlers ? [e.handlers[key]] : []))
 
-        const myImpl = findImpl(store)
-        const self = handlers[key] ?? myImpl?.handlers[key] ?? (defaultActions as AnyType)[key]
+        // Runs the action against ONE impl entry (or, when `entry` is undefined, a protocol-level
+        // handler / default action with no impl context). `dispatch` decides which entries flow
+        // through here: the default runs the last-installed impl; the codec runs the highest-priority
+        // one; a fan-out protocol (e.g. logger) can run every entry.
+        const run = function* (entry: Hookable.HookSelfEntry | undefined): Operation<unknown> {
+          const self = handlers[key] ?? entry?.handlers[key] ?? (defaultActions as AnyType)[key]
 
-        const inner = function* (...innerArgs: unknown[]) {
-          if (innerArgs[0] === RAW_ACTION) {
-            return { self, context, options, key, meta: myImpl?.meta?.get(key) }
-          }
-
-          for (const hook of befores) {
-            yield* intercept(hook(innerArgs), `${key}:before`)
-          }
-
-          if (!self) {
-            return yield* fail(
-              'unexpected',
-              `No handler for "${key}" in "${options.name}", maybe forgot to install "${options.name}" plugin?`,
-            )
-          }
-
-          let result: unknown = yield* intercept(self(...innerArgs), key)
-
-          for (const hook of afters) {
-            const modified = yield* intercept(hook(result, innerArgs), `${key}:after`)
-            if (modified !== undefined) {
-              result = modified
+          const inner = function* (...innerArgs: unknown[]) {
+            if (innerArgs[0] === RAW_ACTION) {
+              return { self, context, options, key, meta: entry?.meta?.get(key) }
             }
-          }
 
-          return result
-        }
-
-        const makeNext =
-          (i: number) =>
-          (...nextArgs: unknown[]): AnyType => ({
-            *[Symbol.iterator]() {
-              if (i < arounds.length) {
-                return yield* intercept(arounds[i](nextArgs, makeNext(i + 1)))
-              }
-              return yield* intercept(inner(...nextArgs))
-            },
-          })
-
-        const runChain = function* (): Operation<unknown> {
-          try {
-            if (arounds.length > 0) {
-              return yield* intercept(arounds[0](args, makeNext(1)))
+            for (const hook of befores) {
+              yield* intercept(hook(innerArgs), `${key}:before`)
             }
-            return yield* intercept(inner(...args))
-          } catch (error) {
-            let failure = asFailure(error)
 
-            for (const hook of errors) {
-              try {
-                yield* intercept(hook(error, args), `${key}:error`)
-              } catch (hookError) {
-                failure = appendCauses(
-                  asFailure(hookError),
-                  `masked: ${failure.message || String(failure.error)}`,
-                  ...failure.causes,
-                )
+            if (!self) {
+              return yield* fail(
+                'unexpected',
+                `No handler for "${key}" in "${options.name}", maybe forgot to install "${options.name}" plugin?`,
+              )
+            }
+
+            let result: unknown = yield* intercept(self(...innerArgs), key)
+
+            for (const hook of afters) {
+              const modified = yield* intercept(hook(result, innerArgs), `${key}:after`)
+              if (modified !== undefined) {
+                result = modified
               }
             }
 
-            unwrap(failure)
+            return result
           }
+
+          const makeNext =
+            (i: number) =>
+            (...nextArgs: unknown[]): AnyType => ({
+              *[Symbol.iterator]() {
+                if (i < arounds.length) {
+                  return yield* intercept(arounds[i](nextArgs, makeNext(i + 1)))
+                }
+                return yield* intercept(inner(...nextArgs))
+              },
+            })
+
+          const runChain = function* (): Operation<unknown> {
+            try {
+              if (arounds.length > 0) {
+                return yield* intercept(arounds[0](args, makeNext(1)))
+              }
+              return yield* intercept(inner(...args))
+            } catch (error) {
+              let failure = asFailure(error)
+
+              for (const hook of errors) {
+                try {
+                  yield* intercept(hook(error, args), `${key}:error`)
+                } catch (hookError) {
+                  failure = appendCauses(
+                    asFailure(hookError),
+                    `masked: ${failure.message || String(failure.error)}`,
+                    ...failure.causes,
+                  )
+                }
+              }
+
+              unwrap(failure)
+            }
+          }
+
+          if (entry) {
+            return yield* context.with(entry.contextValue as AnyType, () => runChain())
+          }
+          return yield* runChain()
         }
 
-        if (myImpl) {
-          return yield* context.with(myImpl.contextValue as AnyType, () => runChain())
+        // Protocol-level handlers (register/getTransports/...) aren't tied to an installed impl and
+        // must run exactly once; only impl-provided actions flow through `dispatch`.
+        if (handlers[key]) {
+          return yield* run(undefined)
         }
-        return yield* runChain()
+
+        return yield* dispatch(store.self, run)
       })
     }, tag)
 
-  const actions = createProxy(
-    '',
-    makeResolveAction(store => store.self.at(-1), protocolTag),
-  )
+  // The protocol proxy runs impl-provided actions via `exec` (default: the last-installed impl). A
+  // protocol may override `exec` — the codec protocol runs the highest-priority codec, and a fan-out
+  // protocol could run every installed impl. Per-plugin proxies (below, in buildPlugin) always target
+  // their own tag and ignore `exec`, so a direct `SomeCodec.actions.decode(...)` still hits that codec.
+  const defaultExec: Hookable.Exec = function* (entries, run) {
+    return yield* run(entries.at(-1))
+  }
+
+  const actions = createProxy('', makeResolveAction(options.exec ?? defaultExec, protocolTag))
 
   const addHook = (type: 'around' | 'before' | 'after' | 'error') =>
     function* (targetHandlers: Record<string, AnyType>) {
@@ -175,7 +191,9 @@ export const createHookable = (options: {
 
     const pluginActions = createProxy(
       '',
-      makeResolveAction(store => store.self.find(e => e.tag === pluginTag), pluginTag),
+      makeResolveAction(function* (entries, run) {
+        return yield* run(entries.find(e => e.tag === pluginTag))
+      }, pluginTag),
     )
 
     const setup = function* (...args: AnyType[]) {

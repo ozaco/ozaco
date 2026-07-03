@@ -1,8 +1,7 @@
-import type { Future } from 'std:effect'
-import { all, operation, reduce, useContext } from 'std:effect'
+import { operation, useContext } from 'std:effect'
 
 import type { LogLevel } from '../const'
-import { Logger } from '../definitions'
+import { Logger, LoggerTransport } from '../definitions'
 import type { LoggerDef } from '../types/logger'
 
 import { LoggerBindingsContext } from './context'
@@ -25,33 +24,9 @@ export const logAt = (level: LogLevel) =>
   })
 
 export const dispatch = operation(function* (entry: LoggerDef.Entry) {
-  const transports = yield* Logger.actions.getTransports()
-
-  if (transports.length === 0) {
-    return
-  }
-
-  const ops = yield* reduce(
-    transports,
-    function* (acc, transport) {
-      const transportCtx = yield* useContext(transport)
-
-      if (transportCtx.level !== undefined && entry.level < transportCtx.level) {
-        return acc
-      }
-
-      acc.push(transport.actions.write(entry))
-
-      return acc
-    },
-    [] as Future<unknown, unknown>[],
-  )
-
-  if (ops.length === 0) {
-    return
-  }
-
-  yield* all(ops)
+  // Fans out to every installed transport via the LoggerTransport protocol's `exec`. Each transport
+  // applies its own level threshold inside `write`, so no per-transport filtering is needed here.
+  yield* LoggerTransport.actions.write(entry)
 })
 
 export const buildEntry = (

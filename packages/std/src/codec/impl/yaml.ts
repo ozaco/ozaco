@@ -17,21 +17,20 @@ const encodeOptions = {
   indent: 2,
   noRefs: true,
   lineWidth: 80,
-  quoteStyle: 'single' as const,
+  quotingType: "'" as const,
 }
 const decodeOptions = {
-  maxDepth: 100,
   json: true,
 }
 
 const getSelf = (): CodecDef => YamlCodec
 
 /**
- * A zero-dependency TOML codec for the `std:codec` registry (a from-scratch parser + serializer,
- * adapted from Deno's `@std/yaml`; TOML datetimes are intentionally unsupported). `parseYaml` /
- * `stringifyYaml` return a `Result`, so this stays effect-native — the codec just `yield*`s the
- * failure, no try/catch. Default priority 500, below `JsonCodec` (999): installing both keeps JSON
- * as the default; register with a higher `{ priority }` to prefer TOML, or install it alone.
+ * A YAML codec for the `std:codec` registry, backed by `js-yaml` (an optional peer dependency —
+ * install `js-yaml` alongside `@ozaco/std` to use it). `encode` / `decode` return a `Result`, so this
+ * stays effect-native — the codec just `yield*`s the failure, no try/catch. Default priority 500,
+ * below `JsonCodec` (999): installing both keeps JSON as the default; register with a higher
+ * `{ priority }` to prefer YAML, or install it alone.
  */
 export const YamlCodec = Codec.implement({
   name: 'std/yaml-codec',
