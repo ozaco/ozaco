@@ -5,6 +5,8 @@ export const CodecErrors = createTags(
 
   'encode',
   'decode',
+  'stringify',
+  'parse',
   'encode-stream',
   'decode-stream',
   'no-codec',

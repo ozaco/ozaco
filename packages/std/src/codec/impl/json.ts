@@ -48,6 +48,25 @@ export const JsonCodec = Codec.implement({
     }
   }),
 
+  stringify: operation(function* (value: unknown) {
+    try {
+      return JSON.stringify(value)
+    } catch (error) {
+      return yield* fail(
+        CodecErrors.Stringify,
+        error instanceof Error ? error.message : String(error),
+      )
+    }
+  }),
+
+  parse: operation(function* (text: string) {
+    try {
+      return JSON.parse(text)
+    } catch (error) {
+      return yield* fail(CodecErrors.Parse, error instanceof Error ? error.message : String(error))
+    }
+  }),
+
   encodeStream: operation(function* (stream) {
     const channel = createChannel<Uint8Array, true | Result.Failure<unknown>>()
 

@@ -63,6 +63,31 @@ export const TomlCodec = Codec.implement({
     }
   }),
 
+  stringify: operation(function* (value: unknown) {
+    try {
+      return stringify(value, {
+        maxDepth: 100,
+        numbersAsFloat: false,
+      })
+    } catch (error) {
+      return yield* fail(
+        CodecErrors.Stringify,
+        error instanceof Error ? error.message : String(error),
+      )
+    }
+  }),
+
+  parse: operation(function* (text: string) {
+    try {
+      return parse(text, {
+        maxDepth: 100,
+        integersAsBigInt: false,
+      }) as AnyType
+    } catch (error) {
+      return yield* fail(CodecErrors.Parse, error instanceof Error ? error.message : String(error))
+    }
+  }),
+
   encodeStream: operation(function* (stream) {
     const channel = createChannel<Uint8Array, true | Result.Failure<unknown>>()
 

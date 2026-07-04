@@ -24,6 +24,11 @@ export namespace CodecDef {
     encode(value: unknown): Future<Uint8Array, unknown>
     decode<T>(data: Uint8Array): Future<T, unknown>
 
+    /** Like `encode`, but returns the serialized text instead of `Uint8Array` bytes. */
+    stringify(value: unknown): Future<string, unknown>
+    /** Like `decode`, but takes the serialized text instead of `Uint8Array` bytes. */
+    parse<T>(text: string): Future<T, unknown>
+
     encodeStream<T>(
       stream: Stream<T, unknown>,
     ): Future<Stream<Uint8Array, true | Result.Failure<unknown>>, unknown>
