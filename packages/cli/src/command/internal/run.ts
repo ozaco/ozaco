@@ -1,18 +1,18 @@
 import { Palette, Terminal } from 'cli:core'
 import type { Operation } from 'std:effect'
-import { until, useContext } from 'std:effect'
+import { scoped, until, useContext } from 'std:effect'
+import { install } from 'std:plugin'
 import { fail } from 'std:result'
 import type { AnyType, StandardSchemaV1 } from 'std:shared'
 import { isPromise } from 'std:shared'
 
 import { CommandErrors, HELP_FLAGS, VERSION_FLAGS } from '../const'
 import type { CommandDef } from '../types/command'
-import type { ActionHelp } from '../types/internal'
+import type { ActionHelp, RuntimeNode } from '../types/internal'
 
 import { build } from './build'
 import { renderActionHelp, renderCommandHelp } from './help'
 import { optionsFromSchema } from './schema'
-import { getSubcommands } from './subcommands'
 import { tokenize } from './tokenize'
 
 const hasFlag = (argv: string[], flags: string[]): boolean =>
@@ -37,46 +37,34 @@ const formatIssues = (issues: readonly StandardSchemaV1.Issue[]): string =>
     })
     .join('\n')
 
-/**
- * Parse argv against a command plugin and dispatch the matched action (the CLI analog of
- * `Broker.call`). Walks `subcommands` for the deepest match, handles `--help`/`--version`, builds the
- * action's input from argv, validates it with the action's schema, and invokes the action through the
- * plugin's `actions` proxy. On a parse/validation error it writes the message + help and fails with
- * `CommandErrors.Parse`. Requires Terminal + Palette installed (and the command installed).
- */
-export function* runCommand(
-  root: CommandDef.Command<AnyType, AnyType, AnyType>,
-  argv?: string[],
-): Operation<void, unknown> {
-  const fromProcess = typeof process === 'undefined' ? [] : process.argv.slice(2)
-  const args = (argv ?? fromProcess).slice()
-  const palette = yield* useContext(Palette)
+function* descend(node: RuntimeNode, rest: string[], path: string[]): Operation<void, unknown> {
+  const token = rest[0]
 
-  let command = root
-  const path = [root.name]
-  let rest = args
-  for (;;) {
-    const token = rest[0]
-    if (token === undefined || token.startsWith('-')) {
-      break
-    }
-    const sub = getSubcommands(command)[token]
-    if (sub === undefined) {
-      break
-    }
-    command = sub
-    path.push(token)
-    rest = rest.slice(1)
+  if (token !== undefined && !token.startsWith('-') && node.children[token] !== undefined) {
+    return yield* scoped(function* () {
+      for (const child of Object.values(node.children)) {
+        yield* install(child.plugin as AnyType)
+      }
+      return yield* descend(node.children[token]!, rest.slice(1), [...path, token])
+    })
   }
+
+  return yield* dispatch(node, rest, path)
+}
+
+function* dispatch(node: RuntimeNode, rest: string[], path: string[]): Operation<void, unknown> {
+  const palette = yield* useContext(Palette)
+  const command = node.plugin
 
   const keys = command.getKeys()
   const head = rest[0]
   let actionKey: string | undefined
   let actionArgv = rest
+  let actionPath = path
   if (head !== undefined && !head.startsWith('-') && keys.includes(head)) {
     actionKey = head
     actionArgv = rest.slice(1)
-    path.push(head)
+    actionPath = [...path, head]
   } else if (keys.includes('default')) {
     actionKey = 'default'
   }
@@ -87,7 +75,7 @@ export function* runCommand(
   }
 
   if (actionKey === undefined) {
-    yield* Terminal.actions.write(`${renderCommandHelp(command, path, palette)}\n`)
+    yield* Terminal.actions.write(`${renderCommandHelp(node, path, palette)}\n`)
     return
   }
 
@@ -96,7 +84,7 @@ export function* runCommand(
   const short = meta.short ?? {}
   const argsOrder = meta.args ?? []
   const actionHelp: ActionHelp = {
-    path,
+    path: actionPath,
     description: meta.description,
     infos,
     short,
@@ -129,5 +117,22 @@ export function* runCommand(
     return yield* fail(CommandErrors.Parse, text)
   }
 
-  yield* command.actions[actionKey](ctx)
+  yield* command.actions[actionKey]!(ctx)
+}
+
+/**
+ * Parse argv against a command tree and dispatch the matched action (the CLI analog of `Broker.call`).
+ *
+ * Walks `subcommands` LAZILY: to descend into a child, it opens the current node's child scope and
+ * installs that node's direct children there — their `setup`s run then, the CLI analog of "entering" a
+ * command — so only the commands on the invoked path are ever set up, and each level's context is
+ * visible to the levels below (child scopes inherit their parent). When no child token matches, the
+ * current node's leaf action is resolved, its argv built + validated, and dispatched.
+ *
+ * Requires Terminal + Palette installed, and the root node installed (done by `register`).
+ */
+export function* runCommand(root: RuntimeNode, argv?: string[]): Operation<void, unknown> {
+  const fromProcess = typeof process === 'undefined' ? [] : process.argv.slice(2)
+  const args = (argv ?? fromProcess).slice()
+  return yield* descend(root, args, [root.name])
 }

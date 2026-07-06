@@ -1,12 +1,10 @@
 import { Registry } from 'cli:core'
 import type { RegistryDef } from 'cli:core'
 import type { Operation } from 'std:effect'
-import { definePlugin, install } from 'std:plugin'
 import type { AnyType, EmptyType, StandardSchemaV1 } from 'std:shared'
 
 import { ACTION, COMMAND } from './const'
 import { get, register, run } from './internal/registry-actions'
-import { setSubcommands } from './internal/subcommands'
 import type { CommandDef } from './types/command'
 
 /**
@@ -33,46 +31,38 @@ export function defineAction(config: AnyType, handler: AnyType): AnyType {
 }
 
 /**
- * Define a command. Like `defineService`, it is a `definePlugin(subtype: COMMAND).build(actions)`
- * plugin you `install()`. `actions` mixes leaf actions (`defineAction`) and nested commands; nested
- * commands are split off into `subcommands` and auto-installed by this command's `setup`.
+ * Define a command. Returns a pure spec (no plugin is built here) — the registry compiles it into a
+ * path-identified plugin tree at `register`, and installs each level lazily as dispatch descends into
+ * it. `actions` mixes leaf actions (`defineAction`, split into `leaf`) and nested commands (`subs`).
  */
 export const defineCommand = <TContext = unknown, TError = unknown, TArgs extends unknown[] = []>(
   options: CommandDef.Options<TContext, TError, TArgs>,
-): CommandDef.Command<TContext, TError, TArgs> => {
-  const subcommands: Record<string, CommandDef.Command<AnyType, AnyType, AnyType>> = {}
-  const leaf: Record<string, CommandDef.Member> = {}
+): CommandDef.Spec<TContext, TError, TArgs> => {
+  const leaf: Record<string, CommandDef.Action<AnyType, AnyType, AnyType>> = {}
+  const subs: Record<string, CommandDef.Spec> = {}
 
   for (const [key, member] of Object.entries(options.actions)) {
     if ((member as { _st?: symbol })._st === COMMAND) {
-      subcommands[key] = member as CommandDef.Command<AnyType, AnyType, AnyType>
+      subs[key] = member as CommandDef.Spec
     } else {
-      leaf[key] = member
+      leaf[key] = member as CommandDef.Action<AnyType, AnyType, AnyType>
     }
   }
 
-  const command = definePlugin({
-    subtype: COMMAND,
+  return {
+    _st: COMMAND,
     name: options.name,
+    version: options.version,
     description: options.description,
-    version: options.version ?? '0.0.0',
-    setup: function* (...args: AnyType[]) {
-      const context = options.setup ? yield* options.setup(...(args as TArgs)) : undefined
-      for (const sub of Object.values(subcommands)) {
-        yield* install(sub as AnyType)
-      }
-      return context
-    } as AnyType,
-  }).build(leaf as AnyType) as AnyType
-
-  setSubcommands(command, subcommands)
-
-  return command as CommandDef.Command<TContext, TError, TArgs>
+    leaf,
+    subs,
+    setup: options.setup,
+  } as CommandDef.Spec<TContext, TError, TArgs>
 }
 
 /**
  * The command registry (mirrors the backend `Broker`). Install it, `register` your commands (each is
- * installed automatically), then `run(argv)` dispatches `argv[0]` to the matching command.
+ * compiled + its own setup run), then `run(argv)` dispatches `argv[0]` to the matching command tree.
  */
 export const DefaultRegistry = Registry.implement({
   name: 'cli/default-registry',

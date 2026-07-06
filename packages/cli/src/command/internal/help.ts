@@ -1,10 +1,7 @@
 import type { PaletteDef, RegistryDef } from 'cli:core'
-import type { AnyType } from 'std:shared'
 
 import type { CommandDef } from '../types/command'
-import type { ActionHelp } from '../types/internal'
-
-import { getSubcommands } from './subcommands'
+import type { ActionHelp, RuntimeNode } from '../types/internal'
 
 // Pad the left column on its plain width, then paint it (keeps ANSI from breaking alignment).
 const section = (entries: [string, string][], paint: (text: string) => string): string[] => {
@@ -62,20 +59,23 @@ export const renderActionHelp = (action: ActionHelp, palette: PaletteDef.Context
 
 /** Usage + the list of subcommands/actions for a group command. */
 export const renderCommandHelp = (
-  command: CommandDef.Command<AnyType, AnyType, AnyType>,
+  node: RuntimeNode,
   path: string[],
   palette: PaletteDef.Context,
 ): string => {
   const { colors } = palette
+  const command = node.plugin
   const out: string[] = []
 
-  if (command.description !== undefined) {
-    out.push(command.description, '')
+  if (node.description !== undefined) {
+    out.push(node.description, '')
   }
   out.push(`${colors.bold('Usage:')} ${path.join(' ')} <command> [options]`)
 
-  const subcommands = getSubcommands(command)
-  const names = [...Object.keys(subcommands), ...command.getKeys().filter(key => key !== 'default')]
+  const names = [
+    ...Object.keys(node.children),
+    ...command.getKeys().filter(key => key !== 'default'),
+  ]
 
   if (names.length > 0) {
     out.push(
@@ -83,9 +83,9 @@ export const renderCommandHelp = (
       colors.bold('Commands:'),
       ...section(
         names.map(name => {
-          const sub = subcommands[name]
-          const meta = sub === undefined ? command.getMeta(name) : undefined
-          const description = sub?.description ?? (meta?.description as string | undefined) ?? ''
+          const child = node.children[name]
+          const meta = child === undefined ? command.getMeta(name) : undefined
+          const description = child?.description ?? (meta?.description as string | undefined) ?? ''
           return [name, description]
         }),
         colors.accent,

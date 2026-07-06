@@ -7,17 +7,23 @@ import type { AnyType } from 'std:shared'
 
 import { CommandErrors, VERSION_FLAGS } from '../const'
 import type { CommandDef } from '../types/command'
+import type { RuntimeNode } from '../types/internal'
 
 import { renderProgramHelp } from './help'
+import { buildNode } from './node'
 import { runCommand } from './run'
 
 const hasFlag = (argv: string[], flags: string[]): boolean =>
   argv.some(token => flags.includes(token))
 
 export const register = operation(function* (command: RegistryDef.Command) {
-  yield* install(command as AnyType)
+  const spec = command as AnyType as CommandDef.Spec
+  const node = buildNode(spec, spec.name)
+  // Level-1 eager: run this top-level command's OWN setup now; its subtree stays lazy (installed as
+  // the dispatcher descends). The compiled node is what we store + dispatch against.
+  yield* install(node.plugin as AnyType)
   const ctx = yield* useContext(Registry)
-  ctx.commands.set(command.name, command)
+  ctx.commands.set(node.name, node as AnyType as RegistryDef.Command)
 })
 
 export const get = operation(function* (name: string) {
@@ -33,12 +39,9 @@ export const run = operation(function* (argv?: string[]) {
   const head = args[0]
 
   if (head !== undefined && !head.startsWith('-')) {
-    const command = ctx.commands.get(head)
-    if (command !== undefined) {
-      return yield* runCommand(
-        command as CommandDef.Command<AnyType, AnyType, AnyType>,
-        args.slice(1),
-      )
+    const node = ctx.commands.get(head) as AnyType as RuntimeNode | undefined
+    if (node !== undefined) {
+      return yield* runCommand(node, args.slice(1))
     }
     const help = renderProgramHelp(ctx, palette)
     yield* Terminal.actions.write(

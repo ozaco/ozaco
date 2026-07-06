@@ -1,5 +1,17 @@
 import type { CommandDef } from './command'
 
+/**
+ * A node in the compiled command tree: a command's built plugin (identity = its tree path) plus its
+ * child nodes keyed by the token you type. Built eagerly at `register`; each node's `setup` runs
+ * lazily, as the dispatcher descends into it.
+ */
+export interface RuntimeNode {
+  name: string
+  description?: string | undefined
+  plugin: CommandDef.Built
+  children: Record<string, RuntimeNode>
+}
+
 /** Tokenizer output: option values by canonical field, positionals, `--` rest, and parse errors. */
 export interface RawParse {
   /** Canonical field name → raw string values (in order seen). */

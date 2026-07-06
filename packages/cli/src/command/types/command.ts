@@ -30,8 +30,8 @@ export namespace CommandDef {
   export type Action<S = unknown, R = unknown, E = unknown> = CommandDef.ActionMeta &
     ((ctx: CommandDef.Infer<S>) => Operation<R, E>)
 
-  /** Values allowed in a command's `actions`: leaf actions or nested commands. */
-  export type Member = CommandDef.Action<AnyType, AnyType, AnyType> | CommandDef.Command
+  /** Values allowed in a command's `actions`: leaf actions or nested command specs. */
+  export type Member = CommandDef.Action<AnyType, AnyType, AnyType> | CommandDef.Spec
 
   export interface Options<TContext, TError, TArgs extends unknown[]> {
     name: string
@@ -41,12 +41,27 @@ export namespace CommandDef {
     setup?: (...args: TArgs) => Operation<TContext, TError>
   }
 
-  /** A command is a plugin (install it) with leaf actions; nested subcommands are tracked off-object. */
-  export interface Command<
-    TContext = unknown,
-    TError = unknown,
-    TArgs extends unknown[] = [],
-  > extends Plugin<TContext, TError, TArgs, Record<string, AnyType>> {
+  /**
+   * What `defineCommand` returns: a pure descriptor of the command tree — NOT a plugin. The registry
+   * compiles it into a path-identified plugin tree at `register` (see internal/node) and installs each
+   * level lazily as dispatch descends. Nested commands live in `subs` (keyed by the token you type),
+   * leaf actions in `leaf`.
+   */
+  export interface Spec<TContext = unknown, TError = unknown, TArgs extends unknown[] = []> {
+    _st: typeof COMMAND
+    name: string
+    version?: string | undefined
+    description?: string | undefined
+    leaf: Record<string, CommandDef.Action<AnyType, AnyType, AnyType>>
+    subs: Record<string, CommandDef.Spec>
+    setup?: ((...args: TArgs) => Operation<TContext, TError>) | undefined
+  }
+
+  /**
+   * A built command: the plugin compiled from a `Spec` with a tree-path identity (e.g. `kube.config`),
+   * so distinct commands never collide in the shared scope even when they share a human `name`.
+   */
+  export interface Built extends Plugin<AnyType, AnyType, AnyType[], Record<string, AnyType>> {
     _st: typeof COMMAND
   }
 

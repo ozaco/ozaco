@@ -1,10 +1,15 @@
 import type { Future } from 'std:effect'
-import type { Plugin } from 'std:plugin'
-import type { AnyType } from 'std:shared'
 
 export namespace RegistryDef {
-  /** A registered command: any command-plugin (kept generic so core needn't depend on cli:command). */
-  export type Command = Plugin<AnyType, AnyType, AnyType[], AnyType>
+  /**
+   * A registered command as the registry sees it — kept structural so core needn't depend on
+   * cli:command. `register` receives a command spec; the stored value is its compiled runtime node.
+   * Both expose `name`/`description`, which is all the registry + program help ever read.
+   */
+  export interface Command {
+    name: string
+    description?: string | undefined
+  }
 
   export interface Options {
     name?: string | undefined
@@ -20,7 +25,7 @@ export namespace RegistryDef {
   }
 
   export interface Actions {
-    /** Register (and install) a top-level command, keyed by its `name`. */
+    /** Register a top-level command (compiles it and runs its own setup), keyed by its `name`. */
     register(command: RegistryDef.Command): Future<void, unknown>
     /** Dispatch argv: `argv[0]` selects a registered command, the rest is run against it. */
     run(argv?: string[]): Future<void, unknown>
