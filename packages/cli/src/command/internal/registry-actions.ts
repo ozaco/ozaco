@@ -1,7 +1,6 @@
 import { Palette, Registry, Terminal } from 'cli:core'
 import type { RegistryDef } from 'cli:core'
 import { operation, useContext } from 'std:effect'
-import { install } from 'std:plugin'
 import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 
@@ -19,9 +18,12 @@ const hasFlag = (argv: string[], flags: string[]): boolean =>
 export const register = operation(function* (command: RegistryDef.Command) {
   const spec = command as AnyType as CommandDef.Spec
   const node = buildNode(spec, spec.name)
-  // Level-1 eager: run this top-level command's OWN setup now; its subtree stays lazy (installed as
-  // the dispatcher descends). The compiled node is what we store + dispatch against.
-  yield* install(node.plugin as AnyType)
+  // Build + store the node only — do NOT run the command's `setup` here. Setup runs LAZILY when the
+  // command is actually dispatched (see `runCommand`), in its own scope. Running it eagerly at
+  // register would fire EVERY registered top-level command's setup in the shared registry scope, so
+  // two commands that install the same protocol impl (e.g. two plugins both `install(YamlCodec)`)
+  // collide — the multi-plugin host case, where all installed plugins are registered up front just to
+  // populate `--help`. Program help only reads name/description off the stored node, never the setup.
   const ctx = yield* useContext(Registry)
   ctx.commands.set(node.name, node as AnyType as RegistryDef.Command)
 })

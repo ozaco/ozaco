@@ -127,16 +127,24 @@ function* dispatch(node: RuntimeNode, rest: string[], path: string[]): Operation
 /**
  * Parse argv against a command tree and dispatch the matched action (the CLI analog of `Broker.call`).
  *
- * Walks `subcommands` LAZILY: to descend into a child, it opens a fresh child scope and installs ONLY
- * that child there — its `setup` runs then, the CLI analog of "entering" a command — so only the
- * commands on the invoked path are ever set up, siblings stay isolated, and each level's context is
- * visible to the levels below (child scopes inherit their parent). When no child token matches, the
- * current node's leaf action is resolved, its argv built + validated, and dispatched.
+ * Walks `subcommands` LAZILY: the root is installed in its own scope here, then to descend into a
+ * child it opens a fresh child scope and installs ONLY that child — its `setup` runs then, the CLI
+ * analog of "entering" a command — so only the commands on the invoked path are ever set up, siblings
+ * stay isolated, and each level's context is visible to the levels below (child scopes inherit their
+ * parent). When no child token matches, the current node's leaf action is resolved, its argv built +
+ * validated, and dispatched.
  *
- * Requires Terminal + Palette installed, and the root node installed (done by `register`).
+ * Requires Terminal + Palette installed. The root node is built + stored by `register` but its `setup`
+ * is NOT run there — it runs here, lazily, so registering many top-level commands never collides.
  */
 export function* runCommand(root: RuntimeNode, argv?: string[]): Operation<void, unknown> {
   const fromProcess = typeof process === 'undefined' ? [] : process.argv.slice(2)
   const args = (argv ?? fromProcess).slice()
-  return yield* descend(root, args, [root.name])
+  // Install the root command in its OWN scope (running its setup) here, not at register — the
+  // top-level analog of how `descend` enters a child. Only the invoked command's setup ever runs, so
+  // sibling top-level commands (e.g. two plugins that each install YamlCodec) never collide.
+  return yield* scoped(function* () {
+    yield* install(root.plugin as AnyType)
+    return yield* descend(root, args, [root.name])
+  })
 }
