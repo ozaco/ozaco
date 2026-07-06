@@ -41,11 +41,15 @@ function* descend(node: RuntimeNode, rest: string[], path: string[]): Operation<
   const token = rest[0]
 
   if (token !== undefined && !token.startsWith('-') && node.children[token] !== undefined) {
+    const next = node.children[token]!
     return yield* scoped(function* () {
-      for (const child of Object.values(node.children)) {
-        yield* install(child.plugin as AnyType)
-      }
-      return yield* descend(node.children[token]!, rest.slice(1), [...path, token])
+      // Install ONLY the child on the invoked path — never its siblings. Each subcommand gets its own
+      // child scope (which inherits the parent's contexts via the scope prototype chain), so sibling
+      // commands stay isolated: their `setup`s don't run and their contexts never leak in. This is
+      // also what lets subcommands be compiled as independent bundles (each carrying its own copy of
+      // @ozaco/*) — co-installing two separate bundles into one scope would otherwise collide.
+      yield* install(next.plugin as AnyType)
+      return yield* descend(next, rest.slice(1), [...path, token])
     })
   }
 
@@ -123,9 +127,9 @@ function* dispatch(node: RuntimeNode, rest: string[], path: string[]): Operation
 /**
  * Parse argv against a command tree and dispatch the matched action (the CLI analog of `Broker.call`).
  *
- * Walks `subcommands` LAZILY: to descend into a child, it opens the current node's child scope and
- * installs that node's direct children there — their `setup`s run then, the CLI analog of "entering" a
- * command — so only the commands on the invoked path are ever set up, and each level's context is
+ * Walks `subcommands` LAZILY: to descend into a child, it opens a fresh child scope and installs ONLY
+ * that child there — its `setup` runs then, the CLI analog of "entering" a command — so only the
+ * commands on the invoked path are ever set up, siblings stay isolated, and each level's context is
  * visible to the levels below (child scopes inherit their parent). When no child token matches, the
  * current node's leaf action is resolved, its argv built + validated, and dispatched.
  *
