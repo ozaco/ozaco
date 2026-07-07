@@ -2,8 +2,9 @@
 
 import { operation, until } from 'std:effect'
 import type { WalkEntry } from 'std:io'
-import { hasFlag, IO, IO_FLAGS, toPath } from 'std:io'
+import { IO, IO_FLAGS, toPath } from 'std:io'
 import { fail } from 'std:result'
+import { hasFlag } from 'std:shared'
 
 import { createHash, createHmac, randomBytes as nodeRandomBytes } from 'node:crypto'
 import fs from 'node:fs/promises'
@@ -20,6 +21,7 @@ import { readEnv } from '../internal/env'
 import { fromReadable } from '../internal/from-readable'
 import { tcpConnect, tcpListen, udpBind } from '../internal/net'
 import { mapStat, walkRecursive } from '../internal/node-shared'
+import { nodePath } from '../internal/path-node'
 import { nodeExec, nodeSpawn } from '../internal/process-node'
 import { readFileStream, writeFileStream } from '../internal/stream'
 import { readInterfaces } from '../internal/sys'
@@ -177,6 +179,12 @@ export const NodeIO = IO.implement({
     )
     return results
   }),
+
+  join: nodePath.join,
+  dirname: nodePath.dirname,
+  basename: nodePath.basename,
+  extname: nodePath.extname,
+  isAbsolute: nodePath.isAbsolute,
 
   chmod: operation(function* (path, mode) {
     yield* until(fs.chmod(toPath(path), mode))

@@ -1,8 +1,9 @@
 import type { Stream } from 'std:effect'
 import { action, each, operation } from 'std:effect'
 import type { StreamClose, WritableLike } from 'std:io'
-import { hasFlag, IO_FLAGS } from 'std:io'
+import { IO_FLAGS } from 'std:io'
 import { appendCauses, asFailure } from 'std:result'
+import { hasFlag } from 'std:shared'
 
 import { createReadStream, createWriteStream } from 'node:fs'
 

@@ -1,7 +1,8 @@
 import { operation, until } from 'std:effect'
 import type { WalkEntry } from 'std:io'
-import { hasFlag, IO, IO_FLAGS, toPath } from 'std:io'
+import { IO, IO_FLAGS, toPath } from 'std:io'
 import { fail } from 'std:result'
+import { hasFlag } from 'std:shared'
 
 import fs from 'node:fs/promises'
 import { dirname, join } from 'node:path'
@@ -17,6 +18,7 @@ import { readEnv } from '../internal/env'
 import { fromReadable } from '../internal/from-readable'
 import { tcpConnect, tcpListen, udpBind } from '../internal/net'
 import { mapStat, walkRecursive } from '../internal/node-shared'
+import { nodePath } from '../internal/path-node'
 import { bunExec, bunSpawn } from '../internal/process-bun'
 import { readFileStream, writeFileStream } from '../internal/stream'
 import { readInterfaces } from '../internal/sys'
@@ -108,7 +110,14 @@ export const BunIO = IO.implement({
   }),
 
   exists: operation(function* (path) {
-    return yield* until(Bun.file(toPath(path)).exists())
+    // `Bun.file(dir).exists()` reports `false` for directories — use `fs.access` (matches NodeIO) so
+    // `exists` answers "path exists" for files and directories alike.
+    try {
+      yield* until(fs.access(toPath(path)))
+      return true
+    } catch {
+      return false
+    }
   }),
 
   stat: operation(function* (path) {
@@ -164,6 +173,12 @@ export const BunIO = IO.implement({
     )
     return results
   }),
+
+  join: nodePath.join,
+  dirname: nodePath.dirname,
+  basename: nodePath.basename,
+  extname: nodePath.extname,
+  isAbsolute: nodePath.isAbsolute,
 
   chmod: operation(function* (path, mode) {
     yield* until(fs.chmod(toPath(path), mode))

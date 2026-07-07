@@ -109,6 +109,17 @@ export type IOActions = {
   emptyDir: (path: PathLike) => Future<void, unknown>
   walk: (root: PathLike, options?: WalkOptions) => Future<WalkEntry[], unknown>
 
+  /** Join path segments with the platform separator and normalize the result. */
+  join: (...segments: string[]) => Future<string, unknown>
+  /** The directory portion of a path. */
+  dirname: (path: string) => Future<string, unknown>
+  /** The final portion of a path; strips a trailing `suffix` when it matches. */
+  basename: (path: string, suffix?: string) => Future<string, unknown>
+  /** The extension of the path (including the leading dot), or `''` when there is none. */
+  extname: (path: string) => Future<string, unknown>
+  /** Whether the path is absolute. */
+  isAbsolute: (path: string) => Future<boolean, unknown>
+
   chmod: (path: PathLike, mode: number) => Future<void, unknown>
   symlink: (
     target: PathLike,

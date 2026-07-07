@@ -7,6 +7,7 @@ import type { AnyType } from 'std:shared'
 
 import { readWebEnv } from '../internal/env'
 import { fromReadable } from '../internal/from-readable'
+import { webPath } from '../internal/path-web'
 import { toReadable } from '../internal/to-readable'
 import { webHash, webHmac, webRandomBytes } from '../internal/webcrypto'
 
@@ -65,6 +66,12 @@ export const WebIO = IO.implement({
   ensureFile: unsupported('ensureFile'),
   emptyDir: unsupported('emptyDir'),
   walk: unsupported('walk'),
+
+  join: webPath.join,
+  dirname: webPath.dirname,
+  basename: webPath.basename,
+  extname: webPath.extname,
+  isAbsolute: webPath.isAbsolute,
 
   chmod: unsupported('chmod'),
   symlink: unsupported('symlink'),
