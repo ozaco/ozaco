@@ -30,6 +30,7 @@ const STD_MODULES: Record<string, ModuleEntry> = {
     subpath: 'logger/transport/file',
     source: 'logger/transport/file/index.ts',
   },
+  'std:config': { subpath: 'config', source: 'config/index.ts' },
 }
 
 const SERVER_MODULES: Record<string, ModuleEntry> = {

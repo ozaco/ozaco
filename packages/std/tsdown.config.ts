@@ -22,6 +22,7 @@ export default defineConfig({
     logger: './src/logger/index.ts',
     'logger/transport/console': './src/logger/transport/console/index.ts',
     'logger/transport/file': './src/logger/transport/file/index.ts',
+    config: './src/config/index.ts',
   },
   format: ['esm', 'cjs'],
   dts: true,

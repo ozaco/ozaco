@@ -199,6 +199,17 @@
         "default": "./dist/logger/transport/file.cjs"
       },
       "source": "./src/logger/transport/file.ts"
+    },
+    "./config": {
+      "import": {
+        "types": "./dist/config.d.ts",
+        "default": "./dist/config.js"
+      },
+      "require": {
+        "types": "./dist/config.d.cts",
+        "default": "./dist/config.cjs"
+      },
+      "source": "./src/config/index.ts"
     }
   },
   "publishConfig": {

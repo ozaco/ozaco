@@ -23,7 +23,8 @@
       "std:logger/transport/file": [
         "./src/logger/transport/file/index.ts",
         "./dist/logger/transport/file.d.ts"
-      ]
+      ],
+      "std:config": ["./src/config/index.ts", "./dist/config.d.ts"]
     }
   }
 }

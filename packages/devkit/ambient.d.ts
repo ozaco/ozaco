@@ -51,6 +51,9 @@ declare module 'std:codec/impl/toml' {
 declare module 'std:codec/impl/yaml' {
   export * from '@ozaco/std/codec/impl/yaml'
 }
+declare module 'std:config' {
+  export * from '@ozaco/std/config'
+}
 
 // --------- SERVER ---------
 
