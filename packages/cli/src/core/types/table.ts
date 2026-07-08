@@ -56,8 +56,9 @@ export namespace TableDef {
     rows(rows: Row[]): Future<number[], unknown>
     /**
      * Replace every cell of the row at `index`. Interactive tables redraw in place, so any row
-     * stays editable until `end()`; non-interactive output commits a row once the next one is
-     * appended (or on `end()`), so only the most-recent row can still be updated.
+     * stays editable until `end()`. Non-interactive output can't rewrite a line already sent, so
+     * an update to an already-committed row is RE-APPENDED as a fresh line with the new values
+     * (duplicates are expected); the most-recent, not-yet-committed row is still edited in place.
      */
     update(index: number, row: Row): Future<void, unknown>
     /** Update a single cell of the row at `index` — by column key (object rows) or index (arrays). */

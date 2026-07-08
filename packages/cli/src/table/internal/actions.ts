@@ -155,6 +155,16 @@ export const table = operation(function* (options: TableDef.Options) {
     }
   })
 
+  // An update reflects immediately: a not-yet-committed (pending) row is edited in place and
+  // flushed later with the new value; an already-committed row can't be rewritten in a pipe, so its
+  // new state is RE-APPENDED as a fresh line (duplicates are expected).
+  const reflect = operation(function* (index: number) {
+    if (index < flushed.value && !state.ended) {
+      yield* startOnce()
+      ctx.output.write(`${bodyRow(layout, state.rows[index]!)}\n`)
+    }
+  })
+
   yield* ensure(function* () {
     yield* finish()
   })
@@ -174,15 +184,19 @@ export const table = operation(function* (options: TableDef.Options) {
       return Array.from(rows.keys(), offset => start + offset)
     }),
     update: operation(function* (index: number, row: TableDef.Row) {
-      if (index >= flushed.value && state.rows[index] !== undefined) {
-        state.rows[index] = clone(row)
+      if (state.rows[index] === undefined) {
+        return
       }
+      state.rows[index] = clone(row)
+      yield* reflect(index)
     }),
     set: operation(function* (index: number, column: string | number, value: TableDef.Cell) {
       const cells = state.rows[index]
-      if (index >= flushed.value && cells !== undefined) {
-        setCell(cells, column, value)
+      if (cells === undefined) {
+        return
       }
+      setCell(cells, column, value)
+      yield* reflect(index)
     }),
     end: finish,
   } satisfies TableDef.Handle

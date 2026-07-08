@@ -80,7 +80,9 @@ export namespace ConfigDef {
     working: ConfigDef.Working
   }
 
-  export interface Actions {
+  /** A self-contained config: its own discovery/merge/working file. The default one is `Config`'s
+   * own actions; `open` mints extra, fully-independent instances. */
+  export interface Instance {
     /** (Re)discover `<name>.toml` from cwd up to home, resolve `extends`, return the merged config. */
     load(cwd?: string): Future<void, unknown>
     /** Re-run discovery against the current cwd (pick up on-disk changes) without moving `cwd`. */
@@ -102,5 +104,14 @@ export namespace ConfigDef {
     search(query: string): Future<ConfigDef.Match[], unknown>
     /** The discovered chain (parents) with each file's `extends` locations, as a tree. */
     tree(): Future<ConfigDef.Source[], unknown>
+  }
+
+  export interface Actions extends Instance {
+    /**
+     * Open an INDEPENDENT config instance with its own options, discovery, merge, and working file —
+     * for managing several configs at once (a second install would just overwrite this one, since
+     * the plugin is a scope singleton). The instance is not stored in the scope.
+     */
+    open(options?: ConfigDef.Options): Future<ConfigDef.Instance, unknown>
   }
 }
