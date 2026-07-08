@@ -102,7 +102,7 @@
     },
     "packages/devkit": {
       "name": "@ozaco/devkit",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "dependencies": {
         "rolldown": "1.1.3",
       },
