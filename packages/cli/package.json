@@ -68,6 +68,17 @@
       },
       "source": "./src/prompt/definition.ts"
     },
+    "./table": {
+      "import": {
+        "types": "./dist/table.d.ts",
+        "default": "./dist/table.js"
+      },
+      "require": {
+        "types": "./dist/table.d.cts",
+        "default": "./dist/table.cjs"
+      },
+      "source": "./src/table/definition.ts"
+    },
     "./terminal/bun": {
       "import": {
         "types": "./dist/terminal/bun.d.ts",

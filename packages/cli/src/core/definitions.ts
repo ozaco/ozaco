@@ -1,10 +1,11 @@
 import { defineProtocol } from 'std:plugin'
 
-import { PALETTE, PROMPT, REGISTRY, SPINNER, TERMINAL } from './const'
+import { PALETTE, PROMPT, REGISTRY, SPINNER, TABLE, TERMINAL } from './const'
 import type { PaletteDef } from './types/palette'
 import type { PromptDef } from './types/prompt'
 import type { RegistryDef } from './types/registry'
 import type { SpinnerDef } from './types/spinner'
+import type { TableDef } from './types/table'
 import type { TerminalDef } from './types/terminal'
 
 export const Terminal = defineProtocol<
@@ -60,4 +61,15 @@ export const Registry = defineProtocol<
   name: 'cli/registry',
   version: '0.0.1',
   subtype: REGISTRY,
+})
+
+export const Table = defineProtocol<
+  TableDef.Context,
+  unknown,
+  [options?: TableDef.Options],
+  TableDef.Actions
+>({
+  name: 'cli/table',
+  version: '0.0.1',
+  subtype: TABLE,
 })

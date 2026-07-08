@@ -10,6 +10,7 @@ export default defineConfig({
     prompt: './src/prompt/definition.ts',
     spinner: './src/spinner/definition.ts',
     command: './src/command/definition.ts',
+    table: './src/table/definition.ts',
     'terminal/bun': './src/terminal/bun.ts',
     // 'terminal/web': './src/terminal/web.ts',
     // 'terminal/memory': './src/terminal/memory.ts',

@@ -154,6 +154,10 @@ declare module 'cli:command' {
   export * from '@ozaco/cli/command'
 }
 
+declare module 'cli:table' {
+  export * from '@ozaco/cli/table'
+}
+
 declare module 'cli:terminal/bun' {
   export * from '@ozaco/cli/terminal/bun'
 }
