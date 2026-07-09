@@ -35,28 +35,28 @@ export namespace ConfigDef {
 
   export interface Options {
     /** Target codec (default `TomlCodec`). */
-    codec?: CodecDef
+    codec?: CodecDef | undefined
 
     /** Config name (default `ozaco`). */
-    name?: string
+    name?: string | undefined
 
     /** Directory to start discovery from (default `process.cwd()`). */
-    cwd?: string
+    cwd?: string | undefined
 
-    /** Active variant overlay name (`<veriant>.<name>.toml` wins); default the `STD_CONFIG` env var. */
-    variant?: string
+    /** Active variant overlay name (`<variant>.<name>.toml` wins); default the `STD_CONFIG` env var. */
+    variant?: string | undefined
 
     /** Directory to stop discovery at, inclusive (default the home dir). */
-    home?: string
+    home?: string | undefined
 
     /** Config dir/file should start with dot (default `true`). */
-    dot?: boolean
+    dot?: boolean | undefined
 
     /** File extension without the dot (default derived from the codec, e.g. `toml`). */
-    ext?: string
+    ext?: string | undefined
 
     /** Enabled config features (default `Features.ALL`). */
-    features?: Features
+    features?: Features | undefined
   }
 
   export interface Context {
@@ -76,8 +76,10 @@ export namespace ConfigDef {
     env: ConfigDef.Object
     /** The merged view produced by the last `load` (chain merged low → high, then `env` on top). */
     merged: ConfigDef.Object
-    /** The file `set`/`remove`/`clear`/`save` mutate in memory. */
+    /** The base file `clear` empties and new keys from `set` land in (the cwd base file). */
     working: ConfigDef.Working
+    /** Paths of source files edited by `set`/`remove`/`clear` since the last `load`, flushed by `save`. */
+    dirty: Set<string>
   }
 
   /** A self-contained config: its own discovery/merge/working file. The default one is `Config`'s
@@ -87,16 +89,18 @@ export namespace ConfigDef {
     load(cwd?: string): Future<void, unknown>
     /** Re-run discovery against the current cwd (pick up on-disk changes) without moving `cwd`. */
     refresh(): Future<void, unknown>
-    /** Write the working file's own content as TOML (default the cwd `<name>.toml`, or `path`). */
+    /** Persist edits: no arg writes every file `set`/`remove`/`clear` touched back to its own path;
+     * a `path` exports the base working file's content there instead. */
     save(path?: string): Future<void, unknown>
 
     /** Read a dotted key (`a.b.c`) from the merged config; omit `key` for the whole merged object. */
     get<T>(key?: string): Future<T, unknown>
-    /** Set a dotted key in the working file's content (in memory; call `save` to persist). */
+    /** Set a dotted key in the file that owns it or its nearest existing ancestor path (else the base
+     * working file); reflected in the merge at once, `save` to persist. */
     set(key: string, value: unknown): Future<void, unknown>
-    /** Remove a dotted key from the working file's content (in memory; call `save` to persist). */
+    /** Remove a dotted key from the file that currently provides it (in memory; call `save` to persist). */
     remove(key: string): Future<void, unknown>
-    /** Empty the working file's content (in memory; call `save` to persist). */
+    /** Empty the base working file's content (in memory; call `save` to persist). */
     clear(): Future<void, unknown>
     /** Delete a config FILE (default the working file), then re-discover. */
     delete(path?: string): Future<void, unknown>

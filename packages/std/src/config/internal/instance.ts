@@ -19,6 +19,42 @@ const constCtx = (ctx: ConfigDef.Context) =>
     return ctx
   })
 
+/** Every source, chain + `extends`, highest precedence first (own data wins, later extends win). */
+const collectSources = (sources: ConfigDef.Source[]): ConfigDef.Source[] =>
+  sources.flatMap(source => [source, ...collectSources(source.extends.toReversed())])
+
+/**
+ * The source file `key` should be written to: the highest-precedence file that already defines the
+ * key or its nearest existing ancestor path — so `set('a.b.c')` lands in the file that owns `a.b`, or
+ * failing that `a`. `undefined` when no file mentions any ancestor (the caller falls back to the base
+ * working file, where genuinely new top-level keys belong).
+ */
+const findOrigin = (sources: ConfigDef.Source[], key: string): ConfigDef.Source | undefined => {
+  const flat = collectSources(sources)
+  const parts = key.split('.')
+
+  for (let depth = parts.length; depth >= 1; depth--) {
+    const prefix = parts.slice(0, depth).join('.')
+    for (const source of flat) {
+      if (getPath(source.data, prefix) !== undefined) {
+        return source
+      }
+    }
+  }
+  return undefined
+}
+
+/** Serialize `data` with the context codec and write it to `target`, creating parent dirs. */
+const writeData = operation(function* (
+  ctx: ConfigDef.Context,
+  target: string,
+  data: ConfigDef.Object,
+) {
+  const text = yield* ctx.codec.actions.stringify(data)
+  yield* IO.actions.ensureDir(yield* IO.actions.dirname(target))
+  yield* IO.actions.write(target, text)
+})
+
 /** Build a fresh, unattached config context from options (the same shape the plugin `setup` returns). */
 export const buildContext = operation(function* (options?: ConfigDef.Options) {
   const codec = options?.codec ?? TomlCodec
@@ -40,6 +76,7 @@ export const buildContext = operation(function* (options?: ConfigDef.Options) {
     env: {},
     merged: {},
     working: { path: '', data: {} },
+    dirty: new Set<string>(),
   }
 
   context.working.path = yield* IO.actions.join(cwd, baseFile(context))
@@ -56,6 +93,7 @@ export const rediscover = operation(function* (ctx: ConfigDef.Context, start: st
   ctx.chain = chain
   ctx.working = working
   ctx.merged = mergeChain(chain, ctx.env)
+  ctx.dirty.clear()
 })
 
 /**
@@ -77,11 +115,20 @@ export const makeInstance = (
 
   save: operation(function* (path?: string) {
     const ctx = yield* getCtx()
-    const target = path ?? ctx.working.path
 
-    const text = yield* ctx.codec.actions.stringify(ctx.working.data)
-    yield* IO.actions.ensureDir(yield* IO.actions.dirname(target))
-    yield* IO.actions.write(target, text)
+    // Explicit target: export the base working file's content to `path`.
+    if (path !== undefined) {
+      yield* writeData(ctx, path, ctx.working.data)
+      return
+    }
+
+    // Otherwise persist every source file a set/remove/clear touched, back to its own path.
+    for (const source of collectSources(ctx.chain)) {
+      if (ctx.dirty.has(source.path)) {
+        yield* writeData(ctx, source.path, source.data)
+      }
+    }
+    ctx.dirty.clear()
   }),
 
   get: operation(function* (key?: string) {
@@ -91,19 +138,29 @@ export const makeInstance = (
 
   set: operation(function* (key: string, value: unknown) {
     const ctx = yield* getCtx()
-    ctx.working.data = setPath(ctx.working.data, key, value)
+    // Write into the file that already defines the key; new keys land in the base working file.
+    const target = findOrigin(ctx.chain, key) ?? ctx.working
+    target.data = setPath(target.data, key, value)
+    ctx.dirty.add(target.path)
     ctx.merged = mergeChain(ctx.chain, ctx.env)
   }),
 
   remove: operation(function* (key: string) {
     const ctx = yield* getCtx()
-    ctx.working.data = unsetPath(ctx.working.data, key)
+    // Remove from the file that currently provides the key (a shadowed copy below may re-surface).
+    const target = findOrigin(ctx.chain, key)
+    if (target === undefined) {
+      return
+    }
+    target.data = unsetPath(target.data, key)
+    ctx.dirty.add(target.path)
     ctx.merged = mergeChain(ctx.chain, ctx.env)
   }),
 
   clear: operation(function* () {
     const ctx = yield* getCtx()
     ctx.working.data = {}
+    ctx.dirty.add(ctx.working.path)
     ctx.merged = mergeChain(ctx.chain, ctx.env)
   }),
 

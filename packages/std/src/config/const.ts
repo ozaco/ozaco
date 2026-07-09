@@ -10,9 +10,9 @@ export enum Features {
   FILE = 1 << 2,
   /** Walk parent directories from `cwd` up to `home`, merging outer → inner. */
   CHAIN = 1 << 3,
-  /** Apply the active-variant overlay `<name>.<variant>.<ext>` (wins within its level). */
+  /** Apply the active-variant overlay `<variant>.<name>.<ext>` (wins within its level). */
   VARIANT = 1 << 4,
-  /** Merge fragment files `<name>.<fragment>.<ext>` (later name wins) above the base file. */
+  /** Merge fragment files `<fragment>.<name>.<ext>` (later name wins) above the base file. */
   FRAGMENT = 1 << 5,
   /** Read the variant from `STD_CONFIG` and overlay `<NAME>_A_B` env vars as the top source. */
   ENV = 1 << 6,

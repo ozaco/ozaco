@@ -11,27 +11,32 @@ export const baseName = (ctx: ConfigDef.Context): string => (ctx.dot ? `.${ctx.n
 /** The base config file name, e.g. `.ozaco.toml`. */
 export const baseFile = (ctx: ConfigDef.Context): string => `${baseName(ctx)}.${ctx.ext}`
 
-/** A variant/fragment file name for an infix, e.g. `.ozaco.local.toml`. */
+/** A variant/fragment file name for an infix, e.g. `.local.ozaco.toml` (the infix leads the name). */
 export const infixFile = (ctx: ConfigDef.Context, infix: string): string =>
-  `${baseName(ctx)}.${infix}.${ctx.ext}`
+  `${ctx.dot ? '.' : ''}${infix}.${ctx.name}.${ctx.ext}`
 
 /** The config directory name, e.g. `.ozaco` (`DIR` feature). */
 export const dirName = (ctx: ConfigDef.Context): string => baseName(ctx)
 
 /**
- * Classify a file name: the exact `<base>.<ext>` is `'base'`; a `<base>.<infix>.<ext>` yields its
- * infix (variant or fragment); anything else is `undefined`.
+ * Classify a file name: the exact `<name>.<ext>` is `'base'`; a `<infix>.<name>.<ext>` yields its
+ * infix (variant or fragment); anything else is `undefined`. In `dot` mode every config file is
+ * hidden behind a leading dot (`.<name>.<ext>`, `.<infix>.<name>.<ext>`).
  */
 export const classify = (ctx: ConfigDef.Context, name: string): FileKind | undefined => {
-  const base = baseName(ctx)
-  const suffix = `.${ctx.ext}`
+  if (ctx.dot && !name.startsWith('.')) {
+    return undefined
+  }
 
-  if (name === `${base}${suffix}`) {
+  const bare = ctx.dot ? name.slice(1) : name
+  const anchor = `${ctx.name}.${ctx.ext}`
+
+  if (bare === anchor) {
     return 'base'
   }
 
-  if (name.startsWith(`${base}.`) && name.endsWith(suffix)) {
-    const infix = name.slice(base.length + 1, name.length - suffix.length)
+  if (bare.endsWith(`.${anchor}`)) {
+    const infix = bare.slice(0, bare.length - anchor.length - 1)
     if (infix.length > 0) {
       return { infix }
     }
