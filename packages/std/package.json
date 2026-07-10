@@ -187,7 +187,7 @@
         "types": "./dist/logger/transport/console.d.cts",
         "default": "./dist/logger/transport/console.cjs"
       },
-      "source": "./src/logger/transport/console.ts"
+      "source": "./src/logger/transport/console/index.ts"
     },
     "./logger/transport/file": {
       "import": {
@@ -198,7 +198,7 @@
         "types": "./dist/logger/transport/file.d.cts",
         "default": "./dist/logger/transport/file.cjs"
       },
-      "source": "./src/logger/transport/file.ts"
+      "source": "./src/logger/transport/file/index.ts"
     },
     "./config": {
       "import": {
