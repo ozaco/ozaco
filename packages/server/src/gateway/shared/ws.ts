@@ -1,8 +1,10 @@
 import type { ActionRequest, ActionResponse } from 'server:core'
 import { Gateway } from 'server:core'
-import { operation } from 'std:effect'
+import { attempt, operation } from 'std:effect'
 import { isFailure, isSuccess } from 'std:result'
 import type { AnyType } from 'std:shared'
+
+import { JsonCodec } from 'std:codec/impl/json'
 
 import { JSON_CONTENT } from './const'
 
@@ -17,25 +19,24 @@ export const wsSettingsAction = operation(function* (options: AnyType) {
   }
 })
 
-export const parseWsPayload = (payload: unknown): unknown => {
+export const parseWsPayload = operation(function* (payload: unknown) {
   if (payload === null || payload === undefined) {
     return null
   }
   if (typeof payload === 'string') {
     const trimmed = payload.trim()
     if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
-      try {
-        return JSON.parse(payload)
-      } catch {
-        return payload
-      }
+      // a non-JSON payload that merely starts with `{`/`[` degrades to the raw string (matches the
+      // previous try/catch), so `attempt` swallows the decode failure instead of propagating it
+      const parsed = yield* attempt(JsonCodec.actions.parse(payload))
+      return isSuccess(parsed) ? parsed.value : payload
     }
     return payload
   }
   return payload
-}
+})
 
-export const encodeWsBody = (body: unknown): string | ArrayBufferView | ArrayBuffer | null => {
+export const encodeWsBody = operation(function* (body: unknown) {
   if (body === undefined || body === null) {
     return null
   }
@@ -48,10 +49,10 @@ export const encodeWsBody = (body: unknown): string | ArrayBufferView | ArrayBuf
   if (ArrayBuffer.isView(body)) {
     return body
   }
-  return JSON.stringify(body)
-}
+  return yield* JsonCodec.actions.stringify(body)
+})
 
-export const buildRequest = (ws: AnyType, payload: unknown): [ActionRequest, unknown] => {
+export const buildRequest = operation(function* (ws: AnyType, payload: unknown) {
   const data = (ws?.data ?? {}) as {
     url?: string
     headers?: Record<string, string>
@@ -59,7 +60,7 @@ export const buildRequest = (ws: AnyType, payload: unknown): [ActionRequest, unk
   }
   const url = new URL(data.url ?? 'ws://localhost/')
   const headers = data.headers ?? {}
-  const parsedBody = parseWsPayload(payload)
+  const parsedBody = yield* parseWsPayload(payload)
 
   const body = {
     ...data.params,
@@ -74,8 +75,8 @@ export const buildRequest = (ws: AnyType, payload: unknown): [ActionRequest, unk
     files: {},
   }
 
-  return [req, body]
-}
+  return [req, body] as [ActionRequest, unknown]
+})
 
 export const buildResponse = (): ActionResponse => ({
   status: null,
@@ -84,7 +85,11 @@ export const buildResponse = (): ActionResponse => ({
   meta: { 'content-type': JSON_CONTENT },
 })
 
-export const sendResult = (ws: AnyType, res: ActionResponse | null, result: AnyType): void => {
+export const sendResult = operation(function* (
+  ws: AnyType,
+  res: ActionResponse | null,
+  result: AnyType,
+) {
   const sink = ws as { send?: (data: AnyType) => void } | null
   if (!sink?.send) {
     return
@@ -94,14 +99,14 @@ export const sendResult = (ws: AnyType, res: ActionResponse | null, result: AnyT
     if (result.error instanceof Error) {
       ;(result as AnyType).error = String(result.error)
     }
-    sink.send(JSON.stringify(result))
+    sink.send(yield* JsonCodec.actions.stringify(result))
     return
   }
 
   const body = isSuccess(result) ? (result.value ?? res?.body) : res?.body
-  const encoded = encodeWsBody(body)
+  const encoded = yield* encodeWsBody(body)
   if (encoded === null) {
     return
   }
   sink.send(encoded)
-}
+})

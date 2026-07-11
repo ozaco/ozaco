@@ -1,3 +1,7 @@
+import { operation } from 'std:effect'
+
+import { JsonCodec } from 'std:codec/impl/json'
+
 import type { ClientDef } from '../types'
 
 const PARAM = /:([A-Za-z0-9_]+)/gu
@@ -17,11 +21,11 @@ export interface BuiltRequest {
  * object, then route the remaining fields to the JSON body (write methods) or the query string
  * (GET/HEAD). Method and path come only from the manifest — never inferred here.
  */
-export const buildRequest = (
+export const buildRequest = operation(function* (
   baseUrl: string,
   route: ClientDef.Route,
   input: unknown,
-): BuiltRequest => {
+) {
   const method = route.method.toUpperCase()
   const writes = method !== 'GET' && method !== 'HEAD'
 
@@ -47,7 +51,10 @@ export const buildRequest = (
     const query = new URLSearchParams()
     for (const [key, value] of Object.entries(payload)) {
       if (value !== undefined) {
-        query.set(key, typeof value === 'string' ? value : JSON.stringify(value))
+        query.set(
+          key,
+          typeof value === 'string' ? value : yield* JsonCodec.actions.stringify(value),
+        )
       }
     }
     const search = query.toString()
@@ -57,4 +64,4 @@ export const buildRequest = (
   }
 
   return { url, method, body }
-}
+})

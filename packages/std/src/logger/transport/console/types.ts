@@ -1,3 +1,4 @@
+import type { Operation } from 'std:effect'
 import type { AnyType } from 'std:shared'
 
 import type { LogLevel } from '../../const'
@@ -10,14 +11,14 @@ export namespace ConsoleDef {
     color?: boolean | undefined
     msgKey?: string | undefined
     errorKey?: string | undefined
-    format?: ((entry: LoggerDef.Entry) => string) | undefined
+    format?: ((entry: LoggerDef.Entry) => Operation<string, unknown>) | undefined
   }
 
   export interface Context {
     name: string
     level: LogLevel
 
-    format: (entry: LoggerDef.Entry) => AnyType
+    format: (entry: LoggerDef.Entry) => Operation<AnyType, unknown>
     options: Options
   }
 }

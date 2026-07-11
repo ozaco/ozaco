@@ -1,7 +1,11 @@
 import type { AiDef } from 'ai:core'
 import { AI, AiErrors, DEFAULT_BASE_URL, DEFAULT_CHAT_MODEL } from 'ai:core'
+import { Codec } from 'std:codec'
 import { operation, useContext } from 'std:effect'
+import { install } from 'std:plugin'
 import { fail } from 'std:result'
+
+import { JsonCodec } from 'std:codec/impl/json'
 
 import { parseChatResponse, parseEmbedResponse, parseSttResponse } from '../internal/parse'
 import { buildChatBody, buildEmbedBody, buildSttForm, buildTtsBody } from '../internal/payload'
@@ -26,6 +30,12 @@ export const OpenAI = AI.implement({
   *setup(config: AiDef.Config) {
     if (!config.apiKey) {
       return yield* fail(AiErrors.Auth, 'OpenAICompatible: `apiKey` is required')
+    }
+
+    // request bodies, SSE chunks, and error bodies all (de)serialize through the codec — install a
+    // JSON codec when the consumer hasn't provided one so `install(OpenAI)` stays self-sufficient
+    if ((yield* Codec.context.get()) === undefined) {
+      yield* install(JsonCodec)
     }
 
     const context: AiDef.Context = {

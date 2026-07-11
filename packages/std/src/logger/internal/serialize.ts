@@ -1,3 +1,7 @@
+import type { Operation } from 'std:effect'
+
+import { JsonCodec } from 'std:codec/impl/json'
+
 import type { LoggerDef } from '../types/logger'
 
 export const toRecord = (
@@ -28,8 +32,13 @@ export const toRecord = (
   return record
 }
 
-export const toJson = (entry: LoggerDef.Entry, msgKey = 'msg', errorKey = 'err'): string =>
-  JSON.stringify(toRecord(entry, msgKey, errorKey))
+export const toJson = (entry: LoggerDef.Entry, msgKey = 'msg', errorKey = 'err') =>
+  JsonCodec.actions.stringify(toRecord(entry, msgKey, errorKey))
 
-export const toNdjson = (entry: LoggerDef.Entry, msgKey = 'msg', errorKey = 'err'): string =>
-  `${toJson(entry, msgKey, errorKey)}\n`
+export const toNdjson = function* (
+  entry: LoggerDef.Entry,
+  msgKey = 'msg',
+  errorKey = 'err',
+): Operation<string, unknown> {
+  return `${yield* toJson(entry, msgKey, errorKey)}\n`
+}

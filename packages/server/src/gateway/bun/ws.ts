@@ -23,7 +23,7 @@ export const onMessageAction = operation(function* (ws: AnyType, message: unknow
     return
   }
 
-  const [req, body] = buildRequest(ws, message)
+  const [req, body] = yield* buildRequest(ws, message)
   const res = buildResponse()
 
   const signal: AbortSignal | undefined = ws?.data?.controller?.signal
@@ -36,9 +36,9 @@ export const onMessageAction = operation(function* (ws: AnyType, message: unknow
       body,
       isService(entry.target),
     )
-    sendResult(ws, res, auto(ret))
+    yield* sendResult(ws, res, auto(ret))
   } catch (error) {
-    sendResult(ws, res, asFailure(error))
+    yield* sendResult(ws, res, asFailure(error))
   }
 })
 

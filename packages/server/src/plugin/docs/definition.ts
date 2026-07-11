@@ -33,7 +33,7 @@ export const Docs = definePlugin({
     yield* CompiledRef.set([])
     yield* SpecRef.set(buildOpenAPISpec([], ctx))
     yield* SwaggerHtmlRef.set(
-      buildSwaggerHtml({
+      yield* buildSwaggerHtml({
         openapi: ctx.openapi,
         title: ctx.title,
         auth: Boolean(ctx.auth),

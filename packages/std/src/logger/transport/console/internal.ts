@@ -1,5 +1,10 @@
 // oxlint-disable unicorn/no-hex-escape
 
+import type { Operation } from 'std:effect'
+import { map } from 'std:effect'
+
+import { JsonCodec } from 'std:codec/impl/json'
+
 import { LogLevel } from '../../const'
 import type { LoggerDef } from '../../types/logger'
 
@@ -70,25 +75,31 @@ export const colorOf = (level: LogLevel): string => {
   return ANSI.gray
 }
 
-export const formatBindings = (bindings: Record<string, unknown>, color: boolean): string => {
+export const formatBindings = function* (
+  bindings: Record<string, unknown>,
+  color: boolean,
+): Operation<string, unknown> {
   const keys = Object.keys(bindings)
   if (keys.length === 0) {
     return ''
   }
-  const parts = keys.map(k => {
+  const parts = yield* map(keys, function* (k) {
     const key = paint(color, ANSI.cyan, k)
-    return `${key}=${JSON.stringify(bindings[k])}`
+    return `${key}=${yield* JsonCodec.actions.stringify(bindings[k])}`
   })
   return ` ${parts.join(' ')}`
 }
 
-export const prettyFormat = (entry: LoggerDef.Entry, color: boolean): string => {
+export const prettyFormat = function* (
+  entry: LoggerDef.Entry,
+  color: boolean,
+): Operation<string, unknown> {
   const time = paint(color, ANSI.dim, `[${new Date(entry.time).toISOString()}]`)
   const label = paint(color, colorOf(entry.level), labelOf(entry.level))
   const bindings = formatBindings(entry.bindings, color)
-  const data = entry.data ? ` ${JSON.stringify(entry.data)}` : ''
+  const data = entry.data ? ` ${yield* JsonCodec.actions.stringify(entry.data)}` : ''
   const error = entry.error
-    ? ` ${paint(color, ANSI.red, `err=${JSON.stringify(entry.error)}`)}`
+    ? ` ${paint(color, ANSI.red, `err=${yield* JsonCodec.actions.stringify(entry.error)}`)}`
     : ''
   return `${time} ${label}${bindings}: ${entry.msg}${data}${error}`
 }

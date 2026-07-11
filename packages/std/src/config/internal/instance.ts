@@ -4,6 +4,8 @@ import { IO } from 'std:io'
 import type { AnyType } from 'std:shared'
 import { flattenEntries, getPath, setPath, unsetPath } from 'std:shared'
 
+import { JsonCodec } from 'std:codec/impl/json'
+
 import type { ConfigDef } from '../types'
 
 import { buildContext, rediscover } from './context'
@@ -151,7 +153,7 @@ export const makeInstance = (
     // Every watcher event bumps a shared signal; `debounce` collapses a burst into one tick so a
     // single save (which fires several fs events) triggers just one re-discover.
     const bump = createSignal<void, never>()
-    let last = JSON.stringify(ctx.merged)
+    let last = yield* JsonCodec.actions.stringify(ctx.merged)
 
     const feed = (stream: ReturnType<typeof IO.actions.watch>) =>
       operation(function* () {
@@ -171,7 +173,7 @@ export const makeInstance = (
 
       for (const _ of yield* each(debounce(bump, options?.debounce ?? 50))) {
         yield* rediscover(ctx, ctx.cwd)
-        const next = JSON.stringify(ctx.merged)
+        const next = yield* JsonCodec.actions.stringify(ctx.merged)
         if (next !== last) {
           last = next
           listener(ctx.merged)

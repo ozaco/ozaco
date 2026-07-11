@@ -1,8 +1,10 @@
-import { Codec, CodecErrors } from 'std:codec'
+import { CodecErrors } from 'std:codec'
 import { operation, until } from 'std:effect'
 import type { FetchDef } from 'std:fetch'
 import { fetch as httpFetch } from 'std:fetch'
 import { fail } from 'std:result'
+
+import { JsonCodec } from 'std:codec/impl/json'
 
 import type { ClientDef } from '../types'
 
@@ -39,7 +41,7 @@ export const httpDispatch = operation(function* (
     )
   }
 
-  const built = buildRequest(ctx.baseUrl, route, req.params?.[0])
+  const built = yield* buildRequest(ctx.baseUrl, route, req.params?.[0])
 
   const headers = new Headers()
   const extra =
@@ -53,7 +55,7 @@ export const httpDispatch = operation(function* (
   const init: FetchDef.Init = { method: built.method, headers }
   if (built.body !== undefined) {
     headers.set('content-type', 'application/json')
-    init.body = (yield* Codec.actions.encode(built.body)) as BodyInit
+    init.body = (yield* JsonCodec.actions.encode(built.body)) as BodyInit
   }
 
   const response = yield* httpFetch(built.url, init)

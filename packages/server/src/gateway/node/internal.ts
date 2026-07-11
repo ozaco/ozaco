@@ -7,6 +7,8 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import { createServer } from 'node:http'
 import { Readable } from 'node:stream'
 
+import { JsonCodec } from 'std:codec/impl/json'
+
 import { dispatchRequest } from '../shared/handle'
 import { haltInflight, pauseGate, trackRequest } from '../shared/serve'
 
@@ -73,17 +75,19 @@ export const startAction = operation(function* (
   const ctx = yield* useContext(Gateway.context)
   const scope = yield* useScope()
 
+  // the 426 body is a fixed envelope — encode it once through the codec here (the gateway already
+  // requires JsonCodec for request/response bodies) so the async `handle` stays JSON-call-free
+  const upgradeRequiredBody = yield* JsonCodec.actions.stringify({
+    error: 'upgrade-required',
+    message: 'node gateway has no websocket support',
+  })
+
   const handle = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     // Node has no built-in websocket server — reject upgrades with 426 (use BunGateway for ws)
     if (String(req.headers.upgrade).toLowerCase() === 'websocket') {
       res.statusCode = 426
       res.setHeader('content-type', 'application/json')
-      res.end(
-        JSON.stringify({
-          error: 'upgrade-required',
-          message: 'node gateway has no websocket support',
-        }),
-      )
+      res.end(upgradeRequiredBody)
       return
     }
 

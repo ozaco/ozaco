@@ -1,8 +1,16 @@
+import type { Operation } from 'std:effect'
+
+import { JsonCodec } from 'std:codec/impl/json'
+
 import type { DocsDef } from '../types'
 
-export const buildSwaggerHtml = ({ openapi, title, auth }: DocsDef.SwaggerHtmlOptions): string => {
+export const buildSwaggerHtml = function* ({
+  openapi,
+  title,
+  auth,
+}: DocsDef.SwaggerHtmlOptions): Operation<string, unknown> {
   const safeTitle = title.replaceAll('<', '&lt;').replaceAll('>', '&gt;')
-  const safeUrl = JSON.stringify(openapi)
+  const safeUrl = yield* JsonCodec.actions.stringify(openapi)
   const persistAuth = auth ? 'persistAuthorization: true,' : ''
 
   return `<!DOCTYPE html>

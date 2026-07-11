@@ -47,7 +47,7 @@ export const ConsoleTransport = ConsoleTransportImpl.build({
       return
     }
 
-    const text = ctx.format(entry)
+    const text = yield* ctx.format(entry)
 
     if (entry.level >= LogLevel.error) {
       console.error(text)

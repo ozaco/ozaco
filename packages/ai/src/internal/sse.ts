@@ -1,4 +1,4 @@
-import type { Stream } from 'std:effect'
+import type { Operation, Stream } from 'std:effect'
 import { createChannel, each, ensure, operation, spawn } from 'std:effect'
 import { asFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
@@ -34,7 +34,7 @@ const eventData = (event: string): string =>
  */
 const sseStream = operation(function* <T>(
   raw: Stream<Uint8Array, void>,
-  parseEvent: (data: string) => T | undefined,
+  parseEvent: (data: string) => Operation<T | undefined, AnyType>,
   keep: (value: T) => boolean = () => true,
 ): Generator<AnyType, Stream<T, AiDef.StreamClose>, AnyType> {
   const channel = createChannel<T, AiDef.StreamClose>()
@@ -49,7 +49,7 @@ const sseStream = operation(function* <T>(
         const { events, rest } = splitEvents(buffer)
         buffer = rest
         for (const event of events) {
-          const value = parseEvent(eventData(event))
+          const value = yield* parseEvent(eventData(event))
           if (value === undefined) {
             return
           }
@@ -60,7 +60,7 @@ const sseStream = operation(function* <T>(
         yield* each.next()
       }
       buffer += decoder.decode()
-      const tail = parseEvent(eventData(buffer))
+      const tail = yield* parseEvent(eventData(buffer))
       if (tail !== undefined && keep(tail)) {
         yield* channel.send(tail)
       }

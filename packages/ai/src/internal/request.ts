@@ -104,10 +104,11 @@ export const failStatus = operation(function* (
 /** POST a JSON body to `path` and return the (already status-checked) response. */
 export const postJson = operation(function* (ctx: AiDef.Context, path: string, body: unknown) {
   const url = joinUrl(ctx.baseURL, path)
+  const payload = yield* JsonCodec.actions.stringify(body)
   const response = yield* fetch(url, {
     method: 'POST',
     headers: jsonHeaders(ctx),
-    body: JSON.stringify(body),
+    body: payload,
   })
   return { url, response }
 })

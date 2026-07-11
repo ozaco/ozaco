@@ -1,3 +1,8 @@
+import { attempt, operation } from 'std:effect'
+import { isSuccess } from 'std:result'
+
+import { JsonCodec } from 'std:codec/impl/json'
+
 import { SSE_DONE } from '../const'
 import type { AiDef } from '../types'
 
@@ -137,46 +142,48 @@ export const parseSttResponse = (body: unknown): string => {
  * include-usage chunk. Returns `undefined` for the `[DONE]` sentinel (or an empty/unparseable
  * payload). Tool-call `arguments` are PARTIAL — the consumer accumulates them. Pure — used in tests.
  */
-export const parseChatChunk = (data: string): AiDef.ChatStreamChunk | undefined => {
+export const parseChatChunk = operation(function* (data: string) {
   const payload = data.trim()
   if (payload === SSE_DONE || payload.length === 0) {
     return undefined
   }
-  try {
-    const chunk = JSON.parse(payload) as RawStreamChunk
-    const choice = chunk.choices?.[0]
-    const result: AiDef.ChatStreamChunk = { delta: choice?.delta?.content ?? '' }
-    const toolCalls = parseToolCallDeltas(choice?.delta?.tool_calls)
-    if (toolCalls) {
-      result.toolCalls = toolCalls
-    }
-    if (choice?.finish_reason) {
-      result.finishReason = choice.finish_reason
-    }
-    const usage = parseUsage(chunk.usage)
-    if (usage) {
-      result.usage = usage
-    }
-    return result
-  } catch {
+  // an unparseable chunk degrades to an empty delta (matches the previous try/catch) — `attempt`
+  // captures the decode failure instead of propagating it and halting the stream
+  const parsed = yield* attempt(JsonCodec.actions.parse(payload))
+  if (!isSuccess(parsed)) {
     return { delta: '' }
   }
-}
+  const chunk = parsed.value as RawStreamChunk
+  const choice = chunk.choices?.[0]
+  const result: AiDef.ChatStreamChunk = { delta: choice?.delta?.content ?? '' }
+  const toolCalls = parseToolCallDeltas(choice?.delta?.tool_calls)
+  if (toolCalls) {
+    result.toolCalls = toolCalls
+  }
+  if (choice?.finish_reason) {
+    result.finishReason = choice.finish_reason
+  }
+  const usage = parseUsage(chunk.usage)
+  if (usage) {
+    result.usage = usage
+  }
+  return result
+})
 
 /**
  * Extract the transcript delta from a single streaming `/audio/transcriptions` SSE payload. Returns
  * the delta text for a `transcript.text.delta` event, `''` for any other event (e.g. `*.done`), or
  * `undefined` for the `[DONE]` sentinel that ends the stream. Pure — used directly in tests.
  */
-export const parseTranscriptDelta = (data: string): string | undefined => {
+export const parseTranscriptDelta = operation(function* (data: string) {
   const payload = data.trim()
   if (payload === SSE_DONE || payload.length === 0) {
     return undefined
   }
-  try {
-    const chunk = JSON.parse(payload) as RawTranscriptChunk
-    return chunk.type === 'transcript.text.delta' ? (chunk.delta ?? '') : ''
-  } catch {
+  const parsed = yield* attempt(JsonCodec.actions.parse(payload))
+  if (!isSuccess(parsed)) {
     return ''
   }
-}
+  const chunk = parsed.value as RawTranscriptChunk
+  return chunk.type === 'transcript.text.delta' ? (chunk.delta ?? '') : ''
+})
