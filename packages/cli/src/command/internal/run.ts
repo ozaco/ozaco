@@ -37,7 +37,7 @@ const formatIssues = (issues: readonly StandardSchemaV1.Issue[]): string =>
     })
     .join('\n')
 
-function* descend(node: RuntimeNode, rest: string[], path: string[]): Operation<void, unknown> {
+function* descend(node: RuntimeNode, rest: string[], path: string[]): Operation<void> {
   const token = rest[0]
 
   if (token !== undefined && !token.startsWith('-') && node.children[token] !== undefined) {
@@ -56,7 +56,7 @@ function* descend(node: RuntimeNode, rest: string[], path: string[]): Operation<
   return yield* dispatch(node, rest, path)
 }
 
-function* dispatch(node: RuntimeNode, rest: string[], path: string[]): Operation<void, unknown> {
+function* dispatch(node: RuntimeNode, rest: string[], path: string[]): Operation<void> {
   const palette = yield* useContext(Palette)
   const command = node.plugin
 
@@ -137,7 +137,7 @@ function* dispatch(node: RuntimeNode, rest: string[], path: string[]): Operation
  * Requires Terminal + Palette installed. The root node is built + stored by `register` but its `setup`
  * is NOT run there — it runs here, lazily, so registering many top-level commands never collides.
  */
-export function* runCommand(root: RuntimeNode, argv?: string[]): Operation<void, unknown> {
+export function* runCommand(root: RuntimeNode, argv?: string[]): Operation<void> {
   const fromProcess = typeof process === 'undefined' ? [] : process.argv.slice(2)
   const args = (argv ?? fromProcess).slice()
   // Install the root command in its OWN scope (running its setup) here, not at register — the

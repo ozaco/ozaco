@@ -3,7 +3,6 @@ import type { Plugin } from 'std:plugin'
 
 export type PaletteDef = Plugin<
   PaletteDef.Context,
-  unknown,
   [options?: PaletteDef.Options],
   PaletteDef.Actions
 >
@@ -57,7 +56,7 @@ export namespace PaletteDef {
   }
 
   export interface Actions {
-    colors(): Future<Colors, unknown>
-    symbols(): Future<Symbols, unknown>
+    colors(): Future<Colors>
+    symbols(): Future<Symbols>
   }
 }

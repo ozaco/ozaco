@@ -27,18 +27,18 @@ export namespace CommandDef {
   }
 
   /** A leaf subcommand: a handler carrying its parse metadata (mirrors server's `Action`). */
-  export type Action<S = unknown, R = unknown, E = unknown> = CommandDef.ActionMeta &
-    ((ctx: CommandDef.Infer<S>) => Operation<R, E>)
+  export type Action<S = unknown, R = unknown> = CommandDef.ActionMeta &
+    ((ctx: CommandDef.Infer<S>) => Operation<R>)
 
   /** Values allowed in a command's `actions`: leaf actions or nested command specs. */
-  export type Member = CommandDef.Action<AnyType, AnyType, AnyType> | CommandDef.Spec
+  export type Member = CommandDef.Action<AnyType, AnyType> | CommandDef.Spec
 
-  export interface Options<TContext, TError, TArgs extends unknown[]> {
+  export interface Options<TContext, TArgs extends unknown[]> {
     name: string
     version?: string | undefined
     description?: string | undefined
     actions: Record<string, CommandDef.Member>
-    setup?: (...args: TArgs) => Operation<TContext, TError>
+    setup?: (...args: TArgs) => Operation<TContext>
   }
 
   /**
@@ -47,21 +47,21 @@ export namespace CommandDef {
    * level lazily as dispatch descends. Nested commands live in `subs` (keyed by the token you type),
    * leaf actions in `leaf`.
    */
-  export interface Spec<TContext = unknown, TError = unknown, TArgs extends unknown[] = []> {
+  export interface Spec<TContext = unknown, TArgs extends unknown[] = []> {
     _st: typeof COMMAND
     name: string
     version?: string | undefined
     description?: string | undefined
-    leaf: Record<string, CommandDef.Action<AnyType, AnyType, AnyType>>
+    leaf: Record<string, CommandDef.Action<AnyType, AnyType>>
     subs: Record<string, CommandDef.Spec>
-    setup?: ((...args: TArgs) => Operation<TContext, TError>) | undefined
+    setup?: ((...args: TArgs) => Operation<TContext>) | undefined
   }
 
   /**
    * A built command: the plugin compiled from a `Spec` with a tree-path identity (e.g. `kube.config`),
    * so distinct commands never collide in the shared scope even when they share a human `name`.
    */
-  export interface Built extends Plugin<AnyType, AnyType, AnyType[], Record<string, AnyType>> {
+  export interface Built extends Plugin<AnyType, AnyType[], Record<string, AnyType>> {
     _st: typeof COMMAND
   }
 

@@ -15,10 +15,10 @@ export const terminalWrite = operation(function* (text: string) {
   ctx.output.write(text)
 })
 
-export const terminalSession = operation(function* <R, E>(fn: () => Operation<R, E>) {
+export const terminalSession = operation(function* <R>(fn: () => Operation<R>) {
   const ctx = yield* useContext(Terminal)
 
-  return yield* scoped<R, unknown>(function* () {
+  return yield* scoped<R>(function* () {
     const signal = createSignal<Key, void>()
 
     if (ctx.interactive) {

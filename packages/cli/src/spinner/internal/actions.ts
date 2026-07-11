@@ -26,7 +26,7 @@ const setupTree = operation(function* (options: TreeRunnerOptions = {}) {
   const renderer = yield* Terminal.actions.renderer(columns)
   const state = { roots: [] as TreeNode[], frame: 0, stopped: false }
 
-  let task: Task<void, unknown> | undefined
+  let task: Task<void> | undefined
 
   if (interactive) {
     ctx.output.write(ansi.hideCursor)
@@ -132,7 +132,7 @@ export const start = operation(function* (options?: string | SpinnerDef.StartOpt
   const renderer = yield* Terminal.actions.renderer(columns)
   const state = { message: opts.message ?? '', stopped: false }
 
-  let task: Task<void, unknown> | undefined
+  let task: Task<void> | undefined
 
   if (interactive) {
     ctx.output.write(ansi.hideCursor)

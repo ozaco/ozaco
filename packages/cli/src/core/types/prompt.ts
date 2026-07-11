@@ -2,12 +2,7 @@ import type { Future } from 'std:effect'
 import type { Plugin } from 'std:plugin'
 import type { EmptyType } from 'std:shared'
 
-export type PromptDef = Plugin<
-  PromptDef.Context,
-  unknown,
-  [options?: PromptDef.Options],
-  PromptDef.Actions
->
+export type PromptDef = Plugin<PromptDef.Context, [options?: PromptDef.Options], PromptDef.Actions>
 
 export namespace PromptDef {
   export type Options = EmptyType
@@ -81,13 +76,13 @@ export namespace PromptDef {
   }
 
   export interface Actions {
-    text(options: PromptDef.TextOptions): Future<string, unknown>
-    password(options: PromptDef.PasswordOptions): Future<string, unknown>
-    number(options: PromptDef.NumberOptions): Future<number, unknown>
-    confirm(options: PromptDef.ConfirmOptions): Future<boolean, unknown>
-    select<T>(options: PromptDef.SelectOptions<T>): Future<T, unknown>
-    multiselect<T>(options: PromptDef.MultiSelectOptions<T>): Future<T[], unknown>
-    autocomplete<T>(options: PromptDef.AutocompleteOptions<T>): Future<T, unknown>
-    path(options: PromptDef.PathOptions): Future<string, unknown>
+    text(options: PromptDef.TextOptions): Future<string>
+    password(options: PromptDef.PasswordOptions): Future<string>
+    number(options: PromptDef.NumberOptions): Future<number>
+    confirm(options: PromptDef.ConfirmOptions): Future<boolean>
+    select<T>(options: PromptDef.SelectOptions<T>): Future<T>
+    multiselect<T>(options: PromptDef.MultiSelectOptions<T>): Future<T[]>
+    autocomplete<T>(options: PromptDef.AutocompleteOptions<T>): Future<T>
+    path(options: PromptDef.PathOptions): Future<string>
   }
 }

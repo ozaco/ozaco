@@ -9,7 +9,7 @@ import type { PromptContext, PromptSpec } from '../types'
 const isCancelKey = (key: Key): boolean =>
   key.name === 'escape' || (key.ctrl && (key.name === 'c' || key.name === 'd'))
 
-export function* runPrompt<S, V>(spec: PromptSpec<S, V>): Operation<V, unknown> {
+export function* runPrompt<S, V>(spec: PromptSpec<S, V>): Operation<V> {
   const terminal = yield* useContext(Terminal)
   const palette = yield* useContext(Palette)
   const { columns } = yield* Terminal.actions.size()

@@ -6,7 +6,6 @@ import type { PaletteDef } from './palette'
 
 export type SpinnerDef = Plugin<
   SpinnerDef.Context,
-  unknown,
   [options?: SpinnerDef.Options],
   SpinnerDef.Actions
 >
@@ -24,12 +23,12 @@ export namespace SpinnerDef {
   }
 
   export interface Handle {
-    update(message: string): Future<void, unknown>
-    succeed(message?: string): Future<void, unknown>
-    fail(message?: string): Future<void, unknown>
-    warn(message?: string): Future<void, unknown>
-    info(message?: string): Future<void, unknown>
-    stop(message?: string): Future<void, unknown>
+    update(message: string): Future<void>
+    succeed(message?: string): Future<void>
+    fail(message?: string): Future<void>
+    warn(message?: string): Future<void>
+    info(message?: string): Future<void>
+    stop(message?: string): Future<void>
   }
 
   export interface BarOptions {
@@ -46,21 +45,21 @@ export namespace SpinnerDef {
   }
 
   export interface BarHandle {
-    update(value: number): Future<void, unknown>
-    advance(delta?: number): Future<void, unknown>
-    succeed(message?: string): Future<void, unknown>
-    fail(message?: string): Future<void, unknown>
-    stop(message?: string): Future<void, unknown>
+    update(value: number): Future<void>
+    advance(delta?: number): Future<void>
+    succeed(message?: string): Future<void>
+    fail(message?: string): Future<void>
+    stop(message?: string): Future<void>
   }
 
   export interface TaskHandle {
-    update(message: string): Future<void, unknown>
-    succeed(message?: string): Future<void, unknown>
-    fail(message?: string): Future<void, unknown>
-    warn(message?: string): Future<void, unknown>
-    info(message?: string): Future<void, unknown>
-    task(message: string): Future<SpinnerDef.TaskHandle, unknown>
-    bar(message: string, options?: SpinnerDef.NodeBarOptions): Future<SpinnerDef.BarHandle, unknown>
+    update(message: string): Future<void>
+    succeed(message?: string): Future<void>
+    fail(message?: string): Future<void>
+    warn(message?: string): Future<void>
+    info(message?: string): Future<void>
+    task(message: string): Future<SpinnerDef.TaskHandle>
+    bar(message: string, options?: SpinnerDef.NodeBarOptions): Future<SpinnerDef.BarHandle>
   }
 
   export interface GroupOptions {
@@ -69,14 +68,14 @@ export namespace SpinnerDef {
   }
 
   export interface GroupHandle {
-    task(message: string): Future<SpinnerDef.TaskHandle, unknown>
-    bar(message: string, options?: SpinnerDef.NodeBarOptions): Future<SpinnerDef.BarHandle, unknown>
-    stop(): Future<void, unknown>
+    task(message: string): Future<SpinnerDef.TaskHandle>
+    bar(message: string, options?: SpinnerDef.NodeBarOptions): Future<SpinnerDef.BarHandle>
+    stop(): Future<void>
   }
 
   export interface Actions {
-    start(options?: string | SpinnerDef.StartOptions): Future<SpinnerDef.Handle, unknown>
-    bar(options?: string | SpinnerDef.BarOptions): Future<SpinnerDef.BarHandle, unknown>
-    group(options?: SpinnerDef.GroupOptions): Future<SpinnerDef.GroupHandle, unknown>
+    start(options?: string | SpinnerDef.StartOptions): Future<SpinnerDef.Handle>
+    bar(options?: string | SpinnerDef.BarOptions): Future<SpinnerDef.BarHandle>
+    group(options?: SpinnerDef.GroupOptions): Future<SpinnerDef.GroupHandle>
   }
 }

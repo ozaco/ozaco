@@ -5,7 +5,6 @@ import type { InputStream, Key, OutputStream, Size } from './common'
 
 export type TerminalDef = Plugin<
   TerminalDef.Context,
-  unknown,
   [options?: TerminalDef.Options],
   TerminalDef.Actions
 >
@@ -65,38 +64,34 @@ export namespace TerminalDef {
   }
 
   export interface Renderer {
-    render(frame: string): Future<void, unknown>
-    clear(): Future<void, unknown>
-    done(frame?: string): Future<void, unknown>
+    render(frame: string): Future<void>
+    clear(): Future<void>
+    done(frame?: string): Future<void>
   }
 
   export interface Actions {
     /** Current terminal size. */
-    size(): Future<Size, unknown>
+    size(): Future<Size>
 
     /** Whether the terminal is interactive (TTY + raw-mode capable). */
-    isInteractive(): Future<boolean, unknown>
+    isInteractive(): Future<boolean>
 
     /**
      * Run `fn` inside a raw-input session: raw mode on, cursor hidden, a key reader feeding a
      * shared key stream. On exit (success, error, or halt) raw mode and the cursor are restored.
      */
-    session<R, E>(fn: () => Operation<R, E>): Future<R, E | unknown>
+    session<R>(fn: () => Operation<R>): Future<R>
 
     /** Write raw text to the output stream. */
-    write(text: string | Stream<string, unknown>): Future<void, unknown>
+    write(text: string | Stream<string, unknown>): Future<void>
 
     /** The decoded key stream for the active `session()`. Subscribe with `yield* stream`. */
-    keys(): Future<Stream<Key, void>, unknown>
+    keys(): Future<Stream<Key, void>>
 
-    stripAnsi(text: string): Future<string, unknown>
-    wrapAnsi(
-      text: string,
-      columns: number,
-      options: TerminalDef.WrapAnsiOptions,
-    ): Future<string, unknown>
-    displayWidth(line: string): Future<number, unknown>
+    stripAnsi(text: string): Future<string>
+    wrapAnsi(text: string, columns: number, options: TerminalDef.WrapAnsiOptions): Future<string>
+    displayWidth(line: string): Future<number>
 
-    renderer(columns: number): Future<TerminalDef.Renderer, unknown>
+    renderer(columns: number): Future<TerminalDef.Renderer>
   }
 }

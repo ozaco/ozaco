@@ -26,10 +26,10 @@ export namespace RegistryDef {
 
   export interface Actions {
     /** Register a top-level command (compiles it and runs its own setup), keyed by its `name`. */
-    register(command: RegistryDef.Command): Future<void, unknown>
+    register(command: RegistryDef.Command): Future<void>
     /** Dispatch argv: `argv[0]` selects a registered command, the rest is run against it. */
-    run(argv?: string[]): Future<void, unknown>
+    run(argv?: string[]): Future<void>
     /** Look up a registered command by name. */
-    get(name: string): Future<RegistryDef.Command | undefined, unknown>
+    get(name: string): Future<RegistryDef.Command | undefined>
   }
 }

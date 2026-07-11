@@ -4,12 +4,7 @@ import type { EmptyType } from 'std:shared'
 
 import type { PaletteDef } from './palette'
 
-export type TableDef = Plugin<
-  TableDef.Context,
-  unknown,
-  [options?: TableDef.Options],
-  TableDef.Actions
->
+export type TableDef = Plugin<TableDef.Context, [options?: TableDef.Options], TableDef.Actions>
 
 export namespace TableDef {
   export type Align = 'left' | 'right' | 'center'
@@ -51,24 +46,24 @@ export namespace TableDef {
 
   export interface Handle {
     /** Append one row; returns its index, to `update`/`set` it later. */
-    row(row: Row): Future<number, unknown>
+    row(row: Row): Future<number>
     /** Append many rows at once; returns their indices (in order). */
-    rows(rows: Row[]): Future<number[], unknown>
+    rows(rows: Row[]): Future<number[]>
     /**
      * Replace every cell of the row at `index`. Interactive tables redraw in place, so any row
      * stays editable until `end()`. Non-interactive output can't rewrite a line already sent, so
      * an update to an already-committed row is RE-APPENDED as a fresh line with the new values
      * (duplicates are expected); the most-recent, not-yet-committed row is still edited in place.
      */
-    update(index: number, row: Row): Future<void, unknown>
+    update(index: number, row: Row): Future<void>
     /** Update a single cell of the row at `index` — by column key (object rows) or index (arrays). */
-    set(index: number, column: string | number, value: Cell): Future<void, unknown>
+    set(index: number, column: string | number, value: Cell): Future<void>
     /** Commit the table: the full, fully-aligned table is written to the scrollback. */
-    end(): Future<void, unknown>
+    end(): Future<void>
   }
 
   export interface Actions {
     /** Open a streaming table; feed it via the returned handle's `row`/`rows`, close with `end`. */
-    table(options: TableDef.Options): Future<TableDef.Handle, unknown>
+    table(options: TableDef.Options): Future<TableDef.Handle>
   }
 }

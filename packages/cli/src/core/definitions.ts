@@ -10,7 +10,6 @@ import type { TerminalDef } from './types/terminal'
 
 export const Terminal = defineProtocol<
   TerminalDef.Context,
-  unknown,
   [options?: TerminalDef.Options],
   TerminalDef.Actions
 >({
@@ -21,7 +20,6 @@ export const Terminal = defineProtocol<
 
 export const Palette = defineProtocol<
   PaletteDef.Context,
-  unknown,
   [options?: PaletteDef.Options],
   PaletteDef.Actions
 >({
@@ -32,7 +30,6 @@ export const Palette = defineProtocol<
 
 export const Spinner = defineProtocol<
   SpinnerDef.Context,
-  unknown,
   [options?: SpinnerDef.Options],
   SpinnerDef.Actions
 >({
@@ -43,7 +40,6 @@ export const Spinner = defineProtocol<
 
 export const Prompt = defineProtocol<
   PromptDef.Context,
-  unknown,
   [options?: PromptDef.Options],
   PromptDef.Actions
 >({
@@ -54,7 +50,6 @@ export const Prompt = defineProtocol<
 
 export const Registry = defineProtocol<
   RegistryDef.Context,
-  unknown,
   [options?: RegistryDef.Options],
   RegistryDef.Actions
 >({
@@ -65,7 +60,6 @@ export const Registry = defineProtocol<
 
 export const Table = defineProtocol<
   TableDef.Context,
-  unknown,
   [options?: TableDef.Options],
   TableDef.Actions
 >({

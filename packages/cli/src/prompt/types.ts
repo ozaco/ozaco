@@ -19,7 +19,7 @@ export interface PromptSpec<S, V> {
   onKey(state: S, key: Key, ctx: PromptContext): KeyAction<S, V>
   submitted(value: V, state: S, ctx: PromptContext): string
   cancelled(state: S, ctx: PromptContext): string
-  fallback?(ctx: PromptContext): Operation<V, unknown>
+  fallback?(ctx: PromptContext): Operation<V>
 }
 
 export interface InputState {
