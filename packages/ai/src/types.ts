@@ -5,7 +5,7 @@ import type { Result } from 'std:result'
 
 import type { AiErrors } from './errors'
 
-export type AiDef = Plugin<AiDef.Context, unknown, [config: AiDef.Config], AiDef.Actions>
+export type AiDef = Plugin<AiDef.Context, [config: AiDef.Config], AiDef.Actions>
 
 export namespace AiDef {
   /** An `ai.*` tag for a mapped non-2xx, plus whatever `std:fetch` surfaces raw (it no longer re-tags
@@ -176,7 +176,7 @@ export namespace AiDef {
 
   export interface Actions {
     /** POST `{baseURL}/chat/completions` (non-streaming). */
-    chat(messages: Message[], options?: ChatOptions): Future<ChatResult, Error>
+    chat(messages: Message[], options?: ChatOptions): Future<ChatResult>
     /**
      * POST `{baseURL}/chat/completions` with `stream: true`; yields one `ChatStreamChunk` per SSE
      * event. Each chunk carries the incremental text `delta`, any `toolCalls` fragments, the terminal
@@ -187,25 +187,22 @@ export namespace AiDef {
     chatStream(
       messages: Message[],
       options?: ChatOptions,
-    ): Future<Stream<ChatStreamChunk, StreamClose>, Error>
+    ): Future<Stream<ChatStreamChunk, StreamClose>>
     /** POST `{baseURL}/embeddings`; one vector per input. */
-    embed(input: string | string[], options?: EmbedOptions): Future<number[][], Error>
+    embed(input: string | string[], options?: EmbedOptions): Future<number[][]>
     /** POST `{baseURL}/audio/speech`; returns the synthesized audio bytes. */
-    tts(text: string, options?: TtsOptions): Future<Uint8Array, Error>
+    tts(text: string, options?: TtsOptions): Future<Uint8Array>
     /**
      * POST `{baseURL}/audio/speech` (same body as `tts`); yields the synthesized audio as a byte
      * stream for low-latency playback rather than buffering the whole clip.
      */
-    ttsStream(text: string, options?: TtsOptions): Future<Stream<Uint8Array, StreamClose>, Error>
+    ttsStream(text: string, options?: TtsOptions): Future<Stream<Uint8Array, StreamClose>>
     /** POST `{baseURL}/audio/transcriptions` (multipart); returns the transcription text. */
-    stt(audio: Uint8Array | Blob, options?: SttOptions): Future<string, Error>
+    stt(audio: Uint8Array | Blob, options?: SttOptions): Future<string>
     /**
      * POST `{baseURL}/audio/transcriptions` (multipart, `stream: true`); the response is SSE and
      * yields transcript text deltas as they arrive. The audio input is still uploaded whole.
      */
-    sttStream(
-      audio: Uint8Array | Blob,
-      options?: SttOptions,
-    ): Future<Stream<string, StreamClose>, Error>
+    sttStream(audio: Uint8Array | Blob, options?: SttOptions): Future<Stream<string, StreamClose>>
   }
 }

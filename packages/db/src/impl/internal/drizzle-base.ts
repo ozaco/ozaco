@@ -4,8 +4,6 @@ import type { Result } from 'std:result'
 import { asFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
 
-import type { DbError } from '../../types/runtime'
-
 export type DrizzleTableMap = Record<string, AnyType>
 
 export interface DrizzleRuntime {
@@ -17,19 +15,19 @@ export interface DrizzleRuntime {
   readonly desc: (column: AnyType) => AnyType
   readonly execRaw: (sql: string, params?: unknown[]) => Promise<unknown[]>
   /** Driver-specific error classifier; default is the generic Driver fallback. */
-  readonly classify?: (raw: unknown) => Result.Failure<DbError>
+  readonly classify?: (raw: unknown) => Result.Failure<unknown>
 }
 
 export const runPromise = operation(function* <T>(
   fn: () => Promise<T>,
   runtime?: Pick<DrizzleRuntime, 'classify'>,
-): ManualOperation<T, DbError> {
+): ManualOperation<T> {
   try {
     const outcome = yield* until(fn())
 
     return outcome
   } catch (error) {
-    const failure = asFailure(error) as Result.Failure<DbError>
+    const failure = asFailure(error) as Result.Failure<unknown>
 
     if (runtime?.classify) {
       return yield* runtime.classify(failure)

@@ -3,7 +3,6 @@ import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import { DbErrorCode } from '../../../error-codes'
-import type { DbError } from '../../../types/runtime'
 import type { DrizzleTableMap } from '../../internal/drizzle-base'
 
 const dynamicImport = (spec: string): Promise<AnyType> =>
@@ -19,7 +18,7 @@ export interface SqliteBinding {
 }
 
 export const connectSqlite = (source: string, drizzleTables: DrizzleTableMap) =>
-  withHost<SqliteBinding, DbError>({
+  withHost<SqliteBinding>({
     *bun() {
       const { Database } = yield* call<AnyType>(() => dynamicImport('bun:sqlite'))
       const { drizzle } = yield* call<AnyType>(() => dynamicImport('drizzle-orm/bun-sqlite'))

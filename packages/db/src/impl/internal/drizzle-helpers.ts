@@ -5,7 +5,6 @@ import type { AnyType } from 'std:shared'
 
 import { DbErrorCode } from '../../error-codes'
 import type { WhereClause } from '../../types/query'
-import type { DbError } from '../../types/runtime'
 import type { TableDef } from '../../utils/schema/types'
 
 import type { DrizzleRuntime } from './drizzle-base'
@@ -13,7 +12,7 @@ import type { DrizzleRuntime } from './drizzle-base'
 export const resolveTable = (runtime: DrizzleRuntime, table: TableDef): AnyType | null =>
   runtime.tables[table.name] ?? null
 
-export const tableNotFound = operation(function* <T>(name: string): ManualOperation<T, DbError> {
+export const tableNotFound = operation(function* <T>(name: string): ManualOperation<T> {
   return yield* fail(DbErrorCode.Driver, `table "${name}" not registered in driver schema`)
 })
 

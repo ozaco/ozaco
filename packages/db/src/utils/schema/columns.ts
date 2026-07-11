@@ -1,5 +1,3 @@
-// oxlint-disable oxc/no-rest-spread-properties
-
 import type { ColumnDef, ColumnRef, ColumnType } from './types'
 import { COLUMN } from './types'
 

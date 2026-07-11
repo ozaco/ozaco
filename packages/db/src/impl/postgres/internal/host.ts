@@ -3,7 +3,6 @@ import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import { DbErrorCode } from '../../../error-codes'
-import type { DbError } from '../../../types/runtime'
 import type { DrizzleTableMap } from '../../internal/drizzle-base'
 
 const dynamicImport = (spec: string): Promise<AnyType> =>
@@ -18,7 +17,7 @@ export interface PostgresBinding {
 }
 
 export const connectPostgres = (url: string, max: number, drizzleTables: DrizzleTableMap) =>
-  withHost<PostgresBinding, DbError>({
+  withHost<PostgresBinding>({
     *bun() {
       const { SQL } = yield* call<AnyType>(() => dynamicImport('bun'))
       const { drizzle } = yield* call<AnyType>(() => dynamicImport('drizzle-orm/bun-sql'))

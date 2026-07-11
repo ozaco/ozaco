@@ -2,18 +2,17 @@ import type { Result } from 'std:result'
 import { asFailure, fail } from 'std:result'
 
 import { DbErrorCode } from '../../../error-codes'
-import type { DbError } from '../../../types/runtime'
 
 const SQLITE_UNIQUE = /UNIQUE constraint failed: (?<column>.+)/u
 const SQLITE_FK = /FOREIGN KEY constraint failed/u
 
-export const classifySqliteError = (raw: unknown): Result.Failure<DbError> => {
+export const classifySqliteError = (raw: unknown): Result.Failure<unknown> => {
   if (!raw || typeof raw !== 'object') {
-    return asFailure(raw) as Result.Failure<DbError>
+    return asFailure(raw) as Result.Failure<unknown>
   }
   const err = raw as { message?: string }
   if (typeof err.message !== 'string') {
-    return asFailure(raw) as Result.Failure<DbError>
+    return asFailure(raw) as Result.Failure<unknown>
   }
 
   const unique = SQLITE_UNIQUE.exec(err.message)
@@ -23,11 +22,11 @@ export const classifySqliteError = (raw: unknown): Result.Failure<DbError> => {
       DbErrorCode.UniqueViolation,
       err.message,
       `column=${column}`,
-    ) as Result.Failure<DbError>
+    ) as Result.Failure<unknown>
   }
   if (SQLITE_FK.test(err.message)) {
-    return fail(DbErrorCode.ForeignKeyViolation, err.message) as Result.Failure<DbError>
+    return fail(DbErrorCode.ForeignKeyViolation, err.message) as Result.Failure<unknown>
   }
 
-  return asFailure(raw) as Result.Failure<DbError>
+  return asFailure(raw) as Result.Failure<unknown>
 }

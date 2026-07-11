@@ -3,7 +3,6 @@ import { operation } from 'std:effect'
 import type { AnyType } from 'std:shared'
 
 import type { QueryBuilder } from '../../types/query'
-import type { DbError } from '../../types/runtime'
 import type { SchemaDef } from '../../utils/schema/types'
 
 import type { DrizzleRuntime } from './drizzle-base'
@@ -19,9 +18,7 @@ export const createQueryBuilder = (runtime: DrizzleRuntime, schema: SchemaDef): 
     update: table => createUpdate(runtime, table),
     delete: table => createDelete(runtime, table),
 
-    transaction: operation(function* <T>(
-      fn: (tx: QueryBuilder) => Operation<T, unknown | DbError>,
-    ) {
+    transaction: operation(function* <T>(fn: (tx: QueryBuilder) => Operation<T>) {
       yield* runPromise(() => runtime.execRaw('BEGIN'), runtime)
       try {
         const result = yield* fn(builder)

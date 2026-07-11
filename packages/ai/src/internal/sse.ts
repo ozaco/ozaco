@@ -34,7 +34,7 @@ const eventData = (event: string): string =>
  */
 const sseStream = operation(function* <T>(
   raw: Stream<Uint8Array, void>,
-  parseEvent: (data: string) => Operation<T | undefined, AnyType>,
+  parseEvent: (data: string) => Operation<T | undefined>,
   keep: (value: T) => boolean = () => true,
 ): Generator<AnyType, Stream<T, AiDef.StreamClose>, AnyType> {
   const channel = createChannel<T, AiDef.StreamClose>()
