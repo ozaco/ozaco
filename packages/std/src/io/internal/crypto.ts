@@ -89,7 +89,7 @@ export const encryptSecret = operation(function* (data: Uint8Array | string, sec
 })
 
 export const decryptSecret = operation(function* (data: Uint8Array, secret: string) {
-  if (data.length <= HEADER_BYTES) {
+  if (data.length < HEADER_BYTES) {
     return yield* fail('decrypt-failed', 'ciphertext is too short')
   }
   if (data[0] !== VERSION) {

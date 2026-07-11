@@ -6,7 +6,7 @@ import { Features } from '../const'
 import type { ConfigDef } from '../types'
 
 import { readSource } from './read'
-import { baseFile, dirName, infixFile } from './utils'
+import { baseFile, collectSources, dirName, infixFile } from './utils'
 
 /**
  * Scan one directory for its sources, highest → lowest precedence: active variant → config-dir files
@@ -102,8 +102,12 @@ export const discover = operation(function* (ctx: ConfigDef.Context, start: stri
     chain.push(...(yield* scanDir(ctx, dir, seen)))
   }
 
+  // search the FLATTENED chain (own + every `extends` child), not just top-level members: when the
+  // cwd base file is pulled in only as an `extends` child of a higher-precedence source it is nested,
+  // not a top-level entry — binding `working` to that real Source (instead of minting an empty
+  // standalone duplicate at the same path) is what stops `save` from clobbering it to disk.
   const workingPath = yield* IO.actions.join(start, baseFile(ctx))
-  const working = chain.find(source => source.path === workingPath) ?? {
+  const working = collectSources(chain).find(source => source.path === workingPath) ?? {
     path: workingPath,
     data: {},
     extends: [],

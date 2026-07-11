@@ -55,10 +55,10 @@ export const withValidation = (
       const validationResult = yield* evaluateWith(result, validate(schemas.output, handlerResult))
 
       if (validationResult.issues) {
-        yield* fail(CoreErrors.Validation, formatIssues(validationResult.issues), 'input')
+        yield* fail(CoreErrors.Validation, formatIssues(validationResult.issues), 'output')
       }
 
-      return validationResult
+      return (validationResult as StandardSchemaV1.SuccessResult<unknown>).value
     }
 
     return handlerResult

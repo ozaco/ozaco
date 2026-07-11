@@ -1,5 +1,6 @@
 import type { Stream } from '../types/operation'
 
+import { ensure } from './ensure'
 import { resource } from './resource'
 import { createSignal } from './signal'
 import { spawn } from './spawn'
@@ -17,6 +18,15 @@ export const debounce = <T>(source: Stream<T, unknown>, ms: number): Stream<T, n
         pending = undefined
       }
     }
+
+    // clear a pending debounce timer on teardown/halt — the spawned loop's clearTimeout only runs on
+    // new values and clean source completion, so a halt mid-window would otherwise leak the raw timer
+    // (and later fire `output.send` on a torn-down signal)
+    yield* ensure(function* () {
+      if (timerId !== undefined) {
+        clearTimeout(timerId)
+      }
+    })
 
     // `provide` suspends this resource until teardown, so the source is consumed from a background
     // task — after `provide` the loop would never run.

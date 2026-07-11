@@ -1,6 +1,7 @@
 import type { Operation } from 'std:effect'
 import { attempt, call } from 'std:effect'
 import { isFailure } from 'std:result'
+import { serializeError } from 'std:shared'
 
 import { parseArgs } from 'node:util'
 
@@ -51,9 +52,7 @@ export function* tokenize(
     call(() => parseArgs({ args: head, options, strict: true, allowPositionals: true })),
   )
   if (isFailure(parsed)) {
-    // attempt() types this Failure as `Failure<never>`, but the thrown parseArgs error is the value.
-    const cause: unknown = parsed.error
-    const message = cause instanceof Error ? cause.message : String(cause)
+    const message = serializeError(parsed)
     return { options: new Map(), positionals: [], rest, errors: [message] }
   }
 

@@ -92,21 +92,31 @@ export const TomlCodec = Codec.implement({
     const channel = createChannel<Uint8Array, true | Result.Failure<unknown>>()
 
     yield* spawn(function* () {
+      let close: true | Result.Failure<unknown> = true
       try {
         for (const chunk of yield* each(stream)) {
-          yield* channel.send(
-            encoder.encode(
+          let encoded: Uint8Array
+          try {
+            encoded = encoder.encode(
               stringify(chunk, {
                 maxDepth: 100,
                 numbersAsFloat: false,
               }),
-            ),
-          )
+            )
+          } catch (error) {
+            close = fail(
+              CodecErrors.Encode,
+              error instanceof Error ? error.message : String(error),
+            ) as Result.Failure<unknown>
+            break
+          }
+
+          yield* channel.send(encoded)
 
           yield* each.next()
         }
       } finally {
-        yield* channel.close(true)
+        yield* channel.close(close)
       }
     })
 

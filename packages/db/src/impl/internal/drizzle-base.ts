@@ -30,7 +30,7 @@ export const runPromise = operation(function* <T>(
     const failure = asFailure(error) as Result.Failure<unknown>
 
     if (runtime?.classify) {
-      return yield* runtime.classify(failure)
+      return yield* runtime.classify(failure.error)
     }
 
     return yield* failure

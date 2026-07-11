@@ -1,6 +1,6 @@
 import type { AiDef } from 'ai:core'
 import { AI, AiErrors, DEFAULT_BASE_URL, DEFAULT_CHAT_MODEL } from 'ai:core'
-import { Codec } from 'std:codec'
+import { hasCodec } from 'std:codec'
 import { operation, useContext } from 'std:effect'
 import { install } from 'std:plugin'
 import { fail } from 'std:result'
@@ -33,8 +33,10 @@ export const OpenAI = AI.implement({
     }
 
     // request bodies, SSE chunks, and error bodies all (de)serialize through the codec — install a
-    // JSON codec when the consumer hasn't provided one so `install(OpenAI)` stays self-sufficient
-    if ((yield* Codec.context.get()) === undefined) {
+    // JSON codec when the consumer hasn't registered one so `install(OpenAI)` stays self-sufficient.
+    // `hasCodec()` (the registry) not `Codec.context.get()`: Codec is a cloneable protocol whose
+    // context is only bound during dispatch, so `.get()` is undefined here even when one is installed.
+    if (!(yield* hasCodec())) {
       yield* install(JsonCodec)
     }
 

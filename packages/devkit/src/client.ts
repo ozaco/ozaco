@@ -107,7 +107,7 @@ const renderDistDts = (b: Binding): string =>
   `export declare const manifest: ClientDef.Manifest\n` +
   `export declare const createClient: (\n` +
   `  options: Omit<ClientDef.Options, 'manifest'>,\n` +
-  `) => Operation<${b.servicesType}, unknown>\n`
+  `) => Operation<${b.servicesType}>\n`
 
 // unique temp name per generate() so a watch rebuild never imports a stale module from cache
 let tempSeq = 0

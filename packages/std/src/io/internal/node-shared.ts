@@ -27,7 +27,7 @@ export function* walkRecursive(
 ): Generator<AnyType, void, AnyType> {
   const flags = options.flags ?? 0
 
-  if (options.maxDepth && depth > options.maxDepth) {
+  if (options.maxDepth !== undefined && depth > options.maxDepth) {
     return
   }
 

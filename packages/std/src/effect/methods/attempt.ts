@@ -9,7 +9,7 @@ export function* attempt<T>(
   op: Operation<T> | (() => Operation<T>),
 ): Operation<Result<T, unknown>> {
   try {
-    const result = isOperation(op) ? yield* op as Operation<T> : yield* (op as () => Operation<T>)()
+    const result = isOperation(op) ? yield* op : yield* op()
 
     return succeed(result) as Result<T, unknown>
   } catch (error) {
@@ -17,7 +17,7 @@ export function* attempt<T>(
   }
 }
 
-export function* recover<T, R = unknown>(
+export function* recover<T, R>(
   op: Operation<T> | (() => Operation<T>),
   handler: (failure: Result.Failure<unknown>) => Operation<R>,
 ): Operation<T | R> {

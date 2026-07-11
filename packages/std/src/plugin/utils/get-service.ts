@@ -10,9 +10,7 @@ export const getService = operation(function* (
   handler: (...args: AnyType[]) => Operation<AnyType>,
 ) {
   try {
-    return (yield* (handler as (...args: AnyType[]) => Operation<unknown>)(
-      RAW_ACTION,
-    )) as Hookable.RawAction
+    return (yield* handler(RAW_ACTION)) as Hookable.RawAction
   } catch {
     return yield* fail('unexpected', "handler isn't part of a plugin")
   }

@@ -71,7 +71,7 @@ export async function main(body: (args: string[]) => Operation<void>): Promise<v
             } finally {
               process.off('SIGINT', interrupt.SIGINT)
               if (process.platform !== 'win32') {
-                process.off('SIGTERM', interrupt.SIGINT)
+                process.off('SIGTERM', interrupt.SIGTERM)
               }
             }
           },
@@ -91,7 +91,7 @@ export async function main(body: (args: string[]) => Operation<void>): Promise<v
             } finally {
               process.off('SIGINT', interrupt.SIGINT)
               if (process.platform !== 'win32') {
-                process.off('SIGTERM', interrupt.SIGINT)
+                process.off('SIGTERM', interrupt.SIGTERM)
               }
             }
           },
