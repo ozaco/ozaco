@@ -62,18 +62,18 @@ export namespace ClientDef {
    *   for (const todo of yield* each(yield* call.stream())) {}  // Stream<Todo>
    *   for (const chunk of yield* each(yield* call.raw())) {}    // Stream<Uint8Array>
    */
-  export interface Endpoint<T, E> {
+  export interface Endpoint<T> {
     /** Codec-decoded full body. */
-    body(): Future<T, E>
+    body(): Future<T>
     /** Codec-decoded stream of response chunks (one decoded value per chunk). */
-    stream<U = StreamItem<T>>(): Future<Stream<U, StreamClose>, E>
+    stream<U = StreamItem<T>>(): Future<Stream<U, StreamClose>>
     /** Raw, undecoded stream of response bytes. */
-    raw(): Future<Stream<Uint8Array, StreamClose>, E>
+    raw(): Future<Stream<Uint8Array, StreamClose>>
   }
 
   /** Lift one backend action's call signature into a client endpoint factory (mirrors its args). */
-  type EndpointFn<A> = A extends (...args: infer TArgs) => Operation<infer TReturn, infer TError>
-    ? (...args: TArgs) => Endpoint<TReturn, TError>
+  type EndpointFn<A> = A extends (...args: infer TArgs) => Operation<infer TReturn>
+    ? (...args: TArgs) => Endpoint<TReturn>
     : never
 
   /** The nested, per-route call surface inferred from the app's `services` object type. */
@@ -89,6 +89,6 @@ export namespace ClientDef {
 
   /** A generated client service stub (a real `Service` whose action bodies dispatch remotely). */
   export type Stub<TService> = TService extends { actions: infer TActions }
-    ? Service<unknown, unknown, [], TActions>
+    ? Service<unknown, [], TActions>
     : never
 }

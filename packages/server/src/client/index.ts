@@ -87,7 +87,7 @@ const buildSurface = (services: Record<string, AnyType>): AnyType => {
  */
 const connect = function* <TServices>(
   options: ClientDef.Options,
-): Operation<ClientDef.Client<TServices>, unknown> {
+): Operation<ClientDef.Client<TServices>> {
   yield* install(ClientBroker, options)
 
   const services = defineClient(options.manifest)
@@ -99,6 +99,6 @@ const connect = function* <TServices>(
   return buildSurface(services) as ClientDef.Client<TServices>
 }
 
-export { connect, defineClient }
 export { ClientBroker } from './definition'
 export type { ClientDef } from './types'
+export { connect, defineClient }

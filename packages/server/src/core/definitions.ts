@@ -21,7 +21,7 @@ import type { PolicyDef } from './types/policy'
 import type { TracerDef } from './types/tracer'
 import type { TransportDef } from './types/transport'
 
-export const Broker = defineProtocol<BrokerDef.Context, unknown, unknown[], BrokerDef.Actions>({
+export const Broker = defineProtocol<BrokerDef.Context, unknown[], BrokerDef.Actions>({
   name: 'server/broker',
   version: '0.0.0',
 
@@ -31,7 +31,6 @@ export const Broker = defineProtocol<BrokerDef.Context, unknown, unknown[], Brok
 
 export const Transport = defineProtocol<
   TransportDef.Context,
-  unknown,
   unknown[],
   TransportDef.Actions,
   TransportDef.Handlers
@@ -53,7 +52,7 @@ export const Transport = defineProtocol<
   },
 })
 
-export const Tracer = defineProtocol<TracerDef.Context, unknown, unknown[], TracerDef.Actions>({
+export const Tracer = defineProtocol<TracerDef.Context, unknown[], TracerDef.Actions>({
   name: 'server/tracer',
   version: '0.0.0',
 
@@ -63,7 +62,6 @@ export const Tracer = defineProtocol<TracerDef.Context, unknown, unknown[], Trac
 
 export const Policy = defineProtocol<
   PolicyDef.Context,
-  unknown,
   unknown[],
   PolicyDef.Actions,
   PolicyDef.Handlers
@@ -88,7 +86,6 @@ export const Policy = defineProtocol<
 // plugins hook one surface (cors: `Gateway.before({ fromInternal })`, docs: `Gateway.actions.mount`).
 export const Gateway = defineProtocol<
   GatewayDef.Context,
-  unknown,
   [options?: GatewayDef.Options],
   GatewayDef.Actions
 >({

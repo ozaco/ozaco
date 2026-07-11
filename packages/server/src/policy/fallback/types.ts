@@ -8,7 +8,7 @@ export namespace Fallback {
   export type Handler = (
     failure: Result.Failure<unknown>,
     ctx: PolicyDef.DispatchContext,
-  ) => Operation<unknown, unknown>
+  ) => Operation<unknown>
 
   export interface Options extends PolicyDef.Options {
     value?: unknown

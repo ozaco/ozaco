@@ -13,7 +13,7 @@ export const pumpStream = function* (
   endpoint: WorkerDef.Endpoint,
   sid: string,
   source: Stream<unknown, unknown>,
-): Operation<void, unknown> {
+): Operation<void> {
   let outcome: PumpOutcome
 
   try {

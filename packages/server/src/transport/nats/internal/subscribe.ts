@@ -15,7 +15,7 @@ import { failureFromPayload } from './wire'
 export const subscribeFromNats = function* (
   sub: NatsSubscription,
   hostScope?: Scope,
-): Operation<Stream<unknown, true | Result.Failure<unknown>>, unknown> {
+): Operation<Stream<unknown, true | Result.Failure<unknown>>> {
   const raw = createChannel<Uint8Array, true | Result.Failure<unknown>>()
 
   const reader = function* () {

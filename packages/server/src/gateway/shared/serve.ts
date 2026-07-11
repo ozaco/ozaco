@@ -37,7 +37,7 @@ export const trackRequest = (
   scope: Scope,
   ctx: GatewayDef.Context,
   deliver: (response: Response) => void,
-  body: () => Operation<void, unknown>,
+  body: () => Operation<void>,
 ): void => {
   const task = scope.run(body)
   ctx.inflight.add(task)

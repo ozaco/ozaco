@@ -69,8 +69,8 @@ const wrapPort = (
   }
 }
 
-const spawnWorker = (script: string | URL): Operation<WorkerDef.PortLike, unknown> =>
-  withHost<WorkerDef.PortLike, unknown>({
+const spawnWorker = (script: string | URL): Operation<WorkerDef.PortLike> =>
+  withHost<WorkerDef.PortLike>({
     *browser() {
       return new (globalWorkerCtor())(script, { type: 'module' })
     },
@@ -86,7 +86,7 @@ const spawnWorker = (script: string | URL): Operation<WorkerDef.PortLike, unknow
     },
   })
 
-const parentEndpoint = withHost<WorkerDef.PortLike, unknown>({
+const parentEndpoint = withHost<WorkerDef.PortLike>({
   *browser() {
     return globalThis as unknown as WorkerDef.PortLike
   },

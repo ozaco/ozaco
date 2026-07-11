@@ -33,7 +33,7 @@ export interface ActionResponse {
  * the body is fully sent, paced by backpressure.
  */
 export interface ResponseSink {
-  respond(stream: Stream<Uint8Array, unknown>): Operation<void, unknown>
+  respond(stream: Stream<Uint8Array, unknown>): Operation<void>
 }
 
 /** The transport-agnostic request envelope an action reads via useRequest(). */
@@ -65,8 +65,8 @@ export namespace GatewayDef {
   /** Per-route WebSocket settings authored on an action via `Gateway.actions.ws({...})`. */
   export interface WsOptions {
     path: string
-    onOpen?: (ws: unknown) => Operation<void, unknown>
-    onClose?: (ws: unknown, code: number, reason: string) => Operation<void, unknown>
+    onOpen?: (ws: unknown) => Operation<void>
+    onClose?: (ws: unknown, code: number, reason: string) => Operation<void>
   }
 
   /** The marker a resolved transformer setting carries so the router can classify it. */
@@ -111,14 +111,14 @@ export namespace GatewayDef {
 
     /** in-flight background request tasks (streaming pumps live here); halted on destroy so an
      * active stream cannot block shutdown — halting aborts the pump + its upstream fetch */
-    inflight: Set<Task<unknown, unknown>>
+    inflight: Set<Task<unknown>>
 
     statusMap?: Record<string, number> | undefined
     maxBodyBytes?: number | undefined
     reusePort?: boolean | undefined
 
     simplify?:
-      | ((failure: Result.Failure<unknown>) => Operation<Result.Failure<unknown>, unknown>)
+      | ((failure: Result.Failure<unknown>) => Operation<Result.Failure<unknown>>)
       | undefined
   }
 
@@ -130,7 +130,7 @@ export namespace GatewayDef {
     reusePort?: boolean
 
     simplify?:
-      | ((failure: Result.Failure<unknown>) => Operation<Result.Failure<unknown>, unknown>)
+      | ((failure: Result.Failure<unknown>) => Operation<Result.Failure<unknown>>)
       | undefined
   }
 
@@ -138,47 +138,45 @@ export namespace GatewayDef {
     // listener lifecycle
     start(
       options: Partial<{ port: number; host: string; reusePort: boolean }>,
-    ): Future<{ port: number; host: string }, unknown>
-    isStarted(): Future<boolean, unknown>
-    pause(cause: string): Future<void, unknown>
-    isPaused(): Future<false | string, unknown>
-    resume(): Future<void, unknown>
-    destroy(options?: { drainMs?: number }): Future<void, unknown>
+    ): Future<{ port: number; host: string }>
+    isStarted(): Future<boolean>
+    pause(cause: string): Future<void>
+    isPaused(): Future<false | string>
+    resume(): Future<void>
+    destroy(options?: { drainMs?: number }): Future<void>
 
     // routing (rou3)
-    add(method: string, pattern: string, payload: symbol): Future<void, unknown>
-    remove(method: string, pattern: string): Future<void, unknown>
-    has(method: string, pattern: string, payload?: symbol): Future<boolean, unknown>
-    find(method: string, path: string): Future<[data: symbol, params?: unknown], unknown>
-    optimize(): Future<void, unknown>
-    mount(prefix: string, target: Service | Action): Future<void, unknown>
-    unmount(target: Service | Action): Future<void, unknown>
+    add(method: string, pattern: string, payload: symbol): Future<void>
+    remove(method: string, pattern: string): Future<void>
+    has(method: string, pattern: string, payload?: symbol): Future<boolean>
+    find(method: string, path: string): Future<[data: symbol, params?: unknown]>
+    optimize(): Future<void>
+    mount(prefix: string, target: Service | Action): Future<void>
+    unmount(target: Service | Action): Future<void>
 
     // rest transformer (toInternal/fromInternal are the cors/plugin hook points)
     toInternal(
       req: unknown,
       res: unknown,
       meta: unknown,
-    ): Future<[req: ActionRequest, res: ActionResponse, body: unknown], unknown>
+    ): Future<[req: ActionRequest, res: ActionResponse, body: unknown]>
     fromInternal(
       req: ActionRequest | null,
       res: ActionResponse | null,
       ret: Result<unknown, unknown>,
       meta: unknown,
-    ): Future<AnyType, unknown>
-    rest<T extends RestOptions>(options: T): Future<T & { transformer: AnyType }, unknown>
+    ): Future<AnyType>
+    rest<T extends RestOptions>(options: T): Future<T & { transformer: AnyType }>
 
     // ws transformer (route-bound)
-    upgrade(req: unknown, runtime: unknown): Future<boolean, unknown>
-    onOpen(ws: unknown): Future<void, unknown>
-    onMessage(ws: unknown, message: unknown): Future<void, unknown>
-    onClose(ws: unknown, code: number, reason: string): Future<void, unknown>
-    ws<T extends WsOptions>(
-      options: T,
-    ): Future<T & { method: string; transformer: AnyType }, unknown>
+    upgrade(req: unknown, runtime: unknown): Future<boolean>
+    onOpen(ws: unknown): Future<void>
+    onMessage(ws: unknown, message: unknown): Future<void>
+    onClose(ws: unknown, code: number, reason: string): Future<void>
+    ws<T extends WsOptions>(options: T): Future<T & { method: string; transformer: AnyType }>
   }
 
-  export type Default = Plugin<GatewayDef.Context, unknown, [options?: GatewayDef.Options], Actions>
+  export type Default = Plugin<GatewayDef.Context, [options?: GatewayDef.Options], Actions>
 
   export type WsSetting = GatewayDef.TransformerSetting & Partial<GatewayDef.WsOptions>
 }

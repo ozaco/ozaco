@@ -59,7 +59,7 @@ export namespace DaemonDef {
      * exhaustion `all` crashes the replica, `isolate` skips just this module). */
     failure?: Failure
     /** Run only when eligible. */
-    setup: (rt: Runtime) => Operation<unknown, unknown>
+    setup: (rt: Runtime) => Operation<unknown>
   }
 
   export interface Replicate {
@@ -81,11 +81,11 @@ export namespace DaemonDef {
     failure?: Failure
     /** Common bootstrap, run on every replica BEFORE modules: install logger/broker/gateway/plugins
      * (but do NOT start them — the daemon starts broker + gateway once all modules have mounted). */
-    base?: (rt: Runtime) => Operation<unknown, unknown>
+    base?: (rt: Runtime) => Operation<unknown>
     /** Env-gated units assembled per replica. */
     modules: Module[]
     /** Run on every replica AFTER broker + gateway start (logging, warmup, seeding). */
-    ready?: (rt: Runtime) => Operation<unknown, unknown>
+    ready?: (rt: Runtime) => Operation<unknown>
   }
 
   export interface Context {

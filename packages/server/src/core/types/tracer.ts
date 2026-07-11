@@ -50,15 +50,15 @@ export namespace TracerDef {
   }
 
   export interface Span {
-    spanContext(): Future<SpanContext, unknown>
-    setAttribute(key: string, value: SpanAttributeValue): Future<Span, unknown>
-    setAttributes(attributes: SpanAttributes): Future<Span, unknown>
-    setStatus(status: SpanStatus): Future<Span, unknown>
-    updateName(name: string): Future<Span, unknown>
-    addEvent(name: string, attributes?: SpanAttributes, startTime?: number): Future<Span, unknown>
-    recordException(exception: Result.Failure<unknown>, time?: number): Future<void, unknown>
-    end(endTime?: number): Future<void, unknown>
-    isRecording(): Future<boolean, unknown>
+    spanContext(): Future<SpanContext>
+    setAttribute(key: string, value: SpanAttributeValue): Future<Span>
+    setAttributes(attributes: SpanAttributes): Future<Span>
+    setStatus(status: SpanStatus): Future<Span>
+    updateName(name: string): Future<Span>
+    addEvent(name: string, attributes?: SpanAttributes, startTime?: number): Future<Span>
+    recordException(exception: Result.Failure<unknown>, time?: number): Future<void>
+    end(endTime?: number): Future<void>
+    isRecording(): Future<boolean>
   }
 
   export interface SpanSnapshot {
@@ -73,6 +73,6 @@ export namespace TracerDef {
   }
 
   export interface Actions {
-    startSpan(name: string, options?: SpanOptions): Future<Span, unknown>
+    startSpan(name: string, options?: SpanOptions): Future<Span>
   }
 }

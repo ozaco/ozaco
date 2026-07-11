@@ -52,7 +52,7 @@ const issueTokenPair = operation(function* (user: AuthDef.User, opts: AuthDef.Is
   if (opts.rotateFrom !== undefined && provider.rotateRefreshToken) {
     yield* provider.rotateRefreshToken(opts.rotateFrom, newRecord)
     // the rotate branch deliberately does not saveRefreshToken, so the trailing save is not shared
-    // oxlint-disable-next-line no-negated-condition, oxc/branches-sharing-code
+    // oxlint-disable-next-line no-negated-condition
   } else if (opts.rotateFrom !== undefined) {
     // legacy fallback: non-atomic rotate via revoke + save
     if (!provider.revokeRefreshToken || !provider.saveRefreshToken) {

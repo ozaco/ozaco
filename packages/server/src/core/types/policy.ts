@@ -7,7 +7,7 @@ import type { POLICY_SETTING } from '../const'
 import type { Action } from './action'
 import type { TransportDef } from './transport'
 
-export type PolicyDef = Plugin<PolicyDef.Context, unknown, unknown[], PolicyDef.Actions>
+export type PolicyDef = Plugin<PolicyDef.Context, unknown[], PolicyDef.Actions>
 
 export namespace PolicyDef {
   export interface Options {
@@ -28,8 +28,8 @@ export namespace PolicyDef {
   }
 
   export interface ConfigActions<TOptions> {
-    config(options?: Partial<TOptions>): Future<Setting<TOptions>, unknown>
-    disable(): Future<Setting<TOptions>, unknown>
+    config(options?: Partial<TOptions>): Future<Setting<TOptions>>
+    disable(): Future<Setting<TOptions>>
   }
 
   export interface DispatchContext {
@@ -56,22 +56,22 @@ export namespace PolicyDef {
   }
 
   export interface DisableablePolicy {
-    actions: { disable(): Future<PolicyDef.Setting<unknown>, unknown> }
+    actions: { disable(): Future<PolicyDef.Setting<unknown>> }
   }
 
-  export type Next<T> = () => Operation<T, unknown>
+  export type Next<T> = () => Operation<T>
 
   export interface Actions {
-    apply<T>(ctx: DispatchContext, next: Next<T>): Future<T, unknown>
-    config?(options?: AnyType): Future<Setting<AnyType>, unknown>
-    disable?(): Future<Setting<AnyType>, unknown>
+    apply<T>(ctx: DispatchContext, next: Next<T>): Future<T>
+    config?(options?: AnyType): Future<Setting<AnyType>>
+    disable?(): Future<Setting<AnyType>>
   }
 
   export interface Handlers {
-    dispatchRoot<T>(ctx: DispatchContext, core: Next<T>): Future<T, unknown>
+    dispatchRoot<T>(ctx: DispatchContext, core: Next<T>): Future<T>
 
-    register(policy: PolicyDef, entryCtx: PolicyDef.Context): Future<void, unknown>
-    unregister(policy: PolicyDef): Future<void, unknown>
-    getPolicies(): Future<PolicyDef[], unknown>
+    register(policy: PolicyDef, entryCtx: PolicyDef.Context): Future<void>
+    unregister(policy: PolicyDef): Future<void>
+    getPolicies(): Future<PolicyDef[]>
   }
 }

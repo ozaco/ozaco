@@ -8,24 +8,21 @@ import type { Service } from './service'
 
 export namespace Impl {
   export type DefineAction = {
-    <TSchema extends StandardSchemaV1, TReturn, TError = never>(
+    <TSchema extends StandardSchemaV1, TReturn>(
       config: { input: TSchema } & Partial<Omit<Action.Meta<TSchema>, '_t' | 'input'>>,
-      handler: (body: StandardSchemaV1.InferOutput<TSchema>) => Operation<TReturn, TError>,
-    ): Action<[StandardSchemaV1.InferOutput<TSchema>], TReturn, TError | 'validation'>
+      handler: (body: StandardSchemaV1.InferOutput<TSchema>) => Operation<TReturn>,
+    ): Action<[StandardSchemaV1.InferOutput<TSchema>], TReturn>
 
-    <TReturn, TError = never>(
+    <TReturn>(
       config: Partial<Omit<Action.Meta<unknown>, '_t' | 'input'>>,
-      handler: (body?: unknown) => Operation<TReturn, TError>,
-    ): Action<[body?: unknown], TReturn, TError>
+      handler: (body?: unknown) => Operation<TReturn>,
+    ): Action<[body?: unknown], TReturn>
 
-    <Args extends AnyType[], T, E = never>(
-      fn: (...args: Args) => Operation<T, E>,
-    ): Action<Args, T, E>
+    <Args extends AnyType[], T>(fn: (...args: Args) => Operation<T>): Action<Args, T>
   }
 
   export type DefineService = <
     TContext,
-    TError,
     TArgs extends unknown[] = [],
     TActions = unknown,
   >(options: {
@@ -37,8 +34,8 @@ export namespace Impl {
 
     isPrivate?: boolean
 
-    setup?: (...args: TArgs) => Operation<TContext, TError>
-  }) => Service<TContext, TError, TArgs, TActions>
+    setup?: (...args: TArgs) => Operation<TContext>
+  }) => Service<TContext, TArgs, TActions>
 
   export interface PolicyApplyArgs<TOptions, TContext> {
     /** the resolved dispatch context (request, service/action, key, isStreaming, settings) */
@@ -65,9 +62,9 @@ export namespace Impl {
     priority: number
     version?: string
     /** build the policy's context; `base` carries the resolved name + priority to spread in */
-    setup(options: TOptions | undefined, base: PolicyDef.Context): Operation<TContext, unknown>
+    setup(options: TOptions | undefined, base: PolicyDef.Context): Operation<TContext>
     /** the policy behaviour, invoked only when the policy is enabled for this action */
-    apply(args: PolicyApplyArgs<TOptions, TContext>): Operation<unknown, unknown>
+    apply(args: PolicyApplyArgs<TOptions, TContext>): Operation<unknown>
     /** synchronous cleanup on uninstall (clear timers, reject waiters, …) */
     teardown?(ctx: TContext): void
   }
@@ -78,13 +75,12 @@ export namespace Impl {
    */
   export type Policy<TOptions extends PolicyDef.Options> = Plugin<
     PolicyDef.Context,
-    unknown,
     [options?: TOptions],
     // omit the loose `config?(options?: AnyType)` / `disable?()` from the base actions so the
     // precisely-typed signatures below win overload resolution (and callbacks get inferred)
     Omit<PolicyDef.Actions, 'config' | 'disable'> & {
-      config(options?: Partial<TOptions>): Future<PolicyDef.Setting<TOptions>, unknown>
-      disable(): Future<PolicyDef.Setting<TOptions>, unknown>
+      config(options?: Partial<TOptions>): Future<PolicyDef.Setting<TOptions>>
+      disable(): Future<PolicyDef.Setting<TOptions>>
     }
   >
 }

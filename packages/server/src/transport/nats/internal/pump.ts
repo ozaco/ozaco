@@ -15,7 +15,7 @@ export const pumpToNats = function* (
   connection: NatsConnection,
   subject: string,
   source: Stream<unknown, unknown>,
-): Operation<void, unknown> {
+): Operation<void> {
   let outcome: PumpOutcome
 
   try {

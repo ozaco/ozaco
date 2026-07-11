@@ -6,9 +6,8 @@ import type { ACTION } from '../const'
 export interface Action<
   TArgs extends unknown[] = AnyType[],
   TReturn = AnyType,
-  TError = unknown,
 > extends Action.Meta<unknown> {
-  (...args: TArgs): Operation<TReturn, TError>
+  (...args: TArgs): Operation<TReturn>
 }
 
 export namespace Action {
@@ -26,6 +25,6 @@ export namespace Action {
     allow: AnyType[]
     deny: AnyType[]
 
-    settings: Future<unknown, unknown>[]
+    settings: Future<unknown>[]
   }
 }

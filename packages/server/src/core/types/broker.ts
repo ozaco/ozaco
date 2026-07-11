@@ -6,7 +6,7 @@ import type { AnyType } from 'std:shared'
 import type { Action } from './action'
 import type { Service } from './service'
 
-export type BrokerDef = Plugin<BrokerDef.Context, unknown, unknown[], BrokerDef.Actions>
+export type BrokerDef = Plugin<BrokerDef.Context, unknown[], BrokerDef.Actions>
 
 export namespace BrokerDef {
   export interface Options {
@@ -33,45 +33,41 @@ export namespace BrokerDef {
   }
 
   export interface Actions {
-    start(): Future<BrokerDef.Context, unknown>
-    isStarted(): Future<boolean, unknown>
-    pause(cause: string): Future<void, unknown>
-    isPaused(): Future<false | string, unknown>
-    resume(): Future<void, unknown>
-    destroy(): Future<void, unknown>
+    start(): Future<BrokerDef.Context>
+    isStarted(): Future<boolean>
+    pause(cause: string): Future<void>
+    isPaused(): Future<false | string>
+    resume(): Future<void>
+    destroy(): Future<void>
 
-    register(service: Service, name?: string): Future<void, unknown>
-    unregister(service: Service | string): Future<void, unknown>
+    register(service: Service, name?: string): Future<void>
+    unregister(service: Service | string): Future<void>
 
-    call<TArgs extends unknown[] = AnyType[], TReturn = AnyType, TError = unknown>(
-      target: Action<TArgs, TReturn, TError>,
+    call<TArgs extends unknown[] = AnyType[], TReturn = AnyType>(
+      target: Action<TArgs, TReturn>,
       params?: NoInfer<TArgs>,
       options?: BrokerDef.CallOptions,
-    ): Future<TReturn, unknown>
+    ): Future<TReturn>
 
-    emit(
-      name: string,
-      payload?: unknown,
-      groups?: ReadonlyArray<string | Service>,
-    ): Future<void, unknown>
+    emit(name: string, payload?: unknown, groups?: ReadonlyArray<string | Service>): Future<void>
 
     broadcast(
       name: string,
       payload?: unknown,
       groups?: ReadonlyArray<string | Service>,
-    ): Future<void, unknown>
+    ): Future<void>
 
     on<K extends keyof BrokerDef.EventMap & string>(
       name: K,
       listener: EventEmitter.Listener<BrokerDef.EventMap[K]>,
-    ): Future<() => void, unknown>
+    ): Future<() => void>
 
     getService: {
-      (name: string): Future<Service, unknown>
-      (service: Service): Future<string, unknown>
+      (name: string): Future<Service>
+      (service: Service): Future<string>
     }
-    getServices(): Future<Map<string, Service>, unknown>
-    listActions(): Future<ReadonlyArray<{ service: Service; action: Action }>, unknown>
+    getServices(): Future<Map<string, Service>>
+    listActions(): Future<ReadonlyArray<{ service: Service; action: Action }>>
   }
 
   export interface EventInfo {

@@ -20,7 +20,7 @@ export interface TracedApply {
   /** the inner dispatch (used for the disabled passthrough) */
   next: PolicyDef.Next<unknown>
   /** the policy behaviour, given a (counting) next; only invoked when not disabled */
-  apply: (next: PolicyDef.Next<unknown>) => Operation<unknown, unknown>
+  apply: (next: PolicyDef.Next<unknown>) => Operation<unknown>
 }
 
 /**
@@ -29,7 +29,7 @@ export interface TracedApply {
  * of times the layer calls `next` is recorded so the trace distinguishes a short-circuit (0),
  * a normal pass-through (1) and a retry (>1). Only used when `dispatch.trace` is enabled.
  */
-export const tracePolicyApply = function* (a: TracedApply): Operation<unknown, unknown> {
+export const tracePolicyApply = function* (a: TracedApply): Operation<unknown> {
   const startedAt = performance.now()
   const hasLogger = (yield* Logger.context.get()) !== undefined
 

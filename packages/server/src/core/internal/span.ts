@@ -13,9 +13,9 @@ import type { TracerDef } from '../types/tracer'
  */
 export const withSpan = function* <T>(
   span: TracerDef.Span,
-  body: () => Operation<T, unknown>,
-  onFailure?: (failure: Result.Failure<unknown>) => Operation<void, unknown>,
-): Operation<T, unknown> {
+  body: () => Operation<T>,
+  onFailure?: (failure: Result.Failure<unknown>) => Operation<void>,
+): Operation<T> {
   try {
     return yield* body()
   } catch (error) {

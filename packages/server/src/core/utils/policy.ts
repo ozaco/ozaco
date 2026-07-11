@@ -14,7 +14,7 @@ const isPolicySetting = (value: unknown): value is PolicyDef.Setting =>
  */
 export const bypass = (
   ...policies: ReadonlyArray<PolicyDef.DisableablePolicy>
-): Future<PolicyDef.Setting<unknown>, unknown>[] => policies.map(policy => policy.actions.disable())
+): Future<PolicyDef.Setting<unknown>>[] => policies.map(policy => policy.actions.disable())
 
 /**
  * Resolve an action's lazy per-policy settings ONCE per dispatch into a `policy -> setting` map.
@@ -25,7 +25,7 @@ export const bypass = (
  */
 export const resolvePolicySettings = function* (
   action: Action.Meta<unknown> | undefined,
-): Operation<Map<string, PolicyDef.Setting>, unknown> {
+): Operation<Map<string, PolicyDef.Setting>> {
   const settings = new Map<string, PolicyDef.Setting>()
   for (const op of action?.settings ?? []) {
     let resolved: unknown

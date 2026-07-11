@@ -8,7 +8,7 @@ export const buildSwaggerHtml = function* ({
   openapi,
   title,
   auth,
-}: DocsDef.SwaggerHtmlOptions): Operation<string, unknown> {
+}: DocsDef.SwaggerHtmlOptions): Operation<string> {
   const safeTitle = title.replaceAll('<', '&lt;').replaceAll('>', '&gt;')
   const safeUrl = yield* JsonCodec.actions.stringify(openapi)
   const persistAuth = auth ? 'persistAuthorization: true,' : ''

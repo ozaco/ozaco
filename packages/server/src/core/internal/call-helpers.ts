@@ -32,8 +32,8 @@ export const checkBrokerSettings = operation(function* () {
 
 export const withCallSpan = function* <T>(
   ctx: CallSpanContext,
-  body: (traceContext: TracerDef.SpanContext) => Operation<T, unknown>,
-): Operation<T, unknown> {
+  body: (traceContext: TracerDef.SpanContext) => Operation<T>,
+): Operation<T> {
   const span = yield* Tracer.actions.startSpan(`${ctx.serviceName}.${ctx.actionKey}`, {
     kind: OtelSpanKind.CLIENT,
     attributes: {

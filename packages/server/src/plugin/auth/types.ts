@@ -97,42 +97,42 @@ export namespace AuthDef {
      * Framework will pass the same value to `authorize(state)` and later validate it
      * via `verifyState(state)` on callback.
      */
-    generateState: () => Operation<string, unknown>
+    generateState: () => Operation<string>
     /**
      * Verify that the `state` returned by the OAuth2 callback matches the one
      * generated for this user before authorize. MUST fail with InvalidState when
      * the state is missing, expired, reused, or doesn't match the bound context.
      * Calling this is mandatory; the framework invokes it before exchange().
      */
-    verifyState: (state: string) => Operation<void, unknown>
-    authorize: (state: string) => Operation<string, unknown>
-    exchange: (code: string) => Operation<SSOProfile, unknown>
+    verifyState: (state: string) => Operation<void>
+    authorize: (state: string) => Operation<string>
+    exchange: (code: string) => Operation<SSOProfile>
   }
 
   export interface Provider<TUser extends User = User, TCredentials = unknown> {
-    authenticate: (credentials: TCredentials) => Operation<TUser | null, unknown>
-    loadUser: (userId: string) => Operation<TUser | null, unknown>
+    authenticate: (credentials: TCredentials) => Operation<TUser | null>
+    loadUser: (userId: string) => Operation<TUser | null>
 
-    saveRefreshToken?: (record: RefreshRecord) => Operation<void, unknown>
-    findRefreshToken?: (jti: string) => Operation<RefreshRecord | null, unknown>
-    revokeRefreshToken?: (jti: string) => Operation<void, unknown>
+    saveRefreshToken?: (record: RefreshRecord) => Operation<void>
+    findRefreshToken?: (jti: string) => Operation<RefreshRecord | null>
+    revokeRefreshToken?: (jti: string) => Operation<void>
     /**
      * Atomic refresh token rotation. Provider must guarantee that revoking the old
      * jti and persisting the new record happen in the same transaction so
      * concurrent rotations cannot leave the user without a valid refresh token.
      * If absent, the framework falls back to revoke + save (non-atomic).
      */
-    rotateRefreshToken?: (oldJti: string, newRecord: RefreshRecord) => Operation<void, unknown>
+    rotateRefreshToken?: (oldJti: string, newRecord: RefreshRecord) => Operation<void>
 
-    saveVerification?: (record: VerificationRecord) => Operation<void, unknown>
-    findVerification?: (token: string) => Operation<VerificationRecord | null, unknown>
-    consumeVerification?: (token: string) => Operation<void, unknown>
+    saveVerification?: (record: VerificationRecord) => Operation<void>
+    findVerification?: (token: string) => Operation<VerificationRecord | null>
+    consumeVerification?: (token: string) => Operation<void>
 
-    getRoles?: (user: TUser) => Operation<string[], unknown>
-    getPermissions?: (user: TUser) => Operation<string[], unknown>
+    getRoles?: (user: TUser) => Operation<string[]>
+    getPermissions?: (user: TUser) => Operation<string[]>
 
     ssoProviders?: Record<string, SSOProvider>
-    linkSSO?: (profile: SSOProfile) => Operation<TUser, unknown>
+    linkSSO?: (profile: SSOProfile) => Operation<TUser>
   }
 
   export type Events = {
@@ -190,7 +190,7 @@ export namespace AuthDef {
   }
 
   export interface Strategy {
-    actions: { authorize: (token: string) => Future<AuthDef.Session, unknown> }
+    actions: { authorize: (token: string) => Future<AuthDef.Session> }
   }
 
   export interface IssueOptions {

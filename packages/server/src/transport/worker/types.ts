@@ -38,7 +38,7 @@ export namespace WorkerDef {
     endpoints: Endpoint[]
     pending: Map<string, (wire: Wire) => void>
     streams: Map<string, Queue<unknown, true | Result.Failure<unknown>>>
-    handlers: Map<string, Task<unknown, unknown>>
+    handlers: Map<string, Task<unknown>>
     scope: Scope
     rr: Map<string, number>
   }

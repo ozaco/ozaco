@@ -4,7 +4,7 @@ import type { Result } from 'std:result'
 
 import type { TracerDef } from './tracer'
 
-export type TransportDef = Plugin<TransportDef.Context, unknown, unknown[], TransportDef.Actions>
+export type TransportDef = Plugin<TransportDef.Context, unknown[], TransportDef.Actions>
 
 export namespace TransportDef {
   export interface Options {
@@ -57,18 +57,18 @@ export namespace TransportDef {
   }
 
   export interface Actions {
-    dispatch(req: DispatchRequest): Future<unknown, unknown>
-    emit(req: EventRequest): Future<void, unknown>
-    broadcast(req: EventRequest): Future<void, unknown>
+    dispatch(req: DispatchRequest): Future<unknown>
+    emit(req: EventRequest): Future<void>
+    broadcast(req: EventRequest): Future<void>
   }
 
   export interface Handlers {
-    dispatchRoot(req: DispatchRequest): Future<unknown, unknown>
-    emitRoot(req: EventRequest): Future<void, unknown>
-    broadcastRoot(req: EventRequest): Future<void, unknown>
+    dispatchRoot(req: DispatchRequest): Future<unknown>
+    emitRoot(req: EventRequest): Future<void>
+    broadcastRoot(req: EventRequest): Future<void>
 
-    register(transport: TransportDef, entryCtx: TransportDef.Context): Future<void, unknown>
-    unregister(transport: TransportDef): Future<void, unknown>
-    getTransports(): Future<TransportDef[], unknown>
+    register(transport: TransportDef, entryCtx: TransportDef.Context): Future<void>
+    unregister(transport: TransportDef): Future<void>
+    getTransports(): Future<TransportDef[]>
   }
 }
