@@ -10,7 +10,6 @@ import type { ConsoleDef } from './types'
 
 const ConsoleTransportImpl = LoggerTransport.implement<
   ConsoleDef.Context,
-  unknown,
   [options?: ConsoleDef.Options]
 >({
   name: 'console-transport',

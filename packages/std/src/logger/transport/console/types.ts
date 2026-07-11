@@ -11,14 +11,14 @@ export namespace ConsoleDef {
     color?: boolean | undefined
     msgKey?: string | undefined
     errorKey?: string | undefined
-    format?: ((entry: LoggerDef.Entry) => Operation<string, unknown>) | undefined
+    format?: ((entry: LoggerDef.Entry) => Operation<string>) | undefined
   }
 
   export interface Context {
     name: string
     level: LogLevel
 
-    format: (entry: LoggerDef.Entry) => Operation<AnyType, unknown>
+    format: (entry: LoggerDef.Entry) => Operation<AnyType>
     options: Options
   }
 }

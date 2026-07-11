@@ -1,10 +1,10 @@
 import type { Operation } from 'std:effect'
 import { all } from 'std:effect'
 
-export function* map<T, U, E>(
+export function* map<T, U>(
   arr: readonly T[],
-  mapFn: (value: T, index: number) => Operation<U, E>,
-): Operation<U[], E> {
+  mapFn: (value: T, index: number) => Operation<U>,
+): Operation<U[]> {
   const result: U[] = []
   for (let i = 0; i < arr.length; i++) {
     const mapped = yield* mapFn(arr[i]!, i)
@@ -53,11 +53,11 @@ export function* filterPar<T>(
   return arr.filter((_, i) => results[i])
 }
 
-export function* reduce<T, U, E>(
+export function* reduce<T, U>(
   arr: readonly T[],
-  reduceFn: (acc: U, value: T, index: number) => Operation<U, E>,
+  reduceFn: (acc: U, value: T, index: number) => Operation<U>,
   initial: U,
-): Operation<U, E> {
+): Operation<U> {
   let acc = initial
   for (let i = 0; i < arr.length; i++) {
     acc = yield* reduceFn(acc, arr[i]!, i)

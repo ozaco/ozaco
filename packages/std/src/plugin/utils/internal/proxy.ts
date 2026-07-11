@@ -2,7 +2,7 @@ import type { Future } from 'std:effect'
 
 export const createProxy = <T>(
   prefix: string,
-  resolveAction: (key: string, ...args: unknown[]) => Future<unknown, unknown>,
+  resolveAction: (key: string, ...args: unknown[]) => Future<unknown>,
 ): T => {
   const invoke = (...args: unknown[]) => resolveAction(prefix, ...args)
 

@@ -10,22 +10,22 @@ export interface Hookable<TActions> {
 }
 
 export namespace Hookable {
-  export type AnyAction = (...args: AnyType[]) => Operation<unknown, unknown>
+  export type AnyAction = (...args: AnyType[]) => Operation<unknown>
 
   export type AroundFn<T> = T extends (...args: infer A) => infer R
     ? (args: A, next: (...args: A) => R) => R
     : never
 
-  export type BeforeFn<T> = T extends (...args: infer A) => Operation<unknown, infer E>
-    ? (args: A) => Operation<void, E>
+  export type BeforeFn<T> = T extends (...args: infer A) => Operation<unknown>
+    ? (args: A) => Operation<void>
     : never
 
-  export type AfterFn<T> = T extends (...args: infer A) => Operation<infer R, infer E>
-    ? (result: R, args: A) => Operation<R | void, E>
+  export type AfterFn<T> = T extends (...args: infer A) => Operation<infer R>
+    ? (result: R, args: A) => Operation<R | void>
     : never
 
-  export type ErrorFn<T> = T extends (...args: infer A) => Operation<unknown, infer E>
-    ? (error: unknown, args: A) => Operation<void, E>
+  export type ErrorFn<T> = T extends (...args: infer A) => Operation<unknown>
+    ? (error: unknown, args: A) => Operation<void>
     : never
 
   export type Around<T, TE = ExplicitObject<T>> = {
@@ -89,8 +89,8 @@ export namespace Hookable {
 
   export type Exec = (
     entries: Hookable.HookSelfEntry[],
-    run: (entry: Hookable.HookSelfEntry | undefined) => Operation<unknown, unknown>,
-  ) => Operation<unknown, unknown>
+    run: (entry: Hookable.HookSelfEntry | undefined) => Operation<unknown>,
+  ) => Operation<unknown>
 
   export interface Call {
     key: string

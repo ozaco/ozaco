@@ -27,31 +27,31 @@ export namespace FetchDef {
     readonly redirected: boolean
     readonly bodyUsed: boolean
     readonly type: ResponseType
-    json<T = unknown>(): Future<T, Error>
-    text(): Future<string, Error>
-    arrayBuffer(): Future<ArrayBuffer, Error>
-    blob(): Future<Blob, Error>
-    formData(): Future<FormData, Error>
-    bytes(): Future<Uint8Array, Error>
+    json<T = unknown>(): Future<T>
+    text(): Future<string>
+    arrayBuffer(): Future<ArrayBuffer>
+    blob(): Future<Blob>
+    formData(): Future<FormData>
+    bytes(): Future<Uint8Array>
     /** Whole body, decoded once through the registered codec (auto-installs `JsonCodec` if absent). */
-    body<T = unknown>(): Future<T, Error>
+    body<T = unknown>(): Future<T>
     /** Body piped through the codec's streaming decoder — one decoded value per chunk. */
-    stream<T = unknown>(): Future<Stream<T, StreamClose>, Error>
+    stream<T = unknown>(): Future<Stream<T, StreamClose>>
     /** The raw, undecoded byte stream of the response body. */
-    raw(): Future<Stream<Uint8Array, void>, Error>
-    expect(): Future<Response, Error>
+    raw(): Future<Stream<Uint8Array, void>>
+    expect(): Future<Response>
   }
 
-  export interface Operation extends Future<Response, Error> {
-    json<T = unknown>(): Future<T, Error>
-    text(): Future<string, Error>
-    arrayBuffer(): Future<ArrayBuffer, Error>
-    blob(): Future<Blob, Error>
-    formData(): Future<FormData, Error>
-    bytes(): Future<Uint8Array, Error>
-    body<T = unknown>(): Future<T, Error>
-    stream<T = unknown>(): Future<Stream<T, StreamClose>, Error>
-    raw(): Future<Stream<Uint8Array, void>, Error>
+  export interface Operation extends Future<Response> {
+    json<T = unknown>(): Future<T>
+    text(): Future<string>
+    arrayBuffer(): Future<ArrayBuffer>
+    blob(): Future<Blob>
+    formData(): Future<FormData>
+    bytes(): Future<Uint8Array>
+    body<T = unknown>(): Future<T>
+    stream<T = unknown>(): Future<Stream<T, StreamClose>>
+    raw(): Future<Stream<Uint8Array, void>>
     expect(): Operation
   }
 }

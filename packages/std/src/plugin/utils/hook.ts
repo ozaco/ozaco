@@ -44,7 +44,7 @@ export const createHookable = (options: {
 
   const makeResolveAction = (dispatch: Hookable.Exec, tag: string) =>
     operation(function* (key: string, ...args: unknown[]) {
-      return yield* chainCtx.with(new Map(), function* (): Operation<unknown, unknown> {
+      return yield* chainCtx.with(new Map(), function* (): Operation<unknown> {
         const store = (yield* hookCtx.get())!
 
         const call: Hookable.Call = {
@@ -60,9 +60,7 @@ export const createHookable = (options: {
         // handler / default action with no impl context). `dispatch` decides which entries flow
         // through here: the default runs the last-installed impl; the codec runs the highest-priority
         // one; a fan-out protocol (e.g. logger) can run every entry.
-        const run = function* (
-          entry: Hookable.HookSelfEntry | undefined,
-        ): Operation<unknown, unknown> {
+        const run = function* (entry: Hookable.HookSelfEntry | undefined): Operation<unknown> {
           const self = handlers[key] ?? entry?.handlers[key] ?? defaultActions[key]
 
           const inner = function* (...innerArgs: unknown[]) {
@@ -144,7 +142,7 @@ export const createHookable = (options: {
       version: string
       description?: string
 
-      setup(...args: AnyType[]): Operation<unknown, unknown>
+      setup(...args: AnyType[]): Operation<unknown>
     },
     buildActions?: Record<string, Hookable.AnyAction>,
   ) => {

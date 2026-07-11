@@ -7,7 +7,6 @@ import type { LoggerDef } from './logger'
 
 export type LoggerTransportDef = Plugin<
   LoggerTransportDef.Context,
-  unknown,
   unknown[],
   LoggerTransportDef.Actions
 >
@@ -19,8 +18,8 @@ export namespace LoggerTransportDef {
   }
 
   export interface Actions {
-    write(entry: LoggerDef.Entry): Future<void, unknown>
-    flush(): Future<void, unknown>
-    close(): Future<void, unknown>
+    write(entry: LoggerDef.Entry): Future<void>
+    flush(): Future<void>
+    close(): Future<void>
   }
 }

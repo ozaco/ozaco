@@ -9,13 +9,13 @@ import { lift } from './lift'
 import { spawn } from './spawn'
 import { withResolvers } from './with-resolvers'
 
-export function* callcc<T, E = unknown>(
+export function* callcc<T>(
   op: (
     resolve: (value: T) => Operation<void>,
-    reject: (error: E) => Operation<void>,
-  ) => Operation<void, E>,
-): Operation<T, E> {
-  const result = withResolvers<Result<T, E>>()
+    reject: (error: unknown) => Operation<void>,
+  ) => Operation<void>,
+): Operation<T> {
+  const result = withResolvers<Result<T, unknown>>()
 
   const resolve = lift((value: T) => result.resolve(succeed(value) as Result<T, never>))
 

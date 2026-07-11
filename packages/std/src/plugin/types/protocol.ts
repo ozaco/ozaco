@@ -8,7 +8,6 @@ import type { Plugin } from './plugin'
 
 export interface Protocol<
   TContext = unknown,
-  TError = unknown,
   TArgs extends unknown[] = unknown[],
   TActions extends EmptyType = EmptyType,
   TSelfActions extends EmptyType = EmptyType,
@@ -20,27 +19,22 @@ export interface Protocol<
   context: Context<TContext>
   actions: TActions & TSelfActions
 
-  implement<TIContext extends TContext, TIError extends TError, TIArgs extends TArgs>(options: {
+  implement<TIContext extends TContext, TIArgs extends TArgs>(options: {
     name: string
     version: string
     description?: string
-    setup(...args: TIArgs): Operation<TIContext, TIError>
-  }): Protocol.Implementation<TIContext, TIError, TIArgs, TActions>
+    setup(...args: TIArgs): Operation<TIContext>
+  }): Protocol.Implementation<TIContext, TIArgs, TActions>
 }
 
 export namespace Protocol {
   export type InferContext<T> = T extends Protocol<infer V> ? V : never
 
-  export interface Implementation<
-    TContext,
-    TError,
-    TArgs extends unknown[],
-    TActions extends EmptyType,
-  > {
+  export interface Implementation<TContext, TArgs extends unknown[], TActions extends EmptyType> {
     context: Context<TContext>
 
     build: <TBuildedActions extends TActions>(
       actions: TBuildedActions,
-    ) => Plugin<TContext, TError, TArgs, TBuildedActions>
+    ) => Plugin<TContext, TArgs, TBuildedActions>
   }
 }

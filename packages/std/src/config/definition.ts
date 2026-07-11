@@ -5,7 +5,7 @@ import { buildContext } from './internal/context'
 import { makeInstance, openInstance } from './internal/instance'
 import type { ConfigDef } from './types'
 
-const ConfigImpl = definePlugin<ConfigDef.Context, unknown, [options?: ConfigDef.Options]>({
+const ConfigImpl = definePlugin<ConfigDef.Context, [options?: ConfigDef.Options]>({
   name: 'std/config',
   version: '0.0.0',
   description: 'Hierarchical config discovery, merge, and edit',

@@ -7,7 +7,6 @@ import type { Hookable } from './hookable'
 
 export interface Plugin<
   TContext = unknown,
-  TError = unknown,
   TArgs extends unknown[] = unknown[],
   TActions = unknown,
 > extends Hookable<TActions & EmptyType> {
@@ -18,7 +17,7 @@ export interface Plugin<
   version: string
   description: string
 
-  setup(...args: TArgs): Operation<TContext, TError>
+  setup(...args: TArgs): Operation<TContext>
   context: Context<TContext>
 
   actions: TActions
@@ -29,10 +28,10 @@ export interface Plugin<
 export namespace Plugin {
   export type InferContext<T> = T extends Plugin<infer V> ? V : never
 
-  export interface Definition<TContext, TError, TArgs extends unknown[]> {
+  export interface Definition<TContext, TArgs extends unknown[]> {
     context: Context<TContext>
 
-    build(): Plugin<TContext, TError, TArgs>
-    build<TActions extends EmptyType>(actions: TActions): Plugin<TContext, TError, TArgs, TActions>
+    build(): Plugin<TContext, TArgs>
+    build<TActions extends EmptyType>(actions: TActions): Plugin<TContext, TArgs, TActions>
   }
 }

@@ -1,7 +1,7 @@
 import type { Helpers } from '../types/helpers'
 import type { Operation } from '../types/operation'
 
-export function* withHost<T, E>(op: Helpers.HostOperation<T, E>): Operation<T, E> {
+export function* withHost<T>(op: Helpers.HostOperation<T>): Operation<T> {
   const global = globalThis as Record<string, unknown>
 
   // oxlint-disable-next-line unicorn/no-typeof-undefined

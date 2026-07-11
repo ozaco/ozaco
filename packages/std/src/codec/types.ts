@@ -4,7 +4,7 @@ import type { Result } from 'std:result'
 
 import type { CodecErrors } from './errors'
 
-export type CodecDef = Plugin<CodecDef.Context, unknown, unknown[], CodecDef.Actions>
+export type CodecDef = Plugin<CodecDef.Context, unknown[], CodecDef.Actions>
 
 export namespace CodecDef {
   export interface Options {
@@ -21,37 +21,37 @@ export namespace CodecDef {
   export type DecodeError = (typeof CodecErrors)['Decode']
 
   export interface Actions {
-    encode(value: unknown): Future<Uint8Array, unknown>
-    decode<T>(data: Uint8Array): Future<T, unknown>
+    encode(value: unknown): Future<Uint8Array>
+    decode<T>(data: Uint8Array): Future<T>
 
     /** Like `encode`, but returns the serialized text instead of `Uint8Array` bytes. */
-    stringify(value: unknown): Future<string, unknown>
+    stringify(value: unknown): Future<string>
     /** Like `decode`, but takes the serialized text instead of `Uint8Array` bytes. */
-    parse<T>(text: string): Future<T, unknown>
+    parse<T>(text: string): Future<T>
 
     encodeStream<T>(
       stream: Stream<T, unknown>,
-    ): Future<Stream<Uint8Array, true | Result.Failure<unknown>>, unknown>
+    ): Future<Stream<Uint8Array, true | Result.Failure<unknown>>>
     decodeStream<T>(
       stream: Stream<Uint8Array, unknown>,
       json?: boolean,
-    ): Future<Stream<T, true | Result.Failure<unknown>>, unknown>
+    ): Future<Stream<T, true | Result.Failure<unknown>>>
   }
 
   export interface Handlers {
-    encodeRoot(value: unknown): Future<Uint8Array, unknown>
-    decodeRoot<T>(data: Uint8Array): Future<T, unknown>
+    encodeRoot(value: unknown): Future<Uint8Array>
+    decodeRoot<T>(data: Uint8Array): Future<T>
 
     encodeStreamRoot<T>(
       stream: Stream<T, unknown>,
-    ): Future<Stream<Uint8Array, true | Result.Failure<unknown>>, unknown>
+    ): Future<Stream<Uint8Array, true | Result.Failure<unknown>>>
     decodeStreamRoot<T>(
       stream: Stream<Uint8Array, unknown>,
       json?: boolean,
-    ): Future<Stream<T, true | Result.Failure<unknown>>, unknown>
+    ): Future<Stream<T, true | Result.Failure<unknown>>>
 
-    register(transport: CodecDef, entryCtx: CodecDef.Context): Future<void, unknown>
-    unregister(transport: CodecDef): Future<void, unknown>
-    getTransports(): Future<CodecDef[], unknown>
+    register(transport: CodecDef, entryCtx: CodecDef.Context): Future<void>
+    unregister(transport: CodecDef): Future<void>
+    getTransports(): Future<CodecDef[]>
   }
 }

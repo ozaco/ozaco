@@ -30,12 +30,12 @@ const readWebEnvImpl = makeReadEnv(
 export const readEnv = <R extends Record<string, unknown>, K extends keyof R = never>(
   mapper: (data: Record<string, string | undefined>) => R,
   optional?: readonly K[],
-): Future<{ [P in keyof R]: P extends K ? R[P] : NonNullable<R[P]> }, unknown> =>
+): Future<{ [P in keyof R]: P extends K ? R[P] : NonNullable<R[P]> }> =>
   readEnvImpl(mapper, optional as readonly string[] | undefined) as AnyType
 
 /** Like {@link readEnv} but reads from a best-effort web source (`globalThis.process?.env ?? {}`). */
 export const readWebEnv = <R extends Record<string, unknown>, K extends keyof R = never>(
   mapper: (data: Record<string, string | undefined>) => R,
   optional?: readonly K[],
-): Future<{ [P in keyof R]: P extends K ? R[P] : NonNullable<R[P]> }, unknown> =>
+): Future<{ [P in keyof R]: P extends K ? R[P] : NonNullable<R[P]> }> =>
   readWebEnvImpl(mapper, optional as readonly string[] | undefined) as AnyType

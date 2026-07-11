@@ -7,10 +7,10 @@ import { RAW_ACTION } from '../const'
 import type { Hookable } from '../types/hookable'
 
 export const getService = operation(function* (
-  handler: (...args: AnyType[]) => Operation<AnyType, AnyType>,
+  handler: (...args: AnyType[]) => Operation<AnyType>,
 ) {
   try {
-    return (yield* (handler as (...args: AnyType[]) => Operation<unknown, 'unexpected'>)(
+    return (yield* (handler as (...args: AnyType[]) => Operation<unknown>)(
       RAW_ACTION,
     )) as Hookable.RawAction
   } catch {

@@ -3,7 +3,7 @@ import type { AnyType } from 'std:shared'
 import { CONTEXT, SCOPE, SNAPSHOT_FLAG } from '../const'
 import type { Context, Operation, Scope, Stream, Subscription } from '../types/operation'
 
-export const isOperation = <T, E = never>(value: unknown): value is Operation<T, E> =>
+export const isOperation = <T>(value: unknown): value is Operation<T> =>
   !!value && typeof (value as Operation<T>)[Symbol.iterator] === 'function'
 
 export const isContext = (value: unknown): value is Context<AnyType> =>

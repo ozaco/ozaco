@@ -16,7 +16,7 @@ export const readSource: (
   ctx: ConfigDef.Context,
   path: string,
   seen: Set<string>,
-) => Future<ConfigDef.Source | undefined, unknown> = operation(function* (
+) => Future<ConfigDef.Source | undefined> = operation(function* (
   ctx: ConfigDef.Context,
   path: string,
   seen: Set<string>,

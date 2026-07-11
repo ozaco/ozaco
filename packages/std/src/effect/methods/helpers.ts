@@ -17,7 +17,7 @@ const identity = function* <T, R>(value: T) {
 
 export const into = <T, R = T>(
   source: Iterable<T> | AsyncIterable<T>,
-  transform?: (item: T) => Operation<R, unknown>,
+  transform?: (item: T) => Operation<R>,
 ): Stream<R, void> =>
   resource(function* (provide) {
     const signal = createSignal<R, void>()
@@ -50,7 +50,7 @@ export const into = <T, R = T>(
 
 export const collect = operation(function* <R>(
   source: Subscription<unknown, void> | Stream<unknown, void>,
-  transform?: (item: AnyType) => Operation<unknown, unknown>,
+  transform?: (item: AnyType) => Operation<unknown>,
 ) {
   const subscription = isSubscription(source) ? source : yield* source
   const map = transform ?? identity<unknown, R>

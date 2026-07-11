@@ -78,7 +78,7 @@ export const colorOf = (level: LogLevel): string => {
 export const formatBindings = function* (
   bindings: Record<string, unknown>,
   color: boolean,
-): Operation<string, unknown> {
+): Operation<string> {
   const keys = Object.keys(bindings)
   if (keys.length === 0) {
     return ''
@@ -90,10 +90,7 @@ export const formatBindings = function* (
   return ` ${parts.join(' ')}`
 }
 
-export const prettyFormat = function* (
-  entry: LoggerDef.Entry,
-  color: boolean,
-): Operation<string, unknown> {
+export const prettyFormat = function* (entry: LoggerDef.Entry, color: boolean): Operation<string> {
   const time = paint(color, ANSI.dim, `[${new Date(entry.time).toISOString()}]`)
   const label = paint(color, colorOf(entry.level), labelOf(entry.level))
   const bindings = formatBindings(entry.bindings, color)

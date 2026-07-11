@@ -12,7 +12,7 @@ export namespace FileDef {
     errorKey?: string | undefined
     ensureDir?: boolean | undefined
     bufferSize?: number | undefined
-    format?: ((entry: LoggerDef.Entry) => Operation<string, unknown>) | undefined
+    format?: ((entry: LoggerDef.Entry) => Operation<string>) | undefined
   }
 
   export interface Context {
@@ -21,7 +21,7 @@ export namespace FileDef {
 
     buffer: string[]
     limit: number
-    format: (entry: LoggerDef.Entry) => Operation<AnyType, unknown>
+    format: (entry: LoggerDef.Entry) => Operation<AnyType>
     options: Options
   }
 }

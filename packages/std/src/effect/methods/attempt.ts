@@ -5,23 +5,21 @@ import type { Operation } from '../types/operation'
 
 import { isOperation } from './is'
 
-export function* attempt<T, E = unknown>(
-  op: Operation<T, E> | (() => Operation<T, E>),
-): Operation<Result<T, E>> {
+export function* attempt<T>(
+  op: Operation<T> | (() => Operation<T>),
+): Operation<Result<T, unknown>> {
   try {
-    const result = isOperation(op)
-      ? yield* op as Operation<T, never>
-      : yield* (op as () => Operation<T, never>)()
+    const result = isOperation(op) ? yield* op as Operation<T> : yield* (op as () => Operation<T>)()
 
-    return succeed(result) as Result<T, E>
+    return succeed(result) as Result<T, unknown>
   } catch (error) {
-    return asFailure(error) as Result<T, E>
+    return asFailure(error) as Result<T, unknown>
   }
 }
 
-export function* recover<T, R, E = unknown>(
-  op: Operation<T, E> | (() => Operation<T, E>),
-  handler: (failure: Result.Failure<E>) => Operation<R>,
+export function* recover<T, R = unknown>(
+  op: Operation<T> | (() => Operation<T>),
+  handler: (failure: Result.Failure<unknown>) => Operation<R>,
 ): Operation<T | R> {
   const result = yield* attempt(op)
 

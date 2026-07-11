@@ -115,13 +115,13 @@ export interface ProcessHandle {
   /** The child's stderr as a byte stream. */
   readonly stderr: Stream<Uint8Array, StreamClose>
   /** Resolve with the exit status once the process ends. */
-  exited: () => Future<ProcessStatus, unknown>
+  exited: () => Future<ProcessStatus>
   /** Write a chunk to the child's stdin. */
-  write: (chunk: Uint8Array | string) => Future<void, unknown>
+  write: (chunk: Uint8Array | string) => Future<void>
   /** Close the child's stdin. */
-  closeStdin: () => Future<void, unknown>
+  closeStdin: () => Future<void>
   /** Send a termination signal (default `SIGTERM`). */
-  kill: (signal?: number | string) => Future<void, unknown>
+  kill: (signal?: number | string) => Future<void>
 }
 
 /** An Ed25519 key pair (DER bytes: public = SPKI, private = PKCS8), from {@link IOActions.generateKeyPair}. */
@@ -168,20 +168,20 @@ export interface TcpSocket {
   /** Inbound bytes; the close value is `true` on a clean end or the failure that interrupted it. */
   data: Stream<Uint8Array, StreamClose>
   /** Write a chunk, resolving once it has been flushed (honors backpressure). */
-  write: (chunk: Uint8Array | string) => Future<void, unknown>
+  write: (chunk: Uint8Array | string) => Future<void>
   /** Half-close the socket's write side and tear it down. */
-  close: () => Future<void, unknown>
+  close: () => Future<void>
 }
 
 /** A per-connection handler; runs as a child of the scope that called {@link IOActions.tcpListen}. */
-export type TcpHandler = (socket: TcpSocket) => Operation<void, unknown>
+export type TcpHandler = (socket: TcpSocket) => Operation<void>
 
 /** A handle to a listening TCP server (see {@link IOActions.tcpListen}). */
 export interface TcpServer {
   readonly port: number
   readonly hostname: string
   /** Stop accepting connections and shut the server down. */
-  close: () => Future<void, unknown>
+  close: () => Future<void>
 }
 
 /** Options for {@link IOActions.udpBind}. */
@@ -205,7 +205,7 @@ export interface UdpSocket {
   /** Inbound datagrams, buffered from bind time. */
   messages: Stream<UdpDatagram, StreamClose>
   /** Send a datagram to an explicit destination. */
-  send: (data: Uint8Array | string, port: number, address: string) => Future<void, unknown>
+  send: (data: Uint8Array | string, port: number, address: string) => Future<void>
   /** Close the socket. */
-  close: () => Future<void, unknown>
+  close: () => Future<void>
 }

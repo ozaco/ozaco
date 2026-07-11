@@ -7,7 +7,6 @@ import type { LoggerTransportDef } from './types/transport'
 
 export const Logger = defineProtocol<
   LoggerDef.Context,
-  unknown,
   [options?: LoggerDef.Options],
   LoggerDef.Actions
 >({
@@ -18,7 +17,6 @@ export const Logger = defineProtocol<
 
 export const LoggerTransport = defineProtocol<
   LoggerTransportDef.Context,
-  unknown,
   unknown[],
   LoggerTransportDef.Actions
 >({

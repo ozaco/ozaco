@@ -6,7 +6,7 @@ import { createScopeInternal } from '../internal/scope-internal'
 import { Trap, trap } from '../internal/trap'
 import type { Operation } from '../types/operation'
 
-export const scoped = <T, E = never>(operation: () => Operation<T, E>): Operation<T, E> => ({
+export const scoped = <T>(operation: () => Operation<T>): Operation<T> => ({
   [Symbol.iterator]: function* $scoped() {
     const routine = yield* useCoroutine()
     const original = routine.scope
@@ -15,7 +15,7 @@ export const scoped = <T, E = never>(operation: () => Operation<T, E>): Operatio
     const boundary = new Trap<T>(routine)
     try {
       routine.scope = scope
-      boundary.outcome = just(succeed(yield* trap(operation)) as Result<T, E>)
+      boundary.outcome = just(succeed(yield* trap(operation)) as Result<T, unknown>)
     } catch (error) {
       boundary.outcome = just(asFailure(error))
     } finally {

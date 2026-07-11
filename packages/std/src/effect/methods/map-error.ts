@@ -5,10 +5,10 @@ import type { Operation } from '../types/operation'
 
 import { attempt } from './attempt'
 
-export function* mapError<T, E1, E2>(
-  op: Operation<T, E1>,
-  mapper: (failure: Result.Failure<E1>) => Result.Failure<E2>,
-): Operation<T, E2> {
+export function* mapError<T>(
+  op: Operation<T>,
+  mapper: (failure: Result.Failure<unknown>) => Result.Failure<unknown>,
+): Operation<T> {
   const result = yield* attempt(() => op)
 
   if (isFailure(result)) {

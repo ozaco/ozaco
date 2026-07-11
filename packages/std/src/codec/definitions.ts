@@ -33,7 +33,6 @@ export const hasCodec = operation(function* () {
  */
 export const Codec = defineProtocol<
   CodecDef.Context,
-  unknown,
   unknown[],
   CodecDef.Actions,
   CodecDef.Handlers

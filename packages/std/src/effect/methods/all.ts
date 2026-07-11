@@ -7,10 +7,10 @@ import type { Operation, Task } from '../types/operation'
 import { attempt } from './attempt'
 import { spawn } from './spawn'
 
-export function* all<T extends readonly Operation<unknown, AnyType>[] | []>(
+export function* all<T extends readonly Operation<unknown>[] | []>(
   ops: T,
-): Operation<Helpers.All<T>, Helpers.YieldedError<T[number]>> {
-  const tasks: Task<unknown, unknown>[] = []
+): Operation<Helpers.All<T>> {
+  const tasks: Task<unknown>[] = []
   try {
     return yield* trap(function* () {
       for (const operation of ops) {
@@ -32,8 +32,8 @@ export function* all<T extends readonly Operation<unknown, AnyType>[] | []>(
   }
 }
 
-export function* allSettled<T extends readonly Operation<unknown, AnyType>[] | []>(
+export function* allSettled<T extends readonly Operation<unknown>[] | []>(
   ops: T,
-): Operation<Helpers.AllSettled<T>, unknown> {
+): Operation<Helpers.AllSettled<T>> {
   return (yield* all(ops.map(operation => attempt(() => operation)))) as Helpers.AllSettled<T>
 }

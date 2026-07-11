@@ -22,12 +22,11 @@ export function* exit(status: number, message?: string): Operation<void> {
   yield* escape(payload)
 }
 
-export async function main(body: (args: string[]) => Operation<void, unknown>): Promise<void> {
-  // oxlint-disable-next-line unicorn/consistent-function-scoping
+export async function main(body: (args: string[]) => Operation<void>): Promise<void> {
   let hardexit = (_status: number) => {}
 
   const result = await run(() =>
-    callcc<Helpers.Exit, unknown>(function* (resolve) {
+    callcc<Helpers.Exit>(function* (resolve) {
       yield* ExitContext.set(resolve)
 
       const interval = setInterval(() => {}, 2 ** 30)

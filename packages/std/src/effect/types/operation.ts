@@ -1,22 +1,23 @@
 import type { Result } from 'std:result'
+import type { AnyType } from 'std:shared'
 
 import type { CONTEXT, SCOPE } from '../const'
 
 import type { Helpers } from './helpers'
 
-export interface Operation<T, E = never> {
-  [Symbol.iterator](): Iterator<Helpers.Effect<unknown> | Helpers.FailureOf<E>, T, unknown>
+export interface Operation<T> {
+  [Symbol.iterator](): Iterator<Helpers.Effect<unknown> | Result.Failure<AnyType>, T, unknown>
 }
 
-export type ManualOperation<T, E = never> = Generator<
-  Helpers.Effect<unknown> | Helpers.FailureOf<E>,
+export type ManualOperation<T> = Generator<
+  Helpers.Effect<unknown> | Result.Failure<AnyType>,
   T,
   unknown
 >
 
-export interface Future<T, E = never> extends Operation<T, E>, Promise<Result<T, E>> {}
+export interface Future<T> extends Operation<T>, Promise<Result<T, unknown>> {}
 
-export interface Task<T, E = never> extends Future<T, E> {
+export interface Task<T> extends Future<T> {
   halt(): Future<void>
 
   [Symbol.asyncDispose](): Promise<void>
@@ -41,14 +42,14 @@ export interface Context<T> {
   set(value: T): Operation<T>
   expect(): Operation<T>
   delete(): Operation<boolean>
-  with<R, E>(value: T, operation: (value: T) => Operation<R, E>): Operation<R, E>
+  with<R>(value: T, operation: (value: T) => Operation<R>): Operation<R>
 }
 
 export interface Scope {
   _t: typeof SCOPE
-  run<T, E = never>(operation: () => Operation<T, E>): Task<T, E>
-  safeRun<T, E = never>(operation: () => Operation<T, E>): Promise<Result<T, E>>
-  spawn<T, E = never>(operation: () => Operation<T, E>): Operation<Task<T, E>>
+  run<T>(operation: () => Operation<T>): Task<T>
+  safeRun<T>(operation: () => Operation<T>): Promise<Result<T, unknown>>
+  spawn<T>(operation: () => Operation<T>): Operation<Task<T>>
   get<T>(context: Context<T>): T | undefined
   set<T>(context: Context<T>, value: T): T
   expect<T>(context: Context<T>): T

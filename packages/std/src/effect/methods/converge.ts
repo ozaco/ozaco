@@ -9,7 +9,7 @@ import { sleep } from './sleep'
 export const when = <T>(
   assertion: () => Operation<T>,
   options?: ConvergeOptions,
-): Operation<ConvergeStats<T>, unknown> => ({
+): Operation<ConvergeStats<T>> => ({
   *[Symbol.iterator]() {
     const timeout = options?.timeout ?? 2000
     const interval = options?.interval ?? 10
@@ -38,7 +38,7 @@ export const when = <T>(
 export const always = <T>(
   assertion: () => Operation<T>,
   options?: ConvergeOptions,
-): Operation<ConvergeStats<T>, unknown> => ({
+): Operation<ConvergeStats<T>> => ({
   *[Symbol.iterator]() {
     const timeout = options?.timeout ?? 200
     const interval = options?.interval ?? 10

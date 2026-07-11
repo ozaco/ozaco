@@ -9,9 +9,9 @@ import { useScope } from './scope'
 import { suspend } from './suspend'
 import { withResolvers } from './with-resolvers'
 
-export const resource = <T, E = never>(
-  op: (provide: Helpers.Provide<T>) => Operation<void, E>,
-): Operation<T, E> => ({
+export const resource = <T>(
+  op: (provide: Helpers.Provide<T>) => Operation<void>,
+): Operation<T> => ({
   *[Symbol.iterator]() {
     const ready = withResolvers<T>('await resource')
 

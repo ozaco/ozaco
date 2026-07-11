@@ -7,10 +7,10 @@ import type { Future } from '../types/operation'
 
 import { run } from './run'
 
-export function operation<Args extends AnyType[], T, E = never>(
-  fn: (...args: Args) => Generator<Helpers.Effect<unknown> | Helpers.FailureOf<E>, T, unknown>,
+export function operation<Args extends AnyType[], T>(
+  fn: (...args: Args) => Generator<Helpers.Effect<unknown> | Result.Failure<AnyType>, T, unknown>,
   ...causes: string[]
-): (...args: Args) => Future<T, E> {
+): (...args: Args) => Future<T> {
   return (...args) => {
     const op = {
       *[Symbol.iterator]() {
@@ -26,12 +26,12 @@ export function operation<Args extends AnyType[], T, E = never>(
           yield* appendCauses(asFailure(error), ...causes)
         }
       },
-    } as unknown as Future<T, E>
+    } as unknown as Future<T>
 
-    const settled = () => run(() => op) as Promise<Result<T, E>>
+    const settled = () => run(() => op) as Promise<Result<T, unknown>>
 
     // yield* uses [Symbol.iterator] → runs through effect
-    // await uses .then() → settles into Result<T, E>
+    // await uses .then() → settles into Result<T, unknown>
     return Object.defineProperties(op, {
       // oxlint-disable-next-line unicorn/no-thenable
       then: {

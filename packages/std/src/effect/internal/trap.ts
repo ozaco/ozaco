@@ -8,7 +8,7 @@ import type { Operation } from '../types/operation'
 import { ErrorContext } from './contexts'
 import { useCoroutine } from './coroutine'
 
-export function* trap<T, E = never>(operation: () => Operation<T, E>): Operation<T, E> {
+export function* trap<T>(operation: () => Operation<T>): Operation<T> {
   const scope = yield* useScope()
   const original = scope.expect(ErrorContext)
   const routine = yield* useCoroutine()

@@ -39,6 +39,6 @@ export const toNdjson = function* (
   entry: LoggerDef.Entry,
   msgKey = 'msg',
   errorKey = 'err',
-): Operation<string, unknown> {
+): Operation<string> {
   return `${yield* toJson(entry, msgKey, errorKey)}\n`
 }

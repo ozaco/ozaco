@@ -6,10 +6,7 @@ import type { RetryOptions } from '../types/utils'
 import { attempt } from './attempt'
 import { sleep } from './sleep'
 
-export function* retry<T, E>(
-  op: () => Operation<T, E>,
-  options: RetryOptions = {},
-): Operation<T, E> {
+export function* retry<T>(op: () => Operation<T>, options: RetryOptions = {}): Operation<T> {
   const { attempts = 3, delay = 0, backoff = 1, maxDelay = 30_000, when } = options
 
   let currentDelay = delay

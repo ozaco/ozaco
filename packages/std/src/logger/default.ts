@@ -42,7 +42,7 @@ export const DefaultLogger = Logger.implement({
   error: logAt(LogLevel.error),
   fatal: logAt(LogLevel.fatal),
 
-  child: operation(function* <R, E>(bindings: Record<string, unknown>, fn: () => Operation<R, E>) {
+  child: operation(function* <R>(bindings: Record<string, unknown>, fn: () => Operation<R>) {
     const previous = (yield* LoggerBindingsContext.get()) ?? {}
     return yield* LoggerBindingsContext.with({ ...previous, ...bindings }, () => fn())
   }),

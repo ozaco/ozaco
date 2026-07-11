@@ -6,12 +6,7 @@ import type { LogLevel } from '../const'
 
 import type { LoggerTransportDef } from './transport'
 
-export type LoggerDef = Plugin<
-  LoggerDef.Context,
-  unknown,
-  [options?: LoggerDef.Options],
-  LoggerDef.Actions
->
+export type LoggerDef = Plugin<LoggerDef.Context, [options?: LoggerDef.Options], LoggerDef.Actions>
 
 export namespace LoggerDef {
   export interface Options {
@@ -53,31 +48,27 @@ export namespace LoggerDef {
 
   export type AnyTransportPlugin<TContext = unknown> = Plugin<
     TContext,
-    unknown,
     [],
     LoggerTransportDef.Actions
   >
 
   export interface Actions {
-    log(level: LogLevel, ...args: Payload[]): Future<void, unknown>
+    log(level: LogLevel, ...args: Payload[]): Future<void>
 
-    trace(...args: Payload[]): Future<void, unknown>
-    debug(...args: Payload[]): Future<void, unknown>
-    info(...args: Payload[]): Future<void, unknown>
-    warn(...args: Payload[]): Future<void, unknown>
-    error(...args: Payload[]): Future<void, unknown>
-    fatal(...args: Payload[]): Future<void, unknown>
+    trace(...args: Payload[]): Future<void>
+    debug(...args: Payload[]): Future<void>
+    info(...args: Payload[]): Future<void>
+    warn(...args: Payload[]): Future<void>
+    error(...args: Payload[]): Future<void>
+    fatal(...args: Payload[]): Future<void>
 
-    child<R, E = unknown>(
-      bindings: Record<string, unknown>,
-      fn: () => Operation<R, E>,
-    ): Future<R, E | unknown>
+    child<R>(bindings: Record<string, unknown>, fn: () => Operation<R>): Future<R>
 
-    bind(bindings: Record<string, unknown>): Future<void, unknown>
-    setLevel(level: LogLevel): Future<void, unknown>
-    isLevelEnabled(level: LogLevel): Future<boolean, unknown>
+    bind(bindings: Record<string, unknown>): Future<void>
+    setLevel(level: LogLevel): Future<void>
+    isLevelEnabled(level: LogLevel): Future<boolean>
 
-    flush(): Future<void, unknown>
-    close(): Future<void, unknown>
+    flush(): Future<void>
+    close(): Future<void>
   }
 }

@@ -9,11 +9,7 @@ import type { LoggerDef } from '../../types/logger'
 import { encoder } from './internal'
 import type { FileDef } from './types'
 
-const FileTransportImpl = LoggerTransport.implement<
-  FileDef.Context,
-  unknown,
-  [options: FileDef.Options]
->({
+const FileTransportImpl = LoggerTransport.implement<FileDef.Context, [options: FileDef.Options]>({
   name: 'file-transport',
   version: '0.0.1',
 

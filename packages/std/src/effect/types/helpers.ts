@@ -4,17 +4,12 @@ import type { AnyFunction, AnyType } from 'std:shared'
 import type { Future, Operation, Scope, Subscription } from './operation'
 
 export namespace Helpers {
-  export type Yielded<T extends Operation<unknown, AnyType>> =
-    T extends Operation<infer TYield, AnyType> ? TYield : never
-
-  export type YieldedError<T extends Operation<unknown, AnyType>> =
-    T extends Operation<AnyType, infer TError> ? TError : never
+  export type Yielded<T extends Operation<unknown>> =
+    T extends Operation<infer TYield> ? TYield : never
 
   export interface ErrorBoundary {
     raise(error: unknown): void
   }
-
-  export type FailureOf<E> = [E] extends [never] ? never : Result.Failure<E>
 
   export type CoroutineFuture<T> = Promise<Maybe<Result<T, unknown>>> &
     Operation<Maybe<Result<T, unknown>>>
@@ -68,11 +63,11 @@ export namespace Helpers {
     error?: unknown
   }
 
-  export interface HostOperation<T, E> {
-    deno(): Operation<T, E>
-    node(): Operation<T, E>
-    bun(): Operation<T, E>
-    browser(): Operation<T, E>
+  export interface HostOperation<T> {
+    deno(): Operation<T>
+    node(): Operation<T>
+    bun(): Operation<T>
+    browser(): Operation<T>
   }
 
   export interface FutureWithResolvers<T> {
@@ -114,7 +109,7 @@ export namespace Helpers {
     [Symbol.asyncIterator](): AsyncIterator<T, TReturn>
   }
 
-  export type All<T extends readonly Operation<unknown, unknown>[] | []> = {
+  export type All<T extends readonly Operation<unknown>[] | []> = {
     -readonly [P in keyof T]: Yielded<T[P]>
   }
 
@@ -137,7 +132,7 @@ export namespace Helpers {
     prioritize?: boolean
   }
 
-  export type AllSettled<T extends readonly Operation<unknown, AnyType>[] | []> = {
-    -readonly [P in keyof T]: Result<Helpers.Yielded<T[P]>, Helpers.YieldedError<T[P]>>
+  export type AllSettled<T extends readonly Operation<unknown>[] | []> = {
+    -readonly [P in keyof T]: Result<Helpers.Yielded<T[P]>, unknown>
   }
 }

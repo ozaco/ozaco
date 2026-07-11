@@ -3,10 +3,10 @@ import { useScope } from 'std:effect'
 
 import type { Plugin } from '../types/plugin'
 
-export function* install<TContext, TError, TArgs extends unknown[]>(
-  plugin: Plugin<TContext, TError, TArgs>,
+export function* install<TContext, TArgs extends unknown[]>(
+  plugin: Plugin<TContext, TArgs>,
   ...args: TArgs
-): Operation<TContext, TError> {
+): Operation<TContext> {
   const scope = yield* useScope()
 
   const value = yield* plugin.setup(...args)

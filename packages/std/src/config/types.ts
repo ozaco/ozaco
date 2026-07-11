@@ -4,12 +4,7 @@ import type { Plugin } from 'std:plugin'
 
 import type { Features } from './const'
 
-export type ConfigDef = Plugin<
-  ConfigDef.Context,
-  unknown,
-  [options?: ConfigDef.Options],
-  ConfigDef.Actions
->
+export type ConfigDef = Plugin<ConfigDef.Context, [options?: ConfigDef.Options], ConfigDef.Actions>
 
 export namespace ConfigDef {
   /** A codec-parsed object (config values are plain data). */
@@ -99,45 +94,42 @@ export namespace ConfigDef {
    * own actions; `open` mints extra, fully-independent instances. */
   export interface Instance {
     /** (Re)discover `<name>.<ext>` from cwd up to home, resolve `extends`, refresh the merged view. */
-    load(cwd?: string): Future<void, unknown>
+    load(cwd?: string): Future<void>
     /** Re-run discovery against the current cwd (pick up on-disk changes) without moving `cwd`. */
-    refresh(): Future<void, unknown>
+    refresh(): Future<void>
     /** Persist edits: no arg writes every file `set`/`remove`/`clear` touched back to its own path;
      * a `path` exports the base working file's content there instead. */
-    save(path?: string): Future<void, unknown>
+    save(path?: string): Future<void>
 
     /** Read a dotted key (`a.b.c`) from the merged config; omit `key` for the whole merged object. */
-    get<T>(key?: string): Future<T, unknown>
+    get<T>(key?: string): Future<T>
     /** Set a dotted key in the file that owns it or its nearest existing ancestor path (else the base
      * working file); reflected in the merge at once, `save` to persist. */
-    set(key: string, value: unknown): Future<void, unknown>
+    set(key: string, value: unknown): Future<void>
     /** Remove a dotted key from the file that currently provides it (in memory; call `save` to persist). */
-    remove(key: string): Future<void, unknown>
+    remove(key: string): Future<void>
     /** Empty the base working file's content (in memory; call `save` to persist). */
-    clear(): Future<void, unknown>
+    clear(): Future<void>
     /** Delete a config FILE (default the working file), then re-discover. */
-    delete(path?: string): Future<void, unknown>
+    delete(path?: string): Future<void>
     /** Find merged entries whose dotted key or value contains `query` (case-insensitive). */
-    search(query: string): Future<ConfigDef.Match[], unknown>
+    search(query: string): Future<ConfigDef.Match[]>
     /** The discovered chain (files that exist on disk) with each file's resolved `extends`. */
-    tree(): Future<ConfigDef.Source[], unknown>
+    tree(): Future<ConfigDef.Source[]>
 
     /** Whether the merged config has a value at the dotted `key`. */
-    has(key: string): Future<boolean, unknown>
+    has(key: string): Future<boolean>
     /** All leaf dotted keys present in the merged config. */
-    keys(): Future<string[], unknown>
+    keys(): Future<string[]>
     /** The path of the highest-precedence file that provides `key` (`'<env>'` for the env overlay). */
-    origin(key: string): Future<string | undefined, unknown>
+    origin(key: string): Future<string | undefined>
     /** Every file that defines `key`, highest → lowest precedence, with the value each holds there. */
-    explain(key: string): Future<ConfigDef.Origin[], unknown>
+    explain(key: string): Future<ConfigDef.Origin[]>
     /** Watch the config sources and re-merge on change, invoking `listener` when the merged view
      * actually changes. A config directory (`DIR` feature) is watched recursively; every other
      * source file is watched individually; events are debounced. Returns the background task —
      * `halt()` it to stop watching. */
-    watch(
-      listener: ConfigDef.Watcher,
-      options?: ConfigDef.WatchOptions,
-    ): Future<Task<void, unknown>, unknown>
+    watch(listener: ConfigDef.Watcher, options?: ConfigDef.WatchOptions): Future<Task<void>>
   }
 
   export interface Actions extends Instance {
@@ -146,6 +138,6 @@ export namespace ConfigDef {
      * for managing several configs at once (a second install would just overwrite this one, since
      * the plugin is a scope singleton). The instance is not stored in the scope.
      */
-    open(options?: ConfigDef.Options): Future<ConfigDef.Instance, unknown>
+    open(options?: ConfigDef.Options): Future<ConfigDef.Instance>
   }
 }

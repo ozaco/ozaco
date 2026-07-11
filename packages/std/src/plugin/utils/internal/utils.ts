@@ -19,8 +19,8 @@ export const pickHooks = (list: Hookable.HookStore['around'], key: string): AnyT
 
 export function* runAround(
   call: Hookable.Call,
-  inner: (...innerArgs: unknown[]) => Operation<unknown, unknown>,
-): Operation<unknown, unknown> {
+  inner: (...innerArgs: unknown[]) => Operation<unknown>,
+): Operation<unknown> {
   const { arounds, args } = call
 
   if (arounds.length === 0) {
@@ -45,8 +45,8 @@ export function* runAround(
 // (last one wins) while keeping the original in the cause chain.
 export function* runWithErrorHooks(
   call: Hookable.Call,
-  body: () => Operation<unknown, unknown>,
-): Operation<unknown, unknown> {
+  body: () => Operation<unknown>,
+): Operation<unknown> {
   try {
     return yield* body()
   } catch (error) {

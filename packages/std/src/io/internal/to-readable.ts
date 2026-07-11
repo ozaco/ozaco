@@ -55,7 +55,7 @@ export const toReadable = operation(function* (source: Stream<Uint8Array, unknow
     },
   })
 
-  const pump: Operation<void, unknown> = {
+  const pump: Operation<void> = {
     *[Symbol.iterator]() {
       // terminate the readable when this pump is torn down mid-flight — halt runs neither catch nor
       // finally, so a server shutdown that halts the pump would otherwise leave the controller open
