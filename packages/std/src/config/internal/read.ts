@@ -1,6 +1,7 @@
 import type { Future } from 'std:effect'
 import { operation } from 'std:effect'
 import { IO } from 'std:io'
+import { fail } from 'std:result'
 import { isArray, isString } from 'std:shared'
 
 import { EXTENDS_KEY } from '../const'
@@ -43,11 +44,22 @@ export const readSource: (
       ? target
       : yield* IO.actions.join(yield* IO.actions.dirname(path), target)
 
+    // An explicitly listed `extends` target that is missing is a mistake (typo), not an optional
+    // layer — fail loudly. An already-seen path (cycle/duplicate) is fine and simply skipped below.
+    if (!seen.has(resolved) && !(yield* IO.actions.exists(resolved))) {
+      return yield* fail(`config: "${path}" extends a missing file "${target}" (${resolved})`)
+    }
+
     const source = yield* readSource(ctx, resolved, seen)
     if (source) {
       inherited.push(source)
     }
   }
 
-  return { path, data, extends: inherited }
+  return {
+    path,
+    data,
+    extends: inherited,
+    extendsSpec: isString(spec) || isArray<string>(spec) ? spec : undefined,
+  }
 })

@@ -26,6 +26,7 @@ import { nodeExec, nodeSpawn } from '../internal/process-node'
 import { readFileStream, writeFileStream } from '../internal/stream'
 import { readInterfaces } from '../internal/sys'
 import { toReadable } from '../internal/to-readable'
+import { watchPath } from '../internal/watch'
 import type { HashAlgorithm } from '../types/common'
 
 const toNodeHash = (alg: HashAlgorithm) =>
@@ -62,6 +63,7 @@ export const NodeIO = IO.implement({
   fromReadable,
   toReadable,
   readStream: path => readFileStream(toPath(path)),
+  watch: (path, options) => watchPath(toPath(path), options),
   writeStream: (path, source, options) => writeFileStream(toPath(path), source, options?.flags),
 
   read: operation(function* (path) {

@@ -1,5 +1,5 @@
 import type { CodecDef } from 'std:codec'
-import type { Future } from 'std:effect'
+import type { Future, Task } from 'std:effect'
 import type { Plugin } from 'std:plugin'
 
 import type { Features } from './const'
@@ -12,7 +12,7 @@ export type ConfigDef = Plugin<
 >
 
 export namespace ConfigDef {
-  /** A Codec parsed object (config values are plain data). */
+  /** A codec-parsed object (config values are plain data). */
   export type Object = Record<string, unknown>
 
   /** A search hit: the dotted key and the value found at it in the merged config. */
@@ -21,16 +21,28 @@ export namespace ConfigDef {
     value: unknown
   }
 
+  /** A provenance entry: a file that defines a key and the value it holds there (`'<env>'` = overlay). */
+  export interface Origin {
+    path: string
+    value: unknown
+  }
+
+  /** A change listener for `watch`, called with the freshly re-merged config. */
+  export type Watcher = (merged: ConfigDef.Object) => void
+
+  /** Options for `watch`. */
+  export interface WatchOptions {
+    /** Coalesce bursts of filesystem events into one reload; quiet-window in ms (default `50`). */
+    debounce?: number | undefined
+  }
+
+  /** A discovered config file: its own data plus the sources it `extends` (lower precedence). */
   export interface Source {
     path: string
     data: ConfigDef.Object
     extends: ConfigDef.Source[]
-  }
-
-  /** The single file `set`/`remove`/`clear`/`save` operate on (default the cwd base file). */
-  export interface Working {
-    path: string
-    data: ConfigDef.Object
+    /** The raw `extends` spec as written in the file, re-emitted on `save` so inheritance survives. */
+    extendsSpec?: string | string[] | undefined
   }
 
   export interface Options {
@@ -43,13 +55,13 @@ export namespace ConfigDef {
     /** Directory to start discovery from (default `process.cwd()`). */
     cwd?: string | undefined
 
-    /** Active variant overlay name (`<variant>.<name>.toml` wins); default the `STD_CONFIG` env var. */
+    /** Active variant overlay name (`<variant>.<name>.<ext>` wins); default the `STD_CONFIG` env var. */
     variant?: string | undefined
 
     /** Directory to stop discovery at, inclusive (default the home dir). */
     home?: string | undefined
 
-    /** Config dir/file should start with dot (default `true`). */
+    /** Config dir/file should start with a dot (default `true`). */
     dot?: boolean | undefined
 
     /** File extension without the dot (default derived from the codec, e.g. `toml`). */
@@ -70,14 +82,15 @@ export namespace ConfigDef {
     home: string
     features: Features
 
-    /** Discovered chain, innermost → outermost. Per dir: variant → fragments → base (`extends` resolved). */
+    /** Discovered chain, innermost → outermost. Per dir: variant → dir files → base (`extends` resolved). */
     chain: ConfigDef.Source[]
     /** Env overlay (`ENV` feature), applied as the highest-precedence source over the chain. */
     env: ConfigDef.Object
     /** The merged view produced by the last `load` (chain merged low → high, then `env` on top). */
     merged: ConfigDef.Object
-    /** The base file `clear` empties and new keys from `set` land in (the cwd base file). */
-    working: ConfigDef.Working
+    /** The cwd base file `clear` empties and new keys from `set` land in. A live chain member once it
+     * exists on disk; a standalone target (absent from `chain`/`tree`) until it is written. */
+    working: ConfigDef.Source
     /** Paths of source files edited by `set`/`remove`/`clear` since the last `load`, flushed by `save`. */
     dirty: Set<string>
   }
@@ -85,7 +98,7 @@ export namespace ConfigDef {
   /** A self-contained config: its own discovery/merge/working file. The default one is `Config`'s
    * own actions; `open` mints extra, fully-independent instances. */
   export interface Instance {
-    /** (Re)discover `<name>.toml` from cwd up to home, resolve `extends`, return the merged config. */
+    /** (Re)discover `<name>.<ext>` from cwd up to home, resolve `extends`, refresh the merged view. */
     load(cwd?: string): Future<void, unknown>
     /** Re-run discovery against the current cwd (pick up on-disk changes) without moving `cwd`. */
     refresh(): Future<void, unknown>
@@ -106,8 +119,25 @@ export namespace ConfigDef {
     delete(path?: string): Future<void, unknown>
     /** Find merged entries whose dotted key or value contains `query` (case-insensitive). */
     search(query: string): Future<ConfigDef.Match[], unknown>
-    /** The discovered chain (parents) with each file's `extends` locations, as a tree. */
+    /** The discovered chain (files that exist on disk) with each file's resolved `extends`. */
     tree(): Future<ConfigDef.Source[], unknown>
+
+    /** Whether the merged config has a value at the dotted `key`. */
+    has(key: string): Future<boolean, unknown>
+    /** All leaf dotted keys present in the merged config. */
+    keys(): Future<string[], unknown>
+    /** The path of the highest-precedence file that provides `key` (`'<env>'` for the env overlay). */
+    origin(key: string): Future<string | undefined, unknown>
+    /** Every file that defines `key`, highest → lowest precedence, with the value each holds there. */
+    explain(key: string): Future<ConfigDef.Origin[], unknown>
+    /** Watch the config sources and re-merge on change, invoking `listener` when the merged view
+     * actually changes. A config directory (`DIR` feature) is watched recursively; every other
+     * source file is watched individually; events are debounced. Returns the background task —
+     * `halt()` it to stop watching. */
+    watch(
+      listener: ConfigDef.Watcher,
+      options?: ConfigDef.WatchOptions,
+    ): Future<Task<void, unknown>, unknown>
   }
 
   export interface Actions extends Instance {

@@ -1,11 +1,11 @@
-import { fail, isFailure, isSuccess, succeed, unwrap } from 'std:result'
 import type { Result } from 'std:result'
+import { fail, isFailure, isSuccess, succeed, unwrap } from 'std:result'
 
 import type { AnyType } from '../types/common'
 import type { MatchBuilder, MatchCase } from '../types/match'
 import type { StandardSchemaV1 } from '../types/schema'
 
-import { isPromise } from './is'
+import { isFunction, isPromise } from './is'
 
 const validateSchema = (
   schema: StandardSchemaV1,
@@ -36,7 +36,7 @@ const createBuilder = <Input, Remaining, Output>(
       }
 
       if (c.predicate!(value)) {
-        return succeed(c.handler(value))
+        return succeed(isFunction(c.handler) ? c.handler(value) : c.handler)
       }
     }
 

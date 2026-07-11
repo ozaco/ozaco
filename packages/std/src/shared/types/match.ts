@@ -16,6 +16,10 @@ export interface MatchBuilder<Input, Remaining, Output> {
   ) => MatchBuilder<Input, Exclude<Remaining, StandardSchemaV1.InferInput<S>>, Output | R>
 
   when: {
+    (
+      predicate: (value: Remaining) => boolean,
+      handler: boolean,
+    ): MatchBuilder<Input, Remaining, Output | boolean>
     <P extends (value: Remaining) => unknown, R, N extends Extract<Remaining, GuardValue<P>>>(
       predicate: P,
       handler: (value: N) => R,

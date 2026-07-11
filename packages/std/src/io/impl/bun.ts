@@ -23,6 +23,7 @@ import { bunExec, bunSpawn } from '../internal/process-bun'
 import { readFileStream, writeFileStream } from '../internal/stream'
 import { readInterfaces } from '../internal/sys'
 import { toReadable } from '../internal/to-readable'
+import { watchPath } from '../internal/watch'
 import { webHash, webHmac, webRandomBytes } from '../internal/webcrypto'
 
 export const BunIO = IO.implement({
@@ -46,6 +47,7 @@ export const BunIO = IO.implement({
   fromReadable,
   toReadable,
   readStream: path => readFileStream(toPath(path)),
+  watch: (path, options) => watchPath(toPath(path), options),
   writeStream: (path, source, options) => writeFileStream(toPath(path), source, options?.flags),
 
   read: operation(function* (path) {

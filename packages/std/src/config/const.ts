@@ -12,14 +12,12 @@ export enum Features {
   CHAIN = 1 << 3,
   /** Apply the active-variant overlay `<variant>.<name>.<ext>` (wins within its level). */
   VARIANT = 1 << 4,
-  /** Merge fragment files `<fragment>.<name>.<ext>` (later name wins) above the base file. */
-  FRAGMENT = 1 << 5,
   /** Read the variant from `STD_CONFIG` and overlay `<NAME>_A_B` env vars as the top source. */
-  ENV = 1 << 6,
-  /** Also look inside a `<name>/` directory at each level and merge the `*.<ext>` files in it. */
-  DIR = 1 << 7,
+  ENV = 1 << 5,
+  /** Also look inside a `<name>/` directory at each level and merge its `*.<ext>` files recursively. */
+  DIR = 1 << 6,
 
-  ALL = FILE | CHAIN | VARIANT | FRAGMENT | ENV | DIR,
+  ALL = FILE | CHAIN | VARIANT | ENV | DIR,
 }
 
 /** Default config name (basename of the discovered files). */

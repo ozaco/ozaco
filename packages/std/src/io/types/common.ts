@@ -57,6 +57,20 @@ export interface WalkOptions {
   skip?: RegExp[] | undefined
 }
 
+/** A filesystem change reported by {@link IOActions.watch}. */
+export interface WatchEvent {
+  /** `'rename'` for create/delete/move, `'change'` for content edits (as `fs.watch` reports). */
+  type: 'rename' | 'change'
+  /** The affected entry name relative to the watched path, or `null` when the platform omits it. */
+  path: string | null
+}
+
+/** Options for {@link IOActions.watch}. */
+export interface WatchOptions {
+  /** Watch nested directories too (platform support varies). Defaults to `false`. */
+  recursive?: boolean | undefined
+}
+
 /** Options shared by {@link IOActions.exec} and {@link IOActions.spawn}. */
 export interface ProcessOptions {
   /** Working directory for the child. Defaults to the parent's cwd. */

@@ -21,6 +21,8 @@ import type {
   UdpSocket,
   WalkEntry,
   WalkOptions,
+  WatchEvent,
+  WatchOptions,
 } from './common'
 
 export type IOActions = {
@@ -108,6 +110,9 @@ export type IOActions = {
   ensureFile: (path: PathLike) => Future<void, unknown>
   emptyDir: (path: PathLike) => Future<void, unknown>
   walk: (root: PathLike, options?: WalkOptions) => Future<WalkEntry[], unknown>
+  /** Watch a file or directory via `fsPromises.watch` (event-based, recursive-capable), streaming
+   * {@link WatchEvent}s until the stream is torn down. */
+  watch: (path: PathLike, options?: WatchOptions) => Stream<WatchEvent, never>
 
   /** Join path segments with the platform separator and normalize the result. */
   join: (...segments: string[]) => Future<string, unknown>

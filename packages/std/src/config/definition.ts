@@ -1,7 +1,8 @@
 import { useContext } from 'std:effect'
 import { definePlugin } from 'std:plugin'
 
-import { buildContext, makeInstance, openInstance } from './internal/instance'
+import { buildContext } from './internal/context'
+import { makeInstance, openInstance } from './internal/instance'
 import type { ConfigDef } from './types'
 
 const ConfigImpl = definePlugin<ConfigDef.Context, unknown, [options?: ConfigDef.Options]>({
@@ -18,11 +19,11 @@ const ConfigImpl = definePlugin<ConfigDef.Context, unknown, [options?: ConfigDef
 const defaultInstance = makeInstance(() => useContext(ConfigImpl.context))
 
 /**
- * The config plugin: discovers `<name>.<ext>` files from `cwd` up to `home`, resolves `extends`, and
- * merges them (plus fragments/variant/config-dir and an env overlay) into one view. Requires an `IO`
- * impl and a codec installed first. Precedence per level: variant → fragments → dir → base; inner
- * levels win over outer; the env overlay wins over all. `Config.actions.*` operate on the installed
- * (singleton) config; `Config.actions.open(options)` mints extra, independent instances.
+ * The config plugin: discovers `<name>.<ext>` files from `cwd` up to `home`, resolves each file's
+ * `extends`, and merges them (plus the active variant, the config-dir files, and an env overlay) into
+ * one view. Requires an `IO` impl and a codec installed first. Precedence per level: variant → dir →
+ * base; inner levels win over outer; the env overlay wins over all. `Config.actions.*` operate on the
+ * installed (singleton) config; `Config.actions.open(options)` mints extra, independent instances.
  */
 export const Config = ConfigImpl.build<ConfigDef.Actions>({
   ...defaultInstance,

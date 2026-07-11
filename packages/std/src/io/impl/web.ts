@@ -49,6 +49,7 @@ export const WebIO = IO.implement({
   fromReadable,
   toReadable,
   readStream: () => unsupportedStream('readStream'),
+  watch: () => unsupportedStream('watch') as AnyType,
   writeStream: unsupported('writeStream'),
 
   read: unsupported('read'),

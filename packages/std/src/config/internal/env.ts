@@ -5,24 +5,12 @@ import { hasFlag, setPath } from 'std:shared'
 import { Features, VARIANT_ENV_KEY } from '../const'
 import type { ConfigDef } from '../types'
 
+import { coerce } from './utils'
+
 /** Read all env vars as a plain (possibly sparse) record. */
 const readEnv = operation(function* () {
   return (yield* IO.actions.env(data => data)) as Record<string, string | undefined>
 })
-
-/** Coerce an env string into a boolean/number when it looks like one, else keep the string. */
-const coerce = (value: string): unknown => {
-  if (value === 'true') {
-    return true
-  }
-  if (value === 'false') {
-    return false
-  }
-  if (value !== '' && !Number.isNaN(Number(value))) {
-    return Number(value)
-  }
-  return value
-}
 
 /** The home directory, from `HOME`/`USERPROFILE` (empty string ⇒ discovery walks to the fs root). */
 export const homeDir = operation(function* () {
@@ -45,7 +33,7 @@ export const readVariant = operation(function* (ctx: ConfigDef.Context) {
 
 /**
  * Build the env overlay (`ENV` feature): every `<NAME>_A_B` var becomes the dotted key `a.b` with a
- * coerced value. Empty when the feature is off.
+ * coerced value. Empty when the feature is off. Applied as the highest-precedence source.
  */
 export const buildEnvOverlay = operation(function* (ctx: ConfigDef.Context) {
   if (!hasFlag(ctx.features, Features.ENV)) {
