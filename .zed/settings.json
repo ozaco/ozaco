@@ -1,5 +1,5 @@
 {
-  "language_servers": ["!eslint", "!biome", "vtsls", "!typescript-language-server", "!tsgo", "..."],
+  "language_servers": ["!eslint", "!biome", "!vtsls", "!typescript-language-server", "tsgo", "..."],
   "lsp": {
     "tailwindcss-language-server": {
       "settings": {

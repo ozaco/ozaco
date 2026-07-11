@@ -73,6 +73,7 @@
     "eslint/complexity": "off",
     "eslint/require-yield": "off",
     "eslint/no-underscore-dangle": "off",
+    "eslint/no-useless-return": "off",
     "prefer-named-capture-group": "off",
 
     "typescript/ban-types": "off",

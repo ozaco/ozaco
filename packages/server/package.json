@@ -218,9 +218,9 @@
     "registry": "https://registry.npmjs.org/"
   },
   "dependencies": {
-    "jose": "^6.0.0",
-    "rou3": "0.8.1",
-    "zod": "^4.3.6"
+    "jose": "^6.2.3",
+    "rou3": "0.9.1",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@ozaco/std": "workspace:*",

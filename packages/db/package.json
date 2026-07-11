@@ -56,9 +56,9 @@
     "@ozaco/std": "workspace:*",
     "@types/better-sqlite3": "^7.6.13",
     "@types/pg": "^8.20.0",
-    "better-sqlite3": "^12.9.0",
+    "better-sqlite3": "^12.11.1",
     "drizzle-orm": "^0.45.2",
-    "pg": "^8.20.0",
+    "pg": "^8.22.0",
     "tsdown": "catalog:build",
     "unrun": "catalog:build"
   },
