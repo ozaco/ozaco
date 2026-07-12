@@ -1,6 +1,7 @@
 import type { Operation } from 'std:effect'
-import { createSignal, debounce, each, operation, spawn } from 'std:effect'
+import { attempt, createSignal, debounce, each, operation, spawn } from 'std:effect'
 import { IO } from 'std:io'
+import { isSuccess } from 'std:result'
 import type { AnyType } from 'std:shared'
 import { flattenEntries, getPath, setPath, unsetPath } from 'std:shared'
 
@@ -170,11 +171,15 @@ export const makeInstance = (getCtx: () => Operation<ConfigDef.Context>): Config
       }
 
       for (const _ of yield* each(debounce(bump, options?.debounce ?? 50))) {
-        yield* rediscover(ctx, ctx.cwd)
-        const next = yield* JsonCodec.actions.stringify(ctx.merged)
-        if (next !== last) {
-          last = next
-          listener(ctx.merged)
+        // a transient reload failure (e.g. an `extends` target briefly absent during an atomic
+        // save/rename) must NOT kill the watcher — swallow it and keep watching; the next event retries
+        const reloaded = yield* attempt(() => rediscover(ctx, ctx.cwd))
+        if (isSuccess(reloaded)) {
+          const next = yield* JsonCodec.actions.stringify(ctx.merged)
+          if (next !== last) {
+            last = next
+            listener(ctx.merged)
+          }
         }
         yield* each.next()
       }

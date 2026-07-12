@@ -25,9 +25,10 @@ export const into = <T, R = T>(
     const map = transform ?? identity<T, R>
 
     yield* spawn(function* () {
+      let iterator: AsyncIterator<T> | undefined
       try {
         if (isAsyncIterable(source)) {
-          const iterator = (source as AsyncIterable<T>)[Symbol.asyncIterator]()
+          iterator = (source as AsyncIterable<T>)[Symbol.asyncIterator]()
           while (true) {
             const next = yield* until(iterator.next())
             if (next.done) {
@@ -41,6 +42,14 @@ export const into = <T, R = T>(
           }
         }
       } finally {
+        // close the async source iterator on teardown so its own finally (fd/handle cleanup) runs —
+        // the sync for-of path gets this for free; the manual async loop does not. Best-effort.
+        if (iterator?.return) {
+          try {
+            yield* until(iterator.return())
+            // oxlint-disable-next-line no-empty
+          } catch {}
+        }
         signal.close()
       }
     })

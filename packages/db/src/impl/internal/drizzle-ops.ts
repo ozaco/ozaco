@@ -1,5 +1,6 @@
 import type { Operation } from 'std:effect'
-import { operation } from 'std:effect'
+import { operation, run, until } from 'std:effect'
+import { isSuccess } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import type { QueryBuilder } from '../../types/query'
@@ -19,15 +20,21 @@ export const createQueryBuilder = (runtime: DrizzleRuntime, schema: SchemaDef): 
     delete: table => createDelete(runtime, table),
 
     transaction: operation(function* <T>(fn: (tx: QueryBuilder) => Operation<T>) {
-      yield* runPromise(() => runtime.execRaw('BEGIN'), runtime)
-      try {
-        const result = yield* fn(builder)
-        yield* runPromise(() => runtime.execRaw('COMMIT'), runtime)
-        return result
-      } catch (error) {
-        yield* runPromise(() => runtime.execRaw('ROLLBACK'), runtime)
-        throw error
-      }
+      // Pin ONE connection for the whole transaction via drizzle's `db.transaction`: the inner query
+      // builder runs on the transaction-scoped `txDb`, so the queries share the connection that issued
+      // BEGIN and gets COMMIT/ROLLBACK. The old hand-rolled BEGIN/COMMIT over `execRaw` drew arbitrary
+      // pooled connections in autocommit mode — zero atomicity. A Result.Failure from `fn` throws so
+      // drizzle rolls back; `until` re-surfaces it as the transaction's failure.
+      return yield* until(
+        runtime.db.transaction(async (txDb: AnyType) => {
+          const txBuilder = createQueryBuilder({ ...runtime, db: txDb }, schema)
+          const outcome = await run(() => fn(txBuilder))
+          if (isSuccess(outcome)) {
+            return outcome.value
+          }
+          throw outcome
+        }),
+      )
     }) as AnyType,
     raw: operation(function* <T>(query: string, params: unknown[] = []) {
       const rows = yield* runPromise(() => runtime.execRaw(query, params), runtime)

@@ -10,7 +10,7 @@ import { intercept } from './intercept'
 export const pickHooks = (list: Hookable.HookStore['around'], key: string): AnyType[] => {
   const out: AnyType[] = []
   for (const entry of list) {
-    if (key in entry.handlers) {
+    if (Object.hasOwn(entry.handlers, key)) {
       out.push(entry.handlers[key])
     }
   }

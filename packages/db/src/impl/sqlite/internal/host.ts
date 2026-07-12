@@ -11,7 +11,12 @@ const dynamicImport = (spec: string): Promise<AnyType> =>
 
 export interface SqliteBinding {
   readonly raw: {
-    prepare: (sql: string) => { all: (...args: AnyType[]) => unknown[] }
+    prepare: (sql: string) => {
+      all: (...args: AnyType[]) => unknown[]
+      run: (...args: AnyType[]) => AnyType
+      // better-sqlite3 only: `false` for non-row-returning statements (DDL/INSERT/BEGIN/...)
+      readonly reader?: boolean
+    }
     close: () => void
   }
   readonly db: AnyType

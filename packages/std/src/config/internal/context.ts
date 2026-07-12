@@ -27,6 +27,7 @@ export const buildContext = operation(function* (options?: ConfigDef.Options) {
     home: options?.home ?? (yield* homeDir()),
     features: options?.features ?? Features.ALL,
     variant: options?.variant,
+    variantOption: options?.variant,
     chain: [],
     env: {},
     merged: {},

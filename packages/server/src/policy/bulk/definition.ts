@@ -1,5 +1,5 @@
 import { CoreErrors, definePolicy, PolicyPriority } from 'server:core'
-import { withResolvers } from 'std:effect'
+import { ensure, withResolvers } from 'std:effect'
 import { fail } from 'std:result'
 
 import type { Bulk } from './types'
@@ -50,6 +50,18 @@ export const BulkPolicy = definePolicy<Bulk.Options, Bulk.Context>({
       }
 
       ctx.queue.push(waiter)
+      // if the caller is halted while parked here, dequeue the waiter (and clear its timer) so a
+      // freed slot is never handed to a dead waiter whose `finally { release }` will never run
+      yield* ensure(function* () {
+        waiter.cancelled = true
+        const idx = ctx.queue.indexOf(waiter)
+        if (idx !== -1) {
+          ctx.queue.splice(idx, 1)
+        }
+        if (waiter.timer) {
+          clearTimeout(waiter.timer)
+        }
+      })
       yield* resolvers.operation
     }
 

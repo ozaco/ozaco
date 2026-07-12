@@ -65,13 +65,28 @@ export const writeFileStream = operation(function* (
       : 'w'
   const writable = createWriteStream(path, { flags: fsFlags }) as unknown as WritableLike
 
+  // A persistent 'error' listener: createWriteStream opens asynchronously and can emit 'error' (EACCES
+  // on open, ENOSPC mid-write) during the `each(source)` / `each.next()` await windows where the
+  // transient waitForDrain/waitForFinish listeners are not attached. Without this, that 'error' is an
+  // unhandled event and Node crashes the process. Capture the first one and surface it as a failure.
+  let streamError: unknown
+  writable.on('error', (error: unknown) => {
+    streamError ??= error
+  })
+
   try {
     for (const chunk of yield* each(source)) {
+      if (streamError !== undefined) {
+        yield* asFailure(streamError)
+      }
       const ok = writable.write(chunk)
       if (!ok) {
         yield* waitForDrain(writable)
       }
       yield* each.next()
+    }
+    if (streamError !== undefined) {
+      yield* asFailure(streamError)
     }
     writable.end()
     yield* waitForFinish(writable)

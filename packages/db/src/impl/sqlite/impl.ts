@@ -26,6 +26,13 @@ export const SqliteImpl = DB.implement({
 
     const execRaw = (query: string, params: unknown[] = []): Promise<unknown[]> => {
       const stmt = binding.raw.prepare(query)
+      // better-sqlite3 throws on `.all()` for non-row-returning statements (DDL/INSERT/BEGIN/...) —
+      // route those through `.run()`. It exposes `stmt.reader` (false = no rows); bun:sqlite lacks it
+      // (undefined) and tolerates `.all()` on writes, so bun keeps using `.all()`.
+      if (stmt.reader === false) {
+        stmt.run(...(params as never[]))
+        return Promise.resolve([])
+      }
       return Promise.resolve(stmt.all(...(params as never[])))
     }
 

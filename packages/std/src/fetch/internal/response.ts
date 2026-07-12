@@ -1,9 +1,8 @@
+import { Codec } from 'std:codec'
 import type { Stream } from 'std:effect'
 import { operation, stream, until } from 'std:effect'
 import { asFailure, fail } from 'std:result'
 import type { AnyType } from 'std:shared'
-
-import { JsonCodec } from 'std:codec/impl/json'
 
 import type { FetchDef } from '../types'
 
@@ -67,7 +66,10 @@ export const createFetchResponse = (raw: Response): FetchDef.Response => {
 
   const readBody = operation(function* () {
     const bytes = yield* readBytes()
-    return bytes.length > 0 ? yield* JsonCodec.actions.decode(bytes) : undefined
+    if (bytes.length === 0) {
+      return undefined
+    }
+    return yield* Codec.actions.decode(bytes)
   })
 
   const readStream = operation(function* () {
@@ -75,7 +77,7 @@ export const createFetchResponse = (raw: Response): FetchDef.Response => {
       return yield* fail('parse', 'response has no body')
     }
 
-    return yield* JsonCodec.actions.decodeStream(stream(raw.body as AnyType), true)
+    return yield* Codec.actions.decodeStream(stream(raw.body as AnyType), true)
   })
 
   const self: FetchDef.Response = {

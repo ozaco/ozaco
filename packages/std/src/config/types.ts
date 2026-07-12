@@ -73,7 +73,11 @@ export namespace ConfigDef {
     ext: string
     codec: CodecDef
 
+    /** The effective active variant (explicit option OR env-derived), recomputed on every discovery. */
     variant?: string | undefined
+    /** The explicit `variant` OPTION only, kept separate from `variant` so a reload always re-derives
+     * the env variant instead of latching whatever `variant` held after the first discovery. */
+    variantOption?: string | undefined
     home: string
     features: Features
 

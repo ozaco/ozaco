@@ -49,7 +49,13 @@ const sseStream = operation(function* <T>(
         const { events, rest } = splitEvents(buffer)
         buffer = rest
         for (const event of events) {
-          const value = yield* parseEvent(eventData(event))
+          const data = eventData(event)
+          // a comment/keep-alive or blank event has no `data:` payload — skip it, don't conflate the
+          // empty payload with the `[DONE]` sentinel (which would truncate the stream mid-flight)
+          if (data.length === 0) {
+            continue
+          }
+          const value = yield* parseEvent(data)
           if (value === undefined) {
             return
           }

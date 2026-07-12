@@ -61,7 +61,16 @@ export const createHookable = (options: {
         // through here: the default runs the last-installed impl; the codec runs the highest-priority
         // one; a fan-out protocol (e.g. logger) can run every entry.
         const run = function* (entry: Hookable.HookSelfEntry | undefined): Operation<unknown> {
-          const self = handlers[key] ?? entry?.handlers[key] ?? defaultActions[key]
+          // own-property lookups: these are plain objects, so an action key that collides with an
+          // Object.prototype member (toString/valueOf/constructor/...) must not resolve to the
+          // inherited function
+          const self = Object.hasOwn(handlers, key)
+            ? handlers[key]
+            : entry && Object.hasOwn(entry.handlers, key)
+              ? entry.handlers[key]
+              : Object.hasOwn(defaultActions, key)
+                ? defaultActions[key]
+                : undefined
 
           const inner = function* (...innerArgs: unknown[]) {
             if (innerArgs[0] === RAW_ACTION) {
@@ -101,7 +110,7 @@ export const createHookable = (options: {
 
         // Protocol-level handlers (register/getTransports/...) aren't tied to an installed impl and
         // must run exactly once; only impl-provided actions flow through `dispatch`.
-        if (handlers[key]) {
+        if (Object.hasOwn(handlers, key)) {
           return yield* run(undefined)
         }
 

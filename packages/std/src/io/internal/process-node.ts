@@ -35,6 +35,10 @@ export const nodeExec = operation(function* (
         child.stdout.on('data', chunk => out.push(new Uint8Array(chunk)))
         child.stderr.on('data', chunk => err.push(new Uint8Array(chunk)))
         child.once('error', reject)
+        // a child that closes its read end before we finish writing emits EPIPE on child.stdin;
+        // without a listener Node rethrows it as an uncaughtException and crashes the process. Route
+        // it into `reject` — the promise settles once, so a clean `close` still wins the normal case.
+        child.stdin.on('error', reject)
         child.once('close', (code, signal) =>
           resolve({
             ...makeStatus(code, signal),
@@ -81,6 +85,10 @@ export const nodeSpawn = operation(function* (
     child.once('error', reject)
   })
   void exitedPromise.catch(() => {})
+
+  // guard against an unhandled 'error' on child.stdin (EPIPE when the child closed its read end):
+  // `write()` surfaces the failure through its own callback; this listener only prevents the crash.
+  child.stdin.on('error', () => {})
 
   const exited = operation(function* () {
     try {

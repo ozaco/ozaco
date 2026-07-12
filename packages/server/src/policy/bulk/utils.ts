@@ -4,7 +4,15 @@ import type { Bulk } from './types'
 
 export const release = (ctx: Bulk.Context) => {
   ctx.inflight = Math.max(0, ctx.inflight - 1)
-  const next = ctx.queue.shift()
+  // hand the freed slot to the next LIVE waiter; skip any cancelled while parked (their caller was
+  // halted), or the inflight++ below would reserve a slot never balanced by their (never-run) release
+  let next = ctx.queue.shift()
+  while (next?.cancelled) {
+    if (next.timer) {
+      clearTimeout(next.timer)
+    }
+    next = ctx.queue.shift()
+  }
   if (next) {
     if (next.timer) {
       clearTimeout(next.timer)

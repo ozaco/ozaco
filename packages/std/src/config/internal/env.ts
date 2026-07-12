@@ -18,10 +18,12 @@ export const homeDir = operation(function* () {
   return env.HOME ?? env.USERPROFILE ?? ''
 })
 
-/** The active variant: an explicit one wins; otherwise `STD_CONFIG` when the `ENV` feature is on. */
+/** The active variant: an explicit OPTION wins; otherwise `STD_CONFIG` when the `ENV` feature is on.
+ * Gates on `ctx.variantOption` (the raw option), NOT the mutated `ctx.variant`, so a reload always
+ * re-derives the env variant instead of latching the value stored on the first discovery. */
 export const readVariant = operation(function* (ctx: ConfigDef.Context) {
-  if (ctx.variant) {
-    return ctx.variant
+  if (ctx.variantOption) {
+    return ctx.variantOption
   }
   if (!hasFlag(ctx.features, Features.ENV)) {
     return undefined
