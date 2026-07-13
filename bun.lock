@@ -102,7 +102,7 @@
     },
     "packages/devkit": {
       "name": "@ozaco/devkit",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "dependencies": {
         "rolldown": "1.1.5",
       },
@@ -126,7 +126,7 @@
     },
     "packages/server": {
       "name": "@ozaco/server",
-      "version": "0.3.0",
+      "version": "0.3.1",
       "dependencies": {
         "jose": "^6.2.3",
         "rou3": "0.9.1",
@@ -152,7 +152,7 @@
     },
     "packages/std": {
       "name": "@ozaco/std",
-      "version": "0.3.0",
+      "version": "0.3.1",
       "dependencies": {
         "@streamparser/json": "0.0.22",
       },
