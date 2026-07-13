@@ -66,3 +66,5 @@ export const NodeGateway: GatewayDef.Default = Gateway.implement({
   toRoom: toRoomAction,
   listen: listenAction,
 })
+
+export { wsBearer } from '../shared/ws'

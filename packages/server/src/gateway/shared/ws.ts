@@ -52,6 +52,28 @@ export const encodeWsBody = operation(function* (body: unknown) {
   return yield* JsonCodec.actions.stringify(body)
 })
 
+/**
+ * Extract a bearer token from a WS connection — from the `authorization` header (captured at upgrade)
+ * OR a `?token=` / `?access_token=` query param. Browsers cannot set custom headers on the WS
+ * handshake, so the query-param form is the browser-friendly convention. Use it in a `listen` handler
+ * (e.g. `open`) to authenticate; per-message-RPC routes get it for free (see `buildRequest`).
+ */
+export const wsBearer = (data: {
+  url?: string
+  headers?: Record<string, string>
+}): string | undefined => {
+  const header = data.headers?.authorization
+  if (header) {
+    return header.startsWith('Bearer ') ? header.slice(7) : header
+  }
+  try {
+    const url = new URL(data.url ?? 'ws://localhost/')
+    return url.searchParams.get('token') ?? url.searchParams.get('access_token') ?? undefined
+  } catch {
+    return undefined
+  }
+}
+
 export const buildRequest = operation(function* (ws: AnyType, payload: unknown) {
   const data = (ws?.data ?? {}) as {
     url?: string
@@ -59,7 +81,17 @@ export const buildRequest = operation(function* (ws: AnyType, payload: unknown) 
     params?: Record<string, unknown>
   }
   const url = new URL(data.url ?? 'ws://localhost/')
-  const headers = data.headers ?? {}
+
+  // clone so we never mutate the shared ws.data.headers; promote a `?token=` query param into the
+  // `authorization` meta when no header is present, so `useAuth` works for browser WS clients too.
+  const headers = { ...data.headers }
+  if (!headers.authorization) {
+    const token = url.searchParams.get('token') ?? url.searchParams.get('access_token')
+    if (token) {
+      headers.authorization = `Bearer ${token}`
+    }
+  }
+
   const parsedBody = yield* parseWsPayload(payload)
 
   const body = {

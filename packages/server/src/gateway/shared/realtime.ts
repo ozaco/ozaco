@@ -23,6 +23,7 @@ const registerSocket = (ctx: GatewayDef.Context, raw: AnyType): GatewayDef.Gatew
   const socket: GatewayDef.GatewaySocket = {
     id,
     rooms: new Set<string>(),
+    tasks: new Set(),
     raw,
     send: data => {
       try {
@@ -35,6 +36,35 @@ const registerSocket = (ctx: GatewayDef.Context, raw: AnyType): GatewayDef.Gatew
   ctx.sockets.set(id, socket)
   return socket
 }
+
+/**
+ * Tear down EVERY live WS connection — halt each socket's background tasks (subscription pumps), close
+ * the raw socket, and drop the registry. Called from the gateway destroy path so an open WS client
+ * cannot block shutdown (Bun's graceful `server.stop()` waits on open sockets; a spawned pump would
+ * otherwise keep the scope alive).
+ */
+const closeSockets = operation(function* (ctx: GatewayDef.Context) {
+  // snapshot: closing a raw socket schedules its (async) onClose which mutates the registry
+  for (const socket of Array.from(ctx.sockets.values())) {
+    for (const task of socket.tasks) {
+      yield* task.halt()
+    }
+    // `terminate()` closes the TCP immediately (Bun ServerWebSocket + node `ws` both have it) so the
+    // graceful `server.stop()` isn't left waiting on a lingering close-handshake; fall back to close().
+    const raw = socket.raw as AnyType
+    try {
+      if (typeof raw?.terminate === 'function') {
+        raw.terminate()
+      } else {
+        raw?.close?.()
+      }
+    } catch {
+      /* already gone */
+    }
+  }
+  ctx.sockets.clear()
+  ctx.rooms.clear()
+})
 
 /** Remove a closed socket from the registry and from every room it had joined. */
 const unregisterSocket = (ctx: GatewayDef.Context, id: string): void => {
@@ -104,6 +134,13 @@ const onCloseAction = operation(function* (ws: AnyType, code: number, reason: st
     yield* setting.onClose(ws, code, reason)
   }
   const ctx = yield* useContext(Gateway.context)
+  const socket = ctx.sockets.get(String(ws?.data?.id ?? ''))
+  if (socket) {
+    // halt every per-socket background task (subscription pumps) so nothing survives the disconnect
+    for (const task of socket.tasks) {
+      yield* task.halt()
+    }
+  }
   unregisterSocket(ctx, String(ws?.data?.id ?? ''))
   ws?.data?.controller?.abort()
 })
@@ -203,6 +240,7 @@ const toRoomAction = operation(function* (room: string, message: unknown) {
 
 export {
   broadcastAction,
+  closeSockets,
   emitAction,
   joinAction,
   joinRoom,

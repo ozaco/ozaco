@@ -1,4 +1,5 @@
 import { Gateway } from 'server:core'
+import { sleep } from 'std:effect'
 import { IO } from 'std:io'
 
 // A socket.io-style chat over `Gateway.actions.listen` — registered WITHOUT defineAction/mount. It
@@ -8,6 +9,7 @@ import { IO } from 'std:io'
 //   • `message`                  — the raw catch-all for frames with no matching event
 //   • the `socket` handle        — `send` / `join` / `leave` / `toRoom` / `broadcast`
 //   • `Gateway.actions.emit(id)` — a direct message to ONE socket by id (see `on.dm`)
+//   • `socket.spawn(op)`         — a per-socket pump auto-halted on disconnect (see `on.subscribe`)
 //   • server push               — `broadcast` fired from open/close (outside any request)
 //   • `IO.actions.uuid()`        — a per-connection session id
 //   • `IO.actions.ulid()`        — sortable, monotonic message ids
@@ -59,6 +61,17 @@ export const mountChat = () =>
           event: 'dm',
           from: socket.id,
           text: String(msg.text ?? ''),
+        })
+      },
+
+      *subscribe(socket) {
+        // socket.spawn: a long-lived pump bound to THIS socket — auto-halted on disconnect (no leak).
+        // In a real app this would pump a db LiveQuery Stream; here it's a 1s server clock.
+        yield* socket.spawn(function* () {
+          for (;;) {
+            yield* sleep(1000)
+            yield* socket.send({ event: 'clock', at: Date.now() })
+          }
         })
       },
     },

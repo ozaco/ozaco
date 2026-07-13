@@ -1,4 +1,4 @@
-import type { Future, Operation, Stream, Task } from 'std:effect'
+import type { Future, Operation, Scope, Stream, Task } from 'std:effect'
 import type { Plugin } from 'std:plugin'
 import type { Result } from 'std:result'
 import type { AnyType } from 'std:shared'
@@ -80,6 +80,8 @@ export namespace GatewayDef {
     readonly id: string
     /** rooms this socket has joined — the reverse index used to reap it from every room on close. */
     readonly rooms: Set<string>
+    /** background tasks bound to this socket (e.g. `socket.spawn` subscription pumps) — all halted on close. */
+    readonly tasks: Set<Task<unknown>>
     /** the underlying platform socket (Bun `ServerWebSocket` / node `ws` `WebSocket`). */
     readonly raw: AnyType
     send(data: string | ArrayBufferView | ArrayBuffer): void
@@ -101,6 +103,12 @@ export namespace GatewayDef {
     /** Fan a message out to a room, or to every connected socket. */
     toRoom(room: string, message: unknown): Operation<void>
     broadcast(message: unknown): Operation<void>
+    /**
+     * Spawn a background task bound to THIS socket's lifetime — automatically halted when the socket
+     * closes. Use it to pump a long-lived source (e.g. a db LiveQuery Stream) into the socket without
+     * leaking the loop after disconnect.
+     */
+    spawn(operation: () => Operation<void>): Operation<void>
   }
 
   /**
@@ -146,6 +154,9 @@ export namespace GatewayDef {
   export interface Context {
     port: number
     host: string
+
+    /** The gateway's install scope — where per-socket `socket.spawn` tasks run (halted on close). */
+    scope: Scope
 
     server: AnyType
     started: boolean

@@ -11,6 +11,7 @@ import { Readable } from 'node:stream'
 import type { WebSocketServer } from 'ws'
 
 import { dispatchRequest } from '../shared/handle'
+import { closeSockets } from '../shared/realtime'
 import { haltInflight, pauseGate, trackRequest } from '../shared/serve'
 
 // adapt a Node request into a web-standard Request the shared transformer understands
@@ -212,6 +213,10 @@ export const destroyAction = operation(function* () {
     ctx.started = false
     return
   }
+
+  // close every live WS connection (+ halt its per-socket pumps) so a connected client / spawned loop
+  // can't keep close() hanging or the process alive
+  yield* closeSockets(ctx)
 
   // abort in-flight request pumps first so an active stream cannot block close() below
   yield* haltInflight(ctx)

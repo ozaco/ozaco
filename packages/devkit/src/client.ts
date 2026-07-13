@@ -217,10 +217,9 @@ const generate = async (options: ClientPluginOptions): Promise<void> => {
     const manifest: ClientDef.Manifest = {}
 
     for (const route of ctx.handlers.values()) {
-      if (route.setting.method === 'WS') {
-        continue
-      }
-
+      // include WS-method routes too (method:'WS') so a WS-aware client can discover them; the entry's
+      // `method` distinguishes them from REST. `listen`-registered routes are NOT captured here (they
+      // are raw, dynamic, and have no service/action contract — codegen only walks mounted services).
       const action = route.action as AnyType
       const service = isService(route.target) ? route.target.name : (action.title ?? 'root')
       const key = route.key ?? action.title ?? 'handler'

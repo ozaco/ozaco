@@ -4,6 +4,7 @@ import { asFailure, fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import { dispatchRequest } from '../shared/handle'
+import { closeSockets } from '../shared/realtime'
 import { haltInflight, pauseGate, trackRequest } from '../shared/serve'
 
 export const startAction = operation(function* (
@@ -97,7 +98,9 @@ export const destroyAction = operation(function* (opts?: { drainMs?: number }) {
     return
   }
 
-  // abort in-flight request pumps first so an active stream cannot block the drain below
+  // halt every per-socket pump + terminate every live WS connection, then abort in-flight request
+  // pumps — so nothing is left to keep the process alive
+  yield* closeSockets(ctx)
   yield* haltInflight(ctx)
 
   const drainMs = opts?.drainMs ?? 30_000

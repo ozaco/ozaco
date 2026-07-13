@@ -1,5 +1,6 @@
 import type { GatewayDef } from 'server:core'
 import { defineAction, Gateway } from 'server:core'
+import type { Operation } from 'std:effect'
 import { operation, useContext } from 'std:effect'
 import type { AnyType } from 'std:shared'
 
@@ -36,6 +37,10 @@ const makeSocket = (ctx: GatewayDef.Context, ws: AnyType): GatewayDef.Socket => 
     }),
     toRoom: toRoomAction,
     broadcast: broadcastAction,
+    spawn: operation(function* (op: () => Operation<void>) {
+      // run on the gateway scope, tracked on this socket so onClose halts it (no leaked pumps).
+      reg?.tasks.add(ctx.scope.run(op))
+    }),
   }
 }
 
