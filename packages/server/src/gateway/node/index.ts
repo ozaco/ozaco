@@ -2,6 +2,17 @@ import type { GatewayDef } from 'server:core'
 import { Gateway } from 'server:core'
 
 import { isPausedAction, isStartedAction, pauseAction, resumeAction } from '../shared/lifecycle'
+import { listenAction } from '../shared/listen'
+import {
+  broadcastAction,
+  emitAction,
+  joinAction,
+  leaveAction,
+  onCloseAction,
+  onMessageAction,
+  onOpenAction,
+  toRoomAction,
+} from '../shared/realtime'
 import { fromInternalAction, restSettingsAction, toInternalAction } from '../shared/rest'
 import {
   addAction,
@@ -15,7 +26,7 @@ import {
 import { setup } from '../shared/setup'
 import { wsSettingsAction } from '../shared/ws'
 
-import { destroyAction, noop, noUpgrade, startAction } from './internal'
+import { destroyAction, noUpgrade, startAction } from './internal'
 
 export const NodeGateway: GatewayDef.Default = Gateway.implement({
   name: 'server/gateway-node',
@@ -43,8 +54,15 @@ export const NodeGateway: GatewayDef.Default = Gateway.implement({
   rest: restSettingsAction,
 
   upgrade: noUpgrade,
-  onOpen: noop,
-  onMessage: noop,
-  onClose: noop,
+  onOpen: onOpenAction,
+  onMessage: onMessageAction,
+  onClose: onCloseAction,
   ws: wsSettingsAction,
+
+  emit: emitAction,
+  broadcast: broadcastAction,
+  join: joinAction,
+  leave: leaveAction,
+  toRoom: toRoomAction,
+  listen: listenAction,
 })

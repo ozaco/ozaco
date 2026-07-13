@@ -19,6 +19,7 @@ import type {
   TcpSocket,
   UdpBindOptions,
   UdpSocket,
+  UlidOptions,
   WalkEntry,
   WalkOptions,
   WatchEvent,
@@ -32,6 +33,10 @@ export type IOActions = {
   ) => Future<{ [P in keyof R]: P extends K ? R[P] : NonNullable<R[P]> }>
 
   randomBytes: (length: number) => Future<Uint8Array>
+  /** Generate a ULID — lexicographically sortable, monotonic within a `window`. See {@link UlidOptions}. */
+  ulid: (options?: UlidOptions) => Future<string>
+  /** Generate an RFC 4122 version-4 (random) UUID string. */
+  uuid: () => Future<string>
   hmac: (algorithm: HashAlgorithm, key: Uint8Array, data: Uint8Array) => Future<Uint8Array>
   hash: (algorithm: HashAlgorithm, data: Uint8Array) => Future<Uint8Array>
 

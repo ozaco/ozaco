@@ -66,7 +66,53 @@ export namespace GatewayDef {
   export interface WsOptions {
     path: string
     onOpen?: (ws: unknown) => Operation<void>
+    /**
+     * Opt-in raw-frame handler. When set, incoming frames on this route go to `onMessage` (the app
+     * owns the socket, socket.io-style) instead of the default per-message request/response dispatch.
+     * Leave it unset to keep the automatic per-message RPC behaviour.
+     */
+    onMessage?: (ws: unknown, message: unknown) => Operation<void>
     onClose?: (ws: unknown, code: number, reason: string) => Operation<void>
+  }
+
+  /** A live WebSocket connection tracked in the gateway registry (platform-agnostic: Bun + Node). */
+  export interface GatewaySocket {
+    readonly id: string
+    /** rooms this socket has joined — the reverse index used to reap it from every room on close. */
+    readonly rooms: Set<string>
+    /** the underlying platform socket (Bun `ServerWebSocket` / node `ws` `WebSocket`). */
+    readonly raw: AnyType
+    send(data: string | ArrayBufferView | ArrayBuffer): void
+  }
+
+  /** The effect-native socket handle passed to every `Gateway.actions.listen` handler. All methods are
+   * scoped to THIS socket (except `toRoom`/`broadcast`, which fan out) and reuse the room registry. */
+  export interface Socket {
+    readonly id: string
+    /** Per-connection data captured at upgrade (headers, url, params). */
+    readonly data: AnyType
+    /** Rooms this socket is currently in. */
+    readonly rooms: Set<string>
+    /** Send a message to THIS socket. */
+    send(message: unknown): Operation<void>
+    /** Add / remove THIS socket to / from a room. */
+    join(room: string): Operation<void>
+    leave(room: string): Operation<void>
+    /** Fan a message out to a room, or to every connected socket. */
+    toRoom(room: string, message: unknown): Operation<void>
+    broadcast(message: unknown): Operation<void>
+  }
+
+  /**
+   * Handlers for `Gateway.actions.listen` — a WS endpoint registered WITHOUT `defineAction`/`mount`.
+   * `message` is the raw catch-all (every frame); `on` is a socket.io-style event map — an inbound
+   * `{ event, ... }` whose `event` matches an `on` key routes there, anything else falls to `message`.
+   */
+  export interface ListenHandlers {
+    open?: (socket: Socket) => Operation<void>
+    message?: (socket: Socket, message: unknown) => Operation<void>
+    close?: (socket: Socket) => Operation<void>
+    on?: Record<string, (socket: Socket, message: AnyType) => Operation<void>>
   }
 
   /** The marker a resolved transformer setting carries so the router can classify it. */
@@ -108,6 +154,11 @@ export namespace GatewayDef {
     router: AnyType
     compiled: (method: string, path: string) => AnyType
     handlers: Map<symbol, RegisteredRoute>
+
+    /** Live WS connections by id, and room name → member socket ids (socket.io-style groups). Both are
+     * populated by the WS lifecycle (onOpen/onClose) and read by the emit/broadcast/room actions. */
+    sockets: Map<string, GatewaySocket>
+    rooms: Map<string, Set<string>>
 
     /** in-flight background request tasks (streaming pumps live here); halted on destroy so an
      * active stream cannot block shutdown — halting aborts the pump + its upstream fetch */
@@ -174,6 +225,17 @@ export namespace GatewayDef {
     onMessage(ws: unknown, message: unknown): Future<void>
     onClose(ws: unknown, code: number, reason: string): Future<void>
     ws<T extends WsOptions>(options: T): Future<T & { method: string; transformer: AnyType }>
+
+    // realtime push + rooms — server-initiated, callable from ANY scope (not just an action's return).
+    // `join`/`leave` act on the CURRENT socket (must run inside a WS request); the rest target by id/room.
+    emit(socketId: string, message: unknown): Future<void>
+    broadcast(message: unknown): Future<void>
+    join(room: string): Future<void>
+    leave(room: string): Future<void>
+    toRoom(room: string, message: unknown): Future<void>
+
+    /** Register a WebSocket endpoint at `path` WITHOUT defineAction/mount; handlers get a {@link Socket}. */
+    listen(path: string, handlers: ListenHandlers): Future<void>
   }
 
   export type Default = Plugin<GatewayDef.Context, [options?: GatewayDef.Options], Actions>

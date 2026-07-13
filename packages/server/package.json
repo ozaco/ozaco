@@ -224,16 +224,22 @@
   },
   "devDependencies": {
     "@ozaco/std": "workspace:*",
+    "@types/ws": "^8.18.1",
     "nats": "^2.29.3",
     "tsdown": "catalog:build",
-    "unrun": "catalog:build"
+    "unrun": "catalog:build",
+    "ws": "^8.21.0"
   },
   "peerDependencies": {
     "@ozaco/std": "*",
-    "nats": "^2.29.3"
+    "nats": "^2.29.3",
+    "ws": "^8.0.0"
   },
   "peerDependenciesMeta": {
     "nats": {
+      "optional": true
+    },
+    "ws": {
       "optional": true
     }
   }

@@ -204,7 +204,7 @@ export const DefaultBroker = DefaultBrokerImpl.build({
           action: actionMeta,
           settings,
           params,
-          key: `${raw.options.name}\u0000${raw.key}\u0000${JSON.stringify(params)}`,
+          key: `${raw.options.name}\u0000${raw.key}\u0000${yield* JsonCodec.actions.stringify(params)}`,
           principal,
           isStreaming: options.streams !== undefined,
           trace: broker.trace,

@@ -1,13 +1,14 @@
 import { CoreErrors, Gateway, statusFor } from 'server:core'
 import { action, operation, useContext, useScope } from 'std:effect'
-import { asFailure } from 'std:result'
+import { IO } from 'std:io'
+import { asFailure, isSuccess } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { createServer } from 'node:http'
 import { Readable } from 'node:stream'
 
-import { JsonCodec } from 'std:codec/impl/json'
+import type { WebSocketServer } from 'ws'
 
 import { dispatchRequest } from '../shared/handle'
 import { haltInflight, pauseGate, trackRequest } from '../shared/serve'
@@ -75,22 +76,7 @@ export const startAction = operation(function* (
   const ctx = yield* useContext(Gateway.context)
   const scope = yield* useScope()
 
-  // the 426 body is a fixed envelope — encode it once through the codec here (the gateway already
-  // requires JsonCodec for request/response bodies) so the async `handle` stays JSON-call-free
-  const upgradeRequiredBody = yield* JsonCodec.actions.stringify({
-    error: 'upgrade-required',
-    message: 'node gateway has no websocket support',
-  })
-
   const handle = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
-    // Node has no built-in websocket server — reject upgrades with 426 (use BunGateway for ws)
-    if (String(req.headers.upgrade).toLowerCase() === 'websocket') {
-      res.statusCode = 426
-      res.setHeader('content-type', 'application/json')
-      res.end(upgradeRequiredBody)
-      return
-    }
-
     const paused = await pauseGate(scope)
     if (paused) {
       await writeResponse(res, paused)
@@ -125,6 +111,73 @@ export const startAction = operation(function* (
     void handle(req, res)
   })
 
+  // WebSocket upgrades: node:http has no built-in ws server, so bridge the raw `upgrade` socket to the
+  // `ws` package (an OPTIONAL peer dep — lazily imported so the gateway starts without it), then funnel
+  // its events through the SAME platform-agnostic Gateway.actions.onOpen/onMessage/onClose the Bun
+  // gateway uses (registry + rooms + per-message RPC all shared).
+  let wss: WebSocketServer | undefined
+  const ensureWss = async (): Promise<WebSocketServer | undefined> => {
+    if (wss) {
+      return wss
+    }
+    try {
+      const mod = await import('ws')
+      wss = new mod.WebSocketServer({ noServer: true })
+    } catch {
+      wss = undefined
+    }
+    return wss
+  }
+
+  server.on('upgrade', (req, socket, head) => {
+    void (async () => {
+      const hub = await ensureWss()
+      if (!hub) {
+        socket.destroy()
+        return
+      }
+      const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`)
+      const found = await scope.safeRun(() => Gateway.actions.find('WS', url.pathname))
+      if (!isSuccess(found) || !found.value) {
+        socket.destroy()
+        return
+      }
+      const [sym, params] = found.value as [symbol, unknown]
+      const entry = ctx.handlers.get(sym)
+      if (!entry) {
+        socket.destroy()
+        return
+      }
+      const headers: Record<string, string> = {}
+      for (const [key, value] of Object.entries(req.headers)) {
+        headers[key] = Array.isArray(value) ? value.join(', ') : (value ?? '')
+      }
+      // mint the socket id through IO (IO-first) BEFORE the handshake, so ws.data is set synchronously
+      // in the handleUpgrade callback (no race with the first inbound message).
+      const minted = await scope.safeRun(() => IO.actions.uuid())
+      const id = isSuccess(minted) ? minted.value : ''
+      hub.handleUpgrade(req, socket, head, nodeWs => {
+        ;(nodeWs as AnyType).data = {
+          id,
+          url: url.href,
+          headers,
+          params,
+          entry,
+          controller: new AbortController(),
+        }
+        void scope.safeRun(() => Gateway.actions.onOpen(nodeWs))
+        nodeWs.on('message', (data: AnyType, isBinary: boolean) => {
+          void scope.safeRun(() =>
+            Gateway.actions.onMessage(nodeWs, isBinary ? (data as unknown) : String(data)),
+          )
+        })
+        nodeWs.on('close', (code: number, reason: AnyType) => {
+          void scope.safeRun(() => Gateway.actions.onClose(nodeWs, code, String(reason ?? '')))
+        })
+      })
+    })()
+  })
+
   // Under node:cluster the primary shares one listening handle across workers automatically; for
   // standalone multi-process shared-port, `reusePort` enables kernel-level SO_REUSEPORT balancing.
   yield* action<void>(resolve => {
@@ -139,7 +192,11 @@ export const startAction = operation(function* (
     return () => {}
   })
 
-  ctx.port = config.port ?? ctx.port
+  // read the ACTUAL bound port from the listening socket so `port: 0` (ephemeral) reports the real
+  // port the OS assigned — matching the Bun gateway's behaviour.
+  const address = server.address()
+  ctx.port =
+    typeof address === 'object' && address !== null ? address.port : (config.port ?? ctx.port)
   ctx.host = config.host ?? ctx.host
   ctx.server = server
   ctx.started = true
@@ -176,8 +233,8 @@ export const destroyAction = operation(function* () {
   ctx.started = false
 })
 
-// node has no websocket server — these satisfy the protocol but never run a real upgrade
+// `upgrade` is Bun's fetch-time upgrade action; Node upgrades via the http server's `upgrade` event
+// (wired in startAction), so this satisfies the protocol but is never invoked on Node.
 export const noUpgrade = operation(function* () {
   return false
 })
-export const noop = operation(function* () {})

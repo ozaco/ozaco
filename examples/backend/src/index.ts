@@ -14,6 +14,7 @@ import { ConsoleTransport } from 'std:logger/transport/console'
 import { ENV, STATUS_MAP } from './const'
 import { AiService } from './services/ai'
 import { AuthService } from './services/auth'
+import { mountChat } from './services/chat'
 import { TodoService } from './services/todo'
 import { cleanupErrors } from './utils/cleanup'
 import { memoryAuthProvider } from './utils/store'
@@ -89,10 +90,18 @@ await main(function* () {
     ...(aiEnabled ? [AuthService, TodoService, AiService] : [AuthService, TodoService]),
   )
 
+  // A real-time WebSocket chat, registered directly on the gateway (no defineAction) — rooms + server
+  // push + IO ulid/uuid. See `./services/chat`.
+  yield* mountChat()
+
   const { host, port } = yield* Gateway.actions.start({ port: env.port, host: env.host })
 
   // the Docs plugin logs the swagger/openapi URLs itself once the gateway is listening
   yield* Logger.actions.info(`Todo api ready  → http://${host}:${port}`)
+  yield* Logger.actions.info(`WS chat         → ws://${host}:${port}/chat`)
+  yield* Logger.actions.info(
+    "                  send {event:'join',room} · {event:'say',room,text} · {event:'leave',room}",
+  )
   yield* Logger.actions.info(
     'Seed users      → admin@example.com / admin  ·  user@example.com / user',
   )

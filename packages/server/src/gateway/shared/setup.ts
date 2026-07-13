@@ -23,6 +23,9 @@ export const setup = function* (options: GatewayDef.Options = {}) {
     handlers: new Map(),
     inflight: new Set(),
 
+    sockets: new Map(),
+    rooms: new Map(),
+
     statusMap: options.statusMap,
     maxBodyBytes: options.maxBodyBytes,
     reusePort: options.reusePort,

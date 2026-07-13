@@ -9,6 +9,8 @@ import { readWebEnv } from '../internal/env'
 import { fromReadable } from '../internal/from-readable'
 import { webPath } from '../internal/path-web'
 import { toReadable } from '../internal/to-readable'
+import { ulidId } from '../internal/ulid'
+import { uuidId } from '../internal/uuid'
 import { webHash, webHmac, webRandomBytes } from '../internal/webcrypto'
 
 /** The browser has no filesystem — these actions fail clearly instead of pretending to work. */
@@ -38,6 +40,8 @@ export const WebIO = IO.implement({
   env: readWebEnv,
 
   randomBytes: webRandomBytes,
+  ulid: ulidId,
+  uuid: uuidId,
   hmac: webHmac,
   hash: webHash,
   encrypt: unsupported('encrypt'),

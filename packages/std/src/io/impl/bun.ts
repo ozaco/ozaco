@@ -23,6 +23,8 @@ import { bunExec, bunSpawn } from '../internal/process-bun'
 import { readFileStream, writeFileStream } from '../internal/stream'
 import { readInterfaces } from '../internal/sys'
 import { toReadable } from '../internal/to-readable'
+import { ulidId } from '../internal/ulid'
+import { uuidId } from '../internal/uuid'
 import { watchPath } from '../internal/watch'
 import { webHash, webHmac, webRandomBytes } from '../internal/webcrypto'
 
@@ -36,6 +38,8 @@ export const BunIO = IO.implement({
   env: readEnv,
 
   randomBytes: webRandomBytes,
+  ulid: ulidId,
+  uuid: uuidId,
   hmac: webHmac,
   hash: webHash,
   encrypt: encryptSecret,

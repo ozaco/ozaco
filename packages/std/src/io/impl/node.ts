@@ -26,6 +26,8 @@ import { nodeExec, nodeSpawn } from '../internal/process-node'
 import { readFileStream, writeFileStream } from '../internal/stream'
 import { readInterfaces } from '../internal/sys'
 import { toReadable } from '../internal/to-readable'
+import { ulidId } from '../internal/ulid'
+import { uuidId } from '../internal/uuid'
 import { watchPath } from '../internal/watch'
 import type { HashAlgorithm } from '../types/common'
 
@@ -44,6 +46,9 @@ export const NodeIO = IO.implement({
   randomBytes: operation(function* (length) {
     return new Uint8Array(nodeRandomBytes(length))
   }),
+
+  ulid: ulidId,
+  uuid: uuidId,
 
   hmac: operation(function* (algorithm, key, data) {
     const mac = createHmac(toNodeHash(algorithm), key).update(data).digest()

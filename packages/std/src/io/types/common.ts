@@ -71,6 +71,16 @@ export interface WatchOptions {
   recursive?: boolean | undefined
 }
 
+/** Options for {@link IOActions.ulid}. */
+export interface UlidOptions {
+  /** Quantize the timestamp to this many ms (`floor(now/window)*window`); default `1` (per-ms). */
+  window?: number | undefined
+  /** Total id length EXCLUDING `bucket` (10 timestamp chars + `length - 10` random); default `26`. */
+  length?: number | undefined
+  /** Fixed prefix segment (namespace/shard tag); ids from different buckets never collide. */
+  bucket?: string | undefined
+}
+
 /** Options shared by {@link IOActions.exec} and {@link IOActions.spawn}. */
 export interface ProcessOptions {
   /** Working directory for the child. Defaults to the parent's cwd. */
