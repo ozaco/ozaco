@@ -15,6 +15,7 @@ export default defineConfig({
     'io/impl/node': './src/io/impl/node.ts',
     'io/impl/web': './src/io/impl/web.ts',
     fetch: './src/fetch/index.ts',
+    ws: './src/ws/index.ts',
     codec: './src/codec/index.ts',
     'codec/impl/json': './src/codec/impl/json.ts',
     'codec/impl/toml': './src/codec/impl/toml.ts',

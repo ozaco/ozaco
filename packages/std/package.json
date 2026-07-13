@@ -123,6 +123,17 @@
       },
       "source": "./src/fetch/index.ts"
     },
+    "./ws": {
+      "import": {
+        "types": "./dist/ws.d.ts",
+        "default": "./dist/ws.js"
+      },
+      "require": {
+        "types": "./dist/ws.d.cts",
+        "default": "./dist/ws.cjs"
+      },
+      "source": "./src/ws/index.ts"
+    },
     "./codec": {
       "import": {
         "types": "./dist/codec.d.ts",
