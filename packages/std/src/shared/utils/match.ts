@@ -3,23 +3,9 @@ import { fail, isFailure, isSuccess, succeed, unwrap } from 'std:result'
 
 import type { AnyType } from '../types/common'
 import type { MatchBuilder, MatchCase } from '../types/match'
-import type { StandardSchemaV1 } from '../types/schema'
 
-import { isFunction, isPromise } from './is'
-
-const validateSchema = (
-  schema: StandardSchemaV1,
-  value: unknown,
-): Result<unknown, readonly StandardSchemaV1.Issue[]> => {
-  const result = schema['~standard'].validate(value)
-  if (isPromise(result)) {
-    unwrap(fail('async schema validation is not supported, use a sync schema'))
-  }
-  if (result.issues) {
-    return fail(result.issues)
-  }
-  return succeed(result.value)
-}
+import { isFunction } from './is'
+import { validateSync } from './validate'
 
 const createBuilder = <Input, Remaining, Output>(
   value: Input,
@@ -28,7 +14,7 @@ const createBuilder = <Input, Remaining, Output>(
   const execute = (): Result<AnyType, null> => {
     for (const c of cases) {
       if (c.schema) {
-        const result = validateSchema(c.schema, value)
+        const result = validateSync(c.schema, value)
         if (isSuccess(result)) {
           return succeed(c.handler(result.value))
         }

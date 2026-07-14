@@ -1,10 +1,10 @@
 import { Palette, Terminal } from 'cli:core'
 import type { Operation } from 'std:effect'
-import { scoped, until, useContext } from 'std:effect'
+import { scoped, useContext } from 'std:effect'
 import { install } from 'std:plugin'
-import { fail } from 'std:result'
+import { fail, isFailure } from 'std:result'
 import type { AnyType, StandardSchemaV1 } from 'std:shared'
-import { isPromise } from 'std:shared'
+import { validateSync } from 'std:shared'
 
 import { CommandErrors, HELP_FLAGS, VERSION_FLAGS } from '../const'
 import type { CommandDef } from '../types/command'
@@ -17,13 +17,6 @@ import { tokenize } from './tokenize'
 
 const hasFlag = (argv: string[], flags: string[]): boolean =>
   argv.some(token => flags.includes(token))
-
-const validate = function* (input: StandardSchemaV1, value: unknown) {
-  const result = input['~standard'].validate(value)
-  return (
-    isPromise(result) ? yield* until(result) : result
-  ) as StandardSchemaV1.ValidationResult<unknown>
-}
 
 const formatIssues = (issues: readonly StandardSchemaV1.Issue[]): string =>
   issues
@@ -106,9 +99,9 @@ function* dispatch(node: RuntimeNode, rest: string[], path: string[]): Operation
   let ctx: unknown = built
 
   if (meta.input !== undefined && errors.length === 0) {
-    const result = yield* validate(meta.input, built)
-    if (result.issues) {
-      errors.push(formatIssues(result.issues))
+    const result = validateSync(meta.input, built)
+    if (isFailure(result)) {
+      errors.push(formatIssues(result.error))
     } else {
       ctx = result.value
     }

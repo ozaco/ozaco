@@ -1,5 +1,6 @@
 import type { Operation } from 'std:effect'
-import { operation, until } from 'std:effect'
+import { mapError, validate } from 'std:effect'
+import type { Result } from 'std:result'
 import { fail } from 'std:result'
 import type { AnyType, StandardSchemaV1 } from 'std:shared'
 
@@ -7,24 +8,16 @@ import { CoreErrors } from '../const'
 import type { Action } from '../types/action'
 import { ActionContext } from '../utils/context'
 
-const validate = operation(function* (schema: StandardSchemaV1, value: unknown) {
-  const result = schema['~standard'].validate(value)
-
-  if (result instanceof Promise) {
-    return yield* until(result)
-  }
-
-  return result
-})
-
-const formatIssues = (issues: ReadonlyArray<StandardSchemaV1.Issue>): string =>
-  issues.map(i => `At ${i.path?.join('.') || 'root'} : ${i.message}`).join(', ')
-
 const evaluateWith = function* <T>(result: unknown, op: Operation<T>) {
   return yield* ActionContext.with(result as Action, function* () {
     return yield* op
   })
 }
+
+const asValidation =
+  (scope: 'input' | 'output') =>
+  (failure: Result.Failure<unknown>): Result.Failure<unknown> =>
+    fail(CoreErrors.Validation, failure.message, scope) as Result.Failure<unknown>
 
 export const withValidation = (
   handler: AnyType,
@@ -37,28 +30,21 @@ export const withValidation = (
     let args = callArgs
 
     if (schemas.input) {
-      const validationResult = yield* evaluateWith(result, validate(schemas.input, callArgs[0]))
+      const parsed = yield* evaluateWith(
+        result,
+        mapError(validate(schemas.input, callArgs[0]), asValidation('input')),
+      )
 
-      if (validationResult.issues) {
-        yield* fail(CoreErrors.Validation, formatIssues(validationResult.issues), 'input')
-      }
-
-      args = [
-        (validationResult as StandardSchemaV1.SuccessResult<unknown>).value,
-        ...callArgs.slice(1),
-      ]
+      args = [parsed, ...callArgs.slice(1)]
     }
 
     const handlerResult = yield* evaluateWith(result, handler(...args))
 
     if (schemas.output) {
-      const validationResult = yield* evaluateWith(result, validate(schemas.output, handlerResult))
-
-      if (validationResult.issues) {
-        yield* fail(CoreErrors.Validation, formatIssues(validationResult.issues), 'output')
-      }
-
-      return (validationResult as StandardSchemaV1.SuccessResult<unknown>).value
+      return yield* evaluateWith(
+        result,
+        mapError(validate(schemas.output, handlerResult), asValidation('output')),
+      )
     }
 
     return handlerResult
