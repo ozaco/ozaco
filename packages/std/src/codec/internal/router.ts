@@ -1,9 +1,6 @@
-import type { Stream } from 'std:effect'
 import { filter, operation, some, toSorted, useContext } from 'std:effect'
 import { fail } from 'std:result'
-import type { AnyType } from 'std:shared'
 
-import { CodecErrors } from '../errors'
 import type { CodecDef } from '../types'
 
 import { CodecRegistryContext } from './context'
@@ -19,49 +16,6 @@ export const sortedCodecs = operation(function* (
 
     return aCtx.priority - bCtx.priority
   })
-})
-
-export const codecEncode = operation(function* (value: unknown) {
-  const entries = yield* codecGetTransportsHandler()
-
-  if (entries.length === 0) {
-    return yield* fail(CodecErrors.NoCodec, 'no codecs registered')
-  }
-
-  return yield* entries[0]!.actions.encode(value)
-})
-
-export const codecDecode = operation(function* (data: Uint8Array) {
-  const entries = yield* codecGetTransportsHandler()
-
-  if (entries.length === 0) {
-    return yield* fail(CodecErrors.NoCodec, 'no codecs registered')
-  }
-
-  return yield* entries[0]!.actions.decode(data) as AnyType
-})
-
-export const codecEncodeStream = operation(function* <T>(stream: Stream<T, unknown>) {
-  const entries = yield* codecGetTransportsHandler()
-
-  if (entries.length === 0) {
-    return yield* fail(CodecErrors.NoCodec, 'no codecs registered')
-  }
-
-  return yield* entries[0]!.actions.encodeStream<T>(stream)
-})
-
-export const codecDecodeStream = operation(function* <T>(
-  stream: Stream<Uint8Array, unknown>,
-  json = true,
-) {
-  const entries = yield* codecGetTransportsHandler()
-
-  if (entries.length === 0) {
-    return yield* fail(CodecErrors.NoCodec, 'no codecs registered')
-  }
-
-  return yield* entries[0]!.actions.decodeStream<T>(stream, json)
 })
 
 export const codecRegisterHandler: CodecDef.Handlers['register'] = operation(

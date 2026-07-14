@@ -2,10 +2,6 @@ import { operation } from 'std:effect'
 import { defineProtocol } from 'std:plugin'
 
 import {
-  codecDecode,
-  codecDecodeStream,
-  codecEncode,
-  codecEncodeStream,
   codecGetTransportsHandler,
   codecRegisterHandler,
   codecUnregisterHandler,
@@ -64,11 +60,6 @@ export const Codec = defineProtocol<
   },
 
   handlers: {
-    encodeRoot: codecEncode,
-    decodeRoot: codecDecode,
-    encodeStreamRoot: codecEncodeStream,
-    decodeStreamRoot: codecDecodeStream,
-
     register: codecRegisterHandler,
     unregister: codecUnregisterHandler,
     getTransports: codecGetTransportsHandler,

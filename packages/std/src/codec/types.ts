@@ -38,18 +38,12 @@ export namespace CodecDef {
     ): Future<Stream<T, true | Result.Failure<unknown>>>
   }
 
+  export interface JsonActions extends Omit<CodecDef.Actions, 'stringify'> {
+    /** Like `encode`, but returns the serialized text instead of `Uint8Array` bytes. */
+    stringify(value: unknown, space?: number): Future<string>
+  }
+
   export interface Handlers {
-    encodeRoot(value: unknown): Future<Uint8Array>
-    decodeRoot<T>(data: Uint8Array): Future<T>
-
-    encodeStreamRoot<T>(
-      stream: Stream<T, unknown>,
-    ): Future<Stream<Uint8Array, true | Result.Failure<unknown>>>
-    decodeStreamRoot<T>(
-      stream: Stream<Uint8Array, unknown>,
-      json?: boolean,
-    ): Future<Stream<T, true | Result.Failure<unknown>>>
-
     register(transport: CodecDef, entryCtx: CodecDef.Context): Future<void>
     unregister(transport: CodecDef): Future<void>
     getTransports(): Future<CodecDef[]>

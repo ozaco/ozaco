@@ -31,7 +31,7 @@ export const JsonCodec = Codec.implement({
 
     return context
   },
-}).build<CodecDef.Actions>({
+}).build<CodecDef.JsonActions>({
   encode: operation(function* (value: unknown) {
     try {
       return encoder.encode(JSON.stringify(value))
@@ -48,9 +48,9 @@ export const JsonCodec = Codec.implement({
     }
   }),
 
-  stringify: operation(function* (value: unknown) {
+  stringify: operation(function* (value, space = 0) {
     try {
-      return JSON.stringify(value)
+      return JSON.stringify(value, null, space)
     } catch (error) {
       return yield* fail(
         CodecErrors.Stringify,
