@@ -1,9 +1,9 @@
 {
   "compilerOptions": {
     "lib": ["esnext"],
-    "types": ["node", "bun", "@ozaco/devkit"]
+    "types": ["node", "bun"]
   },
-  "extends": ["../../tsconfig.base.json"],
+  "extends": ["../../tsconfig.base.json", "./tsconfig.paths.json"],
   "include": ["src", "tests"],
   "exclude": ["**/dist/**", "tests/fixtures"],
   "references": []

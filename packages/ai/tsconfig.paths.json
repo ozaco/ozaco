@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "paths": {
+      "ai:core": ["./src/index.ts", "./dist/index.d.ts"],
+      "ai:impl/openai": ["./src/impl/openai.ts", "./dist/openai.d.ts"],
+
+      "std:shared": ["./node_modules/@ozaco/std/dist/shared.d.ts"],
+      "std:result": ["./node_modules/@ozaco/std/dist/result.d.ts"],
+      "std:effect": ["./node_modules/@ozaco/std/dist/effect.d.ts"],
+      "std:plugin": ["./node_modules/@ozaco/std/dist/plugin.d.ts"],
+      "std:fetch": ["./node_modules/@ozaco/std/dist/fetch.d.ts"],
+      "std:codec": ["./node_modules/@ozaco/std/dist/codec.d.ts"],
+      "std:codec/impl/json": ["./node_modules/@ozaco/std/dist/codec/impl/json.d.ts"]
+    }
+  }
+}
