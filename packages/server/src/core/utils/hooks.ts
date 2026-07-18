@@ -1,9 +1,10 @@
 import type { Operation, Stream } from 'std:effect'
 import { useContext } from 'std:effect'
+import { fail } from 'std:result'
 
 import type { Action } from '../types/action'
 import type { BrokerDef } from '../types/broker'
-import type { ActionRequest, ActionResponse } from '../types/gateway'
+import type { ActionRequest, ActionResponse, MultipartPart } from '../types/gateway'
 import type { Service } from '../types/service'
 import type { TracerDef } from '../types/tracer'
 
@@ -15,6 +16,7 @@ import {
   ActionResponseContext,
   ActionSignalContext,
   CallContext,
+  MultipartContext,
   ServiceContext,
   StreamContext,
   TraceContext,
@@ -58,4 +60,20 @@ export function* useRawResponse<T = unknown>(): Operation<T> {
 
 export function* useActionSignal(): Operation<AbortSignal> {
   return yield* useContext(ActionSignalContext)
+}
+
+/**
+ * The stream of `multipart/form-data` parts for a route that opted into streaming via
+ * `rest({ multipart: 'stream' })`. Iterate it in order (`each`) and fully consume each file part's
+ * `stream` before advancing. Fails if the current request is not a streaming multipart route.
+ */
+export function* useMultipart(): Operation<Stream<MultipartPart, unknown>> {
+  const stream = yield* MultipartContext.get()
+  if (!stream) {
+    return yield* fail(
+      'gateway/multipart',
+      'useMultipart() requires a multipart/form-data body on a route configured with rest({ multipart: "stream" })',
+    )
+  }
+  return stream
 }

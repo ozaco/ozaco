@@ -142,4 +142,7 @@ export type IOActions = {
 
   /** List the machine's network interface addresses (via `node:os`). */
   ip: () => Future<NetworkInterface[]>
+
+  /** The OS temp directory (via `node:os.tmpdir()`). */
+  tmpdir: () => Future<string>
 }

@@ -21,7 +21,7 @@ import { mapStat, walkRecursive } from '../internal/node-shared'
 import { nodePath } from '../internal/path-node'
 import { bunExec, bunSpawn } from '../internal/process-bun'
 import { readFileStream, writeFileStream } from '../internal/stream'
-import { readInterfaces } from '../internal/sys'
+import { readInterfaces, readTmpDir } from '../internal/sys'
 import { toReadable } from '../internal/to-readable'
 import { ulidId } from '../internal/ulid'
 import { uuidId } from '../internal/uuid'
@@ -203,4 +203,5 @@ export const BunIO = IO.implement({
   tcpConnect,
   udpBind,
   ip: readInterfaces,
+  tmpdir: readTmpDir,
 })

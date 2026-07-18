@@ -1,14 +1,24 @@
 import type { ActionFile, ActionRequest, ActionResponse, GatewayDef } from 'server:core'
-import { CoreErrors, Gateway, statusFor } from 'server:core'
+import { CoreErrors, Gateway, MultipartContext, statusFor } from 'server:core'
 import { Codec } from 'std:codec'
-import { operation, until, useContext } from 'std:effect'
+import { attempt, each, ensure, operation, until, useContext } from 'std:effect'
+import { IO } from 'std:io'
 import { fail, isFailure, isSuccess } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import { JsonCodec } from 'std:codec/impl/json'
 
+import { parseMultipart } from '../external/multipart'
+
 import { BODY_METHODS, FORM_DATA, FORM_URLENCODED, JSON_CONTENT } from './const'
-import { appendField, appendFile, blobToFile, matchFileKey, stringToFile } from './form-data'
+import {
+  appendField,
+  appendFile,
+  matchFileKey,
+  spillDir,
+  spillFile,
+  stringToFile,
+} from './form-data'
 
 // the `rest` action is the per-route REST settings constructor (was Rest.actions.settings)
 export const restSettingsAction = operation(function* (options: AnyType) {
@@ -53,17 +63,49 @@ export const toInternalAction = operation(function* (req: AnyType, _res: unknown
         return yield* fail(CoreErrors.PayloadTooLarge, `body exceeds ${maxBytes} bytes`)
       }
       parsedBody = buffer.byteLength === 0 ? null : yield* JsonCodec.actions.decode(buffer)
-    } else if (contentType.includes(FORM_DATA) || contentType.includes(FORM_URLENCODED)) {
-      const form: FormData = yield* until(req.formData())
+    } else if (contentType.includes(FORM_DATA)) {
+      const limits = maxBytes === undefined ? undefined : { fileSize: maxBytes }
+      const mode = (meta.setting?.multipart as 'buffer' | 'stream' | undefined) ?? 'buffer'
+
+      if (mode === 'stream') {
+        // B (streaming): leave the body untouched — the action pulls parts itself via useMultipart()
+        // and streams each file straight to its destination (S3, hashing, …) with zero spill.
+        yield* MultipartContext.set(parseMultipart(req, limits))
+        parsedBody = null
+      } else {
+        // A (buffered): spill every uploaded file to a temp dir so the whole files map is ready before
+        // the action runs, while memory stays bounded (one chunk at a time streams to disk). The temp
+        // dir is removed at request-scope teardown.
+        const fields: Record<string, unknown> = {}
+        const dir = yield* spillDir()
+
+        for (const part of yield* each(parseMultipart(req, limits))) {
+          if (part.kind === 'field') {
+            if (matchFileKey(fileMatcher, part.name)) {
+              appendFile(files, part.name, stringToFile(part.name, part.value))
+            } else {
+              appendField(fields, part.name, part.value)
+            }
+          } else {
+            const { file } = yield* spillFile(dir, part)
+            appendFile(files, part.name, file)
+          }
+          yield* each.next()
+        }
+
+        yield* ensure(function* () {
+          yield* attempt(IO.actions.rm(dir, { recursive: true, force: true }))
+        })
+
+        parsedBody = fields
+      }
+    } else if (contentType.includes(FORM_URLENCODED)) {
+      // urlencoded carries no files and is small — parse it directly, no streaming parser needed
+      const text = (yield* until(req.text())) as string
       const fields: Record<string, unknown> = {}
 
-      for (const [key, value] of form.entries()) {
-        const isBlob = typeof value !== 'string'
-        const isMatched = matchFileKey(fileMatcher, key)
-
-        if (isBlob) {
-          appendFile(files, key, blobToFile(value as Blob, key))
-        } else if (isMatched) {
+      for (const [key, value] of new URLSearchParams(text)) {
+        if (matchFileKey(fileMatcher, key)) {
           appendFile(files, key, stringToFile(key, value))
         } else {
           appendField(fields, key, value)

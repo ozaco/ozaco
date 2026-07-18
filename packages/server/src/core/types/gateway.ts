@@ -15,6 +15,22 @@ export interface ActionFile {
   stream: Stream<Uint8Array, AnyType>
 }
 
+/**
+ * A single part of a `multipart/form-data` body, delivered by `useMultipart()` when a REST route opts
+ * into streaming (`rest({ multipart: 'stream' })`). Parts arrive in wire order; a `file` part's
+ * `stream` MUST be fully consumed (or the iterator advanced) before the next part becomes available —
+ * the underlying parser pauses the upload until the current file is drained (that is the backpressure).
+ */
+export type MultipartPart =
+  | { readonly kind: 'field'; readonly name: string; readonly value: string }
+  | {
+      readonly kind: 'file'
+      readonly name: string
+      readonly filename?: string | undefined
+      readonly mediaType?: string | undefined
+      readonly stream: Stream<Uint8Array, AnyType>
+    }
+
 /** The transport-agnostic response envelope an action can read/mutate via useResponse(). */
 export interface ActionResponse {
   status: number | null
@@ -60,6 +76,16 @@ export namespace GatewayDef {
     path: string
     files?: string[] | RegExp | ((key: string) => boolean)
     statusMap?: Record<string, number>
+    /**
+     * How to handle a `multipart/form-data` body:
+     * - `'buffer'` (default): each file is spilled to a temp file and exposed on `req.files` as a
+     *   readable `stream`; the whole files map is ready before the action runs (bounded memory, no
+     *   whole-file-in-RAM).
+     * - `'stream'`: the body is NOT parsed up front — the action pulls parts itself via
+     *   `useMultipart()` and streams each file straight to its destination (S3, hashing, transform, …)
+     *   with zero spill.
+     */
+    multipart?: 'buffer' | 'stream'
   }
 
   /** Per-route WebSocket settings authored on an action via `Gateway.actions.ws({...})`. */

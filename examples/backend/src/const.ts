@@ -20,6 +20,7 @@ export const STATUS_MAP: Record<string, number> = {
   'ai.request': 502,
   'ai.bad-response': 502,
   'ai.unsupported': 400,
+  'upload.no-file': 400,
 }
 
 export const ENV = IO.actions.env(data => ({

@@ -88,4 +88,5 @@ export const WebIO = IO.implement({
   tcpConnect: unsupported('tcpConnect'),
   udpBind: unsupported('udpBind'),
   ip: unsupported('ip'),
+  tmpdir: unsupported('tmpdir'),
 })

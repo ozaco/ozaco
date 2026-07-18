@@ -8,19 +8,16 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import { createServer } from 'node:http'
 import { Readable } from 'node:stream'
 
-import type { WebSocketServer } from 'ws'
-
+import { createWsServer, upgradeWs } from '../external/ws'
 import { dispatchRequest } from '../shared/handle'
 import { closeSockets } from '../shared/realtime'
 import { haltInflight, pauseGate, trackRequest } from '../shared/serve'
 
-// adapt a Node request into a web-standard Request the shared transformer understands
-const toRequest = async (req: IncomingMessage): Promise<Request> => {
-  const chunks: Buffer[] = []
-  for await (const chunk of req) {
-    chunks.push(chunk as Buffer)
-  }
-
+// adapt a Node request into a web-standard Request the shared transformer understands. The body is
+// exposed as a STREAMING `ReadableStream` (via `Readable.toWeb`) instead of being buffered up front —
+// so a large upload flows through the multipart parser (and on to disk/S3) without ever sitting whole
+// in memory. `duplex: 'half'` is required by undici whenever the body is a stream.
+const toRequest = (req: IncomingMessage): Request => {
   const method = req.method ?? 'GET'
   const headers = new Headers()
   for (const [key, value] of Object.entries(req.headers)) {
@@ -31,12 +28,13 @@ const toRequest = async (req: IncomingMessage): Promise<Request> => {
     }
   }
 
-  const hasBody = method !== 'GET' && method !== 'HEAD' && chunks.length > 0
-  return new Request(`http://${req.headers.host ?? 'localhost'}${req.url ?? '/'}`, {
-    method,
-    headers,
-    ...(hasBody ? { body: Buffer.concat(chunks) } : {}),
-  })
+  const init: RequestInit & { duplex?: 'half' } = { method, headers }
+  if (method !== 'GET' && method !== 'HEAD') {
+    init.body = Readable.toWeb(req) as unknown as ReadableStream<Uint8Array>
+    init.duplex = 'half'
+  }
+
+  return new Request(`http://${req.headers.host ?? 'localhost'}${req.url ?? '/'}`, init)
 }
 
 // stream the response body to the node socket — works for both a buffered Response (JSON/text) and a
@@ -84,7 +82,7 @@ export const startAction = operation(function* (
       return
     }
 
-    const request = await toRequest(req)
+    const request = toRequest(req)
 
     // `dispatchRequest` delivers the Response via `deliver` — for a streaming action as soon as the
     // headers are known (while the body drains in the background), for a normal action once the value
@@ -112,20 +110,13 @@ export const startAction = operation(function* (
     void handle(req, res)
   })
 
-  // WebSocket upgrades: node:http has no built-in ws server, so bridge the raw `upgrade` socket to the
-  // `ws` package (an OPTIONAL peer dep — lazily imported so the gateway starts without it), then funnel
-  // its events through the SAME platform-agnostic Gateway.actions.onOpen/onMessage/onClose the Bun
-  // gateway uses (registry + rooms + per-message RPC all shared).
-  let wss: WebSocketServer | undefined
-  const ensureWss = async (): Promise<WebSocketServer | undefined> => {
-    if (wss) {
-      return wss
-    }
-    try {
-      const mod = await import('ws')
-      wss = new mod.WebSocketServer({ noServer: true })
-    } catch {
-      wss = undefined
+  // WebSocket upgrades: node:http has no built-in ws server. Route resolution + id minting + the
+  // Gateway.actions.onOpen/onMessage/onClose funnel stay here (orchestration); the impure `ws`-library
+  // interop (lazy load, handshake, raw event binding) is isolated in `../external/ws`.
+  let wss: Awaited<ReturnType<typeof createWsServer>>
+  const ensureWss = async () => {
+    if (!wss) {
+      wss = await createWsServer()
     }
     return wss
   }
@@ -154,28 +145,21 @@ export const startAction = operation(function* (
         headers[key] = Array.isArray(value) ? value.join(', ') : (value ?? '')
       }
       // mint the socket id through IO (IO-first) BEFORE the handshake, so ws.data is set synchronously
-      // in the handleUpgrade callback (no race with the first inbound message).
+      // in the handshake callback (no race with the first inbound message).
       const minted = await scope.safeRun(() => IO.actions.uuid())
       const id = isSuccess(minted) ? minted.value : ''
-      hub.handleUpgrade(req, socket, head, nodeWs => {
-        ;(nodeWs as AnyType).data = {
-          id,
-          url: url.href,
-          headers,
-          params,
-          entry,
-          controller: new AbortController(),
-        }
-        void scope.safeRun(() => Gateway.actions.onOpen(nodeWs))
-        nodeWs.on('message', (data: AnyType, isBinary: boolean) => {
-          void scope.safeRun(() =>
-            Gateway.actions.onMessage(nodeWs, isBinary ? (data as unknown) : String(data)),
-          )
-        })
-        nodeWs.on('close', (code: number, reason: AnyType) => {
-          void scope.safeRun(() => Gateway.actions.onClose(nodeWs, code, String(reason ?? '')))
-        })
-      })
+      upgradeWs(
+        hub,
+        { req, socket, head },
+        {
+          data: { id, url: url.href, headers, params, entry, controller: new AbortController() },
+          onOpen: nodeWs => void scope.safeRun(() => Gateway.actions.onOpen(nodeWs)),
+          onMessage: (nodeWs, message) =>
+            void scope.safeRun(() => Gateway.actions.onMessage(nodeWs, message)),
+          onClose: (nodeWs, code, reason) =>
+            void scope.safeRun(() => Gateway.actions.onClose(nodeWs, code, reason)),
+        },
+      )
     })()
   })
 

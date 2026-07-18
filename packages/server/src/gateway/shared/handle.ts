@@ -1,7 +1,8 @@
 import type { ActionRequest, ActionResponse, GatewayDef, ResponseSink } from 'server:core'
 import { CoreErrors, Gateway, isService, ResponseSinkContext } from 'server:core'
-import { operation, useContext } from 'std:effect'
+import { attempt, operation, useContext } from 'std:effect'
 import { IO } from 'std:io'
+import type { Result } from 'std:result'
 import { asFailure, auto, fail, succeed } from 'std:result'
 
 import { dispatchAction } from './dispatch'
@@ -103,7 +104,13 @@ export const dispatchRequest = operation(function* (
     return response
   } catch (error) {
     const failure = asFailure(error)
-    const simplifiedFailure = ctx.simplify ? yield* ctx.simplify(failure) : failure
+    // `simplify` is an operation whose RETURN value is a Result.Failure; operation() re-short-circuits
+    // a returned failure, so `yield*` here would re-throw and skip the fromInternal below — the failure
+    // would escape to the platform handler's catch, dropping the status map (every error became 500).
+    // Reify it with `attempt` so we keep the simplified failure as a value and still map its status.
+    const simplifiedFailure = (
+      ctx.simplify ? yield* attempt(ctx.simplify(failure)) : failure
+    ) as Result.Failure<unknown>
 
     const response = (yield* Gateway.actions.fromInternal(
       actionReq,

@@ -24,7 +24,7 @@ import { mapStat, walkRecursive } from '../internal/node-shared'
 import { nodePath } from '../internal/path-node'
 import { nodeExec, nodeSpawn } from '../internal/process-node'
 import { readFileStream, writeFileStream } from '../internal/stream'
-import { readInterfaces } from '../internal/sys'
+import { readInterfaces, readTmpDir } from '../internal/sys'
 import { toReadable } from '../internal/to-readable'
 import { ulidId } from '../internal/ulid'
 import { uuidId } from '../internal/uuid'
@@ -210,4 +210,5 @@ export const NodeIO = IO.implement({
   tcpConnect,
   udpBind,
   ip: readInterfaces,
+  tmpdir: readTmpDir,
 })

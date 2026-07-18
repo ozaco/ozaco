@@ -16,6 +16,7 @@ import { AiService } from './services/ai'
 import { AuthService } from './services/auth'
 import { mountChat } from './services/chat'
 import { TodoService } from './services/todo'
+import { UploadService } from './services/upload'
 import { cleanupErrors } from './utils/cleanup'
 import { memoryAuthProvider } from './utils/store'
 
@@ -45,6 +46,7 @@ await main(function* () {
 
   yield* install(AuthService)
   yield* install(TodoService)
+  yield* install(UploadService)
 
   // AI is opt-in: only wire the OpenAI-compatible client + /ai service when a provider key is
   // present, so the rest of the app still boots when it is not configured.
@@ -62,6 +64,7 @@ await main(function* () {
 
   yield* Broker.actions.register(AuthService)
   yield* Broker.actions.register(TodoService)
+  yield* Broker.actions.register(UploadService)
   if (aiEnabled) {
     yield* Broker.actions.register(AiService)
   }
@@ -83,12 +86,15 @@ await main(function* () {
   // Mount each service under `/<service.name>` so the routes match the generated client + docs.
   yield* Gateway.actions.mount('/auth', AuthService)
   yield* Gateway.actions.mount('/todos', TodoService)
+  yield* Gateway.actions.mount('/upload', UploadService)
   if (aiEnabled) {
     yield* Gateway.actions.mount('/ai', AiService)
   }
 
   yield* Docs.actions.from(
-    ...(aiEnabled ? [AuthService, TodoService, AiService] : [AuthService, TodoService]),
+    ...(aiEnabled
+      ? [AuthService, TodoService, UploadService, AiService]
+      : [AuthService, TodoService, UploadService]),
   )
 
   // A real-time WebSocket chat, registered directly on the gateway (no defineAction) — rooms + server
@@ -99,6 +105,9 @@ await main(function* () {
 
   // the Docs plugin logs the swagger/openapi URLs itself once the gateway is listening
   yield* Logger.actions.info(`Todo api ready  → http://${host}:${port}`)
+  yield* Logger.actions.info(
+    `Uploads         → POST /upload (buffered)  ·  POST /upload/stream (streaming)`,
+  )
   yield* Logger.actions.info(`WS chat         → ws://${host}:${port}/chat`)
   yield* Logger.actions.info(
     "                  send {event:'join',room} · {event:'say',room,text} · {event:'leave',room}",
