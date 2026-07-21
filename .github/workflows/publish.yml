@@ -21,7 +21,7 @@ jobs:
         with:
           auto-install: true
 
-      - uses: 'actions/setup-node@v6'
+      - uses: 'actions/setup-node@v7'
         with:
           node-version: '25'
           registry-url: 'https://registry.npmjs.org'
