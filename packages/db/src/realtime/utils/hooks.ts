@@ -2,9 +2,9 @@ import { useContext } from 'std:effect'
 import type { Operation } from 'std:effect'
 import type { AnyType } from 'std:shared'
 
-import { DB } from './definition'
-import type { SchemaFrom, TableDef } from './schema/types'
-import type { Database } from './types'
+import { DB } from '../definition'
+import type { SchemaFrom, TableDef } from '../schema/types'
+import type { Database } from '../types/database'
 
 type Simplify<T> = { [K in keyof T]: T[K] } & {}
 

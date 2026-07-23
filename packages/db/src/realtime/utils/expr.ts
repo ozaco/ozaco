@@ -30,6 +30,31 @@ export const lte = (column: string, value: PrimitiveValueExpression): Filter =>
 export const like = (column: string, value: PrimitiveValueExpression): Filter =>
   sql.fragment`${ident(column)} LIKE ${value}`
 
+/** Case-insensitive `LIKE` — portable across SQLite + Postgres by lowercasing both sides. */
+export const ilike = (column: string, value: PrimitiveValueExpression): Filter =>
+  sql.fragment`lower(${ident(column)}) LIKE lower(${value})`
+
+/** `column IN (...values)` (empty list → `FALSE`, so it matches no rows). */
+export const inList = (column: string, values: readonly PrimitiveValueExpression[]): Filter =>
+  values.length === 0
+    ? sql.fragment`FALSE`
+    : sql.fragment`${ident(column)} IN (${sql.join(
+        values.map(value => sql.fragment`${value}`),
+        sql.fragment`, `,
+      )})`
+
+/** `column NOT IN (...values)` (empty list → `TRUE`, so it excludes nothing). */
+export const notInList = (column: string, values: readonly PrimitiveValueExpression[]): Filter =>
+  values.length === 0
+    ? sql.fragment`TRUE`
+    : sql.fragment`${ident(column)} NOT IN (${sql.join(
+        values.map(value => sql.fragment`${value}`),
+        sql.fragment`, `,
+      )})`
+
+/** Negate a predicate. */
+export const not = (predicate: Filter): Filter => sql.fragment`NOT (${predicate})`
+
 /** AND-combine predicates (empty → `TRUE`). */
 export const and = (...parts: readonly Filter[]): Filter =>
   parts.length === 0 ? sql.fragment`TRUE` : sql.fragment`(${sql.join(parts, sql.fragment` AND `)})`

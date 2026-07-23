@@ -5,20 +5,18 @@ import { fail } from 'std:result'
 import type { AccessContext, AccessGuard } from '../types'
 
 /** Compose two access guards, evaluating the second only when the first allows the action. */
-export const composeAccess =
-  (outer: AccessGuard, inner: AccessGuard | undefined): AccessGuard =>
-  context =>
-    operation(function* () {
-      const outerResult = outer(context)
-      if (!(isOperation(outerResult) ? yield* outerResult : outerResult)) {
-        return false
-      }
-      if (!inner) {
-        return true
-      }
-      const innerResult = inner(context)
-      return isOperation(innerResult) ? yield* innerResult : innerResult
-    })()
+export const composeAccess = (outer: AccessGuard, inner: AccessGuard | undefined): AccessGuard =>
+  function* (context) {
+    const outerResult = outer(context)
+    if (!(isOperation(outerResult) ? yield* outerResult : outerResult)) {
+      return false
+    }
+    if (!inner) {
+      return true
+    }
+    const innerResult = inner(context)
+    return isOperation(innerResult) ? yield* innerResult : innerResult
+  }
 
 /** Evaluate a guard and fail with the server's canonical forbidden error when access is denied. */
 export const assertAccess = operation(function* (

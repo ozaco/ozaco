@@ -18,6 +18,7 @@ export default defineConfig({
     'basic/realtime': './src/basic/realtime/main.ts',
     'basic/interceptors': './src/basic/interceptors/main.ts',
     'basic/dataloaders': './src/basic/dataloaders/main.ts',
+    'advanced/migration': './src/advanced/migration/main.ts',
     'advanced/cluster/writer': './src/advanced/cluster/writer.ts',
     'advanced/cluster/watcher': './src/advanced/cluster/watcher.ts',
   },

@@ -5,10 +5,11 @@ import { attempt } from 'std:effect'
 import { fail, isFailure, isSuccess } from 'std:result'
 import type { AnyType } from 'std:shared'
 
+import { JsonCodec } from 'std:codec/impl/json'
 import { z } from 'zod'
 
 import type { CrudModule, CrudOptions, FnModule } from '../types'
-import { collectionEvent, doc, page } from '../utils/schema'
+import { collectionEvent, doc, filter as filterSchema, page } from '../utils/schema'
 
 const BASE_LIST_ARGS = {
   limit: z.coerce.number().int().min(1).max(200).optional(),
@@ -127,36 +128,38 @@ export const buildCrudModule = <T extends TableDef>(
 
   // Apply one batch item. Fails (never returns falsy) when a target row is missing, so the caller can
   // report that item as an error while the rest of the batch proceeds.
-  const applyBatchOp = (db: AnyType, op: AnyType) =>
-    (function* () {
-      if (op.op === 'create') {
-        return yield* db.insert(table, op.data)
-      }
-      yield* assertVersion(db, op.id, op.ifMatch)
-      if (op.op === 'update') {
-        const row = yield* db.patch(table, op.id, op.patch)
-        if (!row) {
-          return yield* fail(CoreErrors.NotFound, `"${table}" record "${op.id}" not found`)
-        }
-        return row
-      }
-      if (op.op === 'replace') {
-        const row = yield* db.replace(table, op.id, op.data)
-        if (!row) {
-          return yield* fail(CoreErrors.NotFound, `"${table}" record "${op.id}" not found`)
-        }
-        return row
-      }
-      const removed = yield* db.delete(table, op.id)
-      if (!removed) {
+  const applyBatchOp = function* (db: AnyType, op: AnyType) {
+    if (op.op === 'create') {
+      return yield* db.insert(table, op.data)
+    }
+    yield* assertVersion(db, op.id, op.ifMatch)
+    if (op.op === 'update') {
+      const row = yield* db.patch(table, op.id, op.patch)
+      if (!row) {
         return yield* fail(CoreErrors.NotFound, `"${table}" record "${op.id}" not found`)
       }
-      return undefined
-    })()
+      return row
+    }
+    if (op.op === 'replace') {
+      const row = yield* db.replace(table, op.id, op.data)
+      if (!row) {
+        return yield* fail(CoreErrors.NotFound, `"${table}" record "${op.id}" not found`)
+      }
+      return row
+    }
+    const removed = yield* db.delete(table, op.id)
+    if (!removed) {
+      return yield* fail(CoreErrors.NotFound, `"${table}" record "${op.id}" not found`)
+    }
+    return undefined
+  }
 
   const idArgsShape = Object.fromEntries(idParams.map(param => [param, z.string()])) as AnyType
   const listArgs = z.object({
     ...BASE_LIST_ARGS,
+    // full MongoDB-style filter over ANY field: a JSON string on `?filter=…` (decoded through the
+    // Codec in the handler) or the object form on a programmatic call.
+    filter: z.union([z.string(), filterSchema(target)]).optional(),
     ...(Object.fromEntries(filters.map(facet => [facet, z.string().optional()])) as AnyType),
   })
 
@@ -182,6 +185,23 @@ export const buildCrudModule = <T extends TableDef>(
         }
         if (body.q && search.length > 0) {
           q = q.filter(or(...search.map(column => like(column, `%${String(body.q)}%`))))
+        }
+        if (body.filter !== undefined) {
+          // the wire form is a JSON string → decode through the Codec (never raw JSON.parse), then
+          // validate against the table's filter schema before compiling it to SQL.
+          let value: unknown = body.filter
+          if (typeof body.filter === 'string') {
+            const decoded = yield* attempt(JsonCodec.actions.parse(body.filter))
+            if (isFailure(decoded)) {
+              return yield* fail(CoreErrors.Validation, `invalid "filter" JSON`)
+            }
+            value = decoded.value
+          }
+          const parsed = filterSchema(target).safeParse(value)
+          if (!parsed.success) {
+            return yield* fail(CoreErrors.Validation, `invalid "filter"`)
+          }
+          q = q.match(parsed.data as AnyType)
         }
         if (body.sort) {
           const desc = body.sort.startsWith('-')

@@ -56,11 +56,10 @@ export const SurrealDriver = DbDriver.implement({
       yield* until(db.signin(options.auth))
     }
 
-    const runRaw = (query: Query) =>
-      (function* () {
-        const { text, bindings } = toSurreal(query)
-        return firstResultSet(yield* until(db.query(text, bindings)))
-      })()
+    const runRaw = function* (query: Query) {
+      const { text, bindings } = toSurreal(query)
+      return firstResultSet(yield* until(db.query(text, bindings)))
+    }
 
     const connectionId = yield* IO.actions.uuid()
     const connection: DriverConnection = {

@@ -5,7 +5,8 @@ import { attempt, operation } from 'std:effect'
 import { isFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
 
-import type { Column, ColumnKind, Index, SchemaDef, TableDef } from './schema/types'
+import type { Column, ColumnKind, Index, SchemaDef, TableDef } from '../schema/types'
+import type { ApplyOptions, MigrationPlan, MigrationStatement } from '../types/migrate'
 
 const PG_TYPES: Record<ColumnKind, string> = {
   text: 'TEXT',
@@ -41,23 +42,6 @@ const createTableSql = (def: TableDef): string =>
 // are schema-global).
 const createIndexSql = (def: TableDef, index: Index): string =>
   `CREATE ${index.unique ? 'UNIQUE ' : ''}INDEX IF NOT EXISTS ${quote(`${def.name}__${index.name}`)} ON ${quote(def.name)} (${index.columns.map(quote).join(', ')})`
-
-export type MigrationMode = 'auto' | 'manual'
-
-export interface MigrationStatement {
-  readonly kind: 'create-table' | 'add-column' | 'drop-column' | 'create-index'
-  readonly table: string
-  readonly sql: string
-  readonly destructive: boolean
-}
-
-export interface MigrationPlan {
-  readonly statements: readonly MigrationStatement[]
-}
-
-export interface ApplyOptions {
-  readonly allowDestructive?: boolean | undefined
-}
 
 const existingColumns = operation(function* (pool: DatabasePool, table: string) {
   // Postgres path. On backends without information_schema (e.g. SQLite) this fails; treat the table

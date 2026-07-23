@@ -97,13 +97,12 @@ export const connect = operation(function* (url: string | URL, options?: WsDef.O
       socket.send(yield* encodeFrame(data))
     }),
     messages,
-    close: (code, reason) =>
-      operation(function* () {
-        if (socket.readyState === OPEN) {
-          socket.close(code, reason)
-        }
-        yield* closedResolvers.operation
-      })(),
+    close: operation(function* (code, reason) {
+      if (socket.readyState === OPEN) {
+        socket.close(code, reason)
+      }
+      yield* closedResolvers.operation
+    }),
     closed,
   }
 

@@ -2,102 +2,22 @@
 import type { DatabasePool, FragmentSqlToken, PrimitiveValueExpression } from 'db:core'
 import { sql } from 'db:core'
 import type { Future, Signal } from 'std:effect'
-import { attempt, createSignal, operation } from 'std:effect'
+import { createSignal, operation } from 'std:effect'
 import { IO } from 'std:io'
-import { fail, isSuccess } from 'std:result'
+import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 
-import { JsonCodec } from 'std:codec/impl/json'
-
-import type { Filter } from './expr'
-import { and, eq, gt, lt } from './expr'
-import type { Column, ColumnKind, SchemaDef, TableDef } from './schema/types'
-import type {
-  ChangeBus,
-  ChangeEvent,
-  Database,
-  Page,
-  PaginateOptions,
-  QueryHandle,
-  Row,
-} from './types'
-
-const ID = '_id'
-const CREATED = '_createdAt'
-const VERSION = '_version'
-const DEFAULT_ORDER = CREATED
-
-/** A mutable slot for the cross-node {@link ChangeBus}, so it can be attached after the database is
- * built (the server wires a Broker-backed bus in once resources mount). */
-export interface BusHolder {
-  current?: ChangeBus
-}
-
-const ident = (name: string): FragmentSqlToken => sql.fragment`${sql.identifier([name])}`
-const commaList = (parts: readonly FragmentSqlToken[]): FragmentSqlToken =>
-  sql.fragment`${sql.join(parts, sql.fragment`, `)}`
-
-interface Cursor {
-  readonly value: unknown
-  readonly id: string
-  readonly column: string
-  readonly direction: 'asc' | 'desc'
-}
-
-// cursors serialize through the installed codec (no hand-rolled JSON), base64url-wrapped to stay opaque
-const encodeCursor = operation(function* (cursor: Cursor) {
-  const text = yield* JsonCodec.actions.stringify(cursor)
-  return Buffer.from(text).toString('base64url')
-})
-const decodeCursor = operation(function* (raw: string) {
-  const text = Buffer.from(raw, 'base64url').toString('utf8')
-  const parsed = yield* attempt(JsonCodec.actions.parse<Cursor>(text))
-  return isSuccess(parsed) ? parsed.value : null
-})
-
-const tryParseJson = (value: string): unknown => {
-  try {
-    return JSON.parse(value)
-  } catch {
-    return value
-  }
-}
-
-/** Decode one stored value back to its native shape by column kind — booleans arrive as 0/1 on
- * SQLite, json as text. */
-const decode = (kind: ColumnKind, value: unknown): unknown => {
-  if (value === null || value === undefined) {
-    return value
-  }
-  if (kind === 'boolean') {
-    return typeof value === 'number' ? value !== 0 : Boolean(value)
-  }
-  if (kind === 'json') {
-    return typeof value === 'string' ? tryParseJson(value) : value
-  }
-  return value
-}
-
-/** Bring system fields back to numbers (Postgres BIGINT arrives as a string) and decode user columns
- * by their declared kind. */
-const coerceRow = (row: Row | null, columns: readonly Column[]): Row | null => {
-  if (!row) {
-    return row
-  }
-  const out: Row = { ...row }
-  if (out[CREATED] !== undefined) {
-    out[CREATED] = Number(out[CREATED])
-  }
-  if (out[VERSION] !== undefined) {
-    out[VERSION] = Number(out[VERSION])
-  }
-  for (const column of columns) {
-    if (column.name in out) {
-      out[column.name] = decode(column.kind, out[column.name])
-    }
-  }
-  return out
-}
+import { CREATED, DEFAULT_ORDER, ID, VERSION } from '../const'
+import { coerceRow, coerceRows, commaList, ident } from '../internal/coerce'
+import { decodeCursor, encodeCursor } from '../internal/cursor'
+import type { SchemaDef, TableDef } from '../schema/types'
+import type { BusHolder, ChangeBus, ChangeEvent } from '../types/change'
+import type { Database, QueryHandle, Row } from '../types/database'
+import type { Page, PaginateOptions } from '../types/page'
+import type { Filter } from '../utils/expr'
+import { and, eq, gt, lt } from '../utils/expr'
+import type { MongoFilter } from '../utils/filter'
+import { compileFilter } from '../utils/filter'
 
 interface QueryState {
   readonly table: string
@@ -166,29 +86,37 @@ export const createRealtimeDatabase = (
         match: { ...state.match, ...(match as Record<string, PrimitiveValueExpression>) },
       }),
     filter: predicate => makeQuery({ ...state, filters: [...state.filters, predicate] }),
+    match: (filter: MongoFilter) => {
+      const compiled = compileFilter(filter, tableOf(state.table).columns)
+      return compiled
+        ? makeQuery({ ...state, filters: [...state.filters, compiled] })
+        : makeQuery(state)
+    },
     order: (field, dir = 'asc') =>
       makeQuery({ ...state, order: { column: field, direction: dir } }),
 
     collect: operation(function* () {
-      return (yield* runList(state, sql.fragment``)).map(row =>
-        coerceRow(row, tableOf(state.table).columns),
-      ) as AnyType
+      return (yield* coerceRows(
+        yield* runList(state, sql.fragment``),
+        tableOf(state.table).columns,
+      )) as AnyType
     }),
     take: operation(function* (count: number) {
-      return (yield* runList(state, sql.fragment`LIMIT ${Math.trunc(count)}`)).map(row =>
-        coerceRow(row, tableOf(state.table).columns),
-      ) as AnyType
+      return (yield* coerceRows(
+        yield* runList(state, sql.fragment`LIMIT ${Math.trunc(count)}`),
+        tableOf(state.table).columns,
+      )) as AnyType
     }),
     first: operation(function* () {
       const rows = yield* runList(state, sql.fragment`LIMIT 1`)
-      return (rows[0] ? coerceRow(rows[0], tableOf(state.table).columns) : null) as AnyType
+      return (rows[0] ? yield* coerceRow(rows[0], tableOf(state.table).columns) : null) as AnyType
     }),
     unique: operation(function* () {
       const rows = yield* runList(state, sql.fragment`LIMIT 2`)
       if (rows.length > 1) {
         return yield* fail('db.validation', `query on "${state.table}" matched multiple rows`)
       }
-      return (rows[0] ? coerceRow(rows[0], tableOf(state.table).columns) : null) as AnyType
+      return (rows[0] ? yield* coerceRow(rows[0], tableOf(state.table).columns) : null) as AnyType
     }),
     count: operation(function* () {
       const value = yield* pool.oneFirst(
@@ -230,9 +158,10 @@ export const createRealtimeDatabase = (
 
       const hasMore = result.length > limit
       const windowRows = hasMore ? result.slice(0, limit) : result
-      const rows = (travel === 'backward' ? [...windowRows].toReversed() : windowRows).map(row =>
-        coerceRow(row, tableOf(state.table).columns),
-      ) as Row[]
+      const rows = (yield* coerceRows(
+        travel === 'backward' ? [...windowRows].toReversed() : windowRows,
+        tableOf(state.table).columns,
+      )) as Row[]
 
       const first = rows[0]
       const last = rows.at(-1)
@@ -280,7 +209,7 @@ export const createRealtimeDatabase = (
         columns.map(column => sql.fragment`${row[column] as PrimitiveValueExpression}`),
       )}) RETURNING *`,
     )
-    const doc = coerceRow(inserted, def.columns)!
+    const doc = (yield* coerceRow(inserted, def.columns))!
     yield* broadcast({
       table: name,
       id: String(doc[ID]),
@@ -311,7 +240,7 @@ export const createRealtimeDatabase = (
     if (!updated) {
       return null as AnyType
     }
-    const doc = coerceRow(updated, def.columns)!
+    const doc = (yield* coerceRow(updated, def.columns))!
     yield* broadcast({ table: name, id, op: 'patch', row: doc, resourceVersion: String(version) })
     return doc as AnyType
   })
@@ -336,7 +265,7 @@ export const createRealtimeDatabase = (
     if (!updated) {
       return null as AnyType
     }
-    const doc = coerceRow(updated, def.columns)!
+    const doc = (yield* coerceRow(updated, def.columns))!
     yield* broadcast({ table: name, id, op: 'replace', row: doc, resourceVersion: String(version) })
     return doc as AnyType
   })
@@ -356,7 +285,7 @@ export const createRealtimeDatabase = (
     const found = yield* pool.maybeOne(
       sql`SELECT * FROM ${ident(name)} WHERE ${ident(ID)} = ${id} LIMIT 1`,
     )
-    return (found ? coerceRow(found, tableOf(name).columns) : null) as AnyType
+    return (found ? yield* coerceRow(found, tableOf(name).columns) : null) as AnyType
   })
 
   return {
