@@ -1,22 +1,23 @@
-// oxlint-disable import/exports-last
 import type { Action } from 'server:core'
 import type { Operation } from 'std:effect'
 import type { AnyType } from 'std:shared'
 
 import type { z, ZodType } from 'zod'
 
-export type FnKind = 'query' | 'mutation' | 'action' | 'stream'
+import type { ARGS, RESULT } from '../const'
 
-declare const ARGS: unique symbol
-declare const RESULT: unique symbol
+import type { AccessGuard } from './access'
+import type { UploadOptions } from './upload'
+
+/** Handler-body type — the zod OUTPUT (defaults applied), i.e. the parsed args the handler receives. */
+type ArgsBody<A> = A extends ZodType ? z.output<A> : Record<string, never>
+
+export type FnKind = 'query' | 'mutation' | 'action' | 'stream'
 
 /** Call-argument type for an action with args validator `A` — the zod INPUT (fields with a `.default`
  * are optional), i.e. what a caller passes to `Broker.call`. `never` when the action has no args (its
  * call then takes no argument — see {@link ToAction}). */
 export type ArgsOf<A> = A extends ZodType ? z.input<A> : never
-
-/** Handler-body type — the zod OUTPUT (defaults applied), i.e. the parsed args the handler receives. */
-type ArgsBody<A> = A extends ZodType ? z.output<A> : Record<string, never>
 
 /** How a reactive query's realtime channel produces updates: `'snapshot'` re-runs the handler and
  * sends the whole result on any watched write (default); `'delta'` sends per-row change events (the
@@ -32,59 +33,9 @@ export interface RestOverride {
   readonly path: string
 }
 
-/** The context an access guard receives. `op` is the function name (branch on it). Runs in the action
- * scope, so `yield* useDatabase()` / `useAuth()` are available — no injected db. */
-export interface AccessContext {
-  readonly op: string
-  readonly namespace: string
-  readonly args: Record<string, unknown>
-}
-
-export type AccessGuard = (ctx: AccessContext) => boolean | Operation<boolean>
-
-export interface CrudOptions {
-  /** A shared operation-based guard; branches on `ctx.op`
-   * (list/get/create/update/replace/remove/batch, plus any custom `actions`). */
-  readonly access?: AccessGuard | undefined
-  /** Extra query/mutation/stream actions merged into the generated CRUD module (same namespace). */
-  readonly actions?: FnModule | undefined
-  /** Columns exposed as exact-match facet filters on `list` (defaults to the table's indexed columns). */
-  readonly filters?: readonly string[] | undefined
-  /** String columns matched by the free-text `q` param on `list` (defaults to none). */
-  readonly search?: readonly string[] | undefined
-  /** Path-param names that form the row id; more than one is a composite key. Defaults to `['id']`. */
-  readonly idParams?: readonly string[] | undefined
-}
-
 /** The tables a query reactively depends on: `'*'` (re-run on any write) or an explicit list.
  * Defaults to the action's `target` table. */
 export type WatchSpec = '*' | readonly string[]
-
-/** How Gateway should expose uploaded files to a Wizard handler. */
-export type UploadMode = 'buffer' | 'stream'
-
-/** One multipart file field in the generated OpenAPI/client contract. */
-export interface UploadFieldOptions {
-  /** Whether Docs and the generated client mark this field as required. Defaults to `true`. */
-  readonly required?: boolean | undefined
-  /** Accept repeated files under the same multipart field name. Defaults to `false`. */
-  readonly multiple?: boolean | undefined
-}
-
-/** A short list means required, single-file fields; the object form controls cardinality. */
-export type UploadFields = readonly string[] | Readonly<Record<string, true | UploadFieldOptions>>
-
-export interface UploadOptions {
-  /** `buffer` spills to request-scoped temp files; `stream` exposes backpressured parts. */
-  readonly mode?: UploadMode | undefined
-  readonly files: UploadFields
-}
-
-/** Normalized upload metadata shared by the Wizard builder and the existing Docs plugin. */
-export interface UploadMetadata {
-  readonly mode: UploadMode
-  readonly fields: readonly (Required<UploadFieldOptions> & { readonly name: string })[]
-}
 
 export interface WizardActionConfig<
   A extends ArgsSpec | undefined = ArgsSpec | undefined,
@@ -159,25 +110,3 @@ export type ToAction<Def> =
 
 /** A namespace of functions (a resource's crud + its custom ops). */
 export type FnModule = Record<string, WizardActionDef>
-
-/** Transport for a resource's own realtime channel (`/<ns>/_realtime`). */
-export type RealtimeTransport = 'websocket' | 'sse'
-
-export interface ResourceOptions {
-  /** Transport for this resource's own realtime channel (`/<ns>/_realtime`). */
-  readonly realtime?: RealtimeTransport | undefined
-  /** Mount the resource under a parent path carrying path params, e.g. `'/apps/:appId'`. The parent
-   * params arrive in every handler's `body` (nested / sub-resources). */
-  readonly parent?: string | undefined
-}
-
-/** The `type: 'crud'` form of {@link resource}: generate the standard REST collection (list / get /
- * create / update / replace / remove / batch + realtime deltas) for a table, plus any custom
- * `actions`. Replaces the old `defineCrud(...)` helper. */
-export interface CrudResourceConfig extends CrudOptions {
-  readonly type: 'crud'
-  /** Transport for the collection's realtime channel (`/<ns>/_realtime`). Defaults to `'websocket'`. */
-  readonly realtime?: RealtimeTransport | undefined
-  /** Mount the collection under a parent path carrying path params, e.g. `'/apps/:appId'` (nested). */
-  readonly parent?: string | undefined
-}

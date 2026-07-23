@@ -1,5 +1,6 @@
 import type { AnyType } from 'std:shared'
 
+import { composeAccess } from '../internal/access'
 import type {
   AccessGuard,
   ArgsOf,
@@ -12,7 +13,6 @@ import type {
   WizardActionConfig,
   WizardActionDef,
 } from '../types'
-import { composeAccess } from '../utils/access'
 
 const defineAction = (kind: FnKind, config: AnyType): WizardActionDef => ({
   kind,

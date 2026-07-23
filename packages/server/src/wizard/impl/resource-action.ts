@@ -2,9 +2,9 @@ import { CoreStatusMap, defineAction, Gateway } from 'server:core'
 import type { Action } from 'server:core'
 import type { AnyType } from 'std:shared'
 
+import { assertAccess } from '../internal/access'
+import { resolveActionArgs } from '../internal/args'
 import type { RealtimeTransport, UploadMetadata, WizardActionDef } from '../types'
-import { assertAccess } from '../utils/access'
-import { resolveActionArgs } from '../utils/args'
 import { normalizeUpload } from '../utils/upload'
 
 interface BuildSpec {

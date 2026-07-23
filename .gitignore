@@ -143,3 +143,4 @@ pnpm-lock.yaml
 .ozaco
 local
 .codex
+cluster.*

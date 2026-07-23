@@ -109,33 +109,31 @@ const watchOverSse = operation(function* (spec: WatchSpec) {
   const stream = yield* fetch(sseUrlFor(spec)).raw()
 
   const task = yield* spawn(function* () {
-    const outcome = yield* attempt(
-      operation(function* () {
-        const subscription = yield* stream
-        const decoder = new TextDecoder()
-        let buffer = ''
-        for (;;) {
-          const step = yield* subscription.next()
-          if (step.done) {
-            break
-          }
-          buffer += decoder.decode(step.value, { stream: true })
-          const parts = buffer.split('\n\n')
-          buffer = parts.pop() ?? ''
-          for (const part of parts) {
-            const line = part.split('\n').find(entry => entry.startsWith('data:'))
-            if (line) {
-              const decoded = yield* attempt(
-                JsonCodec.actions.parse(line.slice('data:'.length).trim()),
-              )
-              if (isSuccess(decoded)) {
-                onNext((decoded.value as AnyType).result)
-              }
+    const outcome = yield* attempt(function* () {
+      const subscription = yield* stream
+      const decoder = new TextDecoder()
+      let buffer = ''
+      for (;;) {
+        const step = yield* subscription.next()
+        if (step.done) {
+          break
+        }
+        buffer += decoder.decode(step.value, { stream: true })
+        const parts = buffer.split('\n\n')
+        buffer = parts.pop() ?? ''
+        for (const part of parts) {
+          const line = part.split('\n').find(entry => entry.startsWith('data:'))
+          if (line) {
+            const decoded = yield* attempt(
+              JsonCodec.actions.parse(line.slice('data:'.length).trim()),
+            )
+            if (isSuccess(decoded)) {
+              onNext((decoded.value as AnyType).result)
             }
           }
         }
-      })(),
-    )
+      }
+    })
     if (isFailure(outcome) && onError) {
       onError(outcome.error)
     }

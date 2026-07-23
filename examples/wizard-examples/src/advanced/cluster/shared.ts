@@ -68,6 +68,5 @@ export const startNode = operation(function* (options: NodeOptions) {
     // client would otherwise keep reconnecting and hold the graceful drain open.
     yield* Broker.actions.destroy()
     yield* Gateway.actions.destroy({ drainMs: 0 })
-    console.log('destroyed')
   })
 })

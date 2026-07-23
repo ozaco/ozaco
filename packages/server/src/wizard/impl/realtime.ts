@@ -9,9 +9,9 @@ import type { AnyType } from 'std:shared'
 import { JsonCodec } from 'std:codec/impl/json'
 import type { ZodType } from 'zod'
 
+import { matchesWatch, resolveWatchTarget } from '../internal/realtime'
+import type { WatchTarget } from '../internal/realtime'
 import type { FnModule, RealtimeTransport, WizardActionDef } from '../types'
-import { matchesWatch, resolveWatchTarget } from '../utils/realtime'
-import type { WatchTarget } from '../utils/realtime'
 
 /** Wrap a payload for the wire. Over `_realtime` it is `{ id?, result }` (matched by the client's
  * subscription id); over a dedicated SSE stream route it is the raw value. */

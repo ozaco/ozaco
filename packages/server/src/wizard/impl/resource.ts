@@ -1,33 +1,28 @@
 import type { TableDef } from 'db:realtime'
-import type { Action, Service } from 'server:core'
 import { Broker, defineService, Gateway } from 'server:core'
 
-import { buildCrudModule } from '../action/crud'
-import type { CrudModule } from '../action/crud'
-import type { CrudResourceConfig, FnModule, ResourceOptions, ToAction } from '../types'
+import type {
+  CrudModule,
+  CrudResourceConfig,
+  FnModule,
+  Resource,
+  ResourceOptions,
+  ToAction,
+} from '../types'
 import { ensureChangeBus } from '../utils/change-bus'
 
-import { buildResourceAction } from './action'
+import { buildCrudModule } from './crud'
 import { mountResourceRealtime, mountStreamRoute } from './realtime'
+import { buildResourceAction } from './resource-action'
 
 /** Project a function module to the `.actions` record the Broker calls: each entry becomes the core
- * {@link Action} carrying that function's arg + result types, so `Broker.call` infers them. */
+ * `Action` carrying that function's arg + result types, so `Broker.call` infers them. */
 type ResourceActions<TModule extends FnModule> = {
   readonly [K in keyof TModule]: ToAction<TModule[K]>
 }
 
 const isCrudConfig = (value: FnModule | CrudResourceConfig): value is CrudResourceConfig =>
   (value as { type?: unknown }).type === 'crud'
-
-/** A Wizard resource is a native server Service; its typed functions live on `resource.actions`. */
-export type Resource<TActions extends Record<string, Action> = Record<string, Action>> = Service<
-  unknown,
-  [],
-  TActions
->
-
-/** The action names a `type: 'crud'` resource always exposes. */
-export type CrudActionName = 'list' | 'get' | 'create' | 'update' | 'replace' | 'remove' | 'batch'
 
 /**
  * Bundle a table's or named group's functions into one native Service. Installing the resource

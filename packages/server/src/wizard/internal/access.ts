@@ -21,17 +21,19 @@ export const composeAccess =
     })()
 
 /** Evaluate a guard and fail with the server's canonical forbidden error when access is denied. */
-export const assertAccess = (guard: AccessGuard | undefined, context: AccessContext) =>
-  operation(function* () {
-    if (!guard) {
-      return
-    }
-    const result = guard(context)
-    const allowed = isOperation(result) ? yield* result : result
-    if (!allowed) {
-      return yield* fail(
-        CoreErrors.Forbidden,
-        `access denied: ${context.op} on "${context.namespace}"`,
-      )
-    }
-  })()
+export const assertAccess = operation(function* (
+  guard: AccessGuard | undefined,
+  context: AccessContext,
+) {
+  if (!guard) {
+    return
+  }
+  const result = guard(context)
+  const allowed = isOperation(result) ? yield* result : result
+  if (!allowed) {
+    return yield* fail(
+      CoreErrors.Forbidden,
+      `access denied: ${context.op} on "${context.namespace}"`,
+    )
+  }
+})

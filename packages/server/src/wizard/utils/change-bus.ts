@@ -3,8 +3,7 @@ import { DB } from 'db:realtime'
 import { Broker } from 'server:core'
 import { createSignal, operation, useContext } from 'std:effect'
 
-/** Broker event name carrying a committed DB write across nodes. */
-const CHANGE_EVENT = 'ozaco:db:change'
+import { CHANGE_EVENT } from '../const'
 
 /**
  * Build a {@link ChangeBus} backed by the server Broker's event bus. `publish` broadcasts a committed

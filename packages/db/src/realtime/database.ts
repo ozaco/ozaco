@@ -378,20 +378,19 @@ export const createRealtimeDatabase = (
  * to remote writes just as they do to local ones. Runs forever; spawn it as a background task (the
  * `RealtimeDb` plugin does this at install when a `bus` is configured).
  */
-export const bridgeChangeBus = (
+export const bridgeChangeBus = operation(function* (
   changes: Signal<ChangeEvent, never>,
   bus: ChangeBus,
-): Future<void> =>
-  operation(function* () {
-    const feed = yield* bus.events
-    for (;;) {
-      const step = yield* feed.next()
-      if (step.done) {
-        break
-      }
-      if (step.value.origin === bus.origin) {
-        continue
-      }
-      changes.send(step.value)
+) {
+  const feed = yield* bus.events
+  for (;;) {
+    const step = yield* feed.next()
+    if (step.done) {
+      break
     }
-  })()
+    if (step.value.origin === bus.origin) {
+      continue
+    }
+    changes.send(step.value)
+  }
+})

@@ -103,7 +103,12 @@ export const destroyAction = operation(function* (opts?: { drainMs?: number }) {
   yield* closeSockets(ctx)
   yield* haltInflight(ctx)
 
-  const drainMs = opts?.drainMs ?? 30_000
+  // `destroy()` is a HARD teardown: the two calls above already force-closed every socket + pump, so
+  // there is nothing left to gracefully drain. Default to an immediate stop — a positive `drainMs` is
+  // opt-in for callers that still want a drain window (e.g. rolling deploys). A 30s default here made
+  // every realtime server hang ~30s on Ctrl-C, because Bun's graceful `server.stop()` keeps waiting on
+  // a realtime connection that `closeSockets` already terminated.
+  const drainMs = opts?.drainMs ?? 0
 
   let drained = false
   // oxlint-disable-next-line promise/always-return
