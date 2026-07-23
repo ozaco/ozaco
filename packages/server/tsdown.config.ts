@@ -23,6 +23,7 @@ export default defineConfig({
     'plugin/auth': './src/plugin/auth/index.ts',
     daemon: './src/daemon/index.ts',
     wizard: './src/wizard/index.ts',
+    metrics: './src/metrics/index.ts',
   },
   format: ['esm', 'cjs'],
   dts: true,

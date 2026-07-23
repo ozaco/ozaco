@@ -104,6 +104,10 @@ const SERVER_MODULES: Record<string, ModuleEntry> = {
     subpath: 'wizard',
     source: 'wizard/index.ts',
   },
+  'server:metrics': {
+    subpath: 'metrics',
+    source: 'metrics/index.ts',
+  },
 }
 
 const DB_MODULES: Record<string, ModuleEntry> = {

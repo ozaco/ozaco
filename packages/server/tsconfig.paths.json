@@ -26,6 +26,7 @@
       "server:client": ["./src/client/index.ts", "./dist/client.d.ts"],
       "server:daemon": ["./src/daemon/index.ts", "./dist/daemon.d.ts"],
       "server:wizard": ["./src/wizard/index.ts", "./dist/wizard.d.ts"],
+      "server:metrics": ["./src/metrics/index.ts", "./dist/metrics.d.ts"],
 
       "std:shared": ["./node_modules/@ozaco/std/dist/shared.d.ts"],
       "std:result": ["./node_modules/@ozaco/std/dist/result.d.ts"],

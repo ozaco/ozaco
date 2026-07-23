@@ -210,6 +210,17 @@
         "default": "./dist/wizard.cjs"
       },
       "source": "./src/wizard/index.ts"
+    },
+    "./metrics": {
+      "import": {
+        "types": "./dist/metrics.d.ts",
+        "default": "./dist/metrics.js"
+      },
+      "require": {
+        "types": "./dist/metrics.d.cts",
+        "default": "./dist/metrics.cjs"
+      },
+      "source": "./src/metrics/index.ts"
     }
   },
   "publishConfig": {
@@ -224,6 +235,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@duckdb/node-api": "^1.5.5-r.1",
     "@ozaco/db": "workspace:*",
     "@ozaco/std": "workspace:*",
     "@types/ws": "^8.18.1",
@@ -233,12 +245,16 @@
     "ws": "^8.21.1"
   },
   "peerDependencies": {
+    "@duckdb/node-api": "^1.0.0",
     "@ozaco/db": "*",
     "@ozaco/std": "*",
     "nats": "^2.29.3",
     "ws": "^8.0.0"
   },
   "peerDependenciesMeta": {
+    "@duckdb/node-api": {
+      "optional": true
+    },
     "@ozaco/db": {
       "optional": true
     },

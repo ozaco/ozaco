@@ -1,0 +1,197 @@
+import type { MongoFilter } from 'db:realtime'
+import type { Future } from 'std:effect'
+import type { Plugin } from 'std:plugin'
+
+export type MetricsDef = Plugin<
+  MetricsDef.Context,
+  [options?: MetricsDef.Options],
+  MetricsDef.Actions
+>
+
+export namespace MetricsDef {
+  /** The built-in stores: auto-collected `calls`/`logs`, plus the general-purpose `events` store. */
+  export type Table = 'calls' | 'logs' | 'events'
+
+  /** Any table name — the built-in ones (with autocomplete) or one you defined via `define`. */
+  export type TableName = Table | (string & {})
+
+  /** A storage-level column type for a user-defined table (`json` → JsonCodec text, not native JSON). */
+  export type ColumnType = 'text' | 'int' | 'float' | 'boolean' | 'timestamp' | 'json'
+
+  /** A queried row (column name → value); `meta` arrives as text and is decoded by the query layer. */
+  export type Row = Record<string, unknown>
+
+  /** One completed action dispatch. `meta` holds arbitrary custom fields (preserved, not stripped). */
+  export interface CallRecord {
+    readonly ts: number
+    readonly service: string
+    readonly action: string
+    readonly status: 'success' | 'failure'
+    readonly durationMs: number
+    readonly error?: string | undefined
+    readonly meta?: Record<string, unknown> | undefined
+  }
+
+  /** One log line. `meta` carries the log's structured custom fields (bindings + data). */
+  export interface LogRecord {
+    readonly ts: number
+    readonly level: number
+    readonly msg: string
+    readonly error: string
+    readonly meta?: Record<string, unknown> | undefined
+  }
+
+  /** A user-recorded custom event/metric: a name, an optional numeric `value`, and custom fields. */
+  export interface EventRecord {
+    readonly ts: number
+    readonly name: string
+    readonly value?: number | undefined
+    readonly meta?: Record<string, unknown> | undefined
+  }
+
+  // The store persists `meta` as JsonCodec text (serialized by the effect layer at flush).
+  export interface StoredCall {
+    readonly ts: number
+    readonly service: string
+    readonly action: string
+    readonly status: string
+    readonly durationMs: number
+    readonly error: string | null
+    readonly meta: string | null
+  }
+  export interface StoredLog {
+    readonly ts: number
+    readonly level: number
+    readonly msg: string
+    readonly error: string
+    readonly meta: string | null
+  }
+  export interface StoredEvent {
+    readonly ts: number
+    readonly name: string
+    readonly value: number | null
+    readonly meta: string | null
+  }
+
+  /** MongoDB-style find over a table — the SAME filter language as `@ozaco/db`. */
+  export interface FindSpec {
+    readonly table: TableName
+    readonly filter?: MongoFilter
+    readonly sort?: string
+    readonly order?: 'asc' | 'desc'
+    readonly limit?: number
+  }
+
+  /** Bulk export/import of a table to/from a file (DuckDB `COPY`). */
+  export interface TransferSpec {
+    readonly table: TableName
+    readonly path: string
+    readonly format?: 'parquet' | 'csv' | 'json'
+  }
+
+  /** A manual custom-event insert — the "normal insert" for anything that isn't a call or a log. */
+  export interface RecordSpec {
+    readonly name: string
+    readonly value?: number
+    readonly fields?: Record<string, unknown>
+  }
+
+  /** Retention: delete a table's rows older than `before` (epoch-ms). */
+  export interface PruneSpec {
+    readonly table: TableName
+    readonly before: number
+  }
+
+  /** Define your OWN table with your OWN columns (idempotent `CREATE TABLE IF NOT EXISTS`). */
+  export interface DefineSpec {
+    readonly table: string
+    readonly columns: Record<string, ColumnType>
+  }
+
+  /** A plain insert into any table — you control the shape. Object/array values become JsonCodec text. */
+  export interface InsertSpec {
+    readonly table: string
+    readonly row: Record<string, unknown>
+  }
+
+  /** The store-level generic insert (values already prepared/serialized by the effect layer). */
+  export interface RowInsert {
+    readonly table: string
+    readonly columns: readonly string[]
+    readonly values: readonly unknown[]
+  }
+
+  /**
+   * A pluggable storage backend — EFFECT-NATIVE: every method is an `operation`/{@link Future} (a driver
+   * wraps its native async API with `until` internally, so errors surface as `Result` failures and the
+   * work stays cancellation-aware, like the `@ozaco/db` drivers). DuckDB is the default ("main") driver,
+   * and its own file EXPORT/IMPORT is part of the contract.
+   */
+  export interface Store {
+    init(): Future<void>
+    insertCalls(rows: readonly StoredCall[]): Future<void>
+    insertLogs(rows: readonly StoredLog[]): Future<void>
+    insertEvents(rows: readonly StoredEvent[]): Future<void>
+    /** Create a user-defined table. */
+    define(spec: DefineSpec): Future<void>
+    /** Insert one prepared row into any table. */
+    insertRow(spec: RowInsert): Future<void>
+    /** Run a raw read query (`$1..$n` params) — for aggregations (`count`, `avg`, `time_bucket`, …). */
+    query(sql: string, params?: readonly unknown[]): Future<Row[]>
+    /** Dump a table to a file. */
+    export(spec: TransferSpec): Future<void>
+    /** Load a table from a file (appends). */
+    import(spec: TransferSpec): Future<void>
+    /** Delete rows older than a cutoff; returns the number of rows removed. */
+    prune(spec: PruneSpec): Future<number>
+    close(): Future<void>
+  }
+
+  export interface Options {
+    /** Provide a custom {@link Store}. Omit to use the built-in DuckDB store at {@link path}. */
+    readonly store?: Store
+    /** DuckDB connection string for the built-in store: `':memory:'` (default) or a file path. */
+    readonly path?: string
+    /** Batch-flush buffered records to the store every N ms (default 1000). */
+    readonly flushIntervalMs?: number
+    /** Auto-instrument every action call into `calls` (installs the metrics policy). Default `true`. */
+    readonly calls?: boolean
+    /** Capture logs into `logs` (registers a logger transport). Default `true`. */
+    readonly logs?: boolean
+    /** Attach custom fields to each call record (stored in `calls.meta`). */
+    readonly fields?: (event: {
+      readonly service: string
+      readonly action: string
+      readonly status: 'success' | 'failure'
+      readonly value?: unknown
+    }) => Record<string, unknown> | undefined
+  }
+
+  export interface Context {
+    readonly store: Store
+  }
+
+  export interface Actions {
+    /** Define your OWN table with your OWN columns (idempotent). */
+    define(spec: DefineSpec): Future<void>
+    /** Plain insert of a row into any table (your table or a built-in one) — you control the shape. */
+    insert(spec: InsertSpec): Future<void>
+    /** Record a custom event/metric into the `events` store — a typed convenience over `insert`.
+     * Buffered + batch-flushed like the rest. */
+    record(spec: RecordSpec): Future<void>
+    /** MongoDB-style find (same filter language as `@ozaco/db`); custom fields in `meta` are decoded
+     * and merged back into each returned row. */
+    find(spec: FindSpec): Future<Row[]>
+    /** Raw read query — for aggregations DuckDB does well (`count`, `avg`, `time_bucket`, …). Pending
+     * buffered records are flushed first. */
+    query(sql: string, params?: readonly unknown[]): Future<Row[]>
+    /** Export a table to a file (Parquet/CSV/JSON) — flushes first. */
+    export(spec: TransferSpec): Future<void>
+    /** Import a table from a file (appends). */
+    import(spec: TransferSpec): Future<void>
+    /** Retention: delete rows older than `before` (epoch-ms); resolves to the number removed. */
+    prune(spec: PruneSpec): Future<number>
+    /** Force a flush of buffered calls/logs to the store. */
+    flush(): Future<void>
+  }
+}

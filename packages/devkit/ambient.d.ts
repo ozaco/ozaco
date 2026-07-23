@@ -114,6 +114,9 @@ declare module 'server:daemon' {
 declare module 'server:wizard' {
   export * from '@ozaco/server/wizard'
 }
+declare module 'server:metrics' {
+  export * from '@ozaco/server/metrics'
+}
 
 // --------- DB ---------
 
