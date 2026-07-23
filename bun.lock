@@ -107,7 +107,7 @@
     },
     "packages/db": {
       "name": "@ozaco/db",
-      "version": "0.3.3",
+      "version": "0.3.4",
       "devDependencies": {
         "@ozaco/std": "workspace:*",
         "@surrealdb/node": "^3.0.3",
@@ -137,7 +137,7 @@
     },
     "packages/devkit": {
       "name": "@ozaco/devkit",
-      "version": "0.2.4",
+      "version": "0.2.5",
       "dependencies": {
         "rolldown": "1.2.0",
       },
@@ -163,7 +163,7 @@
     },
     "packages/server": {
       "name": "@ozaco/server",
-      "version": "0.3.6",
+      "version": "0.3.7",
       "dependencies": {
         "@fastify/busboy": "^3.2.0",
         "jose": "^6.2.4",
@@ -196,7 +196,7 @@
     },
     "packages/std": {
       "name": "@ozaco/std",
-      "version": "0.3.6",
+      "version": "0.3.7",
       "dependencies": {
         "@streamparser/json": "0.0.22",
       },
