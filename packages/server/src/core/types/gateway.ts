@@ -273,6 +273,10 @@ export namespace GatewayDef {
 
     /** Register a WebSocket endpoint at `path` WITHOUT defineAction/mount; handlers get a {@link Socket}. */
     listen(path: string, handlers: ListenHandlers): Future<void>
+
+    /** Register a GET Server-Sent-Events endpoint at `path`; handlers get a one-way {@link Socket}
+     * (server→client push). The SSE alternative to `listen` for environments without WebSockets. */
+    sse(path: string, handlers: ListenHandlers): Future<void>
   }
 
   export type Default = Plugin<GatewayDef.Context, [options?: GatewayDef.Options], Actions>

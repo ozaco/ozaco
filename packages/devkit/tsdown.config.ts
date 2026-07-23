@@ -4,7 +4,6 @@ import { defineConfig } from 'tsdown'
 export default defineConfig({
   entry: {
     resolve: './src/resolve.ts',
-    client: './src/client.ts',
   },
   format: ['esm', 'cjs'],
   dts: true,

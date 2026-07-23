@@ -8,6 +8,7 @@ tasks:
     command: bun x tsdown --config-loader unrun
     deps:
       - std:build
+      - db:build
     inputs:
       - src/**/*
       - tsdown.config.ts
@@ -24,6 +25,7 @@ tasks:
     command: bun x tsc -p tsconfig.json --noEmit
     deps:
       - std:build
+      - db:build
     inputs:
       - src/**/*
       - tests/**/*

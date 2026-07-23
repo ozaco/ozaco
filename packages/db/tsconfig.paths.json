@@ -1,31 +1,22 @@
 {
   "compilerOptions": {
     "paths": {
-      "db:core": ["./src/index.ts", "./dist/index.d.ts"],
-      "db:impl/sqlite": ["./src/impl/sqlite/index.ts", "./dist/impl-sqlite.d.ts"],
-      "db:impl/postgres": ["./src/impl/postgres/index.ts", "./dist/impl-postgres.d.ts"],
+      "db:core": ["./src/core/index.ts", "./dist/index.d.ts"],
+      "db:realtime": ["./src/realtime/index.ts", "./dist/realtime.d.ts"],
+      "db:impl/pg": ["./src/impl/pg.ts", "./dist/impl/pg.d.ts"],
+      "db:impl/bun": ["./src/impl/bun.ts", "./dist/impl/bun.d.ts"],
+      "db:impl/sqlite": ["./src/impl/sqlite.ts", "./dist/impl/sqlite.d.ts"],
+      "db:impl/surreal": ["./src/impl/surreal.ts", "./dist/impl/surreal.d.ts"],
 
-      "std:shared": [
-        "./node_modules/@ozaco/std/dist/shared.d.ts",
-        "./node_modules/@ozaco/std/dist/shared.js"
-      ],
-      "std:result": [
-        "./node_modules/@ozaco/std/dist/result.d.ts",
-        "./node_modules/@ozaco/std/dist/result.js"
-      ],
-      "std:effect": [
-        "./node_modules/@ozaco/std/dist/effect.d.ts",
-        "./node_modules/@ozaco/std/dist/effect.js"
-      ],
-      "std:event": [
-        "./node_modules/@ozaco/std/dist/event.d.ts",
-        "./node_modules/@ozaco/std/dist/event.js"
-      ],
-      "std:plugin": [
-        "./node_modules/@ozaco/std/dist/plugin.d.ts",
-        "./node_modules/@ozaco/std/dist/plugin.js"
-      ],
-      "std:io": ["./node_modules/@ozaco/std/dist/io.d.ts", "./node_modules/@ozaco/std/dist/io.js"]
+      "std:shared": ["./node_modules/@ozaco/std/dist/shared.d.ts"],
+      "std:result": ["./node_modules/@ozaco/std/dist/result.d.ts"],
+      "std:effect": ["./node_modules/@ozaco/std/dist/effect.d.ts"],
+      "std:event": ["./node_modules/@ozaco/std/dist/event.d.ts"],
+      "std:plugin": ["./node_modules/@ozaco/std/dist/plugin.d.ts"],
+      "std:io": ["./node_modules/@ozaco/std/dist/io.d.ts"],
+      "std:codec": ["./node_modules/@ozaco/std/dist/codec.d.ts"],
+      "std:codec/impl/json": ["./node_modules/@ozaco/std/dist/codec/impl/json.d.ts"],
+      "std:logger": ["./node_modules/@ozaco/std/dist/logger.d.ts"]
     }
   }
 }

@@ -63,23 +63,6 @@ export const NatsTransport = Transport.implement({
 
     const subscriptions: Nats.Context['subscriptions'] = new Map()
 
-    yield* ensure(function* () {
-      yield* map([...subscriptions.entries()], function* ([, sub]) {
-        yield* until(sub.drain())
-
-        yield* ensure(function* () {
-          sub.unsubscribe()
-        })
-      })
-
-      subscriptions.clear()
-
-      yield* Transport.actions.unregister(getSelf())
-      yield* until(connection.close(), 'nats:unconnect')
-    })
-
-    yield* brokerWathcer()
-
     const emitSub = connection.subscribe(emitWildcard(prefix))
     subscriptions.set(emitWildcard(prefix), emitSub)
 
@@ -88,6 +71,19 @@ export const NatsTransport = Transport.implement({
 
     yield* consume(emitSub, handleEmit)
     yield* consume(broadcastSub, handleBroadcast)
+
+    yield* brokerWathcer()
+    yield* ensure(function* () {
+      yield* map([...subscriptions.entries()], function* ([, sub]) {
+        sub.unsubscribe()
+        yield* until(sub.drain())
+      })
+
+      subscriptions.clear()
+
+      yield* Transport.actions.unregister(getSelf())
+      yield* until(connection.close(), 'nats:unconnect')
+    })
 
     const context: Nats.Context = {
       name,

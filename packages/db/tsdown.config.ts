@@ -5,9 +5,12 @@ import { dbResolve, stdResolve } from '../devkit/src/resolve'
 // oxlint-disable-next-line import/no-default-export
 export default defineConfig({
   entry: {
-    index: './src/index.ts',
-    'impl-sqlite': './src/impl/sqlite/index.ts',
-    'impl-postgres': './src/impl/postgres/index.ts',
+    index: './src/core/index.ts',
+    realtime: './src/realtime/index.ts',
+    'impl/pg': './src/impl/pg.ts',
+    'impl/bun': './src/impl/bun.ts',
+    'impl/sqlite': './src/impl/sqlite.ts',
+    'impl/surreal': './src/impl/surreal.ts',
   },
   format: ['esm', 'cjs'],
   dts: true,
@@ -16,6 +19,18 @@ export default defineConfig({
   outDir: './dist',
   deps: {
     onlyBundle: [],
+    // driver packages stay external so each pool module keeps a static, bundler-visible import
+    neverBundle: [
+      'pg',
+      'pg-query-stream',
+      'pg-copy-streams',
+      'surrealdb',
+      '@surrealdb/node',
+      'bun',
+      'bun:sqlite',
+    ],
   },
-  plugins: [stdResolve.rolldown(), dbResolve.rolldown({ sourceDir: './src' })],
+  // `db:core` resolves to the external `@ozaco/db` (dist/index.js), NOT inlined per bundle — so the
+  // `DbDriver`/`Pool` protocol singletons stay shared across the impl/realtime modules.
+  plugins: [stdResolve.rolldown(), dbResolve.rolldown()],
 })

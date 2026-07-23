@@ -40,6 +40,7 @@ export const compileEntries = operation(function* (services: Service[], transfor
         key,
         method: rest.method,
         path: `/${service.name}${rest.path === '/' ? '' : rest.path}`,
+        rest,
         meta: meta as Action.Meta<AnyType>,
       })
     }

@@ -39,7 +39,13 @@
       "std:io": ["./node_modules/@ozaco/std/dist/io.d.ts"],
       "std:io/impl/bun": ["./node_modules/@ozaco/std/dist/io/impl/bun.d.ts"],
       "std:io/impl/node": ["./node_modules/@ozaco/std/dist/io/impl/node.d.ts"],
-      "std:io/impl/web": ["./node_modules/@ozaco/std/dist/io/impl/web.d.ts"]
+      "std:io/impl/web": ["./node_modules/@ozaco/std/dist/io/impl/web.d.ts"],
+      "db:core": ["./node_modules/@ozaco/db/dist/index.d.ts"],
+      "db:realtime": ["./node_modules/@ozaco/db/dist/realtime.d.ts"],
+      "db:impl/pg": ["./node_modules/@ozaco/db/dist/impl/pg.d.ts"],
+      "db:impl/bun": ["./node_modules/@ozaco/db/dist/impl/bun.d.ts"],
+      "db:impl/sqlite": ["./node_modules/@ozaco/db/dist/impl/sqlite.d.ts"],
+      "db:impl/surreal": ["./node_modules/@ozaco/db/dist/impl/surreal.d.ts"]
     }
   }
 }

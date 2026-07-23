@@ -51,51 +51,49 @@ export const Daemon = definePlugin({
       return rt
     }
 
-    const outcome = yield* attempt(
-      (function* () {
-        if (options.base) {
-          yield* options.base(rt)
+    const outcome = yield* attempt(function* () {
+      if (options.base) {
+        yield* options.base(rt)
+      }
+
+      for (const module of options.modules) {
+        if (!eligible(module, rt)) {
+          continue
         }
 
-        for (const module of options.modules) {
-          if (!eligible(module, rt)) {
+        const policy = resolveFailure(module.failure, options.failure)
+        const result = yield* attempt(
+          policy.retry.attempts > 1
+            ? retry(() => module.setup(rt), policy.retry)
+            : () => module.setup(rt),
+        )
+
+        if (!isSuccess(result)) {
+          const failed = appendCauses(result, `daemon:module=${module.name}`)
+          // `isolate`: drop just this module and keep assembling the rest. `all`: abort the replica.
+          if (policy.mode === 'isolate') {
+            if ((yield* Logger.context.get()) !== undefined) {
+              yield* Logger.actions.error(
+                `daemon: module "${module.name}" isolated after failure (role ${rt.role ?? 'all'}): ${failed.message || String(failed.error)}`,
+              )
+            }
             continue
           }
-
-          const policy = resolveFailure(module.failure, options.failure)
-          const result = yield* attempt(
-            policy.retry.attempts > 1
-              ? retry(() => module.setup(rt), policy.retry)
-              : () => module.setup(rt),
-          )
-
-          if (!isSuccess(result)) {
-            const failed = appendCauses(result, `daemon:module=${module.name}`)
-            // `isolate`: drop just this module and keep assembling the rest. `all`: abort the replica.
-            if (policy.mode === 'isolate') {
-              if ((yield* Logger.context.get()) !== undefined) {
-                yield* Logger.actions.error(
-                  `daemon: module "${module.name}" isolated after failure (role ${rt.role ?? 'all'}): ${failed.message || String(failed.error)}`,
-                )
-              }
-              continue
-            }
-            return yield* failed
-          }
+          return yield* failed
         }
+      }
 
-        yield* Broker.actions.start()
+      yield* Broker.actions.start()
 
-        // Start the gateway only if `base` installed one. shared-port replicas bind SO_REUSEPORT.
-        if ((yield* Gateway.context.get()) !== undefined) {
-          yield* Gateway.actions.start(rt.reusePort ? { reusePort: true } : {})
-        }
+      // Start the gateway only if `base` installed one. shared-port replicas bind SO_REUSEPORT.
+      if ((yield* Gateway.context.get()) !== undefined) {
+        yield* Gateway.actions.start(rt.reusePort ? { reusePort: true } : {})
+      }
 
-        if (options.ready) {
-          yield* options.ready(rt)
-        }
-      })(),
-    )
+      if (options.ready) {
+        yield* options.ready(rt)
+      }
+    })
 
     if (!isSuccess(outcome)) {
       return yield* appendCauses(outcome, `daemon:role=${rt.role ?? 'all'} index=${rt.index}`)

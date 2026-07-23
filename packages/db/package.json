@@ -22,29 +22,62 @@
         "types": "./dist/index.d.cts",
         "default": "./dist/index.cjs"
       },
-      "source": "./src/index.ts"
+      "source": "./src/core/index.ts"
+    },
+    "./realtime": {
+      "import": {
+        "types": "./dist/realtime.d.ts",
+        "default": "./dist/realtime.js"
+      },
+      "require": {
+        "types": "./dist/realtime.d.cts",
+        "default": "./dist/realtime.cjs"
+      },
+      "source": "./src/realtime/index.ts"
+    },
+    "./impl/pg": {
+      "import": {
+        "types": "./dist/impl/pg.d.ts",
+        "default": "./dist/impl/pg.js"
+      },
+      "require": {
+        "types": "./dist/impl/pg.d.cts",
+        "default": "./dist/impl/pg.cjs"
+      },
+      "source": "./src/impl/pg.ts"
+    },
+    "./impl/bun": {
+      "import": {
+        "types": "./dist/impl/bun.d.ts",
+        "default": "./dist/impl/bun.js"
+      },
+      "require": {
+        "types": "./dist/impl/bun.d.cts",
+        "default": "./dist/impl/bun.cjs"
+      },
+      "source": "./src/impl/bun.ts"
     },
     "./impl/sqlite": {
       "import": {
-        "types": "./dist/impl-sqlite.d.ts",
-        "default": "./dist/impl-sqlite.js"
+        "types": "./dist/impl/sqlite.d.ts",
+        "default": "./dist/impl/sqlite.js"
       },
       "require": {
-        "types": "./dist/impl-sqlite.d.cts",
-        "default": "./dist/impl-sqlite.cjs"
+        "types": "./dist/impl/sqlite.d.cts",
+        "default": "./dist/impl/sqlite.cjs"
       },
-      "source": "./src/impl/sqlite/index.ts"
+      "source": "./src/impl/sqlite.ts"
     },
-    "./impl/postgres": {
+    "./impl/surreal": {
       "import": {
-        "types": "./dist/impl-postgres.d.ts",
-        "default": "./dist/impl-postgres.js"
+        "types": "./dist/impl/surreal.d.ts",
+        "default": "./dist/impl/surreal.js"
       },
       "require": {
-        "types": "./dist/impl-postgres.d.cts",
-        "default": "./dist/impl-postgres.cjs"
+        "types": "./dist/impl/surreal.d.cts",
+        "default": "./dist/impl/surreal.cjs"
       },
-      "source": "./src/impl/postgres/index.ts"
+      "source": "./src/impl/surreal.ts"
     }
   },
   "publishConfig": {
@@ -54,25 +87,35 @@
   },
   "devDependencies": {
     "@ozaco/std": "workspace:*",
+    "@surrealdb/node": "^3.0.3",
     "@types/better-sqlite3": "^7.6.13",
     "@types/pg": "^8.20.0",
     "better-sqlite3": "^12.11.1",
-    "drizzle-orm": "^0.45.2",
     "pg": "^8.22.0",
+    "surrealdb": "^2.0.6",
     "tsdown": "catalog:build",
-    "unrun": "catalog:build"
+    "unrun": "catalog:build",
+    "zod": "^4.4.3"
   },
   "peerDependencies": {
     "@ozaco/std": "*",
+    "@surrealdb/node": "^3.0.0",
     "better-sqlite3": "^11.0.0 || ^12.0.0",
-    "drizzle-orm": "^0.45.0",
-    "pg": "^8.0.0"
+    "pg": "^8.0.0",
+    "surrealdb": "^2.0.0",
+    "zod": "^4.0.0"
   },
   "peerDependenciesMeta": {
+    "@surrealdb/node": {
+      "optional": true
+    },
     "better-sqlite3": {
       "optional": true
     },
     "pg": {
+      "optional": true
+    },
+    "surrealdb": {
       "optional": true
     }
   }

@@ -108,12 +108,11 @@ declare module 'server:plugin/docs' {
 declare module 'server:plugin/auth' {
   export * from '@ozaco/server/plugin/auth'
 }
-declare module 'server:client' {
-  export * from '@ozaco/server/client'
-}
-
 declare module 'server:daemon' {
   export * from '@ozaco/server/daemon'
+}
+declare module 'server:wizard' {
+  export * from '@ozaco/server/wizard'
 }
 
 // --------- DB ---------
@@ -121,11 +120,20 @@ declare module 'server:daemon' {
 declare module 'db:core' {
   export * from '@ozaco/db'
 }
+declare module 'db:realtime' {
+  export * from '@ozaco/db/realtime'
+}
+declare module 'db:impl/pg' {
+  export * from '@ozaco/db/impl/pg'
+}
+declare module 'db:impl/bun' {
+  export * from '@ozaco/db/impl/bun'
+}
 declare module 'db:impl/sqlite' {
   export * from '@ozaco/db/impl/sqlite'
 }
-declare module 'db:impl/postgres' {
-  export * from '@ozaco/db/impl/postgres'
+declare module 'db:impl/surreal' {
+  export * from '@ozaco/db/impl/surreal'
 }
 
 // --------- AI ---------
@@ -163,4 +171,13 @@ declare module 'cli:table' {
 
 declare module 'cli:terminal/bun' {
   export * from '@ozaco/cli/terminal/bun'
+}
+
+// --------- CLIENT ---------
+declare module 'client:core' {
+  export * from '@ozaco/client'
+}
+
+declare module 'client:codegen' {
+  export * from '@ozaco/client/codegen'
 }

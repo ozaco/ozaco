@@ -30,6 +30,18 @@ const buildSecurityScheme = (auth: DocsDef.AuthOptions): DocsDef.SecurityScheme 
 
 const BODY_METHODS = new Set(['POST', 'PUT', 'PATCH'])
 
+interface UploadField {
+  readonly name: string
+  readonly required: boolean
+  readonly multiple: boolean
+}
+
+interface UploadSpec {
+  readonly mode: 'buffer' | 'stream'
+  readonly fields: readonly UploadField[]
+  readonly openFields: boolean
+}
+
 const extractPathParams = (path: string): { openapiPath: string; params: string[] } => {
   const params: string[] = []
   const openapiPath = path.replaceAll(/:([A-Za-z_][A-Za-z0-9_]*)/gu, (_, name: string) => {
@@ -39,14 +51,14 @@ const extractPathParams = (path: string): { openapiPath: string; params: string[
   return { openapiPath, params }
 }
 
-const toJsonSchema = (schema: unknown): DocsDef.JsonSchema | undefined => {
+const toJsonSchema = (schema: unknown, io: 'input' | 'output'): DocsDef.JsonSchema | undefined => {
   if (!schema) {
     return undefined
   }
   try {
     return z.toJSONSchema(schema as AnyType, {
       unrepresentable: 'any',
-      io: 'input',
+      io,
     }) as DocsDef.JsonSchema
   } catch {
     // schema is not zod-representable; skip emitting a body/query schema
@@ -77,14 +89,77 @@ const pickQueryParams = (
   return out
 }
 
+const uploadSpec = (entry: DocsDef.CompiledEntry): UploadSpec | undefined => {
+  const wizardUpload = (entry.meta as AnyType).wizard?.upload as
+    | { mode?: unknown; fields?: unknown }
+    | undefined
+
+  if (wizardUpload && Array.isArray(wizardUpload.fields)) {
+    const fields = wizardUpload.fields.flatMap((field: AnyType) =>
+      typeof field?.name === 'string'
+        ? [
+            {
+              name: field.name,
+              required: field.required !== false,
+              multiple: field.multiple === true,
+            },
+          ]
+        : [],
+    )
+    return {
+      mode: wizardUpload.mode === 'stream' ? 'stream' : 'buffer',
+      fields,
+      openFields: false,
+    }
+  }
+
+  if (Array.isArray(entry.rest.files)) {
+    return {
+      mode: entry.rest.multipart === 'stream' ? 'stream' : 'buffer',
+      fields: entry.rest.files.map(name => ({ name, required: false, multiple: false })),
+      openFields: false,
+    }
+  }
+
+  if (entry.rest.multipart) {
+    return { mode: entry.rest.multipart, fields: [], openFields: true }
+  }
+
+  return undefined
+}
+
+const multipartSchema = (
+  input: DocsDef.JsonSchema | undefined,
+  upload: UploadSpec,
+): DocsDef.JsonSchema => {
+  const properties = { ...input?.properties }
+  const required = new Set(input?.required)
+
+  for (const field of upload.fields) {
+    const file = { type: 'string', format: 'binary' }
+    properties[field.name] = field.multiple ? { type: 'array', items: file } : file
+    if (field.required) {
+      required.add(field.name)
+    }
+  }
+
+  return {
+    ...input,
+    type: 'object',
+    properties,
+    ...(required.size > 0 ? { required: [...required] } : {}),
+    ...(upload.openFields ? { additionalProperties: true } : {}),
+  }
+}
+
 const buildOperation = (
   entry: DocsDef.CompiledEntry,
   pathParams: string[],
 ): DocsDef.OperationObject => {
   const { meta, method, service, key } = entry
 
-  const inputSchema = toJsonSchema(meta.input)
-  const outputSchema = toJsonSchema(meta.output)
+  const inputSchema = toJsonSchema(meta.input, 'input')
+  const outputSchema = toJsonSchema(meta.output, 'output')
 
   const parameters: DocsDef.ParameterObject[] = pathParams.map(name => ({
     name,
@@ -105,6 +180,34 @@ const buildOperation = (
     },
   }
 
+  const wizardKind = (meta as AnyType).wizard?.kind
+  if (
+    wizardKind === 'query' ||
+    wizardKind === 'mutation' ||
+    wizardKind === 'action' ||
+    wizardKind === 'stream'
+  ) {
+    op['x-ozaco-kind'] = wizardKind
+  }
+
+  const wizardEmits = (meta as AnyType).wizard?.emits
+  if (wizardEmits) {
+    const emitsSchema = toJsonSchema(wizardEmits, 'output')
+    if (emitsSchema) {
+      op['x-ozaco-emits'] = emitsSchema
+    }
+  }
+
+  const wizardRealtime = (meta as AnyType).wizard?.realtime
+  if (wizardRealtime === 'websocket' || wizardRealtime === 'sse') {
+    op['x-ozaco-realtime'] = wizardRealtime
+  }
+
+  const upload = uploadSpec(entry)
+  if (upload) {
+    op['x-ozaco-upload-mode'] = upload.mode
+  }
+
   if (meta.title) {
     op.summary = meta.title
   }
@@ -112,10 +215,12 @@ const buildOperation = (
     op.description = meta.description
   }
 
-  if (BODY_METHODS.has(method.toUpperCase()) && inputSchema) {
+  if (BODY_METHODS.has(method.toUpperCase()) && (inputSchema || upload)) {
     op.requestBody = {
       required: true,
-      content: { 'application/json': { schema: inputSchema } },
+      content: upload
+        ? { 'multipart/form-data': { schema: multipartSchema(inputSchema, upload) } }
+        : { 'application/json': { schema: inputSchema! } },
     }
     if (parameters.length > 0) {
       op.parameters = parameters

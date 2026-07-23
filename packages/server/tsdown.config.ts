@@ -1,6 +1,6 @@
 import { defineConfig } from 'tsdown'
 
-import { serverResolve, stdResolve } from '../devkit/src/resolve'
+import { dbResolve, serverResolve, stdResolve } from '../devkit/src/resolve'
 
 // oxlint-disable-next-line import/no-default-export
 export default defineConfig({
@@ -21,8 +21,8 @@ export default defineConfig({
     'plugin/cors': './src/plugin/cors/index.ts',
     'plugin/docs': './src/plugin/docs/index.ts',
     'plugin/auth': './src/plugin/auth/index.ts',
-    client: './src/client/index.ts',
     daemon: './src/daemon/index.ts',
+    wizard: './src/wizard/index.ts',
   },
   format: ['esm', 'cjs'],
   dts: true,
@@ -32,5 +32,9 @@ export default defineConfig({
   deps: {
     onlyBundle: [],
   },
-  plugins: [stdResolve.rolldown(), serverResolve.rolldown({ sourceDir: './src' })],
+  plugins: [
+    stdResolve.rolldown(),
+    serverResolve.rolldown({ sourceDir: './src' }),
+    dbResolve.rolldown(),
+  ],
 })

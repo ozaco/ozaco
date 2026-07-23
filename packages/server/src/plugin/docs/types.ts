@@ -1,4 +1,4 @@
-import type { Action } from 'server:core'
+import type { Action, GatewayDef } from 'server:core'
 import type { AnyType } from 'std:shared'
 
 export namespace DocsDef {
@@ -60,6 +60,10 @@ export namespace DocsDef {
       { description: string; content?: Record<string, { schema: JsonSchema }> }
     >
     security?: Array<Record<string, string[]>>
+    'x-ozaco-kind'?: 'query' | 'mutation' | 'action' | 'stream'
+    'x-ozaco-emits'?: JsonSchema
+    'x-ozaco-realtime'?: 'websocket' | 'sse'
+    'x-ozaco-upload-mode'?: 'buffer' | 'stream'
   }
 
   export interface SecurityScheme {
@@ -83,6 +87,7 @@ export namespace DocsDef {
     key: string
     method: string
     path: string
+    rest: GatewayDef.RestOptions
     meta: Action.Meta<AnyType>
   }
 

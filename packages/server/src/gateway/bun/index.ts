@@ -24,6 +24,7 @@ import {
   unmountAction,
 } from '../shared/router'
 import { setup } from '../shared/setup'
+import { sseAction } from '../shared/sse'
 import { wsSettingsAction } from '../shared/ws'
 
 import { destroyAction, startAction } from './internal'
@@ -66,6 +67,7 @@ export const BunGateway: GatewayDef.Default = Gateway.implement({
   leave: leaveAction,
   toRoom: toRoomAction,
   listen: listenAction,
+  sse: sseAction,
 })
 
 export { wsBearer } from '../shared/ws'

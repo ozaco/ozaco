@@ -1,5 +1,5 @@
 import { Broker, DefaultBroker, Gateway } from 'server:core'
-import { debug, ensure, main, suspend } from 'std:effect'
+import { ensure, main, suspend } from 'std:effect'
 import { DefaultLogger, Logger } from 'std:logger'
 import { install } from 'std:plugin'
 
@@ -21,7 +21,6 @@ import { cleanupErrors } from './utils/cleanup'
 import { memoryAuthProvider } from './utils/store'
 
 await main(function* () {
-  yield* debug(true)
   yield* install(BunIO)
 
   const env = yield* ENV

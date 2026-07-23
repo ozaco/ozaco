@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/oxfmt/configuration_schema.json",
-  "ignorePatterns": ["**/dist/**"],
+  "ignorePatterns": ["**/dist/**", "**/*.d.ts", "**/*.gen.ts", "**/node_modules/**"],
   "sortTailwindcss": {},
   "semi": false,
   "arrowParens": "avoid",
@@ -17,7 +17,7 @@
     "customGroups": [
       {
         "groupName": "ozaco",
-        "elementNamePattern": ["std:*", "cli:*", "server:*", "db:*", "ai:*"]
+        "elementNamePattern": ["std:*", "cli:*", "server:*", "db:*", "ai:*", "devkit:*", "client:*"]
       }
     ],
     "groups": ["ozaco", "builtin", "external", "internal", "parent", ["sibling", "index"]],

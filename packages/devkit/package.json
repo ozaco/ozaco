@@ -28,17 +28,6 @@
         "default": "./dist/resolve.cjs"
       },
       "source": "./src/resolve.ts"
-    },
-    "./client": {
-      "import": {
-        "types": "./dist/client.d.ts",
-        "default": "./dist/client.js"
-      },
-      "require": {
-        "types": "./dist/client.d.cts",
-        "default": "./dist/client.cjs"
-      },
-      "source": "./src/client.ts"
     }
   },
   "publishConfig": {
@@ -52,6 +41,7 @@
   "devDependencies": {
     "@ozaco/ai": "workspace:*",
     "@ozaco/cli": "workspace:*",
+    "@ozaco/client": "workspace:*",
     "@ozaco/db": "workspace:*",
     "@ozaco/server": "workspace:*",
     "@ozaco/std": "workspace:*",
@@ -61,6 +51,7 @@
   "peerDependencies": {
     "@ozaco/ai": "*",
     "@ozaco/cli": "*",
+    "@ozaco/client": "*",
     "@ozaco/db": "*",
     "@ozaco/server": "*",
     "@ozaco/std": "*",

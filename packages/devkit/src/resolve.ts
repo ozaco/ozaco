@@ -96,20 +96,23 @@ const SERVER_MODULES: Record<string, ModuleEntry> = {
     subpath: 'plugin/auth',
     source: 'plugin/auth/index.ts',
   },
-  'server:client': {
-    subpath: 'client',
-    source: 'client/index.ts',
-  },
   'server:daemon': {
     subpath: 'daemon',
     source: 'daemon/index.ts',
   },
+  'server:wizard': {
+    subpath: 'wizard',
+    source: 'wizard/index.ts',
+  },
 }
 
 const DB_MODULES: Record<string, ModuleEntry> = {
-  'db:core': { subpath: '', source: 'index.ts' },
-  'db:impl/sqlite': { subpath: 'impl/sqlite', source: 'impl/sqlite/index.ts' },
-  'db:impl/postgres': { subpath: 'impl/postgres', source: 'impl/postgres/index.ts' },
+  'db:core': { subpath: '', source: 'core/index.ts' },
+  'db:realtime': { subpath: 'realtime', source: 'realtime/index.ts' },
+  'db:impl/pg': { subpath: 'impl/pg', source: 'impl/pg.ts' },
+  'db:impl/bun': { subpath: 'impl/bun', source: 'impl/bun.ts' },
+  'db:impl/sqlite': { subpath: 'impl/sqlite', source: 'impl/sqlite.ts' },
+  'db:impl/surreal': { subpath: 'impl/surreal', source: 'impl/surreal.ts' },
 }
 
 const AI_MODULES: Record<string, ModuleEntry> = {
@@ -125,6 +128,11 @@ const CLI_MODULES: Record<string, ModuleEntry> = {
   'cli:command': { subpath: 'command', source: 'command/definition.ts' },
   'cli:table': { subpath: 'table', source: 'table/definition.ts' },
   'cli:terminal/bun': { subpath: 'terminal/bun', source: 'terminal/bun.ts' },
+}
+
+const CLIENT_MODULES: Record<string, ModuleEntry> = {
+  'client:core': { subpath: 'core', source: 'index.ts' },
+  'client:codegen': { subpath: 'codegen', source: 'codegen/definition.ts' },
 }
 
 interface ResolveAliasOptions {
@@ -204,5 +212,13 @@ const cliResolve: UnpluginInstance<ResolveOptions | undefined, false> = createUn
     ),
 )
 
-export { aiResolve, cliResolve, dbResolve, resolveAlias, serverResolve, stdResolve }
+const clientResolve: UnpluginInstance<ResolveOptions | undefined, false> = createUnplugin(
+  (options?: ResolveOptions) =>
+    resolveFactory('@ozaco/devkit:resolve:client')(
+      buildAliases(CLIENT_MODULES, '@ozaco/client', options?.sourceDir),
+      !options?.sourceDir,
+    ),
+)
+
+export { aiResolve, clientResolve, cliResolve, dbResolve, resolveAlias, serverResolve, stdResolve }
 export type { ResolveAliasOptions, ResolveOptions }
