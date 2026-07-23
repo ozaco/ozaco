@@ -8,6 +8,7 @@ import type { AnyType } from 'std:shared'
 import { readWebEnv } from '../internal/env'
 import { fromReadable } from '../internal/from-readable'
 import { webPath } from '../internal/path-web'
+import { createS3 } from '../internal/s3'
 import { toReadable } from '../internal/to-readable'
 import { ulidId } from '../internal/ulid'
 import { uuidId } from '../internal/uuid'
@@ -89,4 +90,10 @@ export const WebIO = IO.implement({
   udpBind: unsupported('udpBind'),
   ip: unsupported('ip'),
   tmpdir: unsupported('tmpdir'),
+
+  // The browser must not hold S3 credentials; the client is constructible but every op fails
+  // `io-unsupported`.
+  s3: operation(function* () {
+    return createS3(null)
+  }),
 })

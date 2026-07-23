@@ -1,7 +1,7 @@
 // oxlint-disable unicorn/text-encoding-identifier-case
 
 import { operation, until } from 'std:effect'
-import type { WalkEntry } from 'std:io'
+import type { S3Options, WalkEntry } from 'std:io'
 import { IO, IO_FLAGS, toPath } from 'std:io'
 import { fail } from 'std:result'
 import { hasFlag } from 'std:shared'
@@ -23,6 +23,8 @@ import { tcpConnect, tcpListen, udpBind } from '../internal/net'
 import { mapStat, walkRecursive } from '../internal/node-shared'
 import { nodePath } from '../internal/path-node'
 import { nodeExec, nodeSpawn } from '../internal/process-node'
+import { createS3 } from '../internal/s3'
+import { fetchS3Client } from '../internal/s3-fetch'
 import { readFileStream, writeFileStream } from '../internal/stream'
 import { readInterfaces, readTmpDir } from '../internal/sys'
 import { toReadable } from '../internal/to-readable'
@@ -211,4 +213,9 @@ export const NodeIO = IO.implement({
   udpBind,
   ip: readInterfaces,
   tmpdir: readTmpDir,
+
+  // Node has no built-in S3; use the dependency-free SigV4-over-fetch client.
+  s3: operation(function* (options?: S3Options) {
+    return createS3(fetchS3Client(options ?? {}))
+  }),
 })

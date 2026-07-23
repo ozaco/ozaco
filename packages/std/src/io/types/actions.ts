@@ -10,6 +10,8 @@ import type {
   PathLike,
   ProcessHandle,
   ReadableLike,
+  S3Client,
+  S3Options,
   SpawnOptions,
   StreamClose,
   TcpConnectOptions,
@@ -145,4 +147,9 @@ export type IOActions = {
 
   /** The OS temp directory (via `node:os.tmpdir()`). */
   tmpdir: () => Future<string>
+
+  /** Resolve an S3 client bound to `options` (falls back to the S3 env when a field is omitted): on Bun
+   * its built-in `S3Client`, elsewhere a dependency-free SigV4-over-`fetch` client (the browser has
+   * none — its operations fail `io-unsupported`). The client's own operations are lazy. */
+  s3: (options?: S3Options) => Future<S3Client>
 }

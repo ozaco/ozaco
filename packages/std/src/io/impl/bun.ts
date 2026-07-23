@@ -1,7 +1,8 @@
 import { operation, until } from 'std:effect'
-import type { WalkEntry } from 'std:io'
+import type { S3Options, WalkEntry } from 'std:io'
 import { IO, IO_FLAGS, toPath } from 'std:io'
 import { fail } from 'std:result'
+import type { AnyType } from 'std:shared'
 import { hasFlag } from 'std:shared'
 
 import fs from 'node:fs/promises'
@@ -20,6 +21,7 @@ import { tcpConnect, tcpListen, udpBind } from '../internal/net'
 import { mapStat, walkRecursive } from '../internal/node-shared'
 import { nodePath } from '../internal/path-node'
 import { bunExec, bunSpawn } from '../internal/process-bun'
+import { createS3 } from '../internal/s3'
 import { readFileStream, writeFileStream } from '../internal/stream'
 import { readInterfaces, readTmpDir } from '../internal/sys'
 import { toReadable } from '../internal/to-readable'
@@ -204,4 +206,8 @@ export const BunIO = IO.implement({
   udpBind,
   ip: readInterfaces,
   tmpdir: readTmpDir,
+
+  s3: operation(function* (options?: S3Options) {
+    return createS3(new (Bun.S3Client as AnyType)(options ?? {}))
+  }),
 })

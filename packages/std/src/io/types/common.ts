@@ -219,3 +219,89 @@ export interface UdpSocket {
   /** Close the socket. */
   close: () => Future<void>
 }
+
+// --- S3 (object storage) — Bun's built-in S3Client (BunIO only) ------------------------------------
+
+/** Connection + credentials for an S3 client. Any field may be omitted to fall back to Bun's env
+ * (`S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` / `S3_REGION` / `S3_BUCKET` / `S3_ENDPOINT`, …). */
+export interface S3Options {
+  readonly accessKeyId?: string
+  readonly secretAccessKey?: string
+  readonly sessionToken?: string
+  readonly region?: string
+  readonly bucket?: string
+  readonly endpoint?: string
+  /** Canned ACL applied to writes (e.g. `'public-read'`). */
+  readonly acl?: string
+}
+
+/** Object metadata (from `stat`). */
+export interface S3Stat {
+  readonly size: number
+  readonly etag?: string | undefined
+  readonly lastModified?: Date | undefined
+  readonly type?: string | undefined
+}
+
+/** Options for a presigned URL. */
+export interface S3PresignOptions {
+  /** Seconds the URL stays valid. */
+  readonly expiresIn?: number
+  /** The HTTP method the URL authorizes (default `'GET'`). */
+  readonly method?: 'GET' | 'PUT' | 'DELETE' | 'HEAD'
+  readonly acl?: string
+  readonly type?: string
+}
+
+export interface S3ListOptions {
+  readonly prefix?: string
+  readonly maxKeys?: number
+  readonly continuationToken?: string
+  readonly startAfter?: string
+}
+
+export interface S3ObjectInfo {
+  readonly key: string
+  readonly size?: number | undefined
+  readonly lastModified?: Date | undefined
+  readonly etag?: string | undefined
+}
+
+export interface S3ListResult {
+  readonly contents: readonly S3ObjectInfo[]
+  readonly truncated: boolean
+  readonly continuationToken?: string | undefined
+}
+
+/** A handle to one S3 object (mirrors Bun's `S3File`, effect-native). Operations are lazy — nothing
+ * hits the network until you call one. */
+export interface S3File {
+  readonly key: string
+  text: () => Future<string>
+  json: <T = unknown>() => Future<T>
+  bytes: () => Future<Uint8Array>
+  arrayBuffer: () => Future<ArrayBuffer>
+  /** The object's byte stream (a platform `ReadableStream`; adapt it with `IO.actions.fromReadable`). */
+  stream: () => Future<ReadableStream<Uint8Array>>
+  /** Upload/overwrite the object; resolves to the number of bytes written. */
+  write: (data: Uint8Array | string | Blob) => Future<number>
+  exists: () => Future<boolean>
+  delete: () => Future<void>
+  stat: () => Future<S3Stat>
+  /** A presigned URL for this object (default `GET`). */
+  presign: (options?: S3PresignOptions) => Future<string>
+}
+
+/** An S3 client bound to a bucket/credentials — `IO.actions.s3(options)`. Uses Bun's built-in
+ * `S3Client`; on non-Bun runtimes every operation fails `io-unsupported`. */
+export interface S3Client {
+  /** A handle to one object. */
+  file: (key: string) => S3File
+  read: (key: string) => Future<Uint8Array>
+  write: (key: string, data: Uint8Array | string | Blob) => Future<number>
+  exists: (key: string) => Future<boolean>
+  delete: (key: string) => Future<void>
+  stat: (key: string) => Future<S3Stat>
+  list: (options?: S3ListOptions) => Future<S3ListResult>
+  presign: (key: string, options?: S3PresignOptions) => Future<string>
+}
