@@ -13,7 +13,7 @@
     ],
     "catalogs": {
       "build": {
-        "tsdown": "^0.22.4",
+        "tsdown": "^0.22.13",
         "unrun": "^0.3.1"
       }
     }

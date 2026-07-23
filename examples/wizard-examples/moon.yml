@@ -8,7 +8,6 @@ tasks:
     command: bun x tsdown
     deps:
       - devkit:build
-      - client:build
     inputs:
       - src/**/*
       - tsdown.config.ts
@@ -17,9 +16,6 @@ tasks:
   types:
     command: bun x tsc -p tsconfig.json --noEmit
     deps:
-      - std:build
-      - server:build
-      - db:build
-      - client:build
+      - wizard-examples:build
     inputs:
       - src/**/*

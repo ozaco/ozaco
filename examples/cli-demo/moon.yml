@@ -23,7 +23,7 @@ tasks:
   types:
     command: bun x tsc -p tsconfig.json --noEmit
     deps:
-      - devkit:build
+      - cli-demo:build
     inputs:
       - src/**/*
       - tsdown.config.ts

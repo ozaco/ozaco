@@ -1,6 +1,6 @@
 {
   "name": "@ozaco/db",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "homepage": "https://ozaco.com/",
   "author": "giveerr (https://github.com/giveerr)",
   "repository": {
@@ -90,9 +90,9 @@
     "@surrealdb/node": "^3.0.3",
     "@types/better-sqlite3": "^7.6.13",
     "@types/pg": "^8.20.0",
-    "better-sqlite3": "^12.11.1",
+    "better-sqlite3": "^13.0.1",
     "pg": "^8.22.0",
-    "surrealdb": "^2.0.6",
+    "surrealdb": "^2.0.8",
     "tsdown": "catalog:build",
     "unrun": "catalog:build",
     "zod": "^4.4.3"

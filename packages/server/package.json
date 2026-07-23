@@ -1,6 +1,6 @@
 {
   "name": "@ozaco/server",
-  "version": "0.3.5",
+  "version": "0.3.6",
   "homepage": "https://ozaco.com/",
   "author": "giveerr (https://github.com/giveerr)",
   "repository": {
@@ -219,7 +219,7 @@
   },
   "dependencies": {
     "@fastify/busboy": "^3.2.0",
-    "jose": "^6.2.3",
+    "jose": "^6.2.4",
     "rou3": "0.9.1",
     "zod": "^4.4.3"
   },
@@ -230,7 +230,7 @@
     "nats": "^2.29.3",
     "tsdown": "catalog:build",
     "unrun": "catalog:build",
-    "ws": "^8.21.0"
+    "ws": "^8.21.1"
   },
   "peerDependencies": {
     "@ozaco/db": "*",

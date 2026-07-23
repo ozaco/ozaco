@@ -11,6 +11,8 @@ tasks:
       - server:build
       - db:build
       - ai:build
+      - client:build
+      - cli:build
     inputs:
       - src/**/*
       - ambient.d.ts
@@ -31,6 +33,8 @@ tasks:
       - server:build
       - db:build
       - ai:build
+      - client:build
+      - cli:build
     inputs:
       - src/**/*
       - ambient.d.ts
