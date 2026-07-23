@@ -59,13 +59,20 @@ export interface PostgresErrorFields {
 }
 
 /**
- * Map a Postgres driver error (node-`pg` or Bun `SQL`) to the matching {@link DbError} tag by
- * SQLSTATE — the Result-world counterpart of `@slonik/pg-driver`'s error classification. The failure
- * carries the message plus the relevant constraint/table/column detail as causes.
+ * Map a driver error to the matching {@link DbError} tag — the Result-world counterpart of
+ * `@slonik/pg-driver`'s error classification. Despite the name (kept for compatibility) this is now
+ * multi-dialect: Postgres/Bun `SQL` are classified by SQLSTATE; for the non-SQLSTATE drivers a UNIQUE
+ * violation is additionally detected from the driver's own error shape — SQLite
+ * (`SQLITE_CONSTRAINT_UNIQUE` / "UNIQUE constraint failed") and SurrealDB (an index/uniqueness message).
+ * The failure carries the message plus the relevant constraint/table/column detail as causes.
  */
 export const classifyPostgresError = (error: AnyType): Result.Failure<unknown> => {
   const fields = readPostgresFields(error)
-  const code = fields.code ?? ''
+  // A Postgres SQLSTATE is always a 5-char string. Non-Postgres drivers (e.g. SurrealDB, which
+  // surfaces a numeric JSON-RPC code like -32000) hand us a non-string or absent code; coerce anything
+  // that isn't a string to '' so we fall through to `DbError.Query` instead of throwing on
+  // `code.startsWith` and masking the real driver error with a `TypeError`.
+  const code = typeof fields.code === 'string' ? fields.code : ''
   const message = String(error?.message ?? error)
   const causes = [
     fields.constraint ? `constraint=${fields.constraint}` : undefined,
@@ -108,6 +115,18 @@ export const classifyPostgresError = (error: AnyType): Result.Failure<unknown> =
   }
   if (code.startsWith('08')) {
     return raise(DbError.Connection)
+  }
+  // Non-Postgres dialects don't use SQLSTATE, so a UNIQUE violation would otherwise fall through to the
+  // generic `DbError.Query`. Detect it from the driver's own error shape (string-based + defensive, so
+  // it never misfires on Postgres, whose unique violations are already caught by `23505` above): SQLite
+  // tags `SQLITE_CONSTRAINT_UNIQUE` ("UNIQUE constraint failed"); SurrealDB reports an index/uniqueness
+  // violation in its message (e.g. "index … already contains …").
+  const uniqueViolation =
+    code.includes('SQLITE_CONSTRAINT_UNIQUE') ||
+    /unique constraint failed/iu.test(message) ||
+    (/index/iu.test(message) && /(already contains|unique|duplicate)/iu.test(message))
+  if (uniqueViolation) {
+    return raise(DbError.UniqueIntegrityConstraintViolation)
   }
   return raise(DbError.Query)
 }

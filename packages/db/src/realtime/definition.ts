@@ -1,10 +1,10 @@
 // oxlint-disable import/exports-last
-import { usePool } from 'db:core'
+import { useDriver, usePool } from 'db:core'
 import { createContext, operation, spawn, useContext } from 'std:effect'
 import { defineProtocol } from 'std:plugin'
 
 import { bridgeChangeBus, createRealtimeDatabase } from './impl/database'
-import { applySchema, planSchema } from './impl/migrate'
+import { applySchema, dropIndex, dropTable, planSchema, reindex } from './impl/migrate'
 import { schemaFrom } from './schema/define'
 import type { BusHolder, ChangeBus } from './types/change'
 import type { DBActions, DBContext, RealtimeState, RealtimeDbConfig } from './types/database'
@@ -24,12 +24,15 @@ const closeAction = operation(function* () {
 
 const migrateAction = operation(function* () {
   const state = yield* useContext(StateRef)
-  yield* applySchema(state.pool, state.schema, { allowDestructive: !state.safe })
+  yield* applySchema(state.pool, state.schema, {
+    allowDestructive: !state.safe,
+    dialect: state.dialect,
+  })
 })
 
 const planAction = operation(function* () {
   const state = yield* useContext(StateRef)
-  return yield* planSchema(state.pool, state.schema)
+  return yield* planSchema(state.pool, state.schema, state.dialect)
 })
 
 const hasBusAction = operation(function* () {
@@ -46,6 +49,21 @@ const connectBusAction = operation(function* (bus: ChangeBus) {
   return true
 })
 
+const dropTableAction = operation(function* (table: string) {
+  const state = yield* useContext(StateRef)
+  yield* dropTable(state, table)
+})
+
+const dropIndexAction = operation(function* (table: string, indexName: string) {
+  const state = yield* useContext(StateRef)
+  yield* dropIndex(state, table, indexName)
+})
+
+const reindexAction = operation(function* (table: string) {
+  const state = yield* useContext(StateRef)
+  yield* reindex(state, table)
+})
+
 /**
  * The realtime database plugin — installs a Convex-style {@link Database} on top of an already-installed
  * core `@ozaco/db` pool (resolved via `usePool()`). The concrete backend (pg / Bun SQL / SQLite /
@@ -57,13 +75,14 @@ export const RealtimeDb = DB.implement({
   version: '0.0.1',
   *setup(config: RealtimeDbConfig) {
     const pool = yield* usePool()
+    const { dialect } = yield* useDriver()
     const schema = schemaFrom(config.tables)
     const safe = config.safe ?? false
     const busHolder: BusHolder = {}
-    const db = createRealtimeDatabase(pool, schema, busHolder)
-    yield* StateRef.set({ pool, schema, safe, db, busHolder })
+    const db = createRealtimeDatabase(pool, schema, { busHolder, dialect })
+    yield* StateRef.set({ pool, schema, safe, db, busHolder, dialect })
     if ((config.migrations ?? 'auto') === 'auto') {
-      yield* applySchema(pool, schema, { allowDestructive: !safe })
+      yield* applySchema(pool, schema, { allowDestructive: !safe, dialect })
     }
     const bus = config.bus
     if (bus) {
@@ -79,4 +98,7 @@ export const RealtimeDb = DB.implement({
   planMigration: planAction,
   hasBus: hasBusAction,
   connectBus: connectBusAction,
+  dropTable: dropTableAction,
+  dropIndex: dropIndexAction,
+  reindex: reindexAction,
 })

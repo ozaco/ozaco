@@ -16,6 +16,8 @@ export default defineConfig({
     'basic/file-upload': './src/basic/file-upload/main.ts',
     'advanced/common': './src/advanced/common/main.ts',
     'basic/realtime': './src/basic/realtime/main.ts',
+    'basic/realtime-surreal': './src/basic/realtime-surreal/main.ts',
+    'basic/db-ddl': './src/basic/db-ddl/main.ts',
     'basic/interceptors': './src/basic/interceptors/main.ts',
     'basic/dataloaders': './src/basic/dataloaders/main.ts',
     'advanced/migration': './src/advanced/migration/main.ts',

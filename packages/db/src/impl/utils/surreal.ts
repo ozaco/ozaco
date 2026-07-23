@@ -1,13 +1,18 @@
 import type { Query, QueryResultRow } from 'db:core'
 
-/** Translate the engine's Postgres-style `$1..$n` placeholders to SurrealQL named vars `$p1..$pn`
- * with a bindings bag — the degrade layer for a Postgres-shaped query on SurrealDB. */
+/** Translate a Postgres-shaped query (the core `sql` tag's output) to SurrealQL — the degrade layer.
+ * Two rewrites: the engine's `$1..$n` placeholders become named vars `$p1..$pn`, and double-quoted
+ * identifiers become backtick-quoted ones. The latter is safe because the `sql` tag parameterizes
+ * every value (`$n`) and escapes string literals with single quotes, so any `"…"` run left in the
+ * baked SQL is ALWAYS an identifier — in SurrealQL `"…"` is a string, and names are `` `…` ``. */
 export const toSurreal = (query: Query): { text: string; bindings: Record<string, unknown> } => {
   const bindings: Record<string, unknown> = {}
   for (const [index, value] of query.values.entries()) {
     bindings[`p${index + 1}`] = value
   }
-  const text = query.sql.replaceAll(/\$(\d+)/gu, (_match, digits: string) => `$p${digits}`)
+  const text = query.sql
+    .replaceAll(/"((?:[^"]|"")*)"/gu, (_match, name: string) => `\`${name.replaceAll('""', '"')}\``)
+    .replaceAll(/\$(\d+)/gu, (_match, digits: string) => `$p${digits}`)
   return { text, bindings }
 }
 

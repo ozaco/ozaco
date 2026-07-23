@@ -93,14 +93,14 @@ export function resource(
       yield* Broker.actions.register(service)
       yield* Gateway.actions.mount(basePath, service)
       if (hasReactive) {
-        yield* mountResourceRealtime(basePath, module, transport)
+        yield* mountResourceRealtime({ basePath, namespace, module, transport })
         // Turn on cross-node reactive fan-out automatically when a Broker + realtime DB are present
         // (rides whatever transport is installed). Idempotent — attaches at most one bus per process.
         yield* ensureChangeBus()
       }
       for (const [name, definition] of streamEntries) {
         if (definition.rest) {
-          yield* mountStreamRoute(basePath, name, definition)
+          yield* mountStreamRoute({ basePath, namespace, name, def: definition })
         }
       }
     },

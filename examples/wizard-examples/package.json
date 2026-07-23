@@ -8,7 +8,9 @@
     "@ozaco/client": "workspace:*",
     "@ozaco/db": "workspace:*",
     "@ozaco/server": "workspace:*",
-    "@ozaco/std": "workspace:*"
+    "@ozaco/std": "workspace:*",
+    "@surrealdb/node": "^3.0.3",
+    "surrealdb": "^2.0.8"
   },
   "devDependencies": {
     "@ozaco/devkit": "workspace:*",

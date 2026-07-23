@@ -7,7 +7,7 @@ import type { Filter } from '../utils/expr'
 import type { MongoFilter } from '../utils/filter'
 
 import type { BusHolder, ChangeBus, ChangeEvent } from './change'
-import type { MigrationMode, MigrationPlan } from './migrate'
+import type { Dialect, MigrationMode, MigrationPlan } from './migrate'
 import type { Page, PaginateOptions } from './page'
 
 /** The stored-row shape at the realtime layer (validated fields + system fields). */
@@ -95,6 +95,12 @@ export interface DBActions extends Record<string, AnyType> {
    * — a no-op returning `false` if one is already attached. The server calls this automatically with a
    * Broker-backed bus when resources mount, so multi-node reactivity needs no app wiring. */
   connectBus(bus: ChangeBus): Future<boolean>
+  /** Drop a table if it exists. Portable across postgres / sqlite / surreal. */
+  dropTable(table: string): Future<void>
+  /** Drop a declared index (by its declared name) if it exists. Portable across all dialects. */
+  dropIndex(table: string, indexName: string): Future<void>
+  /** Rebuild a table's indexes (postgres/sqlite reindex the table; surreal rebuilds each index). */
+  reindex(table: string): Future<void>
 }
 
 /** Config for {@link RealtimeDb}: the tables to manage and the migration policy. The pool itself is
@@ -116,4 +122,6 @@ export interface RealtimeState {
   readonly safe: boolean
   readonly db: Database
   readonly busHolder: BusHolder
+  /** The installed driver's dialect, so `migrate()`/`planMigration()` re-run against the right SQL. */
+  readonly dialect: Dialect
 }

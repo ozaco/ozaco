@@ -4,13 +4,14 @@ import { IO } from 'std:io'
 import { fail, isFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
 
-import { DbDriver } from '../defaults'
+import { DbDriver, useDriver } from '../defaults'
 import type {
   ClientConfiguration,
   DatabasePool,
   DatabasePoolConnection,
   DatabaseTransactionConnection,
   DriverConnection,
+  DriverDef,
   Interceptor,
   PoolState,
   Query,
@@ -105,61 +106,150 @@ const makeStreamRun = (deps: RunDeps) =>
     }
   })
 
-// --- transactions (BEGIN/COMMIT/ROLLBACK + savepoint nesting + retry) ------------------------------
+// --- transactions (dialect-aware control + savepoint nesting + retry + shared-handle serialization) --
+
+/**
+ * A minimal async mutex (FIFO), mirroring the connection pool's waiter pattern. `sqlite`/`surreal`
+ * share ONE physical handle across every pooled logical connection, so two overlapping top-level
+ * transactions would both `BEGIN` on that handle ("cannot start a transaction within a transaction" /
+ * interleaved statements). One per-pool lock makes a second top-level transaction wait for the first to
+ * COMMIT/CANCEL. Postgres has real per-connection isolation and is never serialized.
+ *
+ * LIMITATION (documented, not fixed this pass): only transaction-vs-transaction overlap is guarded. A
+ * non-transactional query issued on another logical connection while a transaction is open still hits
+ * the shared handle without going through this lock; and — like the connection pool's own waiter list —
+ * a transaction cancelled while WAITING to acquire is not removed from the queue. Full isolation would
+ * need a real per-transaction handle, which is out of scope here.
+ */
+interface SerialLock {
+  acquire(): Future<() => void>
+}
+
+const createSerialLock = (): SerialLock => {
+  const waiters: Array<() => void> = []
+  let held = false
+
+  const release = (): void => {
+    const next = waiters.shift()
+    if (next) {
+      next() // hand the lock straight to the next waiter; it stays held
+      return
+    }
+    held = false
+  }
+
+  const acquire = operation(function* () {
+    if (!held) {
+      held = true
+      return release
+    }
+    yield* until(
+      new Promise<void>(resolve => {
+        waiters.push(resolve)
+      }),
+    )
+    return release
+  })
+
+  return { acquire }
+}
 
 interface TxDeps extends RunDeps {
   readonly retryLimit: number
+  readonly dialect: DriverDef.Info['dialect']
+  readonly lock: SerialLock
+}
+
+interface TxControl {
+  readonly begin: string
+  readonly commit: string
+  readonly rollback: string
+}
+
+/** The dialect-appropriate transaction-control statements. SurrealQL uses BEGIN/COMMIT/CANCEL and has
+ * no savepoints (a nested transaction is rejected before this is reached); Postgres/SQLite use ANSI
+ * BEGIN/COMMIT/ROLLBACK at the top level and SAVEPOINT/RELEASE/ROLLBACK TO for a nested (savepoint)
+ * transaction. */
+const txControl = (dialect: DriverDef.Info['dialect'], savepoint: string | null): TxControl => {
+  if (dialect === 'surreal') {
+    return { begin: 'BEGIN', commit: 'COMMIT', rollback: 'CANCEL' }
+  }
+  if (savepoint) {
+    return {
+      begin: `SAVEPOINT ${savepoint}`,
+      commit: `RELEASE SAVEPOINT ${savepoint}`,
+      rollback: `ROLLBACK TO SAVEPOINT ${savepoint}`,
+    }
+  }
+  return { begin: 'BEGIN', commit: 'COMMIT', rollback: 'ROLLBACK' }
 }
 
 /**
- * Run `handler` inside a transaction. `savepoint` (nested) uses SAVEPOINT/RELEASE/ROLLBACK TO;
- * otherwise BEGIN/COMMIT/ROLLBACK. Retries on `DbError.TransactionRollback`
- * (serialization/deadlock) up to `retryLimit`.
+ * Run `handler` inside a transaction. Control statements are dialect-aware (see {@link txControl}):
+ * Postgres/SQLite use BEGIN/COMMIT/ROLLBACK (SAVEPOINT/RELEASE/ROLLBACK TO when nested); SurrealDB uses
+ * BEGIN/COMMIT/CANCEL and rejects nesting cleanly (it has no savepoints). On the shared-handle drivers
+ * (sqlite/surreal) top-level transactions are serialized through {@link TxDeps.lock}. Retries on
+ * `DbError.TransactionRollback` (serialization/deadlock) up to `retryLimit`.
  */
 const runTransaction = operation(function* (
   deps: TxDeps,
   handler: (connection: DatabaseTransactionConnection) => Future<AnyType>,
   depth: number,
 ) {
-  const savepoint = depth > 0 ? `ozaco_sp_${depth}` : null
-
-  for (let attemptIndex = 0; ; attemptIndex += 1) {
-    yield* exec(deps.connection, savepoint ? `SAVEPOINT ${savepoint}` : 'BEGIN')
-
-    const transactionId = yield* IO.actions.uuid()
-    const run = makeRun({ ...deps, transactionId })
-    const streamRun = makeStreamRun({ ...deps, transactionId })
-    const methods = makeQueryMethods(run, streamRun)
-    const connection = {
-      ...methods,
-      transactionId,
-      transaction: (
-        nested: (connection: DatabaseTransactionConnection) => Future<AnyType>,
-        retryLimit?: number,
-      ): Future<AnyType> =>
-        runTransaction(
-          { ...deps, transactionId, retryLimit: retryLimit ?? deps.retryLimit },
-          nested,
-          depth + 1,
-        ),
-    } as unknown as DatabaseTransactionConnection
-
-    const outcome = yield* attempt(handler(connection))
-
-    if (!isFailure(outcome)) {
-      yield* exec(deps.connection, savepoint ? `RELEASE SAVEPOINT ${savepoint}` : 'COMMIT')
-      return outcome.value
-    }
-
-    yield* attempt(
-      exec(deps.connection, savepoint ? `ROLLBACK TO SAVEPOINT ${savepoint}` : 'ROLLBACK'),
+  const nested = depth > 0
+  if (nested && deps.dialect === 'surreal') {
+    return yield* fail(
+      DbError.UnexpectedState,
+      'SurrealDB has no savepoints — nested (savepoint) transactions are not supported',
     )
+  }
+  const savepoint = nested ? `ozaco_sp_${depth}` : null
+  const control = txControl(deps.dialect, savepoint)
+  // shared-handle drivers can't run two top-level transactions at once; serialize them. Nested
+  // savepoints run within the outer lock and must NOT re-acquire it (that would self-deadlock).
+  const serialize = !nested && (deps.dialect === 'sqlite' || deps.dialect === 'surreal')
+  const release = serialize ? yield* deps.lock.acquire() : null
 
-    const retryable = outcome.error === DbError.TransactionRollback
-    if (retryable && attemptIndex < deps.retryLimit) {
-      continue
+  try {
+    for (let attemptIndex = 0; ; attemptIndex += 1) {
+      yield* exec(deps.connection, control.begin)
+
+      const transactionId = yield* IO.actions.uuid()
+      const run = makeRun({ ...deps, transactionId })
+      const streamRun = makeStreamRun({ ...deps, transactionId })
+      const methods = makeQueryMethods(run, streamRun)
+      const connection = {
+        ...methods,
+        transactionId,
+        transaction: (
+          nestedRoutine: (connection: DatabaseTransactionConnection) => Future<AnyType>,
+          retryLimit?: number,
+        ): Future<AnyType> =>
+          runTransaction(
+            { ...deps, transactionId, retryLimit: retryLimit ?? deps.retryLimit },
+            nestedRoutine,
+            depth + 1,
+          ),
+      } as unknown as DatabaseTransactionConnection
+
+      const outcome = yield* attempt(handler(connection))
+
+      if (!isFailure(outcome)) {
+        yield* exec(deps.connection, control.commit)
+        return outcome.value
+      }
+
+      yield* attempt(exec(deps.connection, control.rollback))
+
+      const retryable = outcome.error === DbError.TransactionRollback
+      if (retryable && attemptIndex < deps.retryLimit) {
+        continue
+      }
+      return yield* outcome
     }
-    return yield* outcome
+  } finally {
+    // always hand the lock to the next waiter, on commit/cancel/failure/cancellation of the holder
+    release?.()
   }
 })
 
@@ -271,6 +361,12 @@ export const createPool = operation(function* (config: ClientConfiguration) {
   const pool = createConnectionPool(resolved)
   const poolId = yield* IO.actions.uuid()
   const interceptors = resolved.interceptors
+  // Resolved once here (the driver is installed before this pool) rather than per transaction, so the
+  // control statements and shared-handle serialization stay correct regardless of the caller's context.
+  const { dialect } = yield* useDriver()
+  // One lock per pool — the shared-handle drivers (sqlite/surreal) use exactly one physical handle per
+  // pool, so serializing on this lock serializes on that handle. Unused on Postgres.
+  const txLock = createSerialLock()
 
   const poolMethods = makeQueryMethods(
     token =>
@@ -293,7 +389,12 @@ export const createPool = operation(function* (config: ClientConfiguration) {
           retryLimit?: number,
         ): Future<AnyType> =>
           runTransaction(
-            { ...deps, retryLimit: retryLimit ?? resolved.transactionRetryLimit },
+            {
+              ...deps,
+              retryLimit: retryLimit ?? resolved.transactionRetryLimit,
+              dialect,
+              lock: txLock,
+            },
             routine,
             0,
           ),
@@ -312,6 +413,8 @@ export const createPool = operation(function* (config: ClientConfiguration) {
           interceptors,
           poolId,
           retryLimit: retryLimit ?? resolved.transactionRetryLimit,
+          dialect,
+          lock: txLock,
         },
         routine,
         0,

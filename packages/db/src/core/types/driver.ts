@@ -10,7 +10,7 @@ export type DriverDef = Plugin<DriverDef.Info, [DriverDef.Options?], DriverDef.A
 export namespace DriverDef {
   /** Backend metadata a driver's `setup()` returns (the protocol context). */
   export interface Info {
-    readonly dialect: 'postgres' | 'surreal'
+    readonly dialect: 'postgres' | 'sqlite' | 'surreal'
   }
 
   /** Per-driver install options (e.g. SurrealDB's namespace/database); generic at the protocol level. */

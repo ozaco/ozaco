@@ -7,12 +7,15 @@ import { IO } from 'std:io'
 import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 
+import { JsonCodec } from 'std:codec/impl/json'
+
 import { CREATED, DEFAULT_ORDER, ID, VERSION } from '../const'
 import { coerceRow, coerceRows, commaList, ident } from '../internal/coerce'
 import { decodeCursor, encodeCursor } from '../internal/cursor'
 import type { SchemaDef, TableDef } from '../schema/types'
 import type { BusHolder, ChangeBus, ChangeEvent } from '../types/change'
 import type { Database, QueryHandle, Row } from '../types/database'
+import type { Dialect } from '../types/migrate'
 import type { Page, PaginateOptions } from '../types/page'
 import type { Filter } from '../utils/expr'
 import { and, eq, gt, lt } from '../utils/expr'
@@ -35,9 +38,15 @@ interface QueryState {
 export const createRealtimeDatabase = (
   pool: DatabasePool,
   schema: SchemaDef,
-  busHolder: BusHolder = {},
+  config: { busHolder?: BusHolder; dialect?: Dialect } = {},
 ): Database => {
+  const busHolder: BusHolder = config.busHolder ?? {}
+  const dialect: Dialect = config.dialect ?? 'postgres'
   const tableOf = (name: string): TableDef => schema.tables[name] as TableDef
+  // SurrealQL diverges from the ANSI path in a few statement shapes (see below). `INSERT`/`UPDATE`
+  // return the affected records by default — no `RETURNING *`, which SurrealDB's parser rejects.
+  const isSurreal = dialect === 'surreal'
+  const returningAll = isSurreal ? sql.fragment`` : sql.fragment`RETURNING *`
   const changes = createSignal<ChangeEvent>()
   const versions = new Map<string, number>()
   const versionOf = (name: string): string => String(versions.get(name) ?? 0)
@@ -46,6 +55,29 @@ export const createRealtimeDatabase = (
     versions.set(name, next)
     return next
   }
+
+  // `json`-kind columns are bound as JSON TEXT, never as the raw JS value: node-pg encodes a JS array
+  // as a Postgres ARRAY literal `{…}`, which a json/jsonb column rejects (`22P02 invalid input syntax
+  // for json`). Serializing to a string inserts as text (Postgres casts it to json/jsonb, SQLite stores
+  // the text, SurrealDB stores the string) and round-trips through `coerce`'s decode, which JSON-parses
+  // `json` columns that come back as strings. Applied consistently across insert/patch/replace.
+  const jsonColumnsOf = (name: string): ReadonlySet<string> =>
+    new Set(
+      tableOf(name)
+        .columns.filter(column => column.kind === 'json')
+        .map(column => column.name),
+    )
+
+  const bindColumn = operation(function* (
+    jsonColumns: ReadonlySet<string>,
+    column: string,
+    value: PrimitiveValueExpression,
+  ) {
+    if (value === null || value === undefined || !jsonColumns.has(column)) {
+      return value
+    }
+    return (yield* JsonCodec.actions.stringify(value)) as PrimitiveValueExpression
+  })
 
   // Emit a committed write to local watchers and, when a bus is attached (multi-node), to the other
   // nodes. The bus is read from the holder on each write, so it can be attached after construction
@@ -119,8 +151,12 @@ export const createRealtimeDatabase = (
       return (rows[0] ? yield* coerceRow(rows[0], tableOf(state.table).columns) : null) as AnyType
     }),
     count: operation(function* () {
+      // SurrealQL has no `COUNT(*)`: it's the `count()` aggregate with `GROUP ALL`, which still yields
+      // exactly one row (`{ count: 0 }`) on an empty table, so `oneFirst` stays valid for both paths.
       const value = yield* pool.oneFirst(
-        sql`SELECT COUNT(*) AS "count" FROM ${ident(state.table)} ${whereClause(state)}`,
+        isSurreal
+          ? sql`SELECT count() AS "count" FROM ${ident(state.table)} ${whereClause(state)} GROUP ALL`
+          : sql`SELECT COUNT(*) AS "count" FROM ${ident(state.table)} ${whereClause(state)}`,
       )
       return Number(value ?? 0)
     }),
@@ -204,10 +240,20 @@ export const createRealtimeDatabase = (
       ...(parsed.data as Record<string, PrimitiveValueExpression>),
     }
     const columns = Object.keys(row)
+    const jsonColumns = jsonColumnsOf(name)
+    const bound: FragmentSqlToken[] = []
+    for (const column of columns) {
+      const boundValue = yield* bindColumn(
+        jsonColumns,
+        column,
+        row[column] as PrimitiveValueExpression,
+      )
+      bound.push(sql.fragment`${boundValue}`)
+    }
     const inserted = yield* pool.one(
       sql`INSERT INTO ${ident(name)} (${commaList(columns.map(ident))}) VALUES (${commaList(
-        columns.map(column => sql.fragment`${row[column] as PrimitiveValueExpression}`),
-      )}) RETURNING *`,
+        bound,
+      )}) ${returningAll}`,
     )
     const doc = (yield* coerceRow(inserted, def.columns))!
     yield* broadcast({
@@ -228,14 +274,15 @@ export const createRealtimeDatabase = (
     }
     const data = parsed.data as Record<string, PrimitiveValueExpression>
     const version = bump(name)
-    const assignments = [
-      ...Object.entries(data).map(
-        ([column, columnValue]) => sql.fragment`${ident(column)} = ${columnValue}`,
-      ),
-      sql.fragment`${ident(VERSION)} = ${version}`,
-    ]
+    const jsonColumns = jsonColumnsOf(name)
+    const assignments: FragmentSqlToken[] = []
+    for (const [column, columnValue] of Object.entries(data)) {
+      const boundValue = yield* bindColumn(jsonColumns, column, columnValue)
+      assignments.push(sql.fragment`${ident(column)} = ${boundValue}`)
+    }
+    assignments.push(sql.fragment`${ident(VERSION)} = ${version}`)
     const updated = yield* pool.maybeOne(
-      sql`UPDATE ${ident(name)} SET ${commaList(assignments)} WHERE ${ident(ID)} = ${id} RETURNING *`,
+      sql`UPDATE ${ident(name)} SET ${commaList(assignments)} WHERE ${ident(ID)} = ${id} ${returningAll}`,
     )
     if (!updated) {
       return null as AnyType
@@ -253,14 +300,15 @@ export const createRealtimeDatabase = (
     }
     const data = parsed.data as Record<string, PrimitiveValueExpression>
     const version = bump(name)
-    const assignments = [
-      ...Object.entries(data).map(
-        ([column, columnValue]) => sql.fragment`${ident(column)} = ${columnValue}`,
-      ),
-      sql.fragment`${ident(VERSION)} = ${version}`,
-    ]
+    const jsonColumns = jsonColumnsOf(name)
+    const assignments: FragmentSqlToken[] = []
+    for (const [column, columnValue] of Object.entries(data)) {
+      const boundValue = yield* bindColumn(jsonColumns, column, columnValue)
+      assignments.push(sql.fragment`${ident(column)} = ${boundValue}`)
+    }
+    assignments.push(sql.fragment`${ident(VERSION)} = ${version}`)
     const updated = yield* pool.maybeOne(
-      sql`UPDATE ${ident(name)} SET ${commaList(assignments)} WHERE ${ident(ID)} = ${id} RETURNING *`,
+      sql`UPDATE ${ident(name)} SET ${commaList(assignments)} WHERE ${ident(ID)} = ${id} ${returningAll}`,
     )
     if (!updated) {
       return null as AnyType
@@ -271,8 +319,12 @@ export const createRealtimeDatabase = (
   })
 
   const deleteRow = operation(function* (name: string, id: string) {
+    // SurrealQL returns nothing from a DELETE unless asked; `RETURN BEFORE` yields the removed rows so
+    // the `length > 0` check (did anything actually delete?) holds on both paths.
     const removed = yield* pool.any(
-      sql`DELETE FROM ${ident(name)} WHERE ${ident(ID)} = ${id} RETURNING ${ident(ID)}`,
+      isSurreal
+        ? sql`DELETE FROM ${ident(name)} WHERE ${ident(ID)} = ${id} RETURN BEFORE`
+        : sql`DELETE FROM ${ident(name)} WHERE ${ident(ID)} = ${id} RETURNING ${ident(ID)}`,
     )
     if (removed.length > 0) {
       const version = bump(name)

@@ -25,7 +25,7 @@ export const SqliteDriver = DbDriver.implement({
   name: 'sqlite',
   version: '0.0.1',
   *setup() {
-    return { dialect: 'postgres' as const }
+    return { dialect: 'sqlite' as const }
   },
 }).build({
   connect: operation(function* (config: ResolvedClientConfiguration) {

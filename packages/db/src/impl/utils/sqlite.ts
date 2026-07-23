@@ -13,7 +13,7 @@ export const encodeParam = (value: unknown): unknown => {
   return value
 }
 
-/** Whether a statement yields rows (SELECT / WITH / `RETURNING`) — picks `.all()`/`.iterate()` over
- * `.run()`. */
+/** Whether a statement yields rows (SELECT / WITH / PRAGMA / `RETURNING`) — picks `.all()`/`.iterate()`
+ * over `.run()`. `PRAGMA table_info(...)` is row-returning and drives SQLite schema introspection. */
 export const returnsRows = (sql: string): boolean =>
-  /^\s*(select|with)/iu.test(sql) || /\breturning\b/iu.test(sql)
+  /^\s*(select|with|pragma)/iu.test(sql) || /\breturning\b/iu.test(sql)

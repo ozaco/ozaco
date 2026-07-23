@@ -26,6 +26,13 @@ export interface SurrealDriverOptions {
 
 let driverOptions: SurrealDriverOptions | null = null
 
+// SurrealDB's embedded engines (`mem://`, `surrealkv://`) scope the database to the `Surreal` CLIENT
+// instance — a fresh client per pooled connection would be a fresh, EMPTY database, so a write on one
+// connection is invisible to the next. Mirror the SQLite driver: every pooled connection shares ONE
+// client (the pool bounds concurrency, not distinct databases). Opened lazily on the first `connect`,
+// closed only by `end()`.
+let sharedDb: AnyType = null
+
 /**
  * SurrealDB driver plugin — `install(SurrealDriver, { namespace, database })` then
  * `install(Pool, { connectionUri })`. `surrealdb` is imported statically. Postgres-specific features
@@ -43,18 +50,22 @@ export const SurrealDriver = DbDriver.implement({
 }).build({
   connect: operation(function* (config: ResolvedClientConfiguration) {
     const options = driverOptions!
-    const embedded = yield* attempt(call<AnyType>(() => dynamicImport('@surrealdb/node')))
-    const engines = {
-      ...core.createRemoteEngines?.(),
-      ...(isSuccess(embedded) ? (embedded.value as AnyType).createNodeEngines?.() : {}),
-    }
+    if (!sharedDb) {
+      const embedded = yield* attempt(call<AnyType>(() => dynamicImport('@surrealdb/node')))
+      const engines = {
+        ...core.createRemoteEngines?.(),
+        ...(isSuccess(embedded) ? (embedded.value as AnyType).createNodeEngines?.() : {}),
+      }
 
-    const db = new core.Surreal({ engines })
-    yield* until(db.connect(config.connectionUri))
-    yield* until(db.use({ namespace: options.namespace, database: options.database }))
-    if (options.auth) {
-      yield* until(db.signin(options.auth))
+      const db = new core.Surreal({ engines })
+      yield* until(db.connect(config.connectionUri))
+      yield* until(db.use({ namespace: options.namespace, database: options.database }))
+      if (options.auth) {
+        yield* until(db.signin(options.auth))
+      }
+      sharedDb = db
     }
+    const db = sharedDb
 
     const runRaw = function* (query: Query) {
       const { text, bindings } = toSurreal(query)
@@ -75,11 +86,15 @@ export const SurrealDriver = DbDriver.implement({
       }),
       // SurrealDB has no `DISCARD ALL` equivalent; reset is a no-op.
       reset: operation(function* () {}),
-      close: operation(function* () {
-        yield* until(db.close())
-      }),
+      // the client is shared across pooled connections; only `end()` actually closes it.
+      close: operation(function* () {}),
     }
     return connection
   }),
-  end: operation(function* () {}),
+  end: operation(function* () {
+    if (sharedDb) {
+      yield* until(sharedDb.close())
+      sharedDb = null
+    }
+  }),
 })
