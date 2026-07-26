@@ -1,8 +1,8 @@
-import type { TransportDef } from 'server:core'
-import { Broker, CoreErrors, Transport } from 'server:core'
-import type { Stream } from 'std:effect'
+import type { Response, TransportDef } from 'server:core'
+import { Broker, CoreErrors, DataType, Transport, lanesOf, valuesOf } from 'server:core'
+import type { Operation, Stream } from 'std:effect'
 import { ensure, operation, useScope, withResolvers } from 'std:effect'
-import { fail } from 'std:result'
+import { fail, nothing } from 'std:result'
 
 import { getSelf, useWorkerContext } from './internal/context'
 import { createEndpoints } from './internal/endpoint'
@@ -62,25 +62,36 @@ export const WorkerTransport = Transport.implement({
     return context
   },
 }).build({
+  /**
+   * No discovery yet, so the honest answer is `nothing()` for everything.
+   *
+   * `just(false)` is deliberately never returned from an incomplete view: a fast-fail built on
+   * partial knowledge is a new outage mode, not a saving. A presence watcher can upgrade a known
+   * claim to `just(true)` later; this stays the floor.
+   */
+  hosts: operation(function* () {
+    return nothing()
+  }),
+
   dispatch: operation(function* (req: TransportDef.DispatchRequest) {
     const worker = yield* useWorkerContext()
 
     const candidates = worker.endpoints.filter(
-      endpoint => endpoint.services.size === 0 || endpoint.services.has(req.serviceName),
+      endpoint => endpoint.services.size === 0 || endpoint.services.has(req.service),
     )
     if (candidates.length === 0) {
       return yield* fail(
         CoreErrors.NotFound,
-        `worker transport has no endpoint hosting "${req.serviceName}"`,
+        `worker transport has no endpoint hosting "${req.service}"`,
       )
     }
 
-    const cursor = worker.rr.get(req.serviceName) ?? 0
+    const cursor = worker.rr.get(req.service) ?? 0
     const endpoint = candidates[cursor % candidates.length]!
-    worker.rr.set(req.serviceName, cursor + 1)
+    worker.rr.set(req.service, cursor + 1)
 
     const cid = generateId('c')
-    const inputs = (req.streams ?? []) as Stream<unknown, void>[]
+    const inputs = lanesOf(req.sources) as Stream<unknown, void>[]
     const inputStreams = inputs.length > 0 ? inputs.map(() => generateId('s')) : undefined
     const outputStream = generateId('s')
 
@@ -89,12 +100,15 @@ export const WorkerTransport = Transport.implement({
     const envelope: WorkerDef.DispatchEnvelope = {
       kind: 'dispatch',
       cid,
-      serviceName: req.serviceName,
-      actionKey: req.actionKey,
+      serviceName: req.service,
+      actionKey: req.path,
+      origin: String(req.origin).includes('external') ? 'external' : 'internal',
+      meta: req.meta,
+      ...(req.wire === undefined ? {} : { wire: req.wire }),
       outputStream,
-      ...(req.params === undefined
+      ...(valuesOf(req.sources).length === 0
         ? {}
-        : { params: yield* encodeValue(endpoint.wire, req.params) }),
+        : { params: yield* encodeValue(endpoint.wire, valuesOf(req.sources)) }),
       ...(inputStreams === undefined ? {} : { inputStreams }),
       ...(req.contexts === undefined
         ? {}
@@ -113,7 +127,7 @@ export const WorkerTransport = Transport.implement({
     if (!endpoint.post(envelope)) {
       return yield* fail(
         CoreErrors.TransportDispatch,
-        `worker endpoint failed to post dispatch for "${req.serviceName}.${req.actionKey}"`,
+        `worker endpoint failed to post dispatch for "${req.service}.${req.path}"`,
       )
     }
     if (inputStreams) {
@@ -133,14 +147,25 @@ export const WorkerTransport = Transport.implement({
     const wire = yield* reply.operation
 
     if (wire._t === '__stream__') {
-      return yield* consumeInbound(endpoint, outputQueue)
+      return {
+        status: wire.status,
+        meta: wire.meta ?? {},
+        sources: [{ type: DataType.normal, value: yield* consumeInbound(endpoint, outputQueue) }],
+      } satisfies Response
     }
 
     worker.streams.delete(outputStream)
     if (wire._t === '__failure__') {
-      return yield* unwrapWire(wire)
+      return yield* unwrapWire(wire) as Operation<never>
     }
-    return yield* decodeValue(endpoint.wire, wire.value)
+    // The status and headers the owner set, rebuilt on this side rather than dropped.
+    const value = yield* decodeValue(endpoint.wire, wire.value)
+
+    return {
+      status: wire.status,
+      meta: wire.meta ?? {},
+      sources: value === undefined ? [] : [{ type: DataType.normal, value }],
+    } satisfies Response
   }),
 
   emit: operation(function* (req: TransportDef.EventRequest) {

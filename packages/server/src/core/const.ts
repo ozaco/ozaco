@@ -13,6 +13,39 @@ export const POLICY_SETTING = Symbol.for('server:core:policy-setting')
 
 export const GATEWAY = Symbol.for('server:core:gateway')
 
+export const CHANNEL = Symbol.for('server:core:channel')
+
+/**
+ * Where a call came from, as a SYMBOL rather than a string or a boolean.
+ *
+ * Set by whoever admitted the call and never copied out of a payload — which is the point of a
+ * symbol: it cannot survive a codec, so a client cannot put `origin: 'internal'` on the wire and
+ * have a downstream check believe it.
+ */
+export const INTERNAL_ORIGIN = Symbol.for('server:core:internal')
+export const EXTERNAL_ORIGIN = Symbol.for('server:core:external')
+
+/**
+ * What one channel of a call carries.
+ *
+ * A call holds AT MOST ONE source per kind, which is what makes `useSource(type)` unambiguous and
+ * what makes a call's shape a SET rather than a list: it either has a socket or it does not.
+ * Several byte lanes at once are one `multistream`, never several `stream`s.
+ */
+export const DataType = {
+  /** a single value */
+  normal: 'normal',
+  /** one lane — a feed of values, or a feed of raw bytes */
+  stream: 'stream',
+  /** several named lanes at once, e.g. a multipart body */
+  multistream: 'multistream',
+  /** a duplex connection, whose lifetime is a lease rather than the dispatch that opened it */
+  socket: 'socket',
+} as const
+
+// oxlint-disable-next-line no-redeclare
+export type DataType = (typeof DataType)[keyof typeof DataType]
+
 // Default layering of the built-in policies. Policies are applied as an onion sorted ascending by
 // priority: the LOWEST number is the OUTERMOST layer. Timeout is innermost (highest) on purpose —
 // a timeout must surface as a normal thrown CoreErrors.Timeout that the outer stateful policies
@@ -38,6 +71,7 @@ export const CoreErrors = createTags(
 
   'forbidden',
   'not-found',
+  'not-registered',
   'unauthorized',
   'exists',
   'precondition-failed',
@@ -63,6 +97,7 @@ export const CoreStatusMap = {
 
   [CoreErrors.Forbidden]: 403,
   [CoreErrors.NotFound]: 404,
+  [CoreErrors.NotRegistered]: 404,
   [CoreErrors.Unauthorized]: 401,
   [CoreErrors.Exists]: 409,
   [CoreErrors.PreconditionFailed]: 412,

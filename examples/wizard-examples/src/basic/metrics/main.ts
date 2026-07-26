@@ -1,6 +1,6 @@
 import { Pool } from 'db:core'
 import { RealtimeDb, table } from 'db:realtime'
-import { Broker, DefaultBroker } from 'server:core'
+import { Broker, DataType, DefaultBroker } from 'server:core'
 import { Metrics, MetricsCollector } from 'server:metrics'
 import { resource } from 'server:wizard'
 import { main } from 'std:effect'
@@ -36,7 +36,7 @@ await main(function* () {
   yield* install(SqliteDriver)
   yield* install(Pool, { connectionUri: ':memory:' })
   yield* install(RealtimeDb, { tables: [notes] })
-  yield* install(noteResource)
+  yield* noteResource.actions.install()
   yield* install(MetricsCollector, {
     path: ':memory:',
     flushIntervalMs: 200,
@@ -47,11 +47,13 @@ await main(function* () {
 
   // --- generate work: CRUD calls + logs carrying custom structured fields ---
   for (let i = 1; i <= 5; i++) {
-    yield* Broker.actions.call(noteResource.actions.create, [{ title: `note-${i}` }])
+    yield* Broker.actions.call(noteResource, 'create', [
+      { type: DataType.normal, value: { title: `note-${i}` } },
+    ])
     yield* Logger.actions.info(`created note ${i}`, { userId: i, region: i % 2 ? 'eu' : 'us' })
   }
-  yield* Broker.actions.call(noteResource.actions.list, [{}])
-  yield* Broker.actions.call(noteResource.actions.list, [{}])
+  yield* Broker.actions.call(noteResource, 'list', [{ type: DataType.normal, value: {} }])
+  yield* Broker.actions.call(noteResource, 'list', [{ type: DataType.normal, value: {} }])
 
   // --- 1. MongoDB-style find on calls (same filter params as @ozaco/db) + custom field returned ---
   const writes = yield* Metrics.actions.find({

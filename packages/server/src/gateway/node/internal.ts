@@ -99,7 +99,7 @@ export const startAction = operation(function* (
 
     trackRequest(scope, ctx, deliver, function* () {
       try {
-        yield* dispatchRequest(request, res, deliver)
+        yield* dispatchRequest(request, deliver)
       } catch (error) {
         deliver(Response.json(asFailure(error), { status: statusFor(CoreErrors.BrokerInternal) }))
       }

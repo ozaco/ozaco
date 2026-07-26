@@ -1,9 +1,10 @@
 import { filter, operation, some, toSorted, useContext } from 'std:effect'
 import { Logger } from 'std:logger'
-import { asFailure, fail } from 'std:result'
+import { asFailure, fail, isJust } from 'std:result'
 
 import { CoreErrors } from '../const'
 import type { TransportDef } from '../types/transport'
+import { fault } from '../utils/fault'
 
 import { TransportRegistryContext } from './context'
 
@@ -23,10 +24,33 @@ export const transportDispatch = operation(function* (req: TransportDef.Dispatch
     return yield* fail(CoreErrors.MissingSettings, 'no transport registered')
   }
 
+  const hasLogger = (yield* Logger.context.get()) !== undefined
+  const uncertain: TransportDef[] = []
+
+  /**
+   * Ask every carrier first, and only then convey.
+   *
+   * A `just(true)` is dispatched immediately and its failure is the ANSWER — it is never a reason
+   * to try somewhere else, because the body has already run. A `just(false)` is skipped outright.
+   * Only the carriers that answered `nothing()` — no discovery, no claim either way — are tried in
+   * turn, and only until one of them stops saying it does not serve the address.
+   */
+  for (const entry of entries) {
+    const verdict = yield* entry.actions.hosts(req.service, req.path)
+
+    if (isJust(verdict)) {
+      if (verdict.value) {
+        return yield* entry.actions.dispatch(req)
+      }
+      continue
+    }
+    uncertain.push(entry)
+  }
+
   let captured: unknown
   let hasFailed = false
 
-  for (const entry of entries) {
+  for (const entry of uncertain) {
     const entryContext = yield* useContext(entry)
 
     try {
@@ -39,7 +63,11 @@ export const transportDispatch = operation(function* (req: TransportDef.Dispatch
 
       const hasNext = entryContext.next(failure)
 
-      yield* Logger.actions.debug('skipping', entry.name, `${hasNext}`)
+      if (hasLogger) {
+        // Guarded. Unguarded, a failing dispatch in an app with no logger installed reported
+        // "No handler for debug in logger" and the real fault was never seen.
+        yield* Logger.actions.debug('skipping', entry.name, `${hasNext}`)
+      }
 
       if (!hasNext) {
         yield* failure
@@ -51,7 +79,7 @@ export const transportDispatch = operation(function* (req: TransportDef.Dispatch
     yield* asFailure(captured)
   }
 
-  return yield* fail(CoreErrors.NotFound, 'no transport handled the request')
+  return yield* fault(CoreErrors.NotFound, `no carrier reaches "${req.service}.${req.path}"`)
 })
 
 export const transportEmit = operation(function* (req: TransportDef.EventRequest) {

@@ -1,21 +1,27 @@
-import { defineAction, defineService, Gateway, useMultipart, useRequest } from 'server:core'
+import {
+  chunks,
+  DataType,
+  defineAction,
+  defineService,
+  Gateway,
+  parts,
+  useResponse,
+  useSource,
+  value,
+} from 'server:core'
 import { each } from 'std:effect'
 import { IO } from 'std:io'
 import { fail } from 'std:result'
 
+import { z } from 'zod'
+
 /**
- * File uploads two ways — both backed by `std:io`, both streaming (never the whole file in RAM):
- *
- *   • POST /upload         (buffered)  — the files map is ready before the action runs; each file was
- *                                        spilled to a temp file, so `req.files.<name>[0].stream` reads
- *                                        it back. Convenient for forms + small/medium files.
- *   • POST /upload/stream  (streaming) — the action pulls parts itself via `useMultipart()` and pipes
- *                                        each file straight to disk with zero spill. For large uploads
- *                                        or piping to S3 / hashing / transforms.
+ * File uploads are byte lanes, always: the action takes the parts source itself and pipes each file
+ * straight to its destination (disk here; S3, hashing, transforms elsewhere) with zero spill —
+ * never the whole file in RAM, and nothing that cannot cross a wire to another pod.
  *
  * Try it (server on :3000):
- *   curl -F name=avatar -F file=@./some.png  http://127.0.0.1:3000/upload
- *   curl -F file=@./big.zip                  http://127.0.0.1:3000/upload/stream
+ *   curl -F note=hi -F file=@./big.zip  http://127.0.0.1:3000/upload/stream
  */
 
 // <os-temp>/ozaco-uploads, created on demand — every OS/fs touch goes through std:io (IO-first)
@@ -30,52 +36,34 @@ export const UploadService = defineService({
   version: '0.0.0',
 
   actions: {
-    // A (buffered): the whole files map is ready; copy the "file" field to disk by re-streaming it
-    save: defineAction(
-      {
-        title: 'Upload a file (buffered)',
-        description: 'multipart/form-data with a "file" field, plus any text fields.',
-        settings: [Gateway.actions.rest({ method: 'POST', path: '/' })],
-      },
-      function* (fields) {
-        const req = yield* useRequest()
-        const file = req.files.file?.[0]
-        if (!file) {
-          return yield* fail('upload.no-file', 'send a multipart body with a "file" field')
-        }
-
-        const dest = yield* IO.actions.join(
-          yield* uploadDir(),
-          `${yield* IO.actions.ulid()}-${file.name}`,
-        )
-        yield* IO.actions.writeStream(dest, file.stream)
-
-        return {
-          mode: 'buffered',
-          name: file.name,
-          type: file.type,
-          size: file.size,
-          savedTo: dest,
-          fields,
-        }
-      },
-    ),
-
-    // B (streaming): pull every part and stream each file straight to disk — nothing buffered
+    // Pull every part and stream each file straight to disk — nothing buffered
     stream: defineAction(
       {
         title: 'Upload files (streaming)',
         description: 'multipart/form-data; each file is streamed to disk as it arrives.',
-        settings: [Gateway.actions.rest({ method: 'POST', path: '/stream', multipart: 'stream' })],
+        // declared, not discovered: the parts lane is on the wire contract, so policies know this
+        // call streams, docs emit multipart, and a carrier opens the lane before dispatching
+        input: [value(z.record(z.string(), z.unknown())), parts()],
+        settings: [Gateway.actions.rest({ method: 'POST', path: '/stream' })],
       },
-      function* () {
-        const parts = yield* useMultipart()
+      function* (body) {
+        const upload = yield* useSource(DataType.multistream)
         const dir = yield* uploadDir()
 
-        const saved: { name: string | undefined; savedTo: string }[] = []
-        const fields: Record<string, string> = {}
+        if (!upload) {
+          return yield* fail(
+            'upload.not-multipart',
+            'this route expects a multipart/form-data body',
+          )
+        }
 
-        for (const part of yield* each(parts)) {
+        const uploadParts = upload.parts
+
+        const saved: { name: string | undefined; savedTo: string }[] = []
+        // fields ahead of the first file arrive as the BODY; anything after a file stays a part
+        const fields: Record<string, string> = { ...(body as unknown as Record<string, string>) }
+
+        for (const part of yield* each(uploadParts)) {
           if (part.kind === 'field') {
             fields[part.name] = part.value
           } else {
@@ -90,6 +78,39 @@ export const UploadService = defineService({
         }
 
         return { mode: 'streaming', saved, fields }
+      },
+    ),
+
+    /**
+     * C (download): the counterpart — hand the bytes back as a LANE.
+     *
+     * `output: chunks()` is the whole declaration. The edge reads it at mount time and knows to keep
+     * the response open and pump, so the file never lands in memory on the way out either; nothing
+     * here inspects the value to decide that.
+     */
+    read: defineAction(
+      {
+        title: 'Download a file',
+        input: z.object({ name: z.string() }),
+        output: chunks(),
+        settings: [Gateway.actions.rest({ method: 'GET', path: '/:name' })],
+      },
+      function* (body) {
+        const dir = yield* uploadDir()
+        const path = yield* IO.actions.join(dir, body.name)
+
+        const res = yield* useResponse()
+
+        if (!(yield* IO.actions.exists(path))) {
+          // the status is set BEFORE failing, so the fault carries it home — see `Outcome.Fault`
+          res.status = 404
+          return yield* fail('upload.missing', `no file "${body.name}"`)
+        }
+
+        res.meta['content-type'] = 'application/octet-stream'
+        res.meta['content-disposition'] = `attachment; filename="${body.name}"`
+
+        return IO.actions.readStream(path) as never
       },
     ),
   },

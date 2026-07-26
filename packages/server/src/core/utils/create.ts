@@ -6,12 +6,10 @@ export const createEmptyReq = (): ActionRequest => ({
   method: 'INTERNAL',
   url: new URL('internal:///'),
   meta: {},
-  files: {},
 })
 
 export const createEmptyRes = (): ActionResponse => ({
   status: null,
   meta: {},
-  files: {},
   body: null,
 })

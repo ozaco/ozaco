@@ -1,4 +1,5 @@
-import { definePolicy, PolicyPriority } from 'server:core'
+import type { Response } from 'server:core'
+import { definePolicy, PolicyPriority, untagged, valuesOf } from 'server:core'
 import { asFailure } from 'std:result'
 
 import type { Metrics } from './types'
@@ -35,11 +36,21 @@ export const MetricsPolicy = definePolicy<Metrics.Options, Metrics.Context>({
     try {
       const value = yield* next()
       // isolated via runHook so a throwing exporter can never be re-caught and mislabel success
-      runHook(() => onSuccess?.({ ...event, durationMs: Date.now() - startedAt, value }))
+      // The envelope is transport plumbing; an application's observer asked for the answer.
+      runHook(() =>
+        onSuccess?.({
+          ...event,
+          durationMs: Date.now() - startedAt,
+          value: valuesOf((value as Response).sources)[0],
+        }),
+      )
       return value
     } catch (error) {
       const failure = asFailure(error)
-      runHook(() => onFailure?.({ ...event, durationMs: Date.now() - startedAt, failure }))
+      // Same reason as the value above: an exporter asked what went wrong, not how core carries it.
+      runHook(() =>
+        onFailure?.({ ...event, durationMs: Date.now() - startedAt, failure: untagged(failure) }),
+      )
       yield* failure
     }
   },

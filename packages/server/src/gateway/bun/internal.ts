@@ -47,7 +47,7 @@ export const startAction = operation(function* (
       }
 
       try {
-        yield* dispatchRequest(request, null, deliver)
+        yield* dispatchRequest(request, deliver)
       } catch (error) {
         deliver(Response.json(asFailure(error), { status: statusFor(CoreErrors.BrokerInternal) }))
       }
@@ -63,6 +63,10 @@ export const startAction = operation(function* (
       hostname: config.host ?? ctx.host,
       reusePort: config.reusePort ?? ctx.reusePort ?? false,
       idleTimeout: -1,
+      // Streaming is the ONLY upload path, so Bun's 128MB default request cap would silently
+      // truncate what the Node gateway streams fine. `maxBodyBytes` is the one authority on size;
+      // absent it, the platform must not invent a second, lower one.
+      maxRequestBodySize: ctx.maxBodyBytes ?? Number.MAX_SAFE_INTEGER,
 
       fetch,
       websocket: {

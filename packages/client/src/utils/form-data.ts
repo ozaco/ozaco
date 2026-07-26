@@ -44,9 +44,24 @@ export const toFormData = (args: unknown): FormData | undefined => {
     return undefined
   }
 
+  /**
+   * Plain fields FIRST, files after — never the caller's key order.
+   *
+   * The gateway folds only the fields AHEAD of the first file into the validated body (the same
+   * convention S3 form uploads mandate), and an object literal's key order is not something a
+   * caller should have to know is load-bearing: `{ file, label }` and `{ label, file }` must be
+   * the same call.
+   */
   const form = new FormData()
   for (const [key, value] of entries) {
-    append(form, key, value)
+    if (!containsBlob(value)) {
+      append(form, key, value)
+    }
+  }
+  for (const [key, value] of entries) {
+    if (containsBlob(value)) {
+      append(form, key, value)
+    }
   }
   return form
 }

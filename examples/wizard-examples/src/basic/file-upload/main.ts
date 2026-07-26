@@ -1,12 +1,15 @@
 import {
   Broker,
+  DataType,
   DefaultBroker,
+  Gateway,
   defineAction,
   defineService,
-  Gateway,
-  useRequest,
+  parts,
+  useSource,
+  value,
 } from 'server:core'
-import { action, mutation, resource, useMultipart, useUploadFiles } from 'server:wizard'
+import { action, mutation, resource } from 'server:wizard'
 import { each, ensure, main } from 'std:effect'
 import { install } from 'std:plugin'
 import { fail } from 'std:result'
@@ -19,74 +22,77 @@ import { BunIO } from 'std:io/impl/bun'
 import { z } from 'zod'
 
 const result = z.object({
-  mode: z.enum(['buffer', 'stream']),
   files: z.number(),
   bytes: z.number(),
 })
 
-const buffered = mutation({
+/** Drain every part of a multipart body, counting files and bytes. Uploads are byte lanes, always —
+ * the handler pulls the parts itself and streams each file to its destination. */
+function* drainUpload() {
+  const upload = yield* useSource(DataType.multistream)
+  const uploadParts = upload?.parts
+  let files = 0
+  let bytes = 0
+
+  if (!uploadParts) {
+    return { files, bytes }
+  }
+
+  for (const part of yield* each(uploadParts)) {
+    if (part.kind === 'file') {
+      files += 1
+      for (const chunk of yield* each(part.stream)) {
+        bytes += chunk.byteLength
+        yield* each.next()
+      }
+    }
+    yield* each.next()
+  }
+
+  return { files, bytes }
+}
+
+const single = mutation({
   args: z.object({ label: z.string() }),
   returns: result,
   upload: { files: ['file'] },
   *handler() {
-    const files = yield* useUploadFiles()
-    const file = files.file?.[0]
-    if (!file) {
+    const drained = yield* drainUpload()
+    if (drained.files === 0) {
       return yield* fail('upload.no-file', 'missing multipart field "file"')
     }
-    return { mode: 'buffer' as const, files: 1, bytes: file.size }
+    return drained
   },
 })
 
 const streaming = action({
   returns: result,
-  upload: { mode: 'stream', files: { file: { multiple: true } } },
+  upload: { files: { file: { multiple: true } } },
   *handler() {
-    const parts = yield* useMultipart()
-    let files = 0
-    let bytes = 0
-
-    for (const part of yield* each(parts)) {
-      if (part.kind === 'file') {
-        files += 1
-        for (const chunk of yield* each(part.stream)) {
-          bytes += chunk.byteLength
-          yield* each.next()
-        }
-      }
-      yield* each.next()
-    }
-
-    return { mode: 'stream' as const, files, bytes }
+    return yield* drainUpload()
   },
 })
 
-const uploads = resource('uploads', { buffered, streaming })
+const uploads = resource('uploads', { single, streaming })
 
-// The same Gateway upload path remains available to ordinary server services.
+// The same Gateway upload path remains available to ordinary server services: any multipart body
+// arrives as a multistream source, no per-route option needed.
 const nativeUploads = defineService({
   name: 'nativeUploads',
   version: '0.0.0',
   actions: {
     save: defineAction(
       {
-        input: z.object({ label: z.string() }),
+        input: [value(z.object({ label: z.string() })), parts()],
         output: result,
-        settings: [
-          Gateway.actions.rest({
-            method: 'POST',
-            path: '/save',
-            multipart: 'buffer',
-            files: ['file'],
-          }),
-        ],
+        settings: [Gateway.actions.rest({ method: 'POST', path: '/save' })],
       },
       function* () {
-        const file = (yield* useRequest()).files.file?.[0]
-        if (!file) {
+        const drained = yield* drainUpload()
+        if (drained.files === 0) {
           return yield* fail('upload.no-file', 'missing multipart field "file"')
         }
-        return { mode: 'buffer' as const, files: 1, bytes: file.size }
+        return drained
       },
     ),
   },
@@ -94,22 +100,22 @@ const nativeUploads = defineService({
 
 type UploadApi = {
   uploads: {
-    buffered: {
+    single: {
       kind: 'mutation'
       args: { label: string; file: Blob }
-      result: { mode: 'buffer' | 'stream'; files: number; bytes: number }
+      result: { files: number; bytes: number }
     }
     streaming: {
       kind: 'action'
       args: { file: Blob[] }
-      result: { mode: 'buffer' | 'stream'; files: number; bytes: number }
+      result: { files: number; bytes: number }
     }
   }
   nativeUploads: {
     save: {
       kind: 'mutation'
       args: { label: string; file: Blob }
-      result: { mode: 'buffer' | 'stream'; files: number; bytes: number }
+      result: { files: number; bytes: number }
     }
   }
 }
@@ -119,8 +125,8 @@ await main(function* () {
   yield* install(DefaultBroker)
   yield* install(BunGateway, {})
   yield* install(Docs, { silent: true })
-  yield* install(uploads)
-  yield* install(nativeUploads)
+  yield* uploads.actions.install()
+  yield* nativeUploads.actions.install()
   yield* Broker.actions.register(nativeUploads)
   yield* Gateway.actions.mount('/nativeUploads', nativeUploads)
   yield* Docs.actions.from(uploads, nativeUploads)
@@ -134,9 +140,11 @@ await main(function* () {
 
   const url = `http://${host}:${port}`
   const client = createClient<UploadApi>({ url })
-  const bufferedResult = yield* client.uploads.buffered({
+  // the FILE deliberately precedes the field: the client must reorder plain fields ahead of blobs,
+  // or `label` would arrive after the file part and never reach the validated body
+  const singleResult = yield* client.uploads.single({
+    file: new File(['wizard-streamed'], 'single.txt', { type: 'text/plain' }),
     label: 'avatar',
-    file: new File(['wizard-buffered'], 'buffered.txt', { type: 'text/plain' }),
   })
   const streamingResult = yield* client.uploads.streaming({
     file: [
@@ -151,7 +159,7 @@ await main(function* () {
   const generated = yield* pull(url)
 
   if (
-    bufferedResult.bytes !== 15 ||
+    singleResult.bytes !== 15 ||
     streamingResult.files !== 2 ||
     streamingResult.bytes !== 12 ||
     nativeResult.bytes !== 6 ||
@@ -161,7 +169,7 @@ await main(function* () {
     return yield* fail('upload.smoke', 'Wizard upload, streaming, or generated client mismatch')
   }
 
-  console.log('buffered:', bufferedResult)
+  console.log('single:', singleResult)
   console.log('streaming:', streamingResult)
   console.log('native service:', nativeResult)
   console.log('client types: Blob + Blob[]')

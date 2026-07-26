@@ -1,4 +1,12 @@
-import { Broker, CoreErrors, defineAction, defineService, Gateway, useResponse } from 'server:core'
+import {
+  Broker,
+  CoreErrors,
+  DataType,
+  Gateway,
+  defineAction,
+  defineService,
+  useResponse,
+} from 'server:core'
 import { fail } from 'std:result'
 
 import { AccessRefreshAuth, useAuth } from 'server:plugin/auth'
@@ -67,14 +75,16 @@ export const TodoService = defineService({
         const session = yield* useAuth(AccessRefreshAuth)
         yield* AccessRefreshAuth.actions.requirePermission(session, 'todo:write')
 
-        const extendedTitle = yield* Broker.actions.call(AiService.actions.chat, [
+        const extendedTitle = yield* Broker.actions.call(AiService, 'chat', [
           {
-            prompt: body.title,
-            system:
-              'Convert the given prompt into a broader todo list item (the result should be a single item).',
+            type: DataType.normal,
+            value: {
+              prompt: body.title,
+              system:
+                'Convert the given prompt into a broader todo list item (the result should be a single item).',
+            },
           },
         ])
-
         const todo = createTodo(session.sub, extendedTitle.text)
 
         const res = yield* useResponse()

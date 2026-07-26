@@ -1,6 +1,6 @@
 import { Pool, usePool } from 'db:core'
 import { table, RealtimeDb } from 'db:realtime'
-import { Broker, DefaultBroker, Gateway } from 'server:core'
+import { Broker, DataType, DefaultBroker, Gateway } from 'server:core'
 import { resource } from 'server:wizard'
 import { main, sleep } from 'std:effect'
 import { DefaultLogger, Logger, LogLevel } from 'std:logger'
@@ -53,7 +53,7 @@ await main(function* () {
   yield* install(SurrealDriver, { namespace: 'demo', database: 'demo' })
   yield* install(Pool, { connectionUri: 'mem://' })
   yield* install(RealtimeDb, { tables: [notes] })
-  yield* install(noteResource)
+  yield* noteResource.actions.install()
   yield* Broker.actions.start()
   yield* Gateway.actions.start({ port: 4578, host: '127.0.0.1' })
 
@@ -61,9 +61,13 @@ await main(function* () {
 
   for (let i = 1; i <= 10; i++) {
     if (i === 4) {
-      last = yield* Broker.actions.call(noteResource.actions.create, [{ title: `original-${i}` }])
+      last = yield* Broker.actions.call(noteResource, 'create', [
+        { type: DataType.normal, value: { title: `original-${i}` } },
+      ])
     } else {
-      yield* Broker.actions.call(noteResource.actions.create, [{ title: `original-${i}` }])
+      yield* Broker.actions.call(noteResource, 'create', [
+        { type: DataType.normal, value: { title: `original-${i}` } },
+      ])
     }
   }
 
@@ -89,10 +93,18 @@ await main(function* () {
 
   // create + update a few notes — the watcher should see each change live
   yield* sleep(200)
-  const first = yield* Broker.actions.call(noteResource.actions.create, [{ title: 'write docs' }])
-  yield* Broker.actions.call(noteResource.actions.create, [{ title: 'ship it' }])
-  yield* Broker.actions.call(noteResource.actions.update, [{ id: first._id, done: true }])
-  yield* Broker.actions.call(noteResource.actions.update, [{ id: last._id, done: true }])
+  const first = yield* Broker.actions.call(noteResource, 'create', [
+    { type: DataType.normal, value: { title: 'write docs' } },
+  ])
+  yield* Broker.actions.call(noteResource, 'create', [
+    { type: DataType.normal, value: { title: 'ship it' } },
+  ])
+  yield* Broker.actions.call(noteResource, 'update', [
+    { type: DataType.normal, value: { id: first._id, done: true } },
+  ])
+  yield* Broker.actions.call(noteResource, 'update', [
+    { type: DataType.normal, value: { id: last._id, done: true } },
+  ])
   yield* sleep(400)
 
   yield* stop()

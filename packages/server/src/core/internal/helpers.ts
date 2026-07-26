@@ -66,9 +66,9 @@ export const resolveService = (
   return undefined
 }
 
-export const principalDiscriminator = (rawReq: unknown): string => {
-  if (rawReq && typeof rawReq === 'object' && 'meta' in rawReq) {
-    const meta = (rawReq as { meta?: Record<string, string> }).meta
+export const principalDiscriminator = (request: unknown): string => {
+  if (request && typeof request === 'object' && 'meta' in request) {
+    const meta = (request as { meta?: Record<string, string> }).meta
     if (meta && typeof meta === 'object') {
       return `${meta.authorization ?? ''}\u0000${meta.cookie ?? ''}`
     }

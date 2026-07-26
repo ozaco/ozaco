@@ -1,5 +1,6 @@
-import { definePolicy, PolicyPriority } from 'server:core'
+import { definePolicy, PolicyPriority, untagged } from 'server:core'
 import { retry } from 'std:effect'
+import type { Result } from 'std:result'
 
 import type { Retry } from './types'
 import { RetryPolicyKey } from './types'
@@ -26,7 +27,14 @@ export const RetryPolicy = definePolicy<Retry.Options, Retry.Context>({
       return yield* next()
     }
 
-    const when = override?.when ?? ctx.when
+    const configured = override?.when ?? ctx.when
+
+    // The predicate is application code, so it is handed the plain tag rather than the Fault the
+    // call path wraps it in — a `when` written as `f.error === 'transient'` must keep matching.
+    const when =
+      configured === undefined
+        ? undefined
+        : (failure: Result.Failure<unknown>) => configured(untagged(failure))
 
     return yield* retry(next, {
       attempts: override?.attempts ?? ctx.attempts,

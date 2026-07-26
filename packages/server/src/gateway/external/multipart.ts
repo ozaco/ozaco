@@ -1,6 +1,6 @@
 // oxlint-disable import/exports-last
 
-import type { MultipartPart } from 'server:core'
+import type { Source } from 'server:core'
 import type { Stream, Subscription } from 'std:effect'
 import { action, resource, until } from 'std:effect'
 import type { StreamClose } from 'std:io'
@@ -63,7 +63,7 @@ const drain = (readable: Readable): Promise<void> =>
   })
 
 /**
- * Parse a `multipart/form-data` `Request` into an effect-native, backpressured `Stream<MultipartPart>`
+ * Parse a `multipart/form-data` `Request` into an effect-native, backpressured `Stream<Source.Part>`
  * on top of `@fastify/busboy` — the impure boundary lives HERE (in `external/`), wrapping busboy's
  * event/Node-stream API into an effect-native stream. Parts arrive in wire order; each `file` part's
  * `stream` MUST be fully consumed (or the stream advanced) before the next part is available, because
@@ -73,9 +73,9 @@ const drain = (readable: Readable): Promise<void> =>
 export const parseMultipart = (
   request: Request,
   limits?: MultipartLimits,
-): Stream<MultipartPart, StreamClose> =>
+): Stream<Source.Part, StreamClose> =>
   resource(function* (provide) {
-    const queue: MultipartPart[] = []
+    const queue: Source.Part[] = []
     let pendingReadable: Readable | null = null
     let pendingDrained = true
     let closed: StreamClose | null = null
@@ -159,7 +159,7 @@ export const parseMultipart = (
     })
     source.pipe(bb)
 
-    const subscription: Subscription<MultipartPart, StreamClose> = {
+    const subscription: Subscription<Source.Part, StreamClose> = {
       *next() {
         while (true) {
           const part = queue.shift()
@@ -183,6 +183,13 @@ export const parseMultipart = (
     try {
       yield* provide(subscription)
     } finally {
+      // The consumer may live on ANOTHER scope (a transport pump relaying the parts): closing here
+      // without waking it would leave that task parked in `park()` forever, waiting on a parser
+      // that no longer exists.
+      if (closed === null) {
+        closed = asFailure(new Error('request ended before the multipart body was drained'))
+      }
+      wake()
       source.unpipe(bb)
       source.destroy()
       bb.destroy()

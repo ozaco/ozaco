@@ -1,5 +1,5 @@
 import type { ActionRequest, ActionResponse, GatewayDef, ResponseSink } from 'server:core'
-import { CoreErrors, Gateway, isService, ResponseSinkContext } from 'server:core'
+import { CoreErrors, Gateway, ResponseSinkContext } from 'server:core'
 import { attempt, operation, useContext } from 'std:effect'
 import { IO } from 'std:io'
 import type { Result } from 'std:result'
@@ -23,7 +23,6 @@ import { resolveRouteAction } from './util'
  */
 export const dispatchRequest = operation(function* (
   request: Request,
-  rawRes: unknown,
   deliver: (response: Response) => void,
 ) {
   let actionReq: ActionRequest | null = null
@@ -86,12 +85,7 @@ export const dispatchRequest = operation(function* (
     }
 
     const ret = yield* ResponseSinkContext.with(sink, () =>
-      dispatchAction(
-        { req, res, rawReq: request, rawRes, signal: request.signal },
-        action,
-        body,
-        isService(entry.target),
-      ),
+      dispatchAction({ req, res, signal: request.signal }, entry, action, body),
     )
 
     // streaming already built + delivered + drained via the sink; otherwise transform the value

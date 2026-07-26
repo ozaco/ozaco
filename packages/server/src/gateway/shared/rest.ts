@@ -1,8 +1,7 @@
-import type { ActionFile, ActionRequest, ActionResponse, GatewayDef } from 'server:core'
-import { CoreErrors, Gateway, MultipartContext, statusFor } from 'server:core'
+import type { ActionRequest, ActionResponse } from 'server:core'
+import { CoreErrors, DataType, EdgeSourcesContext, Gateway, statusFor } from 'server:core'
 import { Codec } from 'std:codec'
-import { attempt, each, ensure, operation, until, useContext } from 'std:effect'
-import { IO } from 'std:io'
+import { operation, until, useContext } from 'std:effect'
 import { fail, isFailure, isSuccess } from 'std:result'
 import type { AnyType } from 'std:shared'
 
@@ -11,14 +10,7 @@ import { JsonCodec } from 'std:codec/impl/json'
 import { parseMultipart } from '../external/multipart'
 
 import { BODY_METHODS, FORM_DATA, FORM_URLENCODED, JSON_CONTENT } from './const'
-import {
-  appendField,
-  appendFile,
-  matchFileKey,
-  spillDir,
-  spillFile,
-  stringToFile,
-} from './form-data'
+import { appendField, splitLeadingFields } from './form-data'
 
 // the `rest` action is the per-route REST settings constructor (was Rest.actions.settings)
 export const restSettingsAction = operation(function* (options: AnyType) {
@@ -37,9 +29,22 @@ export const toInternalAction = operation(function* (req: AnyType, _res: unknown
 
   const url = new URL(req.url)
   const headers = Object.fromEntries(req.headers.entries())
-  const fileMatcher = meta.setting?.files as GatewayDef.RestOptions['files']
-  const files: Record<string, ActionFile[]> = {}
 
+  /**
+   * `EventSource` cannot set a single header, so a guarded SSE route is unreachable from a browser
+   * unless the token may travel in the query — the same promotion the WS upgrade already does, and
+   * for the same reason.
+   *
+   * Two guards, both load-bearing. Only for SSE routes: an ordinary REST client CAN send a header,
+   * and a token in a URL ends up in access logs, referrers and browser history. And only when no
+   * `authorization` header is present, so a query param can never override a real credential.
+   */
+  if (meta.setting?.sse === true && !headers.authorization) {
+    const token = url.searchParams.get('token') ?? url.searchParams.get('access_token')
+    if (token) {
+      headers.authorization = `Bearer ${token}`
+    }
+  }
   let parsedBody: unknown = null
 
   if (BODY_METHODS.has(String(req.method).toUpperCase())) {
@@ -65,51 +70,28 @@ export const toInternalAction = operation(function* (req: AnyType, _res: unknown
       parsedBody = buffer.byteLength === 0 ? null : yield* JsonCodec.actions.decode(buffer)
     } else if (contentType.includes(FORM_DATA)) {
       const limits = maxBytes === undefined ? undefined : { fileSize: maxBytes }
-      const mode = (meta.setting?.multipart as 'buffer' | 'stream' | undefined) ?? 'buffer'
 
-      if (mode === 'stream') {
-        // B (streaming): leave the body untouched — the action pulls parts itself via useMultipart()
-        // and streams each file straight to its destination (S3, hashing, …) with zero spill.
-        yield* MultipartContext.set(parseMultipart(req, limits))
-        parsedBody = null
-      } else {
-        // A (buffered): spill every uploaded file to a temp dir so the whole files map is ready before
-        // the action runs, while memory stays bounded (one chunk at a time streams to disk). The temp
-        // dir is removed at request-scope teardown.
-        const fields: Record<string, unknown> = {}
-        const dir = yield* spillDir()
+      // A multipart body is a byte-lane source, always: the parts are handed over as-is — the action
+      // takes them with `useSource(DataType.multistream)` and streams each file straight to its
+      // destination (S3, hashing, …) with zero spill. There is no buffered mode: a mode that spills
+      // whole files before the action runs cannot cross a wire, so it existed only until the first
+      // service moved to another pod. The fields AHEAD of the first file still become the validated
+      // body — see `splitLeadingFields` — so an upload route keeps its schema without buffering.
+      const fields: Record<string, unknown> = {}
+      const parts = yield* splitLeadingFields(parseMultipart(req, limits), fields)
 
-        for (const part of yield* each(parseMultipart(req, limits))) {
-          if (part.kind === 'field') {
-            if (matchFileKey(fileMatcher, part.name)) {
-              appendFile(files, part.name, stringToFile(part.name, part.value))
-            } else {
-              appendField(fields, part.name, part.value)
-            }
-          } else {
-            const { file } = yield* spillFile(dir, part)
-            appendFile(files, part.name, file)
-          }
-          yield* each.next()
-        }
-
-        yield* ensure(function* () {
-          yield* attempt(IO.actions.rm(dir, { recursive: true, force: true }))
-        })
-
-        parsedBody = fields
-      }
+      yield* EdgeSourcesContext.set([
+        ...((yield* EdgeSourcesContext.get()) ?? []),
+        { type: DataType.multistream, parts },
+      ])
+      parsedBody = fields
     } else if (contentType.includes(FORM_URLENCODED)) {
       // urlencoded carries no files and is small — parse it directly, no streaming parser needed
       const text = (yield* until(req.text())) as string
       const fields: Record<string, unknown> = {}
 
       for (const [key, value] of new URLSearchParams(text)) {
-        if (matchFileKey(fileMatcher, key)) {
-          appendFile(files, key, stringToFile(key, value))
-        } else {
-          appendField(fields, key, value)
-        }
+        appendField(fields, key, value)
       }
       parsedBody = fields
     }
@@ -140,12 +122,10 @@ export const toInternalAction = operation(function* (req: AnyType, _res: unknown
       method: req.method,
       url,
       meta: headers,
-      files,
     },
     {
       status: null,
       body: undefined,
-      files: {},
       meta: {},
     },
     body,

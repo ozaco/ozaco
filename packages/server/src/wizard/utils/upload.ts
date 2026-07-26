@@ -1,7 +1,3 @@
-import type { ActionFile } from 'server:core'
-import { useRequest } from 'server:core'
-import type { Operation } from 'std:effect'
-
 import type { UploadMetadata, UploadOptions } from '../types'
 
 /** Normalize Wizard's shorthand into stable metadata consumed by Gateway and Docs. */
@@ -17,10 +13,5 @@ export const normalizeUpload = (upload: UploadOptions): UploadMetadata => {
     multiple: options === true ? false : (options.multiple ?? false),
   }))
 
-  return { mode: upload.mode ?? 'buffer', fields }
-}
-
-/** Files prepared by Gateway's buffered multipart mode for the current Wizard action. */
-export function* useUploadFiles(): Operation<Record<string, ActionFile[]>> {
-  return (yield* useRequest()).files
+  return { fields }
 }

@@ -3,7 +3,7 @@ import { createTags } from 'std:shared'
 export const NatsErrors = createTags(
   'server:nats-transport',
 
-  'no-responders',
+  'no-jetstream',
   'timeout',
   'request-error',
 

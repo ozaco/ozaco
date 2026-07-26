@@ -1,5 +1,5 @@
-import type { Service, TransportDef } from 'server:core'
-import { Broker, CoreErrors, isStreamResult } from 'server:core'
+import type { Response, Service, Source, TransportDef } from 'server:core'
+import { Broker, CoreErrors, DataType, producesLane } from 'server:core'
 import type { Stream } from 'std:effect'
 import { attempt, ensure, operation, useContext } from 'std:effect'
 import type { Result } from 'std:result'
@@ -79,6 +79,9 @@ export const handleDispatch = (
         actionKey: env.actionKey,
         params,
         streams,
+        ...(env.origin === undefined ? {} : { origin: env.origin }),
+        ...(env.meta === undefined ? {} : { meta: env.meta }),
+        ...(env.wire === undefined ? {} : { wire: env.wire }),
         contexts,
       }),
     )
@@ -88,13 +91,22 @@ export const handleDispatch = (
       return
     }
 
-    if (isStreamResult(outcome.value)) {
-      respond(wireStream())
-      yield* pumpStream(endpoint, env.outputStream, outcome.value as Stream<unknown, unknown>)
+    // The DECLARATION decides, not the value — see the note on the nats carrier.
+    const response = outcome.value as Response
+
+    if (producesLane(yield* service.actions._get(env.actionKey))) {
+      const lane = response.sources.find(source => source.type === DataType.stream) as
+        | Source.Lane
+        | undefined
+      respond(wireStream(response))
+      yield* pumpStream(endpoint, env.outputStream, lane?.stream as Stream<unknown, unknown>)
       return
     }
 
-    respond(wireSuccess(yield* encodeValue(endpoint.wire, outcome.value)))
+    const body = response.sources.find(source => source.type === DataType.normal) as
+      | Source.Normal
+      | undefined
+    respond(wireSuccess(yield* encodeValue(endpoint.wire, body?.value), response))
   })
 
 export const handleEmit = handleEvent('event.emit')

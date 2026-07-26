@@ -101,7 +101,7 @@ export const sseAction = operation(function* (path: string, handlers: GatewayDef
     }
   })
 
-  const setting = { method: 'GET', path, transformer: Gateway } as GatewayDef.WsSetting
+  const setting = { method: 'GET', path, sse: true, transformer: Gateway } as GatewayDef.WsSetting
   const sym = Symbol(`sse#GET#${path}`)
   const entry: GatewayDef.RegisteredRoute = {
     sym,

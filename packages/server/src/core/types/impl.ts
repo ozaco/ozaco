@@ -1,38 +1,53 @@
 import type { Future, Operation } from 'std:effect'
 import type { Plugin } from 'std:plugin'
-import type { AnyType, StandardSchemaV1 } from 'std:shared'
+import type { AnyType, EmptyType } from 'std:shared'
 
 import type { Action } from './action'
+import type { Channel } from './channel'
 import type { PolicyDef } from './policy'
 import type { Service } from './service'
 
 export namespace Impl {
+  /** What an author may state about an action, minus the parts `defineAction` derives. */
+  export interface ActionConfig<TInput, TOutput> {
+    title?: string
+    description?: string
+
+    input?: TInput
+    output?: TOutput
+
+    /** surface claims and policy overrides alike, each an operation resolved when it is read */
+    settings?: Future<unknown>[]
+  }
+
   export type DefineAction = {
-    <TSchema extends StandardSchemaV1, TReturn>(
-      config: { input: TSchema } & Partial<Omit<Action.Meta<TSchema>, '_t' | 'input'>>,
-      handler: (body: StandardSchemaV1.InferOutput<TSchema>) => Operation<TReturn>,
-    ): Action<[StandardSchemaV1.InferOutput<TSchema>], TReturn>
+    /**
+     * The everyday form. `input` is usually a bare schema, which means one `normal` value channel —
+     * and that channel's value is what the handler receives. Any OTHER channel the action declares
+     * (a byte lane, a socket) is taken inside the body with `useSource`, so adding one never
+     * changes this signature.
+     */
+    <TInput extends Channel.Declaration, TOutput extends Channel.Declaration, TReturn = unknown>(
+      config: ActionConfig<TInput, TOutput>,
+      handler: (body: Channel.Body<TInput>) => Operation<TReturn>,
+    ): Action<[Channel.Body<TInput>], TReturn>
 
-    <TReturn>(
-      config: Partial<Omit<Action.Meta<unknown>, '_t' | 'input'>>,
-      handler: (body?: unknown) => Operation<TReturn>,
-    ): Action<[body?: unknown], TReturn>
-
-    <Args extends AnyType[], T>(fn: (...args: Args) => Operation<T>): Action<Args, T>
+    /** No declaration at all — a plain internal action nothing needs to describe. */
+    <TArgs extends AnyType[], TReturn>(
+      handler: (...args: TArgs) => Operation<TReturn>,
+    ): Action<TArgs, TReturn>
   }
 
   export type DefineService = <
     TContext,
     TArgs extends unknown[] = [],
-    TActions = unknown,
+    TActions extends EmptyType = EmptyType,
   >(options: {
     name: string
     version: string
     description?: string
 
     actions: TActions
-
-    isPrivate?: boolean
 
     setup?: (...args: TArgs) => Operation<TContext>
   }) => Service<TContext, TArgs, TActions>

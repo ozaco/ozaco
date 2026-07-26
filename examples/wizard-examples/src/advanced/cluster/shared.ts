@@ -55,7 +55,7 @@ export const startNode = operation(function* (options: NodeOptions) {
   yield* pool.query(sql`PRAGMA busy_timeout = 5000`)
   yield* attempt(pool.query(sql`PRAGMA journal_mode = WAL`))
   yield* install(RealtimeDb, { tables: [notes] })
-  yield* install(noteResource)
+  yield* noteResource.actions.install()
   yield* Broker.actions.start()
   yield* Gateway.actions.start({ port: options.port, host: '127.0.0.1' })
   // Graceful shutdown: on SIGINT/SIGTERM `main` unwinds this scope. `Bun.serve` has no teardown

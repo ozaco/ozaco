@@ -1,4 +1,4 @@
-import { Broker, DefaultBroker } from 'server:core'
+import { Broker, DataType, DefaultBroker } from 'server:core'
 import { each, ensure, main } from 'std:effect'
 import { DefaultLogger, Logger, LogLevel } from 'std:logger'
 import { install } from 'std:plugin'
@@ -42,13 +42,17 @@ await main(function* () {
 
   yield* Logger.actions.info('Dispatching fib() across 4 workers')
   for (const n of [32, 33, 34, 35]) {
-    const out = yield* Broker.actions.call(ComputeService.actions.fib, [n])
+    const out = yield* Broker.actions.call(ComputeService, 'fib', [
+      { type: DataType.normal, value: n },
+    ])
     yield* Logger.actions.info(`  fib(${n}) -> ${JSON.stringify(out)}`)
   }
 
   // a streamed result, served from a worker over the same port
   const items: unknown[] = []
-  const channel = yield* Broker.actions.call(ComputeService.actions.range, [5])
+  const channel = yield* Broker.actions.call(ComputeService, 'range', [
+    { type: DataType.normal, value: 5 },
+  ])
   for (const item of yield* each(channel as AnyType)) {
     items.push(item)
     yield* each.next()

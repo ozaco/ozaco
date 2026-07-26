@@ -1,4 +1,4 @@
-import type { TransportDef } from 'server:core'
+import type { Carried, TransportDef } from 'server:core'
 import type { Queue, Scope, Stream, Task } from 'std:effect'
 import type { Result } from 'std:result'
 
@@ -46,6 +46,9 @@ export namespace WorkerDef {
   export interface WireSuccess {
     _t: '__success__'
     value: unknown
+    /** the reply half: what the action set with `useResponse()`, carried home rather than dropped */
+    status?: number
+    meta?: Record<string, string>
   }
 
   export interface WireFailure {
@@ -58,6 +61,8 @@ export namespace WorkerDef {
 
   export interface WireStream {
     _t: '__stream__'
+    status?: number
+    meta?: Record<string, string>
   }
 
   export type Wire = WireSuccess | WireFailure | WireStream
@@ -74,6 +79,11 @@ export namespace WorkerDef {
     cid: string
     serviceName: string
     actionKey: string
+    /** mapped to a string on the wire and back to the symbol on arrival — a symbol cannot survive a codec */
+    origin?: 'internal' | 'external'
+    meta?: Record<string, string>
+    /** what the call carries and what its answer will hold, so a return channel can exist first */
+    wire?: { sends: Carried[]; receives: Carried[] }
     outputStream: string
     params?: unknown
     inputStreams?: string[]

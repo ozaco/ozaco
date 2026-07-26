@@ -1,6 +1,6 @@
 import { Pool } from 'db:core'
 import { RealtimeDb, table } from 'db:realtime'
-import { Broker, DefaultBroker } from 'server:core'
+import { Broker, DataType, DefaultBroker } from 'server:core'
 import { resource } from 'server:wizard'
 import { main } from 'std:effect'
 import { DefaultLogger, LogLevel } from 'std:logger'
@@ -35,26 +35,34 @@ await main(function* () {
   yield* install(SqliteDriver)
   yield* install(Pool, { connectionUri: ':memory:' })
   yield* install(RealtimeDb, { tables: [notes] })
-  yield* install(noteResource)
+  yield* noteResource.actions.install()
   yield* Broker.actions.start()
 
   // create → update → list → remove, using the same native service actions Docs can inspect
-  const created = yield* Broker.actions.call(noteResource.actions.create, [
-    { title: 'write the docs' },
+  const created = yield* Broker.actions.call(noteResource, 'create', [
+    { type: DataType.normal, value: { title: 'write the docs' } },
   ])
-  yield* Broker.actions.call(noteResource.actions.create, [{ title: 'cut a release' }])
+  yield* Broker.actions.call(noteResource, 'create', [
+    { type: DataType.normal, value: { title: 'cut a release' } },
+  ])
   console.log('created:', created.title, `(${created._id})`)
 
-  const done = yield* Broker.actions.call(noteResource.actions.update, [
-    { id: created._id, done: true },
+  const done = yield* Broker.actions.call(noteResource, 'update', [
+    { type: DataType.normal, value: { id: created._id, done: true } },
   ])
   console.log('updated:', done.title, '→ done =', done.done)
 
-  const page = yield* Broker.actions.call(noteResource.actions.list, [{}])
+  const page = yield* Broker.actions.call(noteResource, 'list', [
+    { type: DataType.normal, value: {} },
+  ])
   console.log('list:', page.data.map((note: { title: string }) => note.title).join(', '))
   console.log('pageInfo:', JSON.stringify(page.pageInfo), 'rv:', page.resourceVersion)
 
-  yield* Broker.actions.call(noteResource.actions.remove, [{ id: created._id }])
-  const after = yield* Broker.actions.call(noteResource.actions.list, [{}])
+  yield* Broker.actions.call(noteResource, 'remove', [
+    { type: DataType.normal, value: { id: created._id } },
+  ])
+  const after = yield* Broker.actions.call(noteResource, 'list', [
+    { type: DataType.normal, value: {} },
+  ])
   console.log('after remove:', after.data.length, 'note(s) left')
 })

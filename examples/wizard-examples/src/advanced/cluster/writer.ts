@@ -1,4 +1,4 @@
-import { Broker } from 'server:core'
+import { Broker, DataType } from 'server:core'
 import { main, sleep } from 'std:effect'
 import { Logger } from 'std:logger'
 
@@ -20,7 +20,9 @@ await main(function* () {
   yield* Logger.actions.info('writer up on :4801 — inserting a note every 1.5s…')
 
   for (let i = 1; ; i++) {
-    const note = yield* Broker.actions.call(noteResource.actions.create, [{ title: `note-${i}` }])
+    const note = yield* Broker.actions.call(noteResource, 'create', [
+      { type: DataType.normal, value: { title: `note-${i}` } },
+    ])
     yield* Logger.actions.info('inserted', { id: note._id, title: note.title })
     yield* sleep(1500)
   }

@@ -1,7 +1,7 @@
 import { Pool } from 'db:core'
 import { DB, table, RealtimeDb } from 'db:realtime'
-import { Broker, DefaultBroker, Gateway } from 'server:core'
-import { action, resource, useResponse } from 'server:wizard'
+import { Broker, DefaultBroker, Gateway, useResponse } from 'server:core'
+import { action, resource } from 'server:wizard'
 import { main } from 'std:effect'
 import { fetch } from 'std:fetch'
 import { DefaultLogger, LogLevel } from 'std:logger'
@@ -65,8 +65,8 @@ await main(function* () {
     migrations: 'manual',
     safe: true,
   })
-  yield* install(serviceResource)
-  yield* install(cluster)
+  yield* serviceResource.actions.install()
+  yield* cluster.actions.install()
   yield* Broker.actions.start()
   yield* Gateway.actions.start({ port: 4577, host: '127.0.0.1' })
 

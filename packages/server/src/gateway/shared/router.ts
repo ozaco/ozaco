@@ -55,11 +55,37 @@ export const mountAction = operation(function* (prefix: string, target: Service 
   const ctx = yield* useContext(Gateway.context)
   const registeredSyms = new Set<symbol>()
 
+  /**
+   * One address, one owner — refused rather than overwritten.
+   *
+   * `addRoute` overwrites in silence, so mounting a service beside a resource that had already
+   * claimed the same pattern left half the app dark and said nothing. This is the same
+   * claim-then-commit shape the broker's `register` uses; a partially mounted service is worse
+   * than a refused one, which is why the `ensure` below rolls the whole mount back.
+   */
+  const taken = new Map<string, string>()
+  for (const route of ctx.handlers.values()) {
+    taken.set(`${route.setting.method} ${route.prefix}${route.setting.path}`, route.prefix)
+  }
+
+  const claim = (method: string, pattern: string, ident: string): string | undefined =>
+    taken.has(`${method} ${pattern}`)
+      ? `${method} ${pattern}`
+      : (taken.set(`${method} ${pattern}`, ident), undefined)
+
+  const collisions: string[] = []
+
   const register = (
     settings: GatewayDef.TransformerSetting[],
     inner: { key?: string; ident: string; action: Action },
   ): void => {
     for (const setting of settings) {
+      const clash = claim(setting.method, prefix + setting.path, inner.ident)
+      if (clash !== undefined) {
+        collisions.push(clash)
+        continue
+      }
+
       const sym = Symbol(`${prefix}#${inner.ident}#${setting.method}`)
 
       const route: GatewayDef.RegisteredRoute = {
@@ -92,23 +118,31 @@ export const mountAction = operation(function* (prefix: string, target: Service 
 
     register(settings, { ident: target.title ?? 'unknown', action: target })
   } else if (isService(target)) {
-    for (const key of target.getKeys()) {
-      const meta = target.getMeta(key)
-
-      if (!meta) {
-        continue
-      }
-
-      const settings = (yield* all(meta.settings ?? [])).filter(s => isRoutableSetting(s))
+    for (const [key, action] of yield* target.actions._list()) {
+      const settings = (yield* all(action.settings ?? [])).filter(s => isRoutableSetting(s))
 
       if (settings.length === 0) {
         continue
       }
 
-      const action = (target.actions as Record<string, Action>)[key]!
-
       register(settings, { key, ident: `${target.name}@${target.version}#${key}`, action })
     }
+  }
+
+  if (collisions.length > 0) {
+    for (const sym of registeredSyms) {
+      const route = ctx.handlers.get(sym)
+      if (route) {
+        removeRoute(ctx.router, route.setting.method, prefix + route.setting.path)
+        ctx.handlers.delete(sym)
+      }
+    }
+
+    return yield* fail(
+      CoreErrors.Exists,
+      `already mounted: ${collisions.join(', ')}`,
+      `mount "${prefix}"`,
+    )
   }
 
   ctx.compiled = compileRouter(ctx.router, { normalize: true })

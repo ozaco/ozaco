@@ -1,3 +1,4 @@
+import type { Response } from 'server:core'
 import { Codec } from 'std:codec'
 import { operation } from 'std:effect'
 import type { Result } from 'std:result'
@@ -48,7 +49,12 @@ const structuredError = (error: unknown): { keep: boolean; value: unknown } => {
 const wireErrorTag = (wire: { error: string; errorValue?: unknown }): unknown =>
   'errorValue' in wire ? wire.errorValue : wire.error
 
-export const wireSuccess = (value: unknown): WorkerDef.WireSuccess => ({ _t: '__success__', value })
+export const wireSuccess = (value: unknown, response: Response): WorkerDef.WireSuccess => ({
+  _t: '__success__',
+  value,
+  ...(response.status === undefined ? {} : { status: response.status }),
+  ...(Object.keys(response.meta).length === 0 ? {} : { meta: response.meta }),
+})
 
 export const wireFailure = (failure: Result.Failure<unknown>): WorkerDef.WireFailure => {
   const structured = structuredError(failure.error)
@@ -61,7 +67,11 @@ export const wireFailure = (failure: Result.Failure<unknown>): WorkerDef.WireFai
   }
 }
 
-export const wireStream = (): WorkerDef.WireStream => ({ _t: '__stream__' })
+export const wireStream = (response: Response): WorkerDef.WireStream => ({
+  _t: '__stream__',
+  ...(response.status === undefined ? {} : { status: response.status }),
+  ...(Object.keys(response.meta).length === 0 ? {} : { meta: response.meta }),
+})
 
 export const unwrapWire = operation(function* (wire: WorkerDef.Wire) {
   if (wire._t === '__failure__') {

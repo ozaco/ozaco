@@ -1,20 +1,8 @@
-import type { ActionFile, GatewayDef, MultipartPart } from 'server:core'
-import { operation } from 'std:effect'
-import { IO } from 'std:io'
+import type { Source } from 'server:core'
+import type { Operation, Stream, Subscription } from 'std:effect'
+import type { StreamClose } from 'std:io'
 
-export const matchFileKey = (matcher: GatewayDef.RestOptions['files'], key: string): boolean => {
-  if (!matcher) {
-    return false
-  }
-  if (Array.isArray(matcher)) {
-    return matcher.includes(key)
-  }
-  if (matcher instanceof RegExp) {
-    return matcher.test(key)
-  }
-  return matcher(key)
-}
-
+/** Accumulate a repeated form key into an array instead of overwriting the earlier value. */
 export const appendField = (target: Record<string, unknown>, key: string, value: unknown): void => {
   if (key in target) {
     const prev = target[key]
@@ -24,55 +12,58 @@ export const appendField = (target: Record<string, unknown>, key: string, value:
   }
 }
 
-export const appendFile = (
-  target: Record<string, ActionFile[]>,
-  key: string,
-  file: ActionFile,
-): void => {
-  if (!target[key]) {
-    target[key] = []
-  }
-  target[key].push(file)
-}
+/**
+ * Split a multipart body at its FIRST FILE: the fields before it join the request body, everything
+ * from that file on stays a streamed part.
+ *
+ * This is what lets an upload route keep a validated body without a buffered mode. Nothing is
+ * spilled or held — the parser pauses AT the first file (it cannot yield the next part until the
+ * current file drains, and we have not touched it), so pulling the leading fields costs exactly the
+ * bytes of those fields. The convention it encodes is the one multipart already has: metadata
+ * fields travel ahead of the payload (the same ordering S3's form upload mandates). A field that
+ * arrives AFTER a file stays a part, in wire order.
+ */
+export const splitLeadingFields = function* (
+  parts: Stream<Source.Part, StreamClose>,
+  fields: Record<string, unknown>,
+): Operation<Stream<Source.Part, StreamClose>> {
+  // opening the subscription binds the parser's resource to the CURRENT (request) scope, which is
+  // exactly the lifetime an upload has
+  const subscription: Subscription<Source.Part, StreamClose> = yield* parts
 
-export const stringToFile = (key: string, value: string): ActionFile => {
-  const blob = new Blob([value])
+  let pending: Source.Part | undefined
+  let closed: StreamClose | null = null
+
+  while (true) {
+    const next = yield* subscription.next()
+
+    if (next.done) {
+      closed = next.value
+      break
+    }
+    if (next.value.kind === 'file') {
+      pending = next.value
+      break
+    }
+
+    appendField(fields, next.value.name, next.value.value)
+  }
+
   return {
-    name: key,
-    type: 'text/plain',
-    size: blob.size,
-    stream: IO.actions.fromReadable(blob.stream().getReader()),
+    *[Symbol.iterator]() {
+      return {
+        *next() {
+          if (pending !== undefined) {
+            const value = pending
+            pending = undefined
+            return { done: false as const, value }
+          }
+          if (closed !== null) {
+            return { done: true as const, value: closed }
+          }
+          return yield* subscription.next()
+        },
+      }
+    },
   }
 }
-
-// A (buffered) mode: spill each uploaded file to a temp file so the whole files map can be handed to
-// the action while memory stays bounded (one file's chunk at a time streams to disk, never the whole
-// file in RAM). The spilled files are removed at request-scope teardown by the caller.
-
-/** Create a fresh per-request spill directory under the OS temp dir. */
-export const spillDir = operation(function* () {
-  const base = yield* IO.actions.tmpdir()
-  const id = yield* IO.actions.uuid()
-  const dir = yield* IO.actions.join(base, `ozaco-upload-${id}`)
-  yield* IO.actions.ensureDir(dir)
-  return dir
-})
-
-/** Stream one file part to a temp file (bounded memory) and return an `ActionFile` that reads it back
- * lazily, plus the temp path so the caller can clean it up when the request ends. */
-export const spillFile = operation(function* (
-  dir: string,
-  part: Extract<MultipartPart, { kind: 'file' }>,
-) {
-  const id = yield* IO.actions.uuid()
-  const path = yield* IO.actions.join(dir, id)
-  yield* IO.actions.writeStream(path, part.stream)
-  const info = yield* IO.actions.stat(path)
-  const file: ActionFile = {
-    name: part.filename ?? part.name,
-    type: part.mediaType ?? 'application/octet-stream',
-    size: info.size,
-    stream: IO.actions.readStream(path),
-  }
-  return { file, path }
-})

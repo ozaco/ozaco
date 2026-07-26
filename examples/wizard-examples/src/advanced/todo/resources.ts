@@ -1,4 +1,5 @@
-import { doc, query, resource, useDatabase, withAccess } from 'server:wizard'
+import { useDatabase } from 'db:realtime'
+import { doc, query, resource, withAccess } from 'server:wizard'
 import { operation } from 'std:effect'
 
 import { z } from 'zod'

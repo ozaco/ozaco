@@ -63,7 +63,6 @@ export namespace DocsDef {
     'x-ozaco-kind'?: 'query' | 'mutation' | 'action' | 'stream'
     'x-ozaco-emits'?: JsonSchema
     'x-ozaco-realtime'?: 'websocket' | 'sse'
-    'x-ozaco-upload-mode'?: 'buffer' | 'stream'
   }
 
   export interface SecurityScheme {

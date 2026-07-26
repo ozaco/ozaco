@@ -1,16 +1,23 @@
+import type { Service } from 'server:core'
 import type { Operation } from 'std:effect'
 
 export namespace DaemonDef {
-  export type Strategy = 'none' | 'worker' | 'cluster'
-  export type Mode = 'shared-port' | 'roles'
+  /**
+   * What this process is. Derived from `SERVICE` (and, in cluster mode, from being the primary) —
+   * never configured by hand.
+   *
+   *   monolith → owns AND serves every module: one process, the whole app
+   *   gateway  → serves every module's routes + docs, owns none of them
+   *   service  → owns exactly one module, serves nothing
+   */
+  export type Kind = 'monolith' | 'gateway' | 'service'
 
-  /** What happens once a unit (a module's setup, or a crashed replica) has exhausted its retries.
-   * `all` stops everything (the replica crashes / the whole daemon is torn down); `isolate` drops only
-   * the broken unit and keeps the rest running. */
+  /** What happens once a unit (a module's assembly, or a crashed child) has exhausted its retries.
+   * `all` stops everything; `isolate` drops only the broken unit and keeps the rest running. */
   export type FailMode = 'all' | 'isolate'
 
-  /** Retry the failing unit before giving up. Same shape as the server retry policy: `delay` grows by
-   * `backoff` each attempt, capped at `maxDelay`. `attempts` is the TOTAL tries incl. the first. */
+  /** Retry the failing unit before giving up. `delay` grows by `backoff` each attempt, capped at
+   * `maxDelay`. `attempts` is the TOTAL tries incl. the first. */
   export interface Retry {
     attempts?: number
     delay?: number
@@ -18,77 +25,76 @@ export namespace DaemonDef {
     maxDelay?: number
   }
 
-  /** Failure handling for module setup (in-process) and replica crashes (supervisor). A `number`
-   * shorthand for `retry` sets the attempt count. Default: `{ mode: 'all' }` with no retry. */
+  /** Failure handling for module assembly (in-process) and child crashes (cluster supervisor). A
+   * `number` shorthand for `retry` sets the attempt count. Default: `{ mode: 'all' }`, no retry. */
   export interface Failure {
     mode?: FailMode
     retry?: Retry | number
   }
 
-  /** Per-replica facts resolved from env + the spawn topology. Passed to every callback so a module
-   * can decide whether it belongs in THIS process and read its configuration. */
+  /** Per-process facts, resolved from the environment. Passed to every callback so a module can tell
+   * whether it belongs here. */
   export interface Runtime {
-    /** The full process environment — `when` predicates read arbitrary feature flags from here. */
+    /** The full process environment — `when` predicates read feature flags from here. */
     env: Record<string, string>
-    /** Roles assigned to this replica (roles mode / worker workerData). Empty in shared-port / single. */
-    roles: Set<string>
-    /** True when no specific role is assigned → this replica runs every eligible module. */
-    runsAll: boolean
-    /** First assigned role, or null. */
-    role: string | null
-    /** Replica index (cluster worker id / worker threadId); -1 for the supervisor / single process. */
+    kind: Kind
+    /** The module this process owns; null unless `kind === 'service'`. */
+    service: string | null
+    /** Cluster child id; -1 for the primary or a single process. */
     index: number
-    strategy: Strategy
-    mode: Mode | null
-    /** OS-level primary (cluster primary / main thread). */
-    primary: boolean
-    /** `primary && strategy !== 'none'` → forks replicas and does NOT host services itself. */
-    supervisor: boolean
-    /** Start the gateway with SO_REUSEPORT (cluster shared-port). */
-    reusePort: boolean
+    /** Running under `cluster: true` (either the primary or one of its children). */
+    cluster: boolean
   }
 
-  /** One env-gated unit of the app: install + register + mount its services/plugins. */
+  /**
+   * One unit of the app. The module NAME is its role: `SERVICE=todos` owns the module called `todos`.
+   * Ownership and serving are independent — a service process owns without serving, the gateway
+   * serves without owning, a monolith does both.
+   */
   export interface Module {
     name: string
-    /** Role-gate: eligible only on replicas whose roles intersect. Absent = role-independent. */
-    roles?: string[]
-    /** Extra predicate (e.g. a feature flag from `rt.env`). Absent = always eligible. */
+    /** Extra predicate (e.g. a feature flag from `rt.env`). Gates OWNERSHIP only — the gateway still
+     * mounts and documents the routes without it, since the flag belongs to the owner. */
     when?: (rt: Runtime) => boolean
-    /** Per-module failure handling, overriding the daemon-level `failure` (retry the setup; on
-     * exhaustion `all` crashes the replica, `isolate` skips just this module). */
+    /** Per-module override of the daemon-level `failure`. */
     failure?: Failure
-    /** Run only when eligible. */
-    setup: (rt: Runtime) => Operation<unknown>
-  }
-
-  export interface Replicate {
-    strategy: Strategy
-    /** Replica count for shared-port / worker pool. Default: os.cpus().length. */
-    count?: number
-    /** Cluster topology. Default 'shared-port'. */
-    mode?: Mode
-    /** roles mode: role name → replica count (e.g. `{ auth: 2, docs: 1 }`). */
-    roles?: Record<string, number>
-    /** worker strategy: entry script each thread runs (re-runs your daemon main). */
-    script?: string | URL
+    /**
+     * The service this module owns. On the owning process the daemon runs `install(service)` then
+     * `Broker.actions.register(service)` — do NOT install it yourself in `base`. Elsewhere only
+     * `Gateway.actions.mount` runs, which reads static route/OpenAPI metadata and boots nothing.
+     */
+    service?: Service
+    /** Mount prefix. Omit to keep the service off HTTP entirely (internal RPC only). */
+    route?: string
+    /** Extra wiring for the OWNING process, run BEFORE `service` is installed — e.g. installing a
+     * provider the service depends on. Required when `service` is absent. */
+    setup?: (rt: Runtime) => Operation<unknown>
   }
 
   export interface Options {
-    replicate?: Replicate
-    /** Default failure handling for every module's setup AND for crashed replicas in the supervisor.
-     * Overridable per module via `Module.failure`. Default: `{ mode: 'all' }`, no retry. */
+    /**
+     * Fork one child process per module, with THIS process staying on as the gateway. Mirrors the
+     * Kubernetes shape (a gateway Deployment + one Deployment per module) on a single machine; in a
+     * cluster leave it off and let Kubernetes do the replicating.
+     */
+    cluster?: boolean
+    /** Default failure handling for module assembly AND for crashed children. Default `{mode:'all'}`. */
     failure?: Failure
-    /** Common bootstrap, run on every replica BEFORE modules: install logger/broker/gateway/plugins
-     * (but do NOT start them — the daemon starts broker + gateway once all modules have mounted). */
+    /** Common bootstrap, run BEFORE modules: install logger/broker/transport/gateway (but do NOT
+     * start them — the daemon starts broker + gateway once the modules are assembled). */
     base?: (rt: Runtime) => Operation<unknown>
-    /** Env-gated units assembled per replica. */
+    /** The app's units. Assembled per process according to `rt.kind`. */
     modules: Module[]
-    /** Run on every replica AFTER broker + gateway start (logging, warmup, seeding). */
-    ready?: (rt: Runtime) => Operation<unknown>
+    /** Run AFTER broker + gateway start. `mounted` lists the services whose routes THIS process
+     * exposed — feed it straight to `Docs.actions.from`. */
+    ready?: (rt: Runtime, mounted: readonly Service[]) => Operation<unknown>
   }
 
   export interface Context {
     options: Options
+
+    /** Resolved by `start()`, so it is null while the daemon is only installed. Anything wired from
+     * `base` or a module reads it through `useRole` to learn what this process is. */
+    runtime: Runtime | null
   }
 }

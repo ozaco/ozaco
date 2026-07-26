@@ -1,4 +1,4 @@
-import { definePolicy, PolicyPriority } from 'server:core'
+import { definePolicy, PolicyPriority, respondWith, untagged } from 'server:core'
 import { asFailure } from 'std:result'
 
 import type { Fallback } from './types'
@@ -34,15 +34,22 @@ export const FallbackPolicy = definePolicy<Fallback.Options, Fallback.Context>({
     } catch (error) {
       // any thrown value is treated as a failure — a raw error is wrapped into one via asFailure
       const failure = asFailure(error)
-      if (when && !when(failure)) {
+
+      // `when` and `handler` are application code, so they see the plain tag; `failure` itself is
+      // re-raised untouched so whatever the action had already set still reaches the surface.
+      const plain = untagged(failure)
+
+      if (when && !when(plain)) {
         yield* failure
       }
 
+      // Both of these are APPLICATION values, so both are wrapped: the onion answers with an
+      // envelope, and a policy that substitutes a value must not be the one place that does not.
       if (handler) {
-        return yield* handler(failure, dispatch)
+        return respondWith(yield* handler(plain, dispatch))
       }
       if (hasValue) {
-        return fallbackValue
+        return respondWith(fallbackValue)
       }
       yield* failure
     }

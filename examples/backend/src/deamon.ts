@@ -17,9 +17,25 @@ import { ConsoleTransport } from 'std:logger/transport/console'
 import { ENV, STATUS_MAP } from './const'
 import { AiService } from './services/ai'
 import { AuthService } from './services/auth'
+import { mountChat } from './services/chat'
 import { TodoService } from './services/todo'
+import { UploadService } from './services/upload'
 import { cleanupErrors } from './utils/cleanup'
 import { memoryAuthProvider } from './utils/store'
+
+// One entry, one image — the environment decides what this process becomes:
+//
+//   (SERVICE unset)   monolith: owns and serves everything, like `./index.ts`
+//   SERVICE=gateway   gateway:  mounts + documents every route, owns NOTHING
+//   SERVICE=auth      service:  owns ONLY AuthService, headless (no port)
+//   SERVICE=todos     service:  owns ONLY TodoService
+//   SERVICE=ai        service:  owns ONLY AiService
+//
+// Set CLUSTER=1 to get the same split as forked processes on one machine. In Kubernetes leave it
+// off: one Deployment per module plus a gateway Deployment, each with its own SERVICE.
+//
+// A gateway route holds no code — it dispatches through the broker, misses the empty local registry,
+// and falls through to NATS, where the owning process answers.
 
 await main(function* () {
   yield* install(BunIO)
@@ -31,59 +47,62 @@ await main(function* () {
   })
   yield* install(ConsoleTransport)
 
-  // services mounted on THIS replica — fed to the Docs plugin once everything is up
-  const mounted: Service[] = []
-
   yield* install(Daemon, {
-    replicate: {
-      strategy: 'cluster',
-      mode: 'roles',
-      // roles mode: one process per entry (override the strategy/mode with env to engage it)
-      roles: { auth: 1, todos: 1, ai: 1 },
-    },
+    cluster: rootEnv.cluster,
 
     failure: {
       mode: 'all',
       retry: { attempts: 3, delay: 500, backoff: 3 },
     },
 
-    // Common to every replica. Installs (but does NOT start) the broker-adjacent plugins + gateway;
-    // the daemon starts broker + gateway after the eligible modules have registered and mounted.
+    // Infrastructure only — NO services. Whatever this process owns is installed by the daemon from
+    // `modules`, so an auth process never boots todos or ai.
     *base(rt) {
       yield* Logger.actions.child(
         {
-          index: rt.index,
+          kind: rt.kind,
         },
         function* () {
           const env = yield* ENV
 
-          // Disable the transport-level request timeout (0) — the action `TimeoutPolicy` is the sole
-          // authority, so a slow cross-service call (e.g. todos → ai.chat's buffered LLM completion)
-          // is bounded by the policy, not cut off early by NATS's default 5s reply window.
-          yield* install(NatsTransport, { requestTimeoutMs: 0 })
-
-          yield* install(AuthService)
-          yield* install(TodoService)
-          yield* install(AiService)
-
-          yield* Logger.actions.info(`LogLevel: ${env.level}  ·  role: ${rt.role ?? 'all'}`)
-
-          // Token auth lives on EVERY replica so any role can validate Bearer tokens — only the `auth`
-          // role serves the /auth login routes (see the auth module below).
-          yield* install(AccessRefreshAuth, {
-            secret: 'dev-only-secret-change-me',
-            issuer: 'ozaco-backend',
-            access: { expiresIn: '15m' },
-            refresh: { expiresIn: '7d' },
+          // A generous ceiling, not a disabled one. `requestTimeoutMs: 0` reads as "let the action's
+          // TimeoutPolicy decide" — but that authority only exists where such a policy is actually
+          // applied, and none of these actions apply one. With no timer at all, an owner KILLED
+          // mid-request leaves the caller waiting ~24.8 days: NATS's no-responders fast path only
+          // covers the moment of sending, so a pod that dies after accepting the request is silent
+          // forever. This window is wide enough for a buffered LLM completion and still finite.
+          //
+          // The queue group is the module name: every replica of one module shares it, so NATS
+          // load-balances calls across them.
+          yield* install(NatsTransport, {
+            servers: env.natsServers,
+            requestTimeoutMs: env.requestTimeoutMs,
+            ...(rt.service ? { queueGroup: rt.service } : {}),
           })
-          yield* AccessRefreshAuth.actions.provide(memoryAuthProvider)
 
-          // shared-port replicas share one port (the daemon binds with SO_REUSEPORT); role replicas each
-          // take their own port (base + cluster worker id) so their gateways don't collide.
-          const port = env.port + (rt.reusePort || rt.index < 1 ? 0 : rt.index)
+          // Actions execute where they are owned, so token validation belongs with the owners. The
+          // gateway never runs an action body and needs no auth strategy.
+          if (rt.kind !== 'gateway') {
+            yield* install(AccessRefreshAuth, {
+              secret: 'dev-only-secret-change-me',
+              issuer: 'ozaco-backend',
+              access: { expiresIn: '15m' },
+              refresh: { expiresIn: '7d' },
+            })
+            yield* AccessRefreshAuth.actions.provide(memoryAuthProvider)
+          }
+
+          yield* Logger.actions.info(
+            `LogLevel: ${env.level}  ·  ${rt.kind}${rt.service ? ` (${rt.service})` : ''}`,
+          )
+
+          if (rt.kind === 'service') {
+            // headless: no port, no HTTP surface — it answers over NATS only
+            return
+          }
 
           yield* install(BunGateway, {
-            port,
+            port: env.port,
             host: env.host,
             statusMap: STATUS_MAP,
             simplify: cleanupErrors.bind(null, 'gateway'),
@@ -100,31 +119,19 @@ await main(function* () {
       )
     },
 
+    // Declarative: the daemon installs + registers a service ONLY where it is owned, and mounts its
+    // routes wherever they are served. The module name is its role — `SERVICE=todos` owns `todos`.
     modules: [
+      { name: 'auth', service: AuthService, route: '/auth' },
+      { name: 'todos', service: TodoService, route: '/todos' },
+      { name: 'upload', service: UploadService, route: '/upload' },
       {
-        name: 'auth',
-        roles: ['auth'],
-        *setup() {
-          yield* Broker.actions.register(AuthService)
-          yield* Gateway.actions.mount('/auth', AuthService)
-          mounted.push(AuthService)
-        },
-      },
-      {
-        name: 'todos',
-        roles: ['todos'],
-        *setup() {
-          yield* Broker.actions.register(TodoService)
-          yield* Gateway.actions.mount('/todos', TodoService)
-          mounted.push(TodoService)
-        },
-      },
-      {
-        // AI is opt-in: only assembled when a provider key is present (and, in roles mode, on the
-        // `ai` replica). The rest of the app still boots when it is not configured.
+        // AI is opt-in: owned only where a provider key is present. The gateway still mounts and
+        // documents /ai — the key belongs to the owner, not the edge.
         name: 'ai',
-        roles: ['ai'],
         when: rt => Boolean(rt.env.OPENAI_API_KEY || rt.env.AI_API_KEY),
+        service: AiService,
+        route: '/ai',
         *setup() {
           const env = yield* ENV
           yield* install(OpenAI, {
@@ -132,18 +139,26 @@ await main(function* () {
             ...(env.aiBaseURL ? { baseURL: env.aiBaseURL } : {}),
             ...(env.aiModel ? { model: env.aiModel } : {}),
           })
-          yield* Broker.actions.register(AiService)
-          yield* Gateway.actions.mount('/ai', AiService)
-          mounted.push(AiService)
         },
       },
     ],
 
-    // After broker + gateway are listening: register the mounted services with Docs and log readiness.
-    *ready() {
-      if (mounted.length > 0) {
-        yield* Docs.actions.from(...mounted)
+    // After broker + gateway start. `mounted` is what THIS process exposed — on the gateway that is
+    // the whole API, which is exactly what the unified OpenAPI spec should describe.
+    *ready(rt, mounted) {
+      if (rt.kind === 'service') {
+        yield* Logger.actions.info(`Service ready  ·  owns: ${rt.service}  ·  transport: NATS`)
+        return
       }
+
+      if (mounted.length > 0) {
+        yield* Docs.actions.from(...(mounted as Service[]))
+      }
+
+      // Chat is a raw `listen()` endpoint rather than a service, so the daemon has nothing to mount
+      // for it — whoever serves HTTP registers it here. Its rooms live at the edge, which is why it
+      // is the one thing that does NOT split across pods.
+      yield* mountChat()
 
       const gw = yield* useContext(Gateway.context)
       const names = mounted.map(service => service.name).join(', ') || '(none)'
@@ -155,7 +170,6 @@ await main(function* () {
   yield* Daemon.actions.start()
 
   yield* ensure(function* () {
-    // The supervisor never installed the logger/gateway — guard so its shutdown stays quiet + safe.
     if ((yield* Logger.context.get()) !== undefined) {
       yield* Logger.actions.debug('Shutting down')
     }

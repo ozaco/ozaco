@@ -1,9 +1,10 @@
 import type { GatewayDef } from 'server:core'
-import { ActionRawRequestContext, CoreErrors, Gateway, isService } from 'server:core'
+import { CoreErrors, Gateway } from 'server:core'
 import { operation, useContext } from 'std:effect'
 import { asFailure, auto, fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 
+import { ConnectionContext } from './const'
 import { dispatchAction } from './dispatch'
 import { resolveRouteAction } from './util'
 import { buildRequest, buildResponse, encodeWsBody, sendResult } from './ws'
@@ -116,12 +117,7 @@ const onMessageAction = operation(function* (ws: AnyType, message: unknown) {
   const action = resolveRouteAction(entry)
 
   try {
-    const ret = yield* dispatchAction(
-      { req, res, rawReq: ws, rawRes: ws, signal },
-      action,
-      body,
-      isService(entry.target),
-    )
+    const ret = yield* dispatchAction({ req, res, connection: ws, signal }, entry, action, body)
     yield* sendResult(ws, res, auto(ret))
   } catch (error) {
     yield* sendResult(ws, res, asFailure(error))
@@ -148,7 +144,7 @@ const onCloseAction = operation(function* (ws: AnyType, code: number, reason: st
 // ---- realtime push + rooms ---------------------------------------------------------------------
 
 const useCurrent = operation(function* () {
-  const raw = (yield* ActionRawRequestContext.get()) as AnyType
+  const raw = (yield* ConnectionContext.get()) as AnyType
   const ctx = yield* useContext(Gateway.context)
   const id = raw?.data?.id as string | undefined
   return { ctx, socket: id === undefined ? undefined : ctx.sockets.get(id) }

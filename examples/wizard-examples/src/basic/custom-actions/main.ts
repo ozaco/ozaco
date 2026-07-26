@@ -1,7 +1,7 @@
 import { Pool } from 'db:core'
-import { table, RealtimeDb } from 'db:realtime'
-import { Broker, DefaultBroker } from 'server:core'
-import { doc, mutation, query, resource, useDatabase } from 'server:wizard'
+import { RealtimeDb, table, useDatabase } from 'db:realtime'
+import { Broker, DataType, DefaultBroker } from 'server:core'
+import { doc, mutation, query, resource } from 'server:wizard'
 import { main } from 'std:effect'
 import { DefaultLogger, LogLevel } from 'std:logger'
 import { install } from 'std:plugin'
@@ -59,13 +59,18 @@ await main(function* () {
   yield* install(SqliteDriver)
   yield* install(Pool, { connectionUri: ':memory:' })
   yield* install(RealtimeDb, { tables: [counters] })
-  yield* install(metrics)
+  yield* metrics.actions.install()
   yield* Broker.actions.start()
 
-  yield* Broker.actions.call(metrics.actions.bump, [{ name: 'signups' }])
-  yield* Broker.actions.call(metrics.actions.bump, [{ name: 'signups', by: 4 }])
-  yield* Broker.actions.call(metrics.actions.bump, [{ name: 'logins', by: 2 }])
-
-  const summary = yield* Broker.actions.call(metrics.actions.total, [])
+  yield* Broker.actions.call(metrics, 'bump', [
+    { type: DataType.normal, value: { name: 'signups' } },
+  ])
+  yield* Broker.actions.call(metrics, 'bump', [
+    { type: DataType.normal, value: { name: 'signups', by: 4 } },
+  ])
+  yield* Broker.actions.call(metrics, 'bump', [
+    { type: DataType.normal, value: { name: 'logins', by: 2 } },
+  ])
+  const summary = yield* Broker.actions.call(metrics, 'total', [])
   console.log('metrics:', summary.counters, 'counters, sum', summary.sum)
 })

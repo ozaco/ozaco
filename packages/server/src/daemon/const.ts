@@ -1,19 +1,22 @@
 import { createTags } from 'std:shared'
 
-/** Env vars the daemon reads. The supervisor sets `strategy`/`mode`/`role` on each forked child, so a
- * replica re-running the same entry resolves its identity from these alone. */
+/**
+ * The single env var the daemon reads. It names the module THIS process owns; the cluster supervisor
+ * sets it on every child it forks, so a replica re-running the same entry resolves its own identity.
+ *
+ *   unset      → monolith: owns and serves every module (the plain `bun entry.ts` dev path)
+ *   'gateway'  → edge: mounts + documents every route, owns nothing
+ *   '<module>' → service: owns exactly that module, headless
+ */
 export const DAEMON_ENV = {
-  strategy: 'DAEMON_STRATEGY',
-  count: 'DAEMON_COUNT',
-  mode: 'DAEMON_MODE',
-  role: 'DAEMON_ROLE',
   service: 'SERVICE',
 } as const
+
+/** Reserved `SERVICE` value for an edge replica — it routes and documents, it never runs a service. */
+export const GATEWAY_ROLE = 'gateway'
 
 export const DaemonErrors = createTags(
   'server:daemon',
 
-  'unsupported-strategy',
-  'missing-script',
   'spawn',
 )

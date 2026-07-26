@@ -4,8 +4,10 @@ import type { AnyType } from 'std:shared'
 
 import { NatsErrors } from '../errors'
 
+// No `'503'` (no-responders) entry: JetStream answers a missing consumer differently — a publish to
+// a subject no stream covers errors immediately, and `hosts()` asks `consumers.info` BEFORE anything
+// is sent, so "nobody serves this" is a routing answer here, not a request failure to interpret.
 const CODE_TO_TAG: Record<string, string> = {
-  '503': NatsErrors.NoResponders,
   TIMEOUT: NatsErrors.Timeout,
   REQUEST_ERROR: NatsErrors.RequestError,
 

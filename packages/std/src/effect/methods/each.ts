@@ -49,6 +49,18 @@ export function each<T>(stream: Stream<T, unknown>): Operation<Iterable<T>> {
       return {
         [Symbol.iterator]: () => ({
           next() {
+            /**
+             * Serving a DONE result must finish the loop context HERE. A `for..of` whose iterator
+             * answers done on the very first pull — an EMPTY stream — never runs its body, so no
+             * `each.next()` ever fires and `return()` is not called on natural completion either.
+             * Without this, the context stays on the EachStack and the ENCLOSING loop's
+             * `each.next()` advances the wrong subscription — an empty inner stream silently
+             * corrupting its outer iteration.
+             */
+            if (context.current.done) {
+              context.finish()
+              return context.current
+            }
             if (context.stale) {
               throw fail(
                 'iteration',

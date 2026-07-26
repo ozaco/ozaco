@@ -2,60 +2,47 @@ import { until } from 'std:effect'
 import { IO } from 'std:io'
 import type { AnyType } from 'std:shared'
 
-import { DAEMON_ENV } from '../const'
+import { DAEMON_ENV, GATEWAY_ROLE } from '../const'
 import type { DaemonDef } from '../types'
 
-interface WorkerData {
-  role?: string | null
-  index?: number
-}
-
-const splitRoles = (value: string | undefined | null): string[] =>
-  (value ?? '')
-    .split(',')
-    .map(role => role.trim())
-    .filter(Boolean)
-
+/**
+ * Work out what this process is. Everything comes from the environment plus, under `cluster`, whether
+ * node:cluster considers us the primary — so the same entry file resolves a different identity in
+ * every pod (or every fork) without any per-process configuration.
+ */
 export const resolveRuntime = function* (options: DaemonDef.Options) {
   const env = yield* IO.actions.env(data => ({ ...data }))
-  const replicate = options.replicate
-
-  const strategy: DaemonDef.Strategy =
-    (env[DAEMON_ENV.strategy] as DaemonDef.Strategy) || replicate?.strategy || 'none'
-  const mode: DaemonDef.Mode =
-    (env[DAEMON_ENV.mode] as DaemonDef.Mode) || replicate?.mode || 'shared-port'
+  const cluster = options.cluster ?? false
 
   let primary = true
   let index = -1
-  let workerData: WorkerData = {}
 
-  if (strategy === 'cluster') {
+  if (cluster) {
     const mod = (yield* until(import('node:cluster'))) as AnyType
-    const cluster = (mod.default ?? mod) as AnyType
-    primary = Boolean(cluster.isPrimary)
-    index = cluster.worker?.id ?? -1
-  } else if (strategy === 'worker') {
-    const wt = (yield* until(import('node:worker_threads'))) as AnyType
-    primary = Boolean(wt.isMainThread)
-    index = wt.isMainThread ? -1 : (wt.threadId ?? -1)
-    workerData = (wt.workerData ?? {}) as WorkerData
+    const node = (mod.default ?? mod) as AnyType
+    primary = Boolean(node.isPrimary)
+    index = node.worker?.id ?? -1
   }
 
-  const roles = new Set(
-    splitRoles(workerData.role ?? env[DAEMON_ENV.role] ?? env[DAEMON_ENV.service]),
-  )
+  const named = env[DAEMON_ENV.service]?.trim() || null
+
+  // The cluster primary is always the gateway: its children own the services (it forks one per
+  // module), so it must not own them too.
+  const kind: DaemonDef.Kind =
+    cluster && primary
+      ? 'gateway'
+      : named === null
+        ? 'monolith'
+        : named === GATEWAY_ROLE
+          ? 'gateway'
+          : 'service'
 
   const rt: DaemonDef.Runtime = {
     env,
-    roles,
-    runsAll: roles.size === 0,
-    role: roles.size > 0 ? [...roles][0]! : null,
-    index: workerData.index ?? index,
-    strategy,
-    mode: strategy === 'none' ? null : mode,
-    primary,
-    supervisor: primary && strategy !== 'none',
-    reusePort: strategy === 'cluster' && mode === 'shared-port',
+    kind,
+    service: kind === 'service' ? named : null,
+    index,
+    cluster,
   }
 
   return rt

@@ -21,7 +21,7 @@ void main(function* () {
   yield* install(BunIO)
   yield* install(DefaultBroker)
 
-  yield* install(ComputeService)
+  yield* ComputeService.actions.install()
   yield* Broker.actions.register(ComputeService)
 
   yield* install(WorkerTransport)

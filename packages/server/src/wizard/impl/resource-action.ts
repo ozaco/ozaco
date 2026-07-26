@@ -1,4 +1,4 @@
-import { CoreStatusMap, defineAction, Gateway } from 'server:core'
+import { CoreStatusMap, defineAction, Gateway, parts, value } from 'server:core'
 import type { Action } from 'server:core'
 import type { AnyType } from 'std:shared'
 
@@ -36,16 +36,17 @@ export const buildResourceAction = (spec: BuildSpec): ResourceAction => {
   const action = defineAction(
     {
       title: `${namespace}.${name}`,
-      input: resolveActionArgs(definition),
+      // An upload action DECLARES its parts lane: policies see isStreaming, docs emit multipart,
+      // and a carrier knows to open the lane — none of which a runtime `useSource` can tell them.
+      input: upload
+        ? [value(resolveActionArgs(definition) as AnyType), parts()]
+        : resolveActionArgs(definition),
       ...(definition.returns ? { output: definition.returns } : {}),
       settings: [
         Gateway.actions.rest({
           method,
           path,
           statusMap: CoreStatusMap,
-          ...(upload
-            ? { multipart: upload.mode, files: upload.fields.map(field => field.name) }
-            : {}),
         }),
       ],
     },

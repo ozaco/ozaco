@@ -31,10 +31,10 @@ await main(function* () {
 
   // Each resource is a native service: install registers + mounts it and serves its own realtime
   // channel. The same service values feed the existing Docs/OpenAPI plugin.
-  yield* install(projects)
-  yield* install(tasks)
-  yield* install(comments)
-  yield* install(stats)
+  yield* projects.actions.install()
+  yield* tasks.actions.install()
+  yield* comments.actions.install()
+  yield* stats.actions.install()
   yield* Docs.actions.from(projects, tasks, comments, stats)
 
   yield* Broker.actions.start()

@@ -43,9 +43,9 @@ await main(function* () {
   })
   yield* AccessRefreshAuth.actions.provide(memoryAuthProvider)
 
-  yield* install(AuthService)
-  yield* install(TodoService)
-  yield* install(UploadService)
+  yield* AuthService.actions.install()
+  yield* TodoService.actions.install()
+  yield* UploadService.actions.install()
 
   // AI is opt-in: only wire the OpenAI-compatible client + /ai service when a provider key is
   // present, so the rest of the app still boots when it is not configured.
@@ -56,7 +56,7 @@ await main(function* () {
       ...(env.aiBaseURL ? { baseURL: env.aiBaseURL } : {}),
       ...(env.aiModel ? { model: env.aiModel } : {}),
     })
-    yield* install(AiService)
+    yield* AiService.actions.install()
   } else {
     yield* Logger.actions.warn('OPENAI_API_KEY not set → /ai/* routes are disabled')
   }
@@ -105,7 +105,7 @@ await main(function* () {
   // the Docs plugin logs the swagger/openapi URLs itself once the gateway is listening
   yield* Logger.actions.info(`Todo api ready  → http://${host}:${port}`)
   yield* Logger.actions.info(
-    `Uploads         → POST /upload (buffered)  ·  POST /upload/stream (streaming)`,
+    `Uploads         → POST /upload/stream (streaming)  ·  GET /upload/:name (download)`,
   )
   yield* Logger.actions.info(`WS chat         → ws://${host}:${port}/chat`)
   yield* Logger.actions.info(

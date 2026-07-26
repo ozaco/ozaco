@@ -28,6 +28,19 @@ export const ENV = IO.actions.env(data => ({
   host: data.HOST ?? data.host ?? '0.0.0.0',
   service: data.SERVICE ?? data.service ?? null,
 
+  // Local multi-process mode: fork one child per module instead of running them all here. In
+  // Kubernetes leave it off and give each Deployment its own SERVICE.
+  cluster: ['1', 'true', 'yes'].includes(String(data.CLUSTER ?? '').toLowerCase()),
+
+  // The NATS backplane every process shares. Left at the local default so the single-process path
+  // needs no configuration at all.
+  natsServers: data.NATS_URL ?? data.NATS_SERVERS ?? 'nats://localhost:4222',
+
+  // The ceiling on ONE cross-process call. Wide enough for a buffered LLM completion, finite so an
+  // owner that dies mid-request cannot park the caller forever. `0` disables it entirely — only do
+  // that where an action-level TimeoutPolicy really is applied.
+  requestTimeoutMs: +(data.NATS_REQUEST_TIMEOUT_MS ?? 0) || 120_000,
+
   level: (LogLevel[(data.LEVEL || data.level) as unknown as LogLevel] ?? LogLevel.info) as LogLevel,
 
   // AI provider config — set OPENAI_API_KEY to enable the /ai/* routes. baseURL/model are optional
@@ -41,4 +54,5 @@ export const AppErrors = createTags(
   'app:backend',
 
   'cleanup',
+  'chat',
 )

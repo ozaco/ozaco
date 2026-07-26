@@ -1,3 +1,4 @@
+import { bodyChannel } from 'server:core'
 import type { AnyType } from 'std:shared'
 
 import { z } from 'zod'
@@ -37,7 +38,6 @@ interface UploadField {
 }
 
 interface UploadSpec {
-  readonly mode: 'buffer' | 'stream'
   readonly fields: readonly UploadField[]
   readonly openFields: boolean
 }
@@ -90,9 +90,7 @@ const pickQueryParams = (
 }
 
 const uploadSpec = (entry: DocsDef.CompiledEntry): UploadSpec | undefined => {
-  const wizardUpload = (entry.meta as AnyType).wizard?.upload as
-    | { mode?: unknown; fields?: unknown }
-    | undefined
+  const wizardUpload = (entry.meta as AnyType).wizard?.upload as { fields?: unknown } | undefined
 
   if (wizardUpload && Array.isArray(wizardUpload.fields)) {
     const fields = wizardUpload.fields.flatMap((field: AnyType) =>
@@ -106,23 +104,14 @@ const uploadSpec = (entry: DocsDef.CompiledEntry): UploadSpec | undefined => {
           ]
         : [],
     )
-    return {
-      mode: wizardUpload.mode === 'stream' ? 'stream' : 'buffer',
-      fields,
-      openFields: false,
-    }
+    return { fields, openFields: false }
   }
 
-  if (Array.isArray(entry.rest.files)) {
-    return {
-      mode: entry.rest.multipart === 'stream' ? 'stream' : 'buffer',
-      fields: entry.rest.files.map(name => ({ name, required: false, multiple: false })),
-      openFields: false,
-    }
-  }
-
-  if (entry.rest.multipart) {
-    return { mode: entry.rest.multipart, fields: [], openFields: true }
+  // No wizard metadata — the DECLARATION is the remaining authority: an action whose input carries
+  // a multistream channel is a multipart route, with field names unknown to the contract.
+  const accepts = (entry.meta as AnyType).wire?.accepts as readonly string[] | undefined
+  if (accepts?.includes('multistream')) {
+    return { fields: [], openFields: true }
   }
 
   return undefined
@@ -158,8 +147,12 @@ const buildOperation = (
 ): DocsDef.OperationObject => {
   const { meta, method, service, key } = entry
 
-  const inputSchema = toJsonSchema(meta.input, 'input')
-  const outputSchema = toJsonSchema(meta.output, 'output')
+  // The RESOLVED wire, not the raw declaration: an input written as channels — e.g.
+  // `[value(z.object({...})), parts()]` — is not a zod schema, and feeding it to z.toJSONSchema
+  // silently collapses the documented body to an empty object. `bodyChannel` finds the one channel
+  // whose schema IS the body contract, exactly as core validation reads it.
+  const inputSchema = toJsonSchema(bodyChannel(meta.wire.input)?.schema ?? meta.input, 'input')
+  const outputSchema = toJsonSchema(bodyChannel(meta.wire.output)?.schema ?? meta.output, 'output')
 
   const parameters: DocsDef.ParameterObject[] = pathParams.map(name => ({
     name,
@@ -204,9 +197,6 @@ const buildOperation = (
   }
 
   const upload = uploadSpec(entry)
-  if (upload) {
-    op['x-ozaco-upload-mode'] = upload.mode
-  }
 
   if (meta.title) {
     op.summary = meta.title

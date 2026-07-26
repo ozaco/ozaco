@@ -1,5 +1,5 @@
+import { useDatabase } from 'db:realtime'
 import type { AccessGuard } from 'server:wizard'
-import { useDatabase } from 'server:wizard'
 import { operation } from 'std:effect'
 
 import { tasks } from './schema'

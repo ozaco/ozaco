@@ -104,7 +104,6 @@ export const buildRequest = operation(function* (ws: AnyType, payload: unknown) 
     method: 'WS',
     url,
     meta: headers,
-    files: {},
   }
 
   return [req, body] as [ActionRequest, unknown]
@@ -113,7 +112,6 @@ export const buildRequest = operation(function* (ws: AnyType, payload: unknown) 
 export const buildResponse = (): ActionResponse => ({
   status: null,
   body: undefined,
-  files: {},
   meta: { 'content-type': JSON_CONTENT },
 })
 

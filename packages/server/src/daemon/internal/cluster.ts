@@ -1,21 +1,28 @@
 import { until } from 'std:effect'
-import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 
-import { DAEMON_ENV, DaemonErrors } from '../const'
+import { DAEMON_ENV } from '../const'
 import type { DaemonDef } from '../types'
 
 import type { ResolvedFailure } from './failure'
 
+/**
+ * Fork one child per module, each owning exactly that module (`SERVICE=<name>`). The primary does not
+ * return here — it goes on to be the gateway, so a single `cluster: true` reproduces the Kubernetes
+ * shape (one gateway + one process per service) on one machine.
+ *
+ * `when` is evaluated against the primary's runtime: the whole cluster shares one environment, so a
+ * module gated off by a missing flag gets no child at all.
+ */
 export const forkCluster = function* (
-  replicate: DaemonDef.Replicate,
-  mode: DaemonDef.Mode,
+  modules: DaemonDef.Module[],
+  rt: DaemonDef.Runtime,
   failure: ResolvedFailure,
 ) {
   const mod = (yield* until(import('node:cluster'))) as AnyType
   const cluster = (mod.default ?? mod) as AnyType
 
-  // env + run count per worker, so the supervisor can replace exactly what crashed
+  // env + run count per child, so the supervisor can replace exactly what crashed
   const slots = new Map<AnyType, { env: Record<string, string>; runs: number }>()
 
   const spawn = (env: Record<string, string>, runs: number): AnyType => {
@@ -24,28 +31,21 @@ export const forkCluster = function* (
     return worker
   }
 
-  const fork = (extra: Record<string, string>): AnyType =>
-    spawn({ [DAEMON_ENV.strategy]: 'cluster', [DAEMON_ENV.mode]: mode, ...extra }, 1)
-
-  if (mode === 'roles') {
-    const roles = replicate.roles ?? {}
-    if (Object.keys(roles).length === 0) {
-      return yield* fail(DaemonErrors.Spawn, 'cluster roles mode requires replicate.roles')
+  for (const module of modules) {
+    if (module.when !== undefined && !module.when(rt)) {
+      continue
     }
-    for (const [role, count] of Object.entries(roles)) {
-      for (let i = 0; i < count; i++) {
-        fork({ [DAEMON_ENV.role]: role })
-      }
-    }
-  } else {
-    const os = (yield* until(import('node:os'))) as AnyType
-    const count = replicate.count ?? os.cpus().length
-    for (let i = 0; i < count; i++) {
-      fork({})
-    }
+    spawn({ [DAEMON_ENV.service]: module.name }, 1)
   }
 
+  // Set the moment WE start killing children, which is the only way to tell an intentional stop from
+  // a signal the OS delivered on its own. Treating every signal as intentional meant an OOM kill was
+  // indistinguishable from a clean shutdown, so the module it hosted simply stayed down forever and
+  // its routes 500'd for the life of the process.
+  let stopping = false
+
   const teardown = () => {
+    stopping = true
     for (const worker of Object.values(cluster.workers ?? {})) {
       ;(worker as AnyType)?.kill?.()
     }
@@ -53,11 +53,17 @@ export const forkCluster = function* (
     process.exit(1)
   }
 
+  for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+    process.once(signal, () => {
+      stopping = true
+    })
+  }
+
   cluster.on('exit', (worker: AnyType, code: number, signal: string) => {
     const slot = slots.get(worker)
     slots.delete(worker)
-    // a clean shutdown (intentional signal or exit 0) is never restarted
-    if (!slot || signal || code === 0) {
+    // exit 0 is a job well done; anything during our own shutdown is us
+    if (!slot || stopping || (code === 0 && !signal)) {
       return
     }
 

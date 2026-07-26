@@ -1,18 +1,13 @@
-import type { Stream } from 'std:effect'
 import { ensure, operation, scoped, useContext } from 'std:effect'
-import { Logger } from 'std:logger'
 import type { Result } from 'std:result'
-import { asFailure, fail } from 'std:result'
-import type { AnyType } from 'std:shared'
+import { fail, just } from 'std:result'
 
 import { CoreErrors } from '../const'
 import { Broker, Transport } from '../definitions'
 import { resolveService } from '../internal/helpers'
-import type { Action } from '../types/action'
-import type { BrokerDef } from '../types/broker'
+import { invokeLocal } from '../internal/invoke'
 import type { TransportDef } from '../types/transport'
-import { CallContext, ResponseSinkContext, StreamContext, TraceContext } from '../utils/context'
-import { isStreamResult } from '../utils/is'
+import { tagOf } from '../utils/is'
 
 const getSelf = (): TransportDef => InternalTransport
 
@@ -23,7 +18,15 @@ export const InternalTransport = Transport.implement({
     const name = options.name ?? 'server/internal-transport'
     const priority = options.priority ?? 0
     const next =
-      options.next ?? ((failure: Result.Failure<unknown>) => failure.error === CoreErrors.NotFound)
+      /**
+       * ONLY "this process does not host that address" moves on to the next carrier.
+       *
+       * Anything the ACTION produced — including its own 404 — is the answer, and conveying it
+       * onward would run the body a second time somewhere else. Keying this on `NotFound` meant an
+       * application and the router were spelling two different facts the same way.
+       */
+      options.next ??
+      ((failure: Result.Failure<unknown>) => tagOf(failure.error) === CoreErrors.NotRegistered)
 
     const context: TransportDef.Context = {
       name,
@@ -39,86 +42,37 @@ export const InternalTransport = Transport.implement({
     return context
   },
 }).build({
-  dispatch: operation(function* (req: TransportDef.DispatchRequest) {
-    const { serviceName, actionKey, params = [] } = req
-    const { raw: rawReq, trace: traceContext } = req.contexts ?? {}
-    const streams = (req.streams ?? []) as Stream<unknown, void>[]
-
+  /**
+   * A definitive answer, because this carrier and the claim table are the same process.
+   *
+   * `just(false)` is safe to return HERE precisely because there is no partial view to be wrong
+   * about — which is what makes it different from a wire carrier with no discovery.
+   */
+  hosts: operation(function* (service: string, path: string) {
     const broker = yield* useContext(Broker)
-    const resolved = resolveService(broker.services, serviceName)
+    const resolved = resolveService(broker.services, service)
+
+    if (!resolved) {
+      return just(false)
+    }
+
+    return just(yield* resolved.service.actions._has(path))
+  }),
+
+  dispatch: operation(function* (req: TransportDef.DispatchRequest) {
+    const broker = yield* useContext(Broker)
+    const resolved = resolveService(broker.services, req.service)
 
     if (!resolved) {
       return yield* fail(
-        CoreErrors.NotFound,
-        `service "${serviceName}" not registered on broker "${broker.name}" (internal-transport has no remote fallback)`,
+        CoreErrors.NotRegistered,
+        `service "${req.service}" not registered on broker "${broker.name}" (internal-transport has no remote fallback)`,
       )
     }
 
-    const { service, registeredName } = resolved
-    const action = (service.actions as Record<string, AnyType>)[actionKey]
-    if (typeof action !== 'function') {
-      return yield* fail(
-        CoreErrors.NotFound,
-        `action "${actionKey}" not found on service "${registeredName}"`,
-      )
-    }
-
-    const callValue: BrokerDef.CallContext = {
-      service,
-      serviceName: registeredName,
-
-      action: action as Action,
-      actionKey,
-
-      raw: { req: rawReq, res: undefined },
-    }
-
-    const hasLogger = (yield* Logger.context.get()) !== undefined
-
-    return yield* scoped(function* () {
-      const runBody = function* () {
-        const result = yield* action(...params)
-        return result === undefined ? callValue.raw.res : result
-      }
-
-      const invoke = function* () {
-        return yield* CallContext.with(callValue, function* () {
-          return yield* StreamContext.with(streams, function* () {
-            return yield* hasLogger
-              ? Logger.actions.child({ service: registeredName, action: actionKey }, runBody)
-              : runBody()
-          })
-        })
-      }
-
-      let completed = false
-      try {
-        const result = yield* traceContext ? TraceContext.with(traceContext, invoke) : invoke()
-
-        // streaming response: a gateway installed a sink and the action returned a Stream — hand it
-        // back to the gateway HERE, inside this still-open scope, so the producer (and any upstream
-        // request feeding it) stays alive while the body drains. completed is set first so a mid-stream
-        // client disconnect (which halts the pump) is not logged as a fault.
-        const sink = yield* ResponseSinkContext.get()
-        if (sink && isStreamResult(result)) {
-          completed = true
-          yield* sink.respond(result as Stream<Uint8Array, unknown>)
-          return undefined
-        }
-
-        completed = true
-        return result
-      } finally {
-        if (!completed && hasLogger) {
-          yield* Logger.actions.child({ service: registeredName, action: actionKey }, function* () {
-            yield* Logger.actions.warn(
-              'internal:handler-cancelled',
-              asFailure(fail('cancelled', 'handler cancelled')),
-            )
-          })
-        }
-      }
-    } as AnyType)
+    // One invoker, shared with every other carrier. Two copies of this is how the not-found guard
+    // came to be dead in one of them and the reply draft missing from the other.
+    return yield* scoped(() => invokeLocal(resolved.service, req, req.contexts))
   }),
 
   emit: operation(function* (req: TransportDef.EventRequest) {

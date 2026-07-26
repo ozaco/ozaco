@@ -1,8 +1,9 @@
-import type { AnyType, StandardSchemaV1 } from 'std:shared'
+import type { AnyType } from 'std:shared'
 import { isFunction } from 'std:shared'
 
 import { ACTION } from '../const'
 import { withValidation } from '../internal/validation'
+import { resolveWire } from '../internal/wire'
 import type { Action } from '../types/action'
 import type { Impl } from '../types/impl'
 
@@ -14,22 +15,21 @@ export const defineAction: Impl.DefineAction = (...args: AnyType[]) => {
   const handler = hasConfig ? maybeHandler : configOrHandler
   const config = hasConfig ? configOrHandler : undefined
 
-  const input = config?.input as StandardSchemaV1 | undefined
-  const output = config?.output as StandardSchemaV1 | undefined
+  // Resolved ONCE, here, where the declaration is still in front of us. Everything downstream reads
+  // `wire` and never re-derives it — that is what stops a carrier from asking a value what it is.
+  const wire = resolveWire(config?.input, config?.output)
 
-  const action = withValidation(handler, { input, output }) as unknown as Action
+  const action = withValidation(handler, wire) as unknown as Action
 
   Object.assign(action, {
     _t: ACTION,
 
-    input,
-    output,
+    ...(config?.input === undefined ? {} : { input: config.input }),
+    ...(config?.output === undefined ? {} : { output: config.output }),
+    ...(config?.title === undefined ? {} : { title: config.title }),
+    ...(config?.description === undefined ? {} : { description: config.description }),
 
-    title: config?.title,
-    description: config?.description,
-
-    allow: config?.allow,
-    deny: config?.deny,
+    wire,
     settings: config?.settings ?? [],
   })
 
