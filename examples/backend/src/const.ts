@@ -36,6 +36,11 @@ export const ENV = IO.actions.env(data => ({
   // needs no configuration at all.
   natsServers: data.NATS_URL ?? data.NATS_SERVERS ?? 'nats://localhost:4222',
 
+  // This APP's namespace on the shared server: streams become BACKEND_RPC/…, subjects
+  // backend.v1.>. Two apps must never share a prefix — they would share the three streams AND the
+  // default queued-event group, silently stealing each other's events.
+  natsPrefix: data.NATS_PREFIX ?? 'backend',
+
   // The ceiling on ONE cross-process call. Wide enough for a buffered LLM completion, finite so an
   // owner that dies mid-request cannot park the caller forever. `0` disables it entirely — only do
   // that where an action-level TimeoutPolicy really is applied.

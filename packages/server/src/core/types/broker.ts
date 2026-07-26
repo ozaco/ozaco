@@ -7,6 +7,7 @@ import type { Action } from './action'
 import type { Response } from './common'
 import type { Service } from './service'
 import type { Source } from './source'
+import type { TracerDef } from './tracer'
 
 export type BrokerDef = Plugin<BrokerDef.Context, unknown[], BrokerDef.Actions>
 
@@ -127,6 +128,10 @@ export namespace BrokerDef {
     name: string
     payload: unknown
     groups?: ReadonlyArray<string>
+    /** the emitting node's id — already deduplicated by the transports; informational here */
+    origin?: string
+    /** the span the emitter was inside, so a cross-node event keeps its trace parent */
+    traceContext?: TracerDef.SpanContext
   }
 
   export type EventMap = {

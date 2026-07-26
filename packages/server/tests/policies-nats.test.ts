@@ -25,8 +25,8 @@ import { fail, isFailure, isSuccess } from '@ozaco/std/result'
 
 import { call } from './helpers'
 
-// the transport is JetStream-only — the default points at the `-js` container (ozaco-nats-js)
-const NATS_URL = process.env.NATS_URL ?? 'nats://localhost:4324'
+// the transport is JetStream-only — the local `ozaco-nats-js` container runs `-js` on 4222
+const NATS_URL = process.env.NATS_URL ?? 'nats://localhost:4222'
 
 const natsAvailable = await (async () => {
   try {

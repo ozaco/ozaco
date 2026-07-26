@@ -20,11 +20,40 @@ const wrapPort = (
 ): WorkerDef.Endpoint => {
   const queue = createQueue<unknown, void>()
 
+  /**
+   * DEATH CLOSES THE INBOX. A worker that exits, crashes, or loses its port stops producing
+   * messages — and a recv stream that merely goes quiet parks its reader forever, with every
+   * pending reply and open stream behind it. Closing the queue is what lets the reader's sweep
+   * settle them with an answer instead. Which event exists depends on the platform (Bun Worker:
+   * close/error; browser Worker: error; node worker_threads: exit/error; MessagePort: close), so
+   * every one of them is attached best-effort.
+   */
+  const dead = () => queue.close()
+
   if (typeof port.addEventListener === 'function') {
-    port.addEventListener('message', event => queue.add(event.data))
+    const target = port as unknown as {
+      addEventListener(type: string, listener: (event: { data: unknown }) => void): void
+    }
+    target.addEventListener('message', event => queue.add(event.data))
+    // called ON the port — an extracted `addEventListener` loses its receiver and throws
+    for (const event of ['close', 'error']) {
+      try {
+        target.addEventListener(event, dead)
+      } catch {
+        /* platform without this event */
+      }
+    }
     port.start?.()
   } else if (typeof port.on === 'function') {
-    port.on('message', data => queue.add(data))
+    const target = port as unknown as { on(type: string, listener: (data: unknown) => void): void }
+    target.on('message', data => queue.add(data))
+    for (const event of ['exit', 'error', 'close']) {
+      try {
+        target.on(event, dead)
+      } catch {
+        /* platform without this event */
+      }
+    }
   }
 
   let ready = initiallyReady

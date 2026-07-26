@@ -1,4 +1,4 @@
-import type { Carried, TransportDef } from 'server:core'
+import type { Carried, Source, TransportDef } from 'server:core'
 import type { Queue, Scope, Stream, Task } from 'std:effect'
 import type { Result } from 'std:result'
 
@@ -21,6 +21,10 @@ export namespace WorkerDef {
     count?: number
     endpoint?: PortLike | PortLike[]
     wire?: WireMode
+    /** How long a dispatch waits for its reply from a worker that is alive but not answering.
+     * Default 30000ms; `0` (or negative) disables the transport timer entirely. A DEAD worker is
+     * settled immediately by the endpoint sweep — this timer only covers the hung-but-alive one. */
+    requestTimeoutMs?: number
   }
 
   export interface Endpoint {
@@ -32,12 +36,23 @@ export namespace WorkerDef {
     close(): void
   }
 
+  /** The receiving half of one multipart body: the ordered parts queue, plus the file currently
+   * being filled — exactly one may be open at a time, because parts arrive in wire order. */
+  export interface PartsAssembly {
+    parts: Queue<Source.Part, true | Result.Failure<unknown>>
+    file: Queue<Uint8Array, unknown> | null
+  }
+
   export interface Context extends TransportDef.Context {
     wire: WireMode
     adoptWire: boolean
+    requestTimeoutMs: number
     endpoints: Endpoint[]
     pending: Map<string, (wire: Wire) => void>
     streams: Map<string, Queue<unknown, true | Result.Failure<unknown>>>
+    parts: Map<string, PartsAssembly>
+    /** which endpoint feeds each pending cid / open sid — what the death sweep walks */
+    owners: Map<string, Endpoint>
     handlers: Map<string, Task<unknown>>
     scope: Scope
     rr: Map<string, number>
@@ -87,6 +102,8 @@ export namespace WorkerDef {
     outputStream: string
     params?: unknown
     inputStreams?: string[]
+    /** the sid a multipart body travels on, framed with the part-* envelopes */
+    partsStream?: string
     /** The dispatch contexts, codec-encoded as one blob (decoded back to DispatchContexts on receipt). */
     contexts?: unknown
   }
@@ -101,4 +118,9 @@ export namespace WorkerDef {
     | { kind: 'chunk'; sid: string; data: unknown }
     | { kind: 'end'; sid: string }
     | { kind: 'error'; sid: string; failure: StreamErrorPayload }
+    // a multipart body on its sid: field/file-open/file-close frames; the file's bytes arrive as
+    // plain `chunk` envelopes between `part-file` and `part-file-end`, raw in BOTH wire modes
+    | { kind: 'part-field'; sid: string; name: string; value: string }
+    | { kind: 'part-file'; sid: string; name: string; filename?: string; mediaType?: string }
+    | { kind: 'part-file-end'; sid: string }
 }

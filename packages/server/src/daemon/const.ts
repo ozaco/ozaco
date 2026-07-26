@@ -3,6 +3,8 @@ import { createTags } from 'std:shared'
 /**
  * The single env var the daemon reads. It names the module THIS process owns; the cluster supervisor
  * sets it on every child it forks, so a replica re-running the same entry resolves its own identity.
+ * `Options.service` is the programmatic fallback for boots with no environment (tests, embedding) —
+ * the env var always wins over it.
  *
  *   unset      → monolith: owns and serves every module (the plain `bun entry.ts` dev path)
  *   'gateway'  → edge: mounts + documents every route, owns nothing

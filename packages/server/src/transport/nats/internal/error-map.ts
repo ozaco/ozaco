@@ -50,5 +50,12 @@ export const mapNatsFailure = <E>(failure: Result.Failure<E>): Result.Failure<un
 
   const tag = CODE_TO_TAG[error.code] ?? NatsErrors.Unknown
 
-  return fail(tag, error.message ?? '', ...failure.causes) as Result.Failure<unknown>
+  // A bare "503" is the client's no-responders code and explains nothing on its own — say what it
+  // usually means instead of forwarding the number.
+  const message =
+    error.code === '503'
+      ? 'no responders on the subject (NATS 503) — for a JetStream API call this means the server runs without -js'
+      : (error.message ?? '')
+
+  return fail(tag, message, ...failure.causes) as Result.Failure<unknown>
 }

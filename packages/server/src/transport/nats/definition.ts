@@ -83,9 +83,19 @@ export const NatsTransport = Transport.implement({
     )
 
     const js = connection.jetstream()
+    // The manager's own probe answers a JetStream-less server with a bare NATS "503", which used
+    // to surface as `server:nats-transport.unknown: 503` and explain nothing — translate exactly
+    // that case into the answer a human can act on. (Do NOT pass `checkAPI: false` to skip the
+    // probe instead: on nats 2.29.3 a manager built that way hangs on its first API call.)
     const jsm = yield* mapError(
       until(connection.jetstreamManager(), 'nats:jetstream-manager'),
-      mapNatsFailure,
+      failure =>
+        (failure.error as { code?: string } | undefined)?.code === '503'
+          ? (fail(
+              NatsErrors.NoJetstream,
+              `the NATS server at ${String(options.servers ?? 'nats://localhost:4222')} runs without JetStream — start it with -js`,
+            ) as Result.Failure<unknown>)
+          : mapNatsFailure(failure),
     )
 
     // Refuse a server without JetStream, THEN create the three streams — both before anything else
@@ -376,6 +386,10 @@ export const NatsTransport = Transport.implement({
       ),
       mapNatsFailure,
     )
+
+    // the wire OWNS this emit: the group durable hands it to exactly one member (possibly this
+    // very node), so a local bus echo on top would be the second delivery this contract forbids
+    return 'handled' as const
   }),
 
   broadcast: operation(function* (req: TransportDef.EventRequest) {

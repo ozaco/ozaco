@@ -11,6 +11,7 @@ import { defineConfig } from 'tsdown'
 export default defineConfig({
   entry: {
     'advanced/todo/server': './src/advanced/todo/server.ts',
+    'advanced/daemon': './src/advanced/daemon/main.ts',
     'basic/crud': './src/basic/crud/main.ts',
     'basic/custom-actions': './src/basic/custom-actions/main.ts',
     'basic/file-upload': './src/basic/file-upload/main.ts',

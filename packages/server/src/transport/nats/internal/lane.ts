@@ -2,31 +2,45 @@
 import type { Carried, Source } from 'server:core'
 import { DataType } from 'server:core'
 import { Codec } from 'std:codec'
-import type { Operation, Scope, Stream, StreamQueue } from 'std:effect'
-import { attempt, createStreamQueue, each, into, spawn, until } from 'std:effect'
+import type { Operation, Scope, Stream } from 'std:effect'
+import { action, attempt, createStreamQueue, race, sleep, spawn, until } from 'std:effect'
 import type { Result } from 'std:result'
 import { asFailure, fail, isFailure, isSuccess } from 'std:result'
 
 import type { JsMsg, MsgHdrs } from 'nats'
+import { AckPolicy, DeliverPolicy } from 'nats'
 
 import type { PumpOutcome } from '../../shared/types'
 import {
   EMPTY_PAYLOAD,
+  LANE_ABANDON_MS,
   LANE_BINARY,
+  LANE_BUFFER_MAX_BYTES,
+  LANE_BUFFER_MAX_MESSAGES,
+  LANE_CREDIT_TIMEOUT_MS,
   LANE_ENCODING,
   LANE_END,
   LANE_ERROR,
   LANE_EVENT,
+  LANE_FETCH_EXPIRES_MS,
+  LANE_FETCH_MESSAGES,
+  LANE_GRANT_STEP_BYTES,
+  LANE_MAX_AGE_NS,
   LANE_PART,
   LANE_PART_FIELD,
   LANE_PART_FILE,
   LANE_PART_FILE_END,
+  LANE_STALE_MS,
+  LANE_TICK,
+  LANE_TICK_MS,
+  LANE_WINDOW_BYTES,
   streamNames,
 } from '../const'
+import { NatsErrors } from '../errors'
 import type { Nats } from '../types'
 
 import { useNatsContext } from './context'
-import { laneSubject, PARTS_LANE } from './subjects'
+import { creditSubject, laneSubject, PARTS_LANE } from './subjects'
 import {
   binaryHeaders,
   endHeaders,
@@ -34,11 +48,100 @@ import {
   failureFromPayload,
   failureToPayload,
   partHeaders,
+  tickHeaders,
 } from './wire'
 
 /** Leave room for subject + headers inside the server's `max_payload`; a message over it is dropped. */
 const chunkLimit = (nats: Nats.Context): number =>
   Math.max(1024, ((nats.connection.info?.max_payload as number | undefined) ?? 1_048_576) - 8192)
+
+/**
+ * The WRITER's half of the credit protocol.
+ *
+ * The pump may keep {@link LANE_WINDOW_BYTES} in flight on its own; beyond that every byte must be
+ * covered by a grant the reader published as its consumer actually drained. Credit messages are
+ * control-plane JSON — fixed `{ grant }` / `{ stop }`, never the pluggable codec — because grants
+ * are written from a synchronous release hook and both sides must agree even with no codec at all.
+ */
+interface CreditWindow {
+  /** blocks until `size` more bytes fit the window; raises when the reader said stop or vanished */
+  reserve(size: number): Operation<void>
+  close(): void
+}
+
+const openCreditWindow = (nats: Nats.Context, subject: string): CreditWindow => {
+  let granted = LANE_WINDOW_BYTES
+  let published = 0
+  let stopped: Result.Failure<unknown> | undefined
+  let waiter: (() => void) | undefined
+
+  const sub = nats.connection.subscribe(creditSubject(subject), {
+    callback: (_error, msg) => {
+      try {
+        const body = JSON.parse(new TextDecoder().decode(msg.data)) as {
+          grant?: number
+          stop?: boolean
+        }
+        if (body.stop) {
+          stopped = fail(
+            'cancelled',
+            `lane ${subject} reader closed its window`,
+          ) as Result.Failure<unknown>
+        } else if (typeof body.grant === 'number' && body.grant + LANE_WINDOW_BYTES > granted) {
+          granted = body.grant + LANE_WINDOW_BYTES
+        }
+      } catch {
+        /* a malformed grant is ignored, never fatal */
+      }
+      waiter?.()
+    },
+  })
+
+  const grantArrived = function* (): Operation<'grant'> {
+    yield* action<void>(resolve => {
+      waiter = resolve
+      return () => {
+        waiter = undefined
+      }
+    }, 'nats:lane-credit')
+    return 'grant' as const
+  }
+
+  const expired = function* (): Operation<'timeout'> {
+    yield* sleep(LANE_CREDIT_TIMEOUT_MS)
+    return 'timeout' as const
+  }
+
+  return {
+    *reserve(size) {
+      while (true) {
+        if (stopped) {
+          return yield* stopped
+        }
+        if (published + size <= granted) {
+          published += size
+          return
+        }
+
+        if ((yield* race([grantArrived(), expired()])) === 'timeout') {
+          return yield* fail(
+            NatsErrors.Timeout,
+            `lane ${subject} window never reopened — its reader is gone or stopped draining`,
+          )
+        }
+      }
+    },
+    close() {
+      try {
+        if (!sub.isClosed()) {
+          sub.unsubscribe()
+        }
+      } catch {
+        /* connection torn down */
+      }
+    },
+  }
+}
 
 /**
  * Publish one blob of raw bytes, split to fit `max_payload`.
@@ -48,24 +151,26 @@ const chunkLimit = (nats: Nats.Context): number =>
  * one message by contract (the reader decodes per message), so an oversized value is an error the
  * publish raises rather than a corruption the reader discovers.
  */
+// oxlint-disable-next-line max-params
 const publishBytes = function* (
   nats: Nats.Context,
   subject: string,
   bytes: Uint8Array,
+  window: CreditWindow,
 ): Operation<void> {
   const limit = chunkLimit(nats)
   const headers = binaryHeaders()
 
   if (bytes.byteLength <= limit) {
+    yield* window.reserve(bytes.byteLength)
     yield* until(nats.js.publish(subject, bytes, { headers }), `nats:lane ${subject}`)
     return
   }
 
   for (let offset = 0; offset < bytes.byteLength; offset += limit) {
-    yield* until(
-      nats.js.publish(subject, bytes.subarray(offset, offset + limit), { headers }),
-      `nats:lane ${subject}`,
-    )
+    const fragment = bytes.subarray(offset, offset + limit)
+    yield* window.reserve(fragment.byteLength)
+    yield* until(nats.js.publish(subject, fragment, { headers }), `nats:lane ${subject}`)
   }
 }
 
@@ -104,6 +209,22 @@ const publishMarker = function* (
 }
 
 /**
+ * The writer's heartbeat: while a pump lives, its lane visibly does too.
+ *
+ * An owner SIGKILLed after the `__stream__` reply has nobody left to publish an end marker, and a
+ * reader cannot tell "writer is dead" from "writer is thinking" by silence alone — an SSE feed
+ * legitimately says nothing for minutes. The tick is what makes those two silences different.
+ */
+const spawnTicker = function* (nats: Nats.Context, subject: string) {
+  return yield* spawn(function* () {
+    while (true) {
+      yield* sleep(LANE_TICK_MS)
+      yield* attempt(() => publishMarked(nats, subject, tickHeaders()))
+    }
+  })
+}
+
+/**
  * Drain a lane onto a subject.
  *
  * `bytes` is DECLARED — it comes from the channel the author wrote, never from sniffing a value —
@@ -130,12 +251,17 @@ export const pumpLane = function* (
    * bytes has to guess where one ends — a run of `1 2 3 4 5` came back as the single number `12345`.
    * The message boundary already carries the framing; encoding per value keeps it.
    */
+  const window = openCreditWindow(nats, subject)
+
   const publish = bytes
-    ? (chunk: unknown) => publishBytes(nats, subject, chunk as Uint8Array)
+    ? (chunk: unknown) => publishBytes(nats, subject, chunk as Uint8Array, window)
     : function* (value: unknown) {
         const encoded = (yield* Codec.actions.encode(value)) as Uint8Array
+        yield* window.reserve(encoded.byteLength)
         yield* until(nats.js.publish(subject, encoded), `nats:lane ${subject}`)
       }
+
+  const ticker = yield* spawnTicker(nats, subject)
 
   try {
     /**
@@ -155,6 +281,13 @@ export const pumpLane = function* (
   } catch (error) {
     outcome = asFailure(error)
   } finally {
+    window.close()
+    try {
+      yield* ticker.halt()
+    } catch {
+      /* already halted with us */
+    }
+
     if (outcome === 'end') {
       yield* publishMarker(nats, subject, endHeaders())
     } else {
@@ -185,6 +318,9 @@ export const pumpParts = function* (
 ): Operation<void> {
   let outcome: PumpOutcome
 
+  const window = openCreditWindow(nats, subject)
+  const ticker = yield* spawnTicker(nats, subject)
+
   try {
     // Iterated by hand — see the note in `pumpLane`: a failure-closed source (the upload socket
     // died mid-body) must terminate the lane with ERROR, and that applies doubly here, where an
@@ -203,6 +339,7 @@ export const pumpParts = function* (
           name: part.name,
           value: part.value,
         } satisfies Nats.PartField)) as Uint8Array
+        yield* window.reserve(payload.byteLength)
         yield* publishMarked(nats, subject, partHeaders(LANE_PART_FIELD), payload)
       } else {
         const payload = (yield* Codec.actions.encode({
@@ -210,6 +347,7 @@ export const pumpParts = function* (
           ...(part.filename === undefined ? {} : { filename: part.filename }),
           ...(part.mediaType === undefined ? {} : { mediaType: part.mediaType }),
         } satisfies Nats.PartFile)) as Uint8Array
+        yield* window.reserve(payload.byteLength)
         yield* publishMarked(nats, subject, partHeaders(LANE_PART_FILE), payload)
 
         const file = yield* part.stream
@@ -221,7 +359,7 @@ export const pumpParts = function* (
             }
             break
           }
-          yield* publishBytes(nats, subject, chunk.value as Uint8Array)
+          yield* publishBytes(nats, subject, chunk.value as Uint8Array, window)
         }
 
         yield* publishMarked(nats, subject, partHeaders(LANE_PART_FILE_END))
@@ -230,6 +368,13 @@ export const pumpParts = function* (
   } catch (error) {
     outcome = asFailure(error)
   } finally {
+    window.close()
+    try {
+      yield* ticker.halt()
+    } catch {
+      /* already halted with us */
+    }
+
     if (outcome === 'end') {
       yield* publishMarker(nats, subject, endHeaders())
     } else {
@@ -246,45 +391,236 @@ export const pumpParts = function* (
 }
 
 /**
- * The reading end of one lane subject: an ORDERED ephemeral consumer replaying from sequence 1.
+ * The reader's bound, shared by every queue one lane feeds.
  *
- * The replay is the point of the whole migration — the LANE stream keeps its messages, so a reader
- * that attaches after the writer began still gets chunk zero. Iteration ends when the lane's
- * end/error marker arrives; the consumer itself is ephemeral and evaporates once stopped.
+ * `retain` runs when a message lands in a local queue, `release` when the consumer actually takes
+ * it, and `whenBelow` is where the LANE READER parks while the buffer sits above its marks — the
+ * next batch is simply not fetched. The stream is the buffer; this process is not.
  */
-const consumeLane = function* (
-  nats: Nats.Context,
-  subject: string,
-  handle: (msg: JsMsg) => Operation<'continue' | 'done'>,
-) {
-  // No `deliver_policy` on purpose. The ordered consumer's default — StartSequence at seq 1 — IS
-  // "replay everything", and it is the only spelling this client accepts: passing
-  // `DeliverPolicy.All` explicitly makes nats 2.29.3 send `opt_start_seq` alongside it, which the
-  // server rejects, and `consume()` swallows that rejection into an eternal hang.
-  const consumer = yield* until(
-    nats.js.consumers.get(streamNames(nats.prefix).lane, { filterSubjects: subject }),
+interface LaneGate {
+  retain(size: number): void
+  release(size: number): void
+  /** `'stuck'` after {@link LANE_ABANDON_MS} above the marks — the consumer stopped draining */
+  whenBelow(): Operation<'ready' | 'stuck'>
+  /** set by {@link consumeLane}: every release reports the CUMULATIVE drained bytes, which is
+   * what a credit grant is made of */
+  onReleased?: (cumulative: number) => void
+}
+
+const laneGate = (): LaneGate => {
+  let bytes = 0
+  let messages = 0
+  let drained = 0
+  let waiter: (() => void) | undefined
+
+  const high = () => bytes >= LANE_BUFFER_MAX_BYTES || messages >= LANE_BUFFER_MAX_MESSAGES
+  const low = () => bytes <= LANE_BUFFER_MAX_BYTES / 2 && messages <= LANE_BUFFER_MAX_MESSAGES / 2
+
+  const gate: LaneGate = {
+    retain(size) {
+      bytes += size
+      messages++
+    },
+    release(size) {
+      bytes -= size
+      messages--
+      drained += size
+      gate.onReleased?.(drained)
+      if (low() && waiter) {
+        const wake = waiter
+        waiter = undefined
+        wake()
+      }
+    },
+    *whenBelow() {
+      if (!high()) {
+        return 'ready' as const
+      }
+
+      const drainedInTime = function* (): Operation<'ready'> {
+        yield* action<void>(resolve => {
+          if (!high()) {
+            resolve()
+            return () => {}
+          }
+          waiter = resolve
+          return () => {
+            waiter = undefined
+          }
+        }, 'nats:lane-drain')
+        return 'ready' as const
+      }
+
+      const abandoned = function* (): Operation<'stuck'> {
+        yield* sleep(LANE_ABANDON_MS)
+        return 'stuck' as const
+      }
+
+      return yield* race([drainedInTime(), abandoned()])
+    },
+  }
+
+  return gate
+}
+
+/** A stream queue that reports what it holds to the gate — sizes travel a parallel FIFO, so the
+ * release matches the retain byte for byte. */
+interface GatedQueue<T, TClose> {
+  add(value: T, size: number): void
+  close(value: TClose): void
+  readonly stream: Stream<T, TClose>
+}
+
+const gatedQueue = <T, TClose>(gate: LaneGate): GatedQueue<T, TClose> => {
+  const raw = createStreamQueue<T, TClose>()
+  const sizes: number[] = []
+
+  return {
+    add(value, size) {
+      sizes.push(size)
+      gate.retain(size)
+      raw.add(value)
+    },
+    close(value) {
+      raw.close(value)
+    },
+    stream: {
+      *[Symbol.iterator]() {
+        const subscription = yield* raw
+        return {
+          *next() {
+            const next = yield* subscription.next()
+            if (!next.done) {
+              gate.release(sizes.shift() ?? 0)
+            }
+            return next
+          },
+        }
+      },
+    },
+  }
+}
+
+/** What one lane reader plugs into {@link consumeLane}. */
+interface LaneReader {
+  gate: LaneGate
+  handle(msg: JsMsg): Operation<'continue' | 'done'>
+  /** the lane went silent past {@link LANE_STALE_MS} — close your queues; the loop returns after */
+  expired(): void
+  /** our OWN consumer stopped draining past {@link LANE_ABANDON_MS} — same contract as expired */
+  abandoned(): void
+}
+
+/**
+ * The reading end of one lane subject: an ephemeral consumer replaying from sequence 1, drained in
+ * BATCHES.
+ *
+ * The replay is the point of the whole migration — a reader that attaches after the writer began
+ * still gets chunk zero. Batches are what bound this process: the next fetch is issued only while
+ * the gate sits under its marks, so a slow consumer parks the reader instead of growing its RAM.
+ * A batch that brings NOTHING is the liveness check — no data and no tick past the stale window
+ * means the writer is gone, and the reader says so instead of waiting forever.
+ *
+ * (The consumer is created explicitly via `jsm.consumers.add` — the client's ORDERED consumer both
+ * rejects an explicit `DeliverPolicy.All` and re-creates itself per fetch; a plain ephemeral does
+ * neither. Losing gap-recovery costs nothing here: the stale window already covers a lost link.)
+ */
+const consumeLane = function* (nats: Nats.Context, subject: string, reader: LaneReader) {
+  const stream = streamNames(nats.prefix).lane
+  const credit = creditSubject(subject)
+
+  /**
+   * The reader's half of the credit protocol: as the CONSUMER drains, cumulative grants go back to
+   * the writer in {@link LANE_GRANT_STEP_BYTES} steps — sync JSON from the release hook, because a
+   * grant is control plane, not payload. A transfer smaller than the writer's free window never
+   * produces a single credit message.
+   */
+  let lastGrant = 0
+  reader.gate.onReleased = cumulative => {
+    if (cumulative - lastGrant < LANE_GRANT_STEP_BYTES) {
+      return
+    }
+    lastGrant = cumulative
+    try {
+      nats.connection.publish(
+        credit,
+        new TextEncoder().encode(JSON.stringify({ grant: cumulative })),
+      )
+    } catch {
+      /* the writer's timeout covers a lost grant */
+    }
+  }
+
+  const info = yield* until(
+    nats.jsm.consumers.add(stream, {
+      filter_subject: subject,
+      ack_policy: AckPolicy.None,
+      deliver_policy: DeliverPolicy.All,
+      // outlives any legitimate drain-park; the LANE stream itself only holds messages this long
+      inactive_threshold: LANE_MAX_AGE_NS,
+    }),
     `nats:lane-consumer ${subject}`,
   )
-  const messages = yield* until(consumer.consume(), `nats:lane-consume ${subject}`)
+  const consumer = yield* until(
+    nats.js.consumers.get(stream, info.name),
+    `nats:lane-bind ${subject}`,
+  )
 
-  // Registered so transport teardown can STOP a mid-lane reader rather than halt it: a task parked
-  // inside the iterator below cannot be halted cleanly, but stopping the source ends it on its own.
-  nats.consumers.set(`lane:${subject}`, messages)
+  let last = Date.now()
 
   try {
-    for (const msg of yield* each(into<JsMsg>(messages as AsyncIterable<JsMsg>))) {
-      if ((yield* handle(msg)) === 'done') {
+    while (true) {
+      // BACKPRESSURE: no fetch while the local buffer is full — the stream holds the lane for us.
+      // A buffer that stays full past the abandon window means OUR consumer is gone; the lane is
+      // closed rather than parked until process exit.
+      if ((yield* reader.gate.whenBelow()) === 'stuck') {
+        reader.abandoned()
         return
       }
-      yield* each.next()
+
+      const batch = yield* until(
+        consumer.fetch({ max_messages: LANE_FETCH_MESSAGES, expires: LANE_FETCH_EXPIRES_MS }),
+        `nats:lane-fetch ${subject}`,
+      )
+
+      // iterated via `until` on the raw async iterator — a batch ENDS at its expiry, and a task
+      // parked in an `into(...)` of a live iterator is the one thing a halt cannot unwind
+      const iterator = (batch as AsyncIterable<JsMsg>)[Symbol.asyncIterator]()
+      while (true) {
+        const next = yield* until(iterator.next(), `nats:lane-read ${subject}`)
+        if (next.done) {
+          break
+        }
+        last = Date.now()
+        if ((yield* reader.handle(next.value)) === 'done') {
+          return
+        }
+      }
+
+      // LIVENESS: neither data nor a keepalive tick for the whole stale window — the writer died
+      // without its last word, and "wait forever" must not be how the reader finds out
+      if (Date.now() - last >= LANE_STALE_MS) {
+        reader.expired()
+        return
+      }
     }
   } finally {
-    nats.consumers.delete(`lane:${subject}`)
+    // tell a still-live writer to stop feeding a lane nobody reads — fire-and-forget, its credit
+    // timeout is the fallback if this very publish is what the teardown lost
     try {
-      messages.stop()
+      nats.connection.publish(credit, new TextEncoder().encode(JSON.stringify({ stop: true })))
     } catch {
-      /* already stopped */
+      /* connection torn down */
     }
+
+    // hygiene, both best-effort: a finished lane's chunks should not sit in server memory for five
+    // minutes, and the ephemeral consumer need not wait out its inactivity window
+    yield* attempt(
+      until(nats.jsm.streams.purge(stream, { filter: subject }), `nats:lane-purge ${subject}`),
+    )
+    yield* attempt(
+      until(nats.jsm.consumers.delete(stream, info.name), `nats:lane-unbind ${subject}`),
+    )
   }
 }
 
@@ -299,53 +635,74 @@ export const readLane = function* (
   subject: string,
   hostScope?: Scope,
 ): Operation<Stream<unknown, true | Result.Failure<unknown>>> {
+  const gate = laneGate()
   // Buffered, not broadcast: the reader below starts the moment this returns, while the decoder
   // that consumes it only subscribes a tick later — a channel drops everything in between, which is
   // exactly the opening frames of a feed.
-  const raw = createStreamQueue<unknown, true | Result.Failure<unknown>>()
+  const queue = gatedQueue<unknown, true | Result.Failure<unknown>>(gate)
 
   const reader = function* () {
     let closed = false
+    const close = (value: true | Result.Failure<unknown>) => {
+      queue.close(value)
+      closed = true
+    }
+
     try {
-      yield* consumeLane(nats, subject, function* (msg) {
-        const event = msg.headers?.get(LANE_EVENT)
+      yield* consumeLane(nats, subject, {
+        gate,
+        expired: () =>
+          close(
+            asFailure(
+              fail(
+                NatsErrors.Timeout,
+                `lane ${subject} went silent — its writer is gone (no data or keepalive for ${LANE_STALE_MS}ms)`,
+              ),
+            ),
+          ),
+        abandoned: () =>
+          close(asFailure(fail('cancelled', `lane ${subject} consumer stopped draining`))),
+        *handle(msg) {
+          const event = msg.headers?.get(LANE_EVENT)
 
-        if (event === LANE_END) {
-          raw.close(true)
-          closed = true
-          return 'done'
-        }
+          if (event === LANE_TICK) {
+            return 'continue'
+          }
 
-        if (event === LANE_ERROR) {
-          const payload = yield* attempt(Codec.actions.decode(msg.data))
-          raw.close(
-            isSuccess(payload)
-              ? failureFromPayload(payload.value as Nats.StreamErrorPayload)
-              : (fail('cancelled', 'lane closed with an undecodable error') as never),
-          )
-          closed = true
-          return 'done'
-        }
+          if (event === LANE_END) {
+            close(true)
+            return 'done'
+          }
 
-        // A message this reader cannot decode ENDS the lane with a failure — it never escapes as
-        // a raw throw, because the reader may be running on the transport's own scope.
-        if (msg.headers?.get(LANE_ENCODING) === LANE_BINARY) {
-          raw.add(msg.data)
+          if (event === LANE_ERROR) {
+            const payload = yield* attempt(Codec.actions.decode(msg.data))
+            close(
+              isSuccess(payload)
+                ? failureFromPayload(payload.value as Nats.StreamErrorPayload)
+                : (fail('cancelled', 'lane closed with an undecodable error') as never),
+            )
+            return 'done'
+          }
+
+          // A message this reader cannot decode ENDS the lane with a failure — it never escapes as
+          // a raw throw, because the reader may be running on the transport's own scope.
+          if (msg.headers?.get(LANE_ENCODING) === LANE_BINARY) {
+            queue.add(msg.data, msg.data.byteLength)
+            return 'continue'
+          }
+
+          const value = yield* attempt(Codec.actions.decode(msg.data))
+          if (!isSuccess(value)) {
+            close(value)
+            return 'done'
+          }
+          queue.add(value.value as never, msg.data.byteLength)
           return 'continue'
-        }
-
-        const value = yield* attempt(Codec.actions.decode(msg.data))
-        if (!isSuccess(value)) {
-          raw.close(value)
-          closed = true
-          return 'done'
-        }
-        raw.add(value.value as never)
-        return 'continue'
+        },
       })
     } finally {
       if (!closed) {
-        raw.close(asFailure(fail('cancelled', 'reader halted')))
+        close(asFailure(fail('cancelled', 'reader halted')))
       }
     }
   }
@@ -356,24 +713,26 @@ export const readLane = function* (
     yield* spawn(reader)
   }
 
-  return raw
+  return queue.stream
 }
 
 /**
  * Read a parts lane back into the ordered `Source.Part` stream a handler expects.
  *
- * File sub-streams are queues: the lane keeps arriving in wire order while a slow (or skipping)
- * consumer lags, and a part it never drains simply stays in its queue until the whole lane closes —
- * there is no parser on this side left waiting, so nothing can deadlock.
+ * File sub-streams are queues sharing the lane's ONE gate: whatever queue the consumer neglects —
+ * a skipped file, an undrained tail — still counts against the same bound, so the lane reader
+ * parks instead of buffering without limit. There is no parser on this side left waiting, so
+ * nothing can deadlock.
  */
 export const readParts = function* (
   nats: Nats.Context,
   subject: string,
 ): Operation<Stream<Source.Part, unknown>> {
-  const parts = createStreamQueue<Source.Part, true | Result.Failure<unknown>>()
+  const gate = laneGate()
+  const parts = gatedQueue<Source.Part, true | Result.Failure<unknown>>(gate)
 
   yield* spawn(function* () {
-    let file: StreamQueue<Uint8Array, unknown> | null = null
+    let file: GatedQueue<Uint8Array, unknown> | null = null
     let closed = false
 
     const closeAll = (value: true | Result.Failure<unknown>) => {
@@ -387,64 +746,87 @@ export const readParts = function* (
     }
 
     try {
-      yield* consumeLane(nats, subject, function* (msg) {
-        const event = msg.headers?.get(LANE_EVENT)
-
-        if (event === LANE_END) {
-          closeAll(true)
-          return 'done'
-        }
-        if (event === LANE_ERROR) {
-          const payload = yield* attempt(Codec.actions.decode(msg.data))
+      yield* consumeLane(nats, subject, {
+        gate,
+        expired: () =>
           closeAll(
-            isSuccess(payload)
-              ? failureFromPayload(payload.value as Nats.StreamErrorPayload)
-              : (fail('cancelled', 'lane closed with an undecodable error') as never),
-          )
-          return 'done'
-        }
+            asFailure(
+              fail(
+                NatsErrors.Timeout,
+                `lane ${subject} went silent — its writer is gone (no data or keepalive for ${LANE_STALE_MS}ms)`,
+              ),
+            ),
+          ),
+        abandoned: () =>
+          closeAll(asFailure(fail('cancelled', `lane ${subject} consumer stopped draining`))),
+        *handle(msg) {
+          const event = msg.headers?.get(LANE_EVENT)
 
-        const part = msg.headers?.get(LANE_PART)
-
-        if (part === LANE_PART_FIELD) {
-          const field = yield* attempt(Codec.actions.decode(msg.data))
-          if (!isSuccess(field)) {
-            closeAll(field)
+          if (event === LANE_TICK) {
+            return 'continue'
+          }
+          if (event === LANE_END) {
+            closeAll(true)
             return 'done'
           }
-          const decoded = field.value as Nats.PartField
-          parts.add({ kind: 'field', name: decoded.name, value: decoded.value })
-          return 'continue'
-        }
-
-        if (part === LANE_PART_FILE) {
-          const open = yield* attempt(Codec.actions.decode(msg.data))
-          if (!isSuccess(open)) {
-            closeAll(open)
+          if (event === LANE_ERROR) {
+            const payload = yield* attempt(Codec.actions.decode(msg.data))
+            closeAll(
+              isSuccess(payload)
+                ? failureFromPayload(payload.value as Nats.StreamErrorPayload)
+                : (fail('cancelled', 'lane closed with an undecodable error') as never),
+            )
             return 'done'
           }
-          const decoded = open.value as Nats.PartFile
-          const stream = createStreamQueue<Uint8Array, unknown>()
-          file = stream
-          parts.add({
-            kind: 'file',
-            name: decoded.name,
-            filename: decoded.filename,
-            mediaType: decoded.mediaType,
-            stream,
-          })
-          return 'continue'
-        }
 
-        if (part === LANE_PART_FILE_END) {
-          file?.close(true)
-          file = null
-          return 'continue'
-        }
+          const part = msg.headers?.get(LANE_PART)
 
-        // a raw chunk of the currently open file
-        file?.add(msg.data)
-        return 'continue'
+          if (part === LANE_PART_FIELD) {
+            const field = yield* attempt(Codec.actions.decode(msg.data))
+            if (!isSuccess(field)) {
+              closeAll(field)
+              return 'done'
+            }
+            const decoded = field.value as Nats.PartField
+            parts.add(
+              { kind: 'field', name: decoded.name, value: decoded.value },
+              msg.data.byteLength,
+            )
+            return 'continue'
+          }
+
+          if (part === LANE_PART_FILE) {
+            const open = yield* attempt(Codec.actions.decode(msg.data))
+            if (!isSuccess(open)) {
+              closeAll(open)
+              return 'done'
+            }
+            const decoded = open.value as Nats.PartFile
+            const stream = gatedQueue<Uint8Array, unknown>(gate)
+            file = stream
+            parts.add(
+              {
+                kind: 'file',
+                name: decoded.name,
+                filename: decoded.filename,
+                mediaType: decoded.mediaType,
+                stream: stream.stream,
+              },
+              msg.data.byteLength,
+            )
+            return 'continue'
+          }
+
+          if (part === LANE_PART_FILE_END) {
+            file?.close(true)
+            file = null
+            return 'continue'
+          }
+
+          // a raw chunk of the currently open file
+          file?.add(msg.data, msg.data.byteLength)
+          return 'continue'
+        },
       })
     } finally {
       if (!closed) {
@@ -453,7 +835,7 @@ export const readParts = function* (
     }
   })
 
-  return parts as Stream<Source.Part, unknown>
+  return parts.stream as Stream<Source.Part, unknown>
 }
 
 /** The lane names one dispatch publishes its inputs on, derived from the cid alone. */

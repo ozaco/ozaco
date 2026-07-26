@@ -9,6 +9,7 @@ import { invokeAction } from '../../shared/invoke'
 import type { WorkerDef } from '../types'
 
 import { pumpStream } from './pump'
+import { streamOf } from './stream'
 import { captureInputStreams } from './subscribe'
 import { decodeValue, encodeValue, wireFailure, wireStream, wireSuccess } from './wire'
 
@@ -54,6 +55,17 @@ export const handleDispatch = (
 
     yield* ensure(function* () {
       ctx.handlers.delete(env.cid)
+      // a halted handler leaves its parts assembly nowhere else to be closed
+      if (env.partsStream !== undefined) {
+        const assembly = ctx.parts.get(env.partsStream)
+        if (assembly) {
+          ctx.parts.delete(env.partsStream)
+          const reason = asFailure(fail('cancelled', 'handler cancelled'))
+          assembly.file?.close(reason)
+          assembly.file = null
+          assembly.parts.close(reason)
+        }
+      }
       respond(wireFailure(asFailure(fail('cancelled', 'handler cancelled'))))
     })
 
@@ -67,6 +79,14 @@ export const handleDispatch = (
 
     const streams = yield* captureInputStreams(ctx, endpoint, env.inputStreams ?? [])
 
+    // the multipart body, rebuilt from its part-* frames — the assembly was registered when the
+    // dispatch envelope was routed, so frames that raced ahead of this handler are already queued
+    const assembly = env.partsStream === undefined ? undefined : ctx.parts.get(env.partsStream)
+    const parts =
+      assembly === undefined
+        ? undefined
+        : (streamOf(assembly.parts) as Stream<Source.Part, unknown>)
+
     const params =
       env.params === undefined ? [] : ((yield* decodeValue(endpoint.wire, env.params)) as unknown[])
     const contexts = (
@@ -79,6 +99,7 @@ export const handleDispatch = (
         actionKey: env.actionKey,
         params,
         streams,
+        ...(parts === undefined ? {} : { parts }),
         ...(env.origin === undefined ? {} : { origin: env.origin }),
         ...(env.meta === undefined ? {} : { meta: env.meta }),
         ...(env.wire === undefined ? {} : { wire: env.wire }),

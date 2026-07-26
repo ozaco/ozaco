@@ -43,9 +43,19 @@ const handleEvent = (kind: 'event.emit' | 'event.broadcast', acked: boolean) =>
 
     if (isSuccess(decoded)) {
       const broker = yield* useContext(Broker)
-      yield* attempt(function* () {
-        broker.bus.emit(kind, decoded.value as TransportDef.EventRequest)
-      })
+      const req = decoded.value as TransportDef.EventRequest
+
+      // A BROADCAST receiver skips its own wire copy — the emitter's bus already delivered it
+      // in-process. A QUEUED event never skips: the group durable is its ONLY delivery, and this
+      // node winning its own emit is exactly one member handling it.
+      const echo =
+        kind === 'event.broadcast' && req.origin !== undefined && req.origin === broker.nodeId
+
+      if (!echo) {
+        yield* attempt(function* () {
+          broker.bus.emit(kind, req)
+        })
+      }
     }
 
     if (acked) {

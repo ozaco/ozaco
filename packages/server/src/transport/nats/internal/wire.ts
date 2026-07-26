@@ -9,7 +9,15 @@ import { serializeError } from 'std:shared'
 import type { MsgHdrs } from 'nats'
 import { headers as createHeaders } from 'nats'
 
-import { LANE_BINARY, LANE_ENCODING, LANE_END, LANE_ERROR, LANE_EVENT, LANE_PART } from '../const'
+import {
+  LANE_BINARY,
+  LANE_ENCODING,
+  LANE_END,
+  LANE_ERROR,
+  LANE_EVENT,
+  LANE_PART,
+  LANE_TICK,
+} from '../const'
 import type { Nats } from '../types'
 
 export const wireSuccess = (response: Response): Nats.WireSuccess => ({
@@ -90,6 +98,12 @@ export const endHeaders = (): MsgHdrs => {
 export const errorHeaders = (): MsgHdrs => {
   const h = createHeaders()
   h.set(LANE_EVENT, LANE_ERROR)
+  return h
+}
+
+export const tickHeaders = (): MsgHdrs => {
+  const h = createHeaders()
+  h.set(LANE_EVENT, LANE_TICK)
   return h
 }
 

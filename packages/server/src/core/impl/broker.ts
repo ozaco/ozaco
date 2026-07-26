@@ -300,10 +300,20 @@ export const DefaultBroker = DefaultBrokerImpl.build({
   emit: operation(function* (name, payload, groups) {
     const ctx = yield* useContext(DefaultBrokerImpl)
     const resolved = resolveGroups(ctx.services, groups)
+    // the span the emitter is inside travels WITH the event — a DB change fanning out across
+    // nodes used to lose its trace parent the moment it left the process
+    const trace = yield* TraceContext.get()
 
-    yield* Transport.actions.emit(
-      resolved ? { name, payload, groups: resolved } : { name, payload },
-    )
+    // the ROOT router, not the protocol's single-impl slot: `Transport.actions.emit` reaches only
+    // the last-installed carrier, which is how the delivery contract silently skipped every other
+    // one (dispatch had learned this lesson already — see `dispatchRoot` above)
+    yield* Transport.actions.emitRoot({
+      name,
+      payload,
+      origin: ctx.nodeId,
+      ...(resolved ? { groups: resolved } : {}),
+      ...(trace ? { traceContext: trace } : {}),
+    })
   }),
 
   /** The same call, answered whole — status, headers and every source the action produced. */
@@ -320,10 +330,15 @@ export const DefaultBroker = DefaultBrokerImpl.build({
   broadcast: operation(function* (name, payload, groups) {
     const ctx = yield* useContext(DefaultBrokerImpl)
     const resolved = resolveGroups(ctx.services, groups)
+    const trace = yield* TraceContext.get()
 
-    yield* Transport.actions.broadcast(
-      resolved ? { name, payload, groups: resolved } : { name, payload },
-    )
+    yield* Transport.actions.broadcastRoot({
+      name,
+      payload,
+      origin: ctx.nodeId,
+      ...(resolved ? { groups: resolved } : {}),
+      ...(trace ? { traceContext: trace } : {}),
+    })
   }),
 
   on: operation(function* (name, listener) {

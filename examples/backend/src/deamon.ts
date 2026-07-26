@@ -73,9 +73,11 @@ await main(function* () {
           // forever. This window is wide enough for a buffered LLM completion and still finite.
           //
           // The queue group is the module name: every replica of one module shares it, so NATS
-          // load-balances calls across them.
+          // load-balances calls across them. The subject prefix is this APP's namespace — never
+          // share one between two apps on the same server.
           yield* install(NatsTransport, {
             servers: env.natsServers,
+            subjectPrefix: env.natsPrefix,
             requestTimeoutMs: env.requestTimeoutMs,
             ...(rt.service ? { queueGroup: rt.service } : {}),
           })

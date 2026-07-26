@@ -64,7 +64,13 @@ export namespace DaemonDef {
      * `Gateway.actions.mount` runs, which reads static route/OpenAPI metadata and boots nothing.
      */
     service?: Service
-    /** Mount prefix. Omit to keep the service off HTTP entirely (internal RPC only). */
+    /**
+     * Mount prefix — naming one makes this a PLAIN module: the daemon mounts the route from static
+     * metadata on serving processes, and the service's code runs only where owned. Omit it for a
+     * SELF-WIRING service (a wizard resource), which is then installed wherever it is owned OR
+     * served and mounts its own paths, role-guarded. For a strictly RPC-only plain service, wire
+     * it from `setup` instead of listing it here without a route.
+     */
     route?: string
     /** Extra wiring for the OWNING process, run BEFORE `service` is installed — e.g. installing a
      * provider the service depends on. Required when `service` is absent. */
@@ -78,6 +84,16 @@ export namespace DaemonDef {
      * cluster leave it off and let Kubernetes do the replicating.
      */
     cluster?: boolean
+    /**
+     * Programmatic role, for boots where nothing sets the environment — an embedded app, a test.
+     *
+     * The `SERVICE` env var ALWAYS wins over this: every process runs the same entry file, so a
+     * per-process identity must be able to arrive from outside (the cluster supervisor sets it on
+     * each fork; Kubernetes sets it per Deployment), and an option baked into shared code cannot
+     * be allowed to overrule it. Same values as the env var: `'gateway'`, a module name, or unset
+     * for monolith.
+     */
+    service?: string
     /** Default failure handling for module assembly AND for crashed children. Default `{mode:'all'}`. */
     failure?: Failure
     /** Common bootstrap, run BEFORE modules: install logger/broker/transport/gateway (but do NOT

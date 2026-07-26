@@ -24,7 +24,9 @@ export const resolveRuntime = function* (options: DaemonDef.Options) {
     index = node.worker?.id ?? -1
   }
 
-  const named = env[DAEMON_ENV.service]?.trim() || null
+  // the environment ALWAYS beats the option: every fork and every pod runs this same entry, and
+  // its identity must be assignable from OUTSIDE the shared code — see Options.service
+  const named = env[DAEMON_ENV.service]?.trim() || options.service?.trim() || null
 
   // The cluster primary is always the gateway: its children own the services (it forks one per
   // module), so it must not own them too.

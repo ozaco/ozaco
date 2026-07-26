@@ -82,11 +82,18 @@ export const transportDispatch = operation(function* (req: TransportDef.Dispatch
   return yield* fault(CoreErrors.NotFound, `no carrier reaches "${req.service}.${req.path}"`)
 })
 
+/**
+ * One delivery plane per emit — see the note on {@link TransportDef.Actions.emit}. Carriers are
+ * asked widest-first (descending priority) and the first `'handled'` ends the walk; the in-process
+ * carrier always handles, so an emit is never silently dropped.
+ */
 export const transportEmit = operation(function* (req: TransportDef.EventRequest) {
   const entries = yield* transportGetTransportsHandler()
 
-  for (const entry of entries) {
-    yield* entry.actions.emit(req)
+  for (const entry of entries.toReversed()) {
+    if ((yield* entry.actions.emit(req)) === 'handled') {
+      return
+    }
   }
 })
 

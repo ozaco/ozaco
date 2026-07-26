@@ -1,5 +1,5 @@
 import type { TableDef } from 'db:realtime'
-import { Broker, defineService, Gateway } from 'server:core'
+import { Broker, defineService, Gateway, useRole } from 'server:core'
 
 import type {
   CrudModule,
@@ -90,18 +90,38 @@ export function resource(
     version: '0.0.0',
     actions,
     *setup() {
-      yield* Broker.actions.register(service)
-      yield* Gateway.actions.mount(basePath, service)
-      if (hasReactive) {
-        yield* mountResourceRealtime({ basePath, namespace, module, transport })
-        // Turn on cross-node reactive fan-out automatically when a Broker + realtime DB are present
-        // (rides whatever transport is installed). Idempotent — attaches at most one bus per process.
-        yield* ensureChangeBus()
+      /**
+       * The resource is the ONE authority on its own wiring, and the ROLE decides how much of it
+       * this process gets. Without an orchestrator that is the classic pair (own + serve when a
+       * gateway exists); under a daemon, `SERVICE=notes` makes the notes pod register-only and the
+       * gateway mount-only — including the realtime channel and stream routes, which a daemon's
+       * generic module wiring knows nothing about. Registering unconditionally was how a GATEWAY
+       * replica used to claim ownership of every resource it merely served. (A daemon module that
+       * lists this resource still works: `register` is idempotent for the same object, and the
+       * module needs no `route` — the resource mounts its own paths.)
+       */
+      const { own, serve } = yield* useRole(namespace)
+
+      if (own) {
+        yield* Broker.actions.register(service)
       }
-      for (const [name, definition] of streamEntries) {
-        if (definition.rest) {
-          yield* mountStreamRoute({ basePath, namespace, name, def: definition })
+
+      if (serve) {
+        yield* Gateway.actions.mount(basePath, service)
+        if (hasReactive) {
+          yield* mountResourceRealtime({ basePath, namespace, module, transport })
         }
+        for (const [name, definition] of streamEntries) {
+          if (definition.rest) {
+            yield* mountStreamRoute({ basePath, namespace, name, def: definition })
+          }
+        }
+      }
+
+      if ((own || serve) && hasReactive) {
+        // Cross-node reactive fan-out (rides whatever transport is installed): the OWNER publishes
+        // change events, a SERVING process relays them — both need the bus. Idempotent per process.
+        yield* ensureChangeBus()
       }
     },
   })

@@ -57,6 +57,9 @@ export namespace TransportDef {
     name: string
     payload: unknown
     groups?: ReadonlyArray<string>
+    /** the emitting node — a broadcast receiver skips its OWN wire copy, because the local bus
+     * already delivered it in-process */
+    origin?: string
     traceContext?: TracerDef.SpanContext
   }
 
@@ -77,7 +80,18 @@ export namespace TransportDef {
     hosts(service: string, path: string): Future<Maybe<boolean>>
 
     dispatch(req: DispatchRequest): Future<Response>
-    emit(req: EventRequest): Future<void>
+
+    /**
+     * A queued event has ONE delivery plane, and this is how a carrier claims it.
+     *
+     * `emit` means "one member of the group, wherever it is" — so exactly one carrier may own the
+     * delivery. The router asks carriers from the WIDEST down (descending priority) and stops at
+     * the first `'handled'`: a wire carrier that reaches the whole cluster claims it (the group
+     * durable decides which member runs it — possibly this very node), and only when no wire
+     * exists does the in-process carrier deliver locally. Fanning it to every carrier was how one
+     * emit used to run twice: once on the emitter's own bus, once on a group member.
+     */
+    emit(req: EventRequest): Future<'handled' | 'pass'>
     broadcast(req: EventRequest): Future<void>
   }
 

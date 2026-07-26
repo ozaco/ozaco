@@ -75,15 +75,19 @@ export const InternalTransport = Transport.implement({
     return yield* scoped(() => invokeLocal(resolved.service, req, req.contexts))
   }),
 
+  // the request passes through WHOLE — it is built with conditional spreads, so absent fields are
+  // genuinely absent, and stripping it here was how `traceContext` silently died in-process
   emit: operation(function* (req: TransportDef.EventRequest) {
     const broker = yield* useContext(Broker)
 
-    broker.bus.emit('event.emit', req.groups ? req : { name: req.name, payload: req.payload })
+    broker.bus.emit('event.emit', req)
+    // the local bus IS a full delivery — this carrier only ever runs when no wire claimed the emit
+    return 'handled' as const
   }),
 
   broadcast: operation(function* (req: TransportDef.EventRequest) {
     const broker = yield* useContext(Broker)
 
-    broker.bus.emit('event.broadcast', req.groups ? req : { name: req.name, payload: req.payload })
+    broker.bus.emit('event.broadcast', req)
   }),
 })

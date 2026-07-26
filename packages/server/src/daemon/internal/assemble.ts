@@ -29,17 +29,34 @@ export const assembleModule = function* (
     return
   }
 
-  if (owned) {
+  /**
+   * The ROUTE decides who wires the routes. A module WITH one is the plain contract: install only
+   * where owned, and the daemon mounts the route from static metadata on serving processes — the
+   * service's code never runs on the edge. A module WITHOUT one declares a SELF-WIRING service (a
+   * wizard resource): its setup is the authority on its own paths — REST, realtime, streams —
+   * role-guarded through RoleContext, so it must be installed wherever it is owned OR served, and
+   * the daemon must not mount anything on top. (Strictly-RPC-only plain wiring belongs in
+   * `module.setup`, which runs on the owner alone.)
+   */
+  const selfWiring = module.route === undefined
+
+  if (owned || (served && selfWiring)) {
     // The service seals itself and installs the plugin that comes out — a protocol is not installable
     // on its own, and routing it through `install` would skip the seal.
     yield* service.actions.install()
+  }
+  if (owned) {
+    // idempotent when the setup already self-registered the same object
     yield* Broker.actions.register(service)
+  }
+  if (served && selfWiring) {
+    mounted.push(service)
   }
 
   // Guard the lookup: a process that serves but never installed a gateway degrades to RPC-only
   // instead of crashing on a missing Gateway context.
-  if (served && module.route !== undefined && (yield* Gateway.context.get()) !== undefined) {
-    yield* Gateway.actions.mount(module.route, service)
+  if (served && !selfWiring && (yield* Gateway.context.get()) !== undefined) {
+    yield* Gateway.actions.mount(module.route!, service)
     mounted.push(service)
   }
 }

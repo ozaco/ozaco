@@ -40,6 +40,42 @@ export const LANE_EVENT = 'ozaco-lane-event'
 export const LANE_END = 'end'
 export const LANE_ERROR = 'error'
 
+/**
+ * The writer's keepalive. A lane whose owner was SIGKILLed after the `__stream__` reply has no one
+ * left to publish its end marker — without a heartbeat the reader would wait forever. The writer
+ * ticks while its pump lives; a reader that sees neither data nor ticks for {@link LANE_STALE_MS}
+ * declares the writer lost. Ticks ride the lane like any marker, so a legitimately idle feed (an
+ * SSE channel between events) stays visibly alive.
+ */
+export const LANE_TICK = 'tick'
+export const LANE_TICK_MS = 15_000
+export const LANE_STALE_MS = 45_000 // 3 missed ticks
+
+/**
+ * The reader's bound. Lane data is pulled in BATCHES and the next batch is requested only while
+ * the local buffer sits under these marks — a slow consumer parks the reader instead of growing
+ * its RAM. The stream is the buffer; the process is not.
+ */
+export const LANE_FETCH_MESSAGES = 64
+export const LANE_FETCH_EXPIRES_MS = 5000
+export const LANE_BUFFER_MAX_BYTES = 16_777_216 // 16 MiB retained locally, per lane
+export const LANE_BUFFER_MAX_MESSAGES = 256
+
+/**
+ * The WRITER's bound — a credit window, so a transfer's in-flight tail cannot grow past what the
+ * reader has sanctioned. The writer starts with one free window (a transfer smaller than it costs
+ * ZERO credit traffic); the reader grants more as its consumer actually drains, in steps, as a
+ * cumulative byte count. A reader that closes says `stop`; a window that never reopens within the
+ * credit timeout is a gone reader, and the pump aborts instead of publishing into the void.
+ */
+export const LANE_WINDOW_BYTES = 33_554_432 // 32 MiB in flight before the first grant is needed
+export const LANE_GRANT_STEP_BYTES = 8_388_608 // grant every 8 MiB drained
+export const LANE_CREDIT_TIMEOUT_MS = 60_000
+
+/** A reader whose OWN consumer stopped draining gives up after this long and closes the lane —
+ * an abandoned download must not park a reader task and its buffer until process exit. */
+export const LANE_ABANDON_MS = 300_000 // matches the LANE stream's own max_age
+
 /** Set when a lane's payloads ARE the values — raw bytes that never reach the codec. */
 export const LANE_ENCODING = 'ozaco-lane-enc'
 export const LANE_BINARY = 'bin'

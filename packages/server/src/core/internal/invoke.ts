@@ -80,9 +80,19 @@ export const invokeLocal = operation(function* (
    * ordering because it holds its data, which is exactly why the bug hid.
    */
   const runBody = function* () {
-    const value = yield* action(...params)
-
+    /**
+     * The sink belongs to THIS invocation and to nobody the body calls.
+     *
+     * It is captured before the body runs and CLEARED for the body's duration: a nested
+     * lane-producing action invoked from inside this one used to see the ambient sink and answer
+     * the OUTER caller's wire with its own stream — the inner reply hijacking the outer one. A
+     * nested call now returns its envelope like any other call, and only the invocation the edge
+     * actually addressed feeds the sink.
+     */
     const sink = yield* ResponseSinkContext.get()
+
+    const value = yield* ResponseSinkContext.with(undefined as never, () => action(...params))
+
     if (sink && producesLane(action)) {
       yield* sink.respond(value as Stream<Uint8Array, unknown>)
       return STREAMED

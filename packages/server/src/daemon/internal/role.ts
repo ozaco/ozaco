@@ -23,9 +23,11 @@ export const owns = (module: DaemonDef.Module, rt: DaemonDef.Runtime): boolean =
   (module.when === undefined || module.when(rt)) && ownsRole(module.name, rt)
 
 export const serves = (module: DaemonDef.Module, rt: DaemonDef.Runtime): boolean => {
-  if (module.service === undefined || module.route === undefined) {
+  if (module.service === undefined) {
     return false
   }
-  // a monolith serves only what it runs, so a `when`-disabled module stays off the router there too
+  // a monolith serves only what it runs, so a `when`-disabled module stays off the router there too.
+  // No route requirement here: a module WITH a route is daemon-mounted, one WITHOUT wires itself —
+  // either way a serving process is involved with it (see `assembleModule`).
   return servesRole(rt) && (rt.kind !== 'monolith' || owns(module, rt))
 }
