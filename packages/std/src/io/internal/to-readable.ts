@@ -1,5 +1,5 @@
 import type { Operation, Stream } from 'std:effect'
-import { ensure, operation, until } from 'std:effect'
+import { ensure, operation, race, until, withResolvers } from 'std:effect'
 import { asFailure, isFailure } from 'std:result'
 
 /**
@@ -14,12 +14,20 @@ import { asFailure, isFailure } from 'std:result'
  * in-flight upstream request feeding it) then stays alive until the body is fully drained, paced by
  * the consumer's `pull()` (backpressure). A failure close (`Result.Failure`) becomes
  * `controller.error()` so a truncated source surfaces as a stream error rather than a clean end; the
- * consumer's `cancel()` stops the pump on its next step.
+ * consumer's `cancel()` ends the pump immediately, even while it is parked waiting for the next value.
  */
 export const toReadable = operation(function* (source: Stream<Uint8Array, unknown>) {
   let controller: ReadableStreamDefaultController<Uint8Array>
   let cancelled = false
   let settled = false
+
+  // Resolves the moment the consumer walks away. The drain loop parks in `subscription.next()`
+  // whenever the source is idle, and nothing about a cancelled ReadableStream interrupts that on its
+  // own — a `cancelled` flag is only seen once ANOTHER value shows up. For a long-lived feed (SSE)
+  // that means one more production cycle per abandoned connection, and for a source that never
+  // produces again, a pump that never returns and a scope that never unwinds. Racing the whole drain
+  // against this signal is what makes departure, not the next chunk, end the pump.
+  const departed = withResolvers<void>('readable cancelled')
 
   // resolves when the consumer pulls; the pump parks here once the controller is saturated
   let wake: (() => void) | null = null
@@ -52,8 +60,36 @@ export const toReadable = operation(function* (source: Stream<Uint8Array, unknow
     cancel() {
       cancelled = true
       wake?.()
+      departed.resolve()
     },
   })
+
+  /** Drain `source` into the controller, paced by `pull()`. Halted wholesale when the consumer goes. */
+  const drain = function* (): Operation<void> {
+    const subscription = yield* source
+
+    try {
+      while (true) {
+        if (cancelled) {
+          break
+        }
+        const next = yield* subscription.next()
+        if (next.done) {
+          settle(next.value ?? true)
+          break
+        }
+        if (cancelled) {
+          break
+        }
+        controller.enqueue(next.value)
+        if ((controller.desiredSize ?? 1) <= 0) {
+          yield* until(awaitPull())
+        }
+      }
+    } catch (error) {
+      settle(asFailure(error))
+    }
+  }
 
   const pump: Operation<void> = {
     *[Symbol.iterator]() {
@@ -70,29 +106,9 @@ export const toReadable = operation(function* (source: Stream<Uint8Array, unknow
         }
       })
 
-      const subscription = yield* source
-
-      try {
-        while (true) {
-          if (cancelled) {
-            break
-          }
-          const next = yield* subscription.next()
-          if (next.done) {
-            settle(next.value ?? true)
-            break
-          }
-          if (cancelled) {
-            break
-          }
-          controller.enqueue(next.value)
-          if ((controller.desiredSize ?? 1) <= 0) {
-            yield* until(awaitPull())
-          }
-        }
-      } catch (error) {
-        settle(asFailure(error))
-      }
+      // Two tasks for the whole body, not per chunk: `race` halts the loser, so a cancel tears the
+      // drain (and with it the subscription on the source) down where it stands.
+      yield* race([drain(), departed.operation])
     },
   }
 

@@ -4,7 +4,7 @@ import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 import { flatten } from 'std:shared'
 
-import { PLUGIN, RAW_ACTION } from '../const'
+import { PLUGIN } from '../const'
 import type { Hookable } from '../types/hookable'
 
 import { createDefaultHooks } from './internal/defaults'
@@ -73,10 +73,6 @@ export const createHookable = (options: {
                 : undefined
 
           const inner = function* (...innerArgs: unknown[]) {
-            if (innerArgs[0] === RAW_ACTION) {
-              return { self, context, options, key, meta: entry?.meta?.get(key) }
-            }
-
             for (const hook of call.befores) {
               yield* intercept(hook(innerArgs), `${key}:before`)
             }

@@ -28,13 +28,13 @@ export namespace StandardTypedV1 {
   }
 
   /** Infers the input type of a Standard Typed. */
-  export type InferInput<Schema extends StandardTypedV1> = NonNullable<
-    Schema['~standard']['types']
+  export type InferInput<TSchema extends StandardTypedV1> = NonNullable<
+    TSchema['~standard']['types']
   >['input']
 
   /** Infers the output type of a Standard Typed. */
-  export type InferOutput<Schema extends StandardTypedV1> = NonNullable<
-    Schema['~standard']['types']
+  export type InferOutput<TSchema extends StandardTypedV1> = NonNullable<
+    TSchema['~standard']['types']
   >['output']
 }
 
@@ -105,10 +105,10 @@ export namespace StandardSchemaV1 {
   > {}
 
   /** Infers the input type of a Standard. */
-  export type InferInput<Schema extends StandardTypedV1> = StandardTypedV1.InferInput<Schema>
+  export type InferInput<TSchema extends StandardTypedV1> = StandardTypedV1.InferInput<TSchema>
 
   /** Infers the output type of a Standard. */
-  export type InferOutput<Schema extends StandardTypedV1> = StandardTypedV1.InferOutput<Schema>
+  export type InferOutput<TSchema extends StandardTypedV1> = StandardTypedV1.InferOutput<TSchema>
 }
 
 // ###############################
@@ -171,8 +171,26 @@ export namespace StandardJSONSchemaV1 {
   > {}
 
   /** Infers the input type of a Standard. */
-  export type InferInput<Schema extends StandardTypedV1> = StandardTypedV1.InferInput<Schema>
+  export type InferInput<TSchema extends StandardTypedV1> = StandardTypedV1.InferInput<TSchema>
 
   /** Infers the output type of a Standard. */
-  export type InferOutput<Schema extends StandardTypedV1> = StandardTypedV1.InferOutput<Schema>
+  export type InferOutput<TSchema extends StandardTypedV1> = StandardTypedV1.InferOutput<TSchema>
+}
+
+/**
+ * A schema this system can both VALIDATE against and DESCRIBE.
+ *
+ * The two standards are siblings, not parent and child: one carries `validate`, the other carries
+ * `jsonSchema`, and neither implies the other. Requiring the intersection is what lets one
+ * declaration serve a runtime check and an OpenAPI document without a second source of truth —
+ * and it is safe rather than aspirational because zod satisfies both.
+ */
+export type Schema<Input = unknown, Output = Input> = StandardSchemaV1<Input, Output> &
+  StandardJSONSchemaV1<Input, Output>
+
+export namespace Schema {
+  /** What a handler receives after validation — the OUTPUT side, never the input side. */
+  export type Infer<TSchema> = TSchema extends StandardSchemaV1
+    ? StandardSchemaV1.InferOutput<TSchema>
+    : unknown
 }

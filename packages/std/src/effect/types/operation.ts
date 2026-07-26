@@ -66,3 +66,13 @@ export interface Queue<T, TClose> extends Subscription<T, TClose> {
   add(item: T): void
   close(value: TClose): void
 }
+
+/**
+ * A {@link Queue} that is also a {@link Stream}: buffered, and — unlike a `Channel`, which drops
+ * anything sent before someone subscribes — safe to write to before the consumer arrives. Every
+ * subscription hands back the SAME queue, so it feeds exactly one consumer.
+ */
+export interface StreamQueue<T, TClose> extends Stream<T, TClose> {
+  add(item: T): void
+  close(value: TClose): void
+}
