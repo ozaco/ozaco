@@ -1,5 +1,5 @@
 import type { GatewayDef } from 'server:core'
-import { CoreErrors, Gateway } from 'server:core'
+import { Broker, CoreErrors, Gateway } from 'server:core'
 import { operation, useContext } from 'std:effect'
 import { asFailure, auto, fail } from 'std:result'
 import type { AnyType } from 'std:shared'
@@ -86,11 +86,75 @@ const unregisterSocket = (ctx: GatewayDef.Context, id: string): void => {
   ctx.sockets.delete(id)
 }
 
+// ---- cross-replica fan-out ---------------------------------------------------------------------
+
+/**
+ * Rooms span gateway REPLICAS. Membership stays local (a socket lives on exactly one gateway), but
+ * a push — `toRoom`, `broadcast`, a targeted `emit` — must reach members held by every replica: a
+ * client on gw-1 and one on gw-2 sharing a room would otherwise each hear only half the
+ * conversation. So every push delivers LOCALLY and relays the same frame over the broker's
+ * broadcast plane; peers replay it onto their own sockets. The emitter skips its own echo by
+ * ORIGIN, because its local delivery already happened.
+ */
+const GW_FANOUT = '$gw.fanout'
+
+interface FanoutFrame {
+  op: 'toRoom' | 'broadcast' | 'emit'
+  room?: string
+  socketId?: string
+  message: unknown
+}
+
+const relayFanout = operation(function* (frame: FanoutFrame) {
+  // no broker means no replicas to reach — single-process apps pay nothing
+  if ((yield* Broker.context.get()) === undefined) {
+    return
+  }
+  yield* Broker.actions.broadcast(GW_FANOUT, frame)
+})
+
+const fanoutAttached = new WeakSet<GatewayDef.Context>()
+
+const ensureFanoutWatcher = operation(function* () {
+  const ctx = yield* useContext(Gateway.context)
+  if (fanoutAttached.has(ctx)) {
+    return
+  }
+  const broker = yield* Broker.context.get()
+  if (broker === undefined) {
+    return
+  }
+  fanoutAttached.add(ctx)
+
+  yield* Broker.actions.on('event.broadcast', info => {
+    if (info.name !== GW_FANOUT) {
+      return
+    }
+    // own echo: this gateway already delivered locally when it published
+    if (info.origin !== undefined && info.origin === broker.nodeId) {
+      return
+    }
+    const frame = info.payload as FanoutFrame
+
+    ctx.scope.run(function* () {
+      if (frame.op === 'toRoom' && frame.room !== undefined) {
+        yield* deliverToRoom(ctx, frame.room, frame.message)
+      } else if (frame.op === 'broadcast') {
+        yield* deliverBroadcast(ctx, frame.message)
+      } else if (frame.op === 'emit' && frame.socketId !== undefined) {
+        yield* deliverTo(ctx, frame.socketId, frame.message)
+      }
+    })
+  })
+})
+
 // ---- lifecycle (platform-agnostic) -------------------------------------------------------------
 
 const onOpenAction = operation(function* (ws: AnyType) {
   const ctx = yield* useContext(Gateway.context)
   registerSocket(ctx, ws)
+  // idempotent: the first socket a replica accepts is the moment peer pushes start mattering to it
+  yield* ensureFanoutWatcher()
   const setting = ws?.data?.entry?.setting as GatewayDef.WsSetting | undefined
   if (setting?.onOpen) {
     yield* setting.onOpen(ws)
@@ -196,8 +260,14 @@ const leaveAction = operation(function* (room: string) {
   }
 })
 
-const emitAction = operation(function* (socketId: string, message: unknown) {
-  const ctx = yield* useContext(Gateway.context)
+// LOCAL delivery halves — what a peer's relayed frame replays, and what the actions below do
+// before relaying. Never publish from these, or a relay would relay again.
+
+const deliverTo = operation(function* (
+  ctx: GatewayDef.Context,
+  socketId: string,
+  message: unknown,
+) {
   const socket = ctx.sockets.get(socketId)
   if (!socket) {
     return
@@ -208,8 +278,7 @@ const emitAction = operation(function* (socketId: string, message: unknown) {
   }
 })
 
-const broadcastAction = operation(function* (message: unknown) {
-  const ctx = yield* useContext(Gateway.context)
+const deliverBroadcast = operation(function* (ctx: GatewayDef.Context, message: unknown) {
   const data = yield* encodeWsBody(message)
   if (data === null) {
     return
@@ -219,8 +288,11 @@ const broadcastAction = operation(function* (message: unknown) {
   }
 })
 
-const toRoomAction = operation(function* (room: string, message: unknown) {
-  const ctx = yield* useContext(Gateway.context)
+const deliverToRoom = operation(function* (
+  ctx: GatewayDef.Context,
+  room: string,
+  message: unknown,
+) {
   const members = ctx.rooms.get(room)
   if (!members || members.size === 0) {
     return
@@ -232,6 +304,25 @@ const toRoomAction = operation(function* (room: string, message: unknown) {
   for (const id of members) {
     ctx.sockets.get(id)?.send(data as AnyType)
   }
+})
+
+const emitAction = operation(function* (socketId: string, message: unknown) {
+  const ctx = yield* useContext(Gateway.context)
+  yield* deliverTo(ctx, socketId, message)
+  // the target may live on another replica — everyone else finds no such socket and no-ops
+  yield* relayFanout({ op: 'emit', socketId, message })
+})
+
+const broadcastAction = operation(function* (message: unknown) {
+  const ctx = yield* useContext(Gateway.context)
+  yield* deliverBroadcast(ctx, message)
+  yield* relayFanout({ op: 'broadcast', message })
+})
+
+const toRoomAction = operation(function* (room: string, message: unknown) {
+  const ctx = yield* useContext(Gateway.context)
+  yield* deliverToRoom(ctx, room, message)
+  yield* relayFanout({ op: 'toRoom', room, message })
 })
 
 export {
