@@ -163,7 +163,7 @@
     },
     "packages/server": {
       "name": "@ozaco/server",
-      "version": "0.3.9",
+      "version": "0.3.10",
       "dependencies": {
         "@fastify/busboy": "^3.2.0",
         "jose": "^6.2.4",

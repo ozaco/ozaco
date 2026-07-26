@@ -10,11 +10,22 @@ import { BunIO } from '@ozaco/std/io/impl/bun'
 import { DefaultLogger, LogLevel } from '@ozaco/std/logger'
 import { install } from '@ozaco/std/plugin'
 import { isSuccess } from '@ozaco/std/result'
+import { z } from 'zod'
 
 const wait = (ms: number) =>
   new Promise<void>(resolve => {
     setTimeout(resolve, ms)
   })
+
+interface FilterNode {
+  name: string
+  children?: FilterNode[] | undefined
+}
+
+// mirrors the wizard's mongo-style `filter`: recursive, so z.toJSONSchema emits `$defs` + refs
+const filterNode: z.ZodType<FilterNode> = z.lazy(() =>
+  z.object({ name: z.string(), children: z.array(filterNode).optional() }),
+)
 
 const web = defineService({
   name: 'web',
@@ -22,6 +33,15 @@ const web = defineService({
   actions: {
     ping: defineAction(
       { settings: [Gateway.actions.rest({ method: 'GET', path: '/ping' })] },
+      function* () {
+        return { ok: true }
+      },
+    ),
+    search: defineAction(
+      {
+        input: z.object({ filter: z.union([z.string(), filterNode]).optional() }),
+        settings: [Gateway.actions.rest({ method: 'GET', path: '/search' })],
+      },
       function* () {
         return { ok: true }
       },
@@ -58,6 +78,21 @@ describe('docs plugin', () => {
       expect(String(json.openapi)).toMatch(/^3\./u)
       expect(json.info.title).toBe('Test API')
       expect(Object.keys(json.paths).length).toBeGreaterThan(0)
+
+      // recursive query input: defs hoisted into components.schemas, no dangling `#/$defs/...`
+      const search = json.paths['/web/search'].get
+      const filterParam = search.parameters.find(
+        (param: { name: string }) => param.name === 'filter',
+      )
+      expect(filterParam).toBeDefined()
+      expect(JSON.stringify(json)).not.toContain('#/$defs/')
+      const hoisted = Object.keys(json.components?.schemas ?? {})
+      expect(hoisted.some(name => name.startsWith('web.search.input.'))).toBe(true)
+      for (const ref of JSON.stringify(json).matchAll(
+        /"\$ref":"#\/components\/schemas\/([^"]+)"/gu,
+      )) {
+        expect(hoisted).toContain(String(ref[1]))
+      }
 
       const ui = await fetch(`http://localhost:${port}/docs/swagger`)
       expect(ui.status).toBe(200)

@@ -66,6 +66,47 @@ const toJsonSchema = (schema: unknown, io: 'input' | 'output'): DocsDef.JsonSche
   }
 }
 
+const rewriteRefs = (node: AnyType, refs: ReadonlyMap<string, string>): AnyType => {
+  if (Array.isArray(node)) {
+    return node.map(item => rewriteRefs(item, refs))
+  }
+  if (!node || typeof node !== 'object') {
+    return node
+  }
+  const out: Record<string, AnyType> = {}
+  for (const [key, value] of Object.entries(node)) {
+    out[key] =
+      key === '$ref' && typeof value === 'string' && refs.has(value)
+        ? refs.get(value)
+        : rewriteRefs(value, refs)
+  }
+  return out
+}
+
+// z.toJSONSchema emits recursive schemas (e.g. the wizard's mongo-style `filter`) as a root-level
+// `$defs` map with internal `#/$defs/<name>` refs. Those fragments resolve against the OpenAPI
+// DOCUMENT root — not the schema they sit in — so once the schema is re-rooted under a parameter
+// or requestBody they dangle and Swagger UI errors. Hoist every def into `components.schemas`
+// under a per-operation namespace and rewrite the refs to match.
+const hoistDefs = (
+  schema: DocsDef.JsonSchema | undefined,
+  ns: string,
+  shared: Record<string, DocsDef.JsonSchema>,
+): DocsDef.JsonSchema | undefined => {
+  const defs = schema?.$defs as Record<string, DocsDef.JsonSchema> | undefined
+  if (!schema || !defs) {
+    return schema
+  }
+  const refs = new Map(
+    Object.keys(defs).map(name => [`#/$defs/${name}`, `#/components/schemas/${ns}.${name}`]),
+  )
+  for (const [name, def] of Object.entries(defs)) {
+    shared[`${ns}.${name}`] = rewriteRefs(def, refs) as DocsDef.JsonSchema
+  }
+  const { $defs: _dropped, ...rest } = schema
+  return rewriteRefs(rest, refs) as DocsDef.JsonSchema
+}
+
 const pickQueryParams = (
   jsonSchema: DocsDef.JsonSchema | undefined,
   pathParams: string[],
@@ -144,15 +185,25 @@ const multipartSchema = (
 const buildOperation = (
   entry: DocsDef.CompiledEntry,
   pathParams: string[],
+  schemas: Record<string, DocsDef.JsonSchema>,
 ): DocsDef.OperationObject => {
   const { meta, method, service, key } = entry
+  const ns = `${service}.${key}`.replaceAll(/[^A-Za-z0-9._-]/gu, '_')
 
   // The RESOLVED wire, not the raw declaration: an input written as channels — e.g.
   // `[value(z.object({...})), parts()]` — is not a zod schema, and feeding it to z.toJSONSchema
   // silently collapses the documented body to an empty object. `bodyChannel` finds the one channel
   // whose schema IS the body contract, exactly as core validation reads it.
-  const inputSchema = toJsonSchema(bodyChannel(meta.wire.input)?.schema ?? meta.input, 'input')
-  const outputSchema = toJsonSchema(bodyChannel(meta.wire.output)?.schema ?? meta.output, 'output')
+  const inputSchema = hoistDefs(
+    toJsonSchema(bodyChannel(meta.wire.input)?.schema ?? meta.input, 'input'),
+    `${ns}.input`,
+    schemas,
+  )
+  const outputSchema = hoistDefs(
+    toJsonSchema(bodyChannel(meta.wire.output)?.schema ?? meta.output, 'output'),
+    `${ns}.output`,
+    schemas,
+  )
 
   const parameters: DocsDef.ParameterObject[] = pathParams.map(name => ({
     name,
@@ -185,7 +236,7 @@ const buildOperation = (
 
   const wizardEmits = (meta as AnyType).wizard?.emits
   if (wizardEmits) {
-    const emitsSchema = toJsonSchema(wizardEmits, 'output')
+    const emitsSchema = hoistDefs(toJsonSchema(wizardEmits, 'output'), `${ns}.emits`, schemas)
     if (emitsSchema) {
       op['x-ozaco-emits'] = emitsSchema
     }
@@ -255,15 +306,21 @@ export const buildOpenAPISpec = (
     }
   }
 
+  const schemas: Record<string, DocsDef.JsonSchema> = {}
+
   for (const entry of entries) {
     const { openapiPath, params } = extractPathParams(entry.path)
     const pathItem = doc.paths[openapiPath] ?? {}
-    const op = buildOperation(entry, params)
+    const op = buildOperation(entry, params, schemas)
     if (docs.auth) {
       op.security = [{ [SECURITY_SCHEME_NAME]: [] }]
     }
     pathItem[entry.method.toLowerCase()] = op
     doc.paths[openapiPath] = pathItem
+  }
+
+  if (Object.keys(schemas).length > 0) {
+    doc.components = { ...doc.components, schemas }
   }
 
   return doc

@@ -78,7 +78,10 @@ export namespace DocsDef {
     openapi: string
     info: { title: string; version: string; description?: string }
     paths: Record<string, Record<string, OperationObject>>
-    components?: { securitySchemes?: Record<string, SecurityScheme> }
+    components?: {
+      securitySchemes?: Record<string, SecurityScheme>
+      schemas?: Record<string, JsonSchema>
+    }
   }
 
   export interface CompiledEntry {
