@@ -235,7 +235,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@duckdb/node-api": "^1.5.5-r.1",
+    "@duckdb/node-api": "^1.5.5-r.2",
     "@ozaco/db": "workspace:*",
     "@ozaco/std": "workspace:*",
     "@types/ws": "^8.18.1",

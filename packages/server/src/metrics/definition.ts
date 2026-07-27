@@ -6,7 +6,12 @@ import type { AnyType } from 'std:shared'
 
 import { MetricsPolicy } from 'server:policy/metrics'
 
-import { DEFAULT_FLUSH_INTERVAL_MS, DEFAULT_STORE_PATH, METRICS_SUBTYPE } from './const'
+import {
+  DEFAULT_FLUSH_INTERVAL_MS,
+  DEFAULT_STORE_PATH,
+  METRICS_SERVICE_NAME,
+  METRICS_SUBTYPE,
+} from './const'
 import { createDuckdbStore } from './drivers/duckdb'
 import {
   closeStore,
@@ -21,6 +26,7 @@ import {
   pushCall,
   queryAction,
   recordAction,
+  setForward,
   setStore,
 } from './internal/metric'
 import { writeAction } from './internal/transport'
@@ -64,18 +70,33 @@ export const MetricsLogTransport = MetricsLogTransportImpl.build({
  * JsonCodec `meta` column; query with the MongoDB-style `find`, raw `query` for aggregations,
  * `export`/`import` for Parquet/CSV/JSON, `prune` for retention. Requires a Broker and, for logs, a
  * Logger.
+ *
+ * In a split deployment, `sink: 'forward'` turns the collector into a shipper: no local store —
+ * flushes batch to the `MetricsSink` service over the broker and every read delegates there too, so
+ * `Metrics.actions.*` works identically from any process. See {@link MetricsSink}.
  */
 export const MetricsCollector = Metrics.implement({
   name: 'metrics-collector',
   version: '0.0.1',
   *setup(options: MetricsDef.Options = {}) {
-    const store = options.store ?? createDuckdbStore(options.path ?? DEFAULT_STORE_PATH)
-    yield* store.init()
-    setStore(store)
+    let store: MetricsDef.Store | null = null
+    if (options.sink === 'forward') {
+      // forward mode: no local store — buffers ship to the `metrics-sink` service at flush
+      setForward()
+    } else {
+      store = options.store ?? createDuckdbStore(options.path ?? DEFAULT_STORE_PATH)
+      yield* store.init()
+      setStore(store)
+    }
 
     if (options.calls !== false) {
+      // The sink's own traffic is excluded in BOTH modes — otherwise every forward flush records
+      // its own `ingest` call and echoes one row per interval forever.
       yield* install(MetricsPolicy, {
-        onSuccess: event =>
+        onSuccess: event => {
+          if (event.serviceName === METRICS_SERVICE_NAME) {
+            return
+          }
           pushCall({
             ts: event.startedAt,
             service: event.serviceName,
@@ -88,8 +109,12 @@ export const MetricsCollector = Metrics.implement({
               status: 'success',
               value: event.value,
             }),
-          }),
-        onFailure: event =>
+          })
+        },
+        onFailure: event => {
+          if (event.serviceName === METRICS_SERVICE_NAME) {
+            return
+          }
           pushCall({
             ts: event.startedAt,
             service: event.serviceName,
@@ -102,7 +127,8 @@ export const MetricsCollector = Metrics.implement({
               action: event.actionKey,
               status: 'failure',
             }),
-          }),
+          })
+        },
       })
     }
 

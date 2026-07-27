@@ -233,8 +233,8 @@
   },
   "devDependencies": {
     "@types/fb-watchman": "2.0.6",
-    "js-yaml": "5.2.1",
-    "smol-toml": "1.7.0",
+    "js-yaml": "5.2.2",
+    "smol-toml": "1.7.1",
     "tsdown": "catalog:build",
     "unrun": "catalog:build"
   },

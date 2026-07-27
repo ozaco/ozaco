@@ -18,6 +18,13 @@ export const EVENTS_TABLE = 'events'
 export const DEFAULT_STORE_PATH = ':memory:'
 export const DEFAULT_FLUSH_INTERVAL_MS = 1000
 
+/** The well-known broker ADDRESS of the metrics sink service — what a `sink: 'forward'` collector
+ * ships to and delegates reads to. One name, no config: forwarders and the sink must agree. */
+export const METRICS_SERVICE_NAME = 'metrics-sink'
+/** Per-table cap on rows a forward-mode collector keeps for retry while the sink is unreachable
+ * (e.g. the boot window before the broker/transport is up) — bounds memory, oldest rows drop first. */
+export const FORWARD_PENDING_CAP = 10_000
+
 // Column names match the record field names (quoted camelCase in SQL) so a MongoDB-style filter reads
 // naturally — `{ durationMs: { $gt: 5 } }`. `meta` holds arbitrary custom fields as JsonCodec text
 // (never a native JSON column), preserved on insert and decoded back on read.

@@ -7,6 +7,7 @@ import { isObject } from 'std:shared'
 import { ACTION, DataType, SERVICE } from '../const'
 import type { Action } from '../types/action'
 import type { Outcome } from '../types/common'
+import type { GatewayDef } from '../types/gateway'
 import type { Service } from '../types/service'
 
 export const isService = (value: unknown): value is Service =>
@@ -30,6 +31,10 @@ export const producesLane = (action: Action.Meta | undefined): boolean =>
 /** The mirror: does the call carry a lane INTO the action? */
 export const acceptsLane = (action: Action.Meta | undefined): boolean =>
   action?.wire.accepts.some(type => type !== DataType.normal) ?? false
+
+/** Is this outbound frame a session connection's command to its gateway, rather than client data? */
+export const isControlFrame = (value: unknown): value is GatewayDef.ControlFrame =>
+  typeof (value as AnyType)?.['$ozaco:gw'] === 'string'
 
 /**
  * Did this call fail, and with an {@link Outcome.Fault}?

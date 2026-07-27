@@ -1,11 +1,19 @@
-import type { GatewayDef } from 'server:core'
+// oxlint-disable import/exports-last
+import type { ActionResponse, GatewayDef } from 'server:core'
 import { defineAction, Gateway, ResponseSinkContext, useResponse } from 'server:core'
-import type { Operation } from 'std:effect'
+import type { Operation, Stream } from 'std:effect'
 import { createQueue, ensure, operation, useContext } from 'std:effect'
 import { IO } from 'std:io'
 import type { AnyType } from 'std:shared'
 
-import { broadcastAction, joinRoom, leaveRoom, toRoomAction, unregisterSocket } from './realtime'
+import {
+  broadcastAction,
+  emitAction,
+  joinRoom,
+  leaveRoom,
+  toRoomAction,
+  unregisterSocket,
+} from './realtime'
 import { encodeWsBody } from './ws'
 
 const ENCODER = new TextEncoder()
@@ -16,6 +24,46 @@ const frame = (payload: string | Uint8Array): Uint8Array => {
   const text = typeof payload === 'string' ? payload : DECODER.decode(payload)
   return ENCODER.encode(`data: ${text}\n\n`)
 }
+
+/** The headers an event-stream needs, including the nginx opt-out that would otherwise buffer it. */
+export const sseHeaders = (res: ActionResponse): void => {
+  res.meta['content-type'] = 'text/event-stream'
+  res.meta['cache-control'] = 'no-cache'
+  res.meta['x-accel-buffering'] = 'no'
+}
+
+/**
+ * Present a stream of plain values as an SSE byte stream.
+ *
+ * Framing belongs to the edge, not the producer: the action streams whatever it wants and this
+ * turns each value into `data: …`, so the same action is a live feed here and ordinary values to
+ * any other caller. The leading comment flushes the headers through proxies that would sit on them.
+ */
+export const sseStream = (source: Stream<unknown, unknown>): Stream<Uint8Array, unknown> => ({
+  *[Symbol.iterator]() {
+    const inner = yield* source
+    let opened = false
+
+    return {
+      *next() {
+        if (!opened) {
+          opened = true
+          return { done: false, value: ENCODER.encode(': ok\n\n') }
+        }
+        for (;;) {
+          const step = yield* inner.next()
+          if (step.done) {
+            return step as IteratorResult<Uint8Array, unknown>
+          }
+          const encoded = yield* encodeWsBody(step.value)
+          if (encoded !== null) {
+            return { done: false, value: frame(encoded as string | Uint8Array) }
+          }
+        }
+      },
+    }
+  },
+})
 
 /** The effect-native Socket handle for an SSE connection — the SAME shape `listen` hands WS routes, so
  * a subscription pump written for one transport works on the other unchanged. */
@@ -39,8 +87,11 @@ const makeSseSocket = (ctx: GatewayDef.Context, id: string): GatewayDef.Socket =
     }),
     toRoom: toRoomAction,
     broadcast: broadcastAction,
+    emit: emitAction,
     spawn: operation(function* (op: () => Operation<void>) {
-      reg?.tasks.add(ctx.scope.run(op))
+      const task = ctx.scope.run(op)
+      reg?.tasks.add(task)
+      return task
     }),
   }
 }
@@ -71,10 +122,7 @@ export const sseAction = operation(function* (path: string, handlers: GatewayDef
     ctx.sockets.set(id, socket)
     queue.add(ENCODER.encode(': ok\n\n')) // open the stream immediately (flush headers past proxies)
 
-    const res = yield* useResponse()
-    res.meta['content-type'] = 'text/event-stream'
-    res.meta['cache-control'] = 'no-cache'
-    res.meta['x-accel-buffering'] = 'no'
+    sseHeaders(yield* useResponse())
 
     yield* ensure(function* () {
       for (const task of socket.tasks) {

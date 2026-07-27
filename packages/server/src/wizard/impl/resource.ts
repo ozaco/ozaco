@@ -12,7 +12,7 @@ import type {
 import { ensureChangeBus } from '../utils/change-bus'
 
 import { buildCrudModule } from './crud'
-import { mountResourceRealtime, mountStreamRoute } from './realtime'
+import { realtimeAction, sseRealtimeAction, streamRouteAction } from './realtime'
 import { buildResourceAction } from './resource-action'
 
 /** Project a function module to the `.actions` record the Broker calls: each entry becomes the core
@@ -85,6 +85,24 @@ export function resource(
     ]),
   ) as unknown as ResourceActions<FnModule>
 
+  /**
+   * The realtime surface as ROUTES ON THE SERVICE, not gateway-local endpoints. `_realtime` is a
+   * session-mode socket (or its one-way SSE flavour) and every rest-routed `stream` fn is an SSE
+   * action — so the one `Gateway.mount` below routes the entire surface, and a gateway with NO
+   * database can serve it: the pumps run next to the DB on whichever pod owns the resource.
+   */
+  const channels: Record<string, unknown> = {}
+  if (hasReactive) {
+    channels._realtime =
+      transport === 'sse' ? sseRealtimeAction(namespace, module) : realtimeAction(namespace, module)
+  }
+  for (const [name, definition] of streamEntries) {
+    if (definition.rest) {
+      channels[name] = streamRouteAction(namespace, name, definition)
+    }
+  }
+  Object.assign(actions, channels)
+
   const service: Resource = defineService<unknown, [], ResourceActions<FnModule>>({
     name: namespace,
     version: '0.0.0',
@@ -107,15 +125,8 @@ export function resource(
       }
 
       if (serve) {
+        // one mount routes EVERYTHING — CRUD, `_realtime` (session WS or SSE), stream routes
         yield* Gateway.actions.mount(basePath, service)
-        if (hasReactive) {
-          yield* mountResourceRealtime({ basePath, namespace, module, transport })
-        }
-        for (const [name, definition] of streamEntries) {
-          if (definition.rest) {
-            yield* mountStreamRoute({ basePath, namespace, name, def: definition })
-          }
-        }
       }
 
       if ((own || serve) && hasReactive) {

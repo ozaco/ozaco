@@ -25,6 +25,22 @@ export const CHANNEL = Symbol.for('server:core:channel')
 export const INTERNAL_ORIGIN = Symbol.for('server:core:internal')
 export const EXTERNAL_ORIGIN = Symbol.for('server:core:external')
 
+/** Request-meta key carrying the WebSocket id into a `session` dispatch — survives a remote hop. */
+export const SOCKET_ID_META = 'x-ozaco-socket'
+
+/**
+ * A `session` connection is a LEASE, not an open-ended promise.
+ *
+ * Neither end can tell a quiet peer from a dead one: a killed gateway runs no teardown, and once a
+ * stream reply is adopted the transport never cancels it again. So the gateway renews every open
+ * channel on the inbound stream it already holds, the owner heartbeats on its outbound stream, and
+ * each side reaps a session the other stopped speaking on. Without this a lost peer leaks one live
+ * pump per connection, forever — re-running its queries on every change in the wizard's case.
+ */
+export const SESSION_PING_MS = 10_000
+/** Three missed renewals. Generous enough to ride out a slow tick, short enough to reap promptly. */
+export const SESSION_IDLE_MS = 32_000
+
 /**
  * What one channel of a call carries.
  *

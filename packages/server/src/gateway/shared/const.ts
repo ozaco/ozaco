@@ -7,6 +7,9 @@ export const FORM_URLENCODED = 'application/x-www-form-urlencoded'
 
 export const BODY_METHODS = new Set(['POST', 'PUT', 'PATCH'])
 
+/** Deployment-wide WebSocket discipline override, read once when the gateway is installed. */
+export const WS_MODE_ENV = 'WS_MODE'
+
 /**
  * The live connection an exchange is running on, when there is one.
  *

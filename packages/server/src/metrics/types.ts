@@ -73,6 +73,20 @@ export namespace MetricsDef {
     readonly meta: string | null
   }
 
+  /** The wire batch a `sink: 'forward'` collector ships to the metrics sink service in ONE broker
+   * call per flush — rows arrive pre-serialized (`meta` already JsonCodec text). */
+  export interface IngestBatch {
+    readonly calls: readonly StoredCall[]
+    readonly logs: readonly StoredLog[]
+    readonly events: readonly StoredEvent[]
+  }
+
+  /** The sink service's `query` input — one object, because service actions take a single argument. */
+  export interface QuerySpec {
+    readonly sql: string
+    readonly params?: readonly unknown[] | undefined
+  }
+
   /** MongoDB-style find over a table — the SAME filter language as `@ozaco/db`. */
   export interface FindSpec {
     readonly table: TableName
@@ -148,6 +162,12 @@ export namespace MetricsDef {
   }
 
   export interface Options {
+    /** Where flushed records go. `'store'` (default) writes the local store. `'forward'` opens NO
+     * local store: batches ship to the `metrics-sink` service over the broker (routed locally or via
+     * whatever transport is installed), and reads (`find`/`query`/`export`/`prune`/…) delegate the
+     * same way — consumers keep calling `Metrics.actions.*` regardless of topology. Exactly one
+     * process must register the sink service AND run the collector in `'store'` mode. */
+    readonly sink?: 'store' | 'forward'
     /** Provide a custom {@link Store}. Omit to use the built-in DuckDB store at {@link path}. */
     readonly store?: Store
     /** DuckDB connection string for the built-in store: `':memory:'` (default) or a file path. */
@@ -168,7 +188,8 @@ export namespace MetricsDef {
   }
 
   export interface Context {
-    readonly store: Store
+    /** The local store — `null` when the collector runs in `sink: 'forward'` mode. */
+    readonly store: Store | null
   }
 
   export interface Actions {

@@ -1,4 +1,4 @@
-import type { Future } from 'std:effect'
+import type { Future, Scope } from 'std:effect'
 import type { EventEmitter } from 'std:event'
 import type { Plugin } from 'std:plugin'
 import type { AnyType } from 'std:shared'
@@ -30,6 +30,11 @@ export namespace BrokerDef {
 
     shortenCauses: boolean
     trace: boolean
+
+    /** The broker's install scope. A dispatch's own scope dies as soon as the handler returns, so
+     * anything that must outlive it — a `defineSocket` connection pump — runs here instead. The
+     * broker is present wherever an action runs, which is what makes this a safe universal home. */
+    scope: Scope
 
     services: Map<string, Service>
     bus: EventEmitter<BrokerDef.EventMap>

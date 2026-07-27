@@ -4,10 +4,18 @@ import { operation, useContext } from 'std:effect'
 import { asFailure, auto, fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 
+import { closeChannel, openChannel, pushChannel } from './channel'
 import { ConnectionContext } from './const'
 import { dispatchAction } from './dispatch'
 import { resolveRouteAction } from './util'
-import { buildRequest, buildResponse, encodeWsBody, sendResult } from './ws'
+import {
+  buildRequest,
+  buildResponse,
+  encodeWsBody,
+  parseWsPayload,
+  resolveWsMode,
+  sendResult,
+} from './ws'
 
 // The gateway's socket.io-like real-time layer. WS connections are tracked in the gateway's shared
 // context (`sockets` by id, `rooms` by name), so server-push (emit/broadcast/toRoom) works from ANY
@@ -47,6 +55,12 @@ const registerSocket = (ctx: GatewayDef.Context, raw: AnyType): GatewayDef.Gatew
 const closeSockets = operation(function* (ctx: GatewayDef.Context) {
   // snapshot: closing a raw socket schedules its (async) onClose which mutates the registry
   for (const socket of Array.from(ctx.sockets.values())) {
+    // a session proxy first: closing the channel ends the inbound stream and halts the dispatch
+    const channel = ctx.channels.get(socket.id)
+    if (channel) {
+      ctx.channels.delete(socket.id)
+      yield* channel.close()
+    }
     for (const task of socket.tasks) {
       yield* task.halt()
     }
@@ -65,6 +79,7 @@ const closeSockets = operation(function* (ctx: GatewayDef.Context) {
   }
   ctx.sockets.clear()
   ctx.rooms.clear()
+  ctx.channels.clear()
 })
 
 /** Remove a closed socket from the registry and from every room it had joined. */
@@ -152,10 +167,18 @@ const ensureFanoutWatcher = operation(function* () {
 
 const onOpenAction = operation(function* (ws: AnyType) {
   const ctx = yield* useContext(Gateway.context)
-  registerSocket(ctx, ws)
+  const socket = registerSocket(ctx, ws)
   // idempotent: the first socket a replica accepts is the moment peer pushes start mattering to it
   yield* ensureFanoutWatcher()
-  const setting = ws?.data?.entry?.setting as GatewayDef.WsSetting | undefined
+  const entry = ws?.data?.entry as GatewayDef.RegisteredRoute | undefined
+  const setting = entry?.setting as GatewayDef.WsSetting | undefined
+
+  // session mode: the whole connection is ONE dispatch, opened here and fed by onMessage below
+  if (entry && resolveWsMode(ctx, setting) === 'session') {
+    yield* openChannel(ws, entry, socket)
+    return
+  }
+
   if (setting?.onOpen) {
     yield* setting.onOpen(ws)
   }
@@ -172,6 +195,14 @@ const onMessageAction = operation(function* (ws: AnyType, message: unknown) {
   const setting = entry.setting as GatewayDef.WsSetting | undefined
   if (setting?.onMessage) {
     yield* setting.onMessage(ws, message)
+    return
+  }
+
+  // session mode: frames feed the connection's single dispatch instead of opening one each.
+  // Parsed HERE so the control-frame forgery check sees an object, not its JSON text.
+  const ctx = yield* useContext(Gateway.context)
+  if (resolveWsMode(ctx, setting) === 'session') {
+    yield* pushChannel(ws, yield* parseWsPayload(message))
     return
   }
 
@@ -193,6 +224,8 @@ const onCloseAction = operation(function* (ws: AnyType, code: number, reason: st
   if (setting?.onClose) {
     yield* setting.onClose(ws, code, reason)
   }
+  // ends the inbound stream and halts the pump — unwinding the dispatch cancels it upstream
+  yield* closeChannel(ws)
   const ctx = yield* useContext(Gateway.context)
   const socket = ctx.sockets.get(String(ws?.data?.id ?? ''))
   if (socket) {

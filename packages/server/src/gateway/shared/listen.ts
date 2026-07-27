@@ -4,7 +4,7 @@ import type { Operation } from 'std:effect'
 import { operation, useContext } from 'std:effect'
 import type { AnyType } from 'std:shared'
 
-import { broadcastAction, joinRoom, leaveRoom, toRoomAction } from './realtime'
+import { broadcastAction, emitAction, joinRoom, leaveRoom, toRoomAction } from './realtime'
 import { encodeWsBody, parseWsPayload } from './ws'
 
 // `Gateway.actions.listen(path, handlers)` — register a WS endpoint WITHOUT defineAction/mount. It
@@ -37,9 +37,12 @@ const makeSocket = (ctx: GatewayDef.Context, ws: AnyType): GatewayDef.Socket => 
     }),
     toRoom: toRoomAction,
     broadcast: broadcastAction,
+    emit: emitAction,
     spawn: operation(function* (op: () => Operation<void>) {
       // run on the gateway scope, tracked on this socket so onClose halts it (no leaked pumps).
-      reg?.tasks.add(ctx.scope.run(op))
+      const task = ctx.scope.run(op)
+      reg?.tasks.add(task)
+      return task
     }),
   }
 }

@@ -1,28 +1,51 @@
 import { useDatabase } from 'db:realtime'
 import type { GatewayDef } from 'server:core'
-import { CoreErrors, Gateway, useRequest } from 'server:core'
-import { attempt, mapError, operation, validate } from 'std:effect'
-import type { Operation } from 'std:effect'
+import {
+  Broker,
+  CoreErrors,
+  defineAction,
+  Gateway,
+  socketAction,
+  stream as streamChannel,
+  useRequest,
+} from 'server:core'
+import {
+  attempt,
+  createStreamQueue,
+  ensure,
+  mapError,
+  operation,
+  useContext,
+  validate,
+} from 'std:effect'
+import type { Operation, Task } from 'std:effect'
 import { fail, isSuccess } from 'std:result'
 import type { Result } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import { JsonCodec } from 'std:codec/impl/json'
 import type { ZodType } from 'zod'
+import { z } from 'zod'
 
 import { assertAccess } from '../internal/access'
 import { resolveActionArgs } from '../internal/args'
 import { matchesWatch, resolveWatchTarget } from '../internal/realtime'
 import type { WatchTarget } from '../internal/realtime'
-import type { FnModule, RealtimeTransport, WizardActionDef } from '../types'
+import type { FnModule, WizardActionDef } from '../types'
 
 /** Wrap a payload for the wire. Over `_realtime` it is `{ id?, result }` (matched by the client's
  * subscription id); over a dedicated SSE stream route it is the raw value. */
 type Frame = (value: AnyType) => AnyType
 
+/** All a pump needs of its destination. A `session` socket handle satisfies it directly; an SSE
+ * feed satisfies it with the stream queue the action hands back — so one pump serves both edges. */
+interface Sink {
+  send(message: unknown): Operation<void>
+}
+
 interface PumpDeps {
   readonly action: WizardActionDef
-  readonly socket: GatewayDef.Socket
+  readonly socket: Sink
   readonly target: WatchTarget
   readonly frame: Frame
   /** The action's reactive payload validator (`emits`, falling back to `returns`); each outgoing frame
@@ -204,113 +227,208 @@ const wrapped: Frame = value => value
 /** The reactive payload validator for an action: `emits` if declared, else the one-shot `returns`. */
 const emitsOf = (action: WizardActionDef): ZodType | undefined => action.emits ?? action.returns
 
-const websocketHandlers = (namespace: string, module: FnModule): GatewayDef.ListenHandlers => ({
-  on: {
-    watch: operation(function* (socket: GatewayDef.Socket, message: AnyType) {
-      const target = resolveWatchTarget(message, message?.id)
-      if (!target) {
-        return
-      }
-      const action = module[target.name]
-      if (!action) {
-        return
-      }
-      // Enforce the SAME access + input validation as the REST path before any data flows. This runs
-      // in the message-handler scope (which carries the connection's request/auth context), not the
-      // spawned pump scope; the pump then re-runs the handler with these validated, authorized args.
-      const args = yield* authorizeWatch(namespace, action, target)
-      const frame: Frame = value =>
-        target.subId === undefined ? { result: value } : { id: target.subId, result: value }
-      yield* socket.spawn(
-        pumpFor({ action, socket, target: { ...target, args }, frame, emits: emitsOf(action) }),
-      )
+/** The frame shape the client matches subscriptions by: `{ id, result }`, or bare `{ result }` when
+ * the subscription carried no id (SSE, single-watch sockets). */
+const frameFor = (target: WatchTarget): Frame =>
+  target.subId === undefined
+    ? value => ({ result: value })
+    : value => ({ id: target.subId, result: value })
+
+/** Read a watch target out of an SSE request's query string (`?fn=&args=&resourceVersion=`). */
+const targetFromQuery = operation(function* (name?: string) {
+  const request = yield* useRequest()
+  const fn = name ?? request.url.searchParams.get('fn')
+  const rawArgs = request.url.searchParams.get('args')
+  const resourceVersion = request.url.searchParams.get('resourceVersion') ?? undefined
+  const decoded = rawArgs ? yield* attempt(JsonCodec.actions.parse(rawArgs)) : undefined
+  const args = decoded && isSuccess(decoded) ? decoded.value : {}
+  return resolveWatchTarget({ fn, args, resourceVersion })
+})
+
+/**
+ * Run one pump into a fresh stream and hand that stream back as the action's result.
+ *
+ * SSE is the easy half: a GET is already ONE dispatch, so there is nothing to keep sticky — the
+ * node that owns the resource answers, streams, and the gateway frames it (`sse: true` on the
+ * route). The pump still runs on the broker's install scope, because the dispatch scope closes the
+ * moment this returns; the `ensure` on the dispatch is what reaps it when the client hangs up.
+ */
+const streamOf = operation(function* (deps: Omit<PumpDeps, 'socket'>) {
+  const out = createStreamQueue<unknown, void>()
+  const sink: Sink = {
+    send: operation(function* (message: unknown) {
+      out.add(message)
     }),
-    // TODO(M3): an `unwatch` handler for per-`subId` teardown does not fit the current model cleanly.
-    // `socket.spawn` (gateway/shared/listen.ts) returns void — it keeps each pump's Task in the
-    // socket's PRIVATE registry and exposes no handle to halt one subscription, and that file is
-    // outside this module. A wizard-only fix would need a per-socket `Map<subId, stopSignal>` that
-    // every pump loop races against (`race(feed.next(), stop)`), fired from `unwatch` and reaped in a
-    // `close` handler — a bespoke cancellation channel deferred to keep this security change minimal.
-  },
-})
+  }
 
-const sseHandlers = (namespace: string, module: FnModule): GatewayDef.ListenHandlers => ({
-  open: operation(function* (socket: GatewayDef.Socket) {
-    const request = yield* useRequest()
-    const fn = request.url.searchParams.get('fn')
-    const rawArgs = request.url.searchParams.get('args')
-    const resourceVersion = request.url.searchParams.get('resourceVersion') ?? undefined
-    const decoded = rawArgs ? yield* attempt(JsonCodec.actions.parse(rawArgs)) : undefined
-    const args = decoded && isSuccess(decoded) ? decoded.value : {}
-    const target = resolveWatchTarget({ fn, args, resourceVersion })
-    if (!target) {
-      return
-    }
-    const action = module[target.name]
-    if (!action) {
-      return
-    }
-    // Same access + input validation as the REST path (see websocketHandlers). The SSE `open` handler
-    // runs inside its route action, so it carries the request's auth context for the guard.
-    const validated = yield* authorizeWatch(namespace, action, target)
-    const frame: Frame = value => ({ result: value })
-    yield* socket.spawn(
-      pumpFor({
-        action,
-        socket,
-        target: { ...target, args: validated },
-        frame,
-        emits: emitsOf(action),
-      }),
-    )
-  }),
-})
-
-/** Mount the resource-local realtime channel (`<basePath>/_realtime`) — WS `watch` frames or SSE
- * `?fn=&args=`, both driving the per-action pump. */
-export const mountResourceRealtime = operation(function* (config: {
-  basePath: string
-  namespace: string
-  module: FnModule
-  transport: RealtimeTransport
-}) {
-  const { basePath, namespace, module, transport } = config
-  const path = `${basePath}/_realtime`
-  yield* transport === 'sse'
-    ? Gateway.actions.sse(path, sseHandlers(namespace, module))
-    : Gateway.actions.listen(path, websocketHandlers(namespace, module))
-})
-
-/** Mount a dedicated SSE endpoint for a `stream` action that declared a `rest` route (e.g. a live
- * metrics / vitals / log-tail feed). Each connection drains a fresh subscription; the raw value is
- * sent as the SSE `data` payload. */
-export const mountStreamRoute = operation(function* (config: {
-  basePath: string
-  namespace: string
-  name: string
-  def: WizardActionDef
-}) {
-  const { basePath, namespace, name, def } = config
-  const path = `${basePath}${def.rest?.path ?? `/${name}`}`
-  yield* Gateway.actions.sse(path, {
-    open: operation(function* (socket: GatewayDef.Socket) {
-      const request = yield* useRequest()
-      const rawArgs = request.url.searchParams.get('args')
-      const decoded = rawArgs ? yield* attempt(JsonCodec.actions.parse(rawArgs)) : undefined
-      const args = decoded && isSuccess(decoded) ? decoded.value : {}
-      const target: WatchTarget = { subId: undefined, name, args, resourceVersion: undefined }
-      // Same access + input validation as the REST path before the stream is drained (see
-      // websocketHandlers). The `open` handler runs inside its route action, carrying auth context.
-      const validated = yield* authorizeWatch(namespace, def, target)
-      yield* socket.spawn(
-        pumpFor({
-          action: def,
-          socket,
-          target: { ...target, args: validated },
-          frame: wrapped,
-          emits: emitsOf(def),
-        }),
-      )
-    }),
+  // KEEP the task — discarding it would leave a pump nothing can halt, so a client that hangs up
+  // would leave the owner re-running its query on every write, forever.
+  const broker = yield* useContext(Broker)
+  const pump = broker.scope.run(function* () {
+    yield* ensure(function* () {
+      out.close()
+    })
+    yield* pumpFor({ ...deps, socket: sink })()
   })
+
+  // the consumer stopped reading (client gone, gateway gone, stream cancelled) → stop producing
+  yield* ensure(function* () {
+    yield* attempt(() => pump.halt())
+  })
+
+  return out
 })
+
+/**
+ * The `_realtime` channel as a socket on the resource itself.
+ *
+ * `socketAction` owns everything a live connection needs — the outbound stream, a scope that
+ * outlives the dispatch, teardown on either ending, `on[event]` routing — so all that is left here
+ * is the two events wizard actually speaks. Being an action rather than a gateway-local endpoint is
+ * what lets the gateway forward the whole socket to whichever pod owns the resource, where the
+ * database is.
+ */
+export const realtimeAction = (namespace: string, module: FnModule) => {
+  // per connection, keyed by socket: `unwatch` must stop ONE feed, not the socket
+  const feeds = new Map<string, Map<string, Task<void>>>()
+  let seq = 0
+
+  const pumpsOf = (socket: GatewayDef.Socket) => {
+    const existing = feeds.get(socket.id)
+    if (existing) {
+      return existing
+    }
+    const created = new Map<string, Task<void>>()
+    feeds.set(socket.id, created)
+    return created
+  }
+
+  /** Stop one subscription, tolerating a pump that already finished on its own. */
+  const stop = operation(function* (socket: GatewayDef.Socket, key: string) {
+    const pumps = pumpsOf(socket)
+    const task = pumps.get(key)
+    pumps.delete(key)
+    if (task) {
+      yield* attempt(() => task.halt())
+    }
+  })
+
+  return socketAction(
+    { title: `${namespace}._realtime`, path: '/_realtime' },
+    {
+      on: {
+        watch: operation(function* (socket: GatewayDef.Socket, message: AnyType) {
+          const target = resolveWatchTarget(message, message?.id)
+          const action = target ? module[target.name] : undefined
+          if (!target || !action) {
+            return
+          }
+
+          // a rejected subscription (bad args, denied access) must not tear down the connection
+          const outcome = yield* attempt(function* () {
+            // the SAME access + input validation as the REST path, before any data flows; the
+            // handler runs inside the connection's request context, so a guard reading `useAuth()`
+            // sees the principal that opened the socket
+            const args = yield* authorizeWatch(namespace, action, target)
+            const key = target.subId ?? `#${(seq += 1)}`
+            yield* stop(socket, key)
+            pumpsOf(socket).set(
+              key,
+              yield* socket.spawn(
+                pumpFor({
+                  action,
+                  socket,
+                  target: { ...target, args },
+                  frame: frameFor(target),
+                  emits: emitsOf(action),
+                }),
+              ),
+            )
+          })
+
+          if (!isSuccess(outcome)) {
+            yield* socket.send({
+              ...(message?.id === undefined ? {} : { id: message.id }),
+              error: outcome.error,
+            })
+          }
+        }),
+
+        unwatch: operation(function* (socket: GatewayDef.Socket, message: AnyType) {
+          yield* stop(socket, String(message?.id ?? ''))
+        }),
+      },
+
+      // `socketAction` already halts every spawned pump; this just drops the bookkeeping
+      close: operation(function* (socket: GatewayDef.Socket) {
+        feeds.delete(socket.id)
+      }),
+    },
+  )
+}
+
+/**
+ * The SSE flavour of `_realtime`, as an action rather than a gateway-local endpoint — same
+ * reasoning as the WebSocket one: a route can be served by a pod that holds no code, a
+ * `Gateway.actions.sse` handler cannot. The subscription is chosen by `?fn=&args=`, one per
+ * connection.
+ */
+export const sseRealtimeAction = (namespace: string, module: FnModule) =>
+  defineAction(
+    {
+      title: `${namespace}._realtime`,
+      // the output DECLARATION is what routes the answer through the streaming sink — the wire is
+      // declaration-driven, so an undeclared lane would be JSON-stringified as a value
+      output: streamChannel(z.unknown()),
+      settings: [Gateway.actions.rest({ method: 'GET', path: '/_realtime', sse: true })],
+    },
+    function* () {
+      const target = yield* targetFromQuery()
+      const action = target ? module[target.name] : undefined
+
+      if (!target || !action) {
+        return yield* fail(CoreErrors.NotFound, `${namespace}._realtime: unknown or missing \`fn\``)
+      }
+
+      // same access + input validation as the REST path, before a single row flows
+      const args = yield* authorizeWatch(namespace, action, target)
+      // `_realtime` always wraps (the client reads `.result`); only a dedicated stream route is raw
+      return yield* streamOf({
+        action,
+        target: { ...target, args },
+        frame: frameFor(target),
+        emits: emitsOf(action),
+      })
+    },
+  )
+
+/**
+ * A dedicated SSE endpoint for a `stream` action that declared a `rest` route (a live metrics /
+ * vitals / log-tail feed). Each connection drains a fresh subscription and the raw value becomes
+ * the `data` payload.
+ */
+export const streamRouteAction = (namespace: string, name: string, def: WizardActionDef) =>
+  defineAction(
+    {
+      title: `${namespace}.${name}`,
+      output: streamChannel(z.unknown()),
+      settings: [
+        Gateway.actions.rest({ method: 'GET', path: def.rest?.path ?? `/${name}`, sse: true }),
+      ],
+    },
+    function* () {
+      const target = (yield* targetFromQuery(name)) as WatchTarget | undefined
+
+      if (!target) {
+        return yield* fail(CoreErrors.NotFound, `${namespace}.${name}: no stream target`)
+      }
+
+      const args = yield* authorizeWatch(namespace, def, target)
+      return yield* streamOf({
+        action: def,
+        target: { ...target, args },
+        frame: wrapped,
+        emits: emitsOf(def),
+      })
+    },
+  )

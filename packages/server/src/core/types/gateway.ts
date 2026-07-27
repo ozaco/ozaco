@@ -58,9 +58,24 @@ export namespace GatewayDef {
     statusMap?: Record<string, number>
   }
 
+  /**
+   * How a WS route treats inbound frames.
+   *
+   * `message` (default) — every frame is an independent request/response dispatch. Stateless, and
+   * each frame may be answered by a different node.
+   *
+   * `session` — ONE dispatch for the whole connection: the action reads inbound frames off its
+   * input stream and answers with a stream of outbound frames. A dispatch is answered by exactly
+   * one node and its lanes are keyed to that call, so every frame of a connection lands on the same
+   * process — affinity comes from the transport, not from a routing table. The gateway just holds
+   * the socket, which is what lets a WS route live in another pod.
+   */
+  export type WsMode = 'message' | 'session'
+
   /** Per-route WebSocket settings authored on an action via `Gateway.actions.ws({...})`. */
   export interface WsOptions {
     path: string
+    mode?: WsMode
     onOpen?: (ws: unknown) => Operation<void>
     /**
      * Opt-in raw-frame handler. When set, incoming frames on this route go to `onMessage` (the app
@@ -69,6 +84,36 @@ export namespace GatewayDef {
      */
     onMessage?: (ws: unknown, message: unknown) => Operation<void>
     onClose?: (ws: unknown, code: number, reason: string) => Operation<void>
+  }
+
+  /**
+   * A `session` connection's out-of-band command to its gateway.
+   *
+   * Sockets only ever exist on a gateway. A session action may run in another pod entirely, so when
+   * it says `socket.join('lobby')` the call cannot touch a registry — it rides back on the
+   * connection's OWN outbound stream tagged `$ozaco:gw`, and the gateway applies it without ever
+   * forwarding it to the client. Same channel as the data, so ordering with `socket.send` is free
+   * and there is no second transport to configure.
+   */
+  export interface ControlFrame {
+    /**
+     * `ping` is the LEASE, travelling in both directions and carrying nothing: the gateway sends it
+     * inbound so the owner knows the gateway still holds the socket, and the owner sends it
+     * outbound so the gateway knows the owner is still there. Neither side can infer the other's
+     * death from a quiet stream, so silence is what has to reap a session — and that only works if
+     * both ends keep speaking.
+     */
+    '$ozaco:gw': 'join' | 'leave' | 'toRoom' | 'broadcast' | 'emit' | 'ping'
+    room?: string
+    to?: string
+    message?: unknown
+  }
+
+  /** One `session`-mode connection proxied to its owning node: the inbound frame sink plus the task
+   * pumping the reply stream back. Closing it halts the pump, which unwinds the dispatch. */
+  export interface Channel {
+    push(frame: unknown): Operation<void>
+    close(): Operation<void>
   }
 
   /** A live WebSocket connection tracked in the gateway registry (platform-agnostic: Bun + Node). */
@@ -99,12 +144,17 @@ export namespace GatewayDef {
     /** Fan a message out to a room, or to every connected socket. */
     toRoom(room: string, message: unknown): Operation<void>
     broadcast(message: unknown): Operation<void>
+    /** Push to ONE other socket by id — a no-op when no gateway currently holds it. */
+    emit(socketId: string, message: unknown): Operation<void>
     /**
      * Spawn a background task bound to THIS socket's lifetime — automatically halted when the socket
      * closes. Use it to pump a long-lived source (e.g. a db LiveQuery Stream) into the socket without
      * leaking the loop after disconnect.
+     *
+     * Returns the task, so a caller tracking several pumps on one socket (per-subscription feeds)
+     * can halt exactly one without tearing down the connection.
      */
-    spawn(operation: () => Operation<void>): Operation<void>
+    spawn(operation: () => Operation<void>): Operation<Task<void>>
   }
 
   /**
@@ -166,6 +216,14 @@ export namespace GatewayDef {
      * populated by the WS lifecycle (onOpen/onClose) and read by the emit/broadcast/room actions. */
     sockets: Map<string, GatewaySocket>
     rooms: Map<string, Set<string>>
+
+    /** Open `session`-mode proxies by socket id: the upstream dispatch this connection is bound to. */
+    channels: Map<string, Channel>
+
+    /** The `WS_MODE` env override, or null when unset. It may upgrade routes that declared no mode,
+     * so a split deployment can turn on socket proxying without editing any service — but it can
+     * neither downgrade an explicit `session` route nor upgrade a raw `listen()` endpoint. */
+    wsMode: WsMode | null
 
     /** in-flight background request tasks (streaming pumps live here); halted on destroy so an
      * active stream cannot block shutdown — halting aborts the pump + its upstream fetch */

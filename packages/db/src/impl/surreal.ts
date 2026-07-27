@@ -10,7 +10,7 @@ import type { AnyType } from '@ozaco/std/shared'
 import * as surrealCore from 'surrealdb'
 
 import { arraySubscription, dynamicImport, mapResult } from './utils/common'
-import { firstResultSet, toSurreal } from './utils/surreal'
+import { escapeIdent, firstResultSet, toSurreal } from './utils/surreal'
 
 // `surrealdb` is imported statically so the driver is traceable by bundlers (incl. `bun build
 // --compile`); the embedded `@surrealdb/node` engine stays an optional dynamic import.
@@ -39,6 +39,10 @@ let sharedDb: AnyType = null
  * degrade: SQLSTATE classification / COPY / LISTEN don't apply, and `$n` placeholders are rewritten to
  * SurrealQL `$pn`. `stream()` buffers: SurrealDB's SDK has no server-side cursor for a SELECT (LIVE is
  * a change-subscription primitive, not row streaming — the realtime layer's `changes` signal uses it).
+ *
+ * When targeting a remote server, its major version must match the embedded engine's
+ * (`@surrealdb/node` 3.x ↔ server 3.x) — mixed majors fail in subtle ways (a v2 server can't even
+ * answer a v3-shaped `count()`).
  */
 export const SurrealDriver = DbDriver.implement({
   name: 'surreal',
@@ -59,10 +63,27 @@ export const SurrealDriver = DbDriver.implement({
 
       const db = new core.Surreal({ engines })
       yield* until(db.connect(config.connectionUri))
-      yield* until(db.use({ namespace: options.namespace, database: options.database }))
+      // root/ns credentials FIRST — the DEFINEs below need them; a future record/scope-auth
+      // payload carries its own ns/db, so signing in before `use` stays correct either way.
       if (options.auth) {
         yield* until(db.signin(options.auth))
       }
+      // SurrealDB 3.x errors on `use` of a missing namespace/database (2.x created them lazily —
+      // and the embedded engines still do, which is why only remote servers ever hit this).
+      // Best-effort creation: a db-scoped login carries no DEFINE permission, but then the pair
+      // normally already exists and `IF NOT EXISTS` makes these no-ops — so failures are swallowed
+      // (`attempt`) and a genuinely missing namespace still surfaces as the `use` error below.
+      // `IF NOT EXISTS` is valid on 2.x servers too, so no version branching is needed.
+      const namespace = escapeIdent(options.namespace)
+      yield* attempt(until(db.query(`DEFINE NAMESPACE IF NOT EXISTS ${namespace}`)))
+      yield* attempt(
+        until(
+          db.query(
+            `USE NS ${namespace}; DEFINE DATABASE IF NOT EXISTS ${escapeIdent(options.database)}`,
+          ),
+        ),
+      )
+      yield* until(db.use({ namespace: options.namespace, database: options.database }))
       sharedDb = db
     }
     const db = sharedDb

@@ -6,6 +6,7 @@ import type { Action } from './action'
 import type { Channel } from './channel'
 import type { PolicyDef } from './policy'
 import type { Service } from './service'
+import type { SocketService } from './socket'
 
 export namespace Impl {
   /** What an author may state about an action, minus the parts `defineAction` derives. */
@@ -51,6 +52,13 @@ export namespace Impl {
 
     setup?: (...args: TArgs) => Operation<TContext>
   }) => Service<TContext, TArgs, TActions>
+
+  /** `defineService`'s sibling for a live connection — fixed actions (`connect`), pinned install
+   * args, handlers instead of an actions record. See {@link SocketService}. */
+  export type DefineSocket = (
+    config: SocketService.Config,
+    handlers: SocketService.Handlers,
+  ) => SocketService
 
   export interface PolicyApplyArgs<TOptions, TContext> {
     /** the resolved dispatch context (request, service/action, key, isStreaming, settings) */

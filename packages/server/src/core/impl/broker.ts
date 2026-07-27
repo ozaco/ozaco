@@ -1,5 +1,5 @@
 import { Codec } from 'std:codec'
-import { mapError, operation, useContext } from 'std:effect'
+import { mapError, operation, useContext, useScope } from 'std:effect'
 import { createEvent } from 'std:event'
 import { install } from 'std:plugin'
 import { fail } from 'std:result'
@@ -165,6 +165,7 @@ const DefaultBrokerImpl = Broker.implement({
 
     const services: BrokerDef.Context['services'] = new Map(Object.entries(options?.services ?? {}))
     const bus: BrokerDef.Context['bus'] = createEvent()
+    const scope = yield* useScope()
 
     if ((yield* Tracer.context.get()) === undefined) {
       yield* install(DefaultTracer)
@@ -181,6 +182,8 @@ const DefaultBrokerImpl = Broker.implement({
 
       shortenCauses,
       trace,
+
+      scope,
 
       services,
       bus,

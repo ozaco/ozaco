@@ -4,8 +4,10 @@ import { attempt, operation, useContext } from 'std:effect'
 import { IO } from 'std:io'
 import type { Result } from 'std:result'
 import { asFailure, auto, fail, succeed } from 'std:result'
+import type { AnyType } from 'std:shared'
 
 import { dispatchAction } from './dispatch'
+import { sseHeaders, sseStream } from './sse'
 import { resolveRouteAction } from './util'
 
 /**
@@ -72,7 +74,14 @@ export const dispatchRequest = operation(function* (
     // immediately, then drain the body (paced by the consumer via backpressure).
     const sink: ResponseSink = {
       *respond(stream) {
-        const { readable, pump } = yield* IO.actions.toReadable(stream)
+        // `sse: true` is a property of the ROUTE, not of the action — an action that merely
+        // returns a stream of values becomes a live feed at this edge, and the node that produced
+        // it (possibly another pod) never had to know.
+        const sse = (entry.setting as AnyType)?.sse === true
+        if (sse) {
+          sseHeaders(res)
+        }
+        const { readable, pump } = yield* IO.actions.toReadable(sse ? sseStream(stream) : stream)
         const response = (yield* Gateway.actions.fromInternal(
           req,
           res,

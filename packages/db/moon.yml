@@ -26,4 +26,11 @@ tasks:
       - std:build
     inputs:
       - src/**/*
+      - tests/**/*
       - tsdown.config.ts
+  test:
+    command: bun test --pass-with-no-tests
+    deps:
+      - db:build
+    inputs:
+      - tests/**/*

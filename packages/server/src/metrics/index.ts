@@ -9,4 +9,6 @@ export * from './types'
 
 export * from './definition'
 
+export * from './service'
+
 export { createDuckdbStore } from './drivers/duckdb'

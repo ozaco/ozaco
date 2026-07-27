@@ -1,4 +1,4 @@
-import type { ActionRequest, ActionResponse } from 'server:core'
+import type { ActionRequest, ActionResponse, GatewayDef } from 'server:core'
 import { Gateway } from 'server:core'
 import { attempt, operation } from 'std:effect'
 import { isFailure, isSuccess } from 'std:result'
@@ -18,6 +18,32 @@ export const wsSettingsAction = operation(function* (options: AnyType) {
     transformer: Gateway,
   }
 })
+
+/**
+ * Which discipline a WS route runs under.
+ *
+ * The default matters more than the override — with nothing set anywhere every socket stays on the
+ * per-frame RPC path, so a monolith behaves exactly as it always has and a service's API never has
+ * to know whether it is being proxied.
+ *
+ * Two things the `WS_MODE` env override deliberately cannot do, because neither has a safe meaning:
+ * it cannot claim a raw `onMessage` route (that endpoint owns its frames and exists only in this
+ * process), and it cannot DOWNGRADE a route that asked for `session` — such a route reads its input
+ * stream and answers with a stream, so forcing it onto the per-frame path would make it silently
+ * return a closed empty stream. The env only speaks for routes that declared no mode.
+ */
+export const resolveWsMode = (
+  ctx: GatewayDef.Context,
+  setting: GatewayDef.WsSetting | undefined,
+): GatewayDef.WsMode => {
+  if (setting?.onMessage) {
+    return 'message'
+  }
+  if (setting?.mode) {
+    return setting.mode
+  }
+  return ctx.wsMode ?? 'message'
+}
 
 export const parseWsPayload = operation(function* (payload: unknown) {
   if (payload === null || payload === undefined) {
