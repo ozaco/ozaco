@@ -38,6 +38,7 @@ export const setup = function* (options: GatewayDef.Options = {}) {
     router,
     compiled,
     handlers: new Map(),
+    claims: createRouter(),
     inflight: new Set(),
 
     sockets: new Map(),

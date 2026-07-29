@@ -1,5 +1,5 @@
-import { operation, until } from 'std:effect'
-import { fail } from 'std:result'
+import { attempt, operation, until } from 'std:effect'
+import { fail, isSuccess } from 'std:result'
 
 import type { JetStreamManager, StreamConfig } from 'nats'
 import { AckPolicy, DiscardPolicy, RetentionPolicy, StorageType } from 'nats'
@@ -116,24 +116,49 @@ export const ensureRpcConsumer = operation(function* (
   durable: string,
   filter: string,
 ) {
-  yield* until(
-    jsm.consumers
-      .add(streamNames(prefix).rpc, {
-        durable_name: durable,
-        filter_subject: filter,
-        ack_policy: AckPolicy.Explicit,
-        max_deliver: RPC_MAX_DELIVER,
-        ack_wait: RPC_MAX_AGE_NS,
-      })
-      .catch((error: unknown) => {
-        const message = String((error as { message?: string })?.message ?? error)
-        if (message.includes('already in use') || message.includes('already exists')) {
-          return undefined
-        }
-        throw error
-      }),
-    `nats:consumer ${durable}`,
+  const created = yield* attempt(
+    until(
+      jsm.consumers
+        .add(streamNames(prefix).rpc, {
+          durable_name: durable,
+          filter_subject: filter,
+          ack_policy: AckPolicy.Explicit,
+          max_deliver: RPC_MAX_DELIVER,
+          ack_wait: RPC_MAX_AGE_NS,
+        })
+        .catch((error: unknown) => {
+          const message = String((error as { message?: string })?.message ?? error)
+          if (message.includes('already in use') || message.includes('already exists')) {
+            return undefined
+          }
+          throw error
+        }),
+      `nats:consumer ${durable}`,
+    ),
   )
+  if (isSuccess(created)) {
+    return
+  }
+  /**
+   * A work-queue stream refuses a second consumer whose filter overlaps an existing one's. That is
+   * exactly what a surged rolling deploy produces when the durable scheme changed between releases:
+   * the old replica's consumer still covers the subject under its old name, this node's `add` is
+   * rejected, and — before this mapping — the failure died inside the broker watcher while the pod
+   * sat there looking booted, its calls aging out in the queue. Name the situation instead.
+   */
+  const message = String(
+    (created.error as { message?: string } | undefined)?.message ?? created.error,
+  )
+  if (
+    message.includes('not unique on workqueue') ||
+    message.includes('multiple non-filtered consumers')
+  ) {
+    return yield* fail(
+      NatsErrors.ConsumerConflict,
+      `work-queue consumer conflict on "${filter}": the RPC stream already has a consumer covering this subject that is not this release's durable "${durable}" — typically a replica from a previous release still bound under an old durable name (surged rolling deploy) or two apps sharing the prefix "${prefix}". Until it is gone this node cannot take the address's calls: deploy with maxSurge:0 or delete the stale consumer.`,
+    )
+  }
+  return yield* created
 })
 
 /**

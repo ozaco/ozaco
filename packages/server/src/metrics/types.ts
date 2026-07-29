@@ -138,8 +138,10 @@ export namespace MetricsDef {
   /**
    * A pluggable storage backend — EFFECT-NATIVE: every method is an `operation`/{@link Future} (a driver
    * wraps its native async API with `until` internally, so errors surface as `Result` failures and the
-   * work stays cancellation-aware, like the `@ozaco/db` drivers). DuckDB is the default ("main") driver,
-   * and its own file EXPORT/IMPORT is part of the contract.
+   * work stays cancellation-aware, like the `@ozaco/db` drivers). DuckDB is the default ("main")
+   * driver. File `export`/`import` is OPTIONAL — it exists because DuckDB's `COPY` makes it nearly
+   * free; a store without a natural bulk-file story simply omits the pair instead of stubbing
+   * "unsupported" failures, and the action layer answers for it.
    */
   export interface Store {
     init(): Future<void>
@@ -152,10 +154,10 @@ export namespace MetricsDef {
     insertRow(spec: RowInsert): Future<void>
     /** Run a raw read query (`$1..$n` params) — for aggregations (`count`, `avg`, `time_bucket`, …). */
     query(sql: string, params?: readonly unknown[]): Future<Row[]>
-    /** Dump a table to a file. */
-    export(spec: TransferSpec): Future<void>
-    /** Load a table from a file (appends). */
-    import(spec: TransferSpec): Future<void>
+    /** Dump a table to a file. Optional — omit it and `Metrics.actions.export` fails as unsupported. */
+    export?(spec: TransferSpec): Future<void>
+    /** Load a table from a file (appends). Optional, like {@link Store.export}. */
+    import?(spec: TransferSpec): Future<void>
     /** Delete rows older than a cutoff; returns the number of rows removed. */
     prune(spec: PruneSpec): Future<number>
     close(): Future<void>

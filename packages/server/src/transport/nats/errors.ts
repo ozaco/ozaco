@@ -6,6 +6,7 @@ export const NatsErrors = createTags(
   'no-jetstream',
   'timeout',
   'request-error',
+  'consumer-conflict',
 
   'connection-closed',
   'connection-draining',

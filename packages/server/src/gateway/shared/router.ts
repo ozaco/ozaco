@@ -3,10 +3,39 @@ import { CoreErrors, Gateway, isAction, isService } from 'server:core'
 import { all, ensure, operation, useContext } from 'std:effect'
 import { fail } from 'std:result'
 
-import { addRoute, findAllRoutes, removeRoute } from 'rou3'
+import { addRoute, createRouter, findAllRoutes, removeRoute } from 'rou3'
 import { compileRouter } from 'rou3/compiler'
 
 import { isRoutableSetting } from './util'
+
+/** The pseudo-method claims live under in the claims router — never a real HTTP method. */
+const CLAIM = 'CLAIM'
+
+const depthOf = (prefix: string): number => prefix.split('/').filter(Boolean).length
+
+/**
+ * Rebuild the subtree-claim table from the handlers map. A mount claims its whole subtree: a
+ * request underneath `/kb/files` may only be answered by routes mounted at `/kb/files` or deeper —
+ * see the guard in {@link findAction}. Kept as a second rou3 router so a param-carrying prefix
+ * (`/apps/:appId/roles`) claims correctly, and rebuilt wholesale wherever the route table changes:
+ * a refcount over prefixes two mounts can share is exactly the bookkeeping that drifts.
+ */
+const rebuildClaims = (ctx: GatewayDef.Context): void => {
+  const claims = createRouter()
+  const prefixes = new Set<string>()
+  for (const route of ctx.handlers.values()) {
+    prefixes.add(route.prefix)
+  }
+  for (const prefix of prefixes) {
+    // a root mount ('' / '/') claims nothing — there is no outer route to shadow
+    if (depthOf(prefix) === 0) {
+      continue
+    }
+    addRoute(claims, CLAIM, prefix, prefix)
+    addRoute(claims, CLAIM, `${prefix}/**`, prefix)
+  }
+  ctx.claims = claims
+}
 
 export const addAction = operation(function* (method: string, pattern: string, sym: symbol) {
   const ctx = yield* useContext(Gateway.context)
@@ -41,6 +70,25 @@ export const findAction = operation(function* (method: string, path: string) {
 
   if (!foundRoute) {
     return yield* fail(CoreErrors.NotFound, `${method}:${path}`)
+  }
+
+  /**
+   * A mount owns its subtree, for EVERY method. Static-over-param already sends `GET /kb/files` to
+   * the resource mounted there rather than the outer `GET /kb/:id`; but a method the inner mount
+   * did NOT define used to fall through — `PATCH /kb/files` became `kb.update(id: 'files')`, a
+   * data-dependent surprise no caller intends. So when a strictly deeper mounted prefix covers the
+   * path than the matched route's own, the answer is NotFound: the inner mount shadows the outer
+   * one symmetrically instead of leaking through method by method.
+   */
+  const route = ctx.handlers.get(foundRoute.data as symbol)
+  if (route !== undefined) {
+    const normal = path.length > 1 ? path.replace(/\/+$/u, '') : path
+    const owned = depthOf(route.prefix)
+    for (const claim of findAllRoutes(ctx.claims, CLAIM, normal)) {
+      if (depthOf(claim.data as string) > owned) {
+        return yield* fail(CoreErrors.NotFound, `${method}:${path}`)
+      }
+    }
   }
 
   return [foundRoute.data, foundRoute.params] as [symbol, unknown]
@@ -146,6 +194,7 @@ export const mountAction = operation(function* (prefix: string, target: Service 
   }
 
   ctx.compiled = compileRouter(ctx.router, { normalize: true })
+  rebuildClaims(ctx)
 
   yield* ensure(function* () {
     for (const sym of registeredSyms) {
@@ -156,6 +205,7 @@ export const mountAction = operation(function* (prefix: string, target: Service 
       }
     }
     ctx.compiled = compileRouter(ctx.router, { normalize: true })
+    rebuildClaims(ctx)
   })
 })
 
@@ -175,4 +225,5 @@ export const unmountAction = operation(function* (target: Service | Action) {
   }
 
   ctx.compiled = compileRouter(ctx.router, { normalize: true })
+  rebuildClaims(ctx)
 })

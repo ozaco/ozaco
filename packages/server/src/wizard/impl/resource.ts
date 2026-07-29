@@ -31,9 +31,14 @@ const isCrudConfig = (value: FnModule | CrudResourceConfig): value is CrudResour
  *
  * - `resource(table, { type: 'crud', ...opts })` generates the standard REST collection (spec §0.1):
  *   `GET /`, `GET /:id`, `POST /`, `PATCH /:id`, `PUT /:id`, `DELETE /:id`, `PATCH /batch`, plus live
- *   row deltas. Add custom fns via `actions`, nest under a parent via `parent`.
+ *   row deltas. Add custom fns via `actions`, nest under a parent via `parent`, and decouple the
+ *   address from the storage name via `namespace` (table `appRoles` at `/app-roles`).
  * - `resource(nameOrTable, module, options?)` bundles hand-written `query`/`mutation`/`action`/`stream`
  *   fns.
+ *
+ * Nesting note: a mount claims its whole subtree, for every method. A child at `/kb/files` makes
+ * `files` a reserved word in the parent's `:id` space symmetrically — `PATCH /kb/files` answers 404
+ * rather than becoming `kb.update(id: 'files')` (the gateway router enforces this).
  */
 export function resource<T extends TableDef, TActions extends FnModule = Record<never, never>>(
   target: T,
@@ -55,8 +60,24 @@ export function resource(
       "resource({ type: 'crud' }) requires a table definition, not a namespace string",
     )
   }
+  if (
+    crud &&
+    moduleOrConfig.namespace !== undefined &&
+    !/^[A-Za-z0-9][\w-]*$/u.test(moduleOrConfig.namespace)
+  ) {
+    throw new Error(
+      `resource namespace "${moduleOrConfig.namespace}" must be one plain path segment ([A-Za-z0-9_-]) — nesting is what \`parent\` is for`,
+    )
+  }
 
-  const namespace = typeof targetOrName === 'string' ? targetOrName : targetOrName.name
+  // The resource's IDENTITY: service name, role key and route segment together. The table's name is
+  // only the DEFAULT — `namespace` frees the storage name from the address (`appRoles` at
+  // `/app-roles`); the CRUD module keeps reading/writing the TABLE regardless.
+  const namespace = crud
+    ? (moduleOrConfig.namespace ?? (targetOrName as TableDef).name)
+    : typeof targetOrName === 'string'
+      ? targetOrName
+      : targetOrName.name
   const module: FnModule = crud
     ? (buildCrudModule(targetOrName as TableDef, moduleOrConfig) as unknown as FnModule)
     : moduleOrConfig

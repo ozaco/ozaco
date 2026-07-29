@@ -215,6 +215,9 @@ export namespace GatewayDef {
     router: AnyType
     compiled: (method: string, path: string) => AnyType
     handlers: Map<symbol, RegisteredRoute>
+    /** The subtree-claim table (a second rou3 router): each mounted prefix claims its whole path
+     * subtree, for every method — see the guard in the router's `find`. Rebuilt with the routes. */
+    claims: AnyType
 
     /** Live WS connections by id, and room name → member socket ids (socket.io-style groups). Both are
      * populated by the WS lifecycle (onOpen/onClose) and read by the emit/broadcast/room actions. */

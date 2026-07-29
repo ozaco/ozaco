@@ -1,9 +1,9 @@
 import type { BrokerDef, Service } from 'server:core'
 import { Broker } from 'server:core'
-import { forEachSubscriptionEvent, spawn, until, useContext } from 'std:effect'
+import { attempt, forEachSubscriptionEvent, spawn, until, useContext } from 'std:effect'
 import { useBufferedEvent } from 'std:event'
 import { Logger } from 'std:logger'
-import { asFailure } from 'std:result'
+import { asFailure, isSuccess } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import { streamNames } from '../const'
@@ -39,15 +39,33 @@ const subscribeService = function* (service: Service) {
      * One DURABLE per address, shared by every replica: the work-queue hands each call to exactly
      * one of them, which is what the old per-connection queue group approximated — except this one
      * also answers `hosts()` truthfully, because the consumer's existence is inspectable.
+     *
+     * Attempted PER ADDRESS, and a failure is REPORTED, not thrown: this generator runs inside the
+     * spawned registration watcher, where an escaping failure kills the watcher itself — the pod
+     * then looks booted while none of its later services ever subscribe and every call parked on
+     * the work queue silently ages out. One bad address (a consumer conflict from a surged rolling
+     * deploy, a config drift) must cost that address, loudly, and nothing else.
      */
     const durable = rpcDurable(nats.prefix, service.name, key)
-    yield* ensureRpcConsumer(nats.jsm, nats.prefix, durable, subject)
+    const ready = yield* attempt(function* () {
+      yield* ensureRpcConsumer(nats.jsm, nats.prefix, durable, subject)
+      const consumer = yield* until(
+        nats.js.consumers.get(streamNames(nats.prefix).rpc, durable),
+        `nats:rpc-consumer ${durable}`,
+      )
+      return yield* until(consumer.consume(), `nats:rpc-consume ${durable}`)
+    })
 
-    const consumer = yield* until(
-      nats.js.consumers.get(streamNames(nats.prefix).rpc, durable),
-      `nats:rpc-consumer ${durable}`,
-    )
-    const messages = yield* until(consumer.consume(), `nats:rpc-consume ${durable}`)
+    if (!isSuccess(ready)) {
+      if ((yield* Logger.context.get()) !== undefined) {
+        yield* Logger.actions.error(
+          `nats: NOT serving "${service.name}.${key}": ${ready.message || String(ready.error)}`,
+        )
+      }
+      continue
+    }
+
+    const messages = ready.value
 
     nats.consumers.set(subject, messages)
 

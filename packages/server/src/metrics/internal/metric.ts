@@ -5,6 +5,7 @@ import { compileFilter } from 'db:realtime'
 import { Broker, DataType } from 'server:core'
 import type { Operation } from 'std:effect'
 import { attempt, operation, sleep } from 'std:effect'
+import { Logger } from 'std:logger'
 import { fail, isSuccess } from 'std:result'
 
 import { JsonCodec } from 'std:codec/impl/json'
@@ -35,6 +36,8 @@ let events: MetricsDef.EventRecord[] = []
 // Columns of user-defined tables (from `define`), so a MongoDB-style `find` can compile filters
 // against them too — not just the built-in tables.
 let definedColumns = new Map<string, readonly Column[]>()
+// Whether the last flush failed — state-change flag so a broken store logs once, not per interval.
+let flushBroken = false
 
 export const setStore = (next: MetricsDef.Store): void => {
   store = next
@@ -44,6 +47,7 @@ export const setStore = (next: MetricsDef.Store): void => {
   logs = []
   events = []
   definedColumns = new Map()
+  flushBroken = false
 }
 
 export const setForward = (): void => {
@@ -54,6 +58,7 @@ export const setForward = (): void => {
   logs = []
   events = []
   definedColumns = new Map()
+  flushBroken = false
 }
 
 export const pushCall = (record: MetricsDef.CallRecord): void => {
@@ -167,16 +172,43 @@ const flushBuffers = operation(function* () {
   pending = isSuccess(shipped) ? null : batch
 })
 
+// Telemetry must never take the process down: a failed flush is logged and its batch dropped (the
+// records already left the buffers, so a dead store cannot grow memory either). Logged on state
+// CHANGE only — a permanently broken store warns once, not once per interval — and through the
+// Logger when one is installed; the metrics log transport buffers that line like any other, so a
+// broken store drops it with the next batch instead of amplifying itself.
+const flushSafely = operation(function* () {
+  const flushed = yield* attempt(flushBuffers())
+  if (isSuccess(flushed)) {
+    if (flushBroken) {
+      flushBroken = false
+      if ((yield* Logger.context.get()) !== undefined) {
+        yield* Logger.actions.info('metrics: flush recovered')
+      }
+    }
+    return
+  }
+  if (!flushBroken) {
+    flushBroken = true
+    if ((yield* Logger.context.get()) !== undefined) {
+      yield* Logger.actions.warn(
+        'metrics: flush failed — dropping batches until the store recovers',
+        flushed.message || String(flushed.error),
+      )
+    }
+  }
+})
+
 export const flushLoop = operation(function* (intervalMs: number) {
   for (;;) {
     yield* sleep(intervalMs)
-    yield* flushBuffers()
+    yield* flushSafely()
   }
 })
 
 export const closeStore = operation(function* () {
   if (forward) {
-    yield* flushBuffers()
+    yield* flushSafely()
     forward = false
     pending = null
     return
@@ -184,7 +216,8 @@ export const closeStore = operation(function* () {
   if (!store) {
     return
   }
-  yield* flushBuffers()
+  // teardown must reach `close()` even when the final flush fails
+  yield* flushSafely()
   const current = store
   store = null
   yield* current.close()
@@ -304,14 +337,22 @@ export const exportAction = operation(function* (spec: MetricsDef.TransferSpec) 
     // the file lands on the SINK's filesystem — that is where the table lives
     return yield* callSink<void>('export', spec)
   }
-  yield* (yield* requireStore()).export(spec)
+  const current = yield* requireStore()
+  if (!current.export) {
+    return yield* fail('unsupported', 'this metrics store does not support file export')
+  }
+  yield* current.export(spec)
 })
 
 export const importAction = operation(function* (spec: MetricsDef.TransferSpec) {
   if (forward) {
     return yield* callSink<void>('import', spec)
   }
-  yield* (yield* requireStore()).import(spec)
+  const current = yield* requireStore()
+  if (!current.import) {
+    return yield* fail('unsupported', 'this metrics store does not support file import')
+  }
+  yield* current.import(spec)
 })
 
 export const pruneAction = operation(function* (spec: MetricsDef.PruneSpec) {

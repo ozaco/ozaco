@@ -43,6 +43,16 @@ let sharedDb: AnyType = null
  * When targeting a remote server, its major version must match the embedded engine's
  * (`@surrealdb/node` 3.x ↔ server 3.x) — mixed majors fail in subtle ways (a v2 server can't even
  * answer a v3-shaped `count()`).
+ *
+ * Two embedded-engine caveats, neither of which affects this driver's own paths:
+ * - The SDK's collection helpers (`db.insert(table, rows)`, …) are broken against embedded v3
+ *   engines — they die with `Cannot execute INSERT statement using value: '<table>'`. This driver
+ *   only ever issues raw `db.query(...)` (inserts arrive as compiled SurrealQL), so it never hits
+ *   this; anyone reaching for the shared client directly must stick to `query` too.
+ * - `@surrealdb/node` can PANIC while the process EXITS (SIGTRAP/SIGSEGV → exit code 133/139), even
+ *   after a clean `close()`. It happens after all user code has run, so nothing functional is lost —
+ *   but it pollutes teardown output and, worse, MASKS the real exit code, so a script probing `$?`
+ *   after a run that touched the embedded engine cannot trust a 133/139 to mean an actual crash.
  */
 export const SurrealDriver = DbDriver.implement({
   name: 'surreal',

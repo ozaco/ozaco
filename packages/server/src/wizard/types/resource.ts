@@ -83,6 +83,13 @@ export interface ResourceOptions {
  * `actions`. Replaces the old `defineCrud(...)` helper. */
 export interface CrudResourceConfig extends CrudOptions {
   readonly type: 'crud'
+  /** Override the resource's IDENTITY — the service name, the daemon role key (`SERVICE=<ns>`) and
+   * the route segment (`/<ns>`) move together, so the generated client and a split deployment can
+   * never disagree about the address. The table's name stays purely the storage name. Lets a
+   * SQL-safe table (`appRoles`) live at a hyphenated path (`/app-roles`), and composes with
+   * `parent` for nesting (`namespace: 'files'`, `parent: '/kb'` → `/kb/files`). One plain path
+   * segment (`[A-Za-z0-9_-]`). Defaults to the table's name. */
+  readonly namespace?: string | undefined
   /** Transport for the collection's realtime channel (`/<ns>/_realtime`). Defaults to `'websocket'`. */
   readonly realtime?: RealtimeTransport | undefined
   /** Mount the collection under a parent path carrying path params, e.g. `'/apps/:appId'` (nested). */

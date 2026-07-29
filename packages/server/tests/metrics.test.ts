@@ -3,11 +3,11 @@ import { describe, expect, it } from 'bun:test'
 import { Broker, DefaultBroker, defineAction, defineService } from '@ozaco/server/core'
 import type { MetricsDef } from '@ozaco/server/metrics'
 import { Metrics, MetricsCollector, MetricsSink } from '@ozaco/server/metrics'
-import { run } from '@ozaco/std/effect'
+import { attempt, operation, run, sleep } from '@ozaco/std/effect'
 import { BunIO } from '@ozaco/std/io/impl/bun'
 import { DefaultLogger, LogLevel } from '@ozaco/std/logger'
 import { install } from '@ozaco/std/plugin'
-import { isSuccess } from '@ozaco/std/result'
+import { fail, isSuccess } from '@ozaco/std/result'
 
 import { call } from './helpers'
 
@@ -116,5 +116,59 @@ describe('metrics sink', () => {
     expect(shipped.filter(row => row.service === 'metrics-dummy-forward').length).toBe(2)
     // neither the ingest shipping nor the delegated query may instrument itself
     expect(shipped.some(row => row.service === 'metrics-sink')).toBe(false)
+  })
+
+  it('a failing store insert drops the batch — the flush loop survives to flush the next one', async () => {
+    let broken = true
+    const inserted: MetricsDef.StoredCall[] = []
+    // no `export`/`import` on purpose: the pair is optional for pluggable stores
+    const store: MetricsDef.Store = {
+      init: operation(function* () {}),
+      insertCalls: operation(function* (rows: readonly MetricsDef.StoredCall[]) {
+        if (broken) {
+          return yield* fail('unexpected', 'store gone')
+        }
+        inserted.push(...rows)
+      }),
+      insertLogs: operation(function* () {}),
+      insertEvents: operation(function* () {}),
+      define: operation(function* () {}),
+      insertRow: operation(function* () {}),
+      query: operation(function* () {
+        return [] as MetricsDef.Row[]
+      }),
+      prune: operation(function* () {
+        return 0
+      }),
+      close: operation(function* () {}),
+    }
+    const dummy = buildDummy('metrics-dummy-broken-store')
+
+    const result = await run(function* () {
+      yield* install(BunIO)
+      yield* install(DefaultLogger, { level: LogLevel.silent })
+      yield* install(DefaultBroker)
+      yield* install(MetricsCollector, { store, flushIntervalMs: 10, logs: false })
+      yield* dummy.actions.install()
+      yield* Broker.actions.register(dummy)
+      yield* Broker.actions.start()
+
+      yield* call(dummy, 'ping')
+      // several intervals with the store down: the batch is dropped, the loop must not die with it
+      yield* sleep(50)
+      broken = false
+      yield* call(dummy, 'ping')
+      yield* sleep(50)
+
+      // a store without `export` answers as unsupported instead of exploding on a missing method
+      return yield* attempt(Metrics.actions.export({ table: 'calls', path: '/dev/null' }))
+    })
+
+    expect(isSuccess(result)).toBe(true)
+    if (isSuccess(result)) {
+      expect(isSuccess(result.value)).toBe(false)
+    }
+    // the post-recovery call flushed — proof the loop outlived the failure; the failed batch stayed dropped
+    expect(inserted.length).toBe(1)
   })
 })
