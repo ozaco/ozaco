@@ -101,7 +101,7 @@ export const NatsTransport = Transport.implement({
     // Refuse a server without JetStream, THEN create the three streams — both before anything else
     // touches the wire, so a node built against a changed stream config fails at install, loudly.
     yield* requireJetStream(jsm)
-    yield* provision(jsm, prefix)
+    yield* provision(jsm, prefix, options.replicas)
 
     const consumers: Nats.Context['consumers'] = new Map()
 

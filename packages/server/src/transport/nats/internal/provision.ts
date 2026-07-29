@@ -1,7 +1,7 @@
 import { operation, until } from 'std:effect'
 import { fail } from 'std:result'
 
-import type { JetStreamManager } from 'nats'
+import type { JetStreamManager, StreamConfig } from 'nats'
 import { AckPolicy, DiscardPolicy, RetentionPolicy, StorageType } from 'nats'
 
 import {
@@ -23,62 +23,77 @@ import { eventPrefix, lanePrefix, rpcPrefix } from './subjects'
  * succeed, while a node built against a changed wire refuses to start rather than half-speaking the
  * new one. That is also why the stream name carries the subject prefix: two apps on one server get
  * two sets of streams instead of quietly sharing subjects.
+ *
+ * `replicas` is the one deliberate exception: an existing stream whose replica count differs from
+ * the requested one is UPDATED in place. Scaling R1 streams to R3 after the server grew into a
+ * cluster is an operational act, not a wire change — refusing to start would leave no path from
+ * one to the other.
  */
-export const provision = operation(function* (jsm: JetStreamManager, prefix: string) {
+export const provision = operation(function* (
+  jsm: JetStreamManager,
+  prefix: string,
+  replicas?: number,
+) {
   const names = streamNames(prefix)
+  const replication = replicas === undefined ? {} : { num_replicas: replicas }
 
-  const attempts: [string, () => Promise<unknown>][] = [
+  const attempts: [string, Partial<StreamConfig>][] = [
     [
       names.rpc,
-      () =>
-        jsm.streams.add({
-          name: names.rpc,
-          subjects: [`${rpcPrefix(prefix)}>`],
-          // work-queue: a message leaves the stream once a consumer acks it, so exactly one owner
-          // takes each call even when a whole replica set is subscribed
-          retention: RetentionPolicy.Workqueue,
-          storage: StorageType.Memory,
-          discard: DiscardPolicy.Old,
-          max_age: RPC_MAX_AGE_NS,
-        }),
+      {
+        subjects: [`${rpcPrefix(prefix)}>`],
+        // work-queue: a message leaves the stream once a consumer acks it, so exactly one owner
+        // takes each call even when a whole replica set is subscribed
+        retention: RetentionPolicy.Workqueue,
+        storage: StorageType.Memory,
+        discard: DiscardPolicy.Old,
+        max_age: RPC_MAX_AGE_NS,
+        ...replication,
+      },
     ],
     [
       names.lane,
-      () =>
-        jsm.streams.add({
-          name: names.lane,
-          subjects: [`${lanePrefix(prefix)}>`],
-          // limits, NOT work-queue: a lane has exactly one reader, and it must be able to start
-          // reading after the writer began. That replay is the whole reason this is JetStream.
-          retention: RetentionPolicy.Limits,
-          storage: StorageType.Memory,
-          discard: DiscardPolicy.Old,
-          max_age: LANE_MAX_AGE_NS,
-        }),
+      {
+        subjects: [`${lanePrefix(prefix)}>`],
+        // limits, NOT work-queue: a lane has exactly one reader, and it must be able to start
+        // reading after the writer began. That replay is the whole reason this is JetStream.
+        retention: RetentionPolicy.Limits,
+        storage: StorageType.Memory,
+        discard: DiscardPolicy.Old,
+        max_age: LANE_MAX_AGE_NS,
+        ...replication,
+      },
     ],
     [
       names.event,
-      () =>
-        jsm.streams.add({
-          name: names.event,
-          subjects: [`${eventPrefix(prefix)}>`],
-          retention: RetentionPolicy.Limits,
-          storage: StorageType.File,
-          discard: DiscardPolicy.Old,
-          max_age: EVENT_MAX_AGE_NS,
-        }),
+      {
+        subjects: [`${eventPrefix(prefix)}>`],
+        retention: RetentionPolicy.Limits,
+        storage: StorageType.File,
+        discard: DiscardPolicy.Old,
+        max_age: EVENT_MAX_AGE_NS,
+        ...replication,
+      },
     ],
   ]
 
-  for (const [name, add] of attempts) {
+  for (const [name, config] of attempts) {
     // An existing stream answers `stream name already in use`; anything else is a real fault.
     yield* until(
-      add().catch((error: unknown) => {
+      jsm.streams.add({ name, ...config }).catch(async (error: unknown) => {
         const message = String((error as { message?: string })?.message ?? error)
-        if (message.includes('already in use') || message.includes('already exists')) {
+        if (!message.includes('already in use') && !message.includes('already exists')) {
+          throw error
+        }
+        if (replicas === undefined) {
           return undefined
         }
-        throw error
+        // the stream exists — when its live replica count is not the requested one, scale it
+        const info = await jsm.streams.info(name)
+        if (info.config.num_replicas === replicas) {
+          return undefined
+        }
+        return jsm.streams.update(name, { ...info.config, num_replicas: replicas })
       }),
       `nats:provision ${name}`,
     )

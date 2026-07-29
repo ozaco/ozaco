@@ -13,6 +13,11 @@ export namespace Nats {
     /** How long a dispatch waits for its reply. Default 30000ms. Set `0` (or negative) to DISABLE the
      * transport timeout and let the action `TimeoutPolicy` be the sole authority. */
     requestTimeoutMs?: number
+    /** How many cluster nodes keep a copy of each stream (JetStream `num_replicas`, 1–5). Applied
+     * when the streams are created AND to an existing stream whose count differs — a deployment
+     * grown out of a single node scales to R3 by restarting one member with `replicas: 3`. Omit to
+     * leave streams as they are (new ones default to R1). */
+    replicas?: number
   }
 
   export interface Context extends TransportDef.Context {
