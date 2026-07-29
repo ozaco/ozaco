@@ -57,6 +57,7 @@ export const toRequestEnvelope = (req: ActionRequest): TransportDef.RequestEnvel
   method: req.method,
   url: req.url.toString(),
   meta: req.meta,
+  ...(req.params ? { params: req.params } : {}),
 })
 
 /** Rebuild an `ActionRequest` on the far side of a transport; `url` is re-parsed from its string
@@ -66,4 +67,5 @@ export const fromRequestEnvelope = (envelope: TransportDef.RequestEnvelope): Act
   method: envelope.method,
   url: new URL(envelope.url),
   meta: envelope.meta,
+  ...(envelope.params ? { params: envelope.params } : {}),
 })

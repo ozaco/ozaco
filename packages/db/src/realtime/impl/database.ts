@@ -12,6 +12,7 @@ import { JsonCodec } from 'std:codec/impl/json'
 import { CREATED, DEFAULT_ORDER, ID, VERSION } from '../const'
 import { coerceRow, coerceRows, commaList, ident } from '../internal/coerce'
 import { decodeCursor, encodeCursor } from '../internal/cursor'
+import { partialValidator } from '../schema/partial'
 import type { SchemaDef, TableDef } from '../schema/types'
 import type { BusHolder, ChangeBus, ChangeEvent } from '../types/change'
 import type { Database, QueryHandle, Row } from '../types/database'
@@ -268,7 +269,9 @@ export const createRealtimeDatabase = (
 
   const patchRow = operation(function* (name: string, id: string, value: AnyType) {
     const def = tableOf(name)
-    const parsed = def.validator.partial().safeParse(value)
+    // `partialValidator`, NOT `validator.partial()`: zod's partial keeps `.default()` alive, so a
+    // patch omitting a defaulted column would inject that default and silently reset the column.
+    const parsed = partialValidator(def.validator).safeParse(value)
     if (!parsed.success) {
       return yield* fail('db.validation', `invalid patch of "${name}"`)
     }
@@ -277,6 +280,9 @@ export const createRealtimeDatabase = (
     const jsonColumns = jsonColumnsOf(name)
     const assignments: FragmentSqlToken[] = []
     for (const [column, columnValue] of Object.entries(data)) {
+      if (columnValue === undefined) {
+        continue
+      }
       const boundValue = yield* bindColumn(jsonColumns, column, columnValue)
       assignments.push(sql.fragment`${ident(column)} = ${boundValue}`)
     }

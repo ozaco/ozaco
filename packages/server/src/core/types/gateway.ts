@@ -33,6 +33,10 @@ export interface ActionRequest {
   url: URL
 
   meta: Record<string, string> // headers
+
+  /** Path params the matched route extracted (`/:id` → `{ id }`). The router already knew them, so
+   * they ride the envelope instead of being re-derived from `url` — absent on non-routed carriers. */
+  params?: Record<string, string>
 }
 
 /**

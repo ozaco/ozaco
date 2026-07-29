@@ -234,14 +234,18 @@ const frameFor = (target: WatchTarget): Frame =>
     ? value => ({ result: value })
     : value => ({ id: target.subId, result: value })
 
-/** Read a watch target out of an SSE request's query string (`?fn=&args=&resourceVersion=`). */
+/** Read a watch target out of an SSE request's query string (`?fn=&args=&resourceVersion=`). Path
+ * params the route matched (`/calls/:id/stream` → `{ id }`) merge OVER the `?args=` envelope: the
+ * route's own address is authoritative, and a dedicated stream route works without any `?args=`. */
 const targetFromQuery = operation(function* (name?: string) {
   const request = yield* useRequest()
   const fn = name ?? request.url.searchParams.get('fn')
   const rawArgs = request.url.searchParams.get('args')
   const resourceVersion = request.url.searchParams.get('resourceVersion') ?? undefined
   const decoded = rawArgs ? yield* attempt(JsonCodec.actions.parse(rawArgs)) : undefined
-  const args = decoded && isSuccess(decoded) ? decoded.value : {}
+  const parsed = decoded && isSuccess(decoded) ? decoded.value : {}
+  const base = parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {}
+  const args = { ...(base as Record<string, unknown>), ...request.params }
   return resolveWatchTarget({ fn, args, resourceVersion })
 })
 

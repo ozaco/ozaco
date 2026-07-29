@@ -29,6 +29,8 @@ export namespace TransportDef {
     method: string
     url: string
     meta: Record<string, string>
+    /** Path params the matched route extracted — see `ActionRequest.params`. */
+    params?: Record<string, string>
   }
 
   /** Per-call context propagated alongside a dispatch so a remote action can rebuild its environment.

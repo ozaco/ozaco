@@ -1,10 +1,13 @@
 import type { Query, QueryResultRow } from 'db:core'
 
 /** Translate a Postgres-shaped query (the core `sql` tag's output) to SurrealQL — the degrade layer.
- * Two rewrites: the engine's `$1..$n` placeholders become named vars `$p1..$pn`, and double-quoted
- * identifiers become backtick-quoted ones. The latter is safe because the `sql` tag parameterizes
- * every value (`$n`) and escapes string literals with single quotes, so any `"…"` run left in the
- * baked SQL is ALWAYS an identifier — in SurrealQL `"…"` is a string, and names are `` `…` ``. */
+ * Three rewrites: the engine's `$1..$n` placeholders become named vars `$p1..$pn`, double-quoted
+ * identifiers become backtick-quoted ones, and `IN (…)` value lists become `IN […]` arrays. The
+ * identifier rewrite is safe because the `sql` tag parameterizes every value (`$n`) and escapes
+ * string literals with single quotes, so any `"…"` run left in the baked SQL is ALWAYS an
+ * identifier — in SurrealQL `"…"` is a string, and names are `` `…` ``. The `IN` rewrite is safe
+ * because it only matches a parenthesized run of `$pn` placeholders — SurrealQL's `IN`/`NOT IN`
+ * take an array operand, not the ANSI tuple, which its parser rejects. */
 export const toSurreal = (query: Query): { text: string; bindings: Record<string, unknown> } => {
   const bindings: Record<string, unknown> = {}
   for (const [index, value] of query.values.entries()) {
@@ -13,6 +16,7 @@ export const toSurreal = (query: Query): { text: string; bindings: Record<string
   const text = query.sql
     .replaceAll(/"((?:[^"]|"")*)"/gu, (_match, name: string) => `\`${name.replaceAll('""', '"')}\``)
     .replaceAll(/\$(\d+)/gu, (_match, digits: string) => `$p${digits}`)
+    .replaceAll(/\bIN \((\$p\d+(?:, \$p\d+)*)\)/gu, 'IN [$1]')
   return { text, bindings }
 }
 

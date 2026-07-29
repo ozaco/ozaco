@@ -130,6 +130,7 @@ export const buildRequest = operation(function* (ws: AnyType, payload: unknown) 
     method: 'WS',
     url,
     meta: headers,
+    params: (data.params ?? {}) as Record<string, string>,
   }
 
   return [req, body] as [ActionRequest, unknown]

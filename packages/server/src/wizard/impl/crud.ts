@@ -1,5 +1,5 @@
 import type { TableDef } from 'db:realtime'
-import { eq, like, or, useDatabase } from 'db:realtime'
+import { eq, like, or, partialValidator, useDatabase } from 'db:realtime'
 import { CoreErrors, useRequest } from 'server:core'
 import { attempt } from 'std:effect'
 import { fail, isFailure, isSuccess } from 'std:result'
@@ -246,7 +246,9 @@ export const buildCrudModule = <T extends TableDef>(
     },
     update: {
       kind: 'mutation',
-      args: target.validator.partial().extend(idArgsShape),
+      // `partialValidator`, NOT `.partial()`: zod's partial keeps `.default()` alive, so a PATCH
+      // omitting a defaulted column would inject that default into the body and reset the column.
+      args: partialValidator(target.validator).extend(idArgsShape),
       returns: document,
       target: table,
       access,
@@ -317,7 +319,7 @@ export const buildCrudModule = <T extends TableDef>(
             z.object({
               op: z.literal('update'),
               id: z.string(),
-              patch: target.validator.partial(),
+              patch: partialValidator(target.validator),
               ifMatch: z.string().optional(),
             }),
             z.object({

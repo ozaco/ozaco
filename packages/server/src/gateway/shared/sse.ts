@@ -1,6 +1,6 @@
 // oxlint-disable import/exports-last
 import type { ActionResponse, GatewayDef } from 'server:core'
-import { defineAction, Gateway, ResponseSinkContext, useResponse } from 'server:core'
+import { defineAction, Gateway, ResponseSinkContext, useRequest, useResponse } from 'server:core'
 import type { Operation, Stream } from 'std:effect'
 import { createQueue, ensure, operation, useContext } from 'std:effect'
 import { IO } from 'std:io'
@@ -66,12 +66,13 @@ export const sseStream = (source: Stream<unknown, unknown>): Stream<Uint8Array, 
 })
 
 /** The effect-native Socket handle for an SSE connection — the SAME shape `listen` hands WS routes, so
- * a subscription pump written for one transport works on the other unchanged. */
-const makeSseSocket = (ctx: GatewayDef.Context, id: string): GatewayDef.Socket => {
+ * a subscription pump written for one transport works on the other unchanged. `data` mirrors the WS
+ * upgrade payload (`{ id, url, headers, params }`) so a handler reads path params either way. */
+const makeSseSocket = (ctx: GatewayDef.Context, id: string, data: AnyType): GatewayDef.Socket => {
   const reg = ctx.sockets.get(id)
   return {
     id,
-    data: reg?.raw,
+    data,
     rooms: reg?.rooms ?? new Set<string>(),
     send: operation(function* (message: unknown) {
       const encoded = yield* encodeWsBody(message)
@@ -110,6 +111,16 @@ export const sseAction = operation(function* (path: string, handlers: GatewayDef
     const id = yield* IO.actions.ulid()
     const queue = createQueue<Uint8Array, void>()
 
+    // the same per-connection data a WS upgrade captures, so handlers read `socket.data.params`
+    // (path params), `.headers` and `.url` identically on both transports
+    const request = yield* useRequest()
+    const connData = {
+      id,
+      url: String(request.url),
+      headers: request.meta,
+      params: request.params ?? {},
+    }
+
     const socket: GatewayDef.GatewaySocket = {
       id,
       rooms: new Set<string>(),
@@ -129,14 +140,14 @@ export const sseAction = operation(function* (path: string, handlers: GatewayDef
         yield* task.halt()
       }
       if (handlers.close) {
-        yield* handlers.close(makeSseSocket(ctx, id))
+        yield* handlers.close(makeSseSocket(ctx, id, connData))
       }
       unregisterSocket(ctx, id)
       queue.close()
     })
 
     if (handlers.open) {
-      yield* handlers.open(makeSseSocket(ctx, id))
+      yield* handlers.open(makeSseSocket(ctx, id, connData))
     }
 
     // hand the buffered queue to the gateway's streaming sink explicitly (the event-stream headers are
