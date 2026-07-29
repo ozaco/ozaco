@@ -36,7 +36,7 @@
     "registry": "https://registry.npmjs.org/"
   },
   "dependencies": {
-    "rolldown": "1.2.0"
+    "rolldown": "1.2.1"
   },
   "devDependencies": {
     "@ozaco/ai": "workspace:*",
