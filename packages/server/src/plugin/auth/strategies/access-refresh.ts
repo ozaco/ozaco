@@ -1,5 +1,5 @@
 import { CoreErrors } from 'server:core'
-import { operation, useContext } from 'std:effect'
+import { attempt, operation, useContext } from 'std:effect'
 import { definePlugin } from 'std:plugin'
 import { fail } from 'std:result'
 
@@ -28,9 +28,18 @@ import {
 } from '../internal/tokens'
 import type { AuthDef } from '../types'
 
+/** Burn every live token in a rotation family — best-effort: the replay must still be denied when
+ * the provider cannot revoke the line (no revokeRefreshTokenFamily, or the store write fails). */
+const revokeFamily = operation(function* (provider: AuthDef.Provider, familyId: string) {
+  if (provider.revokeRefreshTokenFamily) {
+    yield* attempt(provider.revokeRefreshTokenFamily(familyId))
+  }
+})
+
 const issueTokenPair = operation(function* (user: AuthDef.User, opts: AuthDef.IssueOptions = {}) {
   const strategy = yield* useContext(AccessStrategyCtxRef)
   const provider = yield* getProvider()
+  const events = yield* useContext(AuthEventsRef)
 
   const { roles, permissions } = yield* collectAuthz(provider, user)
 
@@ -41,16 +50,26 @@ const issueTokenPair = operation(function* (user: AuthDef.User, opts: AuthDef.Is
   })
   const refresh = yield* signRefreshToken(user.id, strategy.refreshTTL)
 
-  const newRecord = {
+  // the chain root travels with every descendant so one detected replay can burn the whole line
+  const familyId = opts.rotateFrom ? (opts.rotateFrom.familyId ?? opts.rotateFrom.jti) : refresh.jti
+  const newRecord: AuthDef.RefreshRecord = {
     jti: refresh.jti,
     userId: user.id,
     issuedAt: refresh.issuedAt,
     expiresAt: refresh.expiresAt,
     revokedAt: null,
+    familyId,
   }
 
   if (opts.rotateFrom !== undefined && provider.rotateRefreshToken) {
-    yield* provider.rotateRefreshToken(opts.rotateFrom, newRecord)
+    const swapped = yield* provider.rotateRefreshToken(opts.rotateFrom, newRecord)
+    if (!swapped) {
+      // the CAS lost: this token was spent concurrently while we were signing. That is a replay —
+      // burn the family and deny; the racing winner's pair stays the only live one.
+      yield* revokeFamily(provider, familyId)
+      events.emit('denied', 'reused-token', 'refresh token rotated concurrently')
+      return yield* fail(AuthErrorCode.ReusedToken, 'refresh token already spent')
+    }
     // the rotate branch deliberately does not saveRefreshToken, so the trailing save is not shared
     // oxlint-disable-next-line no-negated-condition
   } else if (opts.rotateFrom !== undefined) {
@@ -61,7 +80,7 @@ const issueTokenPair = operation(function* (user: AuthDef.User, opts: AuthDef.Is
         'rotation requires rotateRefreshToken or both revokeRefreshToken+saveRefreshToken',
       )
     }
-    yield* provider.revokeRefreshToken(opts.rotateFrom)
+    yield* provider.revokeRefreshToken(opts.rotateFrom.jti)
     yield* provider.saveRefreshToken(newRecord)
   } else {
     if (!provider.saveRefreshToken) {
@@ -150,8 +169,11 @@ export const AccessRefreshAuth = definePlugin({
       return yield* fail(AuthErrorCode.RevokedToken, 'refresh token not found')
     }
     if (record.revokedAt) {
-      events.emit('denied', 'revoked-token', 'refresh token revoked')
-      return yield* fail(AuthErrorCode.RevokedToken, 'refresh token revoked')
+      // a revoked-but-still-known token coming back is exactly the replay rotation exists to catch:
+      // the chain moved on without this caller, so whoever presents this copy is not its owner
+      yield* revokeFamily(provider, record.familyId ?? record.jti)
+      events.emit('denied', 'reused-token', 'refresh token replayed after rotation')
+      return yield* fail(AuthErrorCode.ReusedToken, 'refresh token reused')
     }
 
     const user = yield* provider.loadUser(payload.sub)
@@ -159,10 +181,10 @@ export const AccessRefreshAuth = definePlugin({
       return yield* fail(CoreErrors.NotFound, `user "${payload.sub}" not found`)
     }
 
-    // Rotation is atomic when provider implements rotateRefreshToken; otherwise
-    // falls back to non-atomic revoke + save (legacy).
+    // Rotation is a CAS on this exact record when the provider implements rotateRefreshToken;
+    // otherwise falls back to non-atomic revoke + save (legacy).
     const { session, tokens } = yield* issueTokenPair(user, {
-      rotateFrom: strategy.rotateRefresh ? payload.jti : undefined,
+      rotateFrom: strategy.rotateRefresh ? record : undefined,
     })
     events.emit('refreshed', session)
 

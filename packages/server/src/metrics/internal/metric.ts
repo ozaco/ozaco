@@ -284,6 +284,15 @@ export const queryAction = operation(function* (sqlText: string, params?: readon
   return (yield* current.query(sqlText, params ?? [])) as MetricsDef.Row[]
 })
 
+/** Which dialect a `query` must be written in — asked of the store that will actually run it. In
+ * forward mode that store is the sink's, one broker hop away, so the answer comes from there. */
+export const dialectAction = operation(function* () {
+  if (forward) {
+    return yield* callSink<MetricsDef.Dialect>('dialect')
+  }
+  return (yield* requireStore()).dialect
+})
+
 export const recordAction = operation(function* (spec: MetricsDef.RecordSpec) {
   pushEvent({ ts: Date.now(), name: spec.name, value: spec.value, meta: spec.fields })
 })

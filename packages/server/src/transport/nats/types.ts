@@ -1,5 +1,5 @@
 import type { Carried, TransportDef } from 'server:core'
-import type { Scope } from 'std:effect'
+import type { Scope, Task } from 'std:effect'
 
 import type { ConsumerMessages, JetStreamClient, JetStreamManager, NatsConnection } from 'nats'
 
@@ -30,6 +30,9 @@ export namespace Nats {
     requestTimeoutMs: number
     /** every long-lived JetStream consumer this node runs, stopped at teardown */
     consumers: Map<string, ConsumerMessages>
+    /** background claim loops for addresses blocked by a foreign durable, keyed by subject —
+     * halted when their service unregisters and at teardown */
+    reclaims: Map<string, Task<void>>
     scope: Scope
   }
 

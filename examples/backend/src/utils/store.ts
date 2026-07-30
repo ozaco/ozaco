@@ -127,11 +127,27 @@ export const memoryAuthProvider: AuthDef.Provider = {
     }
   }),
 
-  // atomic rotation: drop the old jti and persist the new record in one step so a concurrent
-  // refresh can never leave the user without a valid refresh token
-  rotateRefreshToken: operation(function* (oldJti: string, record: AuthDef.RefreshRecord) {
-    refreshTokens.delete(oldJti)
-    refreshTokens.set(record.jti, record)
+  // CAS rotation — the replay gate: the swap succeeds only while the old record is still live, and
+  // the old record stays behind revoked so a later replay of it is recognizable as reuse
+  rotateRefreshToken: operation(function* (
+    expected: AuthDef.RefreshRecord,
+    next: AuthDef.RefreshRecord,
+  ) {
+    const current = refreshTokens.get(expected.jti)
+    if (!current || current.revokedAt !== null) {
+      return false
+    }
+    refreshTokens.set(expected.jti, { ...current, revokedAt: Date.now() })
+    refreshTokens.set(next.jti, next)
+    return true
+  }),
+
+  revokeRefreshTokenFamily: operation(function* (familyId: string) {
+    for (const [jti, record] of refreshTokens) {
+      if ((record.familyId ?? record.jti) === familyId && record.revokedAt === null) {
+        refreshTokens.set(jti, { ...record, revokedAt: Date.now() })
+      }
+    }
   }),
 }
 

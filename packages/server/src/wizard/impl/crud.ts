@@ -184,7 +184,24 @@ export const buildCrudModule = <T extends TableDef>(
           }
         }
         if (body.q && search.length > 0) {
-          q = q.filter(or(...search.map(column => like(column, `%${String(body.q)}%`))))
+          // `q` matches by column TYPE: free-text columns LIKE; numeric/timestamp columns equal,
+          // and only when the needle parses as a number (LIKE on them errors on pg and coerces
+          // surprisingly on sqlite); booleans opt out — matching "true" is a facet's job.
+          const needle = String(body.q)
+          const numeric = Number(needle)
+          const clauses = search.flatMap(column => {
+            const kind = columnKind.get(column)
+            if (kind === 'int' || kind === 'float' || kind === 'timestamp') {
+              return Number.isFinite(numeric) ? [eq(column, numeric as AnyType)] : []
+            }
+            if (kind === 'boolean') {
+              return []
+            }
+            return [like(column, `%${needle}%`)]
+          })
+          if (clauses.length > 0) {
+            q = q.filter(or(...clauses))
+          }
         }
         if (body.filter !== undefined) {
           // the wire form is a JSON string → decode through the Codec (never raw JSON.parse), then

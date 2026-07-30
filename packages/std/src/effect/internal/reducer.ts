@@ -87,21 +87,47 @@ class InstructionQueue {
   }
 }
 
+// One drain may run at most this many steps before handing the rest of the queue to a macrotask.
+// A coroutine whose loop never crosses an async boundary (a retry around a synchronously failing
+// compute is the canonical case) re-enqueues itself on every step, so an unbounded drain never
+// returns to the event loop: timers, IO, even connection closes starve while one request spins.
+// The budget turns that lock into mere slowness — the offender still gets its slice, everything
+// else keeps breathing. Sized far above any legitimate synchronous burst (a whole dispatch is
+// hundreds of steps) and far below where one slice becomes noticeable stall.
+const STEP_BUDGET = 65_536
+
+// setImmediate where it exists (node/bun) — setTimeout(0) is clamped to ~1ms and would tax every
+// budget hand-off; the web build falls back to it.
+const defer: (fn: () => void) => void =
+  typeof setImmediate === 'function' ? setImmediate : fn => setTimeout(fn, 0)
+
 export class Reducer {
   reducing = false
+  /** a budget hand-off macrotask is pending; guards against stacking more than one */
+  private continuing = false
   readonly queue = new InstructionQueue()
 
   schedule = (routine: Helpers.Coroutine) => {
-    const { queue } = this
+    this.queue.enqueue(routine)
 
-    queue.enqueue(routine)
-
-    if (this.reducing) {
-      return
+    if (!this.reducing) {
+      this.drain()
     }
+  }
+
+  private continueDrain = () => {
+    this.continuing = false
+    if (!this.reducing) {
+      this.drain()
+    }
+  }
+
+  private drain = () => {
+    const { queue } = this
 
     try {
       this.reducing = true
+      let steps = 0
 
       for (let item = queue.dequeue(); item; item = queue.dequeue()) {
         try {
@@ -120,6 +146,14 @@ export class Reducer {
         } catch (error) {
           const settle = item.scope.expect(SettleContext)
           settle(just(asFailure(error)), item.settle)
+        }
+
+        if (++steps === STEP_BUDGET) {
+          if (!this.continuing) {
+            this.continuing = true
+            defer(this.continueDrain)
+          }
+          break
         }
       }
     } finally {

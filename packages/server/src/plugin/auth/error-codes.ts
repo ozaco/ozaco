@@ -6,6 +6,7 @@ export const AuthErrorCode = createTags(
   'invalid-token',
   'expired-token',
   'revoked-token',
+  'reused-token',
   'missing-token',
   'not-provided',
   'unknown-provider',

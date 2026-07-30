@@ -56,15 +56,18 @@ describe('metrics sink', () => {
         logs: [],
         events: [],
       })
-      return yield* Metrics.actions.query(
+      const rows = yield* Metrics.actions.query(
         'SELECT "service", count(*) AS n FROM calls GROUP BY "service"',
       )
+      return { rows, dialect: yield* Metrics.actions.dialect() }
     })
 
     expect(isSuccess(result)).toBe(true)
     if (isSuccess(result)) {
+      // store mode answers for the local store, with no broker hop involved
+      expect(result.value.dialect).toBe('duckdb')
       const byService = Object.fromEntries(
-        result.value.map(row => [String(row.service), Number(row.n)]),
+        result.value.rows.map(row => [String(row.service), Number(row.n)]),
       )
       expect(byService['metrics-dummy-store']).toBe(3)
       expect(byService['remote-pod']).toBe(1)
@@ -86,6 +89,10 @@ describe('metrics sink', () => {
         query: defineAction(function* (spec: MetricsDef.QuerySpec) {
           return [{ echoed: spec.sql }]
         }),
+        // the storing process owns a Surreal store; a forward-mode caller cannot know that locally
+        dialect: defineAction(function* () {
+          return 'surrealql'
+        }),
       },
       *setup() {},
     })
@@ -105,12 +112,16 @@ describe('metrics sink', () => {
       yield* call(dummy, 'ping')
       yield* call(dummy, 'ping')
       // flushes the buffered calls to the sink, then delegates the read to it
-      return yield* Metrics.actions.query('SELECT 1')
+      const rows = yield* Metrics.actions.query('SELECT 1')
+      // the dialect a `query` must be written in comes from the REMOTE store, not a local guess
+      const dialect = yield* Metrics.actions.dialect()
+      return { rows, dialect }
     })
 
     expect(isSuccess(result)).toBe(true)
     if (isSuccess(result)) {
-      expect(result.value).toEqual([{ echoed: 'SELECT 1' }])
+      expect(result.value.rows).toEqual([{ echoed: 'SELECT 1' }])
+      expect(result.value.dialect).toBe('surrealql')
     }
     const shipped = received.flatMap(batch => batch.calls)
     expect(shipped.filter(row => row.service === 'metrics-dummy-forward').length).toBe(2)
@@ -123,6 +134,7 @@ describe('metrics sink', () => {
     const inserted: MetricsDef.StoredCall[] = []
     // no `export`/`import` on purpose: the pair is optional for pluggable stores
     const store: MetricsDef.Store = {
+      dialect: 'sqlite',
       init: operation(function* () {}),
       insertCalls: operation(function* (rows: readonly MetricsDef.StoredCall[]) {
         if (broken) {

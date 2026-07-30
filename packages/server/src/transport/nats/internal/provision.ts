@@ -1,12 +1,13 @@
 import { attempt, operation, until } from 'std:effect'
 import { fail, isSuccess } from 'std:result'
 
-import type { JetStreamManager, StreamConfig } from 'nats'
+import type { ConsumerInfo, JetStreamManager, StreamConfig } from 'nats'
 import { AckPolicy, DiscardPolicy, RetentionPolicy, StorageType } from 'nats'
 
 import {
   EVENT_MAX_AGE_NS,
   LANE_MAX_AGE_NS,
+  RPC_INACTIVE_THRESHOLD_NS,
   RPC_MAX_AGE_NS,
   RPC_MAX_DELIVER,
   streamNames,
@@ -14,6 +15,35 @@ import {
 import { NatsErrors } from '../errors'
 
 import { eventPrefix, lanePrefix, rpcPrefix } from './subjects'
+
+/** Does a consumer filter (which may hold `*`/`>`, or be absent = everything) cover `subject`? */
+const covers = (pattern: string, subject: string): boolean => {
+  const patternTokens = pattern.split('.')
+  const subjectTokens = subject.split('.')
+  for (const [index, token] of patternTokens.entries()) {
+    if (token === '>') {
+      return true
+    }
+    if (index >= subjectTokens.length || (token !== '*' && token !== subjectTokens[index])) {
+      return false
+    }
+  }
+  return patternTokens.length === subjectTokens.length
+}
+
+const overlapsAddress = (info: ConsumerInfo, subject: string): boolean => {
+  const config = info.config as { filter_subject?: string; filter_subjects?: string[] }
+  const filters = config.filter_subjects ?? (config.filter_subject ? [config.filter_subject] : [])
+  return filters.length === 0 || filters.some(pattern => covers(pattern, subject))
+}
+
+const listConsumers = async (jsm: JetStreamManager, stream: string): Promise<ConsumerInfo[]> => {
+  const out: ConsumerInfo[] = []
+  for await (const info of jsm.consumers.list(stream)) {
+    out.push(info)
+  }
+  return out
+}
 
 /**
  * Create the three streams, idempotently.
@@ -108,6 +138,11 @@ export const provision = operation(function* (
  * Durable and named after the address, so every replica of a service shares ONE consumer and the
  * work-queue hands each call to exactly one of them. `max_deliver: 1` is what makes that at most
  * once rather than at least once — see the note on {@link RPC_MAX_DELIVER}.
+ *
+ * Every RPC durable carries {@link RPC_INACTIVE_THRESHOLD_NS}: a bound replica's pull loop is
+ * permanent interest, so a live consumer is never touched — but the durable of a release that is
+ * fully gone retires on its own instead of blocking the address forever and answering `hosts()`
+ * for nobody. A durable from before this existed is converged by the `update` on the exists path.
  */
 // oxlint-disable-next-line max-params
 export const ensureRpcConsumer = operation(function* (
@@ -116,20 +151,23 @@ export const ensureRpcConsumer = operation(function* (
   durable: string,
   filter: string,
 ) {
+  const stream = streamNames(prefix).rpc
   const created = yield* attempt(
     until(
       jsm.consumers
-        .add(streamNames(prefix).rpc, {
+        .add(stream, {
           durable_name: durable,
           filter_subject: filter,
           ack_policy: AckPolicy.Explicit,
           max_deliver: RPC_MAX_DELIVER,
           ack_wait: RPC_MAX_AGE_NS,
+          inactive_threshold: RPC_INACTIVE_THRESHOLD_NS,
         })
+        .then(() => 'created' as const)
         .catch((error: unknown) => {
           const message = String((error as { message?: string })?.message ?? error)
           if (message.includes('already in use') || message.includes('already exists')) {
-            return undefined
+            return 'exists' as const
           }
           throw error
         }),
@@ -137,14 +175,29 @@ export const ensureRpcConsumer = operation(function* (
     ),
   )
   if (isSuccess(created)) {
+    if (created.value === 'exists') {
+      // a durable created before expiry existed lives forever — converge it (no-op when current)
+      yield* attempt(
+        until(
+          jsm.consumers.update(stream, durable, {
+            inactive_threshold: RPC_INACTIVE_THRESHOLD_NS,
+          }),
+          `nats:consumer-converge ${durable}`,
+        ),
+      )
+    }
     return
   }
   /**
-   * A work-queue stream refuses a second consumer whose filter overlaps an existing one's. That is
-   * exactly what a surged rolling deploy produces when the durable scheme changed between releases:
-   * the old replica's consumer still covers the subject under its old name, this node's `add` is
-   * rejected, and — before this mapping — the failure died inside the broker watcher while the pod
-   * sat there looking booted, its calls aging out in the queue. Name the situation instead.
+   * A work-queue stream refuses a second consumer whose filter overlaps an existing one's — a
+   * durable left behind by an older release's naming scheme, or another app on the same prefix.
+   *
+   * Never delete the blocker here: only the SERVER knows whether someone is still bound to it, and
+   * deleting a live old replica's consumer mid-drain would hand its unacked calls to this node — a
+   * second execution of a body that already ran. Instead ARM expiry on it and report the conflict;
+   * a blocker whose owner lives (surged rolling deploy) keeps interest and survives untouched until
+   * it exits, one whose owner is gone is retired within the threshold — and the watcher's reclaim
+   * loop then claims the address with no human involved.
    */
   const message = String(
     (created.error as { message?: string } | undefined)?.message ?? created.error,
@@ -153,9 +206,25 @@ export const ensureRpcConsumer = operation(function* (
     message.includes('not unique on workqueue') ||
     message.includes('multiple non-filtered consumers')
   ) {
+    yield* attempt(function* () {
+      const consumers = yield* until(listConsumers(jsm, stream), `nats:consumer-list ${stream}`)
+      for (const blocker of consumers) {
+        if (blocker.name === durable || !overlapsAddress(blocker, filter)) {
+          continue
+        }
+        yield* attempt(
+          until(
+            jsm.consumers.update(stream, blocker.name, {
+              inactive_threshold: RPC_INACTIVE_THRESHOLD_NS,
+            }),
+            `nats:consumer-arm ${blocker.name}`,
+          ),
+        )
+      }
+    })
     return yield* fail(
       NatsErrors.ConsumerConflict,
-      `work-queue consumer conflict on "${filter}": the RPC stream already has a consumer covering this subject that is not this release's durable "${durable}" — typically a replica from a previous release still bound under an old durable name (surged rolling deploy) or two apps sharing the prefix "${prefix}". Until it is gone this node cannot take the address's calls: deploy with maxSurge:0 or delete the stale consumer.`,
+      `work-queue consumer conflict on "${filter}": the RPC stream already has a consumer covering this subject that is not this release's durable "${durable}". Expiry is armed on the blocker — once its owner is gone for ${RPC_INACTIVE_THRESHOLD_NS / 1_000_000_000}s the server retires it and this node claims the address automatically. A conflict that persists means the blocker is live: typically two apps sharing the prefix "${prefix}".`,
     )
   }
   return yield* created

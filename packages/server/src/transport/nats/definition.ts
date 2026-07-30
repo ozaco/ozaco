@@ -104,6 +104,7 @@ export const NatsTransport = Transport.implement({
     yield* provision(jsm, prefix, options.replicas)
 
     const consumers: Nats.Context['consumers'] = new Map()
+    const reclaims: Nats.Context['reclaims'] = new Map()
 
     const context: Nats.Context = {
       name,
@@ -117,6 +118,7 @@ export const NatsTransport = Transport.implement({
       js,
       jsm,
       consumers,
+      reclaims,
       scope,
     }
 
@@ -150,6 +152,20 @@ export const NatsTransport = Transport.implement({
     yield* brokerWathcer()
 
     yield* ensure(function* () {
+      // Stop ConsumerMessages BEFORE halting anything that consumes them: halting a task parked
+      // inside `into(<live iterator>)` wedges the unwind, and a reclaim task's consume parks there.
+      for (const [, messages] of consumers) {
+        try {
+          messages.stop()
+        } catch {
+          /* already stopped */
+        }
+      }
+      for (const [, task] of reclaims) {
+        yield* attempt(() => task.halt())
+      }
+      reclaims.clear()
+      // a reclaim that bound between the two sweeps left a fresh live consumer — stop those too
       for (const [, messages] of consumers) {
         try {
           messages.stop()

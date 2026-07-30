@@ -32,6 +32,25 @@ export const RPC_MAX_DELIVER = 1
 
 /** How long a message may sit in each stream. All three carry live traffic, never history. */
 export const RPC_MAX_AGE_NS = 60_000_000_000 // 60s — longer than any sane request timeout
+
+/**
+ * A durable nobody has pulled for this long is retired by the SERVER (JetStream
+ * `inactive_threshold`). A live replica keeps permanent interest through its pull loop, so this
+ * never touches a bound consumer; what it retires is exactly the leftovers — durables from an older
+ * naming scheme after a deploy, and addresses a release stopped serving — the two things that
+ * otherwise block work-queue binds forever and answer `hosts()` for nobody. Matches the RPC
+ * stream's own max_age: a consumer idle longer than any message could live holds nothing.
+ */
+export const RPC_INACTIVE_THRESHOLD_NS = 60_000_000_000 // 60s
+
+/**
+ * How an address blocked by a foreign durable heals. `ensureRpcConsumer` arms expiry
+ * ({@link RPC_INACTIVE_THRESHOLD_NS}) on the blockers, and the watcher then claims the address in
+ * the background at this tick — quiet, slow, forever: the one blocker that never goes idle (a live
+ * foreign owner, i.e. two apps sharing a prefix) keeps the error visible at a low duty cycle.
+ */
+export const RECLAIM_INTERVAL_MS = 5000
+export const RECLAIM_LOG_EVERY = 12 // one "still blocked" error per minute
 export const LANE_MAX_AGE_NS = 300_000_000_000 // 5m — a download may legitimately take a while
 export const EVENT_MAX_AGE_NS = 3_600_000_000_000 // 1h — enough for a consumer to restart
 

@@ -70,6 +70,12 @@ export namespace AuthDef {
     issuedAt: number
     expiresAt: number
     revokedAt: number | null
+    /**
+     * Root of the rotation chain this token belongs to (the first token's jti), carried unchanged
+     * through every rotation so a detected replay can revoke the whole line at once. Absent only on
+     * records persisted before families existed — treat such a record's own jti as its root.
+     */
+    familyId?: string
   }
 
   export interface VerificationRecord {
@@ -117,12 +123,20 @@ export namespace AuthDef {
     findRefreshToken?: (jti: string) => Operation<RefreshRecord | null>
     revokeRefreshToken?: (jti: string) => Operation<void>
     /**
-     * Atomic refresh token rotation. Provider must guarantee that revoking the old
-     * jti and persisting the new record happen in the same transaction so
-     * concurrent rotations cannot leave the user without a valid refresh token.
-     * If absent, the framework falls back to revoke + save (non-atomic).
+     * Compare-and-swap refresh rotation — the replay gate. In ONE atomic action: verify the stored
+     * record for `expected.jti` still exists and is unrevoked, mark it revoked (keep it — a deleted
+     * record cannot testify to a later replay), and persist `next`. Return `true` on success. When
+     * the record is missing or already revoked, write NOTHING and return `false`: the token was
+     * spent concurrently and the strategy treats that as a reuse (reused-token + family revocation).
+     * If absent, the framework falls back to revoke + save (non-atomic, no replay detection).
      */
-    rotateRefreshToken?: (oldJti: string, newRecord: RefreshRecord) => Operation<void>
+    rotateRefreshToken?: (expected: RefreshRecord, next: RefreshRecord) => Operation<boolean>
+    /**
+     * Revoke every live token whose family root matches `familyId` — the response to a detected
+     * replay. Optional but strongly recommended next to rotateRefreshToken: without it a confirmed
+     * theft only burns the presented token, leaving the line's live descendant in play.
+     */
+    revokeRefreshTokenFamily?: (familyId: string) => Operation<void>
 
     saveVerification?: (record: VerificationRecord) => Operation<void>
     findVerification?: (token: string) => Operation<VerificationRecord | null>
@@ -194,7 +208,7 @@ export namespace AuthDef {
   }
 
   export interface IssueOptions {
-    /** If set, use rotateRefreshToken to atomically swap old jti → new record. */
-    rotateFrom?: string | undefined
+    /** The live record being spent: rotation CAS-swaps exactly this record for the new one. */
+    rotateFrom?: RefreshRecord | undefined
   }
 }

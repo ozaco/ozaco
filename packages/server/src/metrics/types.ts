@@ -1,6 +1,7 @@
 import type { MongoFilter } from 'db:realtime'
 import type { Future } from 'std:effect'
 import type { Plugin } from 'std:plugin'
+import type { LiteralUnion } from 'std:shared'
 
 export type MetricsDef = Plugin<
   MetricsDef.Context,
@@ -20,6 +21,9 @@ export namespace MetricsDef {
 
   /** A queried row (column name → value); `meta` arrives as text and is decoded by the query layer. */
   export type Row = Record<string, unknown>
+
+  /** The SQL flavour a {@link Store} speaks. Well-known engines autocomplete; any other names itself. */
+  export type Dialect = LiteralUnion<string, 'duckdb' | 'sqlite' | 'postgres' | 'surrealql'>
 
   /** One completed action dispatch. `meta` holds arbitrary custom fields (preserved, not stripped). */
   export interface CallRecord {
@@ -144,6 +148,14 @@ export namespace MetricsDef {
    * "unsupported" failures, and the action layer answers for it.
    */
   export interface Store {
+    /**
+     * The SQL dialect {@link Store.query} speaks, declared up front so a caller can branch instead
+     * of probing — raw SQL is inherently the store's own (`quantile_cont` vs `math::percentile`
+     * never translate for free, and a store swap otherwise breaks every application query
+     * silently). Reachable from anywhere as `Metrics.actions.dialect()`, which answers for the
+     * store that actually holds the rows even when that store lives in another process.
+     */
+    dialect: Dialect
     init(): Future<void>
     insertCalls(rows: readonly StoredCall[]): Future<void>
     insertLogs(rows: readonly StoredLog[]): Future<void>
@@ -208,6 +220,10 @@ export namespace MetricsDef {
     /** Raw read query — for aggregations DuckDB does well (`count`, `avg`, `time_bucket`, …). Pending
      * buffered records are flushed first. */
     query(sql: string, params?: readonly unknown[]): Future<Row[]>
+    /** Which dialect {@link Actions.query} must be written in. Answers for the store that actually
+     * holds the rows: the local one, or the SINK's in `sink: 'forward'` mode — the SQL crosses the
+     * broker, so the dialect that matters is the remote one, and asking is the only way to know. */
+    dialect(): Future<Dialect>
     /** Export a table to a file (Parquet/CSV/JSON) — flushes first. */
     export(spec: TransferSpec): Future<void>
     /** Import a table from a file (appends). */

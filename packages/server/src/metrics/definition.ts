@@ -16,6 +16,7 @@ import { createDuckdbStore } from './drivers/duckdb'
 import {
   closeStore,
   defineAction,
+  dialectAction,
   exportAction,
   findAction,
   flushAction,
@@ -149,6 +150,7 @@ export const MetricsCollector = Metrics.implement({
   record: recordAction,
   find: findAction,
   query: queryAction,
+  dialect: dialectAction,
   export: exportAction,
   import: importAction,
   prune: pruneAction,

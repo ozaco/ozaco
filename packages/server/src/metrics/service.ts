@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { METRICS_SERVICE_NAME } from './const'
 import {
   defineAction as defineTableAction,
+  dialectAction,
   exportAction,
   findAction,
   flushAction,
@@ -82,6 +83,11 @@ export const MetricsSink = defineService({
         return yield* queryAction(spec.sql, spec.params)
       },
     ),
+    /** What flavour of SQL this sink's store speaks — the answer forward-mode callers cannot derive
+     * locally, because the store they will be querying is this one. */
+    dialect: defineAction(function* () {
+      return yield* dialectAction()
+    }),
     define: defineAction(function* (spec: MetricsDef.DefineSpec) {
       yield* defineTableAction(spec)
     }),

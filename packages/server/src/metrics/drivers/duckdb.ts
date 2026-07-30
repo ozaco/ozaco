@@ -97,6 +97,7 @@ export const createDuckdbStore = (path: string): MetricsDef.Store => {
   })
 
   return {
+    dialect: 'duckdb',
     init: operation(function* () {
       const db = yield* connect()
       for (const ddl of SCHEMA_DDL) {
