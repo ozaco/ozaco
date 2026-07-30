@@ -163,7 +163,7 @@
     },
     "packages/server": {
       "name": "@ozaco/server",
-      "version": "0.3.15",
+      "version": "0.3.16",
       "dependencies": {
         "@fastify/busboy": "^3.2.0",
         "jose": "^6.2.4",
@@ -196,7 +196,7 @@
     },
     "packages/std": {
       "name": "@ozaco/std",
-      "version": "0.3.9",
+      "version": "0.3.10",
       "dependencies": {
         "@streamparser/json": "0.0.22",
       },
