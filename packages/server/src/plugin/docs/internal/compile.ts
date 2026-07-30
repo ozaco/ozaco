@@ -12,10 +12,17 @@ import type { DocsDef } from '../types'
  * disagreement — three flags could say an action was exposed while it carried no setting to expose
  * it with, or the reverse. The settings filter below is now the only gate.
  */
-export const compileEntries = operation(function* (services: Service[], transformer: unknown) {
+export const compileEntries = operation(function* (
+  services: Service[],
+  transformer: unknown,
+  prefixes?: ReadonlyMap<unknown, string>,
+) {
   const out: DocsDef.CompiledEntry[] = []
 
   for (const service of services) {
+    // the REAL mount prefix when the gateway knows it; the name-shaped guess otherwise
+    const prefix = prefixes?.get(service) ?? `/${service.name}`
+
     for (const [key, action] of yield* service.actions._list()) {
       const settings = yield* all(action.settings ?? [])
 
@@ -31,7 +38,7 @@ export const compileEntries = operation(function* (services: Service[], transfor
         service: service.name,
         key,
         method: rest.method,
-        path: `/${service.name}${rest.path === '/' ? '' : rest.path}`,
+        path: `${prefix}${rest.path === '/' ? '' : rest.path}` || '/',
         rest,
         meta: action as Action.Meta<AnyType>,
       })

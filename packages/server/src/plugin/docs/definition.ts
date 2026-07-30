@@ -65,12 +65,25 @@ export const Docs = definePlugin({
 }).build({
   from: operation(function* (...services: Service[]) {
     const ctx = yield* useContext(DocsRef)
-    yield* useContext(Gateway.context)
+    const gateway = yield* useContext(Gateway.context)
     const previous = (yield* CompiledRef.get()) ?? []
+
+    /**
+     * The MOUNT prefix is part of the truth: a service mounted at `/kb/files` — or at `''`, the
+     * whole-API mount — must be documented where it actually answers, not at `/${service.name}`.
+     * The gateway's route table already knows every prefix, so it is read from there; a service
+     * documented before it is mounted falls back to the name-shaped guess (the old behaviour).
+     */
+    const prefixes = new Map<unknown, string>()
+    for (const route of gateway.handlers.values()) {
+      if (!prefixes.has(route.target)) {
+        prefixes.set(route.target, route.prefix)
+      }
+    }
 
     const names = new Set(services.map(s => s.name))
     const kept = previous.filter(entry => !names.has(entry.service))
-    const fresh = yield* compileEntries(services, Gateway)
+    const fresh = yield* compileEntries(services, Gateway, prefixes)
 
     const next = [...kept, ...fresh]
 

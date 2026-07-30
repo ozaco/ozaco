@@ -207,7 +207,14 @@ export const socketAction = (config: SocketService.Route, handlers: SocketServic
           })
 
           if (handlers.open) {
-            yield* handlers.open(socket)
+            // Same containment as the frame loop below: an `open` failure escaping would unwind
+            // the pump on the BROKER's scope and take the node down. It costs THIS connection —
+            // report it on the socket and end the session (the `ensure` above runs the close path).
+            const opened = yield* attempt(() => handlers.open!(socket))
+            if (!isSuccess(opened)) {
+              out.add({ error: opened.error, message: opened.message })
+              return
+            }
           }
 
           yield* streamForEach(inbound, function* (inboundFrame: unknown) {

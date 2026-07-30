@@ -5,6 +5,7 @@ import { SqliteDriver } from '@ozaco/db/impl/sqlite'
 import { RealtimeDb, table } from '@ozaco/db/realtime'
 import { Broker, DefaultBroker, Gateway } from '@ozaco/server/core'
 import { BunGateway } from '@ozaco/server/gateway/bun'
+import { Docs } from '@ozaco/server/plugin/docs'
 import { resource } from '@ozaco/server/wizard'
 import { run, suspend } from '@ozaco/std/effect'
 import { BunIO } from '@ozaco/std/io/impl/bun'
@@ -46,9 +47,11 @@ const startWizard = async (port: number) => {
     yield* install(SqliteDriver)
     yield* install(Pool, { connectionUri: ':memory:' })
     yield* install(RealtimeDb, { tables: [kb, kbFiles, appRoles] })
+    yield* install(Docs, { title: 'Wizard API', silent: true })
     yield* kbResource.actions.install()
     yield* filesResource.actions.install()
     yield* rolesResource.actions.install()
+    yield* Docs.actions.from(filesResource)
     yield* Broker.actions.start()
     yield* Gateway.actions.start({ port })
     ready.resolve()
@@ -116,6 +119,15 @@ describe('wizard resource addressing', () => {
       // while the same methods on a REAL parent row keep working
       const removeNote = await fetch(`${base}/kb/${noteRow._id}`, { method: 'DELETE' })
       expect(removeNote.status).toBe(204)
+
+      // docs speak the MOUNT truth: the files resource (service name 'files') is documented at its
+      // real address /kb/files — not at the name-shaped guess /files
+      const spec = await fetch(`${base}/docs/openapi`)
+      expect(spec.status).toBe(200)
+      const openapi = (await spec.json()) as { paths: Record<string, unknown> }
+      const paths = Object.keys(openapi.paths)
+      expect(paths.some(path => path.startsWith('/kb/files'))).toBe(true)
+      expect(paths.some(path => path.startsWith('/files'))).toBe(false)
     } finally {
       await task.halt()
     }

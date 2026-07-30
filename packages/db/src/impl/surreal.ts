@@ -12,6 +12,9 @@ import * as surrealCore from 'surrealdb'
 import { arraySubscription, dynamicImport, mapResult } from './utils/common'
 import { escapeIdent, firstResultSet, toSurreal } from './utils/surreal'
 
+// The dialect degrade layer, exported for tests and for debugging what a query becomes on Surreal.
+export { toSurreal } from './utils/surreal'
+
 // `surrealdb` is imported statically so the driver is traceable by bundlers (incl. `bun build
 // --compile`); the embedded `@surrealdb/node` engine stays an optional dynamic import.
 const core = surrealCore as AnyType
