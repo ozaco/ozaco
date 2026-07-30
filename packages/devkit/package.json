@@ -1,6 +1,6 @@
 {
   "name": "@ozaco/devkit",
-  "version": "0.2.7",
+  "version": "0.2.8",
   "homepage": "https://ozaco.com/",
   "author": "giveerr (https://github.com/giveerr)",
   "repository": {
@@ -34,9 +34,6 @@
     "access": "public",
     "provenance": true,
     "registry": "https://registry.npmjs.org/"
-  },
-  "dependencies": {
-    "rolldown": "1.2.0"
   },
   "devDependencies": {
     "@ozaco/ai": "workspace:*",

@@ -94,6 +94,13 @@ class InstructionQueue {
 // The budget turns that lock into mere slowness — the offender still gets its slice, everything
 // else keeps breathing. Sized far above any legitimate synchronous burst (a whole dispatch is
 // hundreds of steps) and far below where one slice becomes noticeable stall.
+//
+// The budget alone is NOT enough, which is worth knowing before touching either half: returning to
+// the event loop lets timers fire and a server accept requests, but the tier scan below always
+// restarts at the lowest occupied tier, so a spinner that re-enqueues itself keeps winning and the
+// work it starves never runs. Measured on a wizard SSE pump: 5.3M dequeues at its own tier while
+// three HTTP dispatches sat in the tier below it, unserved, for as long as the spin lasted. Epoch
+// rotation is the other half of the answer.
 const STEP_BUDGET = 65_536
 
 // setImmediate where it exists (node/bun) — setTimeout(0) is clamped to ~1ms and would tax every
@@ -105,14 +112,29 @@ export class Reducer {
   reducing = false
   /** a budget hand-off macrotask is pending; guards against stacking more than one */
   private continuing = false
-  readonly queue = new InstructionQueue()
+  /** the epoch being drained */
+  private queue = new InstructionQueue()
+  /** routines that became runnable DURING the drain — they belong to the NEXT epoch */
+  private pending = new InstructionQueue()
 
+  /**
+   * Priority orders each epoch; it must not order across epochs.
+   *
+   * A routine that resumes itself lands back in the queue on every step, and the tier scan always
+   * restarts at the lowest occupied tier — so with one queue a self-resuming coroutine at a shallow
+   * scope holds that tier forever and nothing deeper ever runs. Routing a resume that happens
+   * mid-drain into the NEXT epoch is what bounds the wait: every routine already runnable takes its
+   * step before any of them takes a second one. Nesting still decides order among peers, which is
+   * all `Priority` was ever for.
+   */
   schedule = (routine: Helpers.Coroutine) => {
-    this.queue.enqueue(routine)
-
-    if (!this.reducing) {
-      this.drain()
+    if (this.reducing) {
+      this.pending.enqueue(routine)
+      return
     }
+
+    this.queue.enqueue(routine)
+    this.drain()
   }
 
   private continueDrain = () => {
@@ -122,14 +144,21 @@ export class Reducer {
     }
   }
 
-  private drain = () => {
-    const { queue } = this
+  /** Start the next epoch: the routines that resumed during this one become the queue to drain.
+   * Swapping the two objects is what makes it O(1) — the drained queue becomes the empty `pending`. */
+  private rotate = (): Helpers.Coroutine | undefined => {
+    const drained = this.queue
+    this.queue = this.pending
+    this.pending = drained
+    return this.queue.dequeue()
+  }
 
+  private drain = () => {
     try {
       this.reducing = true
       let steps = 0
 
-      for (let item = queue.dequeue(); item; item = queue.dequeue()) {
+      for (let item = this.queue.dequeue() ?? this.rotate(); item;) {
         try {
           const next = item.step()
           if (next.done) {
@@ -155,6 +184,8 @@ export class Reducer {
           }
           break
         }
+
+        item = this.queue.dequeue() ?? this.rotate()
       }
     } finally {
       this.reducing = false

@@ -137,10 +137,7 @@
     },
     "packages/devkit": {
       "name": "@ozaco/devkit",
-      "version": "0.2.7",
-      "dependencies": {
-        "rolldown": "1.2.0",
-      },
+      "version": "0.2.8",
       "devDependencies": {
         "@ozaco/ai": "workspace:*",
         "@ozaco/cli": "workspace:*",
@@ -196,7 +193,7 @@
     },
     "packages/std": {
       "name": "@ozaco/std",
-      "version": "0.3.10",
+      "version": "0.3.11",
       "dependencies": {
         "@streamparser/json": "0.0.22",
       },
