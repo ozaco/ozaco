@@ -115,9 +115,22 @@ export const dispatchRequest = operation(function* (
       ctx.simplify ? yield* attempt(ctx.simplify(failure)) : failure
     ) as Result.Failure<unknown>
 
+    // A failure BEFORE toInternal (a route miss, most importantly) has no envelopes yet — but the
+    // response hooks only run against a response envelope, so a bare 404 carried no CORS headers
+    // and the browser reported it as a CORS error instead of a 404. Give the failure path real
+    // envelopes built from the raw request so cors (and every other fromInternal hook) applies.
+    const failureReq: ActionRequest = actionReq ?? {
+      type: 'http',
+      method: request.method,
+      url: new URL(request.url),
+      meta: Object.fromEntries(request.headers.entries()),
+      params: {},
+    }
+    const failureRes: ActionResponse = actionRes ?? { status: null, body: undefined, meta: {} }
+
     const response = (yield* Gateway.actions.fromInternal(
-      actionReq,
-      actionRes,
+      failureReq,
+      failureRes,
       simplifiedFailure,
       null,
     )) as Response

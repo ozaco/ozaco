@@ -143,14 +143,24 @@ const emitsSchema = (entry: OpenAPIOperation): AnyType =>
 const operationKind = (method: string, entry: OpenAPIOperation): FnKind =>
   entry['x-ozaco-kind'] ?? (method === 'get' || method === 'head' ? 'query' : 'mutation')
 
+const IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/u
+
+/** Namespaces (and fns) are legal server-side as kebab-case (`appRoles` at `/app-roles`), which is
+ * not a legal TS identifier — quote any key the identifier grammar refuses. */
+const asKey = (name: string): string => (IDENTIFIER.test(name) ? name : `'${name}'`)
+
 /** Generate the typed client surface directly from the Docs plugin's OpenAPI document. */
 export const generateApi = operation(function* (document: OpenAPIDocument) {
   const namespaces = new Map<string, string[]>()
   // Per-namespace realtime transport, read from `x-ozaco-realtime` — so the client picks WS/SSE from
   // the generated contract instead of probing at runtime.
   const realtimes = new Map<string, 'websocket' | 'sse'>()
+  // Per-namespace `fn -> [METHOD, path]` manifest — the server routes every fn as REST, so the
+  // client must dispatch to the real route, not a guessed `POST /<ns>/<fn>`. `SSE` marks a
+  // dedicated `stream()` route the client subscribes to directly.
+  const routes = new Map<string, string[]>()
 
-  for (const path of Object.values(document.paths)) {
+  for (const [pathKey, path] of Object.entries(document.paths)) {
     for (const [method, entry] of Object.entries(path)) {
       if (!entry.operationId) {
         continue
@@ -162,31 +172,53 @@ export const generateApi = operation(function* (document: OpenAPIDocument) {
 
       const namespace = entry.operationId.slice(0, separator)
       const name = entry.operationId.slice(separator + 1)
+      if (entry['x-ozaco-realtime']) {
+        realtimes.set(namespace, entry['x-ozaco-realtime'])
+      }
+      // a `_`-prefixed op (the `_realtime` channel, whether the SSE GET route or the `x-ozaco-ws`
+      // path extension) is transport metadata, not a callable fn
+      if (name.startsWith('_') || method.startsWith('x-')) {
+        continue
+      }
+
       const args = yield* jsonSchemaToTs(argsSchema(entry))
       const result = yield* jsonSchemaToTs(resultSchema(entry))
       const emits = yield* jsonSchemaToTs(emitsSchema(entry))
       const kind = operationKind(method, entry)
       const functions = namespaces.get(namespace) ?? []
       functions.push(
-        `    ${name}: { kind: '${kind}'; args: ${args}; result: ${result}; emits: ${emits} }`,
+        `    ${asKey(name)}: { kind: '${kind}'; args: ${args}; result: ${result}; emits: ${emits} }`,
       )
       namespaces.set(namespace, functions)
-      if (entry['x-ozaco-realtime']) {
-        realtimes.set(namespace, entry['x-ozaco-realtime'])
-      }
+
+      const wire = kind === 'stream' ? 'SSE' : method.toUpperCase()
+      const fns = routes.get(namespace) ?? []
+      fns.push(`      ${asKey(name)}: ['${wire}', '${pathKey}']`)
+      routes.set(namespace, fns)
     }
   }
 
   const source = [...namespaces.entries()].map(
-    ([namespace, functions]) => `  ${namespace}: {\n${functions.join('\n')}\n  }`,
+    ([namespace, functions]) => `  ${asKey(namespace)}: {\n${functions.join('\n')}\n  }`,
   )
   const type = `export type Api = {\n${source.join('\n')}\n}\n`
 
   // The runtime companion to `Api`: pass it to `createClient({ url, meta: apiMeta })` and the client
-  // opens each namespace's realtime channel over the declared transport — no runtime detection.
-  const metaEntries = [...realtimes.entries()].map(
-    ([namespace, transport]) => `  ${namespace}: { realtime: '${transport}' }`,
-  )
+  // dispatches every call to its real REST route and opens each namespace's realtime channel over
+  // the declared transport — no guessing, no runtime detection.
+  const metaNames = [...new Set([...namespaces.keys(), ...realtimes.keys()])]
+  const metaEntries = metaNames.map(namespace => {
+    const parts: string[] = []
+    const transport = realtimes.get(namespace)
+    if (transport) {
+      parts.push(`    realtime: '${transport}',`)
+    }
+    const fns = routes.get(namespace)
+    if (fns && fns.length > 0) {
+      parts.push(`    fns: {\n${fns.join(',\n')},\n    },`)
+    }
+    return `  ${asKey(namespace)}: {\n${parts.join('\n')}\n  }`
+  })
   const meta =
     metaEntries.length > 0
       ? `\nexport const apiMeta = {\n${metaEntries.join(',\n')}\n} as const\n`

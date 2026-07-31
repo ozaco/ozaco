@@ -1,14 +1,29 @@
 import type { Future, Operation } from 'std:effect'
 
+/** One namespace's entry in codegen's `apiMeta` (`ozaco pull`). */
+export interface NamespaceMeta {
+  /** Realtime transport of the namespace's `_realtime` channel. */
+  readonly realtime?: 'websocket' | 'sse'
+  /** `fn -> [METHOD, path]` — the fn's real REST route. Path params use the OpenAPI `{name}` form
+   * and are filled from the call args; `SSE` marks a dedicated `stream()` route the client
+   * subscribes to directly. A fn absent here falls back to `POST /<ns>/<fn>`. */
+  readonly fns?: Readonly<Record<string, readonly [string, string]>>
+}
+
 export interface ClientOptions {
   /** Base URL of the wizard backend, e.g. `http://localhost:3000`. */
   readonly url: string
   /** Override for the realtime endpoint (defaults to `ws(s)://<url>/_realtime`). */
   readonly realtimeUrl?: string
-  /** Per-namespace realtime transport, from codegen's `apiMeta` (`ozaco pull`). When present the
-   * client opens each namespace's channel over the declared transport with no runtime detection;
-   * namespaces absent here fall back to a one-time WS-then-SSE probe. */
-  readonly meta?: Readonly<Record<string, { readonly realtime?: 'websocket' | 'sse' }>>
+  /** Bearer token — a value or a getter (e.g. a session read), resolved per call. Sent as an
+   * `Authorization` header on calls, and as `?token=` on realtime channels: a browser cannot set
+   * WS/SSE handshake headers, and the server promotes the query param for exactly those routes. */
+  readonly token?: string | (() => string | undefined)
+  /** Per-namespace routes + realtime transport, from codegen's `apiMeta` (`ozaco pull`). When
+   * present the client dispatches each fn to its declared route and opens realtime channels over
+   * the declared transport; namespaces absent here fall back to `POST /<ns>/<fn>` and a one-time
+   * WS-then-SSE probe. */
+  readonly meta?: Readonly<Record<string, NamespaceMeta>>
 }
 
 /** A query function reference: call it for a one-shot `TResult`, or `.watch(...)` for a live stream.

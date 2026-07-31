@@ -79,9 +79,13 @@ export const findAction = operation(function* (method: string, path: string) {
    * data-dependent surprise no caller intends. So when a strictly deeper mounted prefix covers the
    * path than the matched route's own, the answer is NotFound: the inner mount shadows the outer
    * one symmetrically instead of leaking through method by method.
+   *
+   * `OPTIONS` is exempt: a preflight is not resource access, so the danger shadowing guards against
+   * does not exist — while the guard itself would 404 the CORS `OPTIONS /**` route (a root mount)
+   * on exactly the mounted paths a browser must preflight before it can call them at all.
    */
   const route = ctx.handlers.get(foundRoute.data as symbol)
-  if (route !== undefined) {
+  if (route !== undefined && method !== 'OPTIONS') {
     const normal = path.length > 1 ? path.replace(/\/+$/u, '') : path
     const owned = depthOf(route.prefix)
     for (const claim of findAllRoutes(ctx.claims, CLAIM, normal)) {

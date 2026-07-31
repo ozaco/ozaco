@@ -13,17 +13,98 @@ import { toFormData } from './utils/form-data'
 
 const JSON_HEADERS = { 'content-type': 'application/json' }
 
-/** POST a function call through the effect-native `std:fetch` (never global fetch); the body is the
- * (server-validated) args object. */
-const call = operation(function* (url: string, args: unknown) {
-  const form = toFormData(args)
-  const init: FetchDef.Init = form
-    ? { method: 'POST', body: form }
-    : {
-        method: 'POST',
-        headers: JSON_HEADERS,
-        body: yield* JsonCodec.actions.stringify(args ?? {}),
-      }
+/** Methods whose args ride the query string — the server reads no body on these. */
+const QUERY_METHODS = new Set(['GET', 'HEAD', 'DELETE'])
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  value !== null && typeof value === 'object' && !Array.isArray(value)
+
+/** The bearer token, resolved per call so a getter always reflects the current session. */
+const bearerOf = (options: ClientOptions): string | undefined =>
+  typeof options.token === 'function' ? options.token() : options.token
+
+/** The fn's declared `[METHOD, path]` route (codegen's `apiMeta`), else the bare-action default —
+ * the only route shape the server serves for a fn that declared no `rest` of its own. */
+const routeFor = (
+  options: ClientOptions,
+  namespace: string,
+  fn: string,
+): readonly [string, string] =>
+  options.meta?.[namespace]?.fns?.[fn] ?? ['POST', `/${namespace}/${fn}`]
+
+/** Fill `{param}` path segments from the args; consumed params leave the remainder for query/body. */
+const fillPath = (template: string, args: unknown): { path: string; rest: unknown } => {
+  if (!template.includes('{') || !isRecord(args)) {
+    return { path: template, rest: args }
+  }
+  const consumed = new Set<string>()
+  const path = template.replaceAll(/\{([^}]+)\}/gu, (whole, name: string) => {
+    if (!(name in args)) {
+      return whole
+    }
+    consumed.add(name)
+    return encodeURIComponent(String(args[name]))
+  })
+  const rest = Object.fromEntries(Object.entries(args).filter(([key]) => !consumed.has(key)))
+  return { path, rest }
+}
+
+const toQuery = (rest: unknown): string => {
+  if (!isRecord(rest)) {
+    return ''
+  }
+  const params = new URLSearchParams()
+  for (const [key, value] of Object.entries(rest)) {
+    if (value === undefined) {
+      continue
+    }
+    params.set(key, isRecord(value) || Array.isArray(value) ? JSON.stringify(value) : String(value))
+  }
+  return params.toString()
+}
+
+interface CallSpec {
+  readonly options: ClientOptions
+  readonly namespace: string
+  readonly fn: string
+  readonly args: unknown
+}
+
+/** Dispatch one call over the fn's declared REST route — method + path params + query-or-body args —
+ * through the effect-native `std:fetch` (never global fetch); the args are server-validated. */
+const call = operation(function* (spec: CallSpec) {
+  const { options, namespace, fn, args } = spec
+  const [method, template] = routeFor(options, namespace, fn)
+  if (method === 'SSE') {
+    return yield* fail('stream-only', `${namespace}.${fn} is a stream — use .subscribe(...)`)
+  }
+  const { path, rest } = fillPath(template, args)
+
+  const headers: Record<string, string> = {}
+  const token = bearerOf(options)
+  if (token) {
+    headers.authorization = `Bearer ${token}`
+  }
+
+  let url = `${options.url}${path}`
+  let init: FetchDef.Init
+  if (QUERY_METHODS.has(method)) {
+    const query = toQuery(rest)
+    if (query) {
+      url += `?${query}`
+    }
+    init = { method, headers }
+  } else {
+    const form = toFormData(rest)
+    init = form
+      ? { method, headers, body: form }
+      : {
+          method,
+          headers: { ...headers, ...JSON_HEADERS },
+          body: yield* JsonCodec.actions.stringify(rest ?? {}),
+        }
+  }
+
   const response = yield* fetch(url, init)
   const text = yield* response.text()
   let parsed: AnyType = null
@@ -34,7 +115,7 @@ const call = operation(function* (url: string, args: unknown) {
   if (!response.ok) {
     return yield* fail(
       parsed?.error ?? 'request-failed',
-      parsed?.message ?? `POST ${url} -> ${response.status}`,
+      parsed?.message ?? `${method} ${url} -> ${response.status}`,
     )
   }
   return parsed
@@ -54,12 +135,33 @@ interface ClientCtx {
   readonly cache: Map<string, Transport>
 }
 
-const wsUrlFor = (options: ClientOptions, namespace: string): string =>
-  `${(options.realtimeUrl ?? options.url).replace(/^http/u, 'ws')}/${namespace}/_realtime`
+const wsUrlFor = (options: ClientOptions, namespace: string): string => {
+  const base = `${(options.realtimeUrl ?? options.url).replace(/^http/u, 'ws')}/${namespace}/_realtime`
+  const token = bearerOf(options)
+  // a browser cannot set WS handshake headers — the server promotes `?token=` into `authorization`
+  return token ? `${base}?token=${encodeURIComponent(token)}` : base
+}
 
 const sseUrlFor = (spec: WatchSpec): string => {
   const params = new URLSearchParams({ fn: spec.fn, args: JSON.stringify(spec.args ?? {}) })
+  const token = bearerOf(spec.options)
+  if (token) {
+    // `EventSource`/fetch-SSE cannot set headers either — same promotion, scoped to `sse` routes
+    params.set('token', token)
+  }
   return `${spec.options.realtimeUrl ?? spec.options.url}/${spec.namespace}/_realtime?${params.toString()}`
+}
+
+/** A dedicated `stream()` SSE route (`['SSE', path]` in the manifest): path params ride the path,
+ * the remaining args ride `?args=` — mirroring the server's `targetFromQuery`. */
+const sseStreamUrlFor = (spec: WatchSpec, template: string): string => {
+  const { path, rest } = fillPath(template, spec.args)
+  const params = new URLSearchParams({ args: JSON.stringify(rest ?? {}) })
+  const token = bearerOf(spec.options)
+  if (token) {
+    params.set('token', token)
+  }
+  return `${spec.options.realtimeUrl ?? spec.options.url}${path}?${params.toString()}`
 }
 
 interface WatchSpec {
@@ -102,11 +204,13 @@ const watchOverWs = operation(function* (conn: AnyType, spec: WatchSpec) {
   return (): Operation<void> => conn.close()
 })
 
-/** Watch over SSE via `std:fetch(...).raw()` — parse `data:` frames and forward each `.result`. The
- * reader is `spawn`ed; the stopper halts it, which aborts the in-flight request (scope-tied abort). */
-const watchOverSse = operation(function* (spec: WatchSpec) {
+/** Watch over SSE via `std:fetch(...).raw()` — parse `data:` frames and forward each payload. A
+ * `_realtime` channel wraps every frame as `{ id?, result }`; a dedicated stream route emits the
+ * raw value — `raw` picks the unwrapping. The reader is `spawn`ed; the stopper halts it, which
+ * aborts the in-flight request (scope-tied abort). */
+const watchOverSse = operation(function* (spec: WatchSpec, url: string, raw: boolean) {
   const { onNext, onError } = spec
-  const stream = yield* fetch(sseUrlFor(spec)).raw()
+  const stream = yield* fetch(url).raw()
 
   const task = yield* spawn(function* () {
     const outcome = yield* attempt(function* () {
@@ -128,7 +232,7 @@ const watchOverSse = operation(function* (spec: WatchSpec) {
               JsonCodec.actions.parse(line.slice('data:'.length).trim()),
             )
             if (isSuccess(decoded)) {
-              onNext((decoded.value as AnyType).result)
+              onNext(raw ? decoded.value : (decoded.value as AnyType).result)
             }
           }
         }
@@ -151,10 +255,15 @@ const declaredTransport = (spec: WatchSpec): Transport | undefined => {
 /** Resolve the namespace's realtime transport — from `meta` (preferred) or the cache — then open the
  * subscription. Only when neither is known do we probe (WS first, SSE on handshake failure). */
 const watch = operation(function* (spec: WatchSpec) {
+  // a dedicated `stream()` route bypasses `_realtime` entirely — one fn, one direct SSE feed
+  const declared = spec.options.meta?.[spec.namespace]?.fns?.[spec.fn]
+  if (declared?.[0] === 'SSE') {
+    return yield* watchOverSse(spec, sseStreamUrlFor(spec, declared[1]), true)
+  }
   const known = spec.cache.get(spec.namespace) ?? declaredTransport(spec)
   if (known === 'sse') {
     spec.cache.set(spec.namespace, 'sse')
-    return yield* watchOverSse(spec)
+    return yield* watchOverSse(spec, sseUrlFor(spec), false)
   }
   if (known === 'ws') {
     spec.cache.set(spec.namespace, 'ws')
@@ -167,13 +276,12 @@ const watch = operation(function* (spec: WatchSpec) {
     return yield* watchOverWs(attempted.value, spec)
   }
   spec.cache.set(spec.namespace, 'sse')
-  return yield* watchOverSse(spec)
+  return yield* watchOverSse(spec, sseUrlFor(spec), false)
 })
 
 const makeFn = (ctx: ClientCtx, namespace: string, fn: string): AnyType => {
   const { options, cache } = ctx
-  const url = `${options.url}/${namespace}/${fn}`
-  const invoke = (args: unknown): Future<AnyType> => call(url, args)
+  const invoke = (args: unknown): Future<AnyType> => call({ options, namespace, fn, args })
   invoke.watch = (
     args: unknown,
     onNext: AnyType,

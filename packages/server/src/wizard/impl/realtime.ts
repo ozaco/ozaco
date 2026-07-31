@@ -317,57 +317,63 @@ export const realtimeAction = (namespace: string, module: FnModule) => {
     }
   })
 
-  return socketAction(
-    { title: `${namespace}._realtime`, path: '/_realtime' },
-    {
-      on: {
-        watch: operation(function* (socket: GatewayDef.Socket, message: AnyType) {
-          const target = resolveWatchTarget(message, message?.id)
-          const action = target ? module[target.name] : undefined
-          if (!target || !action) {
-            return
-          }
+  // `.wizard` is the metadata lane Docs reads (resource-action.ts attaches it to every REST-routed
+  // fn); without it the channel reaches OpenAPI with no realtime annotation and codegen cannot pick
+  // the namespace transport.
+  return Object.assign(
+    socketAction(
+      { title: `${namespace}._realtime`, path: '/_realtime' },
+      {
+        on: {
+          watch: operation(function* (socket: GatewayDef.Socket, message: AnyType) {
+            const target = resolveWatchTarget(message, message?.id)
+            const action = target ? module[target.name] : undefined
+            if (!target || !action) {
+              return
+            }
 
-          // a rejected subscription (bad args, denied access) must not tear down the connection
-          const outcome = yield* attempt(function* () {
-            // the SAME access + input validation as the REST path, before any data flows; the
-            // handler runs inside the connection's request context, so a guard reading `useAuth()`
-            // sees the principal that opened the socket
-            const args = yield* authorizeWatch(namespace, action, target)
-            const key = target.subId ?? `#${(seq += 1)}`
-            yield* stop(socket, key)
-            pumpsOf(socket).set(
-              key,
-              yield* socket.spawn(
-                pumpFor({
-                  action,
-                  socket,
-                  target: { ...target, args },
-                  frame: frameFor(target),
-                  emits: emitsOf(action),
-                }),
-              ),
-            )
-          })
-
-          if (!isSuccess(outcome)) {
-            yield* socket.send({
-              ...(message?.id === undefined ? {} : { id: message.id }),
-              error: outcome.error,
+            // a rejected subscription (bad args, denied access) must not tear down the connection
+            const outcome = yield* attempt(function* () {
+              // the SAME access + input validation as the REST path, before any data flows; the
+              // handler runs inside the connection's request context, so a guard reading `useAuth()`
+              // sees the principal that opened the socket
+              const args = yield* authorizeWatch(namespace, action, target)
+              const key = target.subId ?? `#${(seq += 1)}`
+              yield* stop(socket, key)
+              pumpsOf(socket).set(
+                key,
+                yield* socket.spawn(
+                  pumpFor({
+                    action,
+                    socket,
+                    target: { ...target, args },
+                    frame: frameFor(target),
+                    emits: emitsOf(action),
+                  }),
+                ),
+              )
             })
-          }
-        }),
 
-        unwatch: operation(function* (socket: GatewayDef.Socket, message: AnyType) {
-          yield* stop(socket, String(message?.id ?? ''))
+            if (!isSuccess(outcome)) {
+              yield* socket.send({
+                ...(message?.id === undefined ? {} : { id: message.id }),
+                error: outcome.error,
+              })
+            }
+          }),
+
+          unwatch: operation(function* (socket: GatewayDef.Socket, message: AnyType) {
+            yield* stop(socket, String(message?.id ?? ''))
+          }),
+        },
+
+        // `socketAction` already halts every spawned pump; this just drops the bookkeeping
+        close: operation(function* (socket: GatewayDef.Socket) {
+          feeds.delete(socket.id)
         }),
       },
-
-      // `socketAction` already halts every spawned pump; this just drops the bookkeeping
-      close: operation(function* (socket: GatewayDef.Socket) {
-        feeds.delete(socket.id)
-      }),
-    },
+    ),
+    { wizard: { realtime: 'websocket' as const } },
   )
 }
 
@@ -378,32 +384,39 @@ export const realtimeAction = (namespace: string, module: FnModule) => {
  * connection.
  */
 export const sseRealtimeAction = (namespace: string, module: FnModule) =>
-  defineAction(
-    {
-      title: `${namespace}._realtime`,
-      // the output DECLARATION is what routes the answer through the streaming sink — the wire is
-      // declaration-driven, so an undeclared lane would be JSON-stringified as a value
-      output: streamChannel(z.unknown()),
-      settings: [Gateway.actions.rest({ method: 'GET', path: '/_realtime', sse: true })],
-    },
-    function* () {
-      const target = yield* targetFromQuery()
-      const action = target ? module[target.name] : undefined
+  Object.assign(
+    defineAction(
+      {
+        title: `${namespace}._realtime`,
+        // the output DECLARATION is what routes the answer through the streaming sink — the wire is
+        // declaration-driven, so an undeclared lane would be JSON-stringified as a value
+        output: streamChannel(z.unknown()),
+        settings: [Gateway.actions.rest({ method: 'GET', path: '/_realtime', sse: true })],
+      },
+      function* () {
+        const target = yield* targetFromQuery()
+        const action = target ? module[target.name] : undefined
 
-      if (!target || !action) {
-        return yield* fail(CoreErrors.NotFound, `${namespace}._realtime: unknown or missing \`fn\``)
-      }
+        if (!target || !action) {
+          return yield* fail(
+            CoreErrors.NotFound,
+            `${namespace}._realtime: unknown or missing \`fn\``,
+          )
+        }
 
-      // same access + input validation as the REST path, before a single row flows
-      const args = yield* authorizeWatch(namespace, action, target)
-      // `_realtime` always wraps (the client reads `.result`); only a dedicated stream route is raw
-      return yield* streamOf({
-        action,
-        target: { ...target, args },
-        frame: frameFor(target),
-        emits: emitsOf(action),
-      })
-    },
+        // same access + input validation as the REST path, before a single row flows
+        const args = yield* authorizeWatch(namespace, action, target)
+        // `_realtime` always wraps (the client reads `.result`); only a dedicated stream route is raw
+        return yield* streamOf({
+          action,
+          target: { ...target, args },
+          frame: frameFor(target),
+          emits: emitsOf(action),
+        })
+      },
+    ),
+    // same `.wizard` lane as the WS flavour — Docs annotates the channel, codegen picks `sse`
+    { wizard: { realtime: 'sse' as const } },
   )
 
 /**
@@ -412,27 +425,37 @@ export const sseRealtimeAction = (namespace: string, module: FnModule) =>
  * the `data` payload.
  */
 export const streamRouteAction = (namespace: string, name: string, def: WizardActionDef) =>
-  defineAction(
+  Object.assign(
+    defineAction(
+      {
+        title: `${namespace}.${name}`,
+        output: streamChannel(z.unknown()),
+        settings: [
+          Gateway.actions.rest({ method: 'GET', path: def.rest?.path ?? `/${name}`, sse: true }),
+        ],
+      },
+      function* () {
+        const target = (yield* targetFromQuery(name)) as WatchTarget | undefined
+
+        if (!target) {
+          return yield* fail(CoreErrors.NotFound, `${namespace}.${name}: no stream target`)
+        }
+
+        const args = yield* authorizeWatch(namespace, def, target)
+        return yield* streamOf({
+          action: def,
+          target: { ...target, args },
+          frame: wrapped,
+          emits: emitsOf(def),
+        })
+      },
+    ),
+    // the def knows its kind and tick schema; without this lane the route reached OpenAPI as a
+    // plain GET and codegen typed the SSE feed as a one-shot `query`
     {
-      title: `${namespace}.${name}`,
-      output: streamChannel(z.unknown()),
-      settings: [
-        Gateway.actions.rest({ method: 'GET', path: def.rest?.path ?? `/${name}`, sse: true }),
-      ],
-    },
-    function* () {
-      const target = (yield* targetFromQuery(name)) as WatchTarget | undefined
-
-      if (!target) {
-        return yield* fail(CoreErrors.NotFound, `${namespace}.${name}: no stream target`)
-      }
-
-      const args = yield* authorizeWatch(namespace, def, target)
-      return yield* streamOf({
-        action: def,
-        target: { ...target, args },
-        frame: wrapped,
-        emits: emitsOf(def),
-      })
+      wizard: {
+        kind: 'stream' as const,
+        ...(emitsOf(def) ? { emits: emitsOf(def) } : {}),
+      },
     },
   )

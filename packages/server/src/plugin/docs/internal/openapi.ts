@@ -311,6 +311,21 @@ export const buildOpenAPISpec = (
   for (const entry of entries) {
     const { openapiPath, params } = extractPathParams(entry.path)
     const pathItem = doc.paths[openapiPath] ?? {}
+
+    // `ws` is not an OpenAPI method — writing it as a method entry made every spec consumer choke
+    // on the document. A socket channel is represented as a vendor extension on the path item
+    // instead: codegen reads the transport off `x-ozaco-realtime`, everyone else ignores it.
+    if (entry.method === 'WS') {
+      pathItem['x-ozaco-ws'] = {
+        ...(entry.meta.title ? { summary: entry.meta.title } : {}),
+        operationId: `${entry.service}.${entry.key}`,
+        responses: {},
+        'x-ozaco-realtime': (entry.meta as AnyType).wizard?.realtime ?? 'websocket',
+      }
+      doc.paths[openapiPath] = pathItem
+      continue
+    }
+
     const op = buildOperation(entry, params, schemas)
     if (docs.auth) {
       op.security = [{ [SECURITY_SCHEME_NAME]: [] }]
