@@ -1,4 +1,5 @@
 import type { MongoFilter } from 'db:realtime'
+import type { ActionRequest, TracerDef } from 'server:core'
 import type { Future } from 'std:effect'
 import type { Plugin } from 'std:plugin'
 import type { LiteralUnion } from 'std:shared'
@@ -32,6 +33,9 @@ export namespace MetricsDef {
     readonly action: string
     readonly status: 'success' | 'failure'
     readonly durationMs: number
+    /** The request tree's correlation id (the dispatch span's `traceId`) — a first-class, filterable
+     * column so request-scoped analytics don't have to LIKE through `meta`. */
+    readonly requestId?: string | undefined
     readonly error?: string | undefined
     readonly meta?: Record<string, unknown> | undefined
   }
@@ -60,6 +64,7 @@ export namespace MetricsDef {
     readonly action: string
     readonly status: string
     readonly durationMs: number
+    readonly requestId: string | null
     readonly error: string | null
     readonly meta: string | null
   }
@@ -192,12 +197,16 @@ export namespace MetricsDef {
     readonly calls?: boolean
     /** Capture logs into `logs` (registers a logger transport). Default `true`. */
     readonly logs?: boolean
-    /** Attach custom fields to each call record (stored in `calls.meta`). */
+    /** Attach custom fields to each call record (stored in `calls.meta`). The dispatch's request
+     * envelope and span ride along (absent outside a request scope) so identity — clientId, userId,
+     * forwarded headers — can be stamped without re-deriving it. */
     readonly fields?: (event: {
       readonly service: string
       readonly action: string
       readonly status: 'success' | 'failure'
       readonly value?: unknown
+      readonly request?: ActionRequest | undefined
+      readonly trace?: TracerDef.SpanContext | undefined
     }) => Record<string, unknown> | undefined
   }
 

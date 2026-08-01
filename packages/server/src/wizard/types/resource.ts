@@ -1,5 +1,6 @@
 import type { Infer, InferInsert, Page, TableDef } from 'db:realtime'
 import type { Action, Service } from 'server:core'
+import type { Simplify } from 'std:shared'
 
 import type { AccessGuard } from './access'
 import type { FnModule, Mutation, Query } from './action'
@@ -61,8 +62,8 @@ export interface CrudModule<T extends TableDef> {
   readonly list: Query<CrudListArgs, Page<Infer<T>>>
   readonly get: Query<{ readonly id: string }, Infer<T>>
   readonly create: Mutation<InferInsert<T>, Infer<T>>
-  readonly update: Mutation<Partial<InferInsert<T>> & { readonly id: string }, Infer<T>>
-  readonly replace: Mutation<InferInsert<T> & { readonly id: string }, Infer<T>>
+  readonly update: Mutation<Simplify<Partial<InferInsert<T>> & { readonly id: string }>, Infer<T>>
+  readonly replace: Mutation<Simplify<InferInsert<T> & { readonly id: string }>, Infer<T>>
   readonly remove: Mutation<{ readonly id: string }, Infer<T> | undefined>
   readonly batch: Mutation<
     { readonly operations: readonly BatchOp<T>[] },

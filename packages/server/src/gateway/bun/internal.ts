@@ -42,8 +42,15 @@ export const startAction = operation(function* (
           deliver(undefined)
           return
         }
-      } catch {
-        // upgrade negotiation failed (e.g. no ws route) — fall through to REST (which 404s)
+      } catch (error) {
+        // an `authorize` refusal is an ANSWER (401/403) — only negotiation failures (e.g. no ws
+        // route) fall through to REST (which 404s)
+        const failure = asFailure(error)
+        const tag = (failure as AnyType).error
+        if (tag === CoreErrors.Unauthorized || tag === CoreErrors.Forbidden) {
+          deliver(Response.json(failure, { status: statusFor(tag) }))
+          return
+        }
       }
 
       try {

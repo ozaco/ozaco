@@ -11,10 +11,16 @@ export const fetch = (
   shouldExpect = false,
 ): FetchDef.Operation => {
   const runFetch = operation(function* () {
+    const { timeoutMs, ...rest } = init ?? {}
+
     try {
       const impl = yield* fetchImpl.get()
-      const signal = yield* useAbortSignal()
-      const response = yield* until(impl!(input, { ...init, signal }))
+      const scopeSignal = yield* useAbortSignal()
+      const signal =
+        timeoutMs === undefined
+          ? scopeSignal
+          : AbortSignal.any([scopeSignal, AbortSignal.timeout(timeoutMs)])
+      const response = yield* until(impl!(input, { ...rest, signal }))
       const wrapped = createFetchResponse(response)
       if (shouldExpect && !response.ok) {
         return yield* fail(
@@ -24,6 +30,12 @@ export const fetch = (
       }
       return wrapped
     } catch (error) {
+      // `until` reifies a rejection into a Failure, so unwrap one level; matched by NAME, not
+      // `instanceof DOMException` — runtimes disagree on the constructor
+      const raw = (error as { error?: unknown } | null)?.error ?? error
+      if (timeoutMs !== undefined && (raw as { name?: string } | null)?.name === 'TimeoutError') {
+        return yield* fail('timeout', `${input}: timed out after ${timeoutMs}ms`)
+      }
       return yield* asFailure(error)
     }
   }, 'fetch')

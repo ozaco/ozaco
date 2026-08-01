@@ -17,6 +17,7 @@ import {
   simplifyFailureCauses,
 } from '../internal/helpers'
 import { getNodeId, getServiceId } from '../internal/id'
+import { withPrincipal } from '../internal/principal'
 import { carriedOf, valuesOf } from '../internal/wire'
 import type { Action } from '../types/action'
 import type { BrokerDef } from '../types/broker'
@@ -38,7 +39,7 @@ import { InternalTransport } from './transport'
  * hands it over whole. One body, so the two can never drift in what a call actually does.
  */
 // oxlint-disable-next-line max-params
-const runCall = operation(function* (
+const runCallBare = operation(function* (
   target: Service | string,
   path: string,
   sources: Source.Any[] = [],
@@ -152,6 +153,24 @@ const runCall = operation(function* (
       ? TraceContext.with(traceContext, () => Policy.actions.dispatchRoot(policyCtx, core))
       : Policy.actions.dispatchRoot(policyCtx, core)
   })
+})
+
+// oxlint-disable-next-line max-params
+const runCall = operation(function* (
+  target: Service | string,
+  path: string,
+  sources: Source.Any[] = [],
+  options: BrokerDef.CallOptions = {},
+) {
+  // per-call identity is SUGAR over `withPrincipal` — the dispatch re-enters under the synthetic
+  // envelope, so the principal discriminator, the propagated `contexts.request` and an in-process
+  // invoke all read the same context the wrapper form would have planted
+  if (options.principal !== undefined) {
+    const { principal, ...rest } = options
+    return yield* withPrincipal(principal, () => runCallBare(target, path, sources, rest))
+  }
+
+  return yield* runCallBare(target, path, sources, options)
 })
 
 const DefaultBrokerImpl = Broker.implement({

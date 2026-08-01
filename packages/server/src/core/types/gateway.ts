@@ -80,6 +80,13 @@ export namespace GatewayDef {
   export interface WsOptions {
     path: string
     mode?: WsMode
+    /**
+     * Runs at UPGRADE time, before the socket is accepted, with the upgrade request's envelope
+     * (url + headers + route params). Fail (e.g. `yield* fail(CoreErrors.Unauthorized, …)`) or
+     * return `false` to refuse the connection; any other resolved value is planted by the
+     * framework as the connection's verified principal (`socket.principal` / `ws.data.principal`).
+     */
+    authorize?: (request: ActionRequest) => Operation<unknown>
     onOpen?: (ws: unknown) => Operation<void>
     /**
      * Opt-in raw-frame handler. When set, incoming frames on this route go to `onMessage` (the app
@@ -138,6 +145,9 @@ export namespace GatewayDef {
     readonly id: string
     /** Per-connection data captured at upgrade (headers, url, params). */
     readonly data: AnyType
+    /** The value the route's `authorize` hook resolved at upgrade time — the connection's verified
+     * identity, planted by the framework. Absent on routes without an `authorize` hook. */
+    readonly principal?: unknown
     /** Rooms this socket is currently in. */
     readonly rooms: Set<string>
     /** Send a message to THIS socket. */
@@ -167,6 +177,10 @@ export namespace GatewayDef {
    * `{ event, ... }` whose `event` matches an `on` key routes there, anything else falls to `message`.
    */
   export interface ListenHandlers {
+    /** Upgrade-time auth — see {@link WsOptions.authorize}. The resolved principal lands on
+     * `socket.principal`, and every handler below runs inside the upgrade request's context, so
+     * `useRequest()`/`useAuth(...)` work mid-stream (e.g. re-checking token expiry per frame). */
+    authorize?: (request: ActionRequest) => Operation<unknown>
     open?: (socket: Socket) => Operation<void>
     message?: (socket: Socket, message: unknown) => Operation<void>
     close?: (socket: Socket) => Operation<void>

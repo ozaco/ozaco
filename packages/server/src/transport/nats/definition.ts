@@ -273,7 +273,9 @@ export const NatsTransport = Transport.implement({
     let adopted = false
 
     yield* ensure(function* () {
-      if (!adopted) {
+      // shutdown teardown: the connection may already be gone — publishing then throws
+      // CONNECTION_CLOSED, and the owner it would cancel is going down with us anyway
+      if (!adopted && !nats.connection.isClosed()) {
         nats.connection.publish(cancelSubject(nats.prefix, cid), EMPTY_PAYLOAD)
       }
     })

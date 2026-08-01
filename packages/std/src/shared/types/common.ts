@@ -11,6 +11,11 @@ export type AnyFunction = (value: AnyType) => AnyType
 export type Writable<T> = { -readonly [P in keyof T]: T[P] }
 export type WriteableDeep<T> = { -readonly [P in keyof T]: WriteableDeep<T[P]> }
 
+/** Flatten an intersection into ONE object shape, so `Partial<A> & { id: string }` reads as
+ * `{ a?: …; id: string }` in hovers and errors. Homomorphic (per-property `?`/`readonly` survive),
+ * one level deep, identity in assignability. */
+export type Simplify<T> = { [K in keyof T]: T[K] } & EmptyType
+
 export type Tags<T extends string | null, U extends string[]> = {
   readonly [K in U[number] as KebabToPascal<K>]: T extends null ? K : `${T}.${K}`
 }

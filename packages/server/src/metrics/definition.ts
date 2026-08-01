@@ -104,11 +104,14 @@ export const MetricsCollector = Metrics.implement({
             action: event.actionKey,
             status: 'success',
             durationMs: event.durationMs,
+            requestId: event.trace?.traceId,
             meta: options.fields?.({
               service: event.serviceName,
               action: event.actionKey,
               status: 'success',
               value: event.value,
+              request: event.request,
+              trace: event.trace,
             }),
           })
         },
@@ -122,11 +125,14 @@ export const MetricsCollector = Metrics.implement({
             action: event.actionKey,
             status: 'failure',
             durationMs: event.durationMs,
+            requestId: event.trace?.traceId,
             error: String((event.failure as AnyType)?.message ?? 'failure'),
             meta: options.fields?.({
               service: event.serviceName,
               action: event.actionKey,
               status: 'failure',
+              request: event.request,
+              trace: event.trace,
             }),
           })
         },

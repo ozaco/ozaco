@@ -5,10 +5,28 @@ export namespace FetchDef {
   /** Thrown errors (network faults, aborts, body-read failures) pass through UNTOUCHED — reified with
    * `asFailure` so their original name + cause chain survive — hence `unknown`. The only string tags
    * fetch raises itself are the deliberate, non-thrown conditions: `'http-status'` (a non-ok response
-   * under `.expect()`) and `'parse'` (a response with no body). */
+   * under `.expect()`), `'parse'` (a response with no body) and `'timeout'` (a `timeoutMs` deadline
+   * hit before the response settled). */
   export type Error = unknown
 
-  export type Init = Omit<RequestInit, 'signal'> & { signal?: never }
+  /** The body union `fetch()` accepts (platform `BodyInit`), spelled out so callers compiling
+   * without the `dom` lib don't have to hand-roll it. */
+  export type Body =
+    | string
+    | Blob
+    | ArrayBuffer
+    | ArrayBufferView
+    | FormData
+    | URLSearchParams
+    | ReadableStream<Uint8Array>
+    | null
+
+  export type Init = Omit<RequestInit, 'signal'> & {
+    signal?: never
+    /** Aborts the request (via the internal `AbortController`) if no response settled within the
+     * deadline — the failure surfaces as the `'timeout'` tag. Scope halt/failure still aborts. */
+    timeoutMs?: number
+  }
 
   /** The underlying fetch implementation `fetch()` dispatches through (injectable via `fetchImpl`). */
   export type Impl = (input: RequestInfo | URL, init?: RequestInit) => Promise<globalThis.Response>

@@ -34,6 +34,7 @@ export const CALL_COLUMNS = [
   'action',
   'status',
   'durationMs',
+  'requestId',
   'error',
   'meta',
 ] as const
@@ -51,9 +52,13 @@ export const SCHEMA_DDL: readonly string[] = [
     "action" VARCHAR NOT NULL,
     "status" VARCHAR NOT NULL,
     "durationMs" DOUBLE NOT NULL,
+    "requestId" VARCHAR,
     "error" VARCHAR,
     "meta" VARCHAR
   )`,
+  // migration for stores created before the column existed — a no-op on fresh tables
+  `ALTER TABLE ${CALLS_TABLE} ADD COLUMN IF NOT EXISTS "requestId" VARCHAR`,
+  `CREATE INDEX IF NOT EXISTS idx_calls_request_id ON ${CALLS_TABLE} ("requestId")`,
   `CREATE TABLE IF NOT EXISTS ${LOGS_TABLE} (
     "ts" BIGINT NOT NULL,
     "level" INTEGER NOT NULL,
@@ -77,6 +82,7 @@ export const CALL_FILTER_COLUMNS: readonly Column[] = [
   column('action', 'text'),
   column('status', 'text'),
   column('durationMs', 'float'),
+  column('requestId', 'text'),
   column('error', 'text'),
 ]
 export const LOG_FILTER_COLUMNS: readonly Column[] = [

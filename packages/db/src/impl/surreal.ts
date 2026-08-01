@@ -52,10 +52,12 @@ let sharedDb: AnyType = null
  *   engines — they die with `Cannot execute INSERT statement using value: '<table>'`. This driver
  *   only ever issues raw `db.query(...)` (inserts arrive as compiled SurrealQL), so it never hits
  *   this; anyone reaching for the shared client directly must stick to `query` too.
- * - `@surrealdb/node` can PANIC while the process EXITS (SIGTRAP/SIGSEGV → exit code 133/139), even
- *   after a clean `close()`. It happens after all user code has run, so nothing functional is lost —
- *   but it pollutes teardown output and, worse, MASKS the real exit code, so a script probing `$?`
- *   after a run that touched the embedded engine cannot trust a 133/139 to mean an actual crash.
+ * - `@surrealdb/node` PANICS if the process exits while the engine is still OPEN (SIGTRAP →
+ *   exit 133/139), and an open engine also pins the event loop, so a natural exit never comes —
+ *   the only way out of an unclosed engine is a `process.exit()` that then panics. A clean
+ *   `close()` before exit prevents it deterministically (measured: close → 0, no close → 133,
+ *   every run). The Pool guarantees this via scope teardown (`ensure` → `end()`), so the ONLY
+ *   remaining hazard is calling `process.exit()` from inside the scope, before teardown ran.
  */
 export const SurrealDriver = DbDriver.implement({
   name: 'surreal',

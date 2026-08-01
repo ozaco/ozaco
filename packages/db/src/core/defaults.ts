@@ -1,5 +1,5 @@
 import type { Operation } from 'std:effect'
-import { createContext, operation, useContext } from 'std:effect'
+import { createContext, ensure, operation, useContext } from 'std:effect'
 import { defineProtocol } from 'std:plugin'
 import type { AnyType } from 'std:shared'
 
@@ -36,6 +36,13 @@ export const Pool = PoolProtocol.implement({
       interceptors: [...(config.interceptors ?? []), ...registered],
     })
     yield* StateRef.set(pool)
+    // The backend dies WITH ITS SCOPE, not with the process. An embedded engine left open at exit
+    // either keeps the loop alive (natural exit never comes) or panics native teardown
+    // (@surrealdb/node exits 133/139) — and only a pre-exit close prevents it, deterministically.
+    // `end()` is idempotent, so an app that already closes by hand pays nothing.
+    yield* ensure(function* () {
+      yield* pool.end()
+    })
     return pool
   },
 }).build({

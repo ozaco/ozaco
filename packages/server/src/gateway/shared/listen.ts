@@ -1,11 +1,11 @@
 import type { GatewayDef } from 'server:core'
-import { defineAction, Gateway } from 'server:core'
+import { ActionRequestContext, defineAction, Gateway } from 'server:core'
 import type { Operation } from 'std:effect'
 import { operation, useContext } from 'std:effect'
 import type { AnyType } from 'std:shared'
 
 import { broadcastAction, emitAction, joinRoom, leaveRoom, toRoomAction } from './realtime'
-import { encodeWsBody, parseWsPayload } from './ws'
+import { encodeWsBody, parseWsPayload, wsUpgradeRequest } from './ws'
 
 // `Gateway.actions.listen(path, handlers)` — register a WS endpoint WITHOUT defineAction/mount. It
 // synthesizes a WS route entry whose `onOpen/onMessage/onClose` (the existing lifecycle hooks) wrap the
@@ -22,6 +22,7 @@ const makeSocket = (ctx: GatewayDef.Context, ws: AnyType): GatewayDef.Socket => 
   return {
     id,
     data: ws?.data,
+    ...(ws?.data?.principal === undefined ? {} : { principal: ws.data.principal }),
     rooms: reg?.rooms ?? new Set<string>(),
     send: operation(function* (message: unknown) {
       const data = yield* encodeWsBody(message)
@@ -53,15 +54,20 @@ export const listenAction = operation(function* (
 ) {
   const ctx = yield* useContext(Gateway.context)
 
+  // Every handler runs inside the UPGRADE request's context — the same envelope `authorize` saw —
+  // so `useRequest()`/`useAuth(...)` answer on a raw WS route too (mid-stream re-auth included).
+  const inRequest = (ws: AnyType, body: () => Operation<void>): Operation<void> =>
+    ws?.data?.url ? ActionRequestContext.with(wsUpgradeRequest(ws.data), body) : body()
+
   const onOpen = handlers.open
     ? operation(function* (ws: AnyType) {
-        yield* handlers.open!(makeSocket(ctx, ws))
+        yield* inRequest(ws, () => handlers.open!(makeSocket(ctx, ws)))
       })
     : undefined
 
   const onClose = handlers.close
     ? operation(function* (ws: AnyType) {
-        yield* handlers.close!(makeSocket(ctx, ws))
+        yield* inRequest(ws, () => handlers.close!(makeSocket(ctx, ws)))
       })
     : undefined
 
@@ -72,11 +78,11 @@ export const listenAction = operation(function* (
     const event = (message as AnyType)?.event
 
     if (handlers.on && typeof event === 'string' && handlers.on[event]) {
-      yield* handlers.on[event]!(socket, message as AnyType)
+      yield* inRequest(ws, () => handlers.on![event]!(socket, message as AnyType))
       return
     }
     if (handlers.message) {
-      yield* handlers.message(socket, message)
+      yield* inRequest(ws, () => handlers.message!(socket, message))
     }
   })
 
@@ -84,6 +90,7 @@ export const listenAction = operation(function* (
     method: 'WS',
     path,
     transformer: Gateway,
+    ...(handlers.authorize ? { authorize: handlers.authorize } : {}),
     ...(onOpen ? { onOpen } : {}),
     onMessage,
     ...(onClose ? { onClose } : {}),

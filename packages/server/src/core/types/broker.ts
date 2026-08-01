@@ -76,7 +76,7 @@ export namespace BrokerDef {
     >(
       service: TService,
       path: TPath,
-      sources?: Source.Any[],
+      sources?: Source.For<Service.Args<TService, TPath>>,
       options?: BrokerDef.CallOptions,
     ): Future<Service.Returns<TService, TPath>>
 
@@ -101,7 +101,7 @@ export namespace BrokerDef {
     >(
       service: TService,
       path: TPath,
-      sources?: Source.Any[],
+      sources?: Source.For<Service.Args<TService, TPath>>,
       options?: BrokerDef.CallOptions,
     ): Future<Response<Service.Returns<TService, TPath>>>
 
@@ -172,5 +172,24 @@ export namespace BrokerDef {
     origin?: Source.Origin
     /** portable per-call metadata — request id, trace baggage, forwarded headers */
     meta?: Record<string, string>
+
+    /** Run THIS call under an explicit principal — the service-identity mechanism for scopes with
+     * no request context (background tasks, execution engines, raw WS frame handlers). The
+     * dispatch runs inside a synthetic internal envelope carrying these credentials: auth guards
+     * read the bearer token exactly as if an edge delivered it, per-principal policy keys
+     * (cache/bucket) isolate on it, and the envelope propagates across transports, so a cross-node
+     * dispatch authorizes the same way it would locally. REPLACES any current request context for
+     * the duration of the dispatch. */
+    principal?: string | PrincipalInit
   }
+}
+
+/** An explicit caller identity — a bearer token (the common case) or a full header map when the
+ * edge contract needs more than `authorization`. Consumed by `withPrincipal` and
+ * {@link BrokerDef.CallOptions.principal}. */
+export interface PrincipalInit {
+  /** Bearer token — lands in the synthetic envelope as `authorization: Bearer <token>`. */
+  readonly token?: string | undefined
+  /** Additional envelope headers, merged OVER the token's `authorization`. */
+  readonly meta?: Record<string, string> | undefined
 }

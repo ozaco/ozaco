@@ -8,6 +8,17 @@ import { JsonCodec } from 'std:codec/impl/json'
 
 import { JSON_CONTENT } from './const'
 
+/** The upgrade request's envelope, rebuilt from the per-connection `ws.data` captured at upgrade —
+ * one shape for the upgrade-time `authorize` hook and for the request context the listen handlers
+ * run inside (what makes `useRequest()`/`useAuth(...)` answer on a raw WS route). */
+export const wsUpgradeRequest = (data: AnyType): ActionRequest => ({
+  type: 'ws',
+  method: 'WS',
+  url: new URL(String(data?.url ?? 'ws://localhost/')),
+  meta: (data?.headers ?? {}) as Record<string, string>,
+  ...(data?.params ? { params: data.params as Record<string, string> } : {}),
+})
+
 // the `ws` action is the per-route WebSocket settings constructor (was Ws.actions.settings)
 export const wsSettingsAction = operation(function* (options: AnyType) {
   return {

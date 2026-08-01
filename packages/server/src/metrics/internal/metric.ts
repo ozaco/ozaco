@@ -115,6 +115,7 @@ const flushBuffers = operation(function* () {
         action: c.action,
         status: c.status,
         durationMs: c.durationMs,
+        requestId: c.requestId ?? null,
         error: c.error ?? null,
         meta: yield* serializeMeta(c.meta),
       })

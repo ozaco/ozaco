@@ -60,6 +60,11 @@ export namespace Service {
   export type Returns<TService, TPath extends string> =
     At<ActionsOf<TService>, TPath> extends Action<AnyType[], infer TReturn> ? TReturn : unknown
 
+  /** The args tuple the action at `TPath` declares — what a call's normal sources carry, in order.
+   * Falls back to `unknown[]` (an unconstrained call) when the action is untyped. */
+  export type Args<TService, TPath extends string> =
+    At<ActionsOf<TService>, TPath> extends Action<infer TArgs, AnyType> ? TArgs : unknown[]
+
   /** What a claim puts in a routing table: the action plus who owns the address. */
   export interface Route {
     service: Service

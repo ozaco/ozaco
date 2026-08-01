@@ -24,6 +24,8 @@ const storedCall = z.object({
   action: z.string(),
   status: z.string(),
   durationMs: z.number(),
+  // defaulted so a forwarder from before the column existed still ingests cleanly
+  requestId: z.string().nullable().default(null),
   error: z.string().nullable(),
   meta: z.string().nullable(),
 })

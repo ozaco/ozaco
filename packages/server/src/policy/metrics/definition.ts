@@ -1,5 +1,12 @@
 import type { Response } from 'server:core'
-import { definePolicy, PolicyPriority, untagged, valuesOf } from 'server:core'
+import {
+  ActionRequestContext,
+  definePolicy,
+  PolicyPriority,
+  TraceContext,
+  untagged,
+  valuesOf,
+} from 'server:core'
 import { asFailure } from 'std:result'
 
 import type { Metrics } from './types'
@@ -25,10 +32,17 @@ export const MetricsPolicy = definePolicy<Metrics.Options, Metrics.Context>({
     const onFailure = override?.onFailure ?? ctx.onFailure
 
     const startedAt = Date.now()
+    // The dispatch runs inside the request scope, so the envelope and span are readable right here —
+    // an exporter can stamp requestId/clientId/userId without re-deriving them. The span rides
+    // `req.contexts` (set on every dispatch); TraceContext is only planted when tracing is ON.
+    const request = yield* ActionRequestContext.get()
+    const trace = dispatch.req.contexts?.trace ?? (yield* TraceContext.get())
     const event = {
       serviceName: dispatch.serviceName,
       actionKey: dispatch.actionKey,
       startedAt,
+      ...(request === undefined ? {} : { request }),
+      ...(trace === undefined ? {} : { trace }),
     }
 
     runHook(() => onCall?.(event))

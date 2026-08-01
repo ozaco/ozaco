@@ -108,7 +108,16 @@ export const createDuckdbStore = (path: string): MetricsDef.Store => {
       yield* insertBatch(connect, {
         table: CALLS_TABLE,
         columns: CALL_COLUMNS,
-        values: rows.map(r => [r.ts, r.service, r.action, r.status, r.durationMs, r.error, r.meta]),
+        values: rows.map(r => [
+          r.ts,
+          r.service,
+          r.action,
+          r.status,
+          r.durationMs,
+          r.requestId,
+          r.error,
+          r.meta,
+        ]),
       })
     }),
     insertLogs: operation(function* (rows: readonly MetricsDef.StoredLog[]) {

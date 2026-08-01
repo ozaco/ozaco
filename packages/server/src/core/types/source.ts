@@ -76,6 +76,17 @@ export namespace Source {
 
   /** Narrow to the variant a given {@link DataType} produces. */
   export type Of<TType extends DataType, T = unknown> = Extract<Any<T>, { type: TType }>
+
+  /**
+   * The typed `sources` array for a declared args tuple: one {@link Normal} per arg — each `value`
+   * checked against ITS arg, in declaration order (which is how the broker maps them back) —
+   * followed by any number of stream-ish sources (lane / parts / socket). An untyped args tuple
+   * (`any[]` / `unknown[]`, i.e. a hand-written action with no declaration) falls back to
+   * {@link Any}`[]`, so loose call sites stay legal.
+   */
+  export type For<TArgs extends unknown[]> = unknown[] extends TArgs
+    ? Any[]
+    : [...{ [K in keyof TArgs]: Normal<TArgs[K]> }, ...Array<Lane | Lanes | Socket>]
 }
 
 /**

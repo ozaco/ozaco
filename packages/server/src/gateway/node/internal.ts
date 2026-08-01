@@ -12,6 +12,7 @@ import { createWsServer, upgradeWs } from '../external/ws'
 import { dispatchRequest } from '../shared/handle'
 import { closeSockets } from '../shared/realtime'
 import { haltInflight, pauseGate, trackRequest } from '../shared/serve'
+import { wsUpgradeRequest } from '../shared/ws'
 
 // adapt a Node request into a web-standard Request the shared transformer understands. The body is
 // exposed as a STREAMING `ReadableStream` (via `Readable.toWeb`) instead of being buffered up front —
@@ -144,6 +145,21 @@ export const startAction = operation(function* (
       for (const [key, value] of Object.entries(req.headers)) {
         headers[key] = Array.isArray(value) ? value.join(', ') : (value ?? '')
       }
+      // upgrade-time auth (same contract as the Bun edge): any refusal answers a raw 401 — the
+      // handshake never completes, so no socket to clean up.
+      let principal: unknown
+      const authorize = entry.setting.authorize
+      if (authorize) {
+        const outcome = await scope.safeRun(() =>
+          authorize(wsUpgradeRequest({ url: url.href, headers, params })),
+        )
+        if (!isSuccess(outcome) || outcome.value === false) {
+          socket.write('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n')
+          socket.destroy()
+          return
+        }
+        principal = outcome.value
+      }
       // mint the socket id through IO (IO-first) BEFORE the handshake, so ws.data is set synchronously
       // in the handshake callback (no race with the first inbound message).
       const minted = await scope.safeRun(() => IO.actions.uuid())
@@ -152,7 +168,15 @@ export const startAction = operation(function* (
         hub,
         { req, socket, head },
         {
-          data: { id, url: url.href, headers, params, entry, controller: new AbortController() },
+          data: {
+            id,
+            url: url.href,
+            headers,
+            params,
+            entry,
+            ...(principal === undefined ? {} : { principal }),
+            controller: new AbortController(),
+          },
           onOpen: nodeWs => void scope.safeRun(() => Gateway.actions.onOpen(nodeWs)),
           onMessage: (nodeWs, message) =>
             void scope.safeRun(() => Gateway.actions.onMessage(nodeWs, message)),
