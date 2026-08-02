@@ -28,7 +28,17 @@ export const succeed: Impl.Succeed = (...args: AnyType[]) => {
 
   const value = args[0]
 
-  if (isPromise(value)) {
+  /**
+   * Unwrap only a FOREIGN promise — never an effect-native value.
+   *
+   * A `Future`/`Task`/`Stream` built by `operation()` is deliberately thenable (await-side interop),
+   * so `isPromise` alone cannot tell "an async computation to settle" from "an operation handed
+   * around as a value". Calling `.then` on one here RUNS it as a floating task and replaces the
+   * value with its settled `Result` — which is how a lane returned by an action reached `attempt`
+   * as a Promise and came out as `stream: undefined`. `Symbol.iterator` is the discriminator: a
+   * plain promise is not an operation, and an operation used as a value stays one.
+   */
+  if (isPromise(value) && !(Symbol.iterator in (value as object))) {
     return value.then(resolved => {
       success.value = resolved
 
