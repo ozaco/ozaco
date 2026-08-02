@@ -17,6 +17,8 @@ interface OpenAPIOperation {
     readonly name: string
     readonly required?: boolean
     readonly schema?: AnyType
+    /** A param carrying a serialized document — a `stream` route's `?args={json}` envelope. */
+    readonly content?: Record<string, OpenAPIMedia>
   }[]
   readonly requestBody?: {
     readonly content?: Record<string, OpenAPIMedia>
@@ -116,6 +118,15 @@ const argsSchema = (entry: OpenAPIOperation): AnyType => {
   const properties: Record<string, AnyType> = {}
   const required: string[] = []
   for (const parameter of entry.parameters ?? []) {
+    // A param declared with `content` carries a whole argument object serialized into one query
+    // value (a `stream` route's `?args={json}`) — its FIELDS are the call's args, not the param
+    // name. Flattening it is what gives a stream fn real args instead of `Record<string, never>`.
+    const envelope = jsonMediaSchema(parameter.content)
+    if (envelope?.type === 'object') {
+      Object.assign(properties, envelope.properties ?? {})
+      required.push(...((envelope.required ?? []) as string[]))
+      continue
+    }
     properties[parameter.name] = parameter.schema ?? {}
     if (parameter.required) {
       required.push(parameter.name)

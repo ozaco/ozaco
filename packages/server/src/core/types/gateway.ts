@@ -114,10 +114,13 @@ export namespace GatewayDef {
      * death from a quiet stream, so silence is what has to reap a session — and that only works if
      * both ends keep speaking.
      */
-    '$ozaco:gw': 'join' | 'leave' | 'toRoom' | 'broadcast' | 'emit' | 'ping'
+    '$ozaco:gw': 'join' | 'leave' | 'toRoom' | 'broadcast' | 'emit' | 'ping' | 'close'
     room?: string
     to?: string
     message?: unknown
+    /** `close` only: the WebSocket close code / reason to hang up with. */
+    code?: number
+    reason?: string
   }
 
   /** One `session`-mode connection proxied to its owning node: the inbound frame sink plus the task
@@ -160,6 +163,11 @@ export namespace GatewayDef {
     broadcast(message: unknown): Operation<void>
     /** Push to ONE other socket by id — a no-op when no gateway currently holds it. */
     emit(socketId: string, message: unknown): Operation<void>
+    /** Hang up on THIS socket. The owner of a connection is what knows when it has become
+     * pointless (an unauthenticated client that never subscribes, a session gone idle), and until
+     * this existed it had no way to say so — the client held the connection open forever. Travels
+     * as a control frame in `session` mode, so it works from a pod that never touched the socket. */
+    close(code?: number, reason?: string): Operation<void>
     /**
      * Spawn a background task bound to THIS socket's lifetime — automatically halted when the socket
      * closes. Use it to pump a long-lived source (e.g. a db LiveQuery Stream) into the socket without

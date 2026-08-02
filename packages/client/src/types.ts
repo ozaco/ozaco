@@ -31,7 +31,10 @@ export interface ClientOptions {
  * `list` returns a page one-shot but emits per-row change events on `.watch(...)`). */
 export interface QueryRef<TArgs, TResult, TEmits = TResult> {
   (args: TArgs): Future<TResult>
-  /** Live subscription. Resolves to an operation-native stopper — `yield* stop()` closes the socket. */
+  /** Live subscription. Resolves to an operation-native stopper — `yield* stop()` closes the socket.
+   * The channel re-opens itself on a dropped connection (bounded backoff, `onError` once the budget
+   * is spent) and is owned by the client, not by the calling scope, so an `await`ed subscription
+   * keeps streaming: the stopper is what ends it. */
   watch(
     args: TArgs,
     onNext: (event: TEmits) => void,
@@ -48,6 +51,9 @@ export type ActionRef<TArgs, TResult> = (args: TArgs) => Future<TResult>
 /** A producer-driven stream reference: `.subscribe(...)` for a live feed of `TEmits` (metrics,
  * vitals, a log tail, …). No one-shot call. */
 export interface StreamRef<TArgs, TEmits> {
+  /** Same lifetime rules as {@link QueryRef.watch}: self-reopening, client-owned, stopper-ended.
+   * A dedicated stream route's payload arrives exactly as the server produced it (only `_realtime`
+   * frames are unwrapped), so a payload with a `result` field of its own survives intact. */
   subscribe(
     args: TArgs,
     onNext: (event: TEmits) => void,

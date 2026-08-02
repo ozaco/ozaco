@@ -89,6 +89,11 @@ const makeSseSocket = (ctx: GatewayDef.Context, id: string, data: AnyType): Gate
     toRoom: toRoomAction,
     broadcast: broadcastAction,
     emit: emitAction,
+    // an SSE connection has no close frame — ending the byte queue IS the hangup, and the response
+    // stream finishing is what fires the route's teardown
+    close: operation(function* () {
+      ;(reg?.raw as AnyType)?.close?.()
+    }),
     spawn: operation(function* (op: () => Operation<void>) {
       const task = ctx.scope.run(op)
       reg?.tasks.add(task)

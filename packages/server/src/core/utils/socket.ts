@@ -109,6 +109,15 @@ const makeSocket = (
     emit: operation(function* (to: string, message: unknown) {
       out.add(frame({ '$ozaco:gw': 'emit', to, message }))
     }),
+    close: operation(function* (code?: number, reason?: string) {
+      out.add(
+        frame({
+          '$ozaco:gw': 'close',
+          ...(code === undefined ? {} : { code }),
+          ...(reason === undefined ? {} : { reason }),
+        }),
+      )
+    }),
     spawn: operation(function* (op: () => Operation<void>) {
       const broker = yield* useContext(Broker)
       const task = broker.scope.run(op)

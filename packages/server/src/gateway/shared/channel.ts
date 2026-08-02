@@ -54,10 +54,14 @@ const sendFrame = operation(function* (ctx: GatewayDef.Context, id: string, fram
  * makes the platform fire its own close handler, which calls {@link closeChannel}, which is what
  * halts the pump. Tearing the channel down from here instead would mean the pump halting itself.
  */
-const closeSocket = (ctx: GatewayDef.Context, id: string): void => {
+const closeSocket = (
+  ctx: GatewayDef.Context,
+  id: string,
+  hangup?: { code?: number | undefined; reason?: string | undefined },
+): void => {
   const socket = ctx.sockets.get(id)
   try {
-    ;(socket?.raw as AnyType)?.close?.()
+    ;(socket?.raw as AnyType)?.close?.(hangup?.code, hangup?.reason)
   } catch {
     /* already gone */
   }
@@ -99,6 +103,12 @@ const applyControl = operation(function* (ws: AnyType, frame: GatewayDef.Control
   }
   if (command === 'emit') {
     yield* Gateway.actions.emit(String(frame.to ?? ''), frame.message)
+    return
+  }
+  if (command === 'close') {
+    // the owner hung up on the client; the platform close handler tears the channel down from here
+    const ctx = yield* useContext(Gateway.context)
+    closeSocket(ctx, socketId(ws), { code: frame.code, reason: frame.reason })
   }
 })
 

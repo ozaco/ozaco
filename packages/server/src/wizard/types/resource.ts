@@ -74,6 +74,10 @@ export interface CrudModule<T extends TableDef> {
 export interface ResourceOptions {
   /** Transport for this resource's own realtime channel (`/<ns>/_realtime`). */
   readonly realtime?: RealtimeTransport | undefined
+  /** How long a `_realtime` WebSocket may stay connected with NOTHING subscribed before the server
+   * hangs up (default 30s, `0` never hangs up). The access guard runs on `watch`, not on the
+   * handshake, so this is what stops an unauthenticated client from parking sockets. */
+  readonly realtimeIdleMs?: number | undefined
   /** Mount the resource under a parent path carrying path params, e.g. `'/apps/:appId'`. The parent
    * params arrive in every handler's `body` (nested / sub-resources). */
   readonly parent?: string | undefined
@@ -93,6 +97,8 @@ export interface CrudResourceConfig extends CrudOptions {
   readonly namespace?: string | undefined
   /** Transport for the collection's realtime channel (`/<ns>/_realtime`). Defaults to `'websocket'`. */
   readonly realtime?: RealtimeTransport | undefined
+  /** See {@link ResourceOptions.realtimeIdleMs}. */
+  readonly realtimeIdleMs?: number | undefined
   /** Mount the collection under a parent path carrying path params, e.g. `'/apps/:appId'` (nested). */
   readonly parent?: string | undefined
 }

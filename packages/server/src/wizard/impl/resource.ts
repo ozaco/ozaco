@@ -83,6 +83,7 @@ export function resource(
     : moduleOrConfig
   const transport = (crud ? moduleOrConfig.realtime : options.realtime) ?? 'websocket'
   const parent = crud ? moduleOrConfig.parent : options.parent
+  const idleMs = crud ? moduleOrConfig.realtimeIdleMs : options.realtimeIdleMs
   const basePath = parent ? `${parent}/${namespace}` : `/${namespace}`
 
   // `stream` actions are not REST-routed; they are served over `_realtime` (and their own SSE route).
@@ -115,7 +116,9 @@ export function resource(
   const channels: Record<string, unknown> = {}
   if (hasReactive) {
     channels._realtime =
-      transport === 'sse' ? sseRealtimeAction(namespace, module) : realtimeAction(namespace, module)
+      transport === 'sse'
+        ? sseRealtimeAction(namespace, module)
+        : realtimeAction(namespace, module, idleMs)
   }
   for (const [name, definition] of streamEntries) {
     if (definition.rest) {

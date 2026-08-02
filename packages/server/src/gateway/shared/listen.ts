@@ -39,6 +39,13 @@ const makeSocket = (ctx: GatewayDef.Context, ws: AnyType): GatewayDef.Socket => 
     toRoom: toRoomAction,
     broadcast: broadcastAction,
     emit: emitAction,
+    close: operation(function* (code?: number, reason?: string) {
+      try {
+        ;(reg?.raw as AnyType)?.close?.(code, reason)
+      } catch {
+        /* already gone */
+      }
+    }),
     spawn: operation(function* (op: () => Operation<void>) {
       // run on the gateway scope, tracked on this socket so onClose halts it (no leaked pumps).
       const task = ctx.scope.run(op)

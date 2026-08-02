@@ -267,7 +267,25 @@ const buildOperation = (
       op.parameters = parameters
     }
   } else {
-    const all = [...parameters, ...pickQueryParams(inputSchema, pathParams)]
+    // A `stream` route declares its args on the wizard lane, not as an `input`, because they travel
+    // as ONE json-encoded `?args=` param instead of a field per param. Document that envelope
+    // verbatim (OpenAPI's `content` form) so a generator can still recover the argument type.
+    const wizardArgs = (meta as AnyType).wizard?.args
+    const argsSchema = wizardArgs
+      ? hoistDefs(toJsonSchema(wizardArgs, 'input'), `${ns}.args`, schemas)
+      : undefined
+    const all = [
+      ...parameters,
+      ...(argsSchema
+        ? [
+            {
+              name: 'args',
+              in: 'query' as const,
+              content: { 'application/json': { schema: argsSchema } },
+            },
+          ]
+        : pickQueryParams(inputSchema, pathParams)),
+    ]
     if (all.length > 0) {
       op.parameters = all
     }

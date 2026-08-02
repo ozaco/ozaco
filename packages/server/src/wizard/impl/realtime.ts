@@ -15,6 +15,7 @@ import {
   ensure,
   mapError,
   operation,
+  sleep,
   useContext,
   validate,
 } from 'std:effect'
@@ -27,6 +28,7 @@ import { JsonCodec } from 'std:codec/impl/json'
 import type { ZodType } from 'zod'
 import { z } from 'zod'
 
+import { REALTIME_IDLE_MS } from '../const'
 import { assertAccess } from '../internal/access'
 import { resolveActionArgs } from '../internal/args'
 import { matchesWatch, resolveWatchTarget } from '../internal/realtime'
@@ -222,7 +224,12 @@ const pumpFor = (deps: PumpDeps): (() => Operation<void>) => {
   return function* () {}
 }
 
-const wrapped: Frame = value => value
+/** The frame shape of a dedicated stream route: none. The value goes out exactly as the handler
+ * produced it — only `_realtime` wraps (see {@link frameFor}), because only there does a client have
+ * to tell subscriptions apart. A client must therefore key its unwrapping on the ROUTE, never on
+ * "does this frame happen to have a `.result`" — a payload with a `result` field of its own is
+ * perfectly legal here. */
+const unframed: Frame = value => value
 
 /** The reactive payload validator for an action: `emits` if declared, else the one-shot `returns`. */
 const emitsOf = (action: WizardActionDef): ZodType | undefined => action.emits ?? action.returns
@@ -292,9 +299,11 @@ const streamOf = operation(function* (deps: Omit<PumpDeps, 'socket'>) {
  * what lets the gateway forward the whole socket to whichever pod owns the resource, where the
  * database is.
  */
-export const realtimeAction = (namespace: string, module: FnModule) => {
+export const realtimeAction = (namespace: string, module: FnModule, idleMs = REALTIME_IDLE_MS) => {
   // per connection, keyed by socket: `unwatch` must stop ONE feed, not the socket
   const feeds = new Map<string, Map<string, Task<void>>>()
+  // the reaper armed for each connection that currently subscribes to nothing
+  const idlers = new Map<string, Task<void>>()
   let seq = 0
 
   const pumpsOf = (socket: GatewayDef.Socket) => {
@@ -306,6 +315,40 @@ export const realtimeAction = (namespace: string, module: FnModule) => {
     feeds.set(socket.id, created)
     return created
   }
+
+  /** Cancel the reaper — this connection is doing something. */
+  const disarmIdle = operation(function* (socket: GatewayDef.Socket) {
+    const idler = idlers.get(socket.id)
+    idlers.delete(socket.id)
+    if (idler) {
+      yield* attempt(() => idler.halt())
+    }
+  })
+
+  /**
+   * Arm the reaper: hang up in `idleMs` unless a subscription is accepted first.
+   *
+   * The access guard runs on `watch`, never on the handshake, so an unauthenticated client is
+   * indistinguishable from a slow one AT OPEN — the only honest signal is that nothing is being
+   * subscribed to. Re-armed whenever the last feed goes away, so an `unwatch`-and-idle client is
+   * reaped on the same rule as one that never subscribed. Runs on the socket's own task set, so a
+   * client that hangs up first takes the timer with it.
+   */
+  const armIdle = operation(function* (socket: GatewayDef.Socket) {
+    if (idleMs <= 0) {
+      return
+    }
+    yield* disarmIdle(socket)
+    idlers.set(
+      socket.id,
+      yield* socket.spawn(function* () {
+        yield* sleep(idleMs)
+        if (pumpsOf(socket).size === 0) {
+          yield* attempt(() => socket.close(1000, `${namespace}._realtime: nothing subscribed`))
+        }
+      }),
+    )
+  })
 
   /** Stop one subscription, tolerating a pump that already finished on its own. */
   const stop = operation(function* (socket: GatewayDef.Socket, key: string) {
@@ -354,22 +397,35 @@ export const realtimeAction = (namespace: string, module: FnModule) => {
               )
             })
 
-            if (!isSuccess(outcome)) {
-              yield* socket.send({
-                ...(message?.id === undefined ? {} : { id: message.id }),
-                error: outcome.error,
-              })
+            if (isSuccess(outcome)) {
+              yield* disarmIdle(socket)
+              return
+            }
+            yield* socket.send({
+              ...(message?.id === undefined ? {} : { id: message.id }),
+              error: outcome.error,
+            })
+            // refused (bad args, denied access) — the connection is back to subscribing to nothing
+            if (pumpsOf(socket).size === 0) {
+              yield* armIdle(socket)
             }
           }),
 
           unwatch: operation(function* (socket: GatewayDef.Socket, message: AnyType) {
             yield* stop(socket, String(message?.id ?? ''))
+            if (pumpsOf(socket).size === 0) {
+              yield* armIdle(socket)
+            }
           }),
         },
+
+        // a fresh connection subscribes to nothing yet — start the clock
+        open: armIdle,
 
         // `socketAction` already halts every spawned pump; this just drops the bookkeeping
         close: operation(function* (socket: GatewayDef.Socket) {
           feeds.delete(socket.id)
+          idlers.delete(socket.id)
         }),
       },
     ),
@@ -445,17 +501,24 @@ export const streamRouteAction = (namespace: string, name: string, def: WizardAc
         return yield* streamOf({
           action: def,
           target: { ...target, args },
-          frame: wrapped,
+          frame: unframed,
           emits: emitsOf(def),
         })
       },
     ),
-    // the def knows its kind and tick schema; without this lane the route reached OpenAPI as a
-    // plain GET and codegen typed the SSE feed as a one-shot `query`
+    // The def knows its kind, its tick schema AND its args; without this lane the route reached
+    // OpenAPI as a plain GET and codegen typed the SSE feed as a one-shot `query`.
+    //
+    // `args` cannot ride the action's `input`: this route takes its arguments as ONE json-encoded
+    // `?args=` query param (see `targetFromQuery`), not as a field-per-param query, so declaring an
+    // input would make core validation reject every real request. Docs reads this lane instead and
+    // documents the envelope exactly as it travels — which is what lets codegen type
+    // `stream` args at all (they were `Record<string, never>` before).
     {
       wizard: {
         kind: 'stream' as const,
         ...(emitsOf(def) ? { emits: emitsOf(def) } : {}),
+        ...(def.args ? { args: resolveActionArgs(def) } : {}),
       },
     },
   )

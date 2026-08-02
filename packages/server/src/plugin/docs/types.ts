@@ -46,6 +46,10 @@ export namespace DocsDef {
     in: 'query' | 'path'
     required?: boolean
     schema?: JsonSchema
+    /** A param whose value is a serialized document rather than a scalar — OpenAPI's `content` form.
+     * Used for a `stream` route's `?args={json}` envelope, where one query param carries the whole
+     * argument object. */
+    content?: Record<string, { schema: JsonSchema }>
   }
 
   export interface OperationObject {
