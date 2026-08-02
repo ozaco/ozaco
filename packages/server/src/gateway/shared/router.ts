@@ -83,9 +83,16 @@ export const findAction = operation(function* (method: string, path: string) {
    * `OPTIONS` is exempt: a preflight is not resource access, so the danger shadowing guards against
    * does not exist — while the guard itself would 404 the CORS `OPTIONS /**` route (a root mount)
    * on exactly the mounted paths a browser must preflight before it can call them at all.
+   *
+   * `WS` is exempt for the same shape of reason: the hazard above is a REST one — a method falling
+   * through to an outer resource's `:param` route and turning a path segment into a record id. A
+   * socket route is addressed explicitly and never converts a segment into data. And the guard
+   * actively breaks raw WS: `listen()` registers at the root prefix (depth 0), so any mount whose
+   * claim covered its path 404'd the upgrade — the request then fell back to REST and died on that
+   * route's guard with an unrelated error, while the real cause stayed silent.
    */
   const route = ctx.handlers.get(foundRoute.data as symbol)
-  if (route !== undefined && method !== 'OPTIONS') {
+  if (route !== undefined && method !== 'OPTIONS' && method !== 'WS') {
     const normal = path.length > 1 ? path.replace(/\/+$/u, '') : path
     const owned = depthOf(route.prefix)
     for (const claim of findAllRoutes(ctx.claims, CLAIM, normal)) {

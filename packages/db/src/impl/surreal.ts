@@ -1,7 +1,7 @@
 // oxlint-disable import/exports-last
 import type { DriverConnection, Query, ResolvedClientConfiguration } from 'db:core'
 import { DbDriver } from 'db:core'
-import { attempt, call, operation, until } from 'std:effect'
+import { attempt, call, operation, sleep, until } from 'std:effect'
 import { isSuccess } from 'std:result'
 
 import { IO } from '@ozaco/std/io'
@@ -131,6 +131,10 @@ export const SurrealDriver = DbDriver.implement({
     if (sharedDb) {
       yield* until(sharedDb.close())
       sharedDb = null
+      // `close()` resolves before the engine's native threads finish tearing down, and a
+      // `process.exit` racing that unwind is the residual flaky SIGINT segfault (B1). One
+      // macrotask turn while the loop is still alive lets the native side settle first.
+      yield* sleep(0)
     }
   }),
 })

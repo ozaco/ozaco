@@ -13,6 +13,15 @@ import { withHost } from './with-host'
 
 declare const Deno: AnyType
 
+// One macrotask turn between the last teardown resolving and the hard exit. Native backends
+// (an embedded database's threads, a driver's descriptors) may still be unwinding when their JS
+// `close()` promise resolves; `process.exit` at that exact instant can segfault the native side.
+// A single turn lets the loop drain what teardown started — it does not change the exit status.
+const drain = (): Promise<void> =>
+  new Promise(resolve => {
+    setTimeout(resolve, 0)
+  })
+
 export function* exit(status: number, message?: string): Operation<void> {
   const escape = yield* ExitContext.expect()
   const payload: Helpers.Exit = { status }
@@ -129,10 +138,12 @@ export async function main(body: (args: string[]) => Operation<void>): Promise<v
       console.error(exitValue.error)
     }
 
+    await drain()
     return hardexit(exitValue.status)
   }
 
   console.error('unknown error', result)
 
+  await drain()
   return hardexit(1)
 }

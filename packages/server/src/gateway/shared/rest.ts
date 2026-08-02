@@ -9,6 +9,7 @@ import { JsonCodec } from 'std:codec/impl/json'
 
 import { parseMultipart } from '../external/multipart'
 
+import { coerceParams, paramCoercions } from './coerce'
 import { BODY_METHODS, FORM_DATA, FORM_URLENCODED, JSON_CONTENT, RAW_BINARY } from './const'
 import { appendField, splitLeadingFields } from './form-data'
 
@@ -177,8 +178,17 @@ export const toInternalAction = operation(function* (req: AnyType, _res: unknown
     }
   }
 
-  const queryParams = Object.fromEntries(url.searchParams.entries())
-  const pathParams = meta.params as Record<string, unknown> | undefined
+  // Query/path params arrive as strings; coerce the ones whose arg schema says number/boolean —
+  // otherwise `args: z.object({ limit: z.number() })` on a GET route 400s every request and every
+  // author has to remember `z.coerce`. The table is schema-derived, so string-accepting keys and
+  // unparseable values pass through untouched.
+  const entry = meta.sym === undefined ? undefined : ctx.handlers.get(meta.sym as symbol)
+  const coercions = entry === undefined ? null : paramCoercions(entry)
+
+  const queryParams = coerceParams(Object.fromEntries(url.searchParams.entries()), coercions)
+  const rawPathParams = meta.params as Record<string, unknown> | undefined
+  const pathParams =
+    rawPathParams === undefined ? undefined : coerceParams(rawPathParams, coercions)
 
   const isPlainObject = (v: unknown): v is Record<string, unknown> =>
     v !== null && typeof v === 'object' && !Array.isArray(v)
@@ -202,7 +212,8 @@ export const toInternalAction = operation(function* (req: AnyType, _res: unknown
       method: req.method,
       url,
       meta: headers,
-      params: (pathParams ?? {}) as Record<string, string>,
+      // the envelope's params stay the raw wire strings; only the validated body sees coercion
+      params: (rawPathParams ?? {}) as Record<string, string>,
     },
     {
       status: null,
