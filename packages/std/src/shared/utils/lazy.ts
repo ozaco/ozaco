@@ -1,5 +1,5 @@
 import type { Result } from 'std:result'
-import { fail, isSuccess, succeed } from 'std:result'
+import { asFailure, isSuccess, succeed } from 'std:result'
 import type { PromiseWithResolvers } from 'std:shared'
 
 export const lazyPromise = <T, E>(
@@ -44,7 +44,7 @@ export const lazyPromiseWithResolvers = <T>(): PromiseWithResolvers<T> => {
 
   const resolve = ((value: T) =>
     settle(succeed(value) as Result<T, never>)) as PromiseWithResolvers<T>['resolve']
-  const reject = (error: unknown) => settle(fail(error))
+  const reject = (error: unknown) => settle(asFailure(error))
 
   const promise = lazyPromise<T, unknown>(($resolve, $reject) => {
     const record = ($result: Result<T, unknown>) => {

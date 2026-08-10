@@ -7,55 +7,49 @@ export namespace Impl {
   export interface Succeed {
     (): Result<void, never>
 
-    <T extends `${string}`>(value: PromiseLike<T>): Result.Async<T, never>
     <T extends `${string}`>(value: T): Result<T, never>
-    <const T>(value: T): Result.For<T, Awaited<T>, never>
+    <const T>(value: T): Result<T, never>
   }
 
   export interface Fail {
     (): Result<never, void>
 
-    <E extends `${string}`>(error: PromiseLike<E>): Result.Async<never, E>
     <E extends `${string}`>(error: E): Result<never, E>
-    <const E>(error: E, message?: string, ...causes: string[]): Result.For<E, never, Awaited<E>>
+    <const E>(error: E, message?: string, ...causes: string[]): Result<never, E>
   }
 
   export interface Auto {
-    <R extends Result.Both<AnyType, AnyType>>(
+    <R extends Result<AnyType, AnyType>>(
       result: R,
-    ): true extends IsPromiseStrict<R>
-      ? Result.Async<Result.InferSuccess<R>, Result.InferFailure<R>>
-      : Result<Result.InferSuccess<R>, Result.InferFailure<R>>
-    <R extends Result.Both<AnyType, AnyType>, T>(
+    ): Result<Result.InferSuccess<R>, Result.InferFailure<R>>
+    <R extends Result<AnyType, AnyType>, T>(
       result: R,
       defaultValue: T,
-    ): true extends IsPromiseStrict<R>
-      ? Result.Async<Result.InferSuccess<R> | T, never>
-      : Result<Result.InferSuccess<R> | T, never>
+    ): Result<Result.InferSuccess<R> | T, never>
 
-    <T extends `${string}`>(value: PromiseLike<T>): Result.Async<T, never>
+    <T extends `${string}`>(value: PromiseLike<T>): Result<T, never>
     <T extends `${string}`>(value: T): Result<T, never>
-    <const T>(value: T): Result.ResultFromUnion<T>
+    <const T>(value: T): Result.FromUnion<T>
   }
 
   export type Throwable = <R, E extends Result.ErrorConstructor>(
     cb: () => R,
     errorClass?: E,
     ...causes: string[]
-  ) => Result.ResultFromUnion<R | Result.Failure<E['prototype']>>
+  ) => Result.FromUnion<R | Result.Failure<E['prototype']>>
 
-  export type AppendCauses = <T extends Result.Both<AnyType, AnyType>>(
+  export type AppendCauses = <T extends Result<AnyType, AnyType>>(
     result: T,
     ...causes: string[]
   ) => T
 
   export interface Unwrap {
-    <R extends Result.Both<never, AnyType>>(result: R): never
+    <R extends Result<never, AnyType>>(result: R): never
 
-    <R extends Result.Both<AnyType, AnyType>>(
+    <R extends Result<AnyType, AnyType>>(
       result: R,
     ): true extends IsPromiseStrict<R> ? Promise<Result.InferSuccess<R>> : Result.InferSuccess<R>
-    <R extends Result.Both<AnyType, AnyType>, T>(
+    <R extends Result<AnyType, AnyType>, T>(
       result: R,
       defaultValue: T,
     ): true extends IsPromiseStrict<R>

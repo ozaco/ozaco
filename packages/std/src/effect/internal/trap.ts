@@ -1,13 +1,16 @@
 import type { Result } from 'std:result'
 import { asFailure, isJust, isNothing, just, nothing, succeed } from 'std:result'
 
-import { useScope } from '../methods/scope'
+import { useCoroutine, useScope } from '../base/hooks'
 import type { Helpers } from '../types/helpers'
 import type { Operation } from '../types/operation'
 
 import { ErrorContext } from './contexts'
-import { useCoroutine } from './coroutine'
 
+/**
+ * Install an error boundary around `operation`: failures raised by child tasks land here instead of
+ * percolating past it. Internal building block for tasks, `race`, `all`, and `scoped`.
+ */
 export function* trap<T>(operation: () => Operation<T>): Operation<T> {
   const scope = yield* useScope()
   const original = scope.expect(ErrorContext)
@@ -19,7 +22,7 @@ export function* trap<T>(operation: () => Operation<T>): Operation<T> {
   try {
     const value = yield* operation()
     if (isNothing(boundary.outcome)) {
-      boundary.outcome = just(succeed(value) as Result<T, unknown>)
+      boundary.outcome = just(succeed(value) as Result<T>)
     }
   } catch (error) {
     boundary.outcome = just(asFailure(error))
@@ -31,7 +34,7 @@ export function* trap<T>(operation: () => Operation<T>): Operation<T> {
 }
 
 export class Trap<T> implements Helpers.ErrorBoundary {
-  outcome = nothing<Result<T, unknown>>()
+  outcome = nothing<Result<T>>()
 
   constructor(public routine: Helpers.Coroutine) {}
 
@@ -52,7 +55,7 @@ export class Trap<T> implements Helpers.ErrorBoundary {
         }
         return didExit => didExit(succeed())
       },
-      cause: 'exit trap',
+      cause: 'exit this trap. throw if a background error was raised',
     }
   }
 }
