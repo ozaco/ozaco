@@ -1,17 +1,22 @@
 import type { AnyType } from 'std:shared'
 
-import type { Hookable } from '../types/hookable'
+import { buildPlugin, createProtocolRuntime } from '../internal/runtime'
 import type { Impl } from '../types/impl'
 
-import { createHookable } from './hook'
-
+/**
+ * Define a standalone plugin: an internal single-implementation protocol whose only impl is the
+ * plugin itself. Calls on the handle are always pinned to that impl.
+ */
 export const definePlugin: Impl.DefinePlugin = (options): AnyType => {
-  const { context, buildPlugin } = createHookable(options)
+  const runtime = createProtocolRuntime({
+    name: options.name,
+    version: options.version,
+    subtype: options.subtype,
+  })
 
   return {
-    context,
+    context: runtime.context,
 
-    build: (buildActions?: Record<string, Hookable.AnyAction>) =>
-      buildPlugin(options as AnyType, buildActions),
+    build: (actions?: AnyType, extras?: AnyType) => buildPlugin(runtime, options, actions, extras),
   }
 }

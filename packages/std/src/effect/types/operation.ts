@@ -4,7 +4,6 @@ import type { AnyType } from 'std:shared'
 import type { CONTEXT } from '../const'
 
 import type { Helpers } from './helpers'
-import type { Api } from './utils'
 
 export interface Operation<T> {
   [Symbol.iterator](): Iterator<Helpers.Effect<unknown> | Result.Failure<AnyType>, T, unknown>
@@ -63,4 +62,47 @@ export interface Channel<T, TClose> extends Stream<T, TClose> {
 export interface Queue<T, TClose> extends Subscription<T, TClose> {
   add(item: T): void
   close(value: TClose): void
+}
+
+export type Middleware<TArgs extends unknown[], TReturn> = (
+  args: TArgs,
+  next: (...args: TArgs) => TReturn,
+) => TReturn
+
+export type Around<A> = {
+  [K in keyof A]: A[K] extends (...args: infer TArgs) => infer TReturn
+    ? Middleware<TArgs, TReturn>
+    : Middleware<[], A[K]>
+}
+
+/**
+ * An API whose implementation can be decorated within a scope — the runtime half of the
+ * algebraic-effect context system (Effection v4.1 experimental). Create one with `createApi`.
+ *
+ * Faithful to upstream Effection, with one rename: the member map is `actions` (not `operations`)
+ * — `Db.actions.query(...)`.
+ */
+export interface Api<A> {
+  actions: {
+    [K in keyof A]: A[K] extends Operation<unknown>
+      ? A[K]
+      : A[K] extends (...args: infer TArgs) => infer TReturn
+        ? TReturn extends Operation<unknown>
+          ? A[K]
+          : (...args: TArgs) => Operation<TReturn>
+        : Operation<A[K]>
+  }
+
+  around(
+    middlewares: Partial<Around<A>>,
+    options?: {
+      at: 'min' | 'max'
+    },
+  ): Operation<void>
+
+  invoke<K extends keyof A>(
+    scope: Scope,
+    key: K,
+    args: A[K] extends (...args: AnyType) => unknown ? Parameters<A[K]> : [],
+  ): A[K] extends (...args: AnyType) => unknown ? ReturnType<A[K]> : A[K]
 }

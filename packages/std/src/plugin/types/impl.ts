@@ -1,7 +1,6 @@
 import type { Operation } from 'std:effect'
 import type { EmptyType } from 'std:shared'
 
-import type { Hookable } from './hookable'
 import type { Plugin } from './plugin'
 import type { Protocol } from './protocol'
 
@@ -17,29 +16,23 @@ export namespace Impl {
   }) => Plugin.Definition<TContext, TArgs>
 
   export type DefineProtocol = <
+    TActions extends EmptyType,
     TContext,
-    TArgs extends unknown[] = [],
-    TActions extends EmptyType = EmptyType,
-    TCustomActions extends EmptyType = EmptyType,
+    THandlers extends EmptyType = EmptyType,
   >(options: {
     subtype?: symbol
+    /** Allow several implementations to be installed side by side (each with its own context). */
     cloneable?: boolean
 
     name: string
     version: string
     description?: string
 
-    handlers?: TCustomActions
-    defaultActions?: Partial<TActions>
+    /** Protocol-level actions: not tied to an installed impl, always run exactly once. */
+    handlers?: THandlers
+    /** Fallback actions used when the dispatched impl does not provide the key. */
+    defaults?: Partial<TActions>
 
-    /**
-     * Controls how the PROTOCOL-level actions execute across installed impls (default: run the
-     * last-installed impl and return its result). `run(entry)` executes the action against one impl
-     * (applying its context + hooks) and returns the result; `exec` decides which/how many to run —
-     * e.g. the codec protocol runs the highest-priority codec, while a fan-out protocol (logger)
-     * runs every transport. Per-plugin proxies (`SomePlugin.actions.*`) ignore this and target
-     * their own impl.
-     */
-    exec?: Hookable.Exec
-  }) => Protocol<TContext, TArgs, TActions, TCustomActions>
+    exec?: Protocol.Exec
+  }) => Protocol<TActions, TContext, THandlers>
 }

@@ -3,16 +3,14 @@ import { asFailure, isSuccess, succeed } from 'std:result'
 
 import type { Operation } from '../types/operation'
 
-import { isOperation } from './is'
-
 export function* attempt<T>(
   op: Operation<T> | (() => Operation<T>),
   ...causes: string[]
 ): Operation<Result<T, unknown>> {
   try {
-    const result = isOperation(op) ? yield* op : yield* op()
+    const target = typeof op === 'function' ? op() : op
 
-    return succeed(result) as Result<T, unknown>
+    return succeed(yield* target) as Result<T, unknown>
   } catch (error) {
     return asFailure(error, ...causes) as Result<T, unknown>
   }

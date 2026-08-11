@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "lib": ["esnext", "dom"],
+    "target": "esnext",
+    "module": "esnext",
+    "moduleDetection": "force",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noEmit": true,
+    "types": ["bun"],
+    "paths": {
+      "std:shared": ["../../packages/std/src/shared/index.ts"],
+      "std:result": ["../../packages/std/src/result/index.ts"],
+      "std:effect": ["../../packages/std/src/effect/index.ts"],
+      "std:plugin": ["../../packages/std/src/plugin/index.ts"]
+    }
+  },
+  "include": ["./**/*.ts"]
+}

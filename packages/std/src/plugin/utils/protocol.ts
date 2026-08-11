@@ -1,44 +1,46 @@
 import type { AnyType } from 'std:shared'
-import { flatten } from 'std:shared'
 
 import { PROTOCOL } from '../const'
+import { createActionProxy } from '../internal/proxy'
+import { buildPlugin, createProtocolRuntime } from '../internal/runtime'
 import type { Impl } from '../types/impl'
 
-import { createHookable } from './hook'
-
 export const defineProtocol: Impl.DefineProtocol = (options): AnyType => {
-  const { context, actions, hooks, buildPlugin } = createHookable({
+  const runtime = createProtocolRuntime({
     name: options.name,
     version: options.version,
-    handlers: options.handlers ? flatten(options.handlers) : undefined,
-    defaultActions: options.defaultActions ? flatten(options.defaultActions) : undefined,
     subtype: options.subtype,
     cloneable: options.cloneable,
+    handlers: options.handlers as AnyType,
+    defaults: options.defaults as AnyType,
     exec: options.exec,
   })
 
-  return {
+  const base = {
     _t: PROTOCOL,
     _st: options.subtype,
 
     name: options.name,
-    description: options.description,
     version: options.version,
+    tag: runtime.tag,
+    description: options.description,
 
-    context,
-    actions,
+    context: runtime.context,
 
-    useHook: hooks.useHook,
-    around: hooks.around,
-    before: hooks.before,
-    after: hooks.after,
-    error: hooks.error,
+    around: runtime.hooks.around,
+    before: runtime.hooks.before,
+    after: runtime.hooks.after,
+    error: runtime.hooks.error,
 
-    implement(implOptions: AnyType) {
-      return {
-        context,
-        build: (implActions: AnyType) => buildPlugin(implOptions, implActions),
-      }
-    },
+    implement: (implOptions: AnyType) => ({
+      context: runtime.context,
+      build: (actions: AnyType, extras: AnyType) =>
+        buildPlugin(runtime, implOptions, actions, extras),
+    }),
+  }
+
+  return {
+    ...base,
+    actions: createActionProxy(runtime.call),
   }
 }

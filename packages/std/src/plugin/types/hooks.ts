@@ -1,16 +1,24 @@
-import type { Context, Operation } from 'std:effect'
+import type { Operation } from 'std:effect'
 import type { AnyType, ExplicitObject } from 'std:shared'
 
-export interface Hookable<TActions> {
-  useHook(): Operation<Map<string, unknown>>
-  around(handlers: Hookable.Around<TActions>): Operation<void>
-  before(handlers: Hookable.Before<TActions>): Operation<void>
-  after(handlers: Hookable.After<TActions>): Operation<void>
-  error(handlers: Hookable.OnError<TActions>): Operation<void>
-}
-
-export namespace Hookable {
+export namespace Hooks {
   export type AnyAction = (...args: AnyType[]) => Operation<unknown>
+
+  /**
+   * Api-style mapping for extra members: functions stay as written, plain values are exposed as
+   * yieldable operations (`testValue: 12` → `yield* Plugin.testValue`), exactly like value members
+   * on an effect api. The trailing conditional forces eager evaluation so hovers show the resolved
+   * object.
+   */
+  export type Values<T> = {
+    [K in keyof T]: T[K] extends (...args: infer A) => Operation<infer R>
+      ? (...args: A) => Operation<R>
+      : T[K] extends (...args: AnyType[]) => AnyType
+        ? T[K]
+        : Operation<T[K]>
+  } extends infer O
+    ? { [K in keyof O]: O[K] }
+    : never
 
   export type AroundFn<T> = T extends (...args: infer A) => infer R
     ? (args: A, next: (...args: A) => R) => R
@@ -58,46 +66,5 @@ export namespace Hookable {
       : TE[K] extends Record<string, unknown>
         ? OnError<TE[K]>
         : never
-  }
-
-  export interface HookSelfEntry {
-    tag: string
-    handlers: Record<string, AnyType>
-    contextValue: AnyType
-    meta?: Map<string, Record<string, AnyType>>
-  }
-
-  export interface HookStore {
-    around: Array<{ handlers: Record<string, AnyType> }>
-    before: Array<{ handlers: Record<string, AnyType> }>
-    after: Array<{ handlers: Record<string, AnyType> }>
-    error: Array<{ handlers: Record<string, AnyType> }>
-    self: HookSelfEntry[]
-  }
-
-  export interface RawAction {
-    self?: AnyAction | undefined
-    context: Context<unknown>
-    options: {
-      name: string
-      version: string
-      subtype?: symbol
-    }
-    key: string
-    meta?: Record<string, AnyType>
-  }
-
-  export type Exec = (
-    entries: Hookable.HookSelfEntry[],
-    run: (entry: Hookable.HookSelfEntry | undefined) => Operation<unknown>,
-  ) => Operation<unknown>
-
-  export interface Call {
-    key: string
-    args: unknown[]
-    arounds: AnyType[]
-    befores: AnyType[]
-    afters: AnyType[]
-    errors: AnyType[]
   }
 }

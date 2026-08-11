@@ -4,11 +4,10 @@ import type { EmptyType } from 'std:shared'
 
 import { createFuture } from '../base/future'
 import type { Helpers } from '../types/helpers'
-import type { Context, Operation, Scope, Task } from '../types/operation'
+import type { Api, Around, Context, Operation, Scope, Task } from '../types/operation'
 import { api } from '../utils/api'
 
-import type { ApiInternal } from './api-internal'
-import { decorateApi } from './api-internal'
+import { decorateApi } from './api'
 import { ChildrenContext, PriorityContext } from './contexts'
 import { createTask } from './task'
 
@@ -77,10 +76,15 @@ export function buildScopeInternal(parent?: Scope): [Helpers.ScopeInternal, () =
       }
     },
     around<A extends EmptyType>(
-      internalApi: ApiInternal<A>,
-      ...params: Parameters<ApiInternal<A>['around']>
+      target: Api<A>,
+      ...params: [
+        middlewares: Partial<Around<A>>,
+        options?: {
+          at: 'min' | 'max'
+        },
+      ]
     ) {
-      decorateApi(scope, internalApi, ...params)
+      decorateApi(scope, target as Helpers.ApiInternal<A>, ...params)
     },
 
     ensure(op: () => Operation<void>): () => void {

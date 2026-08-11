@@ -1,7 +1,9 @@
 import type { Maybe, Result } from 'std:result'
 import type { AnyType } from 'std:shared'
 
-import type { Future, Operation, Scope, Subscription } from './operation'
+import type { API } from '../const'
+
+import type { Api, Around, Context, Future, Operation, Scope, Subscription } from './operation'
 
 export namespace Helpers {
   export type Resolve<T> = (value: T) => void
@@ -101,5 +103,34 @@ export namespace Helpers {
     future: Future<T>
     resolve(value: T): void
     reject(error: Result.Failure<unknown>): void
+  }
+
+  export interface ScopeApi {
+    create(parent: Scope): [Scope, () => Operation<void>]
+    destroy(scope: Scope): Operation<void>
+    set<T>(scope: Scope, context: Context<T>, value: T): T
+    delete<T>(scope: Scope, context: Context<T>): boolean
+  }
+
+  export interface Apis {
+    scope: Api<ScopeApi>
+  }
+
+  export interface Decorator<A> {
+    min?: Partial<Around<A>> | undefined
+    max?: Partial<Around<A>> | undefined
+  }
+
+  export interface ApiState<A> {
+    local: Decorator<A>
+    total: Decorator<A>
+    handle: A
+  }
+
+  export interface ApiInternal<A> extends Api<A> {
+    _t: typeof API
+
+    context: Context<ApiState<A>>
+    core: A
   }
 }
