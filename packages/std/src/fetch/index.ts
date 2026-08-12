@@ -1,4 +1,5 @@
 export * from './context'
 export * from './types'
 
-export * from './utils/fetch'
+export * from './definition'
+export * from './utils'

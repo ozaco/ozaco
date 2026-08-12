@@ -75,6 +75,8 @@ export const writeFileFlow = operation(function* (
   })
 
   try {
+    // `each` honors the FlowClose contract: a source closing with a Failure raises it here, so a
+    // truncated upstream can never be sealed into the file as success
     for (const chunk of yield* each(source)) {
       if (streamError !== undefined) {
         yield* asFailure(streamError)

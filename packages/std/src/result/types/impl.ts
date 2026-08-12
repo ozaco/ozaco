@@ -27,7 +27,6 @@ export namespace Impl {
       defaultValue: T,
     ): Result<Result.InferSuccess<R> | T, never>
 
-    <T extends `${string}`>(value: PromiseLike<T>): Result<T, never>
     <T extends `${string}`>(value: T): Result<T, never>
     <const T>(value: T): Result.FromUnion<T>
   }
@@ -46,15 +45,17 @@ export namespace Impl {
   export interface Unwrap {
     <R extends Result<never, AnyType>>(result: R): never
 
-    <R extends Result<AnyType, AnyType>>(
+    <R extends Result<AnyType, AnyType> | PromiseLike<Result<AnyType, AnyType>>>(
       result: R,
-    ): true extends IsPromiseStrict<R> ? Promise<Result.InferSuccess<R>> : Result.InferSuccess<R>
-    <R extends Result<AnyType, AnyType>, T>(
+    ): true extends IsPromiseStrict<R>
+      ? Promise<Result.InferSuccess<Awaited<R>>>
+      : Result.InferSuccess<Awaited<R>>
+    <R extends Result<AnyType, AnyType> | PromiseLike<Result<AnyType, AnyType>>, T>(
       result: R,
       defaultValue: T,
     ): true extends IsPromiseStrict<R>
-      ? Promise<Result.InferSuccess<R> | T>
-      : Result.InferSuccess<R> | T
+      ? Promise<Result.InferSuccess<Awaited<R>> | T>
+      : Result.InferSuccess<Awaited<R>> | T
   }
 
   export interface Just {

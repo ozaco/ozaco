@@ -108,6 +108,10 @@ export const YamlCodec = Codec.implement({
 
           yield* each.next()
         }
+      } catch (error) {
+        // the source closed with a Failure (raised by `each`) — forward the truncation through
+        // this flow's own close instead of pretending a clean end
+        close = asFailure(error)
       } finally {
         yield* channel.close(close)
       }

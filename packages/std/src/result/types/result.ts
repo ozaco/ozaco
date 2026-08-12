@@ -37,8 +37,10 @@ export namespace Result {
 
   export type FromUnion<R> = R extends Result<AnyType, AnyType> ? R : Result<R, never>
 
+  // rest-args so both custom `new (error: Error)` classes and built-ins like `SyntaxError`
+  // (`new (message?: string)`) satisfy the constraint without casts
   export interface ErrorConstructor<E = Error> {
-    new (error: Error): E
+    new (...args: AnyType[]): E
     readonly prototype: E
   }
 }

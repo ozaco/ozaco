@@ -1,12 +1,15 @@
+import type { CodecDef } from 'std:codec'
 import { Codec } from 'std:codec'
 import type { Flow } from 'std:effect'
 import { flow, operation, until } from 'std:effect'
 import { asFailure, fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 
-import type { FetchDef } from '../types'
+import type { FetchDef } from './types'
 
-export const createFetchResponse = (raw: Response): FetchDef.Response => {
+/** Wrap a platform `Response`. A `preferred` codec impl pins `body()`/`flow()` decoding to that
+ * implementation instead of the routed `Codec` protocol (it must still be installed in scope). */
+export const createFetchResponse = (raw: Response, preferred?: CodecDef): FetchDef.Response => {
   const readJson = operation(function* <T>() {
     try {
       return (yield* until(raw.json())) as T
@@ -69,7 +72,7 @@ export const createFetchResponse = (raw: Response): FetchDef.Response => {
     if (bytes.length === 0) {
       return undefined
     }
-    return yield* Codec.actions.decode(bytes)
+    return yield* (preferred ?? Codec).actions.decode(bytes)
   })
 
   const readFlow = operation(function* () {
@@ -77,7 +80,7 @@ export const createFetchResponse = (raw: Response): FetchDef.Response => {
       return yield* fail('parse', 'response has no body')
     }
 
-    return yield* Codec.actions.decodeFlow(flow(raw.body as AnyType), true)
+    return yield* (preferred ?? Codec).actions.decodeFlow(flow(raw.body as AnyType), true)
   })
 
   const self: FetchDef.Response = {
@@ -115,6 +118,7 @@ export const createFetchResponse = (raw: Response): FetchDef.Response => {
     body: readBody as AnyType,
     flow: readFlow as AnyType,
     raw: readRaw,
+
     expect: operation(function* () {
       yield* until(Promise.resolve())
       if (!raw.ok) {

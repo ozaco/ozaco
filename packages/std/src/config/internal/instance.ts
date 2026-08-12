@@ -152,6 +152,9 @@ export const makeInstance = (getCtx: () => Operation<ConfigDef.Context>): Config
     // Every watcher event bumps a shared signal; `debounce` collapses a burst into one tick so a
     // single save (which fires several fs events) triggers just one re-discover.
     const bump = createSignal<void, never>()
+    // Change detection pins JsonCodec deliberately: config treats an installed JsonCodec as a
+    // baseline dependency, and canonical JSON is one deterministic fingerprint for the merged view
+    // regardless of which codec the config FILES use.
     let last = yield* JsonCodec.actions.stringify(ctx.merged)
 
     const feed = (stream: ReturnType<typeof IO.actions.watch>) =>

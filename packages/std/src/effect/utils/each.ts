@@ -1,4 +1,4 @@
-import { fail } from 'std:result'
+import { fail, isFailure } from 'std:result'
 
 import { useScope } from '../base/hooks'
 import { spawn } from '../base/spawn'
@@ -54,7 +54,14 @@ export function each<T>(flow: Flow<T, unknown>): Operation<Iterable<T>> {
               )
             } else {
               context.stale = true
-              return context.current
+              const current = context.current
+              // honor the flow's return value: a Failure close means the source was truncated,
+              // and ending the loop as if it completed cleanly would swallow that
+              if (current.done && isFailure(current.value)) {
+                context.finish()
+                throw current.value
+              }
+              return current
             }
           },
           return() {
@@ -81,6 +88,10 @@ each.next = function next(): Operation<void> {
       context.current = current
       if (current.done) {
         context.finish()
+        // same contract as the loop head: a Failure close raises instead of ending cleanly
+        if (isFailure(current.value)) {
+          return yield* current.value
+        }
       }
     },
   } as Operation<void>

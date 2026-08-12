@@ -107,6 +107,10 @@ export const tcpListen = operation(function* (options: TcpListenOptions, onConne
       .finally(() => {
         socket.destroy()
       })
+      .catch(() => {
+        // a handler halted at listen-scope teardown rejects this materialized promise — expected
+        // during shutdown, and the socket is already destroyed above
+      })
   })
 
   yield* mapError(

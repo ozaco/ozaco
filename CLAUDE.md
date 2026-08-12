@@ -28,13 +28,16 @@ This is a TypeScript monorepo for building CLI tools and a standard library (`@o
 The core package exports these modules via path aliases (e.g., `std:result`, `std:logger`):
 
 - **result** - `Result<T,E>` type with utilities: `fail`, `succeed`, `appendCauses`, `orElse`, `pipe`, `guard`, `map`
-- **shared** - Common types (`BlobType`, `Helpers`) and utilities (`isPromise`, `isResult`, timing)
-- **event** - Event system
-- **plugin** - Plugin architecture with context, dependency lists, extendable APIs
-- **logger** - Logger with transport abstraction
-- **logger/create-transport** - Base transport definitions for extending logger
-- **logger/file-transport** - File transport implementation
-- **color** - Styling/color utilities with logger plugin
+- **shared** - Common types (`BlobType`, `Helpers`) and utilities (`isPromise`, `isResult`, `deepMerge`, `match`)
+- **effect** - Effection-style structured concurrency: `Operation`, `Flow` (the effect stream abstraction — "stream" refers only to native platform streams), `spawn`/`fork` (fork for background pumps whose result is not awaited), scopes, signals/channels/queues
+- **event** - Typed event emitter (`createEvent`) plus effect bridges (`useEvent`, `onEvent`, `useBufferedEvent`)
+- **plugin** - Plugin architecture: protocols, `install`, contexts, `around`/`before`/`after` hooks
+- **codec** - Codec protocol with `JsonCodec`/`TomlCodec`/`YamlCodec` impls (`encode`/`decode`, `encodeFlow`/`decodeFlow`)
+- **config** - Config discovery/merge/watch plugin (installed with an IO impl + the config file codec; `JsonCodec` must also be installed — config pins it as a baseline, e.g. for watch change-detection)
+- **io** - Platform IO protocol (`BunIO`/`NodeIO`/`WebIO`): fs, flows, processes, net, crypto, watch
+- **logger** - Logger plugin with transport abstraction (`std:logger/transport/console`, `std:logger/transport/file`)
+- **fetch** - HTTP client plugin: `install(Fetch, { baseUrl, headers, timeoutMs })`, `Fetch.actions.get(...).json()` builders, `Fetch.around` middleware over the single `request` dispatch
+- **ws** - WebSocket client plugin: `Ws.actions.connect` returns a scope-bound resource with optional auto-`reconnect` (one continuous `messages` Flow across generations) and `keepalive`
 
 ### Key Patterns
 

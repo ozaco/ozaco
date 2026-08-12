@@ -34,5 +34,5 @@ export interface MatchBuilder<Input, Remaining, Output> {
 
   exhaustive: [Remaining] extends [never] ? () => Output : Result.Failure<Remaining>
 
-  run: () => Output | null
+  run: () => Output | undefined
 }
