@@ -9,8 +9,8 @@ import type { Plugin } from '../types/plugin'
  * scope-local install registry, and expose its context value. Children of the scope inherit the
  * installation; siblings don't.
  */
-export function* install<TActions extends EmptyType, TContext, TArgs extends unknown[]>(
-  plugin: Plugin<TActions, TContext, TArgs>,
+export function* install<TContext, TArgs extends unknown[], TActions extends EmptyType>(
+  plugin: Plugin<TContext, TArgs, TActions>,
   ...args: TArgs
 ): Operation<TContext> {
   const scope = yield* useScope()

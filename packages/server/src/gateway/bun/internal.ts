@@ -78,13 +78,13 @@ export const startAction = operation(function* (
       fetch,
       websocket: {
         async open(ws: AnyType) {
-          await scope.safeRun(() => Gateway.actions.onOpen(ws))
+          await scope.run(() => Gateway.actions.onOpen(ws))
         },
         async message(ws: AnyType, message: AnyType) {
-          await scope.safeRun(() => Gateway.actions.onMessage(ws, message))
+          await scope.run(() => Gateway.actions.onMessage(ws, message))
         },
         async close(ws: AnyType, code: number, reason: string) {
-          await scope.safeRun(() => Gateway.actions.onClose(ws, code, reason))
+          await scope.run(() => Gateway.actions.onClose(ws, code, reason))
         },
       },
     })

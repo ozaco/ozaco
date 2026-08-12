@@ -27,12 +27,7 @@ export const hasCodec = operation(function* () {
  * `JsonCodec`) to populate the registry. Lives in `std` so any std consumer — `std:fetch`, the server
  * broker/transport, … — can encode/decode without coupling to a higher layer.
  */
-export const Codec = defineProtocol<
-  CodecDef.Context,
-  unknown[],
-  CodecDef.Actions,
-  CodecDef.Handlers
->({
+export const Codec = defineProtocol<CodecDef.Context, CodecDef.Actions, CodecDef.Handlers>({
   name: 'std/codec',
   version: '0.0.0',
 

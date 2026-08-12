@@ -16,8 +16,8 @@ export namespace Impl {
   }) => Plugin.Definition<TContext, TArgs>
 
   export type DefineProtocol = <
-    TActions extends EmptyType,
-    TContext,
+    TContext = unknown,
+    TActions extends EmptyType = EmptyType,
     THandlers extends EmptyType = EmptyType,
   >(options: {
     subtype?: symbol
@@ -34,5 +34,5 @@ export namespace Impl {
     defaults?: Partial<TActions>
 
     exec?: Protocol.Exec
-  }) => Protocol<TActions, TContext, THandlers>
+  }) => Protocol<TContext, TActions, THandlers>
 }

@@ -16,7 +16,7 @@ interface DbActions {
 }
 
 const makeDb = (options?: { cloneable?: boolean; exec?: Protocol.Exec }) => {
-  const Db = defineProtocol<DbActions, DbContext>({
+  const Db = defineProtocol<DbContext, DbActions>({
     name: `db-${Math.random().toString(36).slice(2)}`,
     version: '1.0.0',
     cloneable: options?.cloneable,
@@ -170,7 +170,7 @@ describe('protocol handlers + defaults', () => {
   }
 
   it('handlers run without an impl; defaults fill impl gaps', async () => {
-    const Math_ = defineProtocol<MathActions, undefined, { describe(): Operation<string> }>({
+    const Math_ = defineProtocol<unknown, MathActions, { describe(): Operation<string> }>({
       name: `math-${Math.random().toString(36).slice(2)}`,
       version: '1.0.0',
       handlers: {
@@ -248,7 +248,7 @@ describe('hooks over the api layer', () => {
       boom(): Operation<never>
     }
 
-    const Boom = defineProtocol<BoomActions, undefined>({
+    const Boom = defineProtocol<unknown, BoomActions>({
       name: `boom-${Math.random().toString(36).slice(2)}`,
       version: '1.0.0',
       defaults: {
@@ -296,7 +296,7 @@ describe('nested actions + standalone plugins + guards', () => {
       }
     }
 
-    const Io = defineProtocol<FsActions, { prefix: string }>({
+    const Io = defineProtocol<{ prefix: string }, FsActions>({
       name: `io-${Math.random().toString(36).slice(2)}`,
       version: '1.0.0',
     })

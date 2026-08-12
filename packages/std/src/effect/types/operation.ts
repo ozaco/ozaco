@@ -9,6 +9,12 @@ export interface Operation<T> {
   [Symbol.iterator](): Iterator<Helpers.Effect<unknown> | Result.Failure<AnyType>, T, unknown>
 }
 
+export type ManualOperation<T> = Generator<
+  Helpers.Effect<unknown> | Result.Failure<AnyType>,
+  T,
+  unknown
+>
+
 /**
  * An {@link Operation} that is also awaitable. The promise side resolves to a `Result` and never
  * rejects (std contract); the operation side returns the value or raises the Failure.

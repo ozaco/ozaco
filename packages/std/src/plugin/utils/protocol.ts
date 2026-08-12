@@ -34,8 +34,7 @@ export const defineProtocol: Impl.DefineProtocol = (options): AnyType => {
 
     implement: (implOptions: AnyType) => ({
       context: runtime.context,
-      build: (actions: AnyType, extras: AnyType) =>
-        buildPlugin(runtime, implOptions, actions, extras),
+      build: (actions: AnyType) => buildPlugin(runtime, implOptions, actions),
     }),
   }
 

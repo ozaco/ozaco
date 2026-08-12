@@ -103,7 +103,7 @@ export const tcpListen = operation(function* (options: TcpListenOptions, onConne
   const server = createServer(socket => {
     const handle = makeHandle(socket)
     void scope
-      .safeRun(() => onConnection(handle))
+      .run(() => onConnection(handle))
       .finally(() => {
         socket.destroy()
       })

@@ -1,4 +1,4 @@
-import type { Future, Operation, Stream } from 'std:effect'
+import type { Operation, Stream } from 'std:effect'
 import type { Result } from 'std:result'
 import type { AnyType } from 'std:shared'
 
@@ -125,13 +125,13 @@ export interface ProcessHandle {
   /** The child's stderr as a byte stream. */
   readonly stderr: Stream<Uint8Array, StreamClose>
   /** Resolve with the exit status once the process ends. */
-  exited: () => Future<ProcessStatus>
+  exited: () => Operation<ProcessStatus>
   /** Write a chunk to the child's stdin. */
-  write: (chunk: Uint8Array | string) => Future<void>
+  write: (chunk: Uint8Array | string) => Operation<void>
   /** Close the child's stdin. */
-  closeStdin: () => Future<void>
+  closeStdin: () => Operation<void>
   /** Send a termination signal (default `SIGTERM`). */
-  kill: (signal?: number | string) => Future<void>
+  kill: (signal?: number | string) => Operation<void>
 }
 
 /** An Ed25519 key pair (DER bytes: public = SPKI, private = PKCS8), from {@link IOActions.generateKeyPair}. */
@@ -178,9 +178,9 @@ export interface TcpSocket {
   /** Inbound bytes; the close value is `true` on a clean end or the failure that interrupted it. */
   data: Stream<Uint8Array, StreamClose>
   /** Write a chunk, resolving once it has been flushed (honors backpressure). */
-  write: (chunk: Uint8Array | string) => Future<void>
+  write: (chunk: Uint8Array | string) => Operation<void>
   /** Half-close the socket's write side and tear it down. */
-  close: () => Future<void>
+  close: () => Operation<void>
 }
 
 /** A per-connection handler; runs as a child of the scope that called {@link IOActions.tcpListen}. */
@@ -191,7 +191,7 @@ export interface TcpServer {
   readonly port: number
   readonly hostname: string
   /** Stop accepting connections and shut the server down. */
-  close: () => Future<void>
+  close: () => Operation<void>
 }
 
 /** Options for {@link IOActions.udpBind}. */
@@ -215,9 +215,9 @@ export interface UdpSocket {
   /** Inbound datagrams, buffered from bind time. */
   messages: Stream<UdpDatagram, StreamClose>
   /** Send a datagram to an explicit destination. */
-  send: (data: Uint8Array | string, port: number, address: string) => Future<void>
+  send: (data: Uint8Array | string, port: number, address: string) => Operation<void>
   /** Close the socket. */
-  close: () => Future<void>
+  close: () => Operation<void>
 }
 
 // --- S3 (object storage) — Bun's built-in S3Client (BunIO only) ------------------------------------
@@ -277,19 +277,19 @@ export interface S3ListResult {
  * hits the network until you call one. */
 export interface S3File {
   readonly key: string
-  text: () => Future<string>
-  json: <T = unknown>() => Future<T>
-  bytes: () => Future<Uint8Array>
-  arrayBuffer: () => Future<ArrayBuffer>
+  text: () => Operation<string>
+  json: <T = unknown>() => Operation<T>
+  bytes: () => Operation<Uint8Array>
+  arrayBuffer: () => Operation<ArrayBuffer>
   /** The object's byte stream (a platform `ReadableStream`; adapt it with `IO.actions.fromReadable`). */
-  stream: () => Future<ReadableStream<Uint8Array>>
+  stream: () => Operation<ReadableStream<Uint8Array>>
   /** Upload/overwrite the object; resolves to the number of bytes written. */
-  write: (data: Uint8Array | string | Blob) => Future<number>
-  exists: () => Future<boolean>
-  delete: () => Future<void>
-  stat: () => Future<S3Stat>
+  write: (data: Uint8Array | string | Blob) => Operation<number>
+  exists: () => Operation<boolean>
+  delete: () => Operation<void>
+  stat: () => Operation<S3Stat>
   /** A presigned URL for this object (default `GET`). */
-  presign: (options?: S3PresignOptions) => Future<string>
+  presign: (options?: S3PresignOptions) => Operation<string>
 }
 
 /** An S3 client bound to a bucket/credentials — `IO.actions.s3(options)`. Uses Bun's built-in
@@ -297,11 +297,11 @@ export interface S3File {
 export interface S3Client {
   /** A handle to one object. */
   file: (key: string) => S3File
-  read: (key: string) => Future<Uint8Array>
-  write: (key: string, data: Uint8Array | string | Blob) => Future<number>
-  exists: (key: string) => Future<boolean>
-  delete: (key: string) => Future<void>
-  stat: (key: string) => Future<S3Stat>
-  list: (options?: S3ListOptions) => Future<S3ListResult>
-  presign: (key: string, options?: S3PresignOptions) => Future<string>
+  read: (key: string) => Operation<Uint8Array>
+  write: (key: string, data: Uint8Array | string | Blob) => Operation<number>
+  exists: (key: string) => Operation<boolean>
+  delete: (key: string) => Operation<void>
+  stat: (key: string) => Operation<S3Stat>
+  list: (options?: S3ListOptions) => Operation<S3ListResult>
+  presign: (key: string, options?: S3PresignOptions) => Operation<string>
 }

@@ -1,17 +1,21 @@
 import type { Operation } from 'std:effect'
-import type { AnyType, ExplicitObject } from 'std:shared'
+import type { AnyType, EmptyType, ExplicitObject } from 'std:shared'
 
 export namespace Hooks {
   export type AnyAction = (...args: AnyType[]) => Operation<unknown>
 
   /**
-   * Api-style mapping for extra members: functions stay as written, plain values are exposed as
-   * yieldable operations (`testValue: 12` → `yield* Plugin.testValue`), exactly like value members
-   * on an effect api. The trailing conditional forces eager evaluation so hovers show the resolved
-   * object.
+   * The surface of the EXTRA members beyond a contract (`TBase`): contract keys are dropped,
+   * Operation-returning functions are normalized to `(...args) => Operation<R>` for clean hovers,
+   * and plain values are exposed as yieldable operations (`testValue: 12` →
+   * `yield* Plugin.actions.testValue`), exactly like value members on an effect api. The trailing
+   * conditional forces eager evaluation so hovers show the resolved object instead of the raw
+   * inferred literal.
    */
-  export type Values<T> = {
-    [K in keyof T]: T[K] extends (...args: infer A) => Operation<infer R>
+  export type Extras<T, TBase = EmptyType> = {
+    [K in keyof T as K extends keyof TBase ? never : K]: T[K] extends (
+      ...args: infer A
+    ) => Operation<infer R>
       ? (...args: A) => Operation<R>
       : T[K] extends (...args: AnyType[]) => AnyType
         ? T[K]

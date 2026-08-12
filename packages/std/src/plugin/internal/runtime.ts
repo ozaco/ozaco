@@ -34,7 +34,7 @@ export const createProtocolRuntime = (options: RuntimeOptions) => {
 
   /** Holds the dispatched impl's context value while one of its actions runs. */
   const context = createContext<AnyType>(tag)
-  const installsCtx = createContext<Protocol.Install[]>(`${tag}#installs`, [])
+  const installsCtx = createContext<AnyType[]>(`${tag}#installs`, [])
   /** A plugin handle pins dispatch to its own tag through this context. */
   const targetCtx = createContext<string>(`${tag}#target`)
 
@@ -60,13 +60,13 @@ export const createProtocolRuntime = (options: RuntimeOptions) => {
   const exec = options.exec ?? defaultExec
 
   const dispatch = operation(
-    function* (key: string, args: unknown[]) {
+    function* (key: string, args: AnyType[]) {
       const target = yield* targetCtx.get()
       const installs = (yield* installsCtx.get()) ?? []
 
       // Runs the action against ONE impl entry (or, when `entry` is undefined, a protocol-level
       // handler / default action with no impl context).
-      const run = function* (entry: Protocol.Install | undefined): Operation<unknown> {
+      const run = function* (entry: AnyType | undefined): Operation<unknown> {
         // own-property lookups: an action key colliding with an Object.prototype member
         // (toString/valueOf/...) must not resolve to the inherited function
         const self = Object.hasOwn(handlers, key)
@@ -137,7 +137,6 @@ export const createProtocolRuntime = (options: RuntimeOptions) => {
   }
 }
 
-// oxlint-disable-next-line max-params
 export const buildPlugin = (
   runtime: ReturnType<typeof createProtocolRuntime>,
   buildOptions: {
@@ -147,7 +146,6 @@ export const buildPlugin = (
     setup(...args: AnyType[]): Operation<unknown>
   },
   buildActions?: Record<string, AnyType>,
-  extras?: Record<string, AnyType>,
 ): AnyType => {
   const pluginTag = `${buildOptions.name}@${buildOptions.version ?? 'lts'}`
   const pluginContext = runtime.cloneable ? createContext<AnyType>(pluginTag) : runtime.context
@@ -157,20 +155,6 @@ export const buildPlugin = (
 
   if (buildActions) {
     const flat = flatten(buildActions)
-    for (const key of Object.keys(flat)) {
-      const raw = flat[key]!
-      if (typeof raw === 'function') {
-        actions[key] = operation(raw, key, pluginTag)
-        meta.set(key, Object.fromEntries(Object.entries(raw)))
-      } else {
-        // value member: dispatched as-is, `yield* Plugin.key()` resolves to the value
-        actions[key] = raw
-      }
-    }
-  }
-
-  if (extras) {
-    const flat = flatten(extras)
     for (const key of Object.keys(flat)) {
       const raw = flat[key]!
       if (typeof raw === 'function') {
@@ -227,7 +211,7 @@ export const buildPlugin = (
     setup,
     getKeys: () => [...Object.keys(runtime.defaults), ...Object.keys(actions)],
     getMeta: (key: string) => meta.get(key),
-  } satisfies Omit<Plugin.Control<AnyType, AnyType[]>, '_st'> & { _st: symbol | undefined }
+  } satisfies Omit<Plugin<AnyType, AnyType[]>, '_st' | 'actions'> & { _st: symbol | undefined }
 
   return {
     ...base,

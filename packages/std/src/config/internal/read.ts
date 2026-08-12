@@ -1,4 +1,4 @@
-import type { Future } from 'std:effect'
+import type { ManualOperation } from 'std:effect'
 import { operation } from 'std:effect'
 import { IO } from 'std:io'
 import { fail } from 'std:result'
@@ -10,17 +10,13 @@ import type { ConfigDef } from '../types'
 /**
  * Read and parse one config file into a `Source`, resolving its `extends` (a path or list of paths,
  * relative to the file) into nested sources. `seen` guards against cycles and double-reads. Returns
- * `undefined` when the file is absent or already visited; a malformed file fails via the codec.
+ * `undefined` when the file is absent or already visited; a malformed file fails via the codec.Operation<ConfigDef.Source | undefined>
  */
-export const readSource: (
+export const readSource = operation(function* (
   ctx: ConfigDef.Context,
   path: string,
   seen: Set<string>,
-) => Future<ConfigDef.Source | undefined> = operation(function* (
-  ctx: ConfigDef.Context,
-  path: string,
-  seen: Set<string>,
-) {
+): ManualOperation<ConfigDef.Source | undefined> {
   if (seen.has(path)) {
     return undefined
   }

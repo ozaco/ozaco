@@ -12,17 +12,17 @@ import type { Plugin } from './plugin'
  * `around`, `before`, `after`, `error`) sits on the handle itself.
  */
 export type Protocol<
-  TActions = EmptyType,
   TContext = unknown,
-  THandlers = EmptyType,
-> = Protocol.Control<TActions, THandlers, TContext> & {
+  TActions extends EmptyType = EmptyType,
+  THandlers extends EmptyType = EmptyType,
+> = Protocol.Control<TContext, TActions, THandlers> & {
   actions: TActions & THandlers
 }
 
 export namespace Protocol {
-  export type InferContext<T> = T extends Protocol<EmptyType, infer V> ? V : never
+  export type InferContext<T> = T extends Protocol<infer V> ? V : never
 
-  export interface Control<TActions, THandlers, TContext> {
+  export interface Control<TContext, TActions, THandlers> {
     _t: typeof PROTOCOL
     _st?: symbol | undefined
 
@@ -47,20 +47,22 @@ export namespace Protocol {
       version: string
       description?: string
       setup(...args: TIArgs): Operation<TContext>
-    }): Implementation<TActions, TContext, TIArgs>
+    }): Implementation<TContext, TIArgs, TActions>
   }
 
-  export interface Implementation<TActions, TContext, TArgs extends unknown[] = never> {
+  export interface Implementation<TContext, TArgs extends unknown[], TActions> {
     context: Context<TContext>
 
-    // the CONTRACT type flows through unchanged — no inference from the literal, so hovers show
-    // `Plugin<DbActions, DbContext, ...>` instead of an expanded generator soup. Extra value
-    // members map api-style to yieldable operations (`testValue: 12` → `yield* Plugin.testValue`).
-    // TExtra defaults to EmptyType (not never) so a mistyped extras literal produces ONLY the real
-    // error (implicit-any params) instead of a misleading "not assignable to undefined"
-    build<TBuildedActions extends TActions>(
-      actions: TBuildedActions,
-    ): Plugin<Hooks.Values<TBuildedActions>, TContext, TArgs>
+    // ONE argument, two shapes. A literal matching the contract exactly hits the first overload:
+    // the CONTRACT type flows through unchanged, so hovers show `Plugin<DbContext, ..., DbActions>`
+    // instead of an expanded generator soup. A literal with EXTRA members falls through to the
+    // second: contract keys are stripped from the inferred TExtra (Hooks.Extras), custom actions
+    // stay callable, and plain values become yieldable operations
+    // (`testValue: 12` → `yield* Plugin.actions.testValue`).
+    build(actions: TActions): Plugin<TContext, TArgs, TActions>
+    build<TExtra extends EmptyType = EmptyType>(
+      actions: TActions & TExtra,
+    ): Plugin<TContext, TArgs, TActions & Hooks.Extras<TExtra, TActions>>
   }
 
   /** One installed implementation, as stored in the scope-local install registry. */
@@ -77,7 +79,8 @@ export namespace Protocol {
    * last-installed impl and return its result). `run(entry)` executes the action against one impl
    * (applying its context) and returns the result; `exec` decides which/how many to run — e.g. a
    * codec protocol runs the highest-priority codec, a fan-out protocol (logger) runs every
-   * transport. Pinned plugin calls (`SomePlugin.x(...)`) ignore this and target their own impl.
+   * transport. Pinned plugin calls (`SomePlugin.actions.x(...)`) ignore this and target their own
+   * impl.
    */
   export type Exec = (
     entries: Install[],

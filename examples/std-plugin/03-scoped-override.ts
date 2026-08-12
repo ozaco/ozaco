@@ -18,7 +18,7 @@ interface HttpActions {
   get(path: string): Operation<string>
 }
 
-const Http = defineProtocol<HttpActions, HttpContext, { describe(): Operation<string> }>({
+const Http = defineProtocol<HttpContext, HttpActions, { describe(): Operation<string> }>({
   name: 'http',
   version: '1.0.0',
   // protocol-level handler: runs exactly once, never tied to an impl

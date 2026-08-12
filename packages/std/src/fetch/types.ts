@@ -1,4 +1,4 @@
-import type { Future, Stream } from 'std:effect'
+import type { Operation, Stream } from 'std:effect'
 import type { Result } from 'std:result'
 
 export namespace FetchDef {
@@ -45,31 +45,31 @@ export namespace FetchDef {
     readonly redirected: boolean
     readonly bodyUsed: boolean
     readonly type: ResponseType
-    json<T = unknown>(): Future<T>
-    text(): Future<string>
-    arrayBuffer(): Future<ArrayBuffer>
-    blob(): Future<Blob>
-    formData(): Future<FormData>
-    bytes(): Future<Uint8Array>
+    json<T = unknown>(): Operation<T>
+    text(): Operation<string>
+    arrayBuffer(): Operation<ArrayBuffer>
+    blob(): Operation<Blob>
+    formData(): Operation<FormData>
+    bytes(): Operation<Uint8Array>
     /** Whole body, decoded once through the registered codec (auto-installs `JsonCodec` if absent). */
-    body<T = unknown>(): Future<T>
+    body<T = unknown>(): Operation<T>
     /** Body piped through the codec's streaming decoder — one decoded value per chunk. */
-    stream<T = unknown>(): Future<Stream<T, StreamClose>>
+    stream<T = unknown>(): Operation<Stream<T, StreamClose>>
     /** The raw, undecoded byte stream of the response body. */
-    raw(): Future<Stream<Uint8Array, void>>
-    expect(): Future<Response>
+    raw(): Operation<Stream<Uint8Array, void>>
+    expect(): Operation<Response>
   }
 
-  export interface Operation extends Future<Response> {
-    json<T = unknown>(): Future<T>
-    text(): Future<string>
-    arrayBuffer(): Future<ArrayBuffer>
-    blob(): Future<Blob>
-    formData(): Future<FormData>
-    bytes(): Future<Uint8Array>
-    body<T = unknown>(): Future<T>
-    stream<T = unknown>(): Future<Stream<T, StreamClose>>
-    raw(): Future<Stream<Uint8Array, void>>
-    expect(): Operation
+  export interface Fetch extends Operation<Response> {
+    json<T = unknown>(): Operation<T>
+    text(): Operation<string>
+    arrayBuffer(): Operation<ArrayBuffer>
+    blob(): Operation<Blob>
+    formData(): Operation<FormData>
+    bytes(): Operation<Uint8Array>
+    body<T = unknown>(): Operation<T>
+    stream<T = unknown>(): Operation<Stream<T, StreamClose>>
+    raw(): Operation<Stream<Uint8Array, void>>
+    expect(): Fetch
   }
 }

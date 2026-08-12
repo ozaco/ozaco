@@ -29,7 +29,7 @@ const fanout: Protocol.Exec = function* (entries, dispatch) {
   return results
 }
 
-const Logger = defineProtocol<LoggerActions, LoggerContext>({
+const Logger = defineProtocol<LoggerContext, LoggerActions>({
   name: 'logger',
   version: '1.0.0',
   cloneable: true, // several transports may be installed side by side

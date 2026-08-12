@@ -9,7 +9,7 @@ import { isFailure, isSuccess } from 'std:result'
  * (or the pause check failed), or `null` to proceed with the request.
  */
 export const pauseGate = async (scope: Scope): Promise<Response | null> => {
-  const paused = await scope.safeRun(() => Gateway.actions.isPaused())
+  const paused = await scope.run(() => Gateway.actions.isPaused())
 
   if (isFailure(paused)) {
     return Response.json(

@@ -12,15 +12,15 @@ import type { Hooks } from './hooks'
  * `setup`, `getKeys`, `getMeta`) sits on the handle itself.
  */
 export type Plugin<
-  TActions = EmptyType,
   TContext = unknown,
-  TArgs extends unknown[] = never,
+  TArgs extends unknown[] = unknown[],
+  TActions = EmptyType,
 > = Plugin.Control<TContext, TArgs> & {
   actions: TActions
 }
 
 export namespace Plugin {
-  export type InferContext<T> = T extends Plugin<EmptyType, infer V> ? V : never
+  export type InferContext<T> = T extends Plugin<infer V> ? V : never
 
   export interface Control<TContext, TArgs extends unknown[]> {
     _t: typeof PLUGIN
@@ -42,14 +42,11 @@ export namespace Plugin {
   export interface Definition<TContext, TArgs extends unknown[]> {
     context: Context<TContext>
 
-    build(): Plugin<EmptyType, TContext, TArgs>
-    build<TActions extends EmptyType, TExtra extends EmptyType = EmptyType>(
+    build(): Plugin<TContext, TArgs, EmptyType>
+    // standalone plugins have no contract: the whole literal is normalized api-style
+    // (functions → (...args) => Operation<R>, values → Operation<V>)
+    build<TActions extends EmptyType>(
       actions: TActions,
-      extra?: TExtra,
-    ): Plugin<
-      keyof TExtra extends never ? TActions : TActions & Hooks.Values<TExtra>,
-      TContext,
-      TArgs
-    >
+    ): Plugin<TContext, TArgs, Hooks.Extras<TActions>>
   }
 }

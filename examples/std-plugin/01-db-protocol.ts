@@ -21,7 +21,7 @@ interface DbActions {
 }
 
 // 1. the contract — no implementation yet
-const Db = defineProtocol<DbActions, DbContext>({
+const Db = defineProtocol<DbContext, DbActions>({
   name: 'db',
   version: '1.0.0',
 })

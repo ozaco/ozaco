@@ -130,7 +130,7 @@ export const startAction = operation(function* (
         return
       }
       const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`)
-      const found = await scope.safeRun(() => Gateway.actions.find('WS', url.pathname))
+      const found = await scope.run(() => Gateway.actions.find('WS', url.pathname))
       if (!isSuccess(found) || !found.value) {
         socket.destroy()
         return
@@ -150,7 +150,7 @@ export const startAction = operation(function* (
       let principal: unknown
       const authorize = entry.setting.authorize
       if (authorize) {
-        const outcome = await scope.safeRun(() =>
+        const outcome = await scope.run(() =>
           authorize(wsUpgradeRequest({ url: url.href, headers, params })),
         )
         if (!isSuccess(outcome) || outcome.value === false) {
@@ -162,7 +162,7 @@ export const startAction = operation(function* (
       }
       // mint the socket id through IO (IO-first) BEFORE the handshake, so ws.data is set synchronously
       // in the handshake callback (no race with the first inbound message).
-      const minted = await scope.safeRun(() => IO.actions.uuid())
+      const minted = await scope.run(() => IO.actions.uuid())
       const id = isSuccess(minted) ? minted.value : ''
       upgradeWs(
         hub,
@@ -177,11 +177,11 @@ export const startAction = operation(function* (
             ...(principal === undefined ? {} : { principal }),
             controller: new AbortController(),
           },
-          onOpen: nodeWs => void scope.safeRun(() => Gateway.actions.onOpen(nodeWs)),
+          onOpen: nodeWs => void scope.run(() => Gateway.actions.onOpen(nodeWs)),
           onMessage: (nodeWs, message) =>
-            void scope.safeRun(() => Gateway.actions.onMessage(nodeWs, message)),
+            void scope.run(() => Gateway.actions.onMessage(nodeWs, message)),
           onClose: (nodeWs, code, reason) =>
-            void scope.safeRun(() => Gateway.actions.onClose(nodeWs, code, reason)),
+            void scope.run(() => Gateway.actions.onClose(nodeWs, code, reason)),
         },
       )
     })()

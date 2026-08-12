@@ -17,6 +17,6 @@ export const definePlugin: Impl.DefinePlugin = (options): AnyType => {
   return {
     context: runtime.context,
 
-    build: (actions?: AnyType, extras?: AnyType) => buildPlugin(runtime, options, actions, extras),
+    build: (actions?: AnyType) => buildPlugin(runtime, options, actions),
   }
 }

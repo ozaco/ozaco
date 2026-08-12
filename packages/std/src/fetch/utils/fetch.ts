@@ -9,7 +9,7 @@ export const fetch = (
   input: RequestInfo | URL,
   init?: FetchDef.Init | undefined,
   shouldExpect = false,
-): FetchDef.Operation => {
+): FetchDef.Fetch => {
   const runFetch = operation(function* () {
     const { timeoutMs, ...rest } = init ?? {}
 
