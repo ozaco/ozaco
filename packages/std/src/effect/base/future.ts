@@ -9,13 +9,13 @@ import { withResolvers } from './with-resolvers'
 
 export function createFuture<T>(): Helpers.FutureWithResolvers<T> {
   const promise = lazyPromiseWithResolvers<Result<T>>()
-  const operation = withResolvers<Result<T>>()
+  const operation = withResolvers<T>()
 
   const resolve = (rawValue: T) => {
     const value = auto(rawValue) as Result<T>
 
     promise.resolve(value)
-    operation.resolve(value)
+    operation.resolve(rawValue)
   }
 
   const reject = (rawError: unknown) => {

@@ -4,7 +4,8 @@ import type { AnyType } from 'std:shared'
 import { createContext } from '../../base/context'
 import { API } from '../../const'
 import type { Helpers } from '../../types/helpers'
-import type { Context, Operation, Scope } from '../../types/operation'
+import type { Context, Scope } from '../../types/operation'
+import { isOperation } from '../../utils/is'
 
 import { decorateApi } from './propagate'
 
@@ -14,23 +15,6 @@ const getScope: Helpers.Effect<Scope> = {
     resolve(succeed(routine.scope))
     return didExit => didExit(succeed())
   },
-}
-
-function isOperation<T>(target: Operation<T> | T): target is Operation<T> {
-  return (
-    !!target &&
-    !isNativeIterable(target) &&
-    typeof (target as Operation<T>)[Symbol.iterator] === 'function'
-  )
-}
-
-function isNativeIterable(target: unknown): boolean {
-  return (
-    typeof target === 'string' ||
-    Array.isArray(target) ||
-    target instanceof Map ||
-    target instanceof Set
-  )
 }
 
 export function createApiInternal<A extends object>(name: string, core: A): Helpers.ApiInternal<A> {

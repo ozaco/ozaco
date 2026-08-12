@@ -32,12 +32,16 @@ function createApiHandle<A>(decoration: Helpers.Decorator<A>, core: A): A {
       ? append(decoration.max, decoration.min)
       : decoration.max
     : decoration.min
+
   if (!around) {
     return core
   }
-  const handle: A = {} as A
+
+  const handle = {} as A
+
   for (const key of Object.keys(core as object) as (keyof A)[]) {
     const middleware = around[key] as Middleware<unknown[], unknown> | undefined
+
     if (middleware) {
       if (typeof core[key] === 'function') {
         handle[key] = ((...args: unknown[]) =>

@@ -44,8 +44,7 @@ export const Codec = defineProtocol<CodecDef.Context, CodecDef.Actions, CodecDef
     for (const entry of entries) {
       if (
         !best ||
-        (entry.contextValue as CodecDef.Context).priority >=
-          (best.contextValue as CodecDef.Context).priority
+        (entry.value as CodecDef.Context).priority >= (best.value as CodecDef.Context).priority
       ) {
         best = entry
       }

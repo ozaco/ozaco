@@ -8,7 +8,7 @@ const UNIT = Object.freeze({
   _t: RESULT_SUCCESS,
 
   *[Symbol.iterator]() {
-    return (this as AnyType).value
+    return void 0
   },
 }) as unknown as Result.Success<AnyType>
 

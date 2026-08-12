@@ -42,12 +42,12 @@ export namespace Protocol {
 
     // setup args are typed HERE, at the implementation — the protocol itself carries no TArgs.
     // The context stays pinned to the protocol's named TContext so handles display cleanly.
-    implement<TIArgs extends unknown[] = []>(options: {
+    implement<TIContext extends TContext, TIArgs extends unknown[] = []>(options: {
       name: string
       version: string
       description?: string
-      setup(...args: TIArgs): Operation<TContext>
-    }): Implementation<TContext, TIArgs, TActions>
+      setup(...args: TIArgs): Operation<TIContext>
+    }): Implementation<TIContext, TIArgs, TActions>
   }
 
   export interface Implementation<TContext, TArgs extends unknown[], TActions> {

@@ -5,6 +5,7 @@ import type { AnyType } from 'std:shared'
 import { flatten } from 'std:shared'
 
 import { PLUGIN } from '../const'
+import type { Impl } from '../types/impl'
 import type { Plugin } from '../types/plugin'
 import type { Protocol } from '../types/protocol'
 
@@ -15,21 +16,11 @@ const defaultExec: Protocol.Exec = function* (entries, run) {
   return yield* run(entries.at(-1))
 }
 
-export interface RuntimeOptions {
-  name: string
-  version: string
-  subtype?: symbol | undefined
-  cloneable?: boolean | undefined
-  handlers?: Record<string, AnyType> | undefined
-  defaults?: Record<string, AnyType> | undefined
-  exec?: Protocol.Exec | undefined
-}
-
 /**
  * The per-protocol nucleus: a single-member api (`dispatch`) plus the scope-local install
  * registry. Everything else — the flat protocol/plugin handles, hooks, pinning — is built on it.
  */
-export const createProtocolRuntime = (options: RuntimeOptions) => {
+export const createProtocolRuntime = (options: Impl.RuntimeOptions) => {
   const tag = `${options.name}@${options.version ?? 'lts'}`
 
   /** Holds the dispatched impl's context value while one of its actions runs. */
@@ -197,7 +188,7 @@ export const buildPlugin = (
     pluginTag,
   )
 
-  const base = {
+  return {
     _t: PLUGIN,
     _st: runtime.subtype,
 
@@ -207,14 +198,10 @@ export const buildPlugin = (
     description: buildOptions.description,
 
     context: pluginContext,
+    actions: createActionProxy((key, args) => runtime.pinned(pluginTag, key, args)),
 
     setup,
     getKeys: () => [...Object.keys(runtime.defaults), ...Object.keys(actions)],
     getMeta: (key: string) => meta.get(key),
-  } satisfies Omit<Plugin<AnyType, AnyType[]>, '_st' | 'actions'> & { _st: symbol | undefined }
-
-  return {
-    ...base,
-    actions: createActionProxy((key, args) => runtime.pinned(pluginTag, key, args)),
-  }
+  } satisfies Plugin<AnyType, AnyType[]>
 }

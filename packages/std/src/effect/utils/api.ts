@@ -1,6 +1,6 @@
 import { fail } from 'std:result'
 
-import { createApiInternal } from '../internal/api'
+import { createApiInternal } from '../internal/api/create'
 import type { Helpers } from '../types/helpers'
 import type { Api } from '../types/operation'
 

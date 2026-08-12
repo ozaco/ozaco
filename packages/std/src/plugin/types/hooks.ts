@@ -4,6 +4,18 @@ import type { AnyType, EmptyType, ExplicitObject } from 'std:shared'
 export namespace Hooks {
   export type AnyAction = (...args: AnyType[]) => Operation<unknown>
 
+  export type Dispatch = {
+    dispatch(key: string, args: unknown[]): Operation<unknown>
+  }
+
+  export type Next = (key: string, args: unknown[]) => Operation<unknown>
+
+  export type Wrap = (
+    fn: AnyType,
+    call: [key: string, args: unknown[]],
+    next: Next,
+  ) => Operation<unknown>
+
   /**
    * The surface of the EXTRA members beyond a contract (`TBase`): contract keys are dropped,
    * Operation-returning functions are normalized to `(...args) => Operation<R>` for clean hovers,

@@ -3,11 +3,12 @@ import { asFailure, fail, isSuccess, succeed, unwrap } from 'std:result'
 import type { EmptyType } from 'std:shared'
 
 import { createFuture } from '../base/future'
+import { withResolvers } from '../base/with-resolvers'
 import type { Helpers } from '../types/helpers'
 import type { Api, Around, Context, Operation, Scope, Task } from '../types/operation'
 import { api } from '../utils/api'
 
-import { decorateApi } from './api'
+import { decorateApi } from './api/propagate'
 import { ChildrenContext, PriorityContext } from './contexts'
 import { createTask } from './task'
 
@@ -72,6 +73,29 @@ export function buildScopeInternal(parent?: Scope): [Helpers.ScopeInternal, () =
       return {
         *[Symbol.iterator]() {
           return createTask({ owner: scope, operation })
+        },
+      }
+    },
+    fork<T>(operation: () => Operation<T>): Operation<Task<T>> {
+      return {
+        *[Symbol.iterator]() {
+          const ready = withResolvers<void>('fork:started')
+
+          const task = createTask<T>({
+            owner: scope,
+            // method shorthand does not bind its own name — `operation()` below is fork's param
+            *operation() {
+              ready.resolve()
+              return yield* operation()
+            },
+          })
+
+          // suspending here hands the reducer to the child: by the time `ready` resolves, the
+          // child has executed its first synchronous segment (via yield* delegation above), so
+          // its try/finally teardown is armed before fork returns
+          yield* ready.operation
+
+          return task
         },
       }
     },

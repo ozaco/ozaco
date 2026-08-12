@@ -3,20 +3,14 @@ import { appendCauses, asFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
 import { flatten } from 'std:shared'
 
-type Dispatch = {
-  dispatch(key: string, args: unknown[]): Operation<unknown>
-}
-
-type Next = (key: string, args: unknown[]) => Operation<unknown>
-
-type Wrap = (fn: AnyType, call: [key: string, args: unknown[]], next: Next) => Operation<unknown>
+import type { Hooks } from '../types/hooks'
 
 /**
  * Adapt a per-action handler map into ONE api middleware over `dispatch`: actions without a handler
  * pass straight through to `next`, decorated ones run through `wrap`.
  */
-const layer = (handlers: Record<string, AnyType>, wrap: Wrap) => ({
-  dispatch: ([key, args]: [string, unknown[]], next: Next): Operation<unknown> => ({
+const layer = (handlers: Record<string, AnyType>, wrap: Hooks.Wrap) => ({
+  dispatch: ([key, args]: [string, unknown[]], next: Hooks.Next): Operation<unknown> => ({
     *[Symbol.iterator]() {
       if (!Object.hasOwn(handlers, key)) {
         return yield* next(key, args)
@@ -31,7 +25,7 @@ const layer = (handlers: Record<string, AnyType>, wrap: Wrap) => ({
  * `api.around` on the protocol's dispatch member — scope-scoped, inherited by children, reverted
  * when the scope closes.
  */
-export const createHookInstallers = (api: Api<Dispatch>) => ({
+export const createHookInstallers = (api: Api<Hooks.Dispatch>) => ({
   around: (handlers: AnyType): Operation<void> =>
     api.around(
       layer(flatten(handlers), (fn, [key, args], next) =>

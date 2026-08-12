@@ -41,6 +41,8 @@ export interface Context<T> {
 export interface Scope {
   run<T>(operation: () => Operation<T>): Task<T>
   spawn<T>(operation: () => Operation<T>): Operation<Task<T>>
+  /** Like `spawn`, but resolves only after the child has run to its first suspension point. */
+  fork<T>(operation: () => Operation<T>): Operation<Task<T>>
   get<T>(context: Context<T>): T | undefined
   set<T>(context: Context<T>, value: T): T
   expect<T>(context: Context<T>): T

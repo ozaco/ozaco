@@ -1,5 +1,5 @@
 import type { Operation } from 'std:effect'
-import type { EmptyType } from 'std:shared'
+import type { AnyType, EmptyType } from 'std:shared'
 
 import type { Plugin } from './plugin'
 import type { Protocol } from './protocol'
@@ -35,4 +35,14 @@ export namespace Impl {
 
     exec?: Protocol.Exec
   }) => Protocol<TContext, TActions, THandlers>
+
+  export interface RuntimeOptions {
+    name: string
+    version: string
+    subtype?: symbol | undefined
+    cloneable?: boolean | undefined
+    handlers?: Record<string, AnyType> | undefined
+    defaults?: Record<string, AnyType> | undefined
+    exec?: Protocol.Exec | undefined
+  }
 }
