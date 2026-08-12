@@ -1,49 +1,16 @@
 import { Codec, hasCodec } from 'std:codec'
-import type { CodecDef } from 'std:codec'
 import { attempt, createChannel, each, run, scoped, sleep, spawn, withResolvers } from 'std:effect'
 import { install } from 'std:plugin'
 import type { Result } from 'std:result'
-import { fail, isFailure, unwrap } from 'std:result'
+import { isFailure, unwrap } from 'std:result'
 
 import { describe, expect, it } from 'bun:test'
 
 import { JsonCodec } from 'std:codec/impl/json'
 
-const encoder = new TextEncoder()
-const decoder = new TextDecoder()
+import { fakeCodec } from '../helpers/fake-codec'
 
-/** A minimal, self-contained codec impl that prefixes its label — enough to see WHO answered. */
-const fakeCodec = (label: string) =>
-  Codec.implement({
-    name: label,
-    version: '1.0.0',
-    *setup(options: CodecDef.Options = {}) {
-      const context: CodecDef.Context = {
-        name: options.name ?? label,
-        priority: options.priority ?? 500,
-      }
-      return context
-    },
-  }).build({
-    *encode(value) {
-      return encoder.encode(`${label}:${JSON.stringify(value)}`)
-    },
-    *decode(data) {
-      return JSON.parse(decoder.decode(data).slice(label.length + 1))
-    },
-    *stringify(value) {
-      return `${label}:${JSON.stringify(value)}`
-    },
-    *parse(text) {
-      return JSON.parse(text.slice(label.length + 1))
-    },
-    *encodeStream() {
-      return yield* fail('not-implemented', `${label} encodeStream`)
-    },
-    *decodeStream() {
-      return yield* fail('not-implemented', `${label} decodeStream`)
-    },
-  })
+const encoder = new TextEncoder()
 
 describe('single-codec routing (exec with one entry)', () => {
   it('protocol-level encode/decode round-trips through the one installed codec', async () => {
@@ -116,10 +83,9 @@ describe('registry scope-locality', () => {
 })
 
 describe('multi-codec priority routing (Codec.exec)', () => {
-  // NOTE: these currently FAIL — `Codec.exec` in codec/definitions.ts reads
-  // `entry.contextValue`, but Protocol.Install stores the setup return under `entry.value`.
-  // With one codec installed the `!best` short-circuit hides it; with two or more, reading
-  // `.priority` of undefined throws. The assertions below pin the INTENDED behavior.
+  // `Codec.exec` routes by the priority each install's setup returned (`entry.value`). The
+  // assertions below pin the routing rules: the highest priority wins, ties break toward the
+  // most recently installed codec, and pinned (direct) calls never enter routing at all.
 
   it('routes protocol calls to the highest-priority codec', async () => {
     const High = fakeCodec('fake-high')
@@ -170,13 +136,13 @@ describe('multi-codec priority routing (Codec.exec)', () => {
 })
 
 describe('json codec streaming', () => {
-  it('decodeStream reassembles a multi-byte UTF-8 character split across chunks', async () => {
+  it('decodeFlow reassembles a multi-byte UTF-8 character split across chunks', async () => {
     const outcome = await run(() =>
       scoped(function* () {
         yield* install(JsonCodec)
 
         const source = createChannel<Uint8Array, true | Result.Failure<unknown>>()
-        const decoded = yield* JsonCodec.actions.decodeStream<string>(source)
+        const decoded = yield* JsonCodec.actions.decodeFlow<string>(source)
 
         const collected = withResolvers<string[]>()
         yield* spawn(function* () {
@@ -207,14 +173,14 @@ describe('json codec streaming', () => {
     expect(unwrap(outcome)).toEqual(['dünya'])
   })
 
-  it('encodeStream → decodeStream round-trips a sequence of values', async () => {
+  it('encodeFlow → decodeFlow round-trips a sequence of values', async () => {
     const outcome = await run(() =>
       scoped(function* () {
         yield* install(JsonCodec)
 
         const source = createChannel<unknown, true | Result.Failure<unknown>>()
-        const encoded = yield* JsonCodec.actions.encodeStream(source)
-        const decoded = yield* JsonCodec.actions.decodeStream(encoded)
+        const encoded = yield* JsonCodec.actions.encodeFlow(source)
+        const decoded = yield* JsonCodec.actions.decodeFlow(encoded)
 
         const collected = withResolvers<unknown[]>()
         yield* spawn(function* () {
@@ -246,7 +212,7 @@ describe('json codec streaming', () => {
         yield* install(JsonCodec)
 
         const source = createChannel<Uint8Array, true | Result.Failure<unknown>>()
-        const decoded = yield* JsonCodec.actions.decodeStream(source)
+        const decoded = yield* JsonCodec.actions.decodeFlow(source)
 
         const closed = withResolvers<unknown>()
         yield* spawn(function* () {

@@ -240,7 +240,7 @@ describe('event interop', () => {
   })
 })
 
-describe('stream close carrying a Result', () => {
+describe('flow close carrying a Result', () => {
   it('a channel close value typed as Result.Failure flows to the consumer as `done`', async () => {
     const outcome = await run(function* () {
       const channel = createChannel<number, true | Result.Failure<unknown>>()
