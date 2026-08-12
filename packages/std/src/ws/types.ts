@@ -1,10 +1,10 @@
-import type { Future, Operation, Stream } from 'std:effect'
+import type { Future, Operation, Flow } from 'std:effect'
 import type { Result } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 /**
  * `std:ws` — an effect-native WebSocket CLIENT, the socket counterpart to `std:fetch`. `connect()`
- * opens a socket (resolving once OPEN), then exposes incoming frames as an effect `Stream`, a `send`,
+ * opens a socket (resolving once OPEN), then exposes incoming frames as an effect `Flow`, a `send`,
  * and a `closed` Future. Message framing mirrors the server gateway's WS handling and, like `std:fetch`,
  * runs through the registered `std:codec`: strings/binary go as-is, every other value is codec-encoded
  * on send + codec-decoded on receive. A codec (e.g. `JsonCodec`) must be installed in scope.
@@ -44,7 +44,7 @@ export namespace WsDef {
   }
 
   /** The close value the message stream settles with: `true` on a clean close, or a failure on error. */
-  export type StreamClose = true | Result.Failure<unknown>
+  export type FlowClose = true | Result.Failure<unknown>
 
   /** Why/how the socket closed. */
   export interface CloseInfo {
@@ -64,9 +64,9 @@ export namespace WsDef {
     readonly readyState: number
     /** Send a frame — strings/binary as-is, every other value encoded through the registered codec. */
     send(data: unknown): Operation<void>
-    /** Incoming frames as an effect Stream (codec-decoded on pull); closes `true` on clean close or a
+    /** Incoming frames as an effect Flow (codec-decoded on pull); closes `true` on clean close or a
      * failure on error. */
-    readonly messages: Stream<unknown, StreamClose>
+    readonly messages: Flow<unknown, FlowClose>
     /** Close the socket; the returned op resolves once it is fully closed. */
     close(code?: number, reason?: string): Operation<void>
     /** Resolves with the close code/reason once the socket closes. */

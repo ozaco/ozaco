@@ -1,6 +1,6 @@
-import type { Stream } from 'std:effect'
+import type { Flow } from 'std:effect'
 import { operation, resource } from 'std:effect'
-import type { StreamClose } from 'std:io'
+import type { FlowClose } from 'std:io'
 import { IO } from 'std:io'
 import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
@@ -20,10 +20,10 @@ const unsupported = (action: string): AnyType =>
     return yield* fail('io-unsupported', `IO.${action} is not available in a web environment`)
   })
 
-const unsupportedStream = (action: string): Stream<Uint8Array, StreamClose> =>
+const unsupportedFlow = (action: string): Flow<Uint8Array, FlowClose> =>
   resource(function* () {
     return yield* fail('io-unsupported', `IO.${action} is not available in a web environment`)
-  }) as Stream<Uint8Array, StreamClose>
+  }) as Flow<Uint8Array, FlowClose>
 
 /**
  * The web implementation of `std:io`. Crypto (`randomBytes`/`hmac`/`hash`) runs on the Web Crypto
@@ -53,9 +53,9 @@ export const WebIO = IO.implement({
 
   fromReadable,
   toReadable,
-  readStream: () => unsupportedStream('readStream'),
-  watch: () => unsupportedStream('watch') as AnyType,
-  writeStream: unsupported('writeStream'),
+  readFlow: () => unsupportedFlow('readFlow'),
+  watch: () => unsupportedFlow('watch') as AnyType,
+  writeFlow: unsupported('writeFlow'),
 
   read: unsupported('read'),
   readText: unsupported('readText'),

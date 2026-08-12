@@ -1,6 +1,6 @@
 import type { Result } from 'std:result'
 
-import type { Operation, Stream, Subscription } from './operation'
+import type { Operation, Flow, Subscription } from './operation'
 
 export namespace Utils {
   export interface Exit {
@@ -22,7 +22,7 @@ export namespace Utils {
   }
 
   export interface Each {
-    <T>(stream: Stream<T, unknown>): Operation<Iterable<T>>
+    <T>(flow: Flow<T, unknown>): Operation<Iterable<T>>
     next(): Operation<void>
   }
 

@@ -1,11 +1,11 @@
 import { ensure } from '../base/ensure'
 import { resource } from '../base/resource'
-import { spawn } from '../base/spawn'
-import type { Stream } from '../types/operation'
+import { fork } from '../base/spawn'
+import type { Flow } from '../types/operation'
 
 import { createSignal } from './signal'
 
-export const debounce = <T>(source: Stream<T, unknown>, ms: number): Stream<T, never> =>
+export const debounce = <T>(source: Flow<T, unknown>, ms: number): Flow<T, never> =>
   resource(function* (provide) {
     const output = createSignal<T, never>()
     let timerId: ReturnType<typeof setTimeout> | undefined
@@ -19,7 +19,7 @@ export const debounce = <T>(source: Stream<T, unknown>, ms: number): Stream<T, n
       }
     }
 
-    // clear a pending debounce timer on teardown/halt — the spawned loop's clearTimeout only runs on
+    // clear a pending debounce timer on teardown/halt — the forked loop's clearTimeout only runs on
     // new values and clean source completion, so a halt mid-window would otherwise leak the raw timer
     // (and later fire `output.send` on a torn-down signal)
     yield* ensure(function* () {
@@ -28,9 +28,13 @@ export const debounce = <T>(source: Stream<T, unknown>, ms: number): Stream<T, n
       }
     })
 
+    // subscribe to the output before the pump starts: a signal drops values sent with no
+    // subscriber, so the subscription must exist before the pump can emit
+    const outputSubscription = yield* output
+
     // `provide` suspends this resource until teardown, so the source is consumed from a background
     // task — after `provide` the loop would never run.
-    yield* spawn(function* () {
+    yield* fork(function* () {
       const subscription = yield* source
 
       let done = false
@@ -55,5 +59,5 @@ export const debounce = <T>(source: Stream<T, unknown>, ms: number): Stream<T, n
       output.close(undefined as never)
     })
 
-    yield* provide(yield* output)
+    yield* provide(outputSubscription)
   })

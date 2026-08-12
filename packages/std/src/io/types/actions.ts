@@ -1,4 +1,4 @@
-import type { Operation, Stream } from 'std:effect'
+import type { Operation, Flow } from 'std:effect'
 
 import type {
   ExecOptions,
@@ -13,7 +13,7 @@ import type {
   S3Client,
   S3Options,
   SpawnOptions,
-  StreamClose,
+  FlowClose,
   TcpConnectOptions,
   TcpHandler,
   TcpListenOptions,
@@ -61,14 +61,14 @@ export type IOActions = {
   fromReadable: (
     target: ReadableLike,
     options?: { destroy?: boolean },
-  ) => Stream<Uint8Array, StreamClose>
+  ) => Flow<Uint8Array, FlowClose>
   toReadable: (
-    source: Stream<Uint8Array, unknown>,
+    source: Flow<Uint8Array, unknown>,
   ) => Operation<{ readable: ReadableStream<Uint8Array>; pump: Operation<void> }>
-  readStream: (path: PathLike) => Stream<Uint8Array, StreamClose>
-  writeStream: (
+  readFlow: (path: PathLike) => Flow<Uint8Array, FlowClose>
+  writeFlow: (
     path: PathLike,
-    source: Stream<Uint8Array, unknown>,
+    source: Flow<Uint8Array, unknown>,
     options?: {
       flags?: number
     },
@@ -119,7 +119,7 @@ export type IOActions = {
   walk: (root: PathLike, options?: WalkOptions) => Operation<WalkEntry[]>
   /** Watch a file or directory via `fsPromises.watch` (event-based, recursive-capable), streaming
    * {@link WatchEvent}s until the stream is torn down. */
-  watch: (path: PathLike, options?: WatchOptions) => Stream<WatchEvent, never>
+  watch: (path: PathLike, options?: WatchOptions) => Flow<WatchEvent, never>
 
   /** Join path segments with the platform separator and normalize the result. */
   join: (...segments: string[]) => Operation<string>

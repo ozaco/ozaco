@@ -1,4 +1,4 @@
-import type { Operation, Stream, Subscription } from 'std:effect'
+import type { Operation, Flow, Subscription } from 'std:effect'
 import { createQueue, createSignal, each, ensure, resource } from 'std:effect'
 import type { AnyType } from 'std:shared'
 
@@ -7,7 +7,7 @@ import type { EventEmitter } from '../types'
 export function useEvent<T extends EventEmitter<AnyType>, K extends keyof EventEmitter.Infer<T>>(
   target: T,
   name: K,
-): Stream<EventEmitter.InferType<T, K>, never> {
+): Flow<EventEmitter.InferType<T, K>, never> {
   return resource(function* (provide) {
     const signal = createSignal<EventEmitter>()
     const handler = (...args: AnyType) => signal.send(args)

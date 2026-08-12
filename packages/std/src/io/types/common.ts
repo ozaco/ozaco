@@ -1,11 +1,11 @@
-import type { Operation, Stream } from 'std:effect'
+import type { Operation, Flow } from 'std:effect'
 import type { Result } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 export type PathLike = string | URL
 
-/** The close value an IO byte stream settles with: `true` on a clean end, or the failure that interrupted it. */
-export type StreamClose = true | Result.Failure<unknown>
+/** The close value an IO byte flow settles with: `true` on a clean end, or the failure that interrupted it. */
+export type FlowClose = true | Result.Failure<unknown>
 
 export type HashAlgorithm = 'SHA-256' | 'SHA-384' | 'SHA-512'
 
@@ -120,10 +120,10 @@ export interface ExecResult extends ProcessStatus {
 export interface ProcessHandle {
   /** OS process id (`-1` if the process never started). */
   readonly pid: number
-  /** The child's stdout as a byte stream. */
-  readonly stdout: Stream<Uint8Array, StreamClose>
-  /** The child's stderr as a byte stream. */
-  readonly stderr: Stream<Uint8Array, StreamClose>
+  /** The child's stdout as a byte flow. */
+  readonly stdout: Flow<Uint8Array, FlowClose>
+  /** The child's stderr as a byte flow. */
+  readonly stderr: Flow<Uint8Array, FlowClose>
   /** Resolve with the exit status once the process ends. */
   exited: () => Operation<ProcessStatus>
   /** Write a chunk to the child's stdin. */
@@ -176,7 +176,7 @@ export interface TcpSocket {
   readonly remotePort: number
   readonly localPort: number
   /** Inbound bytes; the close value is `true` on a clean end or the failure that interrupted it. */
-  data: Stream<Uint8Array, StreamClose>
+  data: Flow<Uint8Array, FlowClose>
   /** Write a chunk, resolving once it has been flushed (honors backpressure). */
   write: (chunk: Uint8Array | string) => Operation<void>
   /** Half-close the socket's write side and tear it down. */
@@ -213,7 +213,7 @@ export interface UdpDatagram {
 export interface UdpSocket {
   readonly port: number
   /** Inbound datagrams, buffered from bind time. */
-  messages: Stream<UdpDatagram, StreamClose>
+  messages: Flow<UdpDatagram, FlowClose>
   /** Send a datagram to an explicit destination. */
   send: (data: Uint8Array | string, port: number, address: string) => Operation<void>
   /** Close the socket. */

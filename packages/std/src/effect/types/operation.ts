@@ -55,14 +55,14 @@ export interface Subscription<T, TDone> {
   next(): Operation<IteratorResult<T, TDone>>
 }
 
-export type Stream<T, TReturn> = Operation<Subscription<T, TReturn>>
+export type Flow<T, TReturn> = Operation<Subscription<T, TReturn>>
 
-export interface Signal<T, TClose> extends Stream<T, TClose> {
+export interface Signal<T, TClose> extends Flow<T, TClose> {
   send(value: T): void
   close(value: TClose): void
 }
 
-export interface Channel<T, TClose> extends Stream<T, TClose> {
+export interface Channel<T, TClose> extends Flow<T, TClose> {
   send(message: T): Operation<void>
   close(value: TClose): Operation<void>
 }

@@ -1,4 +1,4 @@
-import type { Operation, Stream } from 'std:effect'
+import type { Operation, Flow } from 'std:effect'
 import type { Result } from 'std:result'
 
 export namespace FetchDef {
@@ -31,8 +31,8 @@ export namespace FetchDef {
   /** The underlying fetch implementation `fetch()` dispatches through (injectable via `fetchImpl`). */
   export type Impl = (input: RequestInfo | URL, init?: RequestInit) => Promise<globalThis.Response>
 
-  /** The close value a codec stream settles with: `true` on a clean end, or a failure mid-stream. */
-  type StreamClose = true | Result.Failure<unknown>
+  /** The close value a codec flow settles with: `true` on a clean end, or a failure mid-flow. */
+  type FlowClose = true | Result.Failure<unknown>
 
   export interface Response {
     /** The underlying platform `Response` (escape hatch). */
@@ -54,9 +54,9 @@ export namespace FetchDef {
     /** Whole body, decoded once through the registered codec (auto-installs `JsonCodec` if absent). */
     body<T = unknown>(): Operation<T>
     /** Body piped through the codec's streaming decoder — one decoded value per chunk. */
-    stream<T = unknown>(): Operation<Stream<T, StreamClose>>
-    /** The raw, undecoded byte stream of the response body. */
-    raw(): Operation<Stream<Uint8Array, void>>
+    flow<T = unknown>(): Operation<Flow<T, FlowClose>>
+    /** The raw, undecoded byte flow of the response body. */
+    raw(): Operation<Flow<Uint8Array, void>>
     expect(): Operation<Response>
   }
 
@@ -68,8 +68,8 @@ export namespace FetchDef {
     formData(): Operation<FormData>
     bytes(): Operation<Uint8Array>
     body<T = unknown>(): Operation<T>
-    stream<T = unknown>(): Operation<Stream<T, StreamClose>>
-    raw(): Operation<Stream<Uint8Array, void>>
+    flow<T = unknown>(): Operation<Flow<T, FlowClose>>
+    raw(): Operation<Flow<Uint8Array, void>>
     expect(): Fetch
   }
 }

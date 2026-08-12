@@ -18,6 +18,7 @@ import {
   verifyData,
 } from '../internal/crypto'
 import { readEnv } from '../internal/env'
+import { readFileFlow, writeFileFlow } from '../internal/flow'
 import { fromReadable } from '../internal/from-readable'
 import { tcpConnect, tcpListen, udpBind } from '../internal/net'
 import { mapStat, walkRecursive } from '../internal/node-shared'
@@ -25,7 +26,6 @@ import { nodePath } from '../internal/path-node'
 import { nodeExec, nodeSpawn } from '../internal/process-node'
 import { createS3 } from '../internal/s3'
 import { fetchS3Client } from '../internal/s3-fetch'
-import { readFileStream, writeFileStream } from '../internal/stream'
 import { readInterfaces, readTmpDir } from '../internal/sys'
 import { toReadable } from '../internal/to-readable'
 import { ulidId } from '../internal/ulid'
@@ -69,9 +69,9 @@ export const NodeIO = IO.implement({
 
   fromReadable,
   toReadable,
-  readStream: path => readFileStream(toPath(path)),
+  readFlow: path => readFileFlow(toPath(path)),
   watch: (path, options) => watchPath(toPath(path), options),
-  writeStream: (path, source, options) => writeFileStream(toPath(path), source, options?.flags),
+  writeFlow: (path, source, options) => writeFileFlow(toPath(path), source, options?.flags),
 
   read: operation(function* (path) {
     const buf = yield* until(fs.readFile(toPath(path)))

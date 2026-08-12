@@ -1,4 +1,4 @@
-import type { Operation, Stream } from 'std:effect'
+import type { Operation, Flow } from 'std:effect'
 import type { Plugin } from 'std:plugin'
 import type { Result } from 'std:result'
 
@@ -29,13 +29,13 @@ export namespace CodecDef {
     /** Like `decode`, but takes the serialized text instead of `Uint8Array` bytes. */
     parse<T>(text: string): Operation<T>
 
-    encodeStream<T>(
-      stream: Stream<T, unknown>,
-    ): Operation<Stream<Uint8Array, true | Result.Failure<unknown>>>
-    decodeStream<T>(
-      stream: Stream<Uint8Array, unknown>,
+    encodeFlow<T>(
+      flow: Flow<T, unknown>,
+    ): Operation<Flow<Uint8Array, true | Result.Failure<unknown>>>
+    decodeFlow<T>(
+      flow: Flow<Uint8Array, unknown>,
       json?: boolean,
-    ): Operation<Stream<T, true | Result.Failure<unknown>>>
+    ): Operation<Flow<T, true | Result.Failure<unknown>>>
   }
 
   export interface JsonActions extends Omit<CodecDef.Actions, 'stringify'> {

@@ -1,5 +1,5 @@
-import type { Stream } from 'std:effect'
-import { createChannel, each, ensure, operation, spawn } from 'std:effect'
+import type { Flow } from 'std:effect'
+import { createChannel, each, ensure, fork, operation } from 'std:effect'
 import type { Result } from 'std:result'
 import { asFailure, fail } from 'std:result'
 import type { AnyType } from 'std:shared'
@@ -67,13 +67,13 @@ export const JsonCodec = Codec.implement({
     }
   }),
 
-  encodeStream: operation(function* (stream) {
+  encodeFlow: operation(function* (flow) {
     const channel = createChannel<Uint8Array, true | Result.Failure<unknown>>()
 
-    yield* spawn(function* () {
+    yield* fork(function* () {
       let close: true | Result.Failure<unknown> = true
       try {
-        for (const chunk of yield* each(stream)) {
+        for (const chunk of yield* each(flow)) {
           let encoded: Uint8Array
           try {
             encoded = encoder.encode(JSON.stringify(chunk))
@@ -101,13 +101,13 @@ export const JsonCodec = Codec.implement({
     return channel
   }),
 
-  decodeStream: operation(function* (stream, json = true) {
+  decodeFlow: operation(function* (flow, json = true) {
     const channel = createChannel<unknown, true | Result.Failure<unknown>>()
     let parser: JSONParser
     const pending: unknown[] = []
     let parseError: Result.Failure<unknown> | undefined
 
-    yield* spawn(function* () {
+    yield* fork(function* () {
       // per-stream decoder in streaming mode: a multi-byte UTF-8 sequence split across chunk
       // boundaries stays buffered until its remaining bytes arrive (the shared module-level
       // decoder would emit replacement characters and interleave state across streams)
@@ -128,8 +128,8 @@ export const JsonCodec = Codec.implement({
         }
       }
 
-      const subscription = yield* stream
-      let closeValue: true | Result.Failure<unknown> = asFailure(fail('cancelled', 'stream halted'))
+      const subscription = yield* flow
+      let closeValue: true | Result.Failure<unknown> = asFailure(fail('cancelled', 'flow halted'))
 
       try {
         while (true) {
@@ -179,6 +179,6 @@ export const JsonCodec = Codec.implement({
       }
     })
 
-    return channel as Stream<AnyType, AnyType>
+    return channel as Flow<AnyType, AnyType>
   }),
 })

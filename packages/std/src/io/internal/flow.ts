@@ -1,6 +1,6 @@
-import type { Stream } from 'std:effect'
+import type { Flow } from 'std:effect'
 import { action, each, operation } from 'std:effect'
-import type { StreamClose, WritableLike } from 'std:io'
+import type { FlowClose, WritableLike } from 'std:io'
 import { IO_FLAGS } from 'std:io'
 import { appendCauses, asFailure } from 'std:result'
 import { hasFlag } from 'std:shared'
@@ -47,12 +47,12 @@ const waitForDrain = (writable: WritableLike): ReturnType<typeof action<void>> =
     return cleanup
   }, 'stream')
 
-export const readFileStream = (path: string): Stream<Uint8Array, StreamClose> =>
+export const readFileFlow = (path: string): Flow<Uint8Array, FlowClose> =>
   fromReadable(createReadStream(path))
 
-export const writeFileStream = operation(function* (
+export const writeFileFlow = operation(function* (
   path: string,
-  source: Stream<Uint8Array, unknown>,
+  source: Flow<Uint8Array, unknown>,
   flags?: number,
 ) {
   const f = flags ?? IO_FLAGS.NONE

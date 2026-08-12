@@ -3,7 +3,7 @@ import { SignalQueueFactoryContext } from '../internal/contexts'
 import type { Queue, Signal, Subscription } from '../types/operation'
 
 /**
- * Create a new signal: convert plain JavaScript callbacks (event listeners, timers) into a Stream.
+ * Create a new signal: convert plain JavaScript callbacks (event listeners, timers) into a Flow.
  * Values sent before a subscriber arrives are dropped; every subscriber gets its own queue.
  */
 export function createSignal<T, TClose = never>(): Signal<T, TClose> {

@@ -1,5 +1,5 @@
 import type { Operation } from 'std:effect'
-import { attempt, createSignal, debounce, each, operation, spawn } from 'std:effect'
+import { attempt, createSignal, debounce, each, fork, operation } from 'std:effect'
 import { IO } from 'std:io'
 import { isSuccess } from 'std:result'
 import type { AnyType } from 'std:shared'
@@ -162,12 +162,12 @@ export const makeInstance = (getCtx: () => Operation<ConfigDef.Context>): Config
         }
       })
 
-    return yield* spawn(function* () {
+    return yield* fork(function* () {
       for (const dir of recursiveDirs) {
-        yield* spawn(feed(IO.actions.watch(dir, { recursive: true })))
+        yield* fork(feed(IO.actions.watch(dir, { recursive: true })))
       }
       for (const file of files) {
-        yield* spawn(feed(IO.actions.watch(file)))
+        yield* fork(feed(IO.actions.watch(file)))
       }
 
       for (const _ of yield* each(debounce(bump, options?.debounce ?? 50))) {

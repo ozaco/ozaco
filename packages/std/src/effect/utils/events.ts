@@ -1,6 +1,6 @@
 import { resource } from '../base/resource'
 import type { Helpers } from '../types/helpers'
-import type { Operation, Stream, Subscription } from '../types/operation'
+import type { Operation, Flow, Subscription } from '../types/operation'
 
 import { createSignal } from './signal'
 
@@ -18,11 +18,11 @@ export function once<T extends EventTarget, K extends Helpers.EventList<T> | (st
   }
 }
 
-/** Subscribe to an `EventTarget` as a {@link Stream} of events. */
+/** Subscribe to an `EventTarget` as a {@link Flow} of events. */
 export function on<T extends EventTarget, K extends Helpers.EventList<T> | (string & {})>(
   target: T,
   name: K,
-): Stream<Helpers.EventTypeFromEventTarget<T, K>, never> {
+): Flow<Helpers.EventTypeFromEventTarget<T, K>, never> {
   return resource(function* (provide) {
     const signal = createSignal<Event>()
 

@@ -1,10 +1,10 @@
 import { resource } from '../base/resource'
-import type { Stream } from '../types/operation'
+import type { Flow } from '../types/operation'
 
 import { createSignal } from './signal'
 
-/** A {@link Stream} that produces a value every `milliseconds`, bound to the current scope. */
-export const interval = (milliseconds: number): Stream<void, never> =>
+/** A {@link Flow} that produces a value every `milliseconds`, bound to the current scope. */
+export const interval = (milliseconds: number): Flow<void, never> =>
   resource(function* (provide) {
     const signal = createSignal<void, never>()
 

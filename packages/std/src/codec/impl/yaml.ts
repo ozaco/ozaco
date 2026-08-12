@@ -1,5 +1,5 @@
-import type { Stream } from 'std:effect'
-import { createChannel, each, ensure, operation, spawn } from 'std:effect'
+import type { Flow } from 'std:effect'
+import { createChannel, each, ensure, fork, operation } from 'std:effect'
 import type { Result } from 'std:result'
 import { asFailure, fail } from 'std:result'
 import type { AnyType } from 'std:shared'
@@ -86,13 +86,13 @@ export const YamlCodec = Codec.implement({
     }
   }),
 
-  encodeStream: operation(function* (stream) {
+  encodeFlow: operation(function* (flow) {
     const channel = createChannel<Uint8Array, true | Result.Failure<unknown>>()
 
-    yield* spawn(function* () {
+    yield* fork(function* () {
       let close: true | Result.Failure<unknown> = true
       try {
-        for (const chunk of yield* each(stream)) {
+        for (const chunk of yield* each(flow)) {
           let encoded: Uint8Array
           try {
             encoded = encoder.encode(dump(chunk, encodeOptions))
@@ -120,15 +120,15 @@ export const YamlCodec = Codec.implement({
     return channel
   }),
 
-  decodeStream: operation(function* (stream) {
+  decodeFlow: operation(function* (flow) {
     const channel = createChannel<unknown, true | Result.Failure<unknown>>()
 
-    yield* spawn(function* () {
+    yield* fork(function* () {
       const streamDecoder = new TextDecoder()
       const parts: string[] = []
       let close: true | Result.Failure<unknown> = true
 
-      const subscription = yield* stream
+      const subscription = yield* flow
       for (;;) {
         const next = yield* subscription.next()
         if (next.done) {
@@ -154,6 +154,6 @@ export const YamlCodec = Codec.implement({
       }
     })
 
-    return channel as Stream<AnyType, AnyType>
+    return channel as Flow<AnyType, AnyType>
   }),
 })

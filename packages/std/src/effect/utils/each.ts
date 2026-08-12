@@ -4,11 +4,11 @@ import { useScope } from '../base/hooks'
 import { spawn } from '../base/spawn'
 import { withResolvers } from '../base/with-resolvers'
 import { EachStack } from '../internal/contexts'
-import type { Operation, Stream } from '../types/operation'
+import type { Operation, Flow } from '../types/operation'
 import type { Utils } from '../types/utils'
 
 // oxlint-disable-next-line import/exports-last
-export function each<T>(stream: Stream<T, unknown>): Operation<Iterable<T>> {
+export function each<T>(flow: Flow<T, unknown>): Operation<Iterable<T>> {
   return {
     *[Symbol.iterator]() {
       const scope = yield* useScope()
@@ -20,7 +20,7 @@ export function each<T>(stream: Stream<T, unknown>): Operation<Iterable<T>> {
       const cxt = withResolvers<Utils.EachLoop<T>>()
 
       yield* spawn(function* () {
-        const subscription = yield* stream
+        const subscription = yield* flow
         const current = yield* subscription.next()
 
         const stack = scope.expect(EachStack)

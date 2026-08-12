@@ -1,4 +1,4 @@
-import type { Future, Stream } from 'std:effect'
+import type { Flow, Future } from 'std:effect'
 import { createQueue, operation, withResolvers } from 'std:effect'
 import type { Result } from 'std:result'
 import { fail } from 'std:result'
@@ -13,7 +13,7 @@ const OPEN = 1
  * Open a WebSocket. The returned `Future<Connection>` resolves once the socket is OPEN (or fails with
  * `'ws/connect'` if it errors during the handshake). Outgoing/incoming frames are (de)serialized
  * through the registered `std:codec` — so a codec (e.g. `JsonCodec`) must be installed in scope.
- * Incoming frames are exposed as `messages` — a queue-backed effect Stream (buffered until consumed,
+ * Incoming frames are exposed as `messages` — a queue-backed effect Flow (buffered until consumed,
  * decoded on pull) that closes `true` on a clean close or with a failure on error. Consume it with a
  * `next()` loop or `streamForEach`; read `closed` for the exit.
  */
@@ -43,7 +43,7 @@ export const connect = operation(function* (url: string | URL, options?: WsDef.O
 
   // the queue holds RAW frames; decoding happens lazily on pull (see `decoded.next`), which lets the
   // codec run inside the effectful `next()` instead of the synchronous onmessage callback.
-  const queue = createQueue<unknown, WsDef.StreamClose>()
+  const queue = createQueue<unknown, WsDef.FlowClose>()
   const opened = withResolvers<void>('ws:open')
   const closedResolvers = withResolvers<WsDef.CloseInfo>('ws:closed')
 
@@ -70,22 +70,21 @@ export const connect = operation(function* (url: string | URL, options?: WsDef.O
     return yield* closedResolvers.operation
   })() as Future<WsDef.CloseInfo>
 
-  // a Stream is `Operation<Subscription>`; this hands back a subscription whose `next()` pulls a raw
+  // a Flow is `Operation<Subscription>`; this hands back a subscription whose `next()` pulls a raw
   // frame off the queue and codec-decodes it — buffered frames survive until a consumer reads them.
-  const decoded = {
-    next: operation(function* () {
-      const item = yield* queue.next()
-      if (item.done) {
-        return item
-      }
-      return { done: false, value: yield* decodeFrame(item.value) }
-    }),
-  }
   const messages = {
     *[Symbol.iterator]() {
-      return decoded
+      return {
+        next: operation(function* () {
+          const item = yield* queue.next()
+          if (item.done) {
+            return item
+          }
+          return { done: false, value: yield* decodeFrame(item.value) }
+        }),
+      }
     },
-  } as Stream<unknown, WsDef.StreamClose>
+  } as Flow<unknown, WsDef.FlowClose>
 
   const connection: WsDef.Connection = {
     native: socket,

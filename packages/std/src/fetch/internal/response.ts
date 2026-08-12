@@ -1,6 +1,6 @@
 import { Codec } from 'std:codec'
-import type { Stream } from 'std:effect'
-import { operation, stream, until } from 'std:effect'
+import type { Flow } from 'std:effect'
+import { flow, operation, until } from 'std:effect'
 import { asFailure, fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 
@@ -61,7 +61,7 @@ export const createFetchResponse = (raw: Response): FetchDef.Response => {
       return yield* fail('parse', 'response has no body')
     }
 
-    return stream(raw.body as AnyType) as Stream<Uint8Array, void>
+    return flow(raw.body as AnyType) as Flow<Uint8Array, void>
   })
 
   const readBody = operation(function* () {
@@ -72,12 +72,12 @@ export const createFetchResponse = (raw: Response): FetchDef.Response => {
     return yield* Codec.actions.decode(bytes)
   })
 
-  const readStream = operation(function* () {
+  const readFlow = operation(function* () {
     if (!raw.body) {
       return yield* fail('parse', 'response has no body')
     }
 
-    return yield* Codec.actions.decodeStream(stream(raw.body as AnyType), true)
+    return yield* Codec.actions.decodeFlow(flow(raw.body as AnyType), true)
   })
 
   const self: FetchDef.Response = {
@@ -113,7 +113,7 @@ export const createFetchResponse = (raw: Response): FetchDef.Response => {
     formData: readFormData,
     bytes: readBytes,
     body: readBody as AnyType,
-    stream: readStream as AnyType,
+    flow: readFlow as AnyType,
     raw: readRaw,
     expect: operation(function* () {
       yield* until(Promise.resolve())

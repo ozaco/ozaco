@@ -77,10 +77,10 @@ export const fetch = (
     return yield* response.body<T>()
   }, 'body')
 
-  const stream = operation(function* <T>() {
+  const flow = operation(function* <T>() {
     const response = yield* runFetch()
-    return yield* response.stream<T>()
-  }, 'stream')
+    return yield* response.flow<T>()
+  }, 'flow')
 
   const raw = operation(function* () {
     const response = yield* runFetch()
@@ -95,7 +95,7 @@ export const fetch = (
     formData,
     bytes,
     body: <T = unknown>() => body<T>(),
-    stream: <T = unknown>() => stream<T>(),
+    flow: <T = unknown>() => flow<T>(),
     raw,
     expect: () => fetch(input, init, true),
   })
