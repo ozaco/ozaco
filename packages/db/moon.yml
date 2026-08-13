@@ -34,3 +34,13 @@ tasks:
       - db:build
     inputs:
       - tests/**/*
+  test-pg:
+    command: bash scripts/test-pg.sh
+    deps:
+      - db:build
+    inputs:
+      - src/**/*
+      - tests/**/*
+      - scripts/test-pg.sh
+    options:
+      cache: false

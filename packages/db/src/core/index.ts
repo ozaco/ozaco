@@ -1,16 +1,20 @@
 /**
- * `@ozaco/db` core — the driver-agnostic Slonik port: errors, types, the `sql` tag, the engine +
- * pool (`createPool`), the `Pool`/`DbDriver` protocols (`usePool`), interceptors, dataloaders, and
- * the binary-COPY encoder. Driver-free, so importing it never pulls in a database package. The
- * concrete driver plugins live at `db:impl/{pg,bun,sqlite,surreal}`.
+ * `@ozaco/db` — the reactive, adapter-agnostic database module. The core is pure structure: a
+ * column DSL (`table`/`column`), a portable filter algebra (`query/ops`), the `DbAdapter` protocol
+ * (backend bindings live at `db:impl/{memory,sqlite,pg,bun-sql}`) and the `Db`/`DbClient` plugin
+ * whose context is the typed, watchable {@link Database} handle. Driver-free: importing this never
+ * pulls in a database package.
  */
+export * from './adapter'
+export * from './bus'
 export * from './const'
-export * from './defaults'
-export * from './types'
+export * from './definition'
+export * from './errors'
+export * from './query/evaluate'
+export * from './query/ops'
+export * from './query/sanitize'
+export * from './schema/column'
+export * from './schema/table'
+export * from './utils'
 
-export * from './utils/copy'
-export * from './utils/dataloaders'
-export * from './utils/errors'
-export * from './utils/interceptors'
-export * from './utils/pool'
-export * from './utils/sql'
+export type * from './types'

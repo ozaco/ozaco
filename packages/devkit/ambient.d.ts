@@ -123,20 +123,17 @@ declare module 'server:metrics' {
 declare module 'db:core' {
   export * from '@ozaco/db'
 }
-declare module 'db:realtime' {
-  export * from '@ozaco/db/realtime'
-}
-declare module 'db:impl/pg' {
-  export * from '@ozaco/db/impl/pg'
-}
-declare module 'db:impl/bun' {
-  export * from '@ozaco/db/impl/bun'
+declare module 'db:impl/memory' {
+  export * from '@ozaco/db/impl/memory'
 }
 declare module 'db:impl/sqlite' {
   export * from '@ozaco/db/impl/sqlite'
 }
-declare module 'db:impl/surreal' {
-  export * from '@ozaco/db/impl/surreal'
+declare module 'db:impl/pg' {
+  export * from '@ozaco/db/impl/pg'
+}
+declare module 'db:impl/bun-sql' {
+  export * from '@ozaco/db/impl/bun-sql'
 }
 
 // --------- AI ---------
