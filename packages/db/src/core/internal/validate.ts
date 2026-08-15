@@ -3,7 +3,8 @@ import { fail } from 'std:result'
 import { isPromise } from 'std:shared'
 
 import { DbErrors } from '../errors'
-import type { ColumnSpec, Doc, StandardSchemaV1, TableDef } from '../types'
+import type { Doc } from '../types/common'
+import type { ColumnSpec, StandardSchemaV1, TableDef } from '../types/schema'
 
 /** Kind-level type check for one present, non-null value; returns an error description or null. */
 const kindError = (column: ColumnSpec, value: unknown): string | null => {

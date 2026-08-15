@@ -18,13 +18,11 @@ import {
   compileDelete,
   compileFind,
   compileInsert,
-  compileMigrateStep,
   compileUpdate,
-  decodeRows,
-  encodeRawParam,
   quoteIdent,
-  sqliteDialect,
-} from '../shared'
+} from '../shared/compile'
+import { compileMigrateStep } from '../shared/ddl'
+import { decodeRows, encodeRawParam, sqliteDialect } from '../shared/dialects'
 
 import { createLock, exec, StateRef } from './internal'
 import { runTransaction } from './transaction'

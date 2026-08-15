@@ -4,7 +4,7 @@ import { attempt, createContext, operation, until, useContext } from 'std:effect
 import { fail, isFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
 
-import { classifySqlState } from '../shared'
+import { classifySqlState } from '../shared/dialects'
 
 import type { PgLiveOptions } from './live'
 

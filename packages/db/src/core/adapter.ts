@@ -5,7 +5,7 @@ import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import { DbErrors } from './errors'
-import type { AdapterDef } from './types'
+import type { AdapterDef } from './types/adapter'
 
 /**
  * The database+driver binding protocol. Each backend lives in its own module (`db:impl/{memory,

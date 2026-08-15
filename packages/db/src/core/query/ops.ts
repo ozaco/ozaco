@@ -1,4 +1,4 @@
-import type { Filter, FilterValue } from '../types'
+import type { Filter, FilterValue } from '../types/query'
 
 /** `field = value` */
 export const eq = (field: string, value: FilterValue): Filter => ({ op: 'eq', field, value })

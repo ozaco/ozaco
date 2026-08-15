@@ -3,7 +3,8 @@ import type { Context, Flow, Operation, Subscription } from 'std:effect'
 import { createContext, createSignal, operation } from 'std:effect'
 import type { AnyType } from 'std:shared'
 
-import type { BusEvent, ChangeBus, ChangeEvent, ChangeOp, Doc, LiveChange } from '../types'
+import type { BusEvent, ChangeBus, ChangeEvent, ChangeOp, LiveChange } from '../types/change'
+import type { Doc } from '../types/common'
 
 /** A committed local write before the hub assigns its version/source. */
 export interface LocalWrite {

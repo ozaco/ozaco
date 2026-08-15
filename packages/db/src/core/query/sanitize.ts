@@ -4,7 +4,7 @@ import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import { DbErrors } from '../errors'
-import type { Filter, FilterValue } from '../types'
+import type { Filter, FilterValue } from '../types/query'
 
 /** What an untrusted (wire-supplied) filter is allowed to reference. */
 export interface FilterPolicy {

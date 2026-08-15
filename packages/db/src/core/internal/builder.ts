@@ -9,19 +9,11 @@ import { DEFAULT_ORDER, ID, VERSION } from '../const'
 import { DbErrors } from '../errors'
 import { matches } from '../query/evaluate'
 import { and, eq, filterFields, gt, lt, or } from '../query/ops'
-import type {
-  ChangeEvent,
-  Doc,
-  Filter,
-  FilterValue,
-  OrderBy,
-  Page,
-  PaginateOptions,
-  QueryHandle,
-  TableSpec,
-  WatchDelta,
-  WatchOptions,
-} from '../types'
+import type { ChangeEvent, WatchDelta, WatchOptions } from '../types/change'
+import type { Doc } from '../types/common'
+import type { QueryHandle } from '../types/db'
+import type { Filter, FilterValue, OrderBy, Page, PaginateOptions } from '../types/query'
+import type { TableSpec } from '../types/schema'
 
 import { decodeCursor, encodeCursor } from './cursor'
 import type { Hub } from './hub'

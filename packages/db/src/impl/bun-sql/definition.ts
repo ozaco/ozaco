@@ -19,12 +19,10 @@ import {
   compileDelete,
   compileFind,
   compileInsert,
-  compileMigrateStep,
   compileUpdate,
-  decodeRows,
-  encodeRawParam,
-  postgresDialect,
-} from '../shared'
+} from '../shared/compile'
+import { compileMigrateStep } from '../shared/ddl'
+import { decodeRows, encodeRawParam, postgresDialect } from '../shared/dialects'
 
 import { exec, StateRef } from './internal'
 import { runTransaction } from './transaction'

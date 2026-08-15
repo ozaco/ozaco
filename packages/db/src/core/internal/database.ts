@@ -8,17 +8,11 @@ import { DbAdapter } from '../adapter'
 import { CREATED, ID, UPDATED, VERSION } from '../const'
 import { DbErrors } from '../errors'
 import { and, eq } from '../query/ops'
-import type {
-  AdapterDef,
-  Database,
-  Doc,
-  Filter,
-  SchemaDef,
-  TableDef,
-  TableSpec,
-  TransactionOptions,
-  WriteOptions,
-} from '../types'
+import type { AdapterDef } from '../types/adapter'
+import type { Doc } from '../types/common'
+import type { Database, TransactionOptions, WriteOptions } from '../types/db'
+import type { Filter } from '../types/query'
+import type { SchemaDef, TableDef, TableSpec } from '../types/schema'
 
 import { createQueryHandle } from './builder'
 import type { Hub, LocalWrite } from './hub'

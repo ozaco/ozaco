@@ -2,7 +2,8 @@ import { operation } from 'std:effect'
 
 import { DbAdapter } from '../adapter'
 import { SYSTEM_NAMES } from '../const'
-import type { MigrateStep, MigrationPlan, TableSpec } from '../types'
+import type { MigrateStep, MigrationPlan } from '../types/adapter'
+import type { TableSpec } from '../types/schema'
 import { isDestructive } from '../utils'
 
 /**

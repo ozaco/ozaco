@@ -1,5 +1,6 @@
 // oxlint-disable import/exports-last
-import type { Doc, Filter } from '../types'
+import type { Doc } from '../types/common'
+import type { Filter } from '../types/query'
 
 /** Collapse a value to a comparable scalar (`Date` → epoch millis). */
 const scalar = (value: unknown): unknown => (value instanceof Date ? value.getTime() : value)

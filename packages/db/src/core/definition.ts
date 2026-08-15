@@ -12,7 +12,9 @@ import type { Hub } from './internal/hub'
 import { bridgeBus, createHub, pumpLive } from './internal/hub'
 import { applyPlan, planMigration } from './internal/migrate'
 import { schemaFrom, tableSpecOf } from './schema/table'
-import type { ChangeBus, Database, DbDef, SchemaFrom, TableDef, TableSpec } from './types'
+import type { ChangeBus } from './types/change'
+import type { Database, DbDef } from './types/db'
+import type { SchemaFrom, TableDef, TableSpec } from './types/schema'
 
 /**
  * The app-facing database protocol. Install an adapter, then {@link DbClient}; resolve the typed

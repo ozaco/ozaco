@@ -1,7 +1,8 @@
 import type { AnyType } from 'std:shared'
 
 import { COLUMN } from '../const'
-import type { ColumnDef, ColumnKind, ColumnMeta, Id } from '../types'
+import type { Id } from '../types/common'
+import type { ColumnDef, ColumnKind, ColumnMeta } from '../types/schema'
 
 const make = <TValue>(kind: ColumnKind, meta: ColumnMeta): ColumnDef<TValue, AnyType, AnyType> => ({
   _t: COLUMN,

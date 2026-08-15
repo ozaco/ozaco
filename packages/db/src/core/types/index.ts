@@ -1,6 +1,0 @@
-export type * from './adapter'
-export type * from './change'
-export type * from './common'
-export type * from './db'
-export type * from './query'
-export type * from './schema'

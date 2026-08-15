@@ -19,12 +19,10 @@ import {
   compileDelete,
   compileFind,
   compileInsert,
-  compileMigrateStep,
   compileUpdate,
-  decodeRows,
-  encodeRawParam,
-  postgresDialect,
-} from '../shared'
+} from '../shared/compile'
+import { compileMigrateStep } from '../shared/ddl'
+import { decodeRows, encodeRawParam, postgresDialect } from '../shared/dialects'
 
 import { exec, rowsOf, StateRef } from './internal'
 import type { PgLiveOptions } from './live'

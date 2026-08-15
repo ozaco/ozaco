@@ -16,7 +16,8 @@ import type { AnyType } from 'std:shared'
 
 import { Client } from 'pg'
 
-import { decodeRows, postgresDialect, quoteIdent } from '../shared'
+import { quoteIdent } from '../shared/compile'
+import { decodeRows, postgresDialect } from '../shared/dialects'
 
 import { raise } from './internal'
 

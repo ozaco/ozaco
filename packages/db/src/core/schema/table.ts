@@ -9,7 +9,7 @@ import type {
   StandardSchemaV1,
   TableDef,
   TableSpec,
-} from '../types'
+} from '../types/schema'
 
 /** A {@link TableDef} plus fluent index declaration. Index columns are checked against the row's own
  * field names. */

@@ -1,7 +1,7 @@
 // oxlint-disable import/exports-last
 import { createSignal, operation } from 'std:effect'
 
-import type { BusEvent, ChangeBus } from './types'
+import type { BusEvent, ChangeBus } from './types/change'
 
 /** A single-process, multi-endpoint {@link ChangeBus} — the reference implementation and the test
  * double for multi-node reactivity: every `endpoint(origin)` shares one event stream, so several
