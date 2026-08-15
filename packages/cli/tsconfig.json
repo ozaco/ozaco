@@ -1,10 +1,9 @@
 {
   "compilerOptions": {
-    "lib": ["esnext", "dom"],
+    "lib": ["esnext"],
     "types": ["node", "bun"]
   },
-  "extends": ["../../tsconfig.base.json", "./tsconfig.paths.json"],
-  "include": ["src", "tests", "local"],
-  "exclude": ["**/dist/**"],
+  "extends": "./tsconfig.paths.json",
+  "include": ["src", "tests"],
   "references": []
 }

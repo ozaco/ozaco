@@ -1,8 +1,5 @@
-import type { PromptDef } from 'cli:core'
-
-import type { InlineParts, PromptContext } from '../types'
-
-export const PAGE_SIZE = 10
+import type { InlineParts } from '../types/internal'
+import type { PromptDef, PromptContext } from '../types/prompt'
 
 export const activeLine = (ctx: PromptContext, message: string): string => {
   const { colors, symbols } = ctx.palette

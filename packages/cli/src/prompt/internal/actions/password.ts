@@ -1,10 +1,10 @@
-import type { PromptDef } from 'cli:core'
 import { operation } from 'std:effect'
 
-import type { FieldState, PromptSpec } from '../../types'
+import type { FieldState } from '../../types/internal'
+import type { PromptDef, PromptSpec } from '../../types/prompt'
+import { runPrompt } from '../../utils'
 import { cancelledLine, inlineFrame, submittedLine } from '../chrome'
 import { createInput, editLine, renderInput } from '../edit'
-import { runPrompt } from '../engine'
 import { isEnter } from '../keys'
 
 export const password = operation(function* (options: PromptDef.PasswordOptions) {
@@ -33,9 +33,6 @@ export const password = operation(function* (options: PromptDef.PasswordOptions)
     },
     submitted: (value, _state, ctx) => submittedLine(ctx, options.message, echo(value)),
     cancelled: (_state, ctx) => cancelledLine(ctx, options.message),
-    *fallback() {
-      return ''
-    },
   }
 
   return yield* runPrompt(spec)

@@ -1,5 +1,6 @@
-import type { PaletteDef } from 'cli:core'
 import { ansi } from 'cli:core'
+
+import type { PaletteDef } from '../types'
 
 const styler =
   (enabled: boolean) =>

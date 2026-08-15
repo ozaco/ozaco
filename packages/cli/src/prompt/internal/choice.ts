@@ -1,4 +1,4 @@
-import type { PromptDef } from 'cli:core'
+import type { PromptDef } from '../types/prompt'
 
 import { step, wrapIndex } from './list'
 

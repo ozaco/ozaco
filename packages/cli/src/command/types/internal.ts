@@ -12,6 +12,13 @@ export interface RuntimeNode {
   children: Record<string, RuntimeNode>
 }
 
+/** The `util.parseArgs` option config one option field compiles to (see internal/tokenize). */
+export interface OptionSpec {
+  type: 'string' | 'boolean'
+  multiple?: boolean
+  short?: string
+}
+
 /** Tokenizer output: option values by canonical field, positionals, `--` rest, and parse errors. */
 export interface RawParse {
   /** Canonical field name → raw string values (in order seen). */
@@ -31,7 +38,7 @@ export interface ActionHelp {
   args: readonly string[]
 }
 
-/** A single property of the JSON Schema produced by `z.toJSONSchema` (what schema introspection walks). */
+/** A single property of the JSON Schema produced by `z.toJSONSchema` (what introspection walks). */
 export interface JsonProp {
   type?: string | string[] | undefined
   enum?: readonly string[] | undefined

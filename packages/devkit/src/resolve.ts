@@ -119,18 +119,18 @@ const DB_MODULES: Record<string, ModuleEntry> = {
 }
 
 const AI_MODULES: Record<string, ModuleEntry> = {
-  'ai:core': { subpath: 'core', source: 'index.ts' },
-  'ai:impl/openai': { subpath: 'impl/openai', source: 'impl/openai.ts' },
+  'ai:core': { subpath: '', source: 'core/index.ts' },
+  'ai:impl/openai': { subpath: 'impl/openai', source: 'impl/openai/index.ts' },
+  'ai:impl/mock': { subpath: 'impl/mock', source: 'impl/mock/index.ts' },
 }
 
 const CLI_MODULES: Record<string, ModuleEntry> = {
-  'cli:core': { subpath: 'core', source: 'core/index.ts' },
-  'cli:palette': { subpath: 'palette', source: 'palette/definition.ts' },
-  'cli:prompt': { subpath: 'prompt', source: 'prompt/definition.ts' },
-  'cli:spinner': { subpath: 'spinner', source: 'spinner/definition.ts' },
-  'cli:command': { subpath: 'command', source: 'command/definition.ts' },
-  'cli:table': { subpath: 'table', source: 'table/definition.ts' },
-  'cli:terminal/bun': { subpath: 'terminal/bun', source: 'terminal/bun.ts' },
+  'cli:core': { subpath: '', source: 'core/index.ts' },
+  'cli:palette': { subpath: 'palette', source: 'palette/index.ts' },
+  'cli:prompt': { subpath: 'prompt', source: 'prompt/index.ts' },
+  'cli:spinner': { subpath: 'spinner', source: 'spinner/index.ts' },
+  'cli:command': { subpath: 'command', source: 'command/index.ts' },
+  'cli:table': { subpath: 'table', source: 'table/index.ts' },
 }
 
 const CLIENT_MODULES: Record<string, ModuleEntry> = {

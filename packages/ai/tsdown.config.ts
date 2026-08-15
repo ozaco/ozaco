@@ -5,8 +5,9 @@ import { aiResolve, stdResolve } from '../devkit/src/resolve'
 // oxlint-disable-next-line import/no-default-export
 export default defineConfig({
   entry: {
-    index: './src/index.ts',
-    openai: './src/impl/openai.ts',
+    index: './src/core/index.ts',
+    'impl/openai': './src/impl/openai/index.ts',
+    'impl/mock': './src/impl/mock/index.ts',
   },
   format: ['esm', 'cjs'],
   dts: true,
@@ -16,5 +17,7 @@ export default defineConfig({
   deps: {
     onlyBundle: [],
   },
-  plugins: [stdResolve.rolldown(), aiResolve.rolldown({ sourceDir: './src' })],
+  // `ai:core` resolves to the external `@ozaco/ai` (dist/index.js), NOT inlined per bundle — so
+  // the `AiProvider`/`Ai` protocol singletons stay shared across the impl modules.
+  plugins: [stdResolve.rolldown(), aiResolve.rolldown()],
 })

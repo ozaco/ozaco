@@ -5,15 +5,12 @@ import { cliResolve, stdResolve } from '../devkit/src/resolve'
 // oxlint-disable-next-line import/no-default-export
 export default defineConfig({
   entry: {
-    core: './src/core/index.ts',
-    palette: './src/palette/definition.ts',
-    prompt: './src/prompt/definition.ts',
-    spinner: './src/spinner/definition.ts',
-    command: './src/command/definition.ts',
-    table: './src/table/definition.ts',
-    'terminal/bun': './src/terminal/bun.ts',
-    // 'terminal/web': './src/terminal/web.ts',
-    // 'terminal/memory': './src/terminal/memory.ts',
+    index: './src/core/index.ts',
+    palette: './src/palette/index.ts',
+    prompt: './src/prompt/index.ts',
+    spinner: './src/spinner/index.ts',
+    table: './src/table/index.ts',
+    command: './src/command/index.ts',
   },
   format: ['esm', 'cjs'],
   dts: true,
@@ -22,6 +19,10 @@ export default defineConfig({
   outDir: './dist',
   deps: {
     onlyBundle: [],
+    // zod is an optional peer, only ever loaded via a guarded dynamic import in cli:command
+    neverBundle: ['bun', 'zod'],
   },
-  plugins: [stdResolve.rolldown(), cliResolve.rolldown({ sourceDir: './src' })],
+  // `cli:core` resolves to the external `@ozaco/cli` (dist/index.js), NOT inlined per bundle — so
+  // the `Terminal`/`Palette`/… protocol singletons stay shared across the module bundles.
+  plugins: [stdResolve.rolldown(), cliResolve.rolldown()],
 })

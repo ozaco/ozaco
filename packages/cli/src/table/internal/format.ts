@@ -1,55 +1,24 @@
-import type { PaletteDef, TableDef } from 'cli:core'
+import { displayWidth, stripAnsi } from 'cli:core'
+import type { PaletteDef } from 'cli:palette'
+
+import type { BoxChars, Layout, Normalized } from '../types/internal'
+import type { TableDef } from '../types/table'
 
 const MIN_WIDTH = 1
 
-interface BoxChars {
-  h: string
-  v: string
-  tl: string
-  tm: string
-  tr: string
-  ml: string
-  mm: string
-  mr: string
-  bl: string
-  bm: string
-  br: string
-}
-
-interface Normalized {
-  columns: TableDef.Column[]
-  border: TableDef.Border
-  gutter: number
-  head: boolean
-  window: number | undefined
-}
-
-interface Layout {
-  columns: TableDef.Column[]
-  headers: string[]
-  widths: number[]
-  aligns: TableDef.Align[]
-  colors: (PaletteDef.Style | undefined)[]
-  border: TableDef.Border
-  gutter: number
-  head: boolean
-  chars: BoxChars
-  ellipsis: string
-  muted: PaletteDef.Style
-  bold: PaletteDef.Style
-}
-
-/** Display width in terminal cells — code points, matching the repo's `Terminal.displayWidth`. */
-const displayWidth = (text: string): number => Array.from(text).length
-
+/**
+ * Shorten to `max` VISIBLE cells. Widths are always measured ANSI-stripped (core `displayWidth`) —
+ * that is the styled-cell alignment fix. A styled cell that must actually be cut is stripped first
+ * (a truncated escape sequence would corrupt the terminal), trading its style for correctness.
+ */
 const truncate = (text: string, max: number, ellipsis: string): string => {
   if (max <= 0) {
     return ''
   }
-  const chars = Array.from(text)
-  if (chars.length <= max) {
+  if (displayWidth(text) <= max) {
     return text
   }
+  const chars = Array.from(stripAnsi(text))
   const dots = Array.from(ellipsis).length
   if (max <= dots) {
     return chars.slice(0, max).join('')

@@ -10,8 +10,8 @@ import type { RuntimeNode } from '../types/internal'
  *
  * A command's plugin identity is its `name@version` tag, and the effect scope + hook-store key off
  * that STRING. So two commands that merely share a human name (a `config` under `kube` and one under
- * `app`) would otherwise map to the same slot and clobber each other. A path is unique by construction
- * and — unlike a counter — deterministic and readable in errors/traces.
+ * `app`) would otherwise map to the same slot and clobber each other. A path is unique by
+ * construction and — unlike a counter — deterministic and readable in errors/traces.
  *
  * `setup` runs the command's OWN setup only; children are installed lazily by the dispatcher as it
  * descends, so registering a root never sets up its whole subtree.

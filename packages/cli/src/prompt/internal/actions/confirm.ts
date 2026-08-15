@@ -1,9 +1,9 @@
-import type { PromptDef } from 'cli:core'
 import { operation } from 'std:effect'
 
-import type { ConfirmState, PromptSpec } from '../../types'
+import type { ConfirmState } from '../../types/internal'
+import type { PromptDef, PromptSpec } from '../../types/prompt'
+import { runPrompt } from '../../utils'
 import { activeLine, cancelledLine, hint, submittedLine } from '../chrome'
-import { runPrompt } from '../engine'
 import { isEnter, isSpace } from '../keys'
 
 export const confirm = operation(function* (options: PromptDef.ConfirmOptions) {
@@ -35,9 +35,6 @@ export const confirm = operation(function* (options: PromptDef.ConfirmOptions) {
     },
     submitted: (value, _state, ctx) => submittedLine(ctx, options.message, value ? 'yes' : 'no'),
     cancelled: (_state, ctx) => cancelledLine(ctx, options.message),
-    *fallback() {
-      return initial
-    },
   }
 
   return yield* runPrompt(spec)

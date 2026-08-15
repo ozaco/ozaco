@@ -1,97 +1,82 @@
-import type { Future, Operation, Stream } from 'std:effect'
-import type { Plugin } from 'std:plugin'
+import type { Flow, Operation } from 'std:effect'
 
-import type { InputStream, Key, OutputStream, Size } from './common'
+import type { Key, Size } from './common'
 
-export type TerminalDef = Plugin<
-  TerminalDef.Context,
-  [options?: TerminalDef.Options],
-  TerminalDef.Actions
->
+/** How much color the terminal can render. */
+export type ColorLevel = 'none' | '16' | '256' | 'true'
 
 export namespace TerminalDef {
-  export type Encoding = 'utf8' | 'hex' | 'binary' | 'ascii' | 'base64'
-
-  export interface Options {
-    input?: InputStream
-    output?: OutputStream
-    error?: OutputStream
-    /** Force interactive (raw-mode) behavior on/off. Defaults to the input/output `isTTY`. */
-    interactive?: boolean
-    encoding?: TerminalDef.Encoding
+  /** What the installed terminal can do, detected once at setup (env/platform reads live in the
+   * impls — core and the feature modules only ever branch on these flags). */
+  export interface Capabilities {
+    /** tty in AND out — prompts and live regions are possible. */
+    readonly interactive: boolean
+    readonly color: ColorLevel
+    readonly unicode: boolean
+    /** the input can enter raw (unbuffered, signal-free) mode. */
+    readonly rawMode: boolean
+    /** the terminal reports size changes (`resize()` emits). */
+    readonly resize: boolean
+    /** the terminal supports the alternate screen buffer. */
+    readonly altScreen: boolean
   }
 
-  export interface Context {
-    input: InputStream
-    output: OutputStream
-    error: OutputStream
-    interactive: boolean
-    encoding: TerminalDef.Encoding
+  /** The terminal protocol context — what an impl's `setup()` resolves. */
+  export interface Info {
+    readonly terminal: string
+    readonly capabilities: Capabilities
   }
 
-  export interface WrapAnsiOptions {
-    /**
-     * If `true`, break words in the middle if they don't fit on a line.
-     * If `false`, only break at word boundaries.
-     *
-     * @default false
-     */
-    hard?: boolean
-
-    /**
-     * If `true`, wrap at word boundaries when possible.
-     * If `false`, don't perform word wrapping (only wrap at explicit newlines).
-     *
-     * @default true
-     */
-    wordWrap?: boolean
-
-    /**
-     * If `true`, trim leading and trailing whitespace from each line.
-     * If `false`, preserve whitespace.
-     *
-     * @default true
-     */
-    trim?: boolean
-
-    /**
-     * When it's ambiguous and `true`, count ambiguous width characters as 1 character wide.
-     * If `false`, count them as 2 characters wide.
-     *
-     * @default true
-     */
-    ambiguousIsNarrow?: boolean
+  export interface RendererOptions {
+    /** Queue (FIFO) for the live region instead of failing `cli.busy` when it is taken. */
+    wait?: boolean
   }
 
+  /**
+   * An exclusive live-region lease. All in-place drawing (spinners, live tables, prompt frames)
+   * goes through one of these — never through raw cursor codes — so regions can't interleave and
+   * the cursor is always restored. `done()` commits + releases early; otherwise the lease releases
+   * (and wipes any leftover frame) when the acquiring scope exits.
+   */
   export interface Renderer {
-    render(frame: string): Future<void>
-    clear(): Future<void>
-    done(frame?: string): Future<void>
+    /** Replace the live region with `frame` (no-op once released / on non-interactive outputs). */
+    render(frame: string): Operation<void>
+    /** Erase the live region but keep the lease. */
+    clear(): Operation<void>
+    /** Commit `frame` (if given) permanently to the scrollback and release the lease. */
+    done(frame?: string): Operation<void>
   }
 
+  /**
+   * The contract every terminal binding implements. Impls own the platform surface (streams, raw
+   * mode, signals, size probing); everything above them is portable. `resize` is capability-gated:
+   * the protocol provides a failing default for impls that omit it.
+   */
   export interface Actions {
+    /** Write raw text to the output. The ONLY output path — everything funnels through here. */
+    write(text: string): Operation<void>
     /** Current terminal size. */
-    size(): Future<Size>
-
-    /** Whether the terminal is interactive (TTY + raw-mode capable). */
-    isInteractive(): Future<boolean>
-
+    size(): Operation<Size>
+    /** The decoded key flow of the active `session()`; fails `cli.terminal` outside one. */
+    keys(): Operation<Flow<Key, void>>
+    /** Size-change flow (capability-gated — fails `cli.unsupported` without the capability). */
+    resize(): Operation<Flow<Size, never>>
     /**
-     * Run `fn` inside a raw-input session: raw mode on, cursor hidden, a key reader feeding a
-     * shared key stream. On exit (success, error, or halt) raw mode and the cursor are restored.
+     * Run `fn` inside a raw-input session: raw mode on, a key reader feeding the `keys()` flow and
+     * a SIGINT guard that fails the session (`cli.cancelled`) so teardown restores the tty. On exit
+     * — success, failure, or halt — raw mode is switched off and the cursor restored.
      */
-    session<R>(fn: () => Operation<R>): Future<R>
+    session<R>(fn: () => Operation<R>): Operation<R>
+  }
 
-    /** Write raw text to the output stream. */
-    write(text: string | Stream<string, unknown>): Future<void>
-
-    /** The decoded key stream for the active `session()`. Subscribe with `yield* stream`. */
-    keys(): Future<Stream<Key, void>>
-
-    stripAnsi(text: string): Future<string>
-    wrapAnsi(text: string, columns: number, options: TerminalDef.WrapAnsiOptions): Future<string>
-    displayWidth(line: string): Future<number>
-
-    renderer(columns: number): Future<TerminalDef.Renderer>
+  /** Protocol-level actions implemented once in core, shared by every impl. */
+  export interface Handlers {
+    /**
+     * Acquire the exclusive live-region lease (see {@link Renderer}). A second concurrent acquire
+     * fails `cli.busy`, or queues FIFO with `{ wait: true }`. The lease is a resource: it
+     * auto-releases (and cleans the screen) when the acquiring scope exits, re-renders on terminal
+     * resize when the capability is present, and hides/shows the cursor around its lifetime.
+     */
+    renderer(options?: RendererOptions): Operation<Renderer>
   }
 }

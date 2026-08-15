@@ -6,25 +6,19 @@ import { serializeError } from 'std:shared'
 import { parseArgs } from 'node:util'
 
 import type { CommandDef } from '../types/command'
-import type { RawParse } from '../types/internal'
-
-interface OptionSpec {
-  type: 'string' | 'boolean'
-  multiple?: boolean
-  short?: string
-}
+import type { OptionSpec, RawParse } from '../types/internal'
 
 const stringify = (value: string | boolean): string =>
   typeof value === 'boolean' ? String(value) : value
 
 /**
- * Tokenize argv with Node's built-in `util.parseArgs` (no hand-rolled parser). The action's option
- * `infos` + `short` map become the parseArgs option config: boolean fields take no value, array
- * fields are `multiple`, everything else is a string the schema later coerces. Tokens after `--` are
- * kept as `rest` (parseArgs would otherwise fold them into positionals). parseArgs throws on a bad
- * parse (unknown option, missing value, value on a boolean); we run it through `attempt(call(...))`
- * so the throw is reified into a `Result` inside the effect runtime — never a bare `try/catch` — and
- * surfaced as `errors`, letting the caller render help instead of unwinding.
+ * Tokenize argv with `util.parseArgs` (no hand-rolled parser; Bun ships the module natively). The
+ * action's option `infos` + `short` map become the parseArgs option config: boolean fields take no
+ * value, array fields are `multiple`, everything else is a string the schema later coerces. Tokens
+ * after `--` are kept as `rest` (parseArgs would otherwise fold them into positionals). parseArgs
+ * throws on a bad parse (unknown option, missing value, value on a boolean); we run it through
+ * `attempt(call(...))` so the throw is reified into a `Result` inside the effect runtime — never a
+ * bare `try/catch` — and surfaced as `errors`, letting the caller render help instead of unwinding.
  */
 export function* tokenize(
   args: string[],

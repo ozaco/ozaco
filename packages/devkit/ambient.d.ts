@@ -138,15 +138,18 @@ declare module 'db:impl/bun-sql' {
 
 // --------- AI ---------
 declare module 'ai:core' {
-  export * from '@ozaco/ai/core'
+  export * from '@ozaco/ai'
 }
 declare module 'ai:impl/openai' {
   export * from '@ozaco/ai/impl/openai'
 }
+declare module 'ai:impl/mock' {
+  export * from '@ozaco/ai/impl/mock'
+}
 
 // --------- CLI ---------
 declare module 'cli:core' {
-  export * from '@ozaco/cli/core'
+  export * from '@ozaco/cli'
 }
 
 declare module 'cli:palette' {
@@ -167,10 +170,6 @@ declare module 'cli:command' {
 
 declare module 'cli:table' {
   export * from '@ozaco/cli/table'
-}
-
-declare module 'cli:terminal/bun' {
-  export * from '@ozaco/cli/terminal/bun'
 }
 
 // --------- CLIENT ---------

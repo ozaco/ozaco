@@ -1,6 +1,6 @@
 {
   "name": "@ozaco/ai",
-  "version": "0.2.5",
+  "version": "0.3.0",
   "homepage": "https://ozaco.com/",
   "author": "giveerr (https://github.com/giveerr)",
   "repository": {
@@ -13,7 +13,7 @@
   ],
   "type": "module",
   "exports": {
-    "./core": {
+    ".": {
       "import": {
         "types": "./dist/index.d.ts",
         "default": "./dist/index.js"
@@ -22,18 +22,29 @@
         "types": "./dist/index.d.cts",
         "default": "./dist/index.cjs"
       },
-      "source": "./src/index.ts"
+      "source": "./src/core/index.ts"
     },
     "./impl/openai": {
       "import": {
-        "types": "./dist/openai.d.ts",
-        "default": "./dist/openai.js"
+        "types": "./dist/impl/openai.d.ts",
+        "default": "./dist/impl/openai.js"
       },
       "require": {
-        "types": "./dist/openai.d.cts",
-        "default": "./dist/openai.cjs"
+        "types": "./dist/impl/openai.d.cts",
+        "default": "./dist/impl/openai.cjs"
       },
-      "source": "./src/impl/openai.ts"
+      "source": "./src/impl/openai/index.ts"
+    },
+    "./impl/mock": {
+      "import": {
+        "types": "./dist/impl/mock.d.ts",
+        "default": "./dist/impl/mock.js"
+      },
+      "require": {
+        "types": "./dist/impl/mock.d.cts",
+        "default": "./dist/impl/mock.cjs"
+      },
+      "source": "./src/impl/mock/index.ts"
     }
   },
   "publishConfig": {
