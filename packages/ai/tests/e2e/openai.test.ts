@@ -1,10 +1,10 @@
 import type { Helpers } from 'ai:core'
 import { Ai, AiClient, AiErrors } from 'ai:core'
 import type { Operation } from 'std:effect'
-import { attempt } from 'std:effect'
+import { attempt, run } from 'std:effect'
 import { FetchClient } from 'std:fetch'
 import { install } from 'std:plugin'
-import { isFailure } from 'std:result'
+import { isFailure, unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import { afterAll, describe, expect, it } from 'bun:test'
@@ -13,7 +13,7 @@ import type { OpenAIProviderOptions } from 'ai:impl/openai'
 import { OpenAIProvider } from 'ai:impl/openai'
 import { JsonCodec } from 'std:codec/impl/json'
 
-import { drain, runScoped } from '../helpers'
+import { drain } from '../helpers'
 
 import type { ProviderScript, SuiteChatTurn, SuiteStream } from './helpers'
 import { runProviderSuite } from './helpers'
@@ -291,139 +291,157 @@ runProviderSuite({
 
 describe('openai provider — wire & transport', () => {
   it('sends bearer auth by default and the computed header overrides user headers', async () => {
-    await runScoped(function* () {
-      yield* installOpenAI(undefined, {
-        headers: { Authorization: 'user-clobber-attempt', 'x-extra': 'yes' },
-      })
-      yield* install(AiClient, { models: { chat: 'm' } })
-      yield* Ai.actions.chat('hi')
-      const request = state.requests[0]!
-      expect(request.auth).toBe('Bearer test-key')
-      expect(request.headers.get('x-extra')).toBe('yes')
-    })
+    unwrap(
+      await run(function* () {
+        yield* installOpenAI(undefined, {
+          headers: { Authorization: 'user-clobber-attempt', 'x-extra': 'yes' },
+        })
+        yield* install(AiClient, { models: { chat: 'm' } })
+        yield* Ai.actions.chat('hi')
+        const request = state.requests[0]!
+        expect(request.auth).toBe('Bearer test-key')
+        expect(request.headers.get('x-extra')).toBe('yes')
+      }),
+    )
   })
 
   it('auth kind "header" carries the key under the custom name instead of authorization', async () => {
-    await runScoped(function* () {
-      yield* installOpenAI(undefined, { auth: { kind: 'header', name: 'X-Api-Key' } })
-      yield* install(AiClient, { models: { chat: 'm' } })
-      yield* Ai.actions.chat('hi')
-      const request = state.requests[0]!
-      expect(request.headers.get('x-api-key')).toBe('test-key')
-      expect(request.auth).toBeNull()
-    })
+    unwrap(
+      await run(function* () {
+        yield* installOpenAI(undefined, { auth: { kind: 'header', name: 'X-Api-Key' } })
+        yield* install(AiClient, { models: { chat: 'm' } })
+        yield* Ai.actions.chat('hi')
+        const request = state.requests[0]!
+        expect(request.headers.get('x-api-key')).toBe('test-key')
+        expect(request.auth).toBeNull()
+      }),
+    )
   })
 
   it('converts neutral tools, tool choice, output and sampling to the OpenAI wire shape', async () => {
-    await runScoped(function* () {
-      yield* installOpenAI()
-      yield* install(AiClient, { models: { chat: 'm' } })
-      yield* Ai.actions.chat('x', {
-        tools: [{ name: 'add', description: 'adds', schema: { type: 'object' } }],
-        toolChoice: { name: 'add' },
-        output: { schema: { type: 'object' }, name: 'answer', strict: true },
-        temperature: 0.1,
-        maxTokens: 5,
-        stop: ['END'],
-      })
-      const body = state.requests[0]!.body
-      expect(body.tools).toEqual([
-        {
-          type: 'function',
-          function: { name: 'add', description: 'adds', parameters: { type: 'object' } },
-        },
-      ])
-      expect(body.tool_choice).toEqual({ type: 'function', function: { name: 'add' } })
-      expect(body.response_format).toEqual({
-        type: 'json_schema',
-        json_schema: { name: 'answer', schema: { type: 'object' }, strict: true },
-      })
-      expect(body.temperature).toBe(0.1)
-      expect(body.max_tokens).toBe(5)
-      expect(body.stop).toEqual(['END'])
-      expect(body.stream).toBeUndefined()
-    })
+    unwrap(
+      await run(function* () {
+        yield* installOpenAI()
+        yield* install(AiClient, { models: { chat: 'm' } })
+        yield* Ai.actions.chat('x', {
+          tools: [{ name: 'add', description: 'adds', schema: { type: 'object' } }],
+          toolChoice: { name: 'add' },
+          output: { schema: { type: 'object' }, name: 'answer', strict: true },
+          temperature: 0.1,
+          maxTokens: 5,
+          stop: ['END'],
+        })
+        const body = state.requests[0]!.body
+        expect(body.tools).toEqual([
+          {
+            type: 'function',
+            function: { name: 'add', description: 'adds', parameters: { type: 'object' } },
+          },
+        ])
+        expect(body.tool_choice).toEqual({ type: 'function', function: { name: 'add' } })
+        expect(body.response_format).toEqual({
+          type: 'json_schema',
+          json_schema: { name: 'answer', schema: { type: 'object' }, strict: true },
+        })
+        expect(body.temperature).toBe(0.1)
+        expect(body.max_tokens).toBe(5)
+        expect(body.stop).toEqual(['END'])
+        expect(body.stream).toBeUndefined()
+      }),
+    )
   })
 
   it('streaming requests set stream and ask for the usage frame', async () => {
-    await runScoped(function* () {
-      yield* installOpenAI({ chatStream: [{ chunks: [{ text: 'a' }] }] })
-      yield* install(AiClient, { models: { chat: 'm' } })
-      const flow = yield* Ai.actions.chatStream('x')
-      yield* drain(flow)
-      const body = state.requests[0]!.body
-      expect(body.stream).toBe(true)
-      expect(body.stream_options).toEqual({ include_usage: true })
-    })
+    unwrap(
+      await run(function* () {
+        yield* installOpenAI({ chatStream: [{ chunks: [{ text: 'a' }] }] })
+        yield* install(AiClient, { models: { chat: 'm' } })
+        const flow = yield* Ai.actions.chatStream('x')
+        yield* drain(flow)
+        const body = state.requests[0]!.body
+        expect(body.stream).toBe(true)
+        expect(body.stream_options).toEqual({ include_usage: true })
+      }),
+    )
   })
 
   it('a mid-stream error frame closes the stream with a classified failure', async () => {
-    await runScoped(function* () {
-      yield* installOpenAI()
-      yield* install(AiClient, { models: { chat: 'm' } })
-      state.special = 'mid-stream-error'
-      const flow = yield* Ai.actions.chatStream('x')
-      const { values, close } = yield* drain(flow)
-      expect(values.map(value => value.text ?? '').join('')).toBe('partial')
-      expect(isFailure(close)).toBe(true)
-      expect((close as AnyType).error).toBe(AiErrors.Request)
-      expect((close as AnyType).message).toContain('boom mid-stream')
-    })
+    unwrap(
+      await run(function* () {
+        yield* installOpenAI()
+        yield* install(AiClient, { models: { chat: 'm' } })
+        state.special = 'mid-stream-error'
+        const flow = yield* Ai.actions.chatStream('x')
+        const { values, close } = yield* drain(flow)
+        expect(values.map(value => value.text ?? '').join('')).toBe('partial')
+        expect(isFailure(close)).toBe(true)
+        expect((close as AnyType).error).toBe(AiErrors.Request)
+        expect((close as AnyType).message).toContain('boom mid-stream')
+      }),
+    )
   })
 
   it('a garbage SSE chunk closes the stream with ai.bad-response', async () => {
-    await runScoped(function* () {
-      yield* installOpenAI()
-      yield* install(AiClient, { models: { chat: 'm' } })
-      state.special = 'garbage-chunk'
-      const flow = yield* Ai.actions.chatStream('x')
-      const { values, close } = yield* drain(flow)
-      expect(values).toEqual([])
-      expect(isFailure(close)).toBe(true)
-      expect((close as AnyType).error).toBe(AiErrors.BadResponse)
-    })
+    unwrap(
+      await run(function* () {
+        yield* installOpenAI()
+        yield* install(AiClient, { models: { chat: 'm' } })
+        state.special = 'garbage-chunk'
+        const flow = yield* Ai.actions.chatStream('x')
+        const { values, close } = yield* drain(flow)
+        expect(values).toEqual([])
+        expect(isFailure(close)).toBe(true)
+        expect((close as AnyType).error).toBe(AiErrors.BadResponse)
+      }),
+    )
   })
 
   it('an SSE event split across network chunks is reassembled', async () => {
-    await runScoped(function* () {
-      yield* installOpenAI()
-      yield* install(AiClient, { models: { chat: 'm' } })
-      state.special = 'split-event'
-      const flow = yield* Ai.actions.chatStream('x')
-      const { values, close } = yield* drain(flow)
-      expect(close).toBe(true)
-      expect(values.map(value => value.text ?? '').join('')).toBe('AB')
-    })
+    unwrap(
+      await run(function* () {
+        yield* installOpenAI()
+        yield* install(AiClient, { models: { chat: 'm' } })
+        state.special = 'split-event'
+        const flow = yield* Ai.actions.chatStream('x')
+        const { values, close } = yield* drain(flow)
+        expect(close).toBe(true)
+        expect(values.map(value => value.text ?? '').join('')).toBe('AB')
+      }),
+    )
   })
 
   it('a stalled request fails ai.timeout under timeoutMs', async () => {
-    await runScoped(function* () {
-      yield* installOpenAI(undefined, { timeoutMs: 100 })
-      yield* install(AiClient, { models: { chat: 'm' } })
-      state.special = 'stall'
-      const outcome = yield* attempt(Ai.actions.chat('x'))
-      state.special = undefined
-      expect((outcome as AnyType).error).toBe(AiErrors.Timeout)
-    })
+    unwrap(
+      await run(function* () {
+        yield* installOpenAI(undefined, { timeoutMs: 100 })
+        yield* install(AiClient, { models: { chat: 'm' } })
+        state.special = 'stall'
+        const outcome = yield* attempt(Ai.actions.chat('x'))
+        state.special = undefined
+        expect((outcome as AnyType).error).toBe(AiErrors.Timeout)
+      }),
+    )
   })
 
   it('stt uploads multipart with the file name, content type and fields', async () => {
-    await runScoped(function* () {
-      yield* installOpenAI({ stt: 'hello' })
-      yield* install(AiClient, { models: { stt: 'model-stt' } })
-      const text = yield* Ai.actions.stt(new Uint8Array([1, 2]), {
-        language: 'tr',
-        filename: 'clip.wav',
-        contentType: 'audio/wav',
-      })
-      expect(text).toBe('hello')
-      const request = state.requests[0]!
-      expect(request.form).toEqual({
-        model: 'model-stt',
-        language: 'tr',
-        fileName: 'clip.wav',
-        fileType: 'audio/wav',
-      })
-    })
+    unwrap(
+      await run(function* () {
+        yield* installOpenAI({ stt: 'hello' })
+        yield* install(AiClient, { models: { stt: 'model-stt' } })
+        const text = yield* Ai.actions.stt(new Uint8Array([1, 2]), {
+          language: 'tr',
+          filename: 'clip.wav',
+          contentType: 'audio/wav',
+        })
+        expect(text).toBe('hello')
+        const request = state.requests[0]!
+        expect(request.form).toEqual({
+          model: 'model-stt',
+          language: 'tr',
+          fileName: 'clip.wav',
+          fileType: 'audio/wav',
+        })
+      }),
+    )
   })
 })

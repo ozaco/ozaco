@@ -1,8 +1,8 @@
 import type { Helpers } from 'ai:core'
 import { Ai, AiClient, AiErrors } from 'ai:core'
-import { attempt } from 'std:effect'
+import { attempt, run } from 'std:effect'
 import { install } from 'std:plugin'
-import { fail } from 'std:result'
+import { fail, unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import { describe, expect, it } from 'bun:test'
@@ -10,8 +10,6 @@ import { describe, expect, it } from 'bun:test'
 import type { MockChatResult, MockScript } from 'ai:impl/mock'
 import { MockProvider } from 'ai:impl/mock'
 import { JsonCodec } from 'std:codec/impl/json'
-
-import { runScoped } from '../helpers'
 
 import type { ProviderScript, SuiteChatTurn } from './helpers'
 import { runProviderSuite } from './helpers'
@@ -96,32 +94,36 @@ runProviderSuite({
 
 describe('mock provider extras', () => {
   it('records every received spec in the calls log', async () => {
-    await runScoped(function* () {
-      const mock = yield* install(MockProvider, { chat: { text: 'hi' } })
-      yield* install(AiClient, { models: { chat: 'model-chat', embed: 'model-embed' } })
-      yield* Ai.actions.chat('one')
-      yield* Ai.actions.chat('two')
-      yield* Ai.actions.embed(['a', 'b'])
-      expect(mock.calls.chat).toHaveLength(2)
-      expect(mock.calls.chat.map((spec: Helpers.ChatSpec) => spec.model)).toEqual([
-        'model-chat',
-        'model-chat',
-      ])
-      expect(mock.calls.embed[0]!.input).toEqual(['a', 'b'])
-      expect(mock.calls.embed[0]!.model).toBe('model-embed')
-    })
+    unwrap(
+      await run(function* () {
+        const mock = yield* install(MockProvider, { chat: { text: 'hi' } })
+        yield* install(AiClient, { models: { chat: 'model-chat', embed: 'model-embed' } })
+        yield* Ai.actions.chat('one')
+        yield* Ai.actions.chat('two')
+        yield* Ai.actions.embed(['a', 'b'])
+        expect(mock.calls.chat).toHaveLength(2)
+        expect(mock.calls.chat.map((spec: Helpers.ChatSpec) => spec.model)).toEqual([
+          'model-chat',
+          'model-chat',
+        ])
+        expect(mock.calls.embed[0]!.input).toEqual(['a', 'b'])
+        expect(mock.calls.embed[0]!.model).toBe('model-embed')
+      }),
+    )
   })
 
   it('an explicit queue is consumed call by call and fails cleanly when exhausted', async () => {
-    await runScoped(function* () {
-      yield* install(MockProvider, {
-        chat: { queue: [{ text: 'first' }, { text: 'second' }] },
-      })
-      yield* install(AiClient, { models: { chat: 'm' } })
-      expect((yield* Ai.actions.chat('1')).text).toBe('first')
-      expect((yield* Ai.actions.chat('2')).text).toBe('second')
-      const outcome = yield* attempt(Ai.actions.chat('3'))
-      expect((outcome as AnyType).error).toBe(AiErrors.Configuration)
-    })
+    unwrap(
+      await run(function* () {
+        yield* install(MockProvider, {
+          chat: { queue: [{ text: 'first' }, { text: 'second' }] },
+        })
+        yield* install(AiClient, { models: { chat: 'm' } })
+        expect((yield* Ai.actions.chat('1')).text).toBe('first')
+        expect((yield* Ai.actions.chat('2')).text).toBe('second')
+        const outcome = yield* attempt(Ai.actions.chat('3'))
+        expect((outcome as AnyType).error).toBe(AiErrors.Configuration)
+      }),
+    )
   })
 })
