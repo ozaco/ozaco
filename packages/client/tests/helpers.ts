@@ -84,9 +84,9 @@ export const bootServer = operation(function* () {
   return yield* Gateway.actions.start({ port: 0 })
 })
 
-/** What `createClient` requires in scope — FetchClient + Ws (the server fixture already
- * registered `JsonCodec`, which ws frame decoding picks up; the watch engine also handles raw
- * string frames when no codec is in scope). */
+/** What `createClient` requires in scope — FetchClient + Ws + JsonCodec. The codec is already
+ * registered by the server fixture in this scope (`DefaultBroker` installs it as the baseline),
+ * so installing it again here would fail with 'codec already registered'. */
 export const bootClientEnv = operation(function* () {
   yield* install(FetchClient)
   yield* install(Ws)

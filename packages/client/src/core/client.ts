@@ -42,7 +42,7 @@ interface FnAddress {
 const doCall = operation(function* (state: ClientState, address: FnAddress, args: unknown) {
   yield* resolveManifest(state)
 
-  const prepared = prepareRequest(state, addressOf(state, address), args)
+  const prepared = yield* prepareRequest(state, addressOf(state, address), args)
   const init: FetchDef.Init = {
     method: prepared.method,
     headers: prepared.headers,
@@ -111,10 +111,10 @@ const resourceProxy = (state: ClientState, resource: string): Record<string, Cli
  * Create the typed client for a wizard api tree. Effect-first: every fn returns an `Operation`,
  * realtime pumps and shared sockets are bound to the CALLING scope (they end when it closes).
  *
- * REQUIRES `FetchClient` and `Ws` installed in the caller's scope — `createClient` installs
- * NOTHING itself (installing `JsonCodec` too is recommended so ws frames decode through the codec,
- * but the watch engine also handles raw string frames). Plain-async consumers (browser apps)
- * should use {@link connectClient}, which owns its scope and installs everything.
+ * REQUIRES `FetchClient`, `Ws` AND `JsonCodec` installed in the caller's scope — `createClient`
+ * installs NOTHING itself. `JsonCodec` is a baseline dependency: every request body, query value
+ * and realtime frame is (de)serialized through it. Plain-async consumers (browser apps) should use
+ * {@link connectClient}, which owns its scope and installs everything.
  *
  * ```ts
  * const client = yield* createClient<Api>({ url: 'http://localhost:3000' })

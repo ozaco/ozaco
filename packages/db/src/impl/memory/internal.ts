@@ -1,5 +1,8 @@
 import type { Doc, IndexSpec, OrderBy } from 'db:core'
 import { compareValues } from 'db:core'
+import { operation } from 'std:effect'
+
+import { JsonCodec } from 'std:codec/impl/json'
 
 export { matches } from 'db:core'
 
@@ -32,7 +35,7 @@ export const sortRows = (rows: readonly Doc[], order: readonly OrderBy[]): Doc[]
 
 /** The values of a unique index for one row, as a comparable key — null when any part is null
  * (SQL unique indexes admit multiple nulls). */
-export const uniqueKey = (index: IndexSpec, doc: Doc): string | null => {
+export const uniqueKey = operation(function* (index: IndexSpec, doc: Doc) {
   const parts: unknown[] = []
   for (const columnName of index.columns) {
     const value =
@@ -42,5 +45,5 @@ export const uniqueKey = (index: IndexSpec, doc: Doc): string | null => {
     }
     parts.push(value)
   }
-  return JSON.stringify(parts)
-}
+  return yield* JsonCodec.actions.stringify(parts)
+})

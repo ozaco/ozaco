@@ -1,9 +1,12 @@
 // oxlint-disable import/exports-last
+import { CodecErrors } from 'std:codec'
 import { attempt, operation } from 'std:effect'
 import type { Future, Operation, Scope, Task } from 'std:effect'
 import { Fetch } from 'std:fetch'
 import { fail, isFailure, isSuccess } from 'std:result'
 import type { Result } from 'std:result'
+
+import { JsonCodec } from 'std:codec/impl/json'
 
 import { ClientErrors } from './errors'
 import type { ClientState, ManifestDoc, ManifestFunctionDoc } from './types'
@@ -67,20 +70,23 @@ export const toWsUrl = (base: string): string => {
 }
 
 /** Scalars go verbatim, objects/arrays as JSON (the wizard `filter` query param contract). */
-const queryValue = (value: unknown): string =>
-  typeof value === 'object' && value !== null ? JSON.stringify(value) : String(value)
+const queryValue = operation(function* (value: unknown) {
+  return typeof value === 'object' && value !== null
+    ? yield* JsonCodec.actions.stringify(value)
+    : String(value)
+})
 
-export const buildQuery = (params: Record<string, unknown>): string => {
+export const buildQuery = operation(function* (params: Record<string, unknown>) {
   const search = new URLSearchParams()
 
   for (const [key, value] of Object.entries(params)) {
     if (value !== undefined) {
-      search.append(key, queryValue(value))
+      search.append(key, yield* queryValue(value))
     }
   }
 
   return search.toString()
-}
+})
 
 /**
  * Resolve the manifest once: an explicit `options.manifest` wins (an invalid one fails
@@ -184,11 +190,11 @@ export interface PreparedRequest {
 const isQueryMethod = (method: string): boolean => QUERY_METHODS.has(method)
 
 /** Fill `:name` path params from args (consumed), split the rest into query string or body. */
-export const prepareRequest = (
+export const prepareRequest = operation(function* (
   state: ClientState,
   address: CallAddress,
   args: unknown,
-): PreparedRequest => {
+) {
   const source: Record<string, unknown> = isRecord(args) ? args : {}
   const consumed = new Set<string>()
 
@@ -225,18 +231,18 @@ export const prepareRequest = (
   let body: string | undefined
 
   if (isQueryMethod(address.method)) {
-    const query = buildQuery(payload)
+    const query = yield* buildQuery(payload)
 
     if (query !== '') {
       url = `${url}?${query}`
     }
   } else if (args !== undefined) {
     headers['content-type'] = 'application/json'
-    body = JSON.stringify(isRecord(args) ? payload : args)
+    body = yield* JsonCodec.actions.stringify(isRecord(args) ? payload : args)
   }
 
   return { url, method: address.method, headers, body }
-}
+})
 
 /**
  * Map a non-2xx response to a raised Failure: the server's `{ error, message, requestId }` body
@@ -249,9 +255,14 @@ export const failFromResponse = operation(function* (input: {
 }) {
   const read = yield* attempt(input.text)
   const raw = isSuccess(read) ? read.value : ''
-  const parsed = yield* attempt(function* () {
-    return JSON.parse(raw) as unknown
-  })
+  const parsed = yield* attempt(() => JsonCodec.actions.parse<unknown>(raw))
+
+  if (isFailure(parsed) && parsed.error !== CodecErrors.Parse) {
+    // only a genuinely unparseable body falls back — a missing JsonCodec install must surface
+    // as itself instead of masquerading as a plain `client.request`
+    return yield* parsed
+  }
+
   const body = isSuccess(parsed) && isRecord(parsed.value) ? parsed.value : {}
 
   const tag = typeof body['error'] === 'string' ? body['error'] : ClientErrors.Request

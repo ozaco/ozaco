@@ -41,7 +41,7 @@ export const checkUnique = operation(function* (
     index => index.unique,
   )
   for (const index of declared) {
-    const key = uniqueKey(index, candidate)
+    const key = yield* uniqueKey(index, candidate)
     if (key === null) {
       continue
     }
@@ -49,7 +49,7 @@ export const checkUnique = operation(function* (
       if (other[ID] === candidate[ID]) {
         continue
       }
-      if (uniqueKey(index, other) === key) {
+      if ((yield* uniqueKey(index, other)) === key) {
         return yield* fail(
           DbErrors.Unique,
           `unique index "${index.name}" violated on "${table.name}"`,

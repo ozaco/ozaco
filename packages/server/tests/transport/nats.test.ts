@@ -1,3 +1,4 @@
+import type { Reply, Trace, Wire } from 'server:core'
 import {
   Broker,
   CoreErrors,
@@ -7,7 +8,6 @@ import {
   encodeEnvelope,
   inputLaneOf,
 } from 'server:core'
-import type { Reply, Trace, Wire } from 'server:core'
 import { collectFlow } from 'server:utils'
 import { scoped, sleep } from 'std:effect'
 import { install } from 'std:plugin'
@@ -17,14 +17,15 @@ import { describe, expect, it } from 'bun:test'
 
 import { JetStreamApiError } from '@nats-io/jetstream'
 import { nkeyAuthenticator } from '@nats-io/nats-core'
-import { natsImpl, NatsErrors, NatsTransport } from 'server:transport/nats'
 import type { ConnectionOptions, NatsConnection, NatsTransportOptions } from 'server:transport/nats'
+import { NatsErrors, natsImpl, NatsTransport } from 'server:transport/nats'
 import { JsonCodec } from 'std:codec/impl/json'
 
+import type { LaneFrame } from '../../src/transport/nats/internal/frames'
 import { encodeLaneFrame, parseLaneFrame } from '../../src/transport/nats/internal/frames'
 import { isStreamFull, OUTPUT_LANE } from '../../src/transport/nats/internal/lanes'
-import { provisionStreams } from '../../src/transport/nats/internal/provision'
 import type { ProvisionInput } from '../../src/transport/nats/internal/provision'
+import { provisionStreams } from '../../src/transport/nats/internal/provision'
 import { createStreamNames, createSubjects } from '../../src/transport/nats/internal/subjects'
 import { bootstrap, cidOf } from '../core/helpers'
 import { runResult, runScoped } from '../helpers'
@@ -64,10 +65,20 @@ const wait = (ms: number) =>
   })
 
 describe('nats lane framing', () => {
-  it('byte data frames survive exactly (raw payload, never the JSON codec)', () => {
+  // both halves are operations now (the error payload rides the pinned JsonCodec), so every
+  // round trip runs in a scope with that codec installed
+  const roundTrip = (frame: LaneFrame) =>
+    runScoped(function* () {
+      yield* install(JsonCodec)
+
+      const encoded = yield* encodeLaneFrame(frame)
+
+      return yield* parseLaneFrame({ data: encoded.payload, headers: encoded.headers })
+    })
+
+  it('byte data frames survive exactly (raw payload, never the JSON codec)', async () => {
     const data = Uint8Array.from([0, 255, 128, 10, 13])
-    const encoded = encodeLaneFrame({ kind: 'data', seq: 3, data })
-    const parsed = parseLaneFrame({ data: encoded.payload, headers: encoded.headers })
+    const parsed = await roundTrip({ kind: 'data', seq: 3, data })
 
     expect(parsed).toBeDefined()
     expect(parsed?.kind).toBe('data')
@@ -79,22 +90,18 @@ describe('nats lane framing', () => {
     }
   })
 
-  it('end frames round trip', () => {
-    const encoded = encodeLaneFrame({ kind: 'end', seq: 7 })
-    const parsed = parseLaneFrame({ data: encoded.payload, headers: encoded.headers })
-
-    expect(parsed).toEqual({ kind: 'end', seq: 7 })
+  it('end frames round trip', async () => {
+    expect(await roundTrip({ kind: 'end', seq: 7 })).toEqual({ kind: 'end', seq: 7 })
   })
 
-  it('error frames carry the Wire.Failure with full fidelity', () => {
+  it('error frames carry the Wire.Failure with full fidelity', async () => {
     const failure: Wire.Failure = {
       error: 'math.boom',
       message: 'the numbers refused',
       causes: ['action:boom(a_1) svc:math@1#abc req:r_1 lane:math'],
       status: 422,
     }
-    const encoded = encodeLaneFrame({ kind: 'error', seq: 4, failure })
-    const parsed = parseLaneFrame({ data: encoded.payload, headers: encoded.headers })
+    const parsed = await roundTrip({ kind: 'error', seq: 4, failure })
 
     expect(parsed?.kind).toBe('error')
 
@@ -106,14 +113,19 @@ describe('nats lane framing', () => {
     }
   })
 
-  it('unframed messages are rejected instead of guessed at', () => {
-    expect(parseLaneFrame({ data: Uint8Array.from([1, 2, 3]) })).toBeUndefined()
+  it('unframed messages are rejected instead of guessed at', async () => {
+    const parsed = await runScoped(function* () {
+      yield* install(JsonCodec)
+
+      return yield* parseLaneFrame({ data: Uint8Array.from([1, 2, 3]) })
+    })
+
+    expect(parsed).toBeUndefined()
   })
 
-  it('chunk frames (raw multipart file bytes) round trip untouched', () => {
+  it('chunk frames (raw multipart file bytes) round trip untouched', async () => {
     const data = Uint8Array.from([7, 0, 255, 1])
-    const encoded = encodeLaneFrame({ kind: 'chunk', seq: 9, data })
-    const parsed = parseLaneFrame({ data: encoded.payload, headers: encoded.headers })
+    const parsed = await roundTrip({ kind: 'chunk', seq: 9, data })
 
     expect(parsed?.kind).toBe('chunk')
     expect(parsed?.seq).toBe(9)

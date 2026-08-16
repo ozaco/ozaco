@@ -122,11 +122,19 @@ const runPaginate = operation(function* (
 
   const first = rows[0]
   const last = rows.at(-1)
-  const edge = (row: Doc): string =>
-    encodeCursor({ column, direction: sortDirection, value: row[column], id: String(row[ID]) })
+  const edge = operation(function* (row: Doc) {
+    return yield* encodeCursor({
+      column,
+      direction: sortDirection,
+      value: row[column],
+      id: String(row[ID]),
+    })
+  })
 
   const hasNext = travel === 'backward' ? cursor !== null : hasMore
   const hasPrev = travel === 'backward' ? hasMore : cursor !== null
+  const nextCursor = hasNext && last ? yield* edge(last) : null
+  const prevCursor = hasPrev && first ? yield* edge(first) : null
 
   const total = options.count
     ? yield* DbAdapter.actions.count({ table: deps.spec, filter: combine(predicatesOf(state)) })
@@ -134,12 +142,7 @@ const runPaginate = operation(function* (
 
   return {
     data: rows,
-    pageInfo: {
-      nextCursor: hasNext && last ? edge(last) : null,
-      prevCursor: hasPrev && first ? edge(first) : null,
-      hasNext,
-      hasPrev,
-    },
+    pageInfo: { nextCursor, prevCursor, hasNext, hasPrev },
     total,
     version: deps.hub.version(deps.spec.name),
   } as Page<AnyType>

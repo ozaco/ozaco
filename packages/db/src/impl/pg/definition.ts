@@ -22,7 +22,7 @@ import {
   compileUpdate,
 } from '../shared/compile'
 import { compileMigrateStep } from '../shared/ddl'
-import { decodeRows, encodeRawParam, postgresDialect } from '../shared/dialects'
+import { decodeRows, encodeRawParams, postgresDialect } from '../shared/dialects'
 
 import { exec, rowsOf, StateRef } from './internal'
 import type { PgLiveOptions } from './live'
@@ -75,13 +75,13 @@ export const PgAdapter = DbAdapter.implement<AdapterDef.Info, [options: PgAdapte
   ...adapterDefaults('pg'),
 
   find: operation(function* (spec: FindSpec) {
-    const statement = compileFind(postgresDialect, spec)
+    const statement = yield* compileFind(postgresDialect, spec)
     const result = yield* exec(statement.text, statement.params)
-    return decodeRows(postgresDialect, spec.table, rowsOf(result))
+    return yield* decodeRows(postgresDialect, spec.table, rowsOf(result))
   }),
 
   count: operation(function* (spec: CountSpec) {
-    const statement = compileCount(postgresDialect, spec)
+    const statement = yield* compileCount(postgresDialect, spec)
     const result = yield* exec(statement.text, statement.params)
     return Number(rowsOf(result)[0]?.count ?? 0)
   }),
@@ -90,21 +90,21 @@ export const PgAdapter = DbAdapter.implement<AdapterDef.Info, [options: PgAdapte
     if (rows.length === 0) {
       return []
     }
-    const statement = compileInsert(postgresDialect, table, rows)
+    const statement = yield* compileInsert(postgresDialect, table, rows)
     const result = yield* exec(statement.text, statement.params)
-    return decodeRows(postgresDialect, table, rowsOf(result))
+    return yield* decodeRows(postgresDialect, table, rowsOf(result))
   }),
 
   update: operation(function* (spec: UpdateSpec) {
-    const statement = compileUpdate(postgresDialect, spec)
+    const statement = yield* compileUpdate(postgresDialect, spec)
     const result = yield* exec(statement.text, statement.params)
-    return decodeRows(postgresDialect, spec.table, rowsOf(result))
+    return yield* decodeRows(postgresDialect, spec.table, rowsOf(result))
   }),
 
   remove: operation(function* (spec: DeleteSpec) {
-    const statement = compileDelete(postgresDialect, spec)
+    const statement = yield* compileDelete(postgresDialect, spec)
     const result = yield* exec(statement.text, statement.params)
-    return decodeRows(postgresDialect, spec.table, rowsOf(result))
+    return yield* decodeRows(postgresDialect, spec.table, rowsOf(result))
   }),
 
   introspect: operation(function* (table: TableSpec) {
@@ -142,10 +142,10 @@ export const PgAdapter = DbAdapter.implement<AdapterDef.Info, [options: PgAdapte
   transaction: runTransaction,
 
   raw: operation(function* (statement: string, params?: readonly unknown[], table?: TableSpec) {
-    const bound = (params ?? []).map(value => encodeRawParam(postgresDialect, value))
+    const bound = yield* encodeRawParams(postgresDialect, params ?? [])
     const result = yield* exec(statement, bound)
     const found = rowsOf(result)
-    const rows = table ? decodeRows(postgresDialect, table, found) : found
+    const rows = table ? yield* decodeRows(postgresDialect, table, found) : found
     return { rows, rowCount: Number(result?.rowCount ?? rows.length) }
   }),
 })

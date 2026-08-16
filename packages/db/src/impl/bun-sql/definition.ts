@@ -22,7 +22,7 @@ import {
   compileUpdate,
 } from '../shared/compile'
 import { compileMigrateStep } from '../shared/ddl'
-import { decodeRows, encodeRawParam, postgresDialect } from '../shared/dialects'
+import { decodeRows, encodeRawParams, postgresDialect } from '../shared/dialects'
 
 import { exec, StateRef } from './internal'
 import { runTransaction } from './transaction'
@@ -59,12 +59,13 @@ export const BunSqlAdapter = DbAdapter.implement<AdapterDef.Info, [options: BunS
   ...adapterDefaults('bun-sql'),
 
   find: operation(function* (spec: FindSpec) {
-    const statement = compileFind(postgresDialect, spec)
-    return decodeRows(postgresDialect, spec.table, yield* exec(statement.text, statement.params))
+    const statement = yield* compileFind(postgresDialect, spec)
+    const found = yield* exec(statement.text, statement.params)
+    return yield* decodeRows(postgresDialect, spec.table, found)
   }),
 
   count: operation(function* (spec: CountSpec) {
-    const statement = compileCount(postgresDialect, spec)
+    const statement = yield* compileCount(postgresDialect, spec)
     const rows = yield* exec(statement.text, statement.params)
     return Number(rows[0]?.count ?? 0)
   }),
@@ -73,18 +74,21 @@ export const BunSqlAdapter = DbAdapter.implement<AdapterDef.Info, [options: BunS
     if (rows.length === 0) {
       return []
     }
-    const statement = compileInsert(postgresDialect, table, rows)
-    return decodeRows(postgresDialect, table, yield* exec(statement.text, statement.params))
+    const statement = yield* compileInsert(postgresDialect, table, rows)
+    const found = yield* exec(statement.text, statement.params)
+    return yield* decodeRows(postgresDialect, table, found)
   }),
 
   update: operation(function* (spec: UpdateSpec) {
-    const statement = compileUpdate(postgresDialect, spec)
-    return decodeRows(postgresDialect, spec.table, yield* exec(statement.text, statement.params))
+    const statement = yield* compileUpdate(postgresDialect, spec)
+    const found = yield* exec(statement.text, statement.params)
+    return yield* decodeRows(postgresDialect, spec.table, found)
   }),
 
   remove: operation(function* (spec: DeleteSpec) {
-    const statement = compileDelete(postgresDialect, spec)
-    return decodeRows(postgresDialect, spec.table, yield* exec(statement.text, statement.params))
+    const statement = yield* compileDelete(postgresDialect, spec)
+    const found = yield* exec(statement.text, statement.params)
+    return yield* decodeRows(postgresDialect, spec.table, found)
   }),
 
   introspect: operation(function* (table: TableSpec) {
@@ -109,9 +113,9 @@ export const BunSqlAdapter = DbAdapter.implement<AdapterDef.Info, [options: BunS
   transaction: runTransaction,
 
   raw: operation(function* (statement: string, params?: readonly unknown[], table?: TableSpec) {
-    const bound = (params ?? []).map(value => encodeRawParam(postgresDialect, value))
+    const bound = yield* encodeRawParams(postgresDialect, params ?? [])
     const found = yield* exec(statement, bound)
-    const rows = table ? decodeRows(postgresDialect, table, found) : found
+    const rows = table ? yield* decodeRows(postgresDialect, table, found) : found
     return { rows, rowCount: rows.length }
   }),
 })

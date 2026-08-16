@@ -2,6 +2,8 @@ import { operation } from 'std:effect'
 import { Fetch } from 'std:fetch'
 import { fail } from 'std:result'
 
+import { JsonCodec } from 'std:codec/impl/json'
+
 import { ClientErrors } from '../core/errors'
 import type { ManifestDoc, ManifestFunctionDoc, ManifestServiceDoc } from '../core/types'
 
@@ -17,7 +19,10 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 const IDENTIFIER = /^[A-Za-z_$][\w$]*$/u
 
-const keyText = (key: string): string => (IDENTIFIER.test(key) ? key : JSON.stringify(key))
+/** A bare identifier stays bare; anything else is emitted as a quoted string literal. */
+const keyText = operation(function* (key: string) {
+  return IDENTIFIER.test(key) ? key : yield* JsonCodec.actions.stringify(key)
+})
 
 const indented = (schema: unknown, depth: number): string => schemaToType(schema, depth)
 
@@ -32,20 +37,18 @@ const functionType = (fn: ManifestFunctionDoc, depth: number): string => {
   return `{\n${lines.join('\n')}\n${INDENT.repeat(depth)}}`
 }
 
-const serviceType = (service: ManifestServiceDoc, depth: number): string => {
+const serviceType = operation(function* (service: ManifestServiceDoc, depth: number) {
   const inner = INDENT.repeat(depth + 1)
-  const lines = Object.keys(service.functions)
-    .toSorted()
-    .map(
-      key =>
-        `${inner}readonly ${keyText(key)}: ${functionType(
-          service.functions[key] as ManifestFunctionDoc,
-          depth + 1,
-        )}`,
-    )
+  const lines: string[] = []
+
+  for (const key of Object.keys(service.functions).toSorted()) {
+    const fn = service.functions[key] as ManifestFunctionDoc
+
+    lines.push(`${inner}readonly ${yield* keyText(key)}: ${functionType(fn, depth + 1)}`)
+  }
 
   return `{\n${lines.join('\n')}\n${INDENT.repeat(depth)}}`
-}
+})
 
 const functionMeta = (fn: ManifestFunctionDoc): string => {
   const route = fn.route ? `{ method: '${fn.route.method}', path: '${fn.route.path}' }` : 'null'
@@ -53,16 +56,15 @@ const functionMeta = (fn: ManifestFunctionDoc): string => {
   return `{ kind: '${fn.kind}', route: ${route} }`
 }
 
-const serviceMeta = (service: ManifestServiceDoc): string => {
+const serviceMeta = operation(function* (service: ManifestServiceDoc) {
   const inner = INDENT.repeat(3)
-  const fns = Object.keys(service.functions)
-    .toSorted()
-    .map(
-      key =>
-        `${inner}${INDENT}${keyText(key)}: ${functionMeta(
-          service.functions[key] as ManifestFunctionDoc,
-        )},`,
-    )
+  const fns: string[] = []
+
+  for (const key of Object.keys(service.functions).toSorted()) {
+    const fn = service.functions[key] as ManifestFunctionDoc
+
+    fns.push(`${inner}${INDENT}${yield* keyText(key)}: ${functionMeta(fn)},`)
+  }
 
   const realtime = service.realtime ? `'${service.realtime.path}'` : 'null'
 
@@ -75,37 +77,32 @@ const serviceMeta = (service: ManifestServiceDoc): string => {
     `${inner}},`,
     `${INDENT.repeat(2)}}`,
   ].join('\n')
-}
+})
 
 /**
  * Compile an OZACO MANIFEST v1 document into a self-contained `.ts` source: an `Api` interface
  * (one entry per service fn with `kind`/`args`/`returns` as REAL TypeScript types derived from
  * the JSON Schemas — `{ declared: true }` degrades to `unknown`) plus an `apiMeta` const carrying
- * the routes and realtime paths. Shape is validated loosely; a non-manifest input throws a
- * `client.manifest` Failure.
+ * the routes and realtime paths. Shape is validated loosely; a non-manifest input fails
+ * `client.manifest`. REQUIRES `JsonCodec` installed (key literals are emitted through it).
  */
-export const generate = (manifest: unknown, options?: GenerateOptions): string => {
+export const generate = operation(function* (manifest: unknown, options?: GenerateOptions) {
   if (!isRecord(manifest) || manifest['ozaco'] !== '1.0' || !isRecord(manifest['services'])) {
-    throw fail(ClientErrors.Manifest, 'input is not an OZACO MANIFEST v1 document')
+    return yield* fail(ClientErrors.Manifest, 'input is not an OZACO MANIFEST v1 document')
   }
 
   const document = manifest as unknown as ManifestDoc
   const services = Object.keys(document.services).toSorted()
+  const apiLines: string[] = []
+  const metaLines: string[] = []
 
-  const apiLines = services.map(
-    name =>
-      `${INDENT}readonly ${keyText(name)}: ${serviceType(
-        document.services[name] as ManifestServiceDoc,
-        1,
-      )}`,
-  )
+  for (const name of services) {
+    const service = document.services[name] as ManifestServiceDoc
+    const key = yield* keyText(name)
 
-  const metaLines = services.map(
-    name =>
-      `${INDENT}${INDENT}${keyText(name)}: ${serviceMeta(
-        document.services[name] as ManifestServiceDoc,
-      )},`,
-  )
+    apiLines.push(`${INDENT}readonly ${key}: ${yield* serviceType(service, 1)}`)
+    metaLines.push(`${INDENT}${INDENT}${key}: ${yield* serviceMeta(service)},`)
+  }
 
   return [
     options?.banner ?? DEFAULT_BANNER,
@@ -121,7 +118,7 @@ export const generate = (manifest: unknown, options?: GenerateOptions): string =
     '} as const',
     '',
   ].join('\n')
-}
+})
 
 /**
  * Fetch `GET <url>/docs/manifest` (through the installed `Fetch` plugin) and generate the client
@@ -133,5 +130,5 @@ export const pull = operation(function* (url: string, options?: GenerateOptions)
   const checked = yield* response.expect()
   const manifest = yield* checked.json()
 
-  return generate(manifest, options)
+  return yield* generate(manifest, options)
 })

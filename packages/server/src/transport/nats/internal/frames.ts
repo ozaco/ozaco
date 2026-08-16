@@ -1,8 +1,10 @@
 // oxlint-disable import/exports-last
 import type { Wire } from 'server:core'
+import type { Operation } from 'std:effect'
 
-import { headers } from '@nats-io/nats-core'
 import type { MsgHdrs } from '@nats-io/nats-core'
+import { headers } from '@nats-io/nats-core'
+import { JsonCodec } from 'std:codec/impl/json'
 
 /**
  * LANE FRAMING DECISION: `lane` envelopes are NOT moved through the codec on this carrier — the
@@ -16,9 +18,6 @@ import type { MsgHdrs } from '@nats-io/nats-core'
 const KIND_HEADER = 'Oz-Lane-Kind'
 const SEQ_HEADER = 'Oz-Lane-Seq'
 
-const encoder = new TextEncoder()
-const decoder = new TextDecoder()
-
 export type LaneFrame =
   | { readonly kind: 'data'; readonly seq: number; readonly data: Uint8Array }
   /** A RAW multipart file chunk on an input lane — the `p: 'chunk'` Wire.PartFrame, payload as-is. */
@@ -31,7 +30,7 @@ export interface EncodedLaneFrame {
   readonly headers: MsgHdrs
 }
 
-export const encodeLaneFrame = (frame: LaneFrame): EncodedLaneFrame => {
+export const encodeLaneFrame = function* (frame: LaneFrame): Operation<EncodedLaneFrame> {
   const hdrs = headers()
 
   hdrs.set(KIND_HEADER, frame.kind)
@@ -41,7 +40,7 @@ export const encodeLaneFrame = (frame: LaneFrame): EncodedLaneFrame => {
     frame.kind === 'data' || frame.kind === 'chunk'
       ? frame.data
       : frame.kind === 'error'
-        ? encoder.encode(JSON.stringify(frame.failure))
+        ? yield* JsonCodec.actions.encode(frame.failure)
         : new Uint8Array(0)
 
   return { payload, headers: hdrs }
@@ -55,10 +54,10 @@ const isWireFailure = (value: unknown): value is Wire.Failure =>
   Array.isArray((value as Wire.Failure).causes)
 
 /** Parses a lane message back into a frame; `undefined` marks an unframed/foreign message. */
-export const parseLaneFrame = (msg: {
+export const parseLaneFrame = function* (msg: {
   readonly data: Uint8Array
   readonly headers?: MsgHdrs | undefined
-}): LaneFrame | undefined => {
+}): Operation<LaneFrame | undefined> {
   const kind = msg.headers?.get(KIND_HEADER)
   const seq = Number(msg.headers?.get(SEQ_HEADER) || '0')
 
@@ -74,7 +73,7 @@ export const parseLaneFrame = (msg: {
     let failure: unknown
 
     try {
-      failure = JSON.parse(decoder.decode(msg.data))
+      failure = yield* JsonCodec.actions.decode(msg.data)
     } catch {
       failure = undefined
     }

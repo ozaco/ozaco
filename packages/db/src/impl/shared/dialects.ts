@@ -1,10 +1,15 @@
 import type { ColumnKind, Doc, TableSpec } from 'db:core'
 import { DbErrors } from 'db:core'
+import { CodecErrors } from 'std:codec'
+import { attempt, operation } from 'std:effect'
+import { isFailure } from 'std:result'
+
+import { JsonCodec } from 'std:codec/impl/json'
 
 import { quoteIdent } from './compile'
 import type { SqlDialect } from './types'
 
-const encodeShared = (kind: ColumnKind, value: unknown): unknown => {
+const encodeShared = operation(function* (kind: ColumnKind, value: unknown) {
   if (value === null || value === undefined) {
     return null
   }
@@ -12,23 +17,26 @@ const encodeShared = (kind: ColumnKind, value: unknown): unknown => {
     return value instanceof Date ? value.getTime() : value
   }
   if (kind === 'json') {
-    return JSON.stringify(value)
+    return yield* JsonCodec.actions.stringify(value)
   }
   return value
-}
+})
 
-const decodeJson = (value: unknown): unknown => {
+/** A `json` column read back: text decodes through the codec, anything unreadable passes through
+ * verbatim (a column written by hand or by a foreign writer is data, not a failure). */
+const decodeJson = operation(function* (value: unknown) {
   if (typeof value !== 'string') {
     return value
   }
-  try {
-    return JSON.parse(value)
-  } catch {
-    return value
+  const parsed = yield* attempt(() => JsonCodec.actions.parse<unknown>(value))
+  if (isFailure(parsed)) {
+    // only unreadable JSON falls back — a missing JsonCodec install must surface as itself
+    return parsed.error === CodecErrors.Parse ? value : yield* parsed
   }
-}
+  return parsed.value
+})
 
-const decodeShared = (kind: ColumnKind, value: unknown): unknown => {
+const decodeShared = operation(function* (kind: ColumnKind, value: unknown) {
   if (value === null || value === undefined) {
     return null
   }
@@ -37,7 +45,7 @@ const decodeShared = (kind: ColumnKind, value: unknown): unknown => {
       return value instanceof Date ? value : new Date(Number(value))
     }
     case 'json': {
-      return decodeJson(value)
+      return yield* decodeJson(value)
     }
     case 'int':
     case 'float': {
@@ -50,7 +58,7 @@ const decodeShared = (kind: ColumnKind, value: unknown): unknown => {
       return value
     }
   }
-}
+})
 
 /** Postgres-family dialect (node-postgres and Bun SQL). */
 export const postgresDialect: SqlDialect = {
@@ -84,51 +92,69 @@ export const sqliteDialect: SqlDialect = {
   },
   ilike: null,
   reindexTable: table => `REINDEX ${quoteIdent(table)}`,
-  encode: (kind, value) => {
+  encode: operation(function* (kind, value) {
     if (kind === 'boolean' && typeof value === 'boolean') {
       return value ? 1 : 0
     }
-    return encodeShared(kind, value)
-  },
+    return yield* encodeShared(kind, value)
+  }),
   decode: decodeShared,
 }
 
 /** Decode one raw driver row back to app-level values by declared column kind. Undeclared columns
  * pass through untouched. */
-export const decodeRow = (dialect: SqlDialect, table: TableSpec, row: Doc): Doc => {
+export const decodeRow = operation(function* (dialect: SqlDialect, table: TableSpec, row: Doc) {
   const out: Record<string, unknown> = { ...row }
   for (const column of table.columns) {
     if (column.name in out) {
-      out[column.name] = dialect.decode(column.kind, out[column.name])
+      out[column.name] = yield* dialect.decode(column.kind, out[column.name])
     }
   }
-  return out
-}
+  return out as Doc
+})
 
-export const decodeRows = (
+export const decodeRows = operation(function* (
   dialect: SqlDialect,
   table: TableSpec,
   rows: readonly Doc[],
-): readonly Doc[] => rows.map(row => decodeRow(dialect, table, row))
+) {
+  const out: Doc[] = []
+  for (const row of rows) {
+    out.push(yield* decodeRow(dialect, table, row))
+  }
+  return out as readonly Doc[]
+})
 
 /** Normalize one user-supplied `raw` bind param from app values to storage values: `Date` →
  * timestamp encoding, booleans/plain objects/arrays per dialect (`json` as text). Primitives and
  * binary pass through untouched. */
-export const encodeRawParam = (dialect: SqlDialect, value: unknown): unknown => {
+export const encodeRawParam = operation(function* (dialect: SqlDialect, value: unknown) {
   if (value === null || value === undefined) {
     return null
   }
   if (value instanceof Date) {
-    return dialect.encode('timestamp', value)
+    return yield* dialect.encode('timestamp', value)
   }
   if (typeof value === 'boolean') {
-    return dialect.encode('boolean', value)
+    return yield* dialect.encode('boolean', value)
   }
   if (typeof value === 'object' && !(value instanceof Uint8Array)) {
-    return dialect.encode('json', value)
+    return yield* dialect.encode('json', value)
   }
   return value
-}
+})
+
+/** Normalize every user-supplied `raw` bind param (see {@link encodeRawParam}). */
+export const encodeRawParams = operation(function* (
+  dialect: SqlDialect,
+  params: readonly unknown[],
+) {
+  const bound: unknown[] = []
+  for (const value of params) {
+    bound.push(yield* encodeRawParam(dialect, value))
+  }
+  return bound
+})
 
 /** Map a Postgres SQLSTATE to the matching `DbErrors` tag (shared by pg and bun-sql). */
 export const classifySqlState = (code: unknown, message: string): string => {

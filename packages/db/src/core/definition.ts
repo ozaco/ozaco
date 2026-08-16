@@ -1,9 +1,12 @@
 // oxlint-disable import/exports-last
+import { hasCodec } from 'std:codec'
 import type { Operation } from 'std:effect'
 import { createContext, fork, operation, useContext } from 'std:effect'
-import { defineProtocol } from 'std:plugin'
+import { defineProtocol, install } from 'std:plugin'
 import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
+
+import { JsonCodec } from 'std:codec/impl/json'
 
 import { DbAdapter } from './adapter'
 import { DbErrors } from './errors'
@@ -53,6 +56,12 @@ const DbClientImpl = DbProtocol.implement<DbDef.Context, [options: DbDef.Options
   version: '0.1.0',
   description: 'The reactive database engine over the installed adapter',
   *setup(options) {
+    // JsonCodec is a BASELINE dependency: `json` columns, keyset cursors and unique-index keys are
+    // all (de)serialized through it. Install it unless the scope already carries a codec.
+    if (!(yield* hasCodec())) {
+      yield* install(JsonCodec)
+    }
+
     const info = yield* DbAdapter.context.get()
     if (!info) {
       return yield* fail(

@@ -9,6 +9,8 @@ import type {
   TableSpec,
   UpdateSpec,
 } from 'db:core'
+import { operation } from 'std:effect'
+import type { AnyType } from 'std:shared'
 
 import type { SqlDialect, Statement } from './types'
 
@@ -27,10 +29,10 @@ const contextOf = (dialect: SqlDialect, table: TableSpec): CompileContext => ({
   params: [],
 })
 
-const bind = (ctx: CompileContext, field: string, value: unknown): string => {
-  ctx.params.push(ctx.dialect.encode(ctx.kinds.get(field) ?? 'json', value))
+const bind = operation(function* (ctx: CompileContext, field: string, value: unknown) {
+  ctx.params.push(yield* ctx.dialect.encode(ctx.kinds.get(field) ?? 'json', value))
   return ctx.dialect.placeholder(ctx.params.length)
-}
+})
 
 const CMP: Record<string, string> = {
   eq: '=',
@@ -41,32 +43,41 @@ const CMP: Record<string, string> = {
   lte: '<=',
 }
 
-const filterSql = (ctx: CompileContext, filter: Filter): string => {
+const filterSql = operation(function* (
+  ctx: CompileContext,
+  filter: Filter,
+): Generator<AnyType, string, AnyType> {
   switch (filter.op) {
     case 'eq':
     case 'ne': {
       if (filter.value === null) {
         return `${quoteIdent(filter.field)} IS ${filter.op === 'eq' ? '' : 'NOT '}NULL`
       }
-      return `${quoteIdent(filter.field)} ${CMP[filter.op]} ${bind(ctx, filter.field, filter.value)}`
+      const placeholder = yield* bind(ctx, filter.field, filter.value)
+      return `${quoteIdent(filter.field)} ${CMP[filter.op]} ${placeholder}`
     }
     case 'gt':
     case 'gte':
     case 'lt':
     case 'lte': {
-      return `${quoteIdent(filter.field)} ${CMP[filter.op]} ${bind(ctx, filter.field, filter.value)}`
+      const placeholder = yield* bind(ctx, filter.field, filter.value)
+      return `${quoteIdent(filter.field)} ${CMP[filter.op]} ${placeholder}`
     }
     case 'in':
     case 'not-in': {
       if (filter.values.length === 0) {
         return filter.op === 'in' ? '1 = 0' : '1 = 1'
       }
-      const list = filter.values.map(value => bind(ctx, filter.field, value)).join(', ')
+      const placeholders: string[] = []
+      for (const value of filter.values) {
+        placeholders.push(yield* bind(ctx, filter.field, value))
+      }
+      const list = placeholders.join(', ')
       return `${quoteIdent(filter.field)} ${filter.op === 'in' ? 'IN' : 'NOT IN'} (${list})`
     }
     case 'like': {
       const column = quoteIdent(filter.field)
-      const pattern = bind(ctx, filter.field, filter.pattern)
+      const pattern = yield* bind(ctx, filter.field, filter.pattern)
       if (!filter.insensitive) {
         return `${column} LIKE ${pattern}`
       }
@@ -85,20 +96,24 @@ const filterSql = (ctx: CompileContext, filter: Filter): string => {
       if (filter.filters.length === 0) {
         return filter.op === 'and' ? '1 = 1' : '1 = 0'
       }
-      const glue = filter.op === 'and' ? ' AND ' : ' OR '
-      return `(${filter.filters.map(inner => filterSql(ctx, inner)).join(glue)})`
+      const parts: string[] = []
+      for (const inner of filter.filters) {
+        parts.push(yield* filterSql(ctx, inner))
+      }
+      return `(${parts.join(filter.op === 'and' ? ' AND ' : ' OR ')})`
     }
     case 'not': {
-      return `NOT (${filterSql(ctx, filter.filter)})`
+      return `NOT (${yield* filterSql(ctx, filter.filter)})`
     }
     default: {
       return '1 = 1'
     }
   }
-}
+})
 
-const whereSql = (ctx: CompileContext, filter: Filter | null): string =>
-  filter ? ` WHERE ${filterSql(ctx, filter)}` : ''
+const whereSql = operation(function* (ctx: CompileContext, filter: Filter | null) {
+  return filter ? ` WHERE ${yield* filterSql(ctx, filter)}` : ''
+})
 
 const orderSql = (order: FindSpec['order']): string =>
   order.length === 0
@@ -107,58 +122,68 @@ const orderSql = (order: FindSpec['order']): string =>
         .map(entry => `${quoteIdent(entry.field)} ${entry.direction === 'desc' ? 'DESC' : 'ASC'}`)
         .join(', ')}`
 
-export const compileFind = (dialect: SqlDialect, spec: FindSpec): Statement => {
+export const compileFind = operation(function* (dialect: SqlDialect, spec: FindSpec) {
   const ctx = contextOf(dialect, spec.table)
+  const where = yield* whereSql(ctx, spec.filter)
   const limit = spec.limit === null ? '' : ` LIMIT ${Math.trunc(spec.limit)}`
   const offset = spec.offset ? ` OFFSET ${Math.trunc(spec.offset)}` : ''
   return {
-    text: `SELECT * FROM ${quoteIdent(spec.table.name)}${whereSql(ctx, spec.filter)}${orderSql(spec.order)}${limit}${offset}`,
+    text: `SELECT * FROM ${quoteIdent(spec.table.name)}${where}${orderSql(spec.order)}${limit}${offset}`,
     params: ctx.params,
-  }
-}
+  } as Statement
+})
 
-export const compileCount = (dialect: SqlDialect, spec: CountSpec): Statement => {
+export const compileCount = operation(function* (dialect: SqlDialect, spec: CountSpec) {
   const ctx = contextOf(dialect, spec.table)
+  const where = yield* whereSql(ctx, spec.filter)
   return {
-    text: `SELECT COUNT(*) AS "count" FROM ${quoteIdent(spec.table.name)}${whereSql(ctx, spec.filter)}`,
+    text: `SELECT COUNT(*) AS "count" FROM ${quoteIdent(spec.table.name)}${where}`,
     params: ctx.params,
-  }
-}
+  } as Statement
+})
 
-export const compileInsert = (
+export const compileInsert = operation(function* (
   dialect: SqlDialect,
   table: TableSpec,
   rows: readonly Doc[],
-): Statement => {
+) {
   const ctx = contextOf(dialect, table)
   const columns = Object.keys(rows[0] ?? {})
-  const tuples = rows
-    .map(row => `(${columns.map(column => bind(ctx, column, row[column] ?? null)).join(', ')})`)
-    .join(', ')
-  return {
-    text: `INSERT INTO ${quoteIdent(table.name)} (${columns.map(quoteIdent).join(', ')}) VALUES ${tuples} RETURNING *`,
-    params: ctx.params,
+  const tuples: string[] = []
+  for (const row of rows) {
+    const placeholders: string[] = []
+    for (const column of columns) {
+      placeholders.push(yield* bind(ctx, column, row[column] ?? null))
+    }
+    tuples.push(`(${placeholders.join(', ')})`)
   }
-}
+  return {
+    text: `INSERT INTO ${quoteIdent(table.name)} (${columns.map(quoteIdent).join(', ')}) VALUES ${tuples.join(', ')} RETURNING *`,
+    params: ctx.params,
+  } as Statement
+})
 
-export const compileUpdate = (dialect: SqlDialect, spec: UpdateSpec): Statement => {
+export const compileUpdate = operation(function* (dialect: SqlDialect, spec: UpdateSpec) {
   const ctx = contextOf(dialect, spec.table)
-  const assignments = [
-    ...Object.entries(spec.set).map(
-      ([column, value]) => `${quoteIdent(column)} = ${bind(ctx, column, value)}`,
-    ),
-    ...spec.bump.map(column => `${quoteIdent(column)} = ${quoteIdent(column)} + 1`),
-  ]
-  return {
-    text: `UPDATE ${quoteIdent(spec.table.name)} SET ${assignments.join(', ')}${whereSql(ctx, spec.filter)} RETURNING *`,
-    params: ctx.params,
+  const assignments: string[] = []
+  for (const [column, value] of Object.entries(spec.set)) {
+    assignments.push(`${quoteIdent(column)} = ${yield* bind(ctx, column, value)}`)
   }
-}
+  for (const column of spec.bump) {
+    assignments.push(`${quoteIdent(column)} = ${quoteIdent(column)} + 1`)
+  }
+  const where = yield* whereSql(ctx, spec.filter)
+  return {
+    text: `UPDATE ${quoteIdent(spec.table.name)} SET ${assignments.join(', ')}${where} RETURNING *`,
+    params: ctx.params,
+  } as Statement
+})
 
-export const compileDelete = (dialect: SqlDialect, spec: DeleteSpec): Statement => {
+export const compileDelete = operation(function* (dialect: SqlDialect, spec: DeleteSpec) {
   const ctx = contextOf(dialect, spec.table)
+  const where = yield* whereSql(ctx, spec.filter)
   return {
-    text: `DELETE FROM ${quoteIdent(spec.table.name)}${whereSql(ctx, spec.filter)} RETURNING *`,
+    text: `DELETE FROM ${quoteIdent(spec.table.name)}${where} RETURNING *`,
     params: ctx.params,
-  }
-}
+  } as Statement
+})

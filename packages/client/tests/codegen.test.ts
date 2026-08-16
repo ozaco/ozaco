@@ -1,10 +1,14 @@
 import { generate, pull, schemaToType } from 'client:codegen'
-import { run } from 'std:effect'
+import type { Operation } from 'std:effect'
+import { run, scoped } from 'std:effect'
 import { FetchClient } from 'std:fetch'
 import { install } from 'std:plugin'
+import type { Result } from 'std:result'
 import { unwrap } from 'std:result'
 
 import { describe, expect, it } from 'bun:test'
+
+import { JsonCodec } from 'std:codec/impl/json'
 
 import { bootServer } from './helpers'
 
@@ -70,9 +74,22 @@ const manifestFixture = {
   },
 }
 
+/** `generate` emits key literals through the codec, so it needs `JsonCodec` in scope. */
+const codegen = <T>(body: () => Operation<T>): Promise<Result<T>> =>
+  run(() =>
+    scoped(function* () {
+      yield* install(JsonCodec)
+
+      return yield* body()
+    }),
+  )
+
+const emit = async (manifest: unknown, options?: { banner: string }): Promise<string> =>
+  unwrap(await codegen(() => generate(manifest, options))) as string
+
 describe('client codegen', () => {
-  it('emits the Api interface with real types derived from the JSON Schemas', () => {
-    const source = generate(manifestFixture)
+  it('emits the Api interface with real types derived from the JSON Schemas', async () => {
+    const source = await emit(manifestFixture)
 
     expect(source).toContain('export interface Api {')
     expect(source).toContain('readonly tasks: {')
@@ -96,8 +113,8 @@ describe('client codegen', () => {
     expect(source).toContain('string | null')
   })
 
-  it('emits apiMeta with routes and realtime paths', () => {
-    const source = generate(manifestFixture, { banner: '// custom banner' })
+  it('emits apiMeta with routes and realtime paths', async () => {
+    const source = await emit(manifestFixture, { banner: '// custom banner' })
 
     expect(source.startsWith('// custom banner')).toBe(true)
     expect(source).toContain('export const apiMeta = {')
@@ -108,24 +125,18 @@ describe('client codegen', () => {
     expect(source).toContain('} as const')
   })
 
-  it('emits syntactically valid TypeScript (Bun.Transpiler accepts it)', () => {
-    const source = generate(manifestFixture)
+  it('emits syntactically valid TypeScript (Bun.Transpiler accepts it)', async () => {
+    const source = await emit(manifestFixture)
     const transpiler = new Bun.Transpiler({ loader: 'ts' })
 
     expect(() => transpiler.transformSync(source)).not.toThrow()
     expect(transpiler.transformSync(source)).toContain('apiMeta')
   })
 
-  it('rejects non-manifest input with client.manifest', () => {
-    let caught: unknown
+  it('rejects non-manifest input with client.manifest', async () => {
+    const outcome = await codegen(() => generate({ not: 'a manifest' }))
 
-    try {
-      generate({ not: 'a manifest' })
-    } catch (error) {
-      caught = error
-    }
-
-    expect((caught as { error?: string })?.error).toBe('client.manifest')
+    expect((outcome as { error?: string }).error).toBe('client.manifest')
   })
 
   it('covers schema corner cases', () => {

@@ -22,7 +22,7 @@ import {
   quoteIdent,
 } from '../shared/compile'
 import { compileMigrateStep } from '../shared/ddl'
-import { decodeRows, encodeRawParam, sqliteDialect } from '../shared/dialects'
+import { decodeRows, encodeRawParams, sqliteDialect } from '../shared/dialects'
 
 import { createLock, exec, StateRef } from './internal'
 import { runTransaction } from './transaction'
@@ -57,12 +57,13 @@ export const SqliteAdapter = DbAdapter.implement<AdapterDef.Info, [options?: Sql
   ...adapterDefaults('sqlite'),
 
   find: operation(function* (spec: FindSpec) {
-    const statement = compileFind(sqliteDialect, spec)
-    return decodeRows(sqliteDialect, spec.table, yield* exec(statement.text, statement.params))
+    const statement = yield* compileFind(sqliteDialect, spec)
+    const found = yield* exec(statement.text, statement.params)
+    return yield* decodeRows(sqliteDialect, spec.table, found)
   }),
 
   count: operation(function* (spec: CountSpec) {
-    const statement = compileCount(sqliteDialect, spec)
+    const statement = yield* compileCount(sqliteDialect, spec)
     const rows = yield* exec(statement.text, statement.params)
     return Number(rows[0]?.count ?? 0)
   }),
@@ -71,18 +72,21 @@ export const SqliteAdapter = DbAdapter.implement<AdapterDef.Info, [options?: Sql
     if (rows.length === 0) {
       return []
     }
-    const statement = compileInsert(sqliteDialect, table, rows)
-    return decodeRows(sqliteDialect, table, yield* exec(statement.text, statement.params))
+    const statement = yield* compileInsert(sqliteDialect, table, rows)
+    const found = yield* exec(statement.text, statement.params)
+    return yield* decodeRows(sqliteDialect, table, found)
   }),
 
   update: operation(function* (spec: UpdateSpec) {
-    const statement = compileUpdate(sqliteDialect, spec)
-    return decodeRows(sqliteDialect, spec.table, yield* exec(statement.text, statement.params))
+    const statement = yield* compileUpdate(sqliteDialect, spec)
+    const found = yield* exec(statement.text, statement.params)
+    return yield* decodeRows(sqliteDialect, spec.table, found)
   }),
 
   remove: operation(function* (spec: DeleteSpec) {
-    const statement = compileDelete(sqliteDialect, spec)
-    return decodeRows(sqliteDialect, spec.table, yield* exec(statement.text, statement.params))
+    const statement = yield* compileDelete(sqliteDialect, spec)
+    const found = yield* exec(statement.text, statement.params)
+    return yield* decodeRows(sqliteDialect, spec.table, found)
   }),
 
   introspect: operation(function* (table: TableSpec) {
@@ -104,9 +108,9 @@ export const SqliteAdapter = DbAdapter.implement<AdapterDef.Info, [options?: Sql
   transaction: runTransaction,
 
   raw: operation(function* (statement: string, params?: readonly unknown[], table?: TableSpec) {
-    const bound = (params ?? []).map(value => encodeRawParam(sqliteDialect, value))
+    const bound = yield* encodeRawParams(sqliteDialect, params ?? [])
     const found = yield* exec(statement, bound)
-    const rows = table ? decodeRows(sqliteDialect, table, found) : found
+    const rows = table ? yield* decodeRows(sqliteDialect, table, found) : found
     return { rows, rowCount: rows.length }
   }),
 })

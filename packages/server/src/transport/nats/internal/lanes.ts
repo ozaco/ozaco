@@ -1,4 +1,5 @@
 // oxlint-disable import/exports-last
+import type { Multistream, MultistreamAssembler, Wire } from 'server:core'
 import {
   createMultistreamAssembler,
   DataType,
@@ -9,8 +10,8 @@ import {
   statusFor,
   toWireFailure,
 } from 'server:core'
-import type { Multistream, MultistreamAssembler, Wire } from 'server:core'
 import { Codec } from 'std:codec'
+import type { Flow, Operation, Queue } from 'std:effect'
 import {
   attempt,
   box,
@@ -23,9 +24,8 @@ import {
   sleep,
   until,
 } from 'std:effect'
-import type { Flow, Operation, Queue } from 'std:effect'
-import { fail, isFailure } from 'std:result'
 import type { Result } from 'std:result'
+import { fail, isFailure } from 'std:result'
 
 import { AckPolicy, DeliverPolicy, JetStreamApiError, ReplayPolicy } from '@nats-io/jetstream'
 import { nanos } from '@nats-io/nats-core'
@@ -34,8 +34,8 @@ import { NatsErrors } from '../errors'
 import type { Nats } from '../types'
 
 import { causesOf } from './failure'
-import { encodeLaneFrame, parseLaneFrame } from './frames'
 import type { LaneFrame } from './frames'
+import { encodeLaneFrame, parseLaneFrame } from './frames'
 
 /** The reply stream's output lane id; input planes ride `in:<DataType>` lanes (`inputLaneOf`). */
 export const OUTPUT_LANE = '0'
@@ -74,7 +74,7 @@ export const publishLaneFrame = operation(function* (
   subject: string,
   frame: LaneFrame,
 ) {
-  const encoded = encodeLaneFrame(frame)
+  const encoded = yield* encodeLaneFrame(frame)
   const deadline = Date.now() + ctx.jetstream.laneFullTimeoutMs
   let backoffMs = RETRY_BASE_MS
 
@@ -168,7 +168,7 @@ export const createLaneReader = operation(function* (ctx: Nats.Context, subject:
         }
 
         const msg = item.value
-        const frame = parseLaneFrame(msg)
+        const frame = yield* parseLaneFrame(msg)
 
         msg.ack()
 

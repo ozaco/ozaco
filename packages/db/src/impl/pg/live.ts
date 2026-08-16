@@ -1,5 +1,6 @@
 // oxlint-disable import/exports-last
 import type { LiveChange, TableSpec } from 'db:core'
+import { CodecErrors } from 'std:codec'
 import type { Flow, Operation } from 'std:effect'
 import {
   attempt,
@@ -15,6 +16,7 @@ import { isFailure, isSuccess } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import { Client } from 'pg'
+import { JsonCodec } from 'std:codec/impl/json'
 
 import { quoteIdent } from '../shared/compile'
 import { decodeRows, postgresDialect } from '../shared/dialects'
@@ -109,6 +111,39 @@ export const openLiveFeed = operation(function* (
   const budget = budgetOf(options)
   const specs = new Map(tables.map(table => [table.name, table]))
   const queue = createQueue<LiveChange, void>()
+  // the `notification` listener is a plain sync callback and cannot decode (the codec lives in
+  // effect-land), so it only hands the raw payload over — this pump does the decoding
+  const raw = createQueue<string, void>()
+
+  yield* fork(function* () {
+    for (;;) {
+      const item = yield* raw.next()
+      if (item.done) {
+        return
+      }
+      const decoded = yield* attempt(() => JsonCodec.actions.parse<WirePayload>(item.value))
+      if (isFailure(decoded)) {
+        // a malformed foreign payload on the channel is ignored, never fatal
+        if (decoded.error !== CodecErrors.Parse) {
+          return yield* decoded
+        }
+        continue
+      }
+      const payload = decoded.value
+      const spec = payload && specs.get(payload.t)
+      if (!spec) {
+        continue
+      }
+      const rows = payload.d ? yield* decodeRows(postgresDialect, spec, [payload.d]) : []
+      queue.add({
+        table: payload.t,
+        id: String(payload.i),
+        op: payload.o,
+        doc: rows[0] ?? null,
+        cursor: payload.x,
+      })
+    }
+  })
 
   const dial = operation(function* (): Generator<AnyType, Session, AnyType> {
     const client = new Client({ connectionString: connection.url, ssl: connection.ssl })
@@ -138,23 +173,7 @@ export const openLiveFeed = operation(function* (
       }
     }
     client.on('notification', (message: AnyType) => {
-      try {
-        const payload = JSON.parse(String(message.payload)) as WirePayload
-        const spec = specs.get(payload.t)
-        if (!spec) {
-          return
-        }
-        const doc = payload.d ? decodeRows(postgresDialect, spec, [payload.d])[0]! : null
-        queue.add({
-          table: payload.t,
-          id: String(payload.i),
-          op: payload.o,
-          doc,
-          cursor: payload.x,
-        })
-      } catch {
-        // a malformed foreign payload on the channel is ignored, never fatal
-      }
+      raw.add(String(message.payload))
     })
     client.on('error', drop)
     client.on('end', drop)

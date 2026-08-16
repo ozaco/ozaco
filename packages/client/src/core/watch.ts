@@ -1,8 +1,10 @@
 import { attempt, box, fork, operation, sleep, withResolvers } from 'std:effect'
-import { fail, isFailure } from 'std:result'
+import { fail, isFailure, isSuccess } from 'std:result'
 import type { Result } from 'std:result'
 import { Ws } from 'std:ws'
 import type { WsDef } from 'std:ws'
+
+import { JsonCodec } from 'std:codec/impl/json'
 
 import { ClientErrors } from './errors'
 import { isRecord, nextWatchId, realtimePathOf, resolveToken, toWsUrl } from './internal'
@@ -48,18 +50,21 @@ const emit = (entry: WatchEntry): void => {
   entry.onRows([...entry.rows.values()], entry.version)
 }
 
-const watchFrame = (entry: WatchEntry, since?: number): string =>
-  JSON.stringify({
+const watchFrame = operation(function* (entry: WatchEntry, since?: number) {
+  return yield* JsonCodec.actions.stringify({
     event: 'watch',
     id: entry.id,
     fn: entry.fn,
     ...(entry.args === undefined ? {} : { args: entry.args }),
     ...(since === undefined ? {} : { since }),
   })
+})
 
 const sendWatch = operation(function* (link: ResourceLink, entry: WatchEntry) {
   if (link.send) {
-    yield* link.send(watchFrame(entry, entry.version >= 0 ? entry.version : undefined))
+    const frame = yield* watchFrame(entry, entry.version >= 0 ? entry.version : undefined)
+
+    yield* link.send(frame)
   }
 })
 
@@ -132,24 +137,24 @@ const applyFrame = operation(function* (link: ResourceLink, frame: Record<string
   }
 })
 
-/** Decode one incoming ws message: objects pass through (codec in scope), strings JSON-parse. */
-const decodeMessage = (value: unknown): Record<string, unknown> | null => {
+/**
+ * Decode one incoming ws message: objects pass through (codec in scope), strings go through the
+ * codec. Decoding is best-effort — a foreign or truncated frame is ignored, never fatal; a MISSING
+ * `JsonCodec` install cannot hide here because `sendWatch` already raises on the first watch.
+ */
+const decodeMessage = operation(function* (value: unknown) {
   if (isRecord(value)) {
     return value
   }
 
   if (typeof value === 'string') {
-    try {
-      const parsed = JSON.parse(value) as unknown
+    const parsed = yield* attempt(() => JsonCodec.actions.parse<unknown>(value))
 
-      return isRecord(parsed) ? parsed : null
-    } catch {
-      return null
-    }
+    return isSuccess(parsed) && isRecord(parsed.value) ? parsed.value : null
   }
 
   return null
-}
+})
 
 /** See the module doc — polls `reconnects` and re-sends active watches with `since` on a bump. */
 const monitorReconnects = operation(function* (link: ResourceLink, connection: WsDef.Connection) {
@@ -217,7 +222,7 @@ const linkPump = operation(function* (state: ClientState, link: ResourceLink) {
       return
     }
 
-    const frame = decodeMessage(step.value)
+    const frame = yield* decodeMessage(step.value)
 
     if (frame) {
       yield* applyFrame(link, frame)
@@ -299,7 +304,11 @@ export const startWatch = operation(function* (state: ClientState, input: WatchI
     const send = link.send
 
     if (send) {
-      yield* attempt(() => send(JSON.stringify({ event: 'unwatch', id: entry.id })))
+      yield* attempt(function* () {
+        const frame = yield* JsonCodec.actions.stringify({ event: 'unwatch', id: entry.id })
+
+        yield* send(frame)
+      })
     }
 
     if (link.entries.size === 0) {
