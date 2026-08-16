@@ -66,8 +66,8 @@ export function buildScopeInternal(parent?: Scope): [Helpers.ScopeInternal, () =
     hasOwn<T>(context: Context<T>): boolean {
       return !!Reflect.getOwnPropertyDescriptor(contexts, context.name)
     },
-    run<T>(operation: () => Operation<T>): Task<T> {
-      return createTask({ owner: scope, operation })
+    run<T>(operation: () => Operation<T>, options?: { detached?: boolean | undefined }): Task<T> {
+      return createTask({ owner: scope, operation, detached: options?.detached })
     },
     spawn<T>(operation: () => Operation<T>): Operation<Task<T>> {
       return {

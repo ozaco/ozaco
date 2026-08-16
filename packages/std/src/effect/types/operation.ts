@@ -17,7 +17,9 @@ export type ManualOperation<T> = Generator<
 
 /**
  * An {@link Operation} that is also awaitable. The promise side resolves to a `Result` and never
- * rejects (std contract); the operation side returns the value or raises the Failure.
+ * rejects (std contract) — success resolves `Success<T>`, an operation failure resolves the
+ * `Failure` itself, and a halt resolves `fail('halted')`. The operation side (`yield*`) returns
+ * the value or raises the Failure.
  */
 export interface Future<T> extends Operation<T>, Promise<Result<T>> {}
 
@@ -39,7 +41,13 @@ export interface Context<T> {
 }
 
 export interface Scope {
-  run<T>(operation: () => Operation<T>): Task<T>
+  /**
+   * Run an operation as a task of this scope and return its handle. By default the task is
+   * SUPERVISED: a failure also crashes this scope (structured concurrency — same as `spawn`).
+   * Pass `{ detached: true }` for delivery-only semantics: the failure settles the task's future
+   * and goes no further (edge bridges, dispatch fan-outs, fire-and-forget pumps).
+   */
+  run<T>(operation: () => Operation<T>, options?: { detached?: boolean | undefined }): Task<T>
   spawn<T>(operation: () => Operation<T>): Operation<Task<T>>
   /** Like `spawn`, but resolves only after the child has run to its first suspension point. */
   fork<T>(operation: () => Operation<T>): Operation<Task<T>>

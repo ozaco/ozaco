@@ -1,4 +1,3 @@
-// oxlint-disable import/exports-last
 import type { StandardSchemaV1 } from 'cli:core'
 import type { Operation } from 'std:effect'
 import type { AnyType, EmptyType } from 'std:shared'

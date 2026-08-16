@@ -1,4 +1,3 @@
-// oxlint-disable import/exports-last
 import type { CountSpec, Doc, FindSpec, IndexSpec, TableSpec } from 'db:core'
 import { DbErrors, ID } from 'db:core'
 import { createContext, operation } from 'std:effect'

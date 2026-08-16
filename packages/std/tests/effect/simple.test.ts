@@ -9,7 +9,7 @@ describe('simple value/result cases', () => {
       return 42
     })
 
-    expect(isSuccess(outcome)).toBe(false)
+    expect(isSuccess(outcome)).toBe(true)
     expect(unwrap(outcome)).toBe(42)
   })
 
@@ -18,7 +18,7 @@ describe('simple value/result cases', () => {
       return yield* succeed(42)
     })
 
-    expect(isSuccess(outcome)).toBe(false)
+    expect(isSuccess(outcome)).toBe(true)
     expect(unwrap(outcome)).toBe(42)
   })
 

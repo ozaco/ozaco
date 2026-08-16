@@ -1,4 +1,3 @@
-// oxlint-disable import/exports-last
 import type { Doc, IndexSpec, OrderBy } from 'db:core'
 import { compareValues } from 'db:core'
 

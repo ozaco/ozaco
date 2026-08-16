@@ -1,4 +1,3 @@
-// oxlint-disable import/exports-last
 import type { Doc } from 'db:core'
 import { attempt, createContext, operation, until, useContext } from 'std:effect'
 import { fail, isFailure } from 'std:result'

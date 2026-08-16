@@ -1,4 +1,3 @@
-// oxlint-disable import/exports-last
 import type { Operation } from 'std:effect'
 import { fork, operation, resource } from 'std:effect'
 import { defineProtocol } from 'std:plugin'

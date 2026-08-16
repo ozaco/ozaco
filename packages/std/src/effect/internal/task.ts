@@ -1,7 +1,7 @@
 // oxlint-disable unicorn/no-thenable func-name-matching
 
 import type { Maybe, Result } from 'std:result'
-import { asFailure, fail, isFailure, isJust, isSuccess, nothing, succeed } from 'std:result'
+import { asFailure, auto, fail, isFailure, isJust, isSuccess, nothing, succeed } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import { critical } from '../base/coroutine'
@@ -25,6 +25,7 @@ class TaskControl {
   constructor(
     public routine: Helpers.Coroutine<unknown>,
     private owner: Helpers.ScopeInternal,
+    private detached: boolean,
   ) {}
 
   interrupt() {
@@ -49,8 +50,9 @@ class TaskControl {
 
     next(final)
 
-    if (isJust(final) && isFailure(final.value) && !this.interrupted) {
-      // raise if there was an error, and we were not halted.
+    if (!this.detached && isJust(final) && isFailure(final.value) && !this.interrupted) {
+      // SUPERVISED (default) tasks escalate: the failure also crashes the owner scope. Detached
+      // tasks deliver it through their future only.
       this.owner.expect(ErrorContext).raise(final.value)
     }
   }
@@ -63,8 +65,9 @@ class TaskInternal<T> implements Task<T> {
   constructor(
     public routine: Helpers.Coroutine<T>,
     owner: Helpers.ScopeInternal,
+    detached: boolean,
   ) {
-    this.control = new TaskControl(routine, owner)
+    this.control = new TaskControl(routine, owner, detached)
     this.scope = this.routine.scope as Helpers.ScopeInternal
     this.scope.set(SettleContext, this.control.settle.bind(this.control))
   }
@@ -137,26 +140,29 @@ class TaskInternal<T> implements Task<T> {
       return this._promise
     }
 
-    this._promise = new Promise((resolve, reject) => {
+    // std contract: the promise side resolves a Result and NEVER rejects — success resolves
+    // Success<T>, an operation failure resolves the Failure itself, a halt resolves
+    // fail('halted'). (`yield* task` keeps raising, that side is unchanged.)
+    this._promise = new Promise(resolve => {
       // oxlint-disable-next-line promise/always-return
       this.routine.future.then(rawOutcome => {
-        let outcome: Maybe<Result<T>> | null = null
-
-        if (isSuccess(rawOutcome)) {
-          outcome = rawOutcome.value
-        } else {
-          return reject(rawOutcome)
+        if (!isSuccess(rawOutcome)) {
+          resolve(asFailure(rawOutcome) as T)
+          return
         }
+
+        const outcome = rawOutcome.value
 
         if (isJust(outcome)) {
           const result = outcome.value
           if (isSuccess(result)) {
-            resolve(result.value)
+            // auto() keeps the no-nesting law: a returned bare Failure IS the failure outcome
+            resolve(auto(result.value) as T)
           } else {
             resolve(asFailure(result) as T)
           }
         } else {
-          reject(fail('halted'))
+          resolve(fail('halted') as T)
         }
       })
     })
@@ -166,7 +172,7 @@ class TaskInternal<T> implements Task<T> {
 }
 
 export function createTask<T>(options: Helpers.TaskOptions<T>): Task<T> {
-  const { owner, operation } = options
+  const { owner, operation, detached = false } = options
   const [scope, destroy] = createScopeInternal(owner)
   const routine = createCoroutine({
     scope,
@@ -179,7 +185,7 @@ export function createTask<T>(options: Helpers.TaskOptions<T>): Task<T> {
     },
   })
 
-  const internal = new TaskInternal(routine, owner)
+  const internal = new TaskInternal(routine, owner, detached)
 
   const task = Object.create(Task, {
     halt: { value: () => internal.halt() },

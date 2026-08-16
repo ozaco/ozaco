@@ -15,7 +15,8 @@ describe('simple value/result cases', () => {
       return 42
     })
 
-    expect(isSuccess(outcome)).toBe(false)
+    // std contract: the promise side resolves a Result — raw returns arrive as Success
+    expect(isSuccess(outcome)).toBe(true)
     expect(unwrap(outcome)).toBe(42)
     expect(i).toBe(1)
   })
@@ -31,7 +32,8 @@ describe('simple value/result cases', () => {
       return yield* succeed(42)
     })
 
-    expect(isSuccess(outcome)).toBe(false)
+    // std contract: the promise side resolves a Result — raw returns arrive as Success
+    expect(isSuccess(outcome)).toBe(true)
     expect(unwrap(outcome)).toBe(42)
     expect(i).toBe(1)
   })

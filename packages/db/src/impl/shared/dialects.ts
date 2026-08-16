@@ -1,4 +1,3 @@
-// oxlint-disable import/exports-last
 import type { ColumnKind, Doc, TableSpec } from 'db:core'
 import { DbErrors } from 'db:core'
 

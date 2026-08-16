@@ -1,4 +1,3 @@
-// oxlint-disable import/exports-last
 import type { ColumnSpec, IndexSpec, MigrateStep } from 'db:core'
 import { CREATED, UPDATED, VERSION } from 'db:core'
 

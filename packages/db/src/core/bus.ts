@@ -1,4 +1,3 @@
-// oxlint-disable import/exports-last
 import { createSignal, operation } from 'std:effect'
 
 import type { BusEvent, ChangeBus } from './types/change'

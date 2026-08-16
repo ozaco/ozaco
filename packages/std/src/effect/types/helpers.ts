@@ -75,6 +75,8 @@ export namespace Helpers {
     owner: ScopeInternal
     operation(): Operation<T>
     prioritize?: boolean | undefined
+    /** Detached tasks deliver failures ONLY through their future — they never crash the owner. */
+    detached?: boolean | undefined
   }
 
   export interface EachLoop<T> {
