@@ -1,13 +1,4 @@
 import { column, table } from 'db:core'
-import type { Operation } from 'std:effect'
-import { run, scoped } from 'std:effect'
-import { unwrap } from 'std:result'
-
-/** Run an effect body inside a fresh scope and throw its underlying error on failure. */
-export const runScoped = async <T>(body: () => Operation<T>): Promise<T> => {
-  const outcome = await run(() => scoped(body))
-  return unwrap(outcome) as T
-}
 
 /** The shared fixture tables the suites install. */
 export const users = table('users', {

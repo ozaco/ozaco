@@ -11,9 +11,9 @@ import {
   table,
   useDb,
 } from 'db:core'
-import { attempt } from 'std:effect'
+import { attempt, run } from 'std:effect'
 import { install } from 'std:plugin'
-import { isFailure } from 'std:result'
+import { isFailure, unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import { describe, expect, it } from 'bun:test'
@@ -21,7 +21,7 @@ import { describe, expect, it } from 'bun:test'
 import { MemoryAdapter } from 'db:impl/memory'
 import { z } from 'zod'
 
-import { posts, runScoped, users } from './helpers'
+import { posts, users } from './helpers'
 
 describe('core semantics (adapter-independent)', () => {
   it('runs a Standard Schema validator (zod v4) on insert', async () => {
@@ -30,79 +30,87 @@ describe('core semantics (adapter-independent)', () => {
       { name: column.text() },
       { validate: z.object({ name: z.string().min(2) }) },
     )
-    await runScoped(function* () {
-      yield* install(MemoryAdapter)
-      const db = yield* install(DbClient, { tables: [people] })
-      const short = yield* attempt(db.insert('people', { name: 'a' }))
-      expect(isFailure(short)).toBe(true)
-      expect((short as AnyType).error).toBe(DbErrors.Validation)
-      const ok = yield* db.insert('people', { name: 'ada' })
-      expect((ok as AnyType).name).toBe('ada')
-    })
+    unwrap(
+      await run(function* () {
+        yield* install(MemoryAdapter)
+        const db = yield* install(DbClient, { tables: [people] })
+        const short = yield* attempt(db.insert('people', { name: 'a' }))
+        expect(isFailure(short)).toBe(true)
+        expect((short as AnyType).error).toBe(DbErrors.Validation)
+        const ok = yield* db.insert('people', { name: 'ada' })
+        expect((ok as AnyType).name).toBe('ada')
+      }),
+    )
   })
 
   it('resolves a typed handle through useDb', async () => {
-    await runScoped(function* () {
-      yield* install(MemoryAdapter)
-      yield* install(DbClient, { tables: [users, posts] })
-      const db = yield* useDb(users, posts)
-      const doc = yield* db.insert('users', { name: 'typed' })
-      // compile-time: doc is the resolved row type of `users`
-      const typed: Infer<typeof users> = doc
-      expect(typed.name).toBe('typed')
-      expect(db.version('users')).toBeGreaterThan(0)
-    })
+    unwrap(
+      await run(function* () {
+        yield* install(MemoryAdapter)
+        yield* install(DbClient, { tables: [users, posts] })
+        const db = yield* useDb(users, posts)
+        const doc = yield* db.insert('users', { name: 'typed' })
+        // compile-time: doc is the resolved row type of `users`
+        const typed: Infer<typeof users> = doc
+        expect(typed.name).toBe('typed')
+        expect(db.version('users')).toBeGreaterThan(0)
+      }),
+    )
   })
 })
 
 describe('wire-filter sanitizing', () => {
   it('rebuilds a clean filter and strips extra properties', async () => {
-    await runScoped(function* () {
-      const wire = JSON.parse(
-        '{"op":"and","filters":[{"op":"eq","field":"role","value":"admin","junk":1},{"op":"gt","field":"age","value":30}]}',
-      )
-      const clean = yield* sanitizeFilter(wire, { fields: ['role', 'age'] })
-      expect(clean).toEqual({
-        op: 'and',
-        filters: [
-          { op: 'eq', field: 'role', value: 'admin' },
-          { op: 'gt', field: 'age', value: 30 },
-        ],
-      })
-      expect(matches({ role: 'admin', age: 45 }, clean as Filter)).toBe(true)
-      expect(matches({ role: 'member', age: 45 }, clean as Filter)).toBe(false)
-    })
+    unwrap(
+      await run(function* () {
+        const wire = JSON.parse(
+          '{"op":"and","filters":[{"op":"eq","field":"role","value":"admin","junk":1},{"op":"gt","field":"age","value":30}]}',
+        )
+        const clean = yield* sanitizeFilter(wire, { fields: ['role', 'age'] })
+        expect(clean).toEqual({
+          op: 'and',
+          filters: [
+            { op: 'eq', field: 'role', value: 'admin' },
+            { op: 'gt', field: 'age', value: 30 },
+          ],
+        })
+        expect(matches({ role: 'admin', age: 45 }, clean as Filter)).toBe(true)
+        expect(matches({ role: 'member', age: 45 }, clean as Filter)).toBe(false)
+      }),
+    )
   })
 
   it('rejects disallowed fields, operators, depths and value shapes', async () => {
-    await runScoped(function* () {
-      const cases: unknown[] = [
-        { op: 'eq', field: 'password', value: 'x' },
-        { op: 'like', field: 'name', pattern: 5 },
-        { op: 'eq', field: 'name', value: { $gt: '' } },
-        { op: 'raw', field: 'name', value: 1 },
-        'not-an-object',
-      ]
-      for (const wire of cases) {
-        const outcome = yield* attempt(sanitizeFilter(wire, { fields: ['name'] }))
-        expect((outcome as AnyType).error).toBe(DbErrors.Validation)
-      }
+    unwrap(
+      await run(function* () {
+        const cases: unknown[] = [
+          { op: 'eq', field: 'password', value: 'x' },
+          { op: 'like', field: 'name', pattern: 5 },
+          { op: 'eq', field: 'name', value: { $gt: '' } },
+          { op: 'raw', field: 'name', value: 1 },
+          'not-an-object',
+        ]
+        for (const wire of cases) {
+          const outcome = yield* attempt(sanitizeFilter(wire, { fields: ['name'] }))
+          expect((outcome as AnyType).error).toBe(DbErrors.Validation)
+        }
 
-      const restricted = yield* attempt(
-        sanitizeFilter(
-          { op: 'like', field: 'name', pattern: 'a%' },
-          { fields: ['name'], ops: ['eq'] },
-        ),
-      )
-      expect((restricted as AnyType).error).toBe(DbErrors.Validation)
+        const restricted = yield* attempt(
+          sanitizeFilter(
+            { op: 'like', field: 'name', pattern: 'a%' },
+            { fields: ['name'], ops: ['eq'] },
+          ),
+        )
+        expect((restricted as AnyType).error).toBe(DbErrors.Validation)
 
-      let deep: Record<string, unknown> = { op: 'eq', field: 'name', value: 'x' }
-      for (let index = 0; index < 12; index += 1) {
-        deep = { op: 'not', filter: deep }
-      }
-      const nested = yield* attempt(sanitizeFilter(deep, { fields: ['name'] }))
-      expect((nested as AnyType).error).toBe(DbErrors.Validation)
-    })
+        let deep: Record<string, unknown> = { op: 'eq', field: 'name', value: 'x' }
+        for (let index = 0; index < 12; index += 1) {
+          deep = { op: 'not', filter: deep }
+        }
+        const nested = yield* attempt(sanitizeFilter(deep, { fields: ['name'] }))
+        expect((nested as AnyType).error).toBe(DbErrors.Validation)
+      }),
+    )
   })
 
   it('clamps untrusted limits', () => {
@@ -116,21 +124,23 @@ describe('wire-filter sanitizing', () => {
 
 describe('adapter middleware', () => {
   it('DbAdapter.around wraps the data plane (the metrics/tracing seam)', async () => {
-    await runScoped(function* () {
-      yield* install(MemoryAdapter)
-      const db = yield* install(DbClient, { tables: [users] })
-      const seen: string[] = []
-      yield* DbAdapter.around({
-        find: ([spec]: AnyType[], next: AnyType) =>
-          (function* () {
-            seen.push(`find:${spec.table.name}`)
-            return yield* next(spec)
-          })(),
-      })
-      yield* db.insert('users', { name: 'ada' })
-      const rows = yield* db.query('users').filter(gt('age', -1)).collect()
-      expect(rows).toHaveLength(0)
-      expect(seen).toEqual(['find:users'])
-    })
+    unwrap(
+      await run(function* () {
+        yield* install(MemoryAdapter)
+        const db = yield* install(DbClient, { tables: [users] })
+        const seen: string[] = []
+        yield* DbAdapter.around({
+          find: ([spec]: AnyType[], next: AnyType) =>
+            (function* () {
+              seen.push(`find:${spec.table.name}`)
+              return yield* next(spec)
+            })(),
+        })
+        yield* db.insert('users', { name: 'ada' })
+        const rows = yield* db.query('users').filter(gt('age', -1)).collect()
+        expect(rows).toHaveLength(0)
+        expect(seen).toEqual(['find:users'])
+      }),
+    )
   })
 })

@@ -1,7 +1,7 @@
 import { DbClient, DbErrors } from 'db:core'
 import { attempt, run, scoped } from 'std:effect'
 import { install } from 'std:plugin'
-import { isFailure } from 'std:result'
+import { isFailure, unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import { describe, expect, it } from 'bun:test'
@@ -12,41 +12,53 @@ import { join } from 'node:path'
 import { MemoryAdapter } from 'db:impl/memory'
 import { SqliteAdapter } from 'db:impl/sqlite'
 
-import { runScoped, users } from './helpers'
+import { users } from './helpers'
 
 describe('plugin lifecycle', () => {
   it('DbClient without an adapter fails db.configuration', async () => {
-    await runScoped(function* () {
-      const outcome = yield* attempt(install(DbClient, { tables: [users] }))
-      expect(isFailure(outcome)).toBe(true)
-      expect((outcome as AnyType).error).toBe(DbErrors.Configuration)
-    })
+    unwrap(
+      await run(function* () {
+        const outcome = yield* attempt(install(DbClient, { tables: [users] }))
+        expect(isFailure(outcome)).toBe(true)
+        expect((outcome as AnyType).error).toBe(DbErrors.Configuration)
+      }),
+    )
   })
 
   it('a second adapter install fails (protocol is not cloneable)', async () => {
-    await runScoped(function* () {
-      yield* install(MemoryAdapter)
-      const second = yield* attempt(install(SqliteAdapter))
-      expect(isFailure(second)).toBe(true)
-      expect((second as AnyType).error).toBe('protocol-not-cloneable')
-    })
+    unwrap(
+      await run(function* () {
+        yield* install(MemoryAdapter)
+        const second = yield* attempt(install(SqliteAdapter))
+        expect(isFailure(second)).toBe(true)
+        expect((second as AnyType).error).toBe('protocol-not-cloneable')
+      }),
+    )
   })
 
   it('sqlite closes its handle with the scope — the file reopens cleanly', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'ozaco-db-'))
     const path = join(dir, 'lifecycle.sqlite')
     try {
-      await runScoped(function* () {
-        yield* install(SqliteAdapter, { path })
-        const db = yield* install(DbClient, { tables: [users] })
-        yield* db.insert('users', { name: 'persisted' })
-      })
-      await runScoped(function* () {
-        yield* install(SqliteAdapter, { path })
-        const db = yield* install(DbClient, { tables: [users] })
-        const row = yield* db.query('users').first()
-        expect((row as AnyType).name).toBe('persisted')
-      })
+      unwrap(
+        await run(() =>
+          scoped(function* () {
+            yield* install(SqliteAdapter, { path })
+            const db = yield* install(DbClient, { tables: [users] })
+            yield* db.insert('users', { name: 'persisted' })
+          }),
+        ),
+      )
+      unwrap(
+        await run(() =>
+          scoped(function* () {
+            yield* install(SqliteAdapter, { path })
+            const db = yield* install(DbClient, { tables: [users] })
+            const row = yield* db.query('users').first()
+            expect((row as AnyType).name).toBe('persisted')
+          }),
+        ),
+      )
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }
