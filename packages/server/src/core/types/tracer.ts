@@ -1,78 +1,57 @@
-import type { Future } from 'std:effect'
-import type { Result } from 'std:result'
+import type { Operation } from 'std:effect'
 
+/** OTel-shaped span identity — kept so OTLP exporters (Datadog, collector) can integrate later. */
+export interface SpanContext {
+  readonly traceId: string
+  readonly spanId: string
+  readonly parentSpanId?: string | undefined
+}
+
+/** Cold span/exporter record types of the tracer protocol (types-only namespace). */
 export namespace TracerDef {
-  export interface Options {
-    onSpanEnd?: (snapshot: SpanSnapshot) => void
-  }
-
-  export interface Context {
-    name: string
-    onSpanEnd?: (snapshot: SpanSnapshot) => void
-  }
-
-  export type SpanAttributeValue =
-    | string
-    | number
-    | boolean
-    | readonly string[]
-    | readonly number[]
-    | readonly boolean[]
-    | undefined
-
-  export type SpanAttributes = Record<string, SpanAttributeValue>
-
-  export interface SpanContext {
-    traceId: string
-    spanId: string
-    traceFlags: number
-    parentSpanId?: string
-    isRemote?: boolean
-  }
-
-  export interface SpanStatus {
-    code: 0 | 1 | 2
-    message?: string
-    cause?: string[]
-  }
+  export type SpanKind = 'client' | 'server' | 'internal'
 
   export interface SpanOptions {
-    kind?: 0 | 1 | 2 | 3 | 4 | 5
-    attributes?: SpanAttributes
-    startTime?: number
-    root?: boolean
-  }
-
-  export interface SpanEvent {
-    name: string
-    attributes?: SpanAttributes
-    time?: number
-  }
-
-  export interface Span {
-    spanContext(): Future<SpanContext>
-    setAttribute(key: string, value: SpanAttributeValue): Future<Span>
-    setAttributes(attributes: SpanAttributes): Future<Span>
-    setStatus(status: SpanStatus): Future<Span>
-    updateName(name: string): Future<Span>
-    addEvent(name: string, attributes?: SpanAttributes, startTime?: number): Future<Span>
-    recordException(exception: Result.Failure<unknown>, time?: number): Future<void>
-    end(endTime?: number): Future<void>
-    isRecording(): Future<boolean>
+    readonly kind?: SpanKind | undefined
+    readonly parent?: SpanContext | undefined
+    readonly attributes?: Record<string, string | number | boolean> | undefined
   }
 
   export interface SpanSnapshot {
-    name: string
-    context: SpanContext
-    kind?: number
-    status: SpanStatus
-    attributes: SpanAttributes
-    events: ReadonlyArray<SpanEvent>
-    startTime: number
-    endTime: number
+    readonly name: string
+    readonly kind: SpanKind
+    readonly context: SpanContext
+    readonly startMs: number
+    readonly endMs: number
+    readonly status: 'ok' | 'error'
+    readonly attributes: Record<string, string | number | boolean>
+    readonly events: readonly { readonly ts: number; readonly message: string }[]
   }
+}
 
-  export interface Actions {
-    startSpan(name: string, options?: SpanOptions): Future<Span>
-  }
+export interface Span {
+  readonly context: SpanContext
+  setAttribute(key: string, value: string | number | boolean): void
+  recordException(message: string): void
+  setStatus(status: 'ok' | 'error', message?: string): void
+  end(): void
+}
+
+/** Span factory — the DefaultTracer impl lands in `server:trace` (phase 5). */
+export interface TracerActions {
+  startSpan(name: string, options?: TracerDef.SpanOptions): Operation<Span>
+  /**
+   * Parse a W3C `traceparent` header into the remote {@link SpanContext} local spans should
+   * parent under — `undefined` for anything malformed (strict: version 00, lowercase hex,
+   * all-zero ids invalid).
+   */
+  parseTraceparent(header: string): Operation<SpanContext | undefined>
+  /** Render `context` as an outbound W3C `traceparent` header (version 00, sampled flags). */
+  formatTraceparent(context: SpanContext): Operation<string>
+}
+
+/** Pluggable span sink — OTLP/HTTP impl (Datadog Agent, otel-collector, Tempo) in `server:trace`. */
+export interface TraceExporterActions {
+  export(spans: readonly TracerDef.SpanSnapshot[]): Operation<void>
+  flush(): Operation<void>
 }

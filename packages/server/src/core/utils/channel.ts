@@ -1,55 +1,104 @@
-import type { Schema } from 'std:shared'
+import { fail } from 'std:result'
+import type { StandardSchemaV1 } from 'std:shared'
 
-import { CHANNEL, DataType } from '../const'
-import type { Channel } from '../types/channel'
+import { CHANNEL } from '../const'
+import { CoreErrors } from '../errors'
+import type { Channel, ChannelKind, Declaration, Schema, WireManifest } from '../types/channel'
 
-const make = (type: DataType, schema?: Schema, emits?: Schema): Channel =>
-  ({
-    _t: CHANNEL,
-    type,
-    ...(schema === undefined ? {} : { schema }),
-    ...(emits === undefined ? {} : { emits }),
-  }) as Channel
+import { isChannel, isSchema } from './is'
 
-/**
- * The five channels an action can declare.
- *
- * A bare schema in `input`/`output` already means {@link value}, so the common case never touches
- * these. Reach for them when a call carries something a JSON Schema cannot describe — and that is
- * exactly the point: `stream`, `parts` and `socket` are not expressible in any schema dialect,
- * which is why the shape has to be DECLARED and cannot be derived from the validator alone.
- *
- * Bytes are always a LANE ({@link chunks} / {@link parts}) — there is no buffered blob channel. A
- * blob read whole cannot cross a wire without holding the body in memory on both sides, so the one
- * shape files travel in is the streaming one.
- */
+const makeChannel = <T, K extends ChannelKind>(
+  kind: K,
+  schema?: Schema,
+  emits?: Schema,
+): Channel<T, K> => ({ _t: CHANNEL, kind, schema, emits })
 
-/** A single validated value. The default, and what the handler receives as its argument. */
-export const value = <TSchema extends Schema>(
-  schema: TSchema,
-): Channel.Normal<Schema.Infer<TSchema>> =>
-  make(DataType.normal, schema) as Channel.Normal<Schema.Infer<TSchema>>
+/** The codec-value plane (the handler's `params` / return value). */
+export function value(): Channel<unknown, 'value'>
+export function value<S extends Schema>(
+  schema: S,
+): Channel<StandardSchemaV1.InferOutput<S>, 'value'>
+export function value(schema?: Schema): Channel<unknown, 'value'> {
+  return makeChannel('value', schema)
+}
 
-/** A feed of validated values — an SSE channel, a live query. */
-export const stream = <TSchema extends Schema>(
-  schema: TSchema,
-): Channel.Lane<Schema.Infer<TSchema>> =>
-  make(DataType.stream, schema) as Channel.Lane<Schema.Infer<TSchema>>
+/** A codec-value stream plane. */
+export function stream(): Channel<unknown, 'stream'>
+export function stream<S extends Schema>(
+  schema: S,
+): Channel<StandardSchemaV1.InferOutput<S>, 'stream'>
+export function stream(schema?: Schema): Channel<unknown, 'stream'> {
+  return makeChannel('stream', schema)
+}
 
-/** A feed of raw bytes — an upload, a download. Never reaches the codec. */
-export const chunks = (): Channel.Lane<Uint8Array> =>
-  make(DataType.stream) as Channel.Lane<Uint8Array>
+/** A raw byte stream plane (no schema — bytes pass through untouched). */
+export const chunks = (): Channel<Uint8Array, 'chunks'> => makeChannel('chunks')
 
-/** Several named byte lanes at once — a multipart body. */
-export const parts = (): Channel.Lanes<Uint8Array> =>
-  make(DataType.multistream) as Channel.Lanes<Uint8Array>
+/** A multipart plane (fields + files). */
+export const parts = (): Channel<unknown, 'parts'> => makeChannel('parts')
 
-/**
- * A duplex connection. Its lifetime is a LEASE, not the dispatch that opened it — which is why it
- * is a channel kind of its own rather than an input paired with an output.
- */
-export const socket = <TIn extends Schema, TOut extends Schema>(
-  inbound: TIn,
-  outbound: TOut,
-): Channel.Socket<Schema.Infer<TIn>, Schema.Infer<TOut>> =>
-  make(DataType.socket, inbound, outbound) as Channel.Socket<Schema.Infer<TIn>, Schema.Infer<TOut>>
+/** A bidirectional session plane (`schema` inbound, `emits` outbound). */
+export function socket(): Channel<unknown, 'socket'>
+export function socket<S extends Schema>(
+  schema: S,
+  emits?: Schema,
+): Channel<StandardSchemaV1.InferOutput<S>, 'socket'>
+export function socket(schema?: Schema, emits?: Schema): Channel<unknown, 'socket'> {
+  return makeChannel('socket', schema, emits)
+}
+
+/** Normalizes a declaration: bare schema → one value channel; `undefined` → unconstrained value. */
+export const normalizeDeclaration = (declaration?: Declaration): readonly Channel[] => {
+  if (declaration === undefined) {
+    return [makeChannel('value')]
+  }
+
+  if (isChannel(declaration)) {
+    return [declaration]
+  }
+
+  if (isSchema(declaration)) {
+    return [makeChannel('value', declaration)]
+  }
+
+  if (Array.isArray(declaration)) {
+    if (declaration.length === 0) {
+      throw fail(CoreErrors.Configuration, 'a channel declaration array cannot be empty')
+    }
+
+    for (const entry of declaration) {
+      if (!isChannel(entry)) {
+        throw fail(
+          CoreErrors.Configuration,
+          'channel declaration arrays may only contain channel() values',
+        )
+      }
+    }
+
+    const values = declaration.filter(entry => entry.kind === 'value')
+
+    if (values.length > 1) {
+      throw fail(CoreErrors.Configuration, 'a declaration may carry at most one value channel')
+    }
+
+    return declaration
+  }
+
+  throw fail(CoreErrors.Configuration, 'invalid channel declaration')
+}
+
+/** Resolves the serializable routing manifest ONCE at definition time. */
+export const manifestOf = (
+  input: readonly Channel[],
+  output: readonly Channel[],
+): WireManifest => ({
+  input: input.map(channel => channel.kind),
+  output: output.map(channel => channel.kind),
+  streamingIn: input.some(channel => channel.kind !== 'value'),
+  streamingOut: output.some(channel => channel.kind !== 'value'),
+  bytesOut: output.some(channel => channel.kind === 'chunks'),
+})
+
+/** The schema of the value plane, when declared. */
+export const valueSchemaOf = (channels: readonly Channel[]): Schema | undefined =>
+  channels.find(channel => channel.kind === 'value')?.schema

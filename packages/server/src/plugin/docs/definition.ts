@@ -1,93 +1,145 @@
+import {
+  Broker,
+  chunks,
+  defineAction,
+  defineService,
+  Gateway,
+  isService,
+  useResponse,
+} from 'server:core'
 import type { Service } from 'server:core'
-import { Gateway } from 'server:core'
-import { operation, useContext } from 'std:effect'
-import { Logger } from 'std:logger'
+import { moduleLogger } from 'server:utils'
+import { flow, operation } from 'std:effect'
 import { definePlugin } from 'std:plugin'
 
-import { createOpenAPIAction, createSwaggerAction } from './internal/actions'
-import { compileEntries } from './internal/compile'
-import { CompiledRef, DocsRef, SpecRef, SwaggerHtmlRef } from './internal/contexts'
-import { buildOpenAPISpec, normalizeAuth } from './internal/openapi'
-import { buildSwaggerHtml } from './internal/swagger'
-import type { DocsDef } from './types'
+import { buildPanelHtml } from './internal/panel'
+import { compile, DocsStateContext } from './internal/state'
+import type { DocsState } from './internal/state'
+import type { DocsEntry, DocsOptions } from './types'
 
-export const Docs = definePlugin({
-  name: 'server/plugin-docs',
-  version: '0.0.0',
-  description: 'documentation service',
+const DEFAULT_PATH = '/docs'
+const ENCODER = new TextEncoder()
 
-  *setup(options: DocsDef.Options = {}) {
-    const ctx: DocsDef.Context = {
-      title: options.title ?? 'Docs',
-      description: options.description ?? 'Documentation',
-      version: options.version ?? '0.0.0',
+/** The mounted `docs` service — the manifest endpoint plus the self-contained panel page. */
+const docsService = (state: DocsState): Service =>
+  defineService({
+    name: 'docs',
+    version: '1.0.0',
+    description: 'ozaco manifest + docs panel',
+    actions: {
+      manifest: defineAction(
+        {
+          title: 'Ozaco Manifest',
+          description: 'The typed OZACO MANIFEST v1 document for every published service.',
+          kind: 'query',
+          route: { method: 'GET', path: '/manifest' },
+        },
+        function* () {
+          return state.manifest ?? (yield* compile(state))
+        },
+      ),
+      panel: defineAction(
+        {
+          title: 'Docs Panel',
+          description: 'Self-contained, CDN-free documentation panel.',
+          kind: 'query',
+          output: chunks(),
+          route: { method: 'GET', path: '/' },
+        },
+        function* () {
+          const manifest = state.manifest ?? (yield* compile(state))
+          const html = buildPanelHtml(manifest)
+          const response = yield* useResponse()
 
-      openapi: options.openapi ?? '/docs/openapi',
-      swagger: options.swagger ?? '/docs/swagger',
-      silent: options.silent ?? false,
+          response.meta['content-type'] = 'text/html; charset=utf-8'
 
-      auth: normalizeAuth(options.auth),
-    }
+          return flow<Uint8Array, unknown>(
+            (async function* render() {
+              yield ENCODER.encode(html)
+            })(),
+          )
+        },
+      ),
+    },
+  })
 
-    yield* DocsRef.set(ctx)
-    yield* CompiledRef.set([])
-    yield* SpecRef.set(buildOpenAPISpec([], ctx))
-    yield* SwaggerHtmlRef.set(
-      yield* buildSwaggerHtml({
-        openapi: ctx.openapi,
-        title: ctx.title,
-        auth: Boolean(ctx.auth),
-      }),
-    )
+const DocsImpl = definePlugin<DocsState, [options?: DocsOptions]>({
+  name: 'server/docs',
+  version: '0.1.0',
+  description: 'OZACO MANIFEST v1 compiler + the bundled, CDN-free docs panel',
 
-    yield* Gateway.actions.mount('', createOpenAPIAction(ctx.openapi))
-    yield* Gateway.actions.mount('', createSwaggerAction(ctx.swagger))
+  *setup(options = {}) {
+    const log = yield* moduleLogger('server:docs')
 
-    // Once the gateway is listening we know the host/port, so log where the docs live. Runs only
-    // when a Logger is installed; returns nothing so the gateway's start result is left untouched.
-    yield* Gateway.after({
-      *start(result: { host: string; port: number }) {
-        if ((yield* Logger.context.get()) === undefined || options.silent) {
-          return
-        }
-
-        const host = result.host === '0.0.0.0' || result.host === '::' ? 'localhost' : result.host
-        const base = `http://${host}:${result.port}`
-
-        yield* Logger.actions.info(`Docs "${ctx.title}" ready`)
-        yield* Logger.actions.info(`  Swagger → ${base}${ctx.swagger}`)
-        yield* Logger.actions.info(`  Openapi → ${base}${ctx.openapi}`)
+    const state: DocsState = {
+      app: {
+        title: options.title ?? 'Ozaco API',
+        version: options.version ?? '0.0.0',
+        description: options.description,
+        auth: options.auth ?? false,
       },
-    })
-
-    return ctx
-  },
-}).build({
-  from: operation(function* (...services: Service[]) {
-    const ctx = yield* useContext(DocsRef)
-    const gateway = yield* useContext(Gateway.context)
-    const previous = (yield* CompiledRef.get()) ?? []
-
-    /**
-     * The MOUNT prefix is part of the truth: a service mounted at `/kb/files` — or at `''`, the
-     * whole-API mount — must be documented where it actually answers, not at `/${service.name}`.
-     * The gateway's route table already knows every prefix, so it is read from there; a service
-     * documented before it is mounted falls back to the name-shaped guess (the old behaviour).
-     */
-    const prefixes = new Map<unknown, string>()
-    for (const route of gateway.handlers.values()) {
-      if (!prefixes.has(route.target)) {
-        prefixes.set(route.target, route.prefix)
-      }
+      path: options.path ?? DEFAULT_PATH,
+      log,
+      entries: new Map(),
+      manifest: undefined,
     }
 
-    const names = new Set(services.map(s => s.name))
-    const kept = previous.filter(entry => !names.has(entry.service))
-    const fresh = yield* compileEntries(services, Gateway, prefixes)
+    yield* DocsStateContext.set(state)
+    yield* log.debug('docs ready', { path: state.path })
 
-    const next = [...kept, ...fresh]
+    return state
+  },
+})
 
-    yield* CompiledRef.set(next)
-    yield* SpecRef.set(buildOpenAPISpec(next, ctx))
+/**
+ * The docs plugin: compiles mounted services into the OZACO MANIFEST v1 (the OpenAPI replacement
+ * of this stack) and serves it together with a self-contained, CDN-free docs panel.
+ *
+ * ```ts
+ * yield* install(Docs, { title: 'My API', version: '1.0.0', auth: true })
+ * yield* Docs.actions.from({ prefix: '/todos', service: todos })
+ * yield* Docs.actions.mount() // GET /docs (panel) + GET /docs/manifest
+ * ```
+ */
+export const Docs = DocsImpl.build({
+  /**
+   * Compile (or re-compile) the manifest from real mount entries. Re-callable — later calls
+   * merge/replace entries by service name. Plain `Service` values default to `/<name>` prefixes.
+   * Fails `server:docs.invalid-manifest` when the generated document breaks the standard.
+   */
+  from: operation(function* (...entries: (DocsEntry | Service)[]) {
+    const state = yield* DocsStateContext.expect()
+
+    for (const entry of entries) {
+      const resolved: DocsEntry = isService(entry)
+        ? { prefix: `/${entry.name}`, service: entry }
+        : entry
+
+      state.entries.set(resolved.service.name, resolved)
+    }
+
+    return yield* compile(state)
+  }),
+
+  /** The compiled manifest (compiles lazily from the current entries when needed). */
+  manifest: operation(function* () {
+    const state = yield* DocsStateContext.expect()
+
+    return state.manifest ?? (yield* compile(state))
+  }),
+
+  /**
+   * Register + mount the `docs` service on the gateway at `options.path` (default `/docs`):
+   * `GET <path>/` serves the panel, `GET <path>/manifest` serves the manifest document.
+   */
+  mount: operation(function* () {
+    const state = yield* DocsStateContext.expect()
+    const service = docsService(state)
+
+    yield* Broker.actions.register(service)
+    yield* Gateway.actions.mount(state.path, service)
+    yield* state.log.info('docs mounted', { path: state.path })
+
+    return service
   }),
 })

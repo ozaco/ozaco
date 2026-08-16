@@ -1,106 +1,150 @@
-import type { Carried, TransportDef } from 'server:core'
+import type { BrokerContext, TransportOptions } from 'server:core'
+import type { BoundLogger } from 'server:utils'
 import type { Scope, Task } from 'std:effect'
+import type { Result } from 'std:result'
 
-import type { ConsumerMessages, JetStreamClient, JetStreamManager, NatsConnection } from 'nats'
+import type { JetStreamClient, JetStreamManager } from '@nats-io/jetstream'
+import type { ConnectionOptions, NatsConnection } from '@nats-io/nats-core'
 
-export namespace Nats {
-  export interface Options extends TransportDef.Options {
-    servers?: string | string[]
-    subjectPrefix?: string
-    /** The group this node joins for QUEUED events — one member of each group sees each event.
-     * Defaults to `'default'`, so unnamed nodes form one group rather than each its own. */
-    queueGroup?: string
-    /** How long a dispatch waits for its reply. Default 30000ms. Set `0` (or negative) to DISABLE the
-     * transport timeout and let the action `TimeoutPolicy` be the sole authority. */
-    requestTimeoutMs?: number
-    /** How many cluster nodes keep a copy of each stream (JetStream `num_replicas`, 1–5). Applied
-     * when the streams are created AND to an existing stream whose count differs — a deployment
-     * grown out of a single node scales to R3 by restarting one member with `replicas: 3`. Omit to
-     * leave streams as they are (new ones default to R1). */
-    replicas?: number
-  }
-
-  export interface Context extends TransportDef.Context {
-    connection: NatsConnection
-    js: JetStreamClient
-    jsm: JetStreamManager
-    prefix: string
-    /** the queued-event group, RAW — `eventDurable` owns flattening it into a durable-safe name */
-    group: string
-    requestTimeoutMs: number
-    /** every long-lived JetStream consumer this node runs, stopped at teardown */
-    consumers: Map<string, ConsumerMessages>
-    /** background claim loops for addresses blocked by a foreign durable, keyed by subject —
-     * halted when their service unregisters and at teardown */
-    reclaims: Map<string, Task<void>>
-    scope: Scope
-  }
-
+export interface NatsTransportOptions extends TransportOptions {
   /**
-   * What one dispatch carries INSIDE the work-queue message.
-   *
-   * The call id and the reply inbox ride the HEADERS (`HDR_CID` / `HDR_REPLY`), not this payload:
-   * every lane subject is derived from the cid in one place, so there is no list of subjects for
-   * the two sides to disagree about. `lanes` is the manifest of what travels beside the payload —
-   * how many plain lanes, and whether a multipart parts lane exists.
+   * FULL `@nats-io/nats-core` v3 `ConnectionOptions` passthrough — auth (user/pass/token/
+   * authenticator), tls, the whole reconnect family, pingInterval, noEcho, inboxPrefix, … —
+   * handed to the injectable `natsImpl.connect` verbatim.
    */
-  export interface DispatchPayload {
-    serviceName: string
-    actionKey: string
-    /** mapped to a string on the wire and back to the symbol on arrival — a symbol cannot survive a codec */
-    origin?: 'internal' | 'external'
-    meta?: Record<string, string>
-    /** what the call carries and what its answer will hold, so a return channel can exist first */
-    wire?: { sends: Carried[]; receives: Carried[] }
+  readonly connection?: ConnectionOptions | undefined
+  /** Sugar for `connection.servers`. */
+  readonly servers?: string | readonly string[] | undefined
+  /** First token of every subject (`<prefix>.v1.…`) and of the stream names. Default `'ozaco'`. */
+  readonly subjectPrefix?: string | undefined
+  /**
+   * Namespaces the per-service durable consumers (`<group>_<service>`). Every instance of a
+   * service MUST share one group — the RPC stream is a workqueue, which allows exactly one
+   * consumer per subject. Default `'default'`.
+   */
+  readonly queueGroup?: string | undefined
+  readonly jetstream?: Nats.JetStreamOptions | undefined
+  readonly events?: Nats.EventsOptions | undefined
+}
 
-    params?: unknown[]
-    lanes?: { streams: number; parts: boolean }
-    contexts?: TransportDef.DispatchContexts
+/** The cold wire/config surface of the NATS carrier, grouped (`Result.Failure` pattern). */
+export namespace Nats {
+  /**
+   * The injectable connection factory behind the transport (the `natsImpl` context). Defaults to
+   * `connect` from `@nats-io/transport-node`; swap it for fakes in tests or for
+   * `@nats-io/transport-deno` on Deno.
+   */
+  export interface ImplLike {
+    connect(options?: ConnectionOptions): Promise<NatsConnection>
   }
 
-  export interface WireSuccess {
-    _t: '__success__'
-    value: unknown
-    /** the reply half: what the action set with `useResponse()`, carried home rather than dropped */
-    status?: number
-    meta?: Record<string, string>
+  export interface JetStreamOptions {
+    /** Replicas for every provisioned stream (min 1, max 5). Default `1`. */
+    readonly replicas?: number | undefined
+    /** RPC workqueue `max_age` in ms — dispatches nobody consumed expire. Default `60_000`. */
+    readonly rpcMaxAgeMs?: number | undefined
+    /** LANE stream `max_age` in ms — the ABANDONED-lane sweeper (frames a reader never acked). Default `300_000`. */
+    readonly laneMaxAgeMs?: number | undefined
+    /**
+     * LANE stream `max_bytes` — the backpressure window. The LANE workqueue rejects publishes once
+     * this many unacked bytes accumulate (`discard: new`), parking slow-consumer producers.
+     * Default `67_108_864` (64 MiB).
+     */
+    readonly laneMaxBytes?: number | undefined
+    /**
+     * How long a lane pump keeps parking-and-retrying against a full LANE stream before it gives
+     * up with `NatsErrors.LaneFull`. Default `30_000`.
+     */
+    readonly laneFullTimeoutMs?: number | undefined
+    /** OUTCOME stream `max_age` in ms — how long `outcome(cid)` stays answerable. Default `600_000`. */
+    readonly outcomeTtlMs?: number | undefined
+    /** Storage backend for every provisioned stream. Default `'memory'`. */
+    readonly storage?: 'memory' | 'file' | undefined
   }
 
-  export interface WireFailure {
-    _t: '__failure__'
-    /** the fault, so a status the owner had already set survives the hop with its tag */
-    halted?: string
-    status?: number
-    meta?: Record<string, string>
-    error: string
-    message: string
-    causes?: string[]
+  /** {@link JetStreamOptions} with every default applied. */
+  export interface JetStreamResolved {
+    readonly replicas: number
+    readonly rpcMaxAgeMs: number
+    readonly laneMaxAgeMs: number
+    readonly laneMaxBytes: number
+    readonly laneFullTimeoutMs: number
+    readonly outcomeTtlMs: number
+    readonly storage: 'memory' | 'file'
   }
 
-  export interface WireStream {
-    _t: '__stream__'
-    status?: number
-    meta?: Record<string, string>
+  export interface EventsOptions {
+    /**
+     * Persist BROADCASTS in a `<P>_EVENT` stream and deliver them through a per-queue-group durable
+     * consumer (`<queueGroup>_events`, `DeliverPolicy.New`, explicit ack). Restart-safe and
+     * at-least-once WITHIN the group: one member consumes each broadcast, missed events replay on
+     * the next attach, and bus handlers MAY see redeliveries. `emit` stays core pub/sub
+     * (at-most-once) in both modes. Default `false`.
+     */
+    readonly durable?: boolean | undefined
+    /** EVENT stream `max_age` in ms — how far back a late-attaching group can catch up. Default `86_400_000`. */
+    readonly maxAgeMs?: number | undefined
+    /** EVENT stream storage. Default `'file'` (durability is the point). */
+    readonly storage?: 'memory' | 'file' | undefined
   }
 
-  export type Wire = WireSuccess | WireFailure | WireStream
-
-  export interface StreamErrorPayload {
-    error: string
-    message: string
-    causes?: string[]
+  /** {@link EventsOptions} with every default applied. */
+  export interface EventsResolved {
+    readonly durable: boolean
+    readonly maxAgeMs: number
+    readonly storage: 'memory' | 'file'
   }
 
-  /** The payload of a `field` part message on a parts lane. */
-  export interface PartField {
-    name: string
-    value: string
+  /** Whitebox counters for tests/ops — this node's lane pump activity. */
+  export interface Diagnostics {
+    /** Publishes that parked (stream full) and retried. */
+    laneRetries: number
+    /** Failure tags of pumps that gave up (lane-full timeouts, publish faults, truncated sources). */
+    readonly laneFailures: string[]
   }
 
-  /** The payload of a `file` part-open message on a parts lane; raw chunks follow until file-end. */
-  export interface PartFile {
-    name: string
-    filename?: string
-    mediaType?: string
+  /** The prefix-bound subject map (see `internal/subjects.ts` for the naming decisions). */
+  export interface Subjects {
+    readonly rpc: (service: string) => string
+    readonly rpcWild: string
+    readonly reply: (cid: string) => string
+    readonly cancel: (cid: string) => string
+    readonly lane: (cid: string, lane: string) => string
+    readonly laneWild: string
+    readonly event: (name: string) => string
+    readonly eventWild: string
+    readonly outcome: (cid: string) => string
+    readonly outcomeWild: string
+  }
+
+  export interface StreamNames {
+    readonly rpc: string
+    readonly lane: string
+    readonly outcome: string
+    /** Provisioned only with `events.durable`. */
+    readonly event: string
+  }
+
+  export interface Context {
+    /** The transport ENTRY name in the routing table (default `nats`). */
+    readonly name: string
+    readonly priority: number
+    readonly prefix: string
+    readonly queueGroup: string
+    readonly scope: Scope
+    readonly log: BoundLogger
+    readonly broker: BrokerContext
+    readonly nc: NatsConnection
+    readonly js: JetStreamClient
+    readonly jsm: JetStreamManager
+    readonly subjects: Subjects
+    readonly streams: StreamNames
+    readonly jetstream: JetStreamResolved
+    readonly events: EventsResolved
+    readonly diagnostics: Diagnostics
+    /** Positive `hosts()` answers: durable name → cache expiry epoch ms. */
+    readonly hostsCache: Map<string, number>
+    /** Running owner consume loops keyed by service name (tasks are boxed — they never fail). */
+    readonly owners: Map<string, Task<Result<void>>>
   }
 }

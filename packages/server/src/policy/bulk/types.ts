@@ -1,28 +1,34 @@
-import type { PolicyDef } from 'server:core'
 import type { Helpers } from 'std:effect'
 
-export const BulkPolicyKey = 'bulk' as const
-
-export namespace Bulk {
-  export interface Options extends PolicyDef.Options {
-    maxConcurrent?: number
-    maxQueue?: number
-    queueTimeout?: number
+declare module 'server:core' {
+  interface PolicyOptionsMap {
+    bulk: BulkOverride
   }
+}
 
-  export interface Waiter {
-    resolvers: Helpers.WithResolvers<void>
-    timer?: ReturnType<typeof setTimeout>
-    /** Set when the parked caller is halted: it removes itself from the queue, and `release` skips it
-     * so a freed slot is never handed to a dead waiter (which would never balance the inflight count). */
-    cancelled?: boolean
-  }
+/** Install-time options for the bulkhead policy. */
+export interface BulkOptions {
+  /** Dispatches allowed to run at once per action (default 10). */
+  readonly maxConcurrent?: number | undefined
+  /** Dispatches allowed to wait for a slot per action (default 100). */
+  readonly maxQueue?: number | undefined
+  /** How long a queued dispatch may wait before failing, in milliseconds (default 30_000). */
+  readonly queueTimeoutMs?: number | undefined
+}
 
-  export interface Context extends PolicyDef.Context {
-    maxConcurrent: number
-    maxQueue: number
-    queueTimeout: number
-    inflight: number
-    queue: Waiter[]
-  }
+/** Per-action override (`policies: { bulk: { … } | false }`) — same shape as the options. */
+export type BulkOverride = BulkOptions
+
+/** One per-action lane: the running count plus the FIFO of dispatches waiting for a slot. */
+export interface BulkLane {
+  active: number
+  readonly queue: Helpers.WithResolvers<void>[]
+}
+
+/** Scope-bound state: the resolved defaults plus the lanes keyed by `service\0action`. */
+export interface BulkState {
+  readonly lanes: Map<string, BulkLane>
+  readonly maxConcurrent: number
+  readonly maxQueue: number
+  readonly queueTimeoutMs: number
 }

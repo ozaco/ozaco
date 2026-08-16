@@ -1,0 +1,3 @@
+# The root .gitignore excludes every `lib/` directory (build-output convention).
+# `src/lib` here is SOURCE (the panel data layer) — re-include it for git and oxlint.
+!lib/

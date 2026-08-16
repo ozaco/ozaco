@@ -61,37 +61,10 @@ declare module 'std:ws' {
 // --------- SERVER ---------
 
 declare module 'server:core' {
-  export * from '@ozaco/server/core'
+  export * from '@ozaco/server'
 }
-declare module 'server:transport/nats' {
-  export * from '@ozaco/server/transport/nats'
-}
-declare module 'server:transport/worker' {
-  export * from '@ozaco/server/transport/worker'
-}
-declare module 'server:policy/bucket' {
-  export * from '@ozaco/server/policy/bucket'
-}
-declare module 'server:policy/retry' {
-  export * from '@ozaco/server/policy/retry'
-}
-declare module 'server:policy/cache' {
-  export * from '@ozaco/server/policy/cache'
-}
-declare module 'server:policy/circuit-breaker' {
-  export * from '@ozaco/server/policy/circuit-breaker'
-}
-declare module 'server:policy/bulk' {
-  export * from '@ozaco/server/policy/bulk'
-}
-declare module 'server:policy/timeout' {
-  export * from '@ozaco/server/policy/timeout'
-}
-declare module 'server:policy/fallback' {
-  export * from '@ozaco/server/policy/fallback'
-}
-declare module 'server:policy/metrics' {
-  export * from '@ozaco/server/policy/metrics'
+declare module 'server:utils' {
+  export * from '@ozaco/server/utils'
 }
 declare module 'server:gateway/bun' {
   export * from '@ozaco/server/gateway/bun'
@@ -99,23 +72,71 @@ declare module 'server:gateway/bun' {
 declare module 'server:gateway/node' {
   export * from '@ozaco/server/gateway/node'
 }
-declare module 'server:plugin/cors' {
-  export * from '@ozaco/server/plugin/cors'
+declare module 'server:gateway/deno' {
+  export * from '@ozaco/server/gateway/deno'
 }
-declare module 'server:plugin/docs' {
-  export * from '@ozaco/server/plugin/docs'
+declare module 'server:transport/worker' {
+  export * from '@ozaco/server/transport/worker'
 }
-declare module 'server:plugin/auth' {
-  export * from '@ozaco/server/plugin/auth'
+declare module 'server:transport/nats' {
+  export * from '@ozaco/server/transport/nats'
 }
-declare module 'server:daemon' {
-  export * from '@ozaco/server/daemon'
+declare module 'server:policy/cache' {
+  export * from '@ozaco/server/policy/cache'
+}
+declare module 'server:policy/fallback' {
+  export * from '@ozaco/server/policy/fallback'
+}
+declare module 'server:policy/bucket' {
+  export * from '@ozaco/server/policy/bucket'
+}
+declare module 'server:policy/bulk' {
+  export * from '@ozaco/server/policy/bulk'
+}
+declare module 'server:policy/rate-limit' {
+  export * from '@ozaco/server/policy/rate-limit'
+}
+declare module 'server:policy/retry' {
+  export * from '@ozaco/server/policy/retry'
+}
+declare module 'server:policy/circuit-breaker' {
+  export * from '@ozaco/server/policy/circuit-breaker'
+}
+declare module 'server:policy/metrics' {
+  export * from '@ozaco/server/policy/metrics'
+}
+declare module 'server:policy/timeout' {
+  export * from '@ozaco/server/policy/timeout'
 }
 declare module 'server:wizard' {
   export * from '@ozaco/server/wizard'
 }
-declare module 'server:metrics' {
-  export * from '@ozaco/server/metrics'
+declare module 'server:plugin/metrics' {
+  export * from '@ozaco/server/plugin/metrics'
+}
+declare module 'server:plugin/metrics/memory' {
+  export * from '@ozaco/server/plugin/metrics/memory'
+}
+declare module 'server:plugin/metrics/starrocks' {
+  export * from '@ozaco/server/plugin/metrics/starrocks'
+}
+declare module 'server:plugin/trace' {
+  export * from '@ozaco/server/plugin/trace'
+}
+declare module 'server:plugin/trace/otlp' {
+  export * from '@ozaco/server/plugin/trace/otlp'
+}
+declare module 'server:plugin/auth' {
+  export * from '@ozaco/server/plugin/auth'
+}
+declare module 'server:plugin/docs' {
+  export * from '@ozaco/server/plugin/docs'
+}
+declare module 'server:daemon' {
+  export * from '@ozaco/server/daemon'
+}
+declare module 'server:plugin/cors' {
+  export * from '@ozaco/server/plugin/cors'
 }
 
 // --------- DB ---------

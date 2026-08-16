@@ -1,11 +1,11 @@
 import { defineConfig } from 'tsdown'
 
-import { stdResolve } from '../devkit/src/resolve'
+import { clientResolve, stdResolve } from '../devkit/src/resolve'
 
 // oxlint-disable-next-line import/no-default-export
 export default defineConfig({
   entry: {
-    index: './src/index.ts',
+    index: './src/core/index.ts',
     codegen: './src/codegen/index.ts',
   },
   format: ['esm', 'cjs'],
@@ -13,5 +13,10 @@ export default defineConfig({
   fixedExtension: false,
   clean: true,
   outDir: './dist',
-  plugins: [stdResolve.rolldown()],
+  deps: {
+    onlyBundle: [],
+  },
+  // `client:core` resolves to the external `@ozaco/client` (dist/index.js), NOT inlined per
+  // bundle — cross-entry imports stay shared instead of duplicating module state.
+  plugins: [stdResolve.rolldown(), clientResolve.rolldown()],
 })

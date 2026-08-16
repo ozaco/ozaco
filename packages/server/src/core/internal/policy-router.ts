@@ -1,70 +1,58 @@
-import { filter, operation, some, toSorted, useContext } from 'std:effect'
+import { operation } from 'std:effect'
 import { fail } from 'std:result'
 
-import type { PolicyDef } from '../types/policy'
+import { CoreErrors } from '../errors'
+import type { PolicyDispatch, PolicyEntry, PolicyNext } from '../types/policy'
 
 import { PolicyRegistryContext } from './context'
 
-export const sortedPolicies = operation(function* (entries: PolicyDef[]) {
-  return yield* toSorted(entries, function* (a, b) {
-    const aCtx = yield* useContext(a)
-    const bCtx = yield* useContext(b)
-
-    return aCtx.priority - bCtx.priority
-  })
+export const policyGetHandler = operation(function* () {
+  return (yield* PolicyRegistryContext.get()) ?? []
 })
 
-export const policyDispatch = operation(function* <T>(
-  ctx: PolicyDef.DispatchContext,
-  core: PolicyDef.Next<T>,
-) {
-  const entries = yield* sortedPolicies(yield* policyGetPoliciesHandler())
+export const policyRegisterHandler = operation(function* (entry: PolicyEntry) {
+  const existing = yield* policyGetHandler()
 
-  let chain: PolicyDef.Next<T> = core
-  for (let i = entries.length - 1; i >= 0; i--) {
-    const policy = entries[i]!
-    const inner = chain
-    chain = function* () {
-      return yield* policy.actions.apply<T>(ctx, inner)
-    }
+  if (existing.some(candidate => candidate.name === entry.name)) {
+    return yield* fail(CoreErrors.Configuration, `policy "${entry.name}" is already registered`)
   }
 
-  return yield* chain()
+  const next = [...existing, entry].toSorted((a, b) => a.priority - b.priority)
+
+  yield* PolicyRegistryContext.set(next)
 })
 
-export const policyRegisterHandler: PolicyDef.Handlers['register'] = operation(
-  function* (policy, policyCtx) {
-    const existing = yield* policyGetPoliciesHandler()
+export const policyUnregisterHandler = operation(function* (name: string) {
+  const existing = yield* policyGetHandler()
 
-    if (
-      yield* some(existing, function* (target) {
-        const targetCtx = yield* useContext(target)
+  yield* PolicyRegistryContext.set(existing.filter(candidate => candidate.name !== name))
+})
 
-        return targetCtx.name === policyCtx.name
-      })
-    ) {
-      return yield* fail('unexpected', `Policy ${policyCtx.name} is already registered`)
+/**
+ * Builds the onion per dispatch — lowest priority outermost. An action-level override of `false`
+ * removes the layer; streaming dispatches skip `skipStreaming` layers unless explicitly overridden.
+ */
+export const policyDispatchRoot = operation(function* (ctx: PolicyDispatch, terminal: PolicyNext) {
+  const entries = yield* policyGetHandler()
+
+  let next = terminal
+
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    const entry = entries[index] as PolicyEntry
+    const override = ctx.overrides[entry.name]
+
+    if (override === false) {
+      continue
     }
 
-    yield* PolicyRegistryContext.set([...existing, policy])
-  },
-)
+    if (entry.skipStreaming && ctx.streaming && override === undefined) {
+      continue
+    }
 
-export const policyUnregisterHandler: PolicyDef.Handlers['unregister'] = operation(
-  function* (policy) {
-    const existing = yield* policyGetPoliciesHandler()
-    const policyCtx = yield* useContext(policy)
+    const inner = next
 
-    yield* PolicyRegistryContext.set(
-      yield* filter(existing, function* (target) {
-        const targetCtx = yield* useContext(target)
+    next = () => entry.apply(ctx, inner)
+  }
 
-        return targetCtx.name !== policyCtx.name
-      }),
-    )
-  },
-)
-
-export const policyGetPoliciesHandler: PolicyDef.Handlers['getPolicies'] = operation(function* () {
-  return (yield* PolicyRegistryContext.get()) ?? []
+  return yield* next()
 })

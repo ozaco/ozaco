@@ -1,30 +1,40 @@
-import type { PolicyDef } from 'server:core'
-import type { Result } from 'std:result'
-
-export const CircuitBreakerPolicyKey = 'circuitBreaker' as const
-
-export namespace CircuitBreaker {
-  export type State = 'closed' | 'open' | 'half-open'
-
-  export interface Options extends PolicyDef.Options {
-    threshold?: number
-    resetTimeout?: number
-    halfOpenMax?: number
-    isFailure?: (failure: Result.Failure<unknown>) => boolean
+declare module 'server:core' {
+  interface PolicyOptionsMap {
+    'circuit-breaker': CircuitBreakerOverride
   }
+}
 
-  export interface Entry {
-    state: State
-    failures: number
-    halfOpenInflight: number
-    openedAt: number
-  }
+/** Install-time options for the circuit-breaker policy. */
+export interface CircuitBreakerOptions {
+  /** Consecutive counted failures that open the circuit (default 5). */
+  readonly threshold?: number | undefined
+  /** How long an open circuit rejects before allowing probes, in milliseconds (default 30_000). */
+  readonly resetTimeoutMs?: number | undefined
+  /** Concurrent probe dispatches allowed while half-open (default 1). */
+  readonly halfOpenMax?: number | undefined
+}
 
-  export interface Context extends PolicyDef.Context {
-    threshold: number
-    resetTimeout: number
-    halfOpenMax: number
-    isFailure?: (failure: Result.Failure<unknown>) => boolean
-    entries: Map<string, Entry>
-  }
+/** Per-action override (`policies: { 'circuit-breaker': { … } | false }`) — same shape. */
+export type CircuitBreakerOverride = CircuitBreakerOptions
+
+/** The breaker's lifecycle phase. */
+export type BreakerPhase = 'closed' | 'open' | 'half-open'
+
+/** One per-action breaker. */
+export interface BreakerSlot {
+  phase: BreakerPhase
+  /** Consecutive counted failures while closed. */
+  failures: number
+  /** When the circuit last opened (epoch ms). */
+  openedAt: number
+  /** Probes admitted during the current half-open window. */
+  probes: number
+}
+
+/** Scope-bound state: the resolved defaults plus the breakers keyed by `service\0action`. */
+export interface CircuitBreakerState {
+  readonly breakers: Map<string, BreakerSlot>
+  readonly threshold: number
+  readonly resetTimeoutMs: number
+  readonly halfOpenMax: number
 }

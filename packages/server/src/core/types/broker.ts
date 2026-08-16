@@ -1,195 +1,113 @@
-import type { Future, Scope } from 'std:effect'
+import type { BoundLogger } from 'server:utils'
+import type { Operation, Scope } from 'std:effect'
 import type { EventEmitter } from 'std:event'
-import type { Plugin } from 'std:plugin'
-import type { AnyType } from 'std:shared'
+import type { Maybe } from 'std:result'
 
-import type { Action } from './action'
-import type { Response } from './common'
-import type { Service } from './service'
-import type { Source } from './source'
-import type { TracerDef } from './tracer'
+import type { Meta, Reply } from './common'
+import type { Service, ActionKey, ArgsOf, ReturnsOf } from './service'
+import type { Outcome, Trace, TraceOrigin } from './trace'
 
-export type BrokerDef = Plugin<BrokerDef.Context, unknown[], BrokerDef.Actions>
+export interface BrokerOptions {
+  /** Broker display name (defaults to `broker`). */
+  readonly name?: string | undefined
+  readonly ackTimeoutMs?: number | undefined
+  readonly requestTimeoutMs?: number | undefined
+  readonly outcomeTtlMs?: number | undefined
+}
 
+export interface CallOptions {
+  readonly meta?: Meta | undefined
+  /** Marks the call tree's origin when there is no ambient trace (edges pass `external`). */
+  readonly origin?: TraceOrigin | undefined
+  /** Adopt an existing trace instead of the ambient one (edges hand over the minted trace). */
+  readonly trace?: Trace | undefined
+  readonly timeoutMs?: number | undefined
+  readonly ackTimeoutMs?: number | undefined
+  /** Dedupe key — a retry after `TimeoutPending` with the same key cannot double-execute. */
+  readonly idempotencyKey?: string | undefined
+  /** Persist this call's outcome even when the reply is delivered normally. */
+  readonly outcome?: boolean | undefined
+  /** Non-value input planes keyed by `DataType` (handlers take them with `useSource`). */
+  readonly sources?: ReadonlyMap<string, unknown> | undefined
+}
+
+/** Cold internals of the broker protocol (types-only namespace). */
 export namespace BrokerDef {
-  export interface Options {
-    name?: string
-    nodeId?: string
-
-    shortenCauses?: boolean
-
-    /** emit a per-policy-layer trace (log + OTel child spans) for every dispatch — off by default */
-    trace?: boolean
-
-    services?: Record<string, Service> | undefined
+  /** One registered service instance. */
+  export interface ServiceEntry {
+    readonly service: Service
+    /** Instance-qualified id: `name@version#instance`. */
+    readonly serviceId: string
   }
 
-  export interface Context {
-    name: string
-    nodeId: string
-
-    shortenCauses: boolean
-    trace: boolean
-
-    /** The broker's install scope. A dispatch's own scope dies as soon as the handler returns, so
-     * anything that must outlive it — a `defineSocket` connection pump — runs here instead. The
-     * broker is present wherever an action runs, which is what makes this a safe universal home. */
-    scope: Scope
-
-    services: Map<string, Service>
-    bus: EventEmitter<BrokerDef.EventMap>
+  /** TTL'd owner-side outcome records (see the fulfillment model). */
+  export interface OutcomeStore {
+    record(outcome: Outcome): void
+    get(cid: string): Maybe<Outcome>
+    size(): number
   }
 
-  export interface Actions {
-    start(): Future<BrokerDef.Context>
-    isStarted(): Future<boolean>
-    pause(cause: string): Future<void>
-    isPaused(): Future<false | string>
-    resume(): Future<void>
-    destroy(): Future<void>
-
-    register(service: Service, name?: string): Future<void>
-
-    /**
-     * Is this address registered HERE — asked of the broker's own table, so the answer is always
-     * definite. Uncertainty belongs to carriers: a TRANSPORT with no discovery answers
-     * `nothing()`; a registry has no such excuse.
-     */
-    hosts(service: Service | string, path: string): Future<boolean>
-    unregister(service: Service | string): Future<void>
-
-    /**
-     * Call by SERVICE plus path.
-     *
-     * The service object rather than a bare name, because that is what carries the types: `path` is
-     * constrained to the addresses this service actually has, so a typo is a compile error, and the
-     * result comes back typed with what the action returns.
-     *
-     * Two plain values rather than the action object it used to take. Passing the action meant the
-     * broker had to ask the plugin runtime which service owned it before it could address anything,
-     * and a node that holds no definition — a gateway, a relay — had nothing to pass at all. A bare
-     * name is still accepted for exactly that case.
-     */
-    call<
-      TService extends Service<AnyType, AnyType[], AnyType>,
-      TPath extends Service.Paths<TService>,
-    >(
-      service: TService,
-      path: TPath,
-      sources?: Source.For<Service.Args<TService, TPath>>,
-      options?: BrokerDef.CallOptions,
-    ): Future<Service.Returns<TService, TPath>>
-
-    call(
-      service: string,
-      path: string,
-      sources?: Source.Any[],
-      options?: BrokerDef.CallOptions,
-    ): Future<AnyType>
-
-    /**
-     * The same call, answered WHOLE — status, headers and every source the action produced.
-     *
-     * Not a second spelling of {@link call} but a different question. A service asking another
-     * service wants what it returned and has no use for a status; a surface has to turn the answer
-     * into a reply and needs all of it. Collapsing the two meant every ordinary caller unwrapped an
-     * envelope to pay for a case that was not theirs.
-     */
-    exchange<
-      TService extends Service<AnyType, AnyType[], AnyType>,
-      TPath extends Service.Paths<TService>,
-    >(
-      service: TService,
-      path: TPath,
-      sources?: Source.For<Service.Args<TService, TPath>>,
-      options?: BrokerDef.CallOptions,
-    ): Future<Response<Service.Returns<TService, TPath>>>
-
-    exchange(
-      service: string,
-      path: string,
-      sources?: Source.Any[],
-      options?: BrokerDef.CallOptions,
-    ): Future<Response<AnyType>>
-
-    emit(name: string, payload?: unknown, groups?: ReadonlyArray<string | Service>): Future<void>
-
-    broadcast(
-      name: string,
-      payload?: unknown,
-      groups?: ReadonlyArray<string | Service>,
-    ): Future<void>
-
-    on<K extends keyof BrokerDef.EventMap & string>(
-      name: K,
-      listener: EventEmitter.Listener<BrokerDef.EventMap[K]>,
-    ): Future<() => void>
-
-    getServices(): Future<Map<string, Service>>
-    listActions(): Future<ReadonlyArray<{ service: Service; action: Action }>>
-  }
-
-  export interface EventInfo {
-    name: string
-    payload: unknown
-    groups?: ReadonlyArray<string>
-    /** the emitting node's id — already deduplicated by the transports; informational here */
-    origin?: string
-    /** the span the emitter was inside, so a cross-node event keeps its trace parent */
-    traceContext?: TracerDef.SpanContext
-  }
-
-  export type EventMap = {
-    'broker.started': []
-    'broker.stopped': []
-    'broker.paused': []
-    'broker.resumed': []
-    'broker.destroyed': []
-
-    'service.registered': [service: Service]
-    'service.unregistered': [service: Service | string]
-
-    'event.emit': [info: BrokerDef.EventInfo]
-    'event.broadcast': [info: BrokerDef.EventInfo]
-  }
-
-  export interface Settings {
-    started: boolean
-    paused: false | string
-    destroying: boolean
-  }
-
-  export interface CallContext {
-    service: Service
-    serviceName: string
-
-    action: Action
-    actionKey: string
-  }
-
-  export interface CallOptions {
-    /** defaults to INTERNAL: a call nobody marked as coming from outside did not come from outside */
-    origin?: Source.Origin
-    /** portable per-call metadata — request id, trace baggage, forwarded headers */
-    meta?: Record<string, string>
-
-    /** Run THIS call under an explicit principal — the service-identity mechanism for scopes with
-     * no request context (background tasks, execution engines, raw WS frame handlers). The
-     * dispatch runs inside a synthetic internal envelope carrying these credentials: auth guards
-     * read the bearer token exactly as if an edge delivered it, per-principal policy keys
-     * (cache/bucket) isolate on it, and the envelope propagates across transports, so a cross-node
-     * dispatch authorizes the same way it would locally. REPLACES any current request context for
-     * the duration of the dispatch. */
-    principal?: string | PrincipalInit
+  /** TTL'd reply dedupe keyed by `idempotencyKey` — the carrier-agnostic dedupe fallback. */
+  export interface ReplyCache {
+    get(key: string): Reply | undefined
+    set(key: string, reply: Reply): void
   }
 }
 
-/** An explicit caller identity — a bearer token (the common case) or a full header map when the
- * edge contract needs more than `authorization`. Consumed by `withPrincipal` and
- * {@link BrokerDef.CallOptions.principal}. */
-export interface PrincipalInit {
-  /** Bearer token — lands in the synthetic envelope as `authorization: Bearer <token>`. */
-  readonly token?: string | undefined
-  /** Additional envelope headers, merged OVER the token's `authorization`. */
-  readonly meta?: Record<string, string> | undefined
+export interface BrokerContext {
+  readonly name: string
+  readonly nodeId: string
+  readonly scope: Scope
+  readonly log: BoundLogger
+  readonly options: {
+    readonly ackTimeoutMs: number
+    readonly requestTimeoutMs: number
+    readonly outcomeTtlMs: number
+  }
+  readonly registry: Map<string, BrokerDef.ServiceEntry>
+  readonly bus: EventEmitter<Record<string, [unknown, Trace?]>>
+  readonly outcomes: BrokerDef.OutcomeStore
+  readonly replies: BrokerDef.ReplyCache
+  readonly state: { started: boolean; paused: boolean; destroyed: boolean }
+}
+
+export interface BrokerActions {
+  start(): Operation<void>
+  isStarted(): Operation<boolean>
+  pause(): Operation<void>
+  resume(): Operation<void>
+  isPaused(): Operation<boolean>
+  destroy(): Operation<void>
+
+  register(service: Service): Operation<void>
+  unregister(service: Service | string): Operation<void>
+  hosts(service: Service | string): Operation<boolean>
+  getServices(): Operation<readonly string[]>
+
+  /** Typed value call — unwraps the reply, re-raises failures with breadcrumbs appended. */
+  call<S extends Service, K extends ActionKey<S>>(
+    service: S,
+    action: K,
+    params: ArgsOf<S, K>,
+    options?: CallOptions,
+  ): Operation<ReturnsOf<S, K>>
+  call(service: string, action: string, params?: unknown, options?: CallOptions): Operation<unknown>
+
+  /** Full-fidelity call — returns the {@link Reply} (status/meta/failure/stream included). */
+  exchange(
+    service: Service | string,
+    action: string,
+    params?: unknown,
+    options?: CallOptions,
+  ): Operation<Reply>
+
+  /** Deliver to the first interested carrier ("someone handles it"). */
+  emit(name: string, payload?: unknown): Operation<void>
+  /** Deliver to every carrier and every node. */
+  broadcast(name: string, payload?: unknown): Operation<void>
+  /** Local subscription; returns the unsubscribe function. */
+  on(name: string, handler: (payload: unknown, trace?: Trace) => void): Operation<() => void>
+
+  /** Owner-side truth for a dispatch after `TimeoutPending` — see the fulfillment model. */
+  outcome(cid: string): Operation<Maybe<Outcome>>
 }

@@ -1,43 +1,30 @@
-import type { ActionRequest, PolicyDef, TracerDef } from 'server:core'
-import type { Result } from 'std:result'
+import type { TraceOrigin } from 'server:core'
 
-export const MetricsPolicyKey = 'metrics' as const
+/**
+ * One completed dispatch as observed at the caller-side policy layer. `causes` stays a raw string
+ * array here — the metrics collector serializes it (JsonCodec) at flush time, never in the sync
+ * hook path.
+ */
+export interface CallEvent {
+  readonly ts: number
+  readonly service: string
+  readonly action: string
+  readonly status: 'success' | 'failure'
+  readonly durationMs: number
+  readonly requestId: string
+  readonly serviceId: string
+  readonly laneId: string
+  readonly actionId: string
+  readonly parentActionId?: string | undefined
+  readonly outcome: 'fulfilled' | 'failed' | 'cancelled' | 'unknown'
+  readonly delivered: boolean
+  readonly origin: TraceOrigin
+  readonly transport: string
+  readonly error?: string | undefined
+  readonly causes?: readonly string[] | undefined
+}
 
-export namespace Metrics {
-  export interface Event {
-    serviceName: string
-    actionKey: string
-    startedAt: number
-    durationMs: number
-    /** The edge envelope this dispatch serves — absent when the call runs outside a request scope
-     * (background task, engine tick). Headers/meta carry whatever identity the edge attached. */
-    request?: ActionRequest | undefined
-    /** The dispatch's span — `traceId` correlates every call of one request tree. */
-    trace?: TracerDef.SpanContext | undefined
-  }
-
-  export type CallEvent = Pick<
-    Event,
-    'serviceName' | 'actionKey' | 'startedAt' | 'request' | 'trace'
-  >
-
-  export interface SuccessEvent extends Event {
-    value: unknown
-  }
-
-  export interface FailureEvent extends Event {
-    failure: Result.Failure<unknown>
-  }
-
-  export interface Options extends PolicyDef.Options {
-    onCall?: (event: CallEvent) => void
-    onSuccess?: (event: SuccessEvent) => void
-    onFailure?: (event: FailureEvent) => void
-  }
-
-  export interface Context extends PolicyDef.Context {
-    onCall?: (event: CallEvent) => void
-    onSuccess?: (event: SuccessEvent) => void
-    onFailure?: (event: FailureEvent) => void
-  }
+/** The sync sink the metrics collector plants — MUST never throw and never cross into effects. */
+export interface MetricsSink {
+  call(event: CallEvent): void
 }

@@ -35,79 +35,47 @@ const STD_MODULES: Record<string, ModuleEntry> = {
 }
 
 const SERVER_MODULES: Record<string, ModuleEntry> = {
-  'server:core': { subpath: 'core', source: 'core/index.ts' },
-  'server:transport/nats': {
-    subpath: 'transport/nats',
-    source: 'transport/nats/index.ts',
+  'server:core': { subpath: '', source: 'core/index.ts' },
+  'server:utils': { subpath: 'utils', source: 'utils/index.ts' },
+  'server:gateway/bun': { subpath: 'gateway/bun', source: 'gateway/bun/index.ts' },
+  'server:gateway/node': { subpath: 'gateway/node', source: 'gateway/node/index.ts' },
+  'server:gateway/deno': { subpath: 'gateway/deno', source: 'gateway/deno/index.ts' },
+  'server:transport/worker': { subpath: 'transport/worker', source: 'transport/worker/index.ts' },
+  'server:transport/nats': { subpath: 'transport/nats', source: 'transport/nats/index.ts' },
+  'server:policy/cache': { subpath: 'policy/cache', source: 'policy/cache/index.ts' },
+  'server:policy/fallback': { subpath: 'policy/fallback', source: 'policy/fallback/index.ts' },
+  'server:policy/bucket': { subpath: 'policy/bucket', source: 'policy/bucket/index.ts' },
+  'server:policy/bulk': { subpath: 'policy/bulk', source: 'policy/bulk/index.ts' },
+  'server:policy/rate-limit': {
+    subpath: 'policy/rate-limit',
+    source: 'policy/rate-limit/index.ts',
   },
-  'server:transport/worker': {
-    subpath: 'transport/worker',
-    source: 'transport/worker/index.ts',
-  },
-  'server:policy/bucket': {
-    subpath: 'policy/bucket',
-    source: 'policy/bucket/index.ts',
-  },
-  'server:policy/retry': {
-    subpath: 'policy/retry',
-    source: 'policy/retry/index.ts',
-  },
-  'server:policy/cache': {
-    subpath: 'policy/cache',
-    source: 'policy/cache/index.ts',
-  },
+  'server:policy/retry': { subpath: 'policy/retry', source: 'policy/retry/index.ts' },
   'server:policy/circuit-breaker': {
     subpath: 'policy/circuit-breaker',
     source: 'policy/circuit-breaker/index.ts',
   },
-  'server:policy/bulk': {
-    subpath: 'policy/bulk',
-    source: 'policy/bulk/index.ts',
+  'server:policy/metrics': { subpath: 'policy/metrics', source: 'policy/metrics/index.ts' },
+  'server:policy/timeout': { subpath: 'policy/timeout', source: 'policy/timeout/index.ts' },
+  'server:wizard': { subpath: 'wizard', source: 'wizard/index.ts' },
+  'server:plugin/metrics': { subpath: 'plugin/metrics', source: 'plugin/metrics/index.ts' },
+  'server:plugin/metrics/memory': {
+    subpath: 'plugin/metrics/memory',
+    source: 'plugin/metrics/memory/index.ts',
   },
-  'server:policy/timeout': {
-    subpath: 'policy/timeout',
-    source: 'policy/timeout/index.ts',
+  'server:plugin/metrics/starrocks': {
+    subpath: 'plugin/metrics/starrocks',
+    source: 'plugin/metrics/starrocks/index.ts',
   },
-  'server:policy/fallback': {
-    subpath: 'policy/fallback',
-    source: 'policy/fallback/index.ts',
+  'server:plugin/trace': { subpath: 'plugin/trace', source: 'plugin/trace/index.ts' },
+  'server:plugin/trace/otlp': {
+    subpath: 'plugin/trace/otlp',
+    source: 'plugin/trace/otlp/index.ts',
   },
-  'server:policy/metrics': {
-    subpath: 'policy/metrics',
-    source: 'policy/metrics/index.ts',
-  },
-  'server:gateway/bun': {
-    subpath: 'gateway/bun',
-    source: 'gateway/bun/index.ts',
-  },
-  'server:gateway/node': {
-    subpath: 'gateway/node',
-    source: 'gateway/node/index.ts',
-  },
-  'server:plugin/cors': {
-    subpath: 'plugin/cors',
-    source: 'plugin/cors/index.ts',
-  },
-  'server:plugin/docs': {
-    subpath: 'plugin/docs',
-    source: 'plugin/docs/index.ts',
-  },
-  'server:plugin/auth': {
-    subpath: 'plugin/auth',
-    source: 'plugin/auth/index.ts',
-  },
-  'server:daemon': {
-    subpath: 'daemon',
-    source: 'daemon/index.ts',
-  },
-  'server:wizard': {
-    subpath: 'wizard',
-    source: 'wizard/index.ts',
-  },
-  'server:metrics': {
-    subpath: 'metrics',
-    source: 'metrics/index.ts',
-  },
+  'server:plugin/auth': { subpath: 'plugin/auth', source: 'plugin/auth/index.ts' },
+  'server:plugin/docs': { subpath: 'plugin/docs', source: 'plugin/docs/index.ts' },
+  'server:daemon': { subpath: 'daemon', source: 'daemon/index.ts' },
+  'server:plugin/cors': { subpath: 'plugin/cors', source: 'plugin/cors/index.ts' },
 }
 
 const DB_MODULES: Record<string, ModuleEntry> = {
@@ -134,8 +102,8 @@ const CLI_MODULES: Record<string, ModuleEntry> = {
 }
 
 const CLIENT_MODULES: Record<string, ModuleEntry> = {
-  'client:core': { subpath: 'core', source: 'index.ts' },
-  'client:codegen': { subpath: 'codegen', source: 'codegen/definition.ts' },
+  'client:core': { subpath: '', source: 'core/index.ts' },
+  'client:codegen': { subpath: 'codegen', source: 'codegen/index.ts' },
 }
 
 interface ResolveAliasOptions {

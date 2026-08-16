@@ -1,0 +1,135 @@
+@import 'tailwindcss';
+
+/*
+ * Design tokens — dark-first developer-tool palette.
+ * The explicit [data-theme] attribute (persisted via lib/config) wins; the
+ * prefers-color-scheme media query is the fallback when no choice was made.
+ */
+:root {
+  --bg: #0b0e14;
+  --panel: #10141c;
+  --card: #151a24;
+  --line: #242b38;
+  --text: #dbe2ec;
+  --muted: #7d8899;
+  --accent: #6ea8fe;
+  --kind-query: #3fb950;
+  --kind-mutation: #d29922;
+  --kind-action: #58a6ff;
+  --kind-stream: #bc8cff;
+  --kind-socket: #f778ba;
+  --danger: #f85149;
+  --ok: #3fb950;
+  --method-get: #3fb950;
+  --method-post: #f0883e;
+  --method-put: #58a6ff;
+  --method-patch: #39c5cf;
+  --method-delete: #f85149;
+  --accent-contrast: #0b0e14;
+}
+
+[data-theme='light'] {
+  --bg: #ffffff;
+  --panel: #f6f8fa;
+  --card: #fbfcfd;
+  --line: #d8dee6;
+  --text: #1f2328;
+  --muted: #59636e;
+  --accent: #0969da;
+  --kind-query: #1a7f37;
+  --kind-mutation: #9a6700;
+  --kind-action: #0969da;
+  --kind-stream: #8250df;
+  --kind-socket: #bf3989;
+  --danger: #cf222e;
+  --ok: #1a7f37;
+  --method-get: #1a7f37;
+  --method-post: #bc4c00;
+  --method-put: #0969da;
+  --method-patch: #1b7c83;
+  --method-delete: #cf222e;
+  --accent-contrast: #ffffff;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']) {
+    --bg: #ffffff;
+    --panel: #f6f8fa;
+    --card: #fbfcfd;
+    --line: #d8dee6;
+    --text: #1f2328;
+    --muted: #59636e;
+    --accent: #0969da;
+    --kind-query: #1a7f37;
+    --kind-mutation: #9a6700;
+    --kind-action: #0969da;
+    --kind-stream: #8250df;
+    --kind-socket: #bf3989;
+    --danger: #cf222e;
+    --ok: #1a7f37;
+    --method-get: #1a7f37;
+    --method-post: #bc4c00;
+    --method-put: #0969da;
+    --method-patch: #1b7c83;
+    --method-delete: #cf222e;
+    --accent-contrast: #ffffff;
+  }
+}
+
+/* Expose the tokens to Tailwind utilities (bg-surface, text-ink, border-line, ...). */
+@theme inline {
+  --color-surface: var(--bg);
+  --color-panel: var(--panel);
+  --color-card: var(--card);
+  --color-line: var(--line);
+  --color-ink: var(--text);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-query: var(--kind-query);
+  --color-mutation: var(--kind-mutation);
+  --color-action: var(--kind-action);
+  --color-stream: var(--kind-stream);
+  --color-socket: var(--kind-socket);
+  --color-danger: var(--danger);
+  --color-ok: var(--ok);
+  --color-get: var(--method-get);
+  --color-post: var(--method-post);
+  --color-put: var(--method-put);
+  --color-patch: var(--method-patch);
+  --color-delete: var(--method-delete);
+  --color-accent-contrast: var(--accent-contrast);
+  --font-sans: system-ui, -apple-system, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+}
+
+/* Quality floor: visible keyboard focus, quiet scrollbars, reduced-motion respected. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

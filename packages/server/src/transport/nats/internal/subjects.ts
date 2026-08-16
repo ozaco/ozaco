@@ -1,114 +1,58 @@
-import { WIRE } from '../const'
+// oxlint-disable import/exports-last
+import type { Nats } from '../types'
 
 /**
- * One place that builds a subject, so a producer and a consumer cannot spell it differently.
+ * SUBJECT LAYOUT (all under one sanitized `<p>` prefix, wire-spec v1):
  *
- * `WIRE` is the wire's version, not the package's. A change to the framing is a new token rather
- * than a new optional field, so an old node and a new one simply do not see each other instead of
- * half understanding one another.
- *
- * Three planes, three subject roots, and each is a separate JetStream stream — because they want
- * opposite things. RPC is a work queue (one taker per call, message gone once acked); a lane is a
- * log with exactly one reader that must be able to start late; events are kept for a while so a
- * consumer can restart without losing what happened while it was away.
+ * - `rpc`     `<p>.v1.rpc.<service>`      — JetStream (`<P>_RPC`, workqueue). ONE subject per
+ *   service; load balancing comes from the single shared durable consumer, not queue groups.
+ * - `reply`   `<p>.v1.reply.<cid>`        — core NATS. Per-dispatch inbox (ack/reply envelopes).
+ * - `cancel`  `<p>.v1.cancel.<cid>`       — core NATS. Caller-abandonment ping to the owner.
+ * - `lane`    `<p>.v1.lane.<cid>.<lane>`  — JetStream (`<P>_LANE`, workqueue + `discard: new`).
+ *   Reply-stream frames on lane `0`, input planes on `in_<DataType>` lanes.
+ * - `event`   `<p>.v1.event.<name>`       — core NATS pub/sub fanout. DELIVERY GUARANTEE:
+ *   at-most-once — events are invalidation-style signals, not durable facts. With
+ *   `events.durable` the same subjects are ALSO captured by `<P>_EVENT` and broadcasts ride a
+ *   per-queue-group durable consumer (at-least-once within the group).
+ * - `outcome` `<p>.v1.outcome.<cid>`      — JetStream (`<P>_OUTCOME`, limits,
+ *   `max_msgs_per_subject: 1`). Owner-side truth for `outcome(cid)` reconciliation.
  */
 
-/**
- * The flattening a durable name needs is LOSSY — `get.all` and `get_all` collapse to one string —
- * and two addresses sharing a durable is a work-queue quietly splitting one action's calls across
- * two handlers. The hash of the RAW tokens restores the distinction; both sides derive it from the
- * same inputs, so `hosts()` and `serve` still agree by construction.
- */
-const fingerprint = (raw: string): string => {
-  let hash = 0x81_1c_9d_c5
-  for (let index = 0; index < raw.length; index++) {
-    hash ^= raw.codePointAt(index) ?? 0
-    hash = Math.imul(hash, 0x01_00_01_93) >>> 0
+const UNSAFE_TOKEN = /[^0-9A-Za-z_-]/gu
+const UNSAFE_EVENT = /[^0-9A-Za-z._-]/gu
+
+/** One valid subject token: anything outside `[0-9A-Za-z_-]` becomes `_`. */
+export const sanitizeToken = (raw: string): string => raw.replace(UNSAFE_TOKEN, '_') || '_'
+
+/** Event names keep their dots (multi-token subjects); wildcards/spaces become `_`. */
+const sanitizeEventName = (raw: string): string => raw.replace(UNSAFE_EVENT, '_') || '_'
+
+/** The shared durable consumer of one service (namespaced by the queue group). */
+export const durableOf = (queueGroup: string, service: string): string =>
+  `${sanitizeToken(queueGroup)}_${sanitizeToken(service)}`
+
+/** The durable BROADCAST consumer one queue group shares on the `<P>_EVENT` stream. */
+export const eventsDurableOf = (queueGroup: string): string => `${sanitizeToken(queueGroup)}_events`
+
+export const createSubjects = (rawPrefix: string): Nats.Subjects => {
+  const p = sanitizeToken(rawPrefix)
+
+  return {
+    rpc: service => `${p}.v1.rpc.${sanitizeToken(service)}`,
+    rpcWild: `${p}.v1.rpc.>`,
+    reply: cid => `${p}.v1.reply.${sanitizeToken(cid)}`,
+    cancel: cid => `${p}.v1.cancel.${sanitizeToken(cid)}`,
+    lane: (cid, lane) => `${p}.v1.lane.${sanitizeToken(cid)}.${sanitizeToken(lane)}`,
+    laneWild: `${p}.v1.lane.>`,
+    event: name => `${p}.v1.event.${sanitizeEventName(name)}`,
+    eventWild: `${p}.v1.event.>`,
+    outcome: cid => `${p}.v1.outcome.${sanitizeToken(cid)}`,
+    outcomeWild: `${p}.v1.outcome.>`,
   }
-  return hash.toString(36)
 }
 
-export const rpcPrefix = (prefix: string): string => `${prefix}.${WIRE}.rpc.`
+export const createStreamNames = (rawPrefix: string): Nats.StreamNames => {
+  const p = sanitizeToken(rawPrefix).toUpperCase()
 
-export const rpcSubject = (prefix: string, service: string, path: string): string =>
-  `${rpcPrefix(prefix)}${service}.${path}`
-
-/** Unsubscribe by STRING PREFIX, never by token index — `path` legitimately contains dots. */
-export const rpcServicePrefix = (prefix: string, service: string): string =>
-  `${rpcPrefix(prefix)}${service}.`
-
-/** A durable consumer name may not contain a dot, so the address is flattened into one. The
- * fingerprint joiner is NUL — no address token can contain it, so the raw pair is unambiguous —
- * spelled as an ESCAPE because a literal NUL byte in source is invisible and one formatter away
- * from silently renaming every durable in the cluster. */
-export const rpcDurable = (prefix: string, service: string, path: string): string =>
-  `${`${prefix}_${service}_${path}`.replaceAll(/[.*>\s]/gu, '_')}_${fingerprint(`${service}\u0000${path}`)}`
-
-/** The durable a GROUP of nodes shares for queued events — the group IS the consumer. */
-export const eventDurable = (prefix: string, group: string): string =>
-  `${`${prefix}_event_${group}`.replaceAll(/[.*>\s]/gu, '_')}_${fingerprint(group)}`
-
-export const lanePrefix = (prefix: string): string => `${prefix}.${WIRE}.lane.`
-
-// oxlint-disable-next-line max-params
-export const laneSubject = (
-  prefix: string,
-  cid: string,
-  direction: 'in' | 'out',
-  lane: string,
-): string => `${lanePrefix(prefix)}${cid}.${direction}.${lane}`
-
-export const laneWildcard = (prefix: string, cid: string, direction: 'in' | 'out'): string =>
-  `${lanePrefix(prefix)}${cid}.${direction}.>`
-
-/** The one lane a multipart body travels on — parts stay in wire order because they share it. */
-export const PARTS_LANE = 'parts'
-
-/** The single lane an answer travels on. */
-export const OUTPUT_LANE = '0'
-
-export const eventPrefix = (prefix: string): string => `${prefix}.${WIRE}.event.`
-
-/**
- * Delivery is IN the subject.
- *
- * "one member of the group" and "every node" cannot share a subject: a plain consumer and a queue
- * consumer on the same one both get a copy, which is a silent double delivery no option can express
- * away. The GROUP is not in the subject though — it is the consumer's name, so one publish reaches
- * each group exactly once without the publisher having to know which groups exist.
- */
-export const fanoutSubject = (prefix: string, name: string): string =>
-  `${eventPrefix(prefix)}fanout.${name}`
-
-export const queuedSubject = (prefix: string, name: string): string =>
-  `${eventPrefix(prefix)}queued.${name}`
-
-export const fanoutWildcard = (prefix: string): string => `${eventPrefix(prefix)}fanout.>`
-
-export const queuedWildcard = (prefix: string): string => `${eventPrefix(prefix)}queued.>`
-
-/** The inbox one dispatch is answered on. A reply has one waiting recipient and no life beyond it. */
-export const replyInbox = (prefix: string, cid: string): string => `${prefix}.${WIRE}.reply.${cid}`
-
-/**
- * Cancellation rides core NATS for the same reason the reply does: it has exactly one recipient —
- * the owner currently running the call — and no meaning once that owner is gone. Persisting it
- * would deliver a "stop" to nobody.
- */
-export const cancelSubject = (prefix: string, cid: string): string =>
-  `${prefix}.${WIRE}.cancel.${cid}`
-
-/**
- * The credit channel of one lane — same tail, `credit` plane. Core NATS, like the reply: a grant
- * has exactly one interested party (the live writer), and a stale grant helps nobody.
- */
-export const creditSubject = (lane: string): string =>
-  lane.replace(`.${WIRE}.lane.`, `.${WIRE}.credit.`)
-
-/**
- * A token that would change what a subscription matches.
- *
- * A service literally named `>` subscribes to the entire cluster. Checked at registration rather
- * than at dispatch, because by dispatch time the consumer already exists.
- */
-export const isUnsafeToken = (value: string): boolean => value.length === 0 || /[\s*>]/u.test(value)
+  return { rpc: `${p}_RPC`, lane: `${p}_LANE`, outcome: `${p}_OUTCOME`, event: `${p}_EVENT` }
+}

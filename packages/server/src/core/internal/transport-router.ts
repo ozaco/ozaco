@@ -1,148 +1,90 @@
-import { filter, operation, some, toSorted, useContext } from 'std:effect'
-import { Logger } from 'std:logger'
-import { asFailure, fail, isJust } from 'std:result'
+import { operation } from 'std:effect'
+import { fail, isJust } from 'std:result'
 
-import { CoreErrors } from '../const'
-import type { TransportDef } from '../types/transport'
-import { fault } from '../utils/fault'
+import { CoreErrors } from '../errors'
+import type { TransportDef, TransportDispatch, TransportEvent } from '../types/transport'
 
 import { TransportRegistryContext } from './context'
 
-export const sortedEntries = operation(function* (entries: TransportDef[]) {
-  return yield* toSorted(entries, function* (a, b) {
-    const aCtx = yield* useContext(a)
-    const bCtx = yield* useContext(b)
-
-    return aCtx.priority - bCtx.priority
-  })
+export const transportGetHandler = operation(function* () {
+  return (yield* TransportRegistryContext.get()) ?? []
 })
 
-export const transportDispatch = operation(function* (req: TransportDef.DispatchRequest) {
-  const entries = yield* transportGetTransportsHandler()
+export const transportRegisterHandler = operation(function* (entry: TransportDef.Entry) {
+  const existing = yield* transportGetHandler()
 
-  if (entries.length === 0) {
-    return yield* fail(CoreErrors.MissingSettings, 'no transport registered')
+  if (existing.some(candidate => candidate.name === entry.name)) {
+    return yield* fail(CoreErrors.Configuration, `transport "${entry.name}" is already registered`)
   }
 
-  const hasLogger = (yield* Logger.context.get()) !== undefined
-  const uncertain: TransportDef[] = []
+  const next = [...existing, entry].toSorted((a, b) => a.priority - b.priority)
 
-  /**
-   * Ask every carrier first, and only then convey.
-   *
-   * A `just(true)` is dispatched immediately and its failure is the ANSWER — it is never a reason
-   * to try somewhere else, because the body has already run. A `just(false)` is skipped outright.
-   * Only the carriers that answered `nothing()` — no discovery, no claim either way — are tried in
-   * turn, and only until one of them stops saying it does not serve the address.
-   */
-  for (const entry of entries) {
-    const verdict = yield* entry.actions.hosts(req.service, req.path)
+  yield* TransportRegistryContext.set(next)
+})
 
-    if (isJust(verdict)) {
-      if (verdict.value) {
-        return yield* entry.actions.dispatch(req)
-      }
-      continue
-    }
-    uncertain.push(entry)
-  }
+export const transportUnregisterHandler = operation(function* (name: string) {
+  const existing = yield* transportGetHandler()
 
-  let captured: unknown
-  let hasFailed = false
-
-  for (const entry of uncertain) {
-    const entryContext = yield* useContext(entry)
-
-    try {
-      return yield* entry.actions.dispatch(req)
-    } catch (error) {
-      const failure = asFailure(error)
-
-      hasFailed = true
-      captured = failure
-
-      const hasNext = entryContext.next(failure)
-
-      if (hasLogger) {
-        // Guarded. Unguarded, a failing dispatch in an app with no logger installed reported
-        // "No handler for debug in logger" and the real fault was never seen.
-        yield* Logger.actions.debug('skipping', entry.name, `${hasNext}`)
-      }
-
-      if (!hasNext) {
-        yield* failure
-      }
-    }
-  }
-
-  if (hasFailed) {
-    yield* asFailure(captured)
-  }
-
-  return yield* fault(CoreErrors.NotFound, `no carrier reaches "${req.service}.${req.path}"`)
+  yield* TransportRegistryContext.set(existing.filter(candidate => candidate.name !== name))
 })
 
 /**
- * One delivery plane per emit — see the note on {@link TransportDef.Actions.emit}. Carriers are
- * asked widest-first (descending priority) and the first `'handled'` ends the walk; the in-process
- * carrier always handles, so an emit is never silently dropped.
+ * hosts()-first routing: `just(true)` dispatches, `just(false)` skips, `nothing()` becomes a
+ * fallback candidate tried only when no carrier positively hosts the service.
  */
-export const transportEmit = operation(function* (req: TransportDef.EventRequest) {
-  const entries = yield* transportGetTransportsHandler()
+export const transportDispatchRoot = operation(function* (dispatch: TransportDispatch) {
+  const entries = yield* transportGetHandler()
+  const { service, action } = dispatch.request
 
-  for (const entry of entries.toReversed()) {
-    if ((yield* entry.actions.emit(req)) === 'handled') {
+  if (entries.length === 0) {
+    return yield* fail(CoreErrors.Unavailable, 'no transport is registered on this broker')
+  }
+
+  const fallbacks: TransportDef.Entry[] = []
+
+  for (const entry of entries) {
+    const hosted = yield* entry.actions.hosts(service)
+
+    if (isJust(hosted)) {
+      if (hosted.value) {
+        return yield* entry.actions.dispatch(dispatch)
+      }
+      continue
+    }
+
+    fallbacks.push(entry)
+  }
+
+  const fallback = fallbacks[0]
+
+  if (fallback) {
+    return yield* fallback.actions.dispatch(dispatch)
+  }
+
+  return yield* fail(
+    CoreErrors.Unavailable,
+    `no transport hosts "${service}.${action}"`,
+    `transport: dispatch cid:${dispatch.request.cid}`,
+  )
+})
+
+/** First carrier reporting `handled` wins; silence is fine (events are fire-and-forget). */
+export const transportEmitRoot = operation(function* (event: TransportEvent) {
+  const entries = yield* transportGetHandler()
+
+  for (const entry of entries) {
+    const result = yield* entry.actions.emit(event)
+
+    if (result === 'handled') {
       return
     }
   }
 })
 
-export const transportBroadcast = operation(function* (req: TransportDef.EventRequest) {
-  const entries = yield* transportGetTransportsHandler()
+export const transportBroadcastRoot = operation(function* (event: TransportEvent) {
+  const entries = yield* transportGetHandler()
 
   for (const entry of entries) {
-    yield* entry.actions.broadcast(req)
+    yield* entry.actions.broadcast(event)
   }
 })
-
-export const transportRegisterHandler: TransportDef.Handlers['register'] = operation(
-  function* (transport, transportCtx) {
-    const existing = (yield* TransportRegistryContext.get()) ?? []
-
-    if (
-      yield* some(existing, function* (target) {
-        const targetCtx = yield* useContext(target)
-
-        return targetCtx.name === transportCtx.name
-      })
-    ) {
-      return yield* fail(
-        'unexpected',
-        `Logger transport ${transportCtx.name} is already registered`,
-      )
-    }
-
-    yield* TransportRegistryContext.set([...existing, transport])
-  },
-)
-
-export const transportUnregisterHandler: TransportDef.Handlers['unregister'] = operation(
-  function* (transport) {
-    const existing = yield* transportGetTransportsHandler()
-    const transportCtx = yield* useContext(transport)
-
-    yield* TransportRegistryContext.set(
-      yield* filter(existing, function* (target) {
-        const targetCtx = yield* useContext(target)
-
-        return targetCtx.name !== transportCtx.name
-      }),
-    )
-  },
-)
-
-export const transportGetTransportsHandler: TransportDef.Handlers['getTransports'] = operation(
-  function* () {
-    return yield* sortedEntries((yield* TransportRegistryContext.get()) ?? [])
-  },
-)

@@ -1,20 +1,35 @@
-import { Broker, DataType } from '@ozaco/server/core'
-import type { Operation } from '@ozaco/std/effect'
+import type { Operation } from 'std:effect'
+import { run, scoped } from 'std:effect'
+import type { Result } from 'std:result'
+import { fail, isFailure, unwrap } from 'std:result'
+
+/** Run an effect body inside a fresh scope and throw its underlying error on failure. */
+export const runScoped = async <T>(body: () => Operation<T>): Promise<T> => {
+  const outcome = await run(() => scoped(body))
+  return unwrap(outcome) as T
+}
 
 /**
- * Call by address, with plain arguments.
- *
- * All this does is wrap each argument as a `normal` source — the answer needs no unwrapping, because
- * `call` hands back what the action returned. Reach for `Broker.actions.exchange` where a test cares
- * about the status or a lane.
+ * Run an effect body inside a fresh scope and return the raw Result. Use this to assert on
+ * failures: a raised (or returned) Failure collapses into the run outcome — `std:result`'s `auto`
+ * never nests Results — so `runScoped`'s unwrap would throw it.
  */
-export const call = <T = unknown>(
-  service: unknown,
-  path: string,
-  ...args: unknown[]
-): Operation<T> =>
-  Broker.actions.call(
-    service as never,
-    path as never,
-    args.map(value => ({ type: DataType.normal, value })),
-  ) as Operation<T>
+export const runResult = async <T>(body: () => Operation<T>): Promise<Result<T>> =>
+  await run(() => scoped(body))
+
+/**
+ * Invoke a sync builder that is expected to `throw fail(...)` and hand back the thrown Failure so
+ * the test can assert its tag (`error`) and `message`. Anything else — no throw, or a non-Failure
+ * value — fails the assertion.
+ */
+export const catchFailure = (invoke: () => unknown): Result.Failure<string> => {
+  try {
+    invoke()
+  } catch (error) {
+    if (isFailure(error)) {
+      return error as Result.Failure<string>
+    }
+    throw fail('expected-failure', `builder threw a non-Failure value: ${String(error)}`)
+  }
+  throw fail('expected-failure', 'builder returned instead of throwing a Failure')
+}

@@ -1,126 +1,140 @@
-import type { Carried, Source, TransportDef } from 'server:core'
-import type { Queue, Scope, Stream, Task } from 'std:effect'
+import type {
+  ActionSignal,
+  BrokerContext,
+  DisconnectMode,
+  Reply,
+  TransportOptions,
+  Wire,
+} from 'server:core'
+import type { BoundLogger } from 'server:utils'
+import type { Helpers, Queue, Scope, Task } from 'std:effect'
 import type { Result } from 'std:result'
 
-export namespace WorkerDef {
-  export type WireMode = 'structured' | 'codec'
+/** Install options of the worker carrier. `script` present → host role; absent → child role. */
+export interface WorkerTransportOptions extends TransportOptions {
+  /** Worker entry script — the HOST spawns `count` workers running it. Omit for the CHILD role. */
+  readonly script?: string | URL | undefined
+  /** How many workers to spawn (host role only). */
+  readonly count?: number | undefined
+}
 
-  export interface PortLike {
-    postMessage(message: unknown, transfer?: unknown[]): void
-    addEventListener?: (type: 'message', listener: (event: { data: unknown }) => void) => void
-    on?: (event: 'message', listener: (data: unknown) => void) => void
-    start?: () => void
-    terminate?: () => void
-    close?: () => void
+/** Which end of the port this instance is. */
+export type WorkerRole = 'host' | 'child'
+
+/** The cold wire/state surface of the worker carrier, grouped (`Result.Failure` pattern). */
+export namespace WorkerWire {
+  /** A `reply` envelope kept for `idempotencyKey` replay (only value replies are replayable). */
+  export type CachedReply = Extract<Wire.Envelope, { k: 'reply' }>
+
+  /**
+   * Carrier-internal readiness handshake — NOT part of the core envelope union. The child posts it
+   * once its message listener is attached, so the host never writes into a listener-less port.
+   */
+  export interface OnlineMessage {
+    readonly k: 'online'
+    readonly node: string
   }
 
-  export type SpawnSpec = string | URL | { script: string | URL; count?: number }
+  /** Everything this carrier moves over a port. */
+  export type PortMessage = Wire.Envelope | OnlineMessage
 
-  export interface Options extends TransportDef.Options {
-    script?: SpawnSpec | SpawnSpec[]
-    count?: number
-    endpoint?: PortLike | PortLike[]
-    wire?: WireMode
-    /** How long a dispatch waits for its reply from a worker that is alive but not answering.
-     * Default 30000ms; `0` (or negative) disables the transport timer entirely. A DEAD worker is
-     * settled immediately by the endpoint sweep — this timer only covers the hung-but-alive one. */
-    requestTimeoutMs?: number
+  /** The minimal port surface both runtimes (bun Web Worker, node worker_threads) reduce to. */
+  export interface Port {
+    post(message: unknown): void
+    terminate(): void
   }
 
-  export interface Endpoint {
-    wire: WireMode
-    services: Set<string>
-    post(message: Envelope): boolean
-    recv: Stream<unknown, void>
-    markReady(): void
-    close(): void
+  /** An in-flight OUTGOING dispatch awaiting its reply envelopes. */
+  export interface PendingDispatch {
+    readonly settle: (result: Result<Reply>) => void
+    readonly acked: () => void
   }
 
-  /** The receiving half of one multipart body: the ordered parts queue, plus the file currently
-   * being filled — exactly one may be open at a time, because parts arrive in wire order. */
-  export interface PartsAssembly {
-    parts: Queue<Source.Part, true | Result.Failure<unknown>>
-    file: Queue<Uint8Array, unknown> | null
+  /** An in-flight INCOMING dispatch (owner side), addressable by `cancel`/`abandoned` envelopes. */
+  export interface RunningDispatch {
+    task: Task<unknown> | undefined
+    cancelled: boolean
+    /** Reconstructed input planes fed by `in:*` lane envelopes (absent on plain dispatches). */
+    inputs: InputBridge | undefined
+    readonly signal: FireableSignal
+    readonly mode: DisconnectMode
   }
 
-  export interface Context extends TransportDef.Context {
-    wire: WireMode
-    adoptWire: boolean
-    requestTimeoutMs: number
-    endpoints: Endpoint[]
-    pending: Map<string, (wire: Wire) => void>
-    streams: Map<string, Queue<unknown, true | Result.Failure<unknown>>>
-    parts: Map<string, PartsAssembly>
-    /** which endpoint feeds each pending cid / open sid — what the death sweep walks */
-    owners: Map<string, Endpoint>
-    handlers: Map<string, Task<unknown>>
-    scope: Scope
-    rr: Map<string, number>
+  /** An {@link ActionSignal} the carrier fires when a `cancel`/`abandoned` envelope arrives. */
+  export interface FireableSignal extends ActionSignal {
+    fire(): void
   }
 
-  export interface WireSuccess {
-    _t: '__success__'
-    value: unknown
-    /** the reply half: what the action set with `useResponse()`, carried home rather than dropped */
-    status?: number
-    meta?: Record<string, string>
+  /** A tiny TTL'd map — the owner-side reply cache backing `idempotencyKey` dedupe. */
+  export interface TtlCache<T> {
+    get(key: string): T | undefined
+    set(key: string, value: T): void
   }
 
-  export interface WireFailure {
-    _t: '__failure__'
-    error: string
-    errorValue?: unknown
-    message: string
-    causes?: string[]
+  /** Producer-side ledger of one flowing lane — parks at `LANE_WINDOW` in flight until credit. */
+  export interface LaneSender {
+    readonly cid: string
+    readonly lane: string
+    /** Items posted so far (doubles as the next `seq`). */
+    sent: number
+    /** Cumulative consumer grant, raised by `lane-credit` envelopes. */
+    granted: number
+    /** The parked producer's gate — resolved by credit, rejected when the peer dies. */
+    gate: Helpers.WithResolvers<void> | undefined
   }
 
-  export interface WireStream {
-    _t: '__stream__'
-    status?: number
-    meta?: Record<string, string>
+  /** Consumer-side ledger of one queue-backed lane (output stream, or the `in:stream` plane). */
+  export interface LaneReceiver {
+    readonly cid: string
+    readonly lane: string
+    readonly queue: Queue<unknown, unknown>
+    /** Cumulative items consumed — posted back as the credit grant every `LANE_CREDIT_STEP`. */
+    consumed: number
+    /** Items received but not yet consumed (diagnostics only). */
+    buffered: number
   }
 
-  export type Wire = WireSuccess | WireFailure | WireStream
-
-  export interface StreamErrorPayload {
-    error: string
-    errorValue?: unknown
-    message: string
-    causes?: string[]
+  /** One reconstructed input plane on the owner side (an `in:*` lane sink). */
+  export interface InputPlane {
+    /** Feed one input-lane envelope (data / end / error) into the plane's sink. */
+    readonly feed: (envelope: Extract<Wire.Envelope, { k: 'lane' }>) => void
+    /** Close the sink with a failure (dead peer, abandoned caller). */
+    readonly kill: (failure: Result.Failure<string>) => void
   }
 
-  export interface DispatchEnvelope {
-    kind: 'dispatch'
-    cid: string
-    serviceName: string
-    actionKey: string
-    /** mapped to a string on the wire and back to the symbol on arrival — a symbol cannot survive a codec */
-    origin?: 'internal' | 'external'
-    meta?: Record<string, string>
-    /** what the call carries and what its answer will hold, so a return channel can exist first */
-    wire?: { sends: Carried[]; receives: Carried[] }
-    outputStream: string
-    params?: unknown
-    inputStreams?: string[]
-    /** the sid a multipart body travels on, framed with the part-* envelopes */
-    partsStream?: string
-    /** The dispatch contexts, codec-encoded as one blob (decoded back to DispatchContexts on receipt). */
-    contexts?: unknown
+  /** Owner-side bridge rebuilding a dispatch's input planes from `in:*` lane envelopes. */
+  export interface InputBridge {
+    /** What `invokeLocal` receives — keyed by `DataType` plane name. */
+    readonly sources: Map<string, unknown>
+    /** Envelope sinks keyed by full lane name (`in:multistream`, `in:stream`). */
+    readonly planes: Map<string, InputPlane>
   }
 
-  export type Envelope =
-    | DispatchEnvelope
-    | { kind: 'ready'; wire: WireMode; services?: string[] }
-    | { kind: 'reply'; cid: string; wire: Wire }
-    | { kind: 'cancel'; cid: string }
-    | { kind: 'emit'; req: unknown }
-    | { kind: 'broadcast'; req: unknown }
-    | { kind: 'chunk'; sid: string; data: unknown }
-    | { kind: 'end'; sid: string }
-    | { kind: 'error'; sid: string; failure: StreamErrorPayload }
-    // a multipart body on its sid: field/file-open/file-close frames; the file's bytes arrive as
-    // plain `chunk` envelopes between `part-file` and `part-file-end`, raw in BOTH wire modes
-    | { kind: 'part-field'; sid: string; name: string; value: string }
-    | { kind: 'part-file'; sid: string; name: string; filename?: string; mediaType?: string }
-    | { kind: 'part-file-end'; sid: string }
+  /** One remote end: a spawned worker (host role) or the parent port (child role). */
+  export interface Peer {
+    readonly index: number
+    port: Port
+    online: boolean
+    dead: boolean
+    /** Envelopes queued until the peer reports `online`. */
+    readonly outbox: PortMessage[]
+    readonly pending: Map<string, PendingDispatch>
+    readonly streams: Map<string, LaneReceiver>
+    /** Producer ledgers keyed by `cid#lane` — every flowing lane this side is pumping. */
+    readonly senders: Map<string, LaneSender>
+    readonly running: Map<string, RunningDispatch>
+  }
+
+  /** The per-install carrier state (no module globals — everything lives here). */
+  export interface Context {
+    readonly name: string
+    readonly role: WorkerRole
+    readonly broker: BrokerContext
+    readonly scope: Scope
+    readonly log: BoundLogger
+    readonly peers: Peer[]
+    readonly replies: TtlCache<CachedReply>
+    /** Round-robin cursor over live peers. */
+    cursor: number
+  }
 }

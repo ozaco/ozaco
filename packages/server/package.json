@@ -1,6 +1,6 @@
 {
   "name": "@ozaco/server",
-  "version": "0.3.20",
+  "version": "0.4.0",
   "homepage": "https://ozaco.com/",
   "author": "giveerr (https://github.com/giveerr)",
   "repository": {
@@ -13,126 +13,27 @@
   ],
   "type": "module",
   "exports": {
-    "./core": {
+    ".": {
       "import": {
-        "types": "./dist/core.d.ts",
-        "default": "./dist/core.js"
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
       },
       "require": {
-        "types": "./dist/core.d.cts",
-        "default": "./dist/core.cjs"
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
       },
       "source": "./src/core/index.ts"
     },
-    "./transport/nats": {
+    "./utils": {
       "import": {
-        "types": "./dist/transport/nats.d.ts",
-        "default": "./dist/transport/nats.js"
+        "types": "./dist/utils.d.ts",
+        "default": "./dist/utils.js"
       },
       "require": {
-        "types": "./dist/transport/nats.d.cts",
-        "default": "./dist/transport/nats.cjs"
+        "types": "./dist/utils.d.cts",
+        "default": "./dist/utils.cjs"
       },
-      "source": "./src/transport/nats/index.ts"
-    },
-    "./transport/worker": {
-      "import": {
-        "types": "./dist/transport/worker.d.ts",
-        "default": "./dist/transport/worker.js"
-      },
-      "require": {
-        "types": "./dist/transport/worker.d.cts",
-        "default": "./dist/transport/worker.cjs"
-      },
-      "source": "./src/transport/worker/index.ts"
-    },
-    "./policy/bucket": {
-      "import": {
-        "types": "./dist/policy/bucket.d.ts",
-        "default": "./dist/policy/bucket.js"
-      },
-      "require": {
-        "types": "./dist/policy/bucket.d.cts",
-        "default": "./dist/policy/bucket.cjs"
-      },
-      "source": "./src/policy/bucket/index.ts"
-    },
-    "./policy/retry": {
-      "import": {
-        "types": "./dist/policy/retry.d.ts",
-        "default": "./dist/policy/retry.js"
-      },
-      "require": {
-        "types": "./dist/policy/retry.d.cts",
-        "default": "./dist/policy/retry.cjs"
-      },
-      "source": "./src/policy/retry/index.ts"
-    },
-    "./policy/cache": {
-      "import": {
-        "types": "./dist/policy/cache.d.ts",
-        "default": "./dist/policy/cache.js"
-      },
-      "require": {
-        "types": "./dist/policy/cache.d.cts",
-        "default": "./dist/policy/cache.cjs"
-      },
-      "source": "./src/policy/cache/index.ts"
-    },
-    "./policy/circuit-breaker": {
-      "import": {
-        "types": "./dist/policy/circuit-breaker.d.ts",
-        "default": "./dist/policy/circuit-breaker.js"
-      },
-      "require": {
-        "types": "./dist/policy/circuit-breaker.d.cts",
-        "default": "./dist/policy/circuit-breaker.cjs"
-      },
-      "source": "./src/policy/circuit-breaker/index.ts"
-    },
-    "./policy/bulk": {
-      "import": {
-        "types": "./dist/policy/bulk.d.ts",
-        "default": "./dist/policy/bulk.js"
-      },
-      "require": {
-        "types": "./dist/policy/bulk.d.cts",
-        "default": "./dist/policy/bulk.cjs"
-      },
-      "source": "./src/policy/bulk/index.ts"
-    },
-    "./policy/timeout": {
-      "import": {
-        "types": "./dist/policy/timeout.d.ts",
-        "default": "./dist/policy/timeout.js"
-      },
-      "require": {
-        "types": "./dist/policy/timeout.d.cts",
-        "default": "./dist/policy/timeout.cjs"
-      },
-      "source": "./src/policy/timeout/index.ts"
-    },
-    "./policy/fallback": {
-      "import": {
-        "types": "./dist/policy/fallback.d.ts",
-        "default": "./dist/policy/fallback.js"
-      },
-      "require": {
-        "types": "./dist/policy/fallback.d.cts",
-        "default": "./dist/policy/fallback.cjs"
-      },
-      "source": "./src/policy/fallback/index.ts"
-    },
-    "./policy/metrics": {
-      "import": {
-        "types": "./dist/policy/metrics.d.ts",
-        "default": "./dist/policy/metrics.js"
-      },
-      "require": {
-        "types": "./dist/policy/metrics.d.cts",
-        "default": "./dist/policy/metrics.cjs"
-      },
-      "source": "./src/policy/metrics/index.ts"
+      "source": "./src/utils/index.ts"
     },
     "./gateway/bun": {
       "import": {
@@ -156,49 +57,137 @@
       },
       "source": "./src/gateway/node/index.ts"
     },
-    "./plugin/cors": {
+    "./gateway/deno": {
       "import": {
-        "types": "./dist/plugin/cors.d.ts",
-        "default": "./dist/plugin/cors.js"
+        "types": "./dist/gateway/deno.d.ts",
+        "default": "./dist/gateway/deno.js"
       },
       "require": {
-        "types": "./dist/plugin/cors.d.cts",
-        "default": "./dist/plugin/cors.cjs"
+        "types": "./dist/gateway/deno.d.cts",
+        "default": "./dist/gateway/deno.cjs"
       },
-      "source": "./src/plugin/cors/index.ts"
+      "source": "./src/gateway/deno/index.ts"
     },
-    "./plugin/docs": {
+    "./transport/worker": {
       "import": {
-        "types": "./dist/plugin/docs.d.ts",
-        "default": "./dist/plugin/docs.js"
+        "types": "./dist/transport/worker.d.ts",
+        "default": "./dist/transport/worker.js"
       },
       "require": {
-        "types": "./dist/plugin/docs.d.cts",
-        "default": "./dist/plugin/docs.cjs"
+        "types": "./dist/transport/worker.d.cts",
+        "default": "./dist/transport/worker.cjs"
       },
-      "source": "./src/plugin/docs/index.ts"
+      "source": "./src/transport/worker/index.ts"
     },
-    "./plugin/auth": {
+    "./transport/nats": {
       "import": {
-        "types": "./dist/plugin/auth.d.ts",
-        "default": "./dist/plugin/auth.js"
+        "types": "./dist/transport/nats.d.ts",
+        "default": "./dist/transport/nats.js"
       },
       "require": {
-        "types": "./dist/plugin/auth.d.cts",
-        "default": "./dist/plugin/auth.cjs"
+        "types": "./dist/transport/nats.d.cts",
+        "default": "./dist/transport/nats.cjs"
       },
-      "source": "./src/plugin/auth/index.ts"
+      "source": "./src/transport/nats/index.ts"
     },
-    "./daemon": {
+    "./policy/cache": {
       "import": {
-        "types": "./dist/daemon.d.ts",
-        "default": "./dist/daemon.js"
+        "types": "./dist/policy/cache.d.ts",
+        "default": "./dist/policy/cache.js"
       },
       "require": {
-        "types": "./dist/daemon.d.cts",
-        "default": "./dist/daemon.cjs"
+        "types": "./dist/policy/cache.d.cts",
+        "default": "./dist/policy/cache.cjs"
       },
-      "source": "./src/daemon/index.ts"
+      "source": "./src/policy/cache/index.ts"
+    },
+    "./policy/fallback": {
+      "import": {
+        "types": "./dist/policy/fallback.d.ts",
+        "default": "./dist/policy/fallback.js"
+      },
+      "require": {
+        "types": "./dist/policy/fallback.d.cts",
+        "default": "./dist/policy/fallback.cjs"
+      },
+      "source": "./src/policy/fallback/index.ts"
+    },
+    "./policy/bucket": {
+      "import": {
+        "types": "./dist/policy/bucket.d.ts",
+        "default": "./dist/policy/bucket.js"
+      },
+      "require": {
+        "types": "./dist/policy/bucket.d.cts",
+        "default": "./dist/policy/bucket.cjs"
+      },
+      "source": "./src/policy/bucket/index.ts"
+    },
+    "./policy/bulk": {
+      "import": {
+        "types": "./dist/policy/bulk.d.ts",
+        "default": "./dist/policy/bulk.js"
+      },
+      "require": {
+        "types": "./dist/policy/bulk.d.cts",
+        "default": "./dist/policy/bulk.cjs"
+      },
+      "source": "./src/policy/bulk/index.ts"
+    },
+    "./policy/rate-limit": {
+      "import": {
+        "types": "./dist/policy/rate-limit.d.ts",
+        "default": "./dist/policy/rate-limit.js"
+      },
+      "require": {
+        "types": "./dist/policy/rate-limit.d.cts",
+        "default": "./dist/policy/rate-limit.cjs"
+      },
+      "source": "./src/policy/rate-limit/index.ts"
+    },
+    "./policy/retry": {
+      "import": {
+        "types": "./dist/policy/retry.d.ts",
+        "default": "./dist/policy/retry.js"
+      },
+      "require": {
+        "types": "./dist/policy/retry.d.cts",
+        "default": "./dist/policy/retry.cjs"
+      },
+      "source": "./src/policy/retry/index.ts"
+    },
+    "./policy/circuit-breaker": {
+      "import": {
+        "types": "./dist/policy/circuit-breaker.d.ts",
+        "default": "./dist/policy/circuit-breaker.js"
+      },
+      "require": {
+        "types": "./dist/policy/circuit-breaker.d.cts",
+        "default": "./dist/policy/circuit-breaker.cjs"
+      },
+      "source": "./src/policy/circuit-breaker/index.ts"
+    },
+    "./policy/metrics": {
+      "import": {
+        "types": "./dist/policy/metrics.d.ts",
+        "default": "./dist/policy/metrics.js"
+      },
+      "require": {
+        "types": "./dist/policy/metrics.d.cts",
+        "default": "./dist/policy/metrics.cjs"
+      },
+      "source": "./src/policy/metrics/index.ts"
+    },
+    "./policy/timeout": {
+      "import": {
+        "types": "./dist/policy/timeout.d.ts",
+        "default": "./dist/policy/timeout.js"
+      },
+      "require": {
+        "types": "./dist/policy/timeout.d.cts",
+        "default": "./dist/policy/timeout.cjs"
+      },
+      "source": "./src/policy/timeout/index.ts"
     },
     "./wizard": {
       "import": {
@@ -211,16 +200,104 @@
       },
       "source": "./src/wizard/index.ts"
     },
-    "./metrics": {
+    "./plugin/metrics": {
       "import": {
-        "types": "./dist/metrics.d.ts",
-        "default": "./dist/metrics.js"
+        "types": "./dist/plugin/metrics.d.ts",
+        "default": "./dist/plugin/metrics.js"
       },
       "require": {
-        "types": "./dist/metrics.d.cts",
-        "default": "./dist/metrics.cjs"
+        "types": "./dist/plugin/metrics.d.cts",
+        "default": "./dist/plugin/metrics.cjs"
       },
-      "source": "./src/metrics/index.ts"
+      "source": "./src/plugin/metrics/index.ts"
+    },
+    "./plugin/metrics/memory": {
+      "import": {
+        "types": "./dist/plugin/metrics/memory.d.ts",
+        "default": "./dist/plugin/metrics/memory.js"
+      },
+      "require": {
+        "types": "./dist/plugin/metrics/memory.d.cts",
+        "default": "./dist/plugin/metrics/memory.cjs"
+      },
+      "source": "./src/plugin/metrics/memory/index.ts"
+    },
+    "./plugin/metrics/starrocks": {
+      "import": {
+        "types": "./dist/plugin/metrics/starrocks.d.ts",
+        "default": "./dist/plugin/metrics/starrocks.js"
+      },
+      "require": {
+        "types": "./dist/plugin/metrics/starrocks.d.cts",
+        "default": "./dist/plugin/metrics/starrocks.cjs"
+      },
+      "source": "./src/plugin/metrics/starrocks/index.ts"
+    },
+    "./plugin/trace": {
+      "import": {
+        "types": "./dist/plugin/trace.d.ts",
+        "default": "./dist/plugin/trace.js"
+      },
+      "require": {
+        "types": "./dist/plugin/trace.d.cts",
+        "default": "./dist/plugin/trace.cjs"
+      },
+      "source": "./src/plugin/trace/index.ts"
+    },
+    "./plugin/trace/otlp": {
+      "import": {
+        "types": "./dist/plugin/trace/otlp.d.ts",
+        "default": "./dist/plugin/trace/otlp.js"
+      },
+      "require": {
+        "types": "./dist/plugin/trace/otlp.d.cts",
+        "default": "./dist/plugin/trace/otlp.cjs"
+      },
+      "source": "./src/plugin/trace/otlp/index.ts"
+    },
+    "./plugin/auth": {
+      "import": {
+        "types": "./dist/plugin/auth.d.ts",
+        "default": "./dist/plugin/auth.js"
+      },
+      "require": {
+        "types": "./dist/plugin/auth.d.cts",
+        "default": "./dist/plugin/auth.cjs"
+      },
+      "source": "./src/plugin/auth/index.ts"
+    },
+    "./plugin/docs": {
+      "import": {
+        "types": "./dist/plugin/docs.d.ts",
+        "default": "./dist/plugin/docs.js"
+      },
+      "require": {
+        "types": "./dist/plugin/docs.d.cts",
+        "default": "./dist/plugin/docs.cjs"
+      },
+      "source": "./src/plugin/docs/index.ts"
+    },
+    "./daemon": {
+      "import": {
+        "types": "./dist/daemon.d.ts",
+        "default": "./dist/daemon.js"
+      },
+      "require": {
+        "types": "./dist/daemon.d.cts",
+        "default": "./dist/daemon.cjs"
+      },
+      "source": "./src/daemon/index.ts"
+    },
+    "./plugin/cors": {
+      "import": {
+        "types": "./dist/plugin/cors.d.ts",
+        "default": "./dist/plugin/cors.js"
+      },
+      "require": {
+        "types": "./dist/plugin/cors.d.cts",
+        "default": "./dist/plugin/cors.cjs"
+      },
+      "source": "./src/plugin/cors/index.ts"
     }
   },
   "publishConfig": {
@@ -235,33 +312,43 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@duckdb/node-api": "^1.5.5-r.2",
+    "@nats-io/jetstream": "^3.4.0",
+    "@nats-io/nats-core": "^3.4.0",
+    "@nats-io/transport-node": "^3.4.0",
     "@ozaco/db": "workspace:*",
     "@ozaco/std": "workspace:*",
     "@types/ws": "^8.18.1",
-    "nats": "^2.29.3",
+    "mysql2": "^3.15.2",
     "tsdown": "catalog:build",
     "unrun": "catalog:build",
     "ws": "^8.21.1"
   },
   "peerDependencies": {
-    "@duckdb/node-api": "^1.0.0",
+    "@nats-io/jetstream": "^3.0.0",
+    "@nats-io/nats-core": "^3.0.0",
+    "@nats-io/transport-node": "^3.0.0",
     "@ozaco/db": "*",
     "@ozaco/std": "*",
-    "nats": "^2.29.3",
+    "mysql2": "^3.0.0",
     "ws": "^8.0.0"
   },
   "peerDependenciesMeta": {
-    "@duckdb/node-api": {
+    "@nats-io/jetstream": {
+      "optional": true
+    },
+    "@nats-io/nats-core": {
+      "optional": true
+    },
+    "@nats-io/transport-node": {
       "optional": true
     },
     "@ozaco/db": {
       "optional": true
     },
-    "nats": {
+    "ws": {
       "optional": true
     },
-    "ws": {
+    "mysql2": {
       "optional": true
     }
   }

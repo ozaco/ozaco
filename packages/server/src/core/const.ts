@@ -1,173 +1,78 @@
-import { CodecErrors } from 'std:codec'
-import { createTags } from 'std:shared'
+import { CoreErrors } from './errors'
 
-export const DEFAULT_STATUS = 500
-
+/** Brand for objects created by `defineAction`. */
 export const ACTION = Symbol.for('server:core:action')
+/** Brand for objects created by `defineService`. */
 export const SERVICE = Symbol.for('server:core:service')
-export const BROKER = Symbol.for('server:core:broker')
-export const TRANSPORT = Symbol.for('broker:core:transport')
-export const TRACER = Symbol.for('server:core:tracer')
-export const POLICY = Symbol.for('server:core:policy')
-export const POLICY_SETTING = Symbol.for('server:core:policy-setting')
-
-export const GATEWAY = Symbol.for('server:core:gateway')
-
+/** Brand for channel declarations created by the `channel` constructors. */
 export const CHANNEL = Symbol.for('server:core:channel')
 
-/**
- * Where a call came from, as a SYMBOL rather than a string or a boolean.
- *
- * Set by whoever admitted the call and never copied out of a payload — which is the point of a
- * symbol: it cannot survive a codec, so a client cannot put `origin: 'internal'` on the wire and
- * have a downstream check believe it.
- */
-export const INTERNAL_ORIGIN = Symbol.for('server:core:internal')
-export const EXTERNAL_ORIGIN = Symbol.for('server:core:external')
+/** Protocol subtypes (the `_st` of each `defineProtocol` call in `definitions.ts`). */
+export const BROKER = Symbol.for('server:core:broker')
+export const TRANSPORT = Symbol.for('server:core:transport')
+export const POLICY = Symbol.for('server:core:policy')
+export const GATEWAY = Symbol.for('server:core:gateway')
+export const GATEWAY_ADAPTER = Symbol.for('server:core:gateway-adapter')
+export const METRICS_STORE = Symbol.for('server:core:metrics-store')
+export const AUTH_STRATEGY = Symbol.for('server:core:auth-strategy')
+export const TRACER = Symbol.for('server:core:tracer')
+export const TRACE_EXPORTER = Symbol.for('server:core:trace-exporter')
 
-/** Request-meta key carrying the WebSocket id into a `session` dispatch — survives a remote hop. */
-export const SOCKET_ID_META = 'x-ozaco-socket'
-
-/**
- * A `session` connection is a LEASE, not an open-ended promise.
- *
- * Neither end can tell a quiet peer from a dead one: a killed gateway runs no teardown, and once a
- * stream reply is adopted the transport never cancels it again. So the gateway renews every open
- * channel on the inbound stream it already holds, the owner heartbeats on its outbound stream, and
- * each side reaps a session the other stopped speaking on. Without this a lost peer leaks one live
- * pump per connection, forever — re-running its queries on every change in the wizard's case.
- */
-export const SESSION_PING_MS = 10_000
-/** Three missed renewals. Generous enough to ride out a slow tick, short enough to reap promptly. */
-export const SESSION_IDLE_MS = 32_000
-
-/**
- * What one channel of a call carries.
- *
- * A call holds AT MOST ONE source per kind, which is what makes `useSource(type)` unambiguous and
- * what makes a call's shape a SET rather than a list: it either has a socket or it does not.
- * Several byte lanes at once are one `multistream`, never several `stream`s.
- */
-export const DataType = {
-  /** a single value */
-  normal: 'normal',
-  /** one lane — a feed of values, or a feed of raw bytes */
-  stream: 'stream',
-  /** several named lanes at once, e.g. a multipart body */
-  multistream: 'multistream',
-  /** a duplex connection, whose lifetime is a lease rather than the dispatch that opened it */
-  socket: 'socket',
-} as const
-
-// oxlint-disable-next-line no-redeclare
-export type DataType = (typeof DataType)[keyof typeof DataType]
-
-// Default layering of the built-in policies. Policies are applied as an onion sorted ascending by
-// priority: the LOWEST number is the OUTERMOST layer. Timeout is innermost (highest) on purpose —
-// a timeout must surface as a normal thrown CoreErrors.Timeout that the outer stateful policies
-// (circuit-breaker, metrics, retry, fallback) observe through their catch blocks. If timeout sat
-// outside them it would HALT their generators, and a halt runs neither catch nor finally (only
-// scope `ensure` cleanup) — so they could neither record the failure nor release their state.
-export const PolicyPriority = {
-  Cache: 0,
-  Fallback: 5,
-  Bucket: 10,
-  Bulk: 20,
-  Retry: 30,
-  CircuitBreaker: 40,
-  Metrics: 50,
-  Timeout: 60,
-} as const
-
-export const CoreErrors = createTags(
-  'server:core',
-
-  'validation',
-  'random-hex',
-
-  'forbidden',
-  'not-found',
-  'not-registered',
-  'unauthorized',
-  'exists',
-  'precondition-failed',
-  'broker-internal',
-  'broker-paused',
-  'payload-too-large',
-  'missing-settings',
-  'protocol-not-cloneable',
-
-  'transport-dispatch',
-  'transport-emit',
-  'transport-broadcast',
-
-  'circuit-open',
-  'bulk-queue-full',
-  'bulk-queue-timeout',
-  'timeout',
-)
-
-export const CoreStatusMap = {
-  [CoreErrors.Validation]: 400,
-  [CoreErrors.RandomHex]: 500,
-
-  [CoreErrors.Forbidden]: 403,
-  [CoreErrors.NotFound]: 404,
-  [CoreErrors.NotRegistered]: 404,
-  [CoreErrors.Unauthorized]: 401,
-  [CoreErrors.Exists]: 409,
-  [CoreErrors.PreconditionFailed]: 412,
-  [CoreErrors.BrokerInternal]: 500,
-  [CoreErrors.BrokerPaused]: 503,
-  [CoreErrors.PayloadTooLarge]: 413,
-  [CoreErrors.MissingSettings]: 500,
-  [CoreErrors.ProtocolNotCloneable]: 500,
-
-  [CodecErrors.Encode]: 500,
-  [CodecErrors.Decode]: 400,
-
-  [CoreErrors.TransportDispatch]: 502,
-  [CoreErrors.TransportEmit]: 502,
-  [CoreErrors.TransportBroadcast]: 502,
-
-  [CoreErrors.CircuitOpen]: 503,
-  [CoreErrors.BulkQueueFull]: 503,
-  [CoreErrors.BulkQueueTimeout]: 504,
-  [CoreErrors.Timeout]: 504,
+/** The non-value data planes an action can declare and a handler can take with `useSource`. */
+export enum DataType {
+  normal = 'normal',
+  stream = 'stream',
+  multistream = 'multistream',
+  socket = 'socket',
 }
 
-export const OTEL_RPC_SYSTEM = 'ozaco-broker'
-export const OTEL_MESSAGING_SYSTEM = 'ozaco-broker'
-
-export const OtelSpanKind = {
-  INTERNAL: 1,
-  SERVER: 2,
-  CLIENT: 3,
-  PRODUCER: 4,
-  CONSUMER: 5,
+/**
+ * Policy onion order — LOWEST priority is the OUTERMOST layer. Timeout sits innermost so its
+ * failure is observable by every outer layer instead of becoming a scope halt.
+ */
+export const PolicyPriority = {
+  cache: 0,
+  fallback: 5,
+  bucket: 10,
+  bulk: 20,
+  rateLimit: 25,
+  retry: 30,
+  circuitBreaker: 40,
+  metrics: 50,
+  timeout: 60,
 } as const
 
-export const OtelSpanStatusCode = {
-  UNSET: 0,
-  OK: 1,
-  ERROR: 2,
-} as const
+/** Wire spec version stamped into every envelope. */
+export const WIRE_VERSION = 1
 
-export const OtelAttrs = {
-  RPC_SYSTEM: 'rpc.system',
-  RPC_SERVICE: 'rpc.service',
-  RPC_METHOD: 'rpc.method',
+/** Header carrying (and echoing back) the external request id at the edge. */
+export const REQUEST_ID_HEADER = 'x-request-id'
 
-  MESSAGING_SYSTEM: 'messaging.system',
-  MESSAGING_OPERATION: 'messaging.operation',
-  MESSAGING_DESTINATION_NAME: 'messaging.destination.name',
+/** How long a dispatch may stay unacknowledged before failing `TimeoutUnreached`. */
+export const ACK_TIMEOUT_MS = 5000
+/** How long an acknowledged dispatch may run before failing `TimeoutPending`. */
+export const REQUEST_TIMEOUT_MS = 30_000
+/** How long recorded outcomes stay queryable via `Broker.actions.outcome(cid)`. */
+export const OUTCOME_TTL_MS = 600_000
 
-  BROKER_NAME: 'broker.name',
-  BROKER_NODE_ID: 'broker.node_id',
-
-  SERVICE_NAME: 'service.name',
-  SERVICE_VERSION: 'service.version',
-  SERVICE_INSTANCE_ID: 'service.instance.id',
-
-  EXCEPTION_MESSAGE: 'exception.message',
-} as const
+/** Default HTTP status per core failure tag; action `errors` maps override per tag. */
+export const CoreStatusMap: Record<string, number> = {
+  [CoreErrors.Configuration]: 500,
+  [CoreErrors.Validation]: 400,
+  [CoreErrors.BadRequest]: 400,
+  [CoreErrors.Unauthorized]: 401,
+  [CoreErrors.Forbidden]: 403,
+  [CoreErrors.NotFound]: 404,
+  [CoreErrors.Conflict]: 409,
+  [CoreErrors.PayloadTooLarge]: 413,
+  [CoreErrors.Unavailable]: 503,
+  [CoreErrors.Unsupported]: 501,
+  [CoreErrors.RateLimited]: 429,
+  [CoreErrors.TimeoutUnreached]: 503,
+  [CoreErrors.TimeoutPending]: 504,
+  [CoreErrors.Cancelled]: 499,
+  [CoreErrors.Paused]: 503,
+  [CoreErrors.Destroyed]: 503,
+  [CoreErrors.NoRoute]: 404,
+  [CoreErrors.Internal]: 500,
+}

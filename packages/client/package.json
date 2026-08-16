@@ -1,6 +1,6 @@
 {
   "name": "@ozaco/client",
-  "version": "0.1.5",
+  "version": "0.4.0",
   "homepage": "https://ozaco.com/",
   "author": "giveerr (https://github.com/giveerr)",
   "repository": {
@@ -22,18 +22,7 @@
         "types": "./dist/index.d.cts",
         "default": "./dist/index.cjs"
       },
-      "source": "./src/index.ts"
-    },
-    "./core": {
-      "import": {
-        "types": "./dist/index.d.ts",
-        "default": "./dist/index.js"
-      },
-      "require": {
-        "types": "./dist/index.d.cts",
-        "default": "./dist/index.cjs"
-      },
-      "source": "./src/index.ts"
+      "source": "./src/core/index.ts"
     },
     "./codegen": {
       "import": {
@@ -53,9 +42,12 @@
     "registry": "https://registry.npmjs.org/"
   },
   "devDependencies": {
+    "@ozaco/db": "workspace:*",
+    "@ozaco/server": "workspace:*",
     "@ozaco/std": "workspace:*",
     "tsdown": "catalog:build",
-    "unrun": "catalog:build"
+    "unrun": "catalog:build",
+    "zod": "^4.4.3"
   },
   "peerDependencies": {
     "@ozaco/std": "*"

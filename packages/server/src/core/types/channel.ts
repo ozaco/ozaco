@@ -1,84 +1,70 @@
-import type { Stream } from 'std:effect'
-import type { Schema } from 'std:shared'
+import type { Flow } from 'std:effect'
+import type { StandardSchemaV1 } from 'std:shared'
 
-import type { CHANNEL, DataType } from '../const'
+import type { CHANNEL } from '../const'
+
+declare const CHANNEL_VALUE: unique symbol
+
+/** Any Standard Schema validator (zod v4 first-class; anything `~standard` is accepted). */
+export type Schema = StandardSchemaV1
+
+export type ChannelKind = 'value' | 'stream' | 'chunks' | 'parts' | 'socket'
 
 /**
- * What ONE side of a call carries, declared rather than discovered.
- *
- * This is the whole point of the type. Every decision the edge and the carriers used to make by
- * inspecting a value at run time — is this a stream, are these bytes, does this need a return
- * channel opened before the answer exists — becomes a lookup on something the author already wrote.
- * Sniffing got it wrong in both directions: a buffered `Uint8Array` was iterated as a stream, and a
- * value feed was served byte by byte.
- *
- * A channel WITHOUT a schema carries raw bytes; one WITH a schema carries values through the codec.
- * That is the entire encoding rule, and it is why there is no separate `encoding` field — a second
- * place to state it is a second place for it to disagree.
+ * One wire plane of an action's input or output contract. `schema` present ⇒ codec-encoded values;
+ * absent (`chunks`) ⇒ raw bytes. Resolved ONCE at definition time into the action's
+ * {@link WireManifest} — carriers route off the manifest and never sniff runtime values.
  */
-export interface Channel<TType extends DataType = DataType, TIn = unknown, TOut = TIn> {
-  _t: typeof CHANNEL
-  type: TType
-
-  /** absent means raw bytes; present means values validated and encoded through it */
-  schema?: Schema
-
-  /** only a socket has a second direction, and only a socket names it */
-  emits?: Schema
-
-  /** phantom, so a declaration carries its value type into the handler's signature */
-  _in?: TIn
-  _out?: TOut
+export interface Channel<T = unknown, K extends ChannelKind = ChannelKind> {
+  readonly _t: typeof CHANNEL
+  readonly kind: K
+  readonly schema?: Schema | undefined
+  /** Second direction of a socket channel (server → client emissions). */
+  readonly emits?: Schema | undefined
+  readonly [CHANNEL_VALUE]?: T
 }
 
-export namespace Channel {
-  export type Normal<T = unknown> = Channel<typeof DataType.normal, T>
-  export type Lane<T = unknown> = Channel<typeof DataType.stream, T>
-  export type Lanes<T = unknown> = Channel<typeof DataType.multistream, T>
-  export type Socket<TIn = unknown, TOut = unknown> = Channel<typeof DataType.socket, TIn, TOut>
+/** What `defineAction` accepts for `input` / `output`: a bare schema, a channel, or several. */
+export type Declaration = Schema | Channel | readonly Channel[]
 
-  /**
-   * What an author may write in `input` / `output`.
-   *
-   * A bare schema is sugar for one `normal` value channel, so the everyday
-   * `input: z.object({ … })` keeps working untouched and never has to learn this type exists.
-   */
-  export type Declaration = Schema | Channel | Channel[]
+/** The resolved, serializable routing contract carriers and policies read. */
+export interface WireManifest {
+  readonly input: readonly ChannelKind[]
+  readonly output: readonly ChannelKind[]
+  /** Any non-value input plane (stream/multistream/socket) — bypasses body-only machinery. */
+  readonly streamingIn: boolean
+  /** Any non-value output plane — streaming dispatch for policy `skipStreaming` decisions. */
+  readonly streamingOut: boolean
+  /** Output is raw bytes (`chunks`) instead of codec values. */
+  readonly bytesOut: boolean
+}
 
-  /**
-   * The value the HANDLER receives — the `normal` channel's type, and nothing else.
-   *
-   * Any other channel an action declares (a byte lane, a socket) is taken inside the body with
-   * `useSource`, so adding one never changes the handler's signature.
-   */
-  export type Body<TDeclaration> = TDeclaration extends undefined
-    ? undefined
-    : TDeclaration extends Channel<infer TType, infer TValue>
-      ? TType extends typeof DataType.normal
-        ? TValue
+/** Infers the handler's `params` type from an input declaration (the `value` plane only). */
+export type Params<D> = D extends undefined
+  ? undefined
+  : D extends Schema
+    ? StandardSchemaV1.InferOutput<D>
+    : D extends Channel<infer T, infer K>
+      ? K extends 'value'
+        ? T
         : undefined
-      : TDeclaration extends readonly (infer TItem)[]
-        ? BodyOf<TItem>
-        : TDeclaration extends Schema
-          ? Schema.Infer<TDeclaration>
-          : unknown
+      : D extends readonly Channel[]
+        ? Extract<D[number], Channel<unknown, 'value'>> extends Channel<infer T, 'value'>
+          ? T
+          : undefined
+        : unknown
 
-  type BodyOf<TItem> =
-    TItem extends Channel<infer TType, infer TValue>
-      ? TType extends typeof DataType.normal
-        ? TValue
-        : never
-      : never
-
-  /** The source a channel produces once the call is running. */
-  export type SourceOf<TChannel> =
-    TChannel extends Channel<infer TType, infer TIn, infer TOut>
-      ? TType extends typeof DataType.normal
-        ? TIn
-        : TType extends typeof DataType.stream
-          ? Stream<TIn, unknown>
-          : TType extends typeof DataType.multistream
-            ? Record<string, Stream<TIn, unknown>>
-            : { inbound: Stream<TIn, unknown>; outbound: { add(value: TOut): void } }
-      : never
-}
+/** Infers the handler's return type from an output declaration. */
+export type Returns<D> = D extends undefined
+  ? unknown
+  : D extends Schema
+    ? StandardSchemaV1.InferOutput<D>
+    : D extends Channel<infer T, infer K>
+      ? K extends 'value'
+        ? T
+        : K extends 'chunks'
+          ? Flow<Uint8Array, unknown>
+          : K extends 'stream'
+            ? Flow<T, unknown>
+            : unknown
+      : unknown

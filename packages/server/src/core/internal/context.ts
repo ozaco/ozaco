@@ -1,27 +1,17 @@
-import { createContext, operation } from 'std:effect'
+import { createContext } from 'std:effect'
+import type { Context } from 'std:effect'
 
-import type { BrokerDef } from '../types/broker'
-import type { PolicyDef } from '../types/policy'
+import type { BrokerContext } from '../types/broker'
+import type { PolicyEntry } from '../types/policy'
 import type { TransportDef } from '../types/transport'
 
-export const BrokerSettingContext = createContext<BrokerDef.Settings>(
-  'server:core:broker-setting',
-  {
-    paused: false,
-    started: false,
-    destroying: false,
-  },
-)
+/** The running broker — set scope-wide by `DefaultBroker.setup` so carriers and `invoke` reach it. */
+export const BrokerRef: Context<BrokerContext> = createContext<BrokerContext>('server:core:broker')
 
-/** Merge a partial into the current broker settings — collapses the `set({ ...(yield* get())!, x })`
- * read-modify-write the broker lifecycle actions would otherwise repeat. */
-export const patchSetting = operation(function* (partial: Partial<BrokerDef.Settings>) {
-  yield* BrokerSettingContext.set({ ...(yield* BrokerSettingContext.get())!, ...partial })
-})
+export const TransportRegistryContext: Context<readonly TransportDef.Entry[]> = createContext<
+  readonly TransportDef.Entry[]
+>('server:core:transports', [])
 
-export const TransportRegistryContext = createContext<TransportDef[]>(
-  'server:core:transport:registry',
-  [],
-)
-
-export const PolicyRegistryContext = createContext<PolicyDef[]>('server:core:policy:registry', [])
+export const PolicyRegistryContext: Context<readonly PolicyEntry[]> = createContext<
+  readonly PolicyEntry[]
+>('server:core:policies', [])

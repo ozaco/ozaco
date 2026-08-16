@@ -1,105 +1,152 @@
-import type { Service } from 'server:core'
-import { Broker, Gateway, RoleContext } from 'server:core'
-import { attempt, operation, retry, useContext } from 'std:effect'
-import { Logger } from 'std:logger'
+import { Broker, CoreErrors, Gateway } from 'server:core'
+import type { GatewayInfo } from 'server:core'
+import { moduleLogger } from 'server:utils'
+import type { BoundLogger } from 'server:utils'
+import { attempt, operation } from 'std:effect'
 import { definePlugin } from 'std:plugin'
-import { appendCauses, isSuccess } from 'std:result'
+import { fail, isFailure } from 'std:result'
 
-import { assembleModule } from './internal/assemble'
-import { forkCluster } from './internal/cluster'
-import { DaemonCtxRef } from './internal/contexts'
-import { resolveFailure } from './internal/failure'
-import { owns, ownsRole, serves, servesRole } from './internal/role'
-import { resolveRuntime } from './internal/runtime'
-import type { DaemonDef } from './types'
+import type { DaemonInfo, DaemonModule, DaemonOptions, DaemonRuntime } from './types'
 
-export const Daemon = definePlugin({
+const GATEWAY_ROLE = 'gateway'
+
+interface DaemonCtx {
+  readonly options: DaemonOptions
+  readonly log: BoundLogger
+}
+
+const resolveRuntime = (options: DaemonOptions): DaemonRuntime => {
+  const env = options.env ?? (process.env as Record<string, string | undefined>)
+  const role = env['SERVICE']
+
+  if (!role) {
+    return { kind: 'monolith', env }
+  }
+
+  if (role === GATEWAY_ROLE) {
+    return { kind: 'gateway', env }
+  }
+
+  return { kind: 'service', service: role, env }
+}
+
+/**
+ * Topology bootstrap — the SAME app file runs every deployment shape:
+ * - no `SERVICE` env → monolith: register + mount everything, start the gateway;
+ * - `SERVICE=gateway` → edge only: mount every module, own none (dispatch rides the transports);
+ * - `SERVICE=<name>` → headless owner: register that module only, no edge.
+ */
+const definition = definePlugin<DaemonCtx, [DaemonOptions]>({
   name: 'server/daemon',
-  version: '0.0.0',
-  description: 'env-resolved bootstrap: monolith, gateway, or one service',
+  version: '0.1.0',
+  *setup(options: DaemonOptions) {
+    if (options.modules.length === 0) {
+      return yield* fail(CoreErrors.Configuration, 'the daemon needs at least one module')
+    }
 
-  *setup(options: DaemonDef.Options) {
-    const ctx: DaemonDef.Context = { options, runtime: null }
-    yield* DaemonCtxRef.set(ctx)
+    const log = yield* moduleLogger('server:daemon')
 
-    // Publish how this process was deployed, so a self-wiring service (`install(svc, { mount })`, a
-    // wizard resource) resolves its own role without being told. The closure reads `ctx.runtime`,
-    // which `start()` fills in before anything is wired.
-    yield* RoleContext.set({
-      owns: name => ctx.runtime === null || ownsRole(name, ctx.runtime),
-      serves: () => ctx.runtime === null || servesRole(ctx.runtime),
-      managed: service => options.modules.some(module => module.service === service),
-    })
-
-    return ctx
+    return { options, log }
   },
-}).build({
+})
+
+/** @see module doc */
+export const Daemon = definition.build({
   start: operation(function* () {
-    const ctx = yield* useContext(DaemonCtxRef)
-    const options = ctx.options
-    const rt = yield* resolveRuntime(options)
+    const { options, log } = yield* definition.context.expect()
+    const runtime = resolveRuntime(options)
 
-    // publish the identity before anything is wired: `base` and every module setup run below, and a
-    // self-configuring plugin (a wizard resource) reads it from here rather than being told
-    ctx.runtime = rt
+    if (
+      runtime.kind === 'service' &&
+      !options.modules.some(module => module.name === runtime.service)
+    ) {
+      const known = options.modules.map(module => module.name).join(', ')
 
-    // The cluster primary forks one child per module and then carries on as the gateway below.
-    if (rt.cluster && rt.kind === 'gateway') {
-      yield* forkCluster(options.modules, rt, resolveFailure(undefined, options.failure))
+      return yield* fail(
+        CoreErrors.Configuration,
+        `SERVICE="${runtime.service}" does not match any module (known: ${known})`,
+      )
     }
 
-    const outcome = yield* attempt(function* () {
-      if (options.base) {
-        yield* options.base(rt)
-      }
+    yield* log.info('daemon starting', { kind: runtime.kind, service: runtime.service })
 
-      // services whose routes THIS process exposed — handed to `ready` so the gateway can document
-      // the full surface without owning any of it
-      const mounted: Service[] = []
+    if (options.base) {
+      yield* options.base(runtime)
+    }
 
-      for (const module of options.modules) {
-        const owned = owns(module, rt)
-        const served = serves(module, rt)
+    const active = options.modules.filter(module => !module.when || module.when(runtime))
+    const owned: DaemonModule[] = []
+    const mounted: DaemonModule[] = []
 
-        if (!owned && !served) {
-          continue
+    for (const module of active) {
+      const owns = runtime.kind === 'monolith' || runtime.service === module.name
+
+      if (owns) {
+        if (module.setup) {
+          yield* module.setup(runtime)
         }
 
-        const unit = () => assembleModule(module, rt, { owned, served, mounted })
-        const policy = resolveFailure(module.failure, options.failure)
-        const result = yield* attempt(policy.retry.attempts > 1 ? retry(unit, policy.retry) : unit)
+        yield* Broker.actions.register(module.service)
+        owned.push(module)
+      }
 
-        if (!isSuccess(result)) {
-          const failed = appendCauses(result, `daemon:module=${module.name}`)
-          // `isolate`: drop just this module and keep assembling the rest. `all`: abort the process.
-          if (policy.mode === 'isolate') {
-            if ((yield* Logger.context.get()) !== undefined) {
-              yield* Logger.actions.error(
-                `daemon: module "${module.name}" isolated after failure (${rt.kind}): ${failed.message || String(failed.error)}`,
-              )
-            }
-            continue
-          }
-          return yield* failed
+      if (runtime.kind !== 'service') {
+        const prefix = module.prefix ?? `/${module.name}`
+        const attempted = yield* attempt(() => Gateway.actions.mount(prefix, module.service))
+
+        if (isFailure(attempted)) {
+          // no gateway engine installed — a headless monolith is a legal shape
+          yield* log.debug('mount skipped', { module: module.name, error: String(attempted.error) })
+        } else {
+          mounted.push(module)
         }
       }
+    }
 
-      yield* Broker.actions.start()
+    yield* Broker.actions.start()
 
-      // Start the gateway only if `base` installed one — a service process is headless.
-      if ((yield* Gateway.context.get()) !== undefined) {
-        yield* Gateway.actions.start({})
+    let gateway: GatewayInfo | undefined
+
+    if (runtime.kind !== 'service' && mounted.length > 0) {
+      const started = yield* attempt(() => Gateway.actions.start(options.serve))
+
+      if (isFailure(started)) {
+        return yield* fail(
+          CoreErrors.Configuration,
+          'gateway start failed — install a gateway adapter (bun/node/deno) in base()',
+          ...started.causes,
+        )
       }
 
-      if (options.ready) {
-        yield* options.ready(rt, mounted)
-      }
+      gateway = started.value
+    }
+
+    if (options.ready) {
+      yield* options.ready(runtime, mounted)
+    }
+
+    const info: DaemonInfo = {
+      runtime,
+      owned: owned.map(module => module.name),
+      mounted: mounted.map(module => module.name),
+      gateway,
+    }
+
+    yield* log.info('daemon started', {
+      kind: runtime.kind,
+      owned: info.owned.join(','),
+      mounted: info.mounted.join(','),
+      url: gateway?.url,
     })
 
-    if (!isSuccess(outcome)) {
-      return yield* appendCauses(outcome, `daemon:kind=${rt.kind} service=${rt.service ?? '-'}`)
-    }
+    return info
+  }),
 
-    return rt
+  stop: operation(function* () {
+    const { log } = yield* definition.context.expect()
+
+    yield* attempt(() => Gateway.actions.stop())
+    yield* attempt(() => Broker.actions.destroy())
+    yield* log.info('daemon stopped', {})
   }),
 })

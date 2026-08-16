@@ -1,77 +1,57 @@
+import { boundLogger } from 'server:utils'
+import type { BoundLogger } from 'server:utils'
+import { operation } from 'std:effect'
 import type { Operation } from 'std:effect'
-import { useContext } from 'std:effect'
+import { fail } from 'std:result'
 
 import type { DataType } from '../const'
-import type { Action } from '../types/action'
-import type { BrokerDef } from '../types/broker'
-import type { Request } from '../types/common'
-import type { ActionRequest, ActionResponse } from '../types/gateway'
-import type { Service } from '../types/service'
-import type { Source } from '../types/source'
-import type { TracerDef } from '../types/tracer'
+import { CoreErrors } from '../errors'
+import { BrokerRef } from '../internal/context'
+import type { BrokerContext } from '../types/broker'
+import type { ActionSignal, CallInfo, Request, ResponseDraft } from '../types/common'
+import type { Trace } from '../types/trace'
 
 import {
-  ActionContext,
-  ActionRequestContext,
-  RequestContext,
-  ActionResponseContext,
-  ActionSignalContext,
   CallContext,
-  ServiceContext,
+  LogContext,
+  RequestContext,
+  ResponseContext,
+  SignalContext,
+  SourcesContext,
   TraceContext,
 } from './context'
 
-export function* useAction<T = Action>(): Operation<T> {
-  return (yield* useContext(ActionContext)) as T
-}
+/** The correlation spine of the current dispatch. */
+export const useTrace = (): Operation<Trace> => TraceContext.expect()
 
-export function* useService<T = Service>(): Operation<T> {
-  return (yield* useContext(ServiceContext)) as T
-}
+/** The raw request envelope of the current dispatch. */
+export const useRequest = (): Operation<Request> => RequestContext.expect()
 
-export function* useCall<T = BrokerDef.CallContext>(): Operation<T> {
-  return (yield* useContext(CallContext)) as T
-}
+/** The mutable response draft (status + meta) of the current dispatch. */
+export const useResponse = (): Operation<ResponseDraft> => ResponseContext.expect()
 
-export function* useTrace<T = TracerDef.Context>(): Operation<T> {
-  return (yield* useContext(TraceContext)) as T
-}
+/** Which service/action instance is handling the current dispatch. */
+export const useCall = (): Operation<CallInfo> => CallContext.expect()
 
-export function* useRequest(): Operation<ActionRequest> {
-  return yield* useContext(ActionRequestContext)
-}
+/** The caller-abandonment signal (`detach` handlers observe it and keep working). */
+export const useSignal = (): Operation<ActionSignal> => SignalContext.expect()
 
-/**
- * The portable {@link Request} this action is serving — origin, address, meta, sources.
- *
- * Distinct from {@link useRequest}, which hands back the HTTP-shaped envelope an edge built and is
- * therefore only meaningful when one did. This answers the same thing whether the call arrived
- * in-process, over nats or from a worker, which is what makes an access check written against
- * `origin` mean the same in all three.
- */
-export function* useCallRequest(): Operation<Request> {
-  return yield* useContext(RequestContext)
-}
+/** The running broker context — the seam remote carriers use to reach the local registry. */
+export const useBroker = (): Operation<BrokerContext> => BrokerRef.expect()
 
-/**
- * One source off the current call, by kind.
- *
- * It replaces `useStream()`, which could only answer the inbound-lane question and answered it with
- * a bare array whose order the caller had to know — a second copy of what the request already
- * carried. A call holds at most one source per kind, so asking by kind is unambiguous, and the
- * narrowing means a `socket` request gives back a socket rather than `unknown`.
- */
-export function* useSource<TType extends DataType>(
-  type: TType,
-): Operation<Source.Of<TType> | undefined> {
-  const request = yield* RequestContext.get()
-  return request?.sources.find(source => source.type === type) as Source.Of<TType> | undefined
-}
+/** The per-call bound logger (requestId/serviceId/actionId bindings included). */
+export const useLog = operation(function* () {
+  return ((yield* LogContext.get()) ?? (yield* boundLogger({}))) as BoundLogger
+})
 
-export function* useResponse(): Operation<ActionResponse> {
-  return yield* useContext(ActionResponseContext)
-}
+/** A non-value input plane (stream/multistream/socket) declared on the action's wire. */
+export const useSource = operation(function* (type: DataType) {
+  const sources = yield* SourcesContext.get()
+  const source = sources?.get(type)
 
-export function* useActionSignal(): Operation<AbortSignal> {
-  return yield* useContext(ActionSignalContext)
-}
+  if (source === undefined) {
+    return yield* fail(CoreErrors.BadRequest, `this dispatch carries no "${type}" source`)
+  }
+
+  return source
+})

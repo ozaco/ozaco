@@ -1,97 +1,71 @@
-import type { Result } from 'std:result'
+import type { Flow } from 'std:effect'
 
-import type { Carried, Source } from './source'
+import type { Trace } from './trace'
+import type { Wire } from './wire'
 
-/**
- * What goes out.
- *
- * The address is kept as the two things it is made of: `service` is the registered name and `path`
- * is the dotted key `flatten` produced from the actions record. A single formatted string would
- * need a separator, an escape rule and a parser that can fail — three chances to disagree about a
- * fact both ends already hold.
- */
+/** Portable per-call metadata (forwarded headers, auth material, request baggage). */
+export type Meta = Record<string, string>
+
+/** The internal representation of one dispatch, identical across every carrier. */
 export interface Request {
-  origin: Source.Origin
-
-  service: string
-  path: string
-
-  /**
-   * Wire-safe by construction. `unknown` values cannot be, and the moment a header map may hold a
-   * live object it stops being obvious which parts of it survive a hop.
-   */
-  meta: Record<string, string>
-
-  /** what the call carries; every source names its own kind, so there is no second list of kinds */
-  sources: Source.Any[]
-
-  /**
-   * What this call carries and what its answer will hold, projected from the target's declaration.
-   *
-   * The caller supplies it because the caller is the one holding a definition — a gateway mounts a
-   * service and reads its actions without ever running one. A carrier needs `receives` BEFORE it
-   * sends, since a return channel has to exist before the answer does. Absent when the call was
-   * addressed by bare name, and then a carrier has to be conservative.
-   */
-  wire?: { sends: Carried[]; receives: Carried[] }
+  /** Per-dispatch correlation id — derives reply/lane/cancel/outcome addresses on the wire. */
+  readonly cid: string
+  readonly service: string
+  readonly action: string
+  /** The `value` plane payload (other planes travel as lanes/sources). */
+  readonly params: unknown
+  readonly meta: Meta
+  readonly trace: Trace
+  /** Maps to the carrier's dedupe window (JetStream `msgID`) — safe retry after unknown outcome. */
+  readonly idempotencyKey?: string | undefined
 }
 
 /**
- * What comes back.
- *
- * Symmetric with {@link Request} on purpose: whatever can travel out must be able to travel back. A
- * status or a header set by an action running on another node used to have nowhere to go, because
- * the reply carried a value and nothing else.
+ * What a dispatch resolves to. Handler failures are folded into a `failure` reply (never raised
+ * across carriers) so status/meta/cause fidelity survives every wire identically; infrastructure
+ * errors still raise as Result failures.
  */
-export interface Response<T = unknown> {
-  status: number | undefined
-  meta: Record<string, string>
+export type Reply =
+  | {
+      readonly kind: 'value'
+      readonly cid: string
+      readonly status?: number | undefined
+      readonly meta: Meta
+      readonly value: unknown
+    }
+  | {
+      readonly kind: 'stream'
+      readonly cid: string
+      readonly status?: number | undefined
+      readonly meta: Meta
+      readonly flow: Flow<unknown, unknown>
+      /** Raw byte lane (`chunks`) vs codec values. */
+      readonly bytes: boolean
+    }
+  | {
+      readonly kind: 'failure'
+      readonly cid: string
+      readonly status: number
+      readonly meta: Meta
+      readonly failure: Wire.Failure
+    }
 
-  /** Narrowing on `type` gives the action's own return type back, not `unknown`. */
-  sources: Source.Any<T>[]
+/** The mutable response draft a handler edits via `useResponse()`. */
+export interface ResponseDraft {
+  status?: number | undefined
+  meta: Meta
 }
 
-export namespace Response {
-  /**
-   * The part an action may write, through `useResponse()`.
-   *
-   * A draft, not the Response itself: an action states a status and headers, it does not get to
-   * invent what came back on the wire. The sources come from what it returned and from the channels
-   * it declared.
-   */
-  export interface Draft {
-    status: number | undefined
-    meta: Record<string, string>
-  }
+/** What `useCall()` exposes inside a handler. */
+export interface CallInfo {
+  readonly service: string
+  readonly action: string
+  readonly serviceId: string
 }
 
-/**
- * How a call ended, REIFIED — what `attempt(() => Broker.actions.call(…))` hands back.
- *
- * Not a return type, and it cannot be: an operation that returns a `Result` has it unwrapped by the
- * runtime, because a Result IS this system's control flow. So a call answers with a `Response` and
- * FAILS otherwise, and this names the value you get when you catch that instead of propagating it.
- */
-export type Outcome<T = unknown> = Result<Response<T>, Outcome.Fault>
-
-export namespace Outcome {
-  /** The handler never got to decide. Distinct from a handler that decided to fail. */
-  export type Halt = 'cancelled' | 'timeout' | 'shutdown'
-
-  /**
-   * What the failure side adds.
-   *
-   * The previous core tracked completion with a `let completed = false` straddling try/catch/finally
-   * and could not tell a handler that FAILED (an answer) from one that was CUT SHORT (no answer) —
-   * so every 4xx an application returned was logged as a cancelled handler. `halted` says the
-   * handler never decided; `response` carries what it had already set if it did.
-   *
-   * `message` and `causes` are NOT copied here; they stay on the `Result.Failure` this is attached
-   * to. One home each.
-   */
-  export interface Fault {
-    tag: string
-    halted?: Halt
-    response?: Response
-  }
+/** Caller-abandonment signal a `detach` handler can observe via `useSignal()`. */
+export interface ActionSignal {
+  aborted(): boolean
+  /** Subscribe to the abort moment; returns the unsubscribe function. */
+  onAbort(listener: () => void): () => void
 }

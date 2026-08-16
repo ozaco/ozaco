@@ -1,15 +1,21 @@
-import type { PolicyDef } from 'server:core'
-
-export const TimeoutPolicyKey = 'timeout' as const
-
-export namespace Timeout {
-  export interface Options extends PolicyDef.Options {
-    timeoutMs?: number
-    timeoutStreams?: boolean
+declare module 'server:core' {
+  interface PolicyOptionsMap {
+    timeout: TimeoutOverride
   }
+}
 
-  export interface Context extends PolicyDef.Context {
-    timeoutMs: number
-    timeoutStreams: boolean
-  }
+/** Install-time options for the timeout policy. */
+export interface TimeoutOptions {
+  /** Deadline per dispatch in milliseconds; 0 or less disables the layer (default 30_000). */
+  readonly ms?: number | undefined
+}
+
+/** Per-action override (`policies: { timeout: { ms } | false }`). */
+export interface TimeoutOverride {
+  readonly ms: number
+}
+
+/** Scope-bound state: the resolved default deadline. */
+export interface TimeoutState {
+  readonly ms: number
 }

@@ -1,77 +1,54 @@
-import type { Future, Operation } from 'std:effect'
-import type { Plugin } from 'std:plugin'
-import type { AnyType } from 'std:shared'
+import type { Operation } from 'std:effect'
 
-import type { POLICY_SETTING } from '../const'
+import type { Reply, Request } from './common'
+import type { Trace } from './trace'
 
-import type { Action } from './action'
-import type { TransportDef } from './transport'
+/**
+ * What every policy layer sees per dispatch. `key` is the coalescing/caching identity
+ * (`service\0action\0params-json`); `overrides` come from the action's typed `policies` field.
+ */
+export interface PolicyDispatch {
+  readonly key: string
+  readonly principal?: string | undefined
+  readonly streaming: boolean
+  readonly trace: Trace
+  readonly request: Request
+  readonly overrides: Readonly<Record<string, object | boolean | undefined>>
+}
 
-export type PolicyDef = Plugin<PolicyDef.Context, unknown[], PolicyDef.Actions>
+export type PolicyNext = () => Operation<Reply>
 
-export namespace PolicyDef {
-  export interface Options {
-    name?: string
-    priority?: number
-  }
+export type PolicyApply = (ctx: PolicyDispatch, next: PolicyNext) => Operation<Reply>
 
-  export interface Context {
-    name: string
-    priority: number
-  }
+/** One registered policy layer (lowest priority = outermost). */
+export interface PolicyEntry {
+  readonly name: string
+  readonly priority: number
+  /** Skip this layer for streaming dispatches unless the action opts in. */
+  readonly skipStreaming: boolean
+  readonly apply: PolicyApply
+}
 
-  export interface Setting<T = unknown> {
-    _t: typeof POLICY_SETTING
-    policy: string
-    disabled?: boolean
-    value?: Partial<T>
-  }
+export interface PolicyHandlers {
+  dispatchRoot(ctx: PolicyDispatch, terminal: PolicyNext): Operation<Reply>
+  register(entry: PolicyEntry): Operation<void>
+  unregister(name: string): Operation<void>
+  getPolicies(): Operation<readonly PolicyEntry[]>
+}
 
-  export interface ConfigActions<TOptions> {
-    config(options?: Partial<TOptions>): Future<Setting<TOptions>>
-    disable(): Future<Setting<TOptions>>
-  }
-
-  export interface DispatchContext {
-    req: TransportDef.DispatchRequest
-    serviceName: string
-    actionKey: string
-    action: Action.Meta<unknown> | undefined
-    /** per-policy settings resolved once for this dispatch (see `resolvePolicySettings`) */
-    settings: ReadonlyMap<string, Setting>
-    params: ReadonlyArray<unknown>
-    /** the dispatch identity key WITHOUT the caller principal: `service\0action\0params` */
-    key: string
-    /** the caller-identity discriminator (derived from the request credentials); identity-keying
-     * policies (cache/bucket) fold this into their lookup key unless `vary: 'none'` */
-    principal: string
-    isStreaming: boolean
-    /** whether to emit a per-policy-layer trace (log + OTel spans) for this dispatch */
-    trace: boolean
-  }
-
-  export interface PolicyChainEntry {
-    name: string
-    priority: number
-  }
-
-  export interface DisableablePolicy {
-    actions: { disable(): Future<PolicyDef.Setting<unknown>> }
-  }
-
-  export type Next<T> = () => Operation<T>
-
-  export interface Actions {
-    apply<T>(ctx: DispatchContext, next: Next<T>): Future<T>
-    config?(options?: AnyType): Future<Setting<AnyType>>
-    disable?(): Future<Setting<AnyType>>
-  }
-
-  export interface Handlers {
-    dispatchRoot<T>(ctx: DispatchContext, core: Next<T>): Future<T>
-
-    register(policy: PolicyDef, entryCtx: PolicyDef.Context): Future<void>
-    unregister(policy: PolicyDef): Future<void>
-    getPolicies(): Future<PolicyDef[]>
-  }
+/** Config for the `definePolicy` factory. */
+export interface PolicySpec<TOptions, TState> {
+  readonly name: string
+  readonly version?: string | undefined
+  readonly priority: number
+  readonly skipStreaming?: boolean | undefined
+  readonly setup: (options: TOptions) => Operation<TState>
+  readonly apply: (input: {
+    readonly ctx: PolicyDispatch
+    readonly state: TState
+    /** The action-level override value for this policy (`undefined` when none). */
+    readonly override: object | boolean | undefined
+    readonly next: PolicyNext
+  }) => Operation<Reply>
+  readonly teardown?: ((state: TState) => Operation<void>) | undefined
 }
