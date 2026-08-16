@@ -1,4 +1,4 @@
-import { run, scoped, until } from 'std:effect'
+import { run, until } from 'std:effect'
 import { install } from 'std:plugin'
 import { unwrap } from 'std:result'
 import { Ws } from 'std:ws'
@@ -31,21 +31,19 @@ describe('keepalive', () => {
   it('sends the default payload at the configured interval while OPEN', async () => {
     const { server, received, gate } = recordingServer(2)
     try {
-      const outcome = await run(() =>
-        scoped(function* () {
-          yield* install(JsonCodec)
-          yield* install(Ws)
+      const outcome = await run(function* () {
+        yield* install(JsonCodec)
+        yield* install(Ws)
 
-          const connection = yield* Ws.actions.connect(`ws://localhost:${server.port}`, {
-            keepalive: { intervalMs: 20 },
-          })
+        const connection = yield* Ws.actions.connect(`ws://localhost:${server.port}`, {
+          keepalive: { intervalMs: 20 },
+        })
 
-          yield* until(gate) // the server observed two keepalive frames
-          yield* connection.close()
+        yield* until(gate) // the server observed two keepalive frames
+        yield* connection.close()
 
-          return received.slice(0, 2)
-        }),
-      )
+        return received.slice(0, 2)
+      })
 
       expect(unwrap(outcome)).toEqual(['ping', 'ping'])
     } finally {
@@ -56,21 +54,19 @@ describe('keepalive', () => {
   it('frames a structured payload through the registered codec', async () => {
     const { server, received, gate } = recordingServer(2)
     try {
-      const outcome = await run(() =>
-        scoped(function* () {
-          yield* install(JsonCodec)
-          yield* install(Ws)
+      const outcome = await run(function* () {
+        yield* install(JsonCodec)
+        yield* install(Ws)
 
-          const connection = yield* Ws.actions.connect(`ws://localhost:${server.port}`, {
-            keepalive: { intervalMs: 20, payload: { type: 'ping' } },
-          })
+        const connection = yield* Ws.actions.connect(`ws://localhost:${server.port}`, {
+          keepalive: { intervalMs: 20, payload: { type: 'ping' } },
+        })
 
-          yield* until(gate)
-          yield* connection.close()
+        yield* until(gate)
+        yield* connection.close()
 
-          return received.slice(0, 2)
-        }),
-      )
+        return received.slice(0, 2)
+      })
 
       expect(unwrap(outcome)).toEqual(['{"type":"ping"}', '{"type":"ping"}'])
     } finally {

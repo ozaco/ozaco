@@ -1,4 +1,4 @@
-import { attempt, run, scoped } from 'std:effect'
+import { attempt, run } from 'std:effect'
 import { install } from 'std:plugin'
 import { isFailure, unwrap } from 'std:result'
 import type { WsDef } from 'std:ws'
@@ -16,22 +16,20 @@ describe('Ws.actions.connect', () => {
     try {
       const url = `ws://localhost:${server.port}`
 
-      const outcome = await run(() =>
-        scoped(function* () {
-          yield* install(JsonCodec)
-          yield* install(Ws)
+      const outcome = await run(function* () {
+        yield* install(JsonCodec)
+        yield* install(Ws)
 
-          const connection = yield* Ws.actions.connect(url)
-          const snapshot = {
-            url: connection.url,
-            readyState: connection.readyState,
-            reconnects: connection.reconnects,
-          }
-          yield* connection.close()
+        const connection = yield* Ws.actions.connect(url)
+        const snapshot = {
+          url: connection.url,
+          readyState: connection.readyState,
+          reconnects: connection.reconnects,
+        }
+        yield* connection.close()
 
-          return snapshot
-        }),
-      )
+        return snapshot
+      })
 
       expect(unwrap(outcome)).toEqual({ url, readyState: 1, reconnects: 0 })
     } finally {
@@ -45,14 +43,12 @@ describe('Ws.actions.connect', () => {
     const deadPort = server.port
     await server.stop(true)
 
-    const outcome = await run(() =>
-      scoped(function* () {
-        yield* install(Ws)
-        const result = yield* attempt(() => Ws.actions.connect(`ws://localhost:${deadPort}`))
+    const outcome = await run(function* () {
+      yield* install(Ws)
+      const result = yield* attempt(() => Ws.actions.connect(`ws://localhost:${deadPort}`))
 
-        return isFailure(result) ? String(result.error) : 'connected'
-      }),
-    )
+      return isFailure(result) ? String(result.error) : 'connected'
+    })
 
     expect(unwrap(outcome)).toBe('ws/connect')
   })
@@ -66,14 +62,12 @@ describe('Ws.actions.connect', () => {
       },
     })
     try {
-      const outcome = await run(() =>
-        scoped(function* () {
-          yield* install(Ws)
-          const result = yield* attempt(() => Ws.actions.connect(`ws://localhost:${server.port}`))
+      const outcome = await run(function* () {
+        yield* install(Ws)
+        const result = yield* attempt(() => Ws.actions.connect(`ws://localhost:${server.port}`))
 
-          return isFailure(result) ? String(result.error) : 'connected'
-        }),
-      )
+        return isFailure(result) ? String(result.error) : 'connected'
+      })
 
       expect(unwrap(outcome)).toBe('ws/connect')
     } finally {
@@ -82,16 +76,14 @@ describe('Ws.actions.connect', () => {
   })
 
   it('a missing WebSocket implementation fails with ws/unsupported', async () => {
-    const outcome = await run(() =>
-      scoped(function* () {
-        yield* install(Ws)
-        // simulate a platform without a WebSocket global (`?? default` swallows undefined, so use false)
-        yield* wsImpl.set(false as unknown as WsDef.Ctor)
-        const result = yield* attempt(() => Ws.actions.connect('ws://localhost:1'))
+    const outcome = await run(function* () {
+      yield* install(Ws)
+      // simulate a platform without a WebSocket global (`?? default` swallows undefined, so use false)
+      yield* wsImpl.set(false as unknown as WsDef.Ctor)
+      const result = yield* attempt(() => Ws.actions.connect('ws://localhost:1'))
 
-        return isFailure(result) ? String(result.error) : 'connected'
-      }),
-    )
+      return isFailure(result) ? String(result.error) : 'connected'
+    })
 
     expect(unwrap(outcome)).toBe('ws/unsupported')
   })

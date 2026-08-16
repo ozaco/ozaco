@@ -1,4 +1,4 @@
-import { run, scoped } from 'std:effect'
+import { run } from 'std:effect'
 import { Fetch, FetchClient } from 'std:fetch'
 import { install } from 'std:plugin'
 import { isFailure, unwrap } from 'std:result'
@@ -93,15 +93,13 @@ describe('platform body readers', () => {
 
 describe('codec-backed body()', () => {
   it('decodes the whole payload through the installed codec', async () => {
-    const outcome = await run(() =>
-      scoped(function* () {
-        yield* install(FetchClient)
-        yield* install(JsonCodec)
+    const outcome = await run(function* () {
+      yield* install(FetchClient)
+      yield* install(JsonCodec)
 
-        const response = yield* Fetch.actions.get(`${base}/json`)
-        return yield* response.body<typeof JSON_BODY>()
-      }),
-    )
+      const response = yield* Fetch.actions.get(`${base}/json`)
+      return yield* response.body<typeof JSON_BODY>()
+    })
 
     expect(unwrap(outcome)).toEqual(JSON_BODY)
   })
@@ -123,18 +121,16 @@ describe('codec-backed body()', () => {
 
 describe('empty bodies', () => {
   it('body() resolves to undefined instead of asking the codec to decode nothing', async () => {
-    const outcome = await run(() =>
-      scoped(function* () {
-        yield* install(FetchClient)
-        yield* install(JsonCodec)
+    const outcome = await run(function* () {
+      yield* install(FetchClient)
+      yield* install(JsonCodec)
 
-        const response = yield* Fetch.actions.get(`${base}/empty`)
+      const response = yield* Fetch.actions.get(`${base}/empty`)
 
-        return {
-          value: yield* response.body(),
-        }
-      }),
-    )
+      return {
+        value: yield* response.body(),
+      }
+    })
 
     expect(unwrap(outcome)).toEqual({ value: undefined })
   })

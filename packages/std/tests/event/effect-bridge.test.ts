@@ -6,17 +6,15 @@ import { describe, expect, it } from 'bun:test'
 
 describe('useEvent', () => {
   it('delivers post-subscription events in order, as argument tuples', async () => {
-    const outcome = await run(() =>
-      scoped(function* () {
-        const emitter = createEvent<{ msg: [string, number] }>()
-        const subscription = yield* useEvent(emitter, 'msg')
+    const outcome = await run(function* () {
+      const emitter = createEvent<{ msg: [string, number] }>()
+      const subscription = yield* useEvent(emitter, 'msg')
 
-        emitter.emit('msg', 'a', 1)
-        emitter.emit('msg', 'b', 2)
+      emitter.emit('msg', 'a', 1)
+      emitter.emit('msg', 'b', 2)
 
-        return [(yield* subscription.next()).value, (yield* subscription.next()).value]
-      }),
-    )
+      return [(yield* subscription.next()).value, (yield* subscription.next()).value]
+    })
 
     expect(unwrap(outcome)).toEqual([
       ['a', 1],
@@ -25,17 +23,15 @@ describe('useEvent', () => {
   })
 
   it('drops events emitted before the subscription exists', async () => {
-    const outcome = await run(() =>
-      scoped(function* () {
-        const emitter = createEvent<{ ping: [string] }>()
-        emitter.emit('ping', 'early')
+    const outcome = await run(function* () {
+      const emitter = createEvent<{ ping: [string] }>()
+      emitter.emit('ping', 'early')
 
-        const subscription = yield* useEvent(emitter, 'ping')
-        emitter.emit('ping', 'late')
+      const subscription = yield* useEvent(emitter, 'ping')
+      emitter.emit('ping', 'late')
 
-        return (yield* subscription.next()).value
-      }),
-    )
+      return (yield* subscription.next()).value
+    })
 
     expect(unwrap(outcome)).toEqual(['late'])
   })
@@ -137,23 +133,21 @@ describe('useEventOnce', () => {
   })
 
   it('sequential waits observe successive events', async () => {
-    const outcome = await run(() =>
-      scoped(function* () {
-        const emitter = createEvent<{ step: [number] }>()
+    const outcome = await run(function* () {
+      const emitter = createEvent<{ step: [number] }>()
 
-        yield* spawn(function* () {
-          yield* sleep(1)
-          emitter.emit('step', 1)
-          yield* sleep(1)
-          emitter.emit('step', 2)
-        })
+      yield* spawn(function* () {
+        yield* sleep(1)
+        emitter.emit('step', 1)
+        yield* sleep(1)
+        emitter.emit('step', 2)
+      })
 
-        const first = yield* useEventOnce(emitter, 'step')
-        const second = yield* useEventOnce(emitter, 'step')
+      const first = yield* useEventOnce(emitter, 'step')
+      const second = yield* useEventOnce(emitter, 'step')
 
-        return [first[0], second[0]]
-      }),
-    )
+      return [first[0], second[0]]
+    })
 
     expect(unwrap(outcome)).toEqual([1, 2])
   })
@@ -189,22 +183,20 @@ describe('onEvent', () => {
 
 describe('useBufferedEvent', () => {
   it('buffers events emitted before the consumer pulls', async () => {
-    const outcome = await run(() =>
-      scoped(function* () {
-        const emitter = createEvent<{ data: [number] }>()
-        const subscription = yield* useBufferedEvent(emitter, 'data')
+    const outcome = await run(function* () {
+      const emitter = createEvent<{ data: [number] }>()
+      const subscription = yield* useBufferedEvent(emitter, 'data')
 
-        emitter.emit('data', 1)
-        emitter.emit('data', 2)
-        emitter.emit('data', 3)
+      emitter.emit('data', 1)
+      emitter.emit('data', 2)
+      emitter.emit('data', 3)
 
-        return [
-          (yield* subscription.next()).value,
-          (yield* subscription.next()).value,
-          (yield* subscription.next()).value,
-        ]
-      }),
-    )
+      return [
+        (yield* subscription.next()).value,
+        (yield* subscription.next()).value,
+        (yield* subscription.next()).value,
+      ]
+    })
 
     expect(unwrap(outcome)).toEqual([[1], [2], [3]])
   })

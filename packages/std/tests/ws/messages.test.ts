@@ -38,27 +38,25 @@ describe('messages flow', () => {
   it('delivers multiple sequential messages in send order', async () => {
     const server = echoServer()
     try {
-      const outcome = await run(() =>
-        scoped(function* () {
-          yield* install(JsonCodec)
-          yield* install(Ws)
+      const outcome = await run(function* () {
+        yield* install(JsonCodec)
+        yield* install(Ws)
 
-          const connection = yield* Ws.actions.connect(`ws://localhost:${server.port}`)
-          yield* connection.send({ seq: 1 })
-          yield* connection.send(['two', 2])
-          yield* connection.send({ seq: 3 })
+        const connection = yield* Ws.actions.connect(`ws://localhost:${server.port}`)
+        yield* connection.send({ seq: 1 })
+        yield* connection.send(['two', 2])
+        yield* connection.send({ seq: 3 })
 
-          const subscription = yield* connection.messages
-          const values = [
-            (yield* subscription.next()).value,
-            (yield* subscription.next()).value,
-            (yield* subscription.next()).value,
-          ]
-          yield* connection.close()
+        const subscription = yield* connection.messages
+        const values = [
+          (yield* subscription.next()).value,
+          (yield* subscription.next()).value,
+          (yield* subscription.next()).value,
+        ]
+        yield* connection.close()
 
-          return values
-        }),
-      )
+        return values
+      })
 
       expect(unwrap(outcome)).toEqual([{ seq: 1 }, ['two', 2], { seq: 3 }])
     } finally {
@@ -73,26 +71,24 @@ describe('messages flow', () => {
       JSON.stringify({ n: 3 }),
     )
     try {
-      const outcome = await run(() =>
-        scoped(function* () {
-          yield* install(JsonCodec)
-          yield* install(Ws)
+      const outcome = await run(function* () {
+        yield* install(JsonCodec)
+        yield* install(Ws)
 
-          const connection = yield* Ws.actions.connect(`ws://localhost:${server.port}`)
-          // let the pushed frames land while nobody is subscribed — queue-backed, so nothing drops
-          yield* sleep(50)
+        const connection = yield* Ws.actions.connect(`ws://localhost:${server.port}`)
+        // let the pushed frames land while nobody is subscribed — queue-backed, so nothing drops
+        yield* sleep(50)
 
-          const subscription = yield* connection.messages
-          const values = [
-            (yield* subscription.next()).value,
-            (yield* subscription.next()).value,
-            (yield* subscription.next()).value,
-          ]
-          yield* connection.close()
+        const subscription = yield* connection.messages
+        const values = [
+          (yield* subscription.next()).value,
+          (yield* subscription.next()).value,
+          (yield* subscription.next()).value,
+        ]
+        yield* connection.close()
 
-          return values
-        }),
-      )
+        return values
+      })
 
       expect(unwrap(outcome)).toEqual([{ n: 1 }, { n: 2 }, { n: 3 }])
     } finally {
@@ -103,28 +99,26 @@ describe('messages flow', () => {
   it('passes non-structured frames through untouched (text, invalid JSON, binary)', async () => {
     const server = pushServer('plain text', '{broken json', new Uint8Array([7, 8, 9]))
     try {
-      const outcome = await run(() =>
-        scoped(function* () {
-          yield* install(JsonCodec)
-          yield* install(Ws)
+      const outcome = await run(function* () {
+        yield* install(JsonCodec)
+        yield* install(Ws)
 
-          const connection = yield* Ws.actions.connect(`ws://localhost:${server.port}`)
-          const subscription = yield* connection.messages
+        const connection = yield* Ws.actions.connect(`ws://localhost:${server.port}`)
+        const subscription = yield* connection.messages
 
-          const text = (yield* subscription.next()).value
-          // looks structured, fails to parse → degrades to the raw string
-          const broken = (yield* subscription.next()).value
-          const binary = (yield* subscription.next()).value
-          yield* connection.close()
+        const text = (yield* subscription.next()).value
+        // looks structured, fails to parse → degrades to the raw string
+        const broken = (yield* subscription.next()).value
+        const binary = (yield* subscription.next()).value
+        yield* connection.close()
 
-          return {
-            text,
-            broken,
-            isArrayBuffer: binary instanceof ArrayBuffer,
-            bytes: [...new Uint8Array(binary as ArrayBuffer)],
-          }
-        }),
-      )
+        return {
+          text,
+          broken,
+          isArrayBuffer: binary instanceof ArrayBuffer,
+          bytes: [...new Uint8Array(binary as ArrayBuffer)],
+        }
+      })
 
       expect(unwrap(outcome)).toEqual({
         text: 'plain text',
@@ -142,17 +136,15 @@ describe('codec dependency', () => {
   it('sending a structured value with no codec in scope fails', async () => {
     const server = echoServer()
     try {
-      const outcome = await run(() =>
-        scoped(function* () {
-          yield* install(Ws)
+      const outcome = await run(function* () {
+        yield* install(Ws)
 
-          const connection = yield* Ws.actions.connect(`ws://localhost:${server.port}`)
-          const sent = yield* attempt(() => connection.send({ needs: 'codec' }))
-          yield* connection.close()
+        const connection = yield* Ws.actions.connect(`ws://localhost:${server.port}`)
+        const sent = yield* attempt(() => connection.send({ needs: 'codec' }))
+        yield* connection.close()
 
-          return isFailure(sent) ? String(sent.error) : 'sent'
-        }),
-      )
+        return isFailure(sent) ? String(sent.error) : 'sent'
+      })
 
       expect(unwrap(outcome)).toBe('missing-action')
     } finally {

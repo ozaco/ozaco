@@ -1,6 +1,6 @@
-import { attempt, run, scoped } from 'std:effect'
+import { attempt, run } from 'std:effect'
 import type { FetchDef } from 'std:fetch'
-import { Fetch, fetchImpl, FetchClient } from 'std:fetch'
+import { Fetch, FetchClient, fetchImpl } from 'std:fetch'
 import { install } from 'std:plugin'
 import { isFailure, unwrap } from 'std:result'
 
@@ -203,23 +203,21 @@ describe('expect()', () => {
   })
 
   it('response expect() returns the same wrapped response on ok and fails on non-ok', async () => {
-    const outcome = await run(() =>
-      scoped(function* () {
-        yield* install(FetchClient)
+    const outcome = await run(function* () {
+      yield* install(FetchClient)
 
-        const good = yield* Fetch.actions.get(`${base}/json`)
-        const passed = yield* good.expect()
+      const good = yield* Fetch.actions.get(`${base}/json`)
+      const passed = yield* good.expect()
 
-        const bad = yield* Fetch.actions.get(`${base}/missing`)
-        const rejected = yield* attempt(() => bad.expect())
+      const bad = yield* Fetch.actions.get(`${base}/missing`)
+      const rejected = yield* attempt(() => bad.expect())
 
-        return {
-          samePassthrough: passed === good,
-          error: isFailure(rejected) ? rejected.error : 'no-failure',
-          message: isFailure(rejected) ? rejected.message : '',
-        }
-      }),
-    )
+      return {
+        samePassthrough: passed === good,
+        error: isFailure(rejected) ? rejected.error : 'no-failure',
+        message: isFailure(rejected) ? rejected.message : '',
+      }
+    })
 
     expect(unwrap(outcome)).toEqual({
       samePassthrough: true,

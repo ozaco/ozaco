@@ -1,5 +1,5 @@
 import type { CodecDef } from 'std:codec'
-import { run, scoped } from 'std:effect'
+import { run } from 'std:effect'
 import { install } from 'std:plugin'
 import { unwrap } from 'std:result'
 import type { WsDef } from 'std:ws'
@@ -27,27 +27,25 @@ describe('install-wide codec default', () => {
   it('install(Ws, { codec }) applies to every connect; a per-connect codec overrides it', async () => {
     const server = echoServer()
     try {
-      const outcome = await run(() =>
-        scoped(function* () {
-          yield* bootstrap({ codec: fake })
+      const outcome = await run(function* () {
+        yield* bootstrap({ codec: fake })
 
-          // no per-connect option → the install-wide default frames the message
-          const defaulted = yield* Ws.actions.connect(`ws://localhost:${server.port}`)
-          const defaultedSub = yield* defaulted.messages
-          yield* defaulted.send({ n: 1 })
-          const viaDefault = yield* defaultedSub.next()
+        // no per-connect option → the install-wide default frames the message
+        const defaulted = yield* Ws.actions.connect(`ws://localhost:${server.port}`)
+        const defaultedSub = yield* defaulted.messages
+        yield* defaulted.send({ n: 1 })
+        const viaDefault = yield* defaultedSub.next()
 
-          // per-connect codec overrides the install default: JSON text echoes back and parses
-          const pinned = yield* Ws.actions.connect(`ws://localhost:${server.port}`, {
-            codec: JsonCodec,
-          })
-          const pinnedSub = yield* pinned.messages
-          yield* pinned.send({ n: 2 })
-          const viaOverride = yield* pinnedSub.next()
+        // per-connect codec overrides the install default: JSON text echoes back and parses
+        const pinned = yield* Ws.actions.connect(`ws://localhost:${server.port}`, {
+          codec: JsonCodec,
+        })
+        const pinnedSub = yield* pinned.messages
+        yield* pinned.send({ n: 2 })
+        const viaOverride = yield* pinnedSub.next()
 
-          return { viaDefault: viaDefault.value, viaOverride: viaOverride.value }
-        }),
-      )
+        return { viaDefault: viaDefault.value, viaOverride: viaOverride.value }
+      })
 
       expect(unwrap(outcome)).toEqual({
         viaDefault: 'FAKE:{"n":1}',
@@ -63,23 +61,21 @@ describe('connect codec option', () => {
   it('encoding goes through the preferred codec even when routing would pick another', async () => {
     const server = echoServer()
     try {
-      const outcome = await run(() =>
-        scoped(function* () {
-          yield* bootstrap()
+      const outcome = await run(function* () {
+        yield* bootstrap()
 
-          const conn = yield* Ws.actions.connect(`ws://localhost:${server.port}`, {
-            codec: fake,
-          })
-          const subscription = yield* conn.messages
+        const conn = yield* Ws.actions.connect(`ws://localhost:${server.port}`, {
+          codec: fake,
+        })
+        const subscription = yield* conn.messages
 
-          yield* conn.send({ n: 1 })
-          const echoed = yield* subscription.next()
+        yield* conn.send({ n: 1 })
+        const echoed = yield* subscription.next()
 
-          // the echoed text frame starts with 'FAKE:' (not '{'), so it passes through raw —
-          // visible proof the PREFERRED codec encoded it, not the higher-priority JsonCodec
-          return echoed.value
-        }),
-      )
+        // the echoed text frame starts with 'FAKE:' (not '{'), so it passes through raw —
+        // visible proof the PREFERRED codec encoded it, not the higher-priority JsonCodec
+        return echoed.value
+      })
 
       expect(unwrap(outcome)).toBe('FAKE:{"n":1}')
     } finally {
@@ -89,23 +85,21 @@ describe('connect codec option', () => {
 
   it('decoding uses the preferred codec; without the option the routed one applies', async () => {
     const readFirst = (server: ReturnType<typeof pushServer>, codec?: CodecDef) =>
-      run(() =>
-        scoped(function* () {
-          yield* install(Ws)
-          yield* install(JsonCodec)
-          // outranks JsonCodec, so the ROUTED protocol picks it — and its parse mangles plain JSON
-          yield* install(noisy, { priority: 1500 })
+      run(function* () {
+        yield* install(Ws)
+        yield* install(JsonCodec)
+        // outranks JsonCodec, so the ROUTED protocol picks it — and its parse mangles plain JSON
+        yield* install(noisy, { priority: 1500 })
 
-          const conn = yield* Ws.actions.connect(
-            `ws://localhost:${server.port}`,
-            codec ? { codec } : {},
-          )
-          const subscription = yield* conn.messages
-          const first = yield* subscription.next()
+        const conn = yield* Ws.actions.connect(
+          `ws://localhost:${server.port}`,
+          codec ? { codec } : {},
+        )
+        const subscription = yield* conn.messages
+        const first = yield* subscription.next()
 
-          return first.value
-        }),
-      )
+        return first.value
+      })
 
     const preferred = pushServer('{"n":7}')
     try {

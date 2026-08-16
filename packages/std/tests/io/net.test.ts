@@ -1,6 +1,6 @@
 import { attempt, operation, run, scoped, sleep, withResolvers } from 'std:effect'
-import { IO } from 'std:io'
 import type { TcpSocket } from 'std:io'
+import { IO } from 'std:io'
 import { install } from 'std:plugin'
 import { isFailure, unwrap } from 'std:result'
 
@@ -97,46 +97,42 @@ describe('tcp', () => {
       yield* socket.close()
     })
 
-    const outcome = await run(() =>
-      scoped(function* () {
-        yield* install(BunIO)
+    const outcome = await run(function* () {
+      yield* install(BunIO)
 
-        const server = yield* IO.actions.tcpListen({ port: 0 }, replyAndClose)
+      const server = yield* IO.actions.tcpListen({ port: 0 }, replyAndClose)
 
-        const client = yield* IO.actions.tcpConnect({ port: server.port })
-        const received = yield* client.data
+      const client = yield* IO.actions.tcpConnect({ port: server.port })
+      const received = yield* client.data
 
-        yield* client.write('hello?')
+      yield* client.write('hello?')
 
-        const reply = yield* received.next()
-        const closing = yield* received.next()
+      const reply = yield* received.next()
+      const closing = yield* received.next()
 
-        yield* server.close()
+      yield* server.close()
 
-        return {
-          reply: reply.done === true ? 'ended-early' : decoder.decode(reply.value),
-          close: closing.done === true ? closing.value : 'still-open',
-        }
-      }),
-    )
+      return {
+        reply: reply.done === true ? 'ended-early' : decoder.decode(reply.value),
+        close: closing.done === true ? closing.value : 'still-open',
+      }
+    })
 
     expect(unwrap(outcome)).toEqual({ reply: 'bye', close: true })
   })
 
   it('connecting to a dead port fails with tcp-connect-failed', async () => {
-    const outcome = await run(() =>
-      scoped(function* () {
-        yield* install(BunIO)
+    const outcome = await run(function* () {
+      yield* install(BunIO)
 
-        const server = yield* IO.actions.tcpListen({ port: 0 }, function* () {})
-        const deadPort = server.port
-        yield* server.close()
-        yield* sleep(20)
+      const server = yield* IO.actions.tcpListen({ port: 0 }, function* () {})
+      const deadPort = server.port
+      yield* server.close()
+      yield* sleep(20)
 
-        const refused = yield* attempt(() => IO.actions.tcpConnect({ port: deadPort }))
-        return isFailure(refused) ? refused.error : 'no-failure'
-      }),
-    )
+      const refused = yield* attempt(() => IO.actions.tcpConnect({ port: deadPort }))
+      return isFailure(refused) ? refused.error : 'no-failure'
+    })
 
     expect(unwrap(outcome)).toBe('tcp-connect-failed')
   })
@@ -183,31 +179,29 @@ describe('tcp', () => {
 
 describe('udp', () => {
   it('two sockets exchange a datagram; close ends the message flow', async () => {
-    const outcome = await run(() =>
-      scoped(function* () {
-        yield* install(BunIO)
+    const outcome = await run(function* () {
+      yield* install(BunIO)
 
-        const sender = yield* IO.actions.udpBind()
-        const receiver = yield* IO.actions.udpBind()
-        const messages = yield* receiver.messages
+      const sender = yield* IO.actions.udpBind()
+      const receiver = yield* IO.actions.udpBind()
+      const messages = yield* receiver.messages
 
-        yield* sender.send('merhaba udp', receiver.port, '127.0.0.1')
+      yield* sender.send('merhaba udp', receiver.port, '127.0.0.1')
 
-        const first = yield* messages.next()
-        const datagram = first.done === true ? undefined : first.value
+      const first = yield* messages.next()
+      const datagram = first.done === true ? undefined : first.value
 
-        yield* receiver.close()
-        const closing = yield* messages.next()
-        yield* sender.close()
+      yield* receiver.close()
+      const closing = yield* messages.next()
+      yield* sender.close()
 
-        return {
-          text: datagram === undefined ? 'ended-early' : decoder.decode(datagram.data),
-          fromSender: datagram?.port === sender.port,
-          address: datagram?.address,
-          close: closing.done === true ? closing.value : 'still-open',
-        }
-      }),
-    )
+      return {
+        text: datagram === undefined ? 'ended-early' : decoder.decode(datagram.data),
+        fromSender: datagram?.port === sender.port,
+        address: datagram?.address,
+        close: closing.done === true ? closing.value : 'still-open',
+      }
+    })
 
     expect(unwrap(outcome)).toEqual({
       text: 'merhaba udp',

@@ -25,26 +25,24 @@ describe('client-side close', () => {
   it('close() resolves once fully closed; the messages flow ends with `true`', async () => {
     const server = echoServer()
     try {
-      const outcome = await run(() =>
-        scoped(function* () {
-          yield* install(JsonCodec)
-          yield* install(Ws)
+      const outcome = await run(function* () {
+        yield* install(JsonCodec)
+        yield* install(Ws)
 
-          const connection = yield* Ws.actions.connect(`ws://localhost:${server.port}`)
-          const subscription = yield* connection.messages
+        const connection = yield* Ws.actions.connect(`ws://localhost:${server.port}`)
+        const subscription = yield* connection.messages
 
-          yield* connection.close(1000, 'client-done')
+        yield* connection.close(1000, 'client-done')
 
-          const info = yield* connection.closed
-          const done = yield* subscription.next()
+        const info = yield* connection.closed
+        const done = yield* subscription.next()
 
-          return {
-            readyState: connection.readyState,
-            code: info.code,
-            flowClose: done.done ? done.value : 'not-done',
-          }
-        }),
-      )
+        return {
+          readyState: connection.readyState,
+          code: info.code,
+          flowClose: done.done ? done.value : 'not-done',
+        }
+      })
 
       expect(unwrap(outcome)).toEqual({ readyState: 3, code: 1000, flowClose: true })
     } finally {
@@ -55,19 +53,17 @@ describe('client-side close', () => {
   it('send after close is a silent no-op', async () => {
     const server = echoServer()
     try {
-      const outcome = await run(() =>
-        scoped(function* () {
-          yield* install(JsonCodec)
-          yield* install(Ws)
+      const outcome = await run(function* () {
+        yield* install(JsonCodec)
+        yield* install(Ws)
 
-          const connection = yield* Ws.actions.connect(`ws://localhost:${server.port}`)
-          yield* connection.close()
+        const connection = yield* Ws.actions.connect(`ws://localhost:${server.port}`)
+        yield* connection.close()
 
-          const late = yield* attempt(() => connection.send('too late'))
+        const late = yield* attempt(() => connection.send('too late'))
 
-          return isFailure(late) ? String(late.error) : 'dropped-silently'
-        }),
-      )
+        return isFailure(late) ? String(late.error) : 'dropped-silently'
+      })
 
       expect(unwrap(outcome)).toBe('dropped-silently')
     } finally {
@@ -80,25 +76,23 @@ describe('server-initiated close (no reconnect configured)', () => {
   it('delivers pending frames, then the flow closes `true` and `closed` carries code/reason', async () => {
     const server = closingServer(4001, 'server-bye', ['last words'])
     try {
-      const outcome = await run(() =>
-        scoped(function* () {
-          yield* install(JsonCodec)
-          yield* install(Ws)
+      const outcome = await run(function* () {
+        yield* install(JsonCodec)
+        yield* install(Ws)
 
-          const connection = yield* Ws.actions.connect(`ws://localhost:${server.port}`)
-          const subscription = yield* connection.messages
+        const connection = yield* Ws.actions.connect(`ws://localhost:${server.port}`)
+        const subscription = yield* connection.messages
 
-          const first = yield* subscription.next()
-          const done = yield* subscription.next()
-          const info = yield* connection.closed
+        const first = yield* subscription.next()
+        const done = yield* subscription.next()
+        const info = yield* connection.closed
 
-          return {
-            first: first.value,
-            flowClose: done.done ? done.value : 'not-done',
-            info,
-          }
-        }),
-      )
+        return {
+          first: first.value,
+          flowClose: done.done ? done.value : 'not-done',
+          info,
+        }
+      })
 
       expect(unwrap(outcome)).toEqual({
         first: 'last words',
@@ -113,20 +107,18 @@ describe('server-initiated close (no reconnect configured)', () => {
   it('close() on an already-closed socket resolves immediately', async () => {
     const server = closingServer(1000, 'early')
     try {
-      const outcome = await run(() =>
-        scoped(function* () {
-          yield* install(JsonCodec)
-          yield* install(Ws)
+      const outcome = await run(function* () {
+        yield* install(JsonCodec)
+        yield* install(Ws)
 
-          const connection = yield* Ws.actions.connect(`ws://localhost:${server.port}`)
-          const info = yield* connection.closed
+        const connection = yield* Ws.actions.connect(`ws://localhost:${server.port}`)
+        const info = yield* connection.closed
 
-          // socket is CLOSED by now — close() must not hang waiting for a second close event
-          yield* connection.close()
+        // socket is CLOSED by now — close() must not hang waiting for a second close event
+        yield* connection.close()
 
-          return { readyState: connection.readyState, reason: info.reason }
-        }),
-      )
+        return { readyState: connection.readyState, reason: info.reason }
+      })
 
       expect(unwrap(outcome)).toEqual({ readyState: 3, reason: 'early' })
     } finally {

@@ -1,6 +1,6 @@
 import type { ConfigDef } from 'std:config'
 import { Config } from 'std:config'
-import { run, scoped } from 'std:effect'
+import { run } from 'std:effect'
 import { install } from 'std:plugin'
 import { isFailure, unwrap } from 'std:result'
 
@@ -36,18 +36,16 @@ describe('config extends resolution', () => {
         jsonText({ mode: 'preset', presetOnly: 42 }),
       )
 
-      const outcome = await run(() =>
-        scoped(function* () {
-          yield* bootstrap({ cwd: root, home: root })
+      const outcome = await run(function* () {
+        yield* bootstrap({ cwd: root, home: root })
 
-          const tree = yield* Config.actions.tree()
-          return {
-            merged: yield* Config.actions.get(),
-            extendsPath: tree[0]?.extends[0]?.path,
-            extendsSpec: tree[0]?.extendsSpec,
-          }
-        }),
-      )
+        const tree = yield* Config.actions.tree()
+        return {
+          merged: yield* Config.actions.get(),
+          extendsPath: tree[0]?.extends[0]?.path,
+          extendsSpec: tree[0]?.extendsSpec,
+        }
+      })
 
       expect(unwrap(outcome)).toEqual({
         // the `extends` key itself never appears in the merged view
@@ -75,20 +73,18 @@ describe('config extends resolution', () => {
         jsonText({ extends: './.cfgspec.json', from: 'c', c: 3 }),
       )
 
-      const outcome = await run(() =>
-        scoped(function* () {
-          yield* bootstrap({ cwd: root, home: root })
+      const outcome = await run(function* () {
+        yield* bootstrap({ cwd: root, home: root })
 
-          const tree = yield* Config.actions.tree()
-          const b = tree[0]?.extends.find(source => source.path === join(root, 'b.json'))
-          const c = b?.extends[0]
+        const tree = yield* Config.actions.tree()
+        const b = tree[0]?.extends.find(source => source.path === join(root, 'b.json'))
+        const c = b?.extends[0]
 
-          return {
-            merged: yield* Config.actions.get(),
-            cycleExtends: c?.extends.length,
-          }
-        }),
-      )
+        return {
+          merged: yield* Config.actions.get(),
+          cycleExtends: c?.extends.length,
+        }
+      })
 
       expect(unwrap(outcome)).toEqual({
         merged: { top: true, from: 'b', a: 1, b: 2, c: 3 },
@@ -104,12 +100,10 @@ describe('config extends resolution', () => {
     try {
       await writeFile(join(root, '.cfgspec.json'), jsonText({ extends: './nope.json' }))
 
-      const outcome = await run(() =>
-        scoped(function* () {
-          yield* bootstrap({ cwd: root, home: root })
-          return 'unreachable'
-        }),
-      )
+      const outcome = await run(function* () {
+        yield* bootstrap({ cwd: root, home: root })
+        return 'unreachable'
+      })
 
       expect(isFailure(outcome)).toBe(true)
       if (isFailure(outcome)) {

@@ -33,14 +33,12 @@ describe('api decoration ordering', () => {
     })
 
     const outcome = await run(function* () {
-      return yield* scoped(function* () {
-        yield* Math_.around(layer('maxA'), { at: 'max' })
-        yield* Math_.around(layer('maxB'), { at: 'max' })
-        yield* Math_.around(layer('minC'), { at: 'min' })
-        yield* Math_.around(layer('minD'), { at: 'min' })
+      yield* Math_.around(layer('maxA'), { at: 'max' })
+      yield* Math_.around(layer('maxB'), { at: 'max' })
+      yield* Math_.around(layer('minC'), { at: 'min' })
+      yield* Math_.around(layer('minD'), { at: 'min' })
 
-        return yield* Math_.actions.add(1, 2)
-      })
+      return yield* Math_.actions.add(1, 2)
     })
 
     expect(unwrap(outcome)).toBe(3)
@@ -166,27 +164,25 @@ describe('api decoration propagation across live scopes', () => {
     const Math_ = makeMath('math.concurrent')
 
     const outcome = await run(function* () {
-      return yield* scoped(function* () {
-        yield* Math_.around({
-          add: ([a, b], next) =>
-            (function* () {
-              yield* sleep(1)
-              return yield* next(a, b)
-            })(),
-        })
-
-        const first = withResolvers<number>()
-        const second = withResolvers<number>()
-
-        yield* spawn(function* () {
-          first.resolve(yield* Math_.actions.add(1, 2))
-        })
-        yield* spawn(function* () {
-          second.resolve(yield* Math_.actions.add(10, 20))
-        })
-
-        return [yield* first.operation, yield* second.operation]
+      yield* Math_.around({
+        add: ([a, b], next) =>
+          (function* () {
+            yield* sleep(1)
+            return yield* next(a, b)
+          })(),
       })
+
+      const first = withResolvers<number>()
+      const second = withResolvers<number>()
+
+      yield* spawn(function* () {
+        first.resolve(yield* Math_.actions.add(1, 2))
+      })
+      yield* spawn(function* () {
+        second.resolve(yield* Math_.actions.add(10, 20))
+      })
+
+      return [yield* first.operation, yield* second.operation]
     })
 
     expect(unwrap(outcome)).toEqual([3, 30])

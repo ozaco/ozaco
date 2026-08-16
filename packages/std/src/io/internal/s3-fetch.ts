@@ -1,3 +1,4 @@
+import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import { createHash, createHmac } from 'node:crypto'
@@ -98,9 +99,11 @@ const signHeaders = (
 const listPart = (xml: string, tag: string): string | undefined =>
   new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`, 'u').exec(xml)?.[1]
 
+// Thrown inside the promise-returning client methods: the rejection carries the Failure through
+// `createS3`'s `until` wrapping, so effect callers observe an `s3-failed` failure, not a bare Error.
 const ensureOk = (response: Response, key: string): void => {
   if (!response.ok) {
-    throw new Error(`s3 ${response.status} ${response.statusText} for "${key}"`)
+    throw fail('s3-failed', `s3 ${response.status} ${response.statusText} for "${key}"`)
   }
 }
 

@@ -1,6 +1,6 @@
-import { attempt, run, scoped } from 'std:effect'
 import type { Flow } from 'std:effect'
-import { Fetch, fetchImpl, FetchClient } from 'std:fetch'
+import { attempt, run } from 'std:effect'
+import { Fetch, FetchClient, fetchImpl } from 'std:fetch'
 import { install } from 'std:plugin'
 import { isFailure, unwrap } from 'std:result'
 
@@ -77,17 +77,15 @@ function* drain<T, R>(source: Flow<T, R>) {
 
 describe('flow() codec streaming', () => {
   it('decodes a chunked response one value per top-level JSON entity', async () => {
-    const outcome = await run(() =>
-      scoped(function* () {
-        yield* install(FetchClient)
-        yield* install(JsonCodec)
+    const outcome = await run(function* () {
+      yield* install(FetchClient)
+      yield* install(JsonCodec)
 
-        const response = yield* Fetch.actions.get(`${base}/ndjson`)
-        const decoded = yield* response.flow<unknown>()
+      const response = yield* Fetch.actions.get(`${base}/ndjson`)
+      const decoded = yield* response.flow<unknown>()
 
-        return yield* drain(decoded)
-      }),
-    )
+      return yield* drain(decoded)
+    })
 
     expect(unwrap(outcome)).toEqual({
       values: [{ id: 1 }, { id: 2 }, 'tail'],
@@ -96,34 +94,30 @@ describe('flow() codec streaming', () => {
   })
 
   it('a malformed JSON stream closes the flow with a Failure', async () => {
-    const outcome = await run(() =>
-      scoped(function* () {
-        yield* install(FetchClient)
-        yield* install(JsonCodec)
+    const outcome = await run(function* () {
+      yield* install(FetchClient)
+      yield* install(JsonCodec)
 
-        const response = yield* Fetch.actions.get(`${base}/broken`)
-        const decoded = yield* response.flow()
-        const { values, close } = yield* drain(decoded)
+      const response = yield* Fetch.actions.get(`${base}/broken`)
+      const decoded = yield* response.flow()
+      const { values, close } = yield* drain(decoded)
 
-        return { values, closedWithFailure: isFailure(close) }
-      }),
-    )
+      return { values, closedWithFailure: isFailure(close) }
+    })
 
     expect(unwrap(outcome)).toEqual({ values: [], closedWithFailure: true })
   })
 
   it('an empty body closes cleanly with no values', async () => {
-    const outcome = await run(() =>
-      scoped(function* () {
-        yield* install(FetchClient)
-        yield* install(JsonCodec)
+    const outcome = await run(function* () {
+      yield* install(FetchClient)
+      yield* install(JsonCodec)
 
-        const response = yield* Fetch.actions.get(`${base}/empty`)
-        const decoded = yield* response.flow()
+      const response = yield* Fetch.actions.get(`${base}/empty`)
+      const decoded = yield* response.flow()
 
-        return yield* drain(decoded)
-      }),
-    )
+      return yield* drain(decoded)
+    })
 
     expect(unwrap(outcome)).toEqual({ values: [], close: true })
   })
@@ -165,26 +159,24 @@ describe('bodyless responses', () => {
   it('raw() and flow() fail with parse when the response has no body at all', async () => {
     // a fetched response always carries a (possibly empty) body stream under Bun, so a bodyless
     // response is injected through the fetchImpl context instead of a server route
-    const outcome = await run(() =>
-      scoped(function* () {
-        yield* install(FetchClient)
-        yield* install(JsonCodec)
+    const outcome = await run(function* () {
+      yield* install(FetchClient)
+      yield* install(JsonCodec)
 
-        return yield* fetchImpl.with(
-          () => Promise.resolve(new Response(null, { status: 204 })),
-          function* () {
-            const response = yield* Fetch.actions.get(`${base}/ignored`)
-            const rawAttempt = yield* attempt(() => response.raw())
-            const flowAttempt = yield* attempt(() => response.flow())
+      return yield* fetchImpl.with(
+        () => Promise.resolve(new Response(null, { status: 204 })),
+        function* () {
+          const response = yield* Fetch.actions.get(`${base}/ignored`)
+          const rawAttempt = yield* attempt(() => response.raw())
+          const flowAttempt = yield* attempt(() => response.flow())
 
-            return {
-              raw: isFailure(rawAttempt) ? rawAttempt.error : 'no-failure',
-              flow: isFailure(flowAttempt) ? flowAttempt.error : 'no-failure',
-            }
-          },
-        )
-      }),
-    )
+          return {
+            raw: isFailure(rawAttempt) ? rawAttempt.error : 'no-failure',
+            flow: isFailure(flowAttempt) ? flowAttempt.error : 'no-failure',
+          }
+        },
+      )
+    })
 
     expect(unwrap(outcome)).toEqual({ raw: 'parse', flow: 'parse' })
   })

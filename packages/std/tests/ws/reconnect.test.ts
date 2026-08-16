@@ -1,4 +1,4 @@
-import { run, scoped, sleep } from 'std:effect'
+import { run, sleep } from 'std:effect'
 import { install } from 'std:plugin'
 import { isFailure, unwrap } from 'std:result'
 import { Ws } from 'std:ws'
@@ -73,34 +73,32 @@ describe('automatic reconnect', () => {
   it('one continuous flow spans generations, and `reconnects` counts the reopen', async () => {
     const server = dropFirstServer()
     try {
-      const outcome = await run(() =>
-        scoped(function* () {
-          yield* install(JsonCodec)
-          yield* install(Ws)
+      const outcome = await run(function* () {
+        yield* install(JsonCodec)
+        yield* install(Ws)
 
-          const connection = yield* Ws.actions.connect(`ws://localhost:${server.port}`, {
-            reconnect: { retries: 5, delayMs: 10 },
-          })
-          const subscription = yield* connection.messages
+        const connection = yield* Ws.actions.connect(`ws://localhost:${server.port}`, {
+          reconnect: { retries: 5, delayMs: 10 },
+        })
+        const subscription = yield* connection.messages
 
-          const greeting = yield* subscription.next() // generation 1's frame
-          while (connection.reconnects === 0) {
-            yield* sleep(5) // the drop is redialed in the background
-          }
+        const greeting = yield* subscription.next() // generation 1's frame
+        while (connection.reconnects === 0) {
+          yield* sleep(5) // the drop is redialed in the background
+        }
 
-          yield* connection.send('hello-again')
-          const echo = yield* subscription.next() // generation 2's frame, SAME subscription
+        yield* connection.send('hello-again')
+        const echo = yield* subscription.next() // generation 2's frame, SAME subscription
 
-          const snapshot = {
-            greeting: greeting.value,
-            echo: echo.value,
-            reconnects: connection.reconnects,
-          }
-          yield* connection.close()
+        const snapshot = {
+          greeting: greeting.value,
+          echo: echo.value,
+          reconnects: connection.reconnects,
+        }
+        yield* connection.close()
 
-          return snapshot
-        }),
-      )
+        return snapshot
+      })
 
       expect(unwrap(outcome)).toEqual({
         greeting: 'welcome-then-drop',
@@ -115,31 +113,29 @@ describe('automatic reconnect', () => {
   it('a send during the reconnect window parks, then goes out once the socket reopens', async () => {
     const server = dropOnCommandServer()
     try {
-      const outcome = await run(() =>
-        scoped(function* () {
-          yield* install(JsonCodec)
-          yield* install(Ws)
+      const outcome = await run(function* () {
+        yield* install(JsonCodec)
+        yield* install(Ws)
 
-          const connection = yield* Ws.actions.connect(`ws://localhost:${server.port}`, {
-            reconnect: { retries: 5, delayMs: 25 },
-          })
-          const subscription = yield* connection.messages
+        const connection = yield* Ws.actions.connect(`ws://localhost:${server.port}`, {
+          reconnect: { retries: 5, delayMs: 25 },
+        })
+        const subscription = yield* connection.messages
 
-          yield* connection.send('drop-now')
-          while (connection.readyState === OPEN) {
-            yield* sleep(2) // wait until the drop lands; the redial is ≥25ms away
-          }
+        yield* connection.send('drop-now')
+        while (connection.readyState === OPEN) {
+          yield* sleep(2) // wait until the drop lands; the redial is ≥25ms away
+        }
 
-          // socket is down, reconnect pending: this send must park until generation 2 is OPEN
-          yield* connection.send('after-reopen')
-          const echo = yield* subscription.next()
+        // socket is down, reconnect pending: this send must park until generation 2 is OPEN
+        yield* connection.send('after-reopen')
+        const echo = yield* subscription.next()
 
-          const snapshot = { echo: echo.value, reconnects: connection.reconnects }
-          yield* connection.close()
+        const snapshot = { echo: echo.value, reconnects: connection.reconnects }
+        yield* connection.close()
 
-          return snapshot
-        }),
-      )
+        return snapshot
+      })
 
       expect(unwrap(outcome)).toEqual({ echo: 'after-reopen', reconnects: 1 })
     } finally {
@@ -150,30 +146,28 @@ describe('automatic reconnect', () => {
   it('exhausted retries close the flow with ws/reconnect-exhausted carrying the last close', async () => {
     const server = dropThenRefuseServer(4008, 'go-away')
     try {
-      const outcome = await run(() =>
-        scoped(function* () {
-          yield* install(JsonCodec)
-          // install-time defaults: connect() below passes no options at all
-          yield* install(Ws, { reconnect: { retries: 3, delayMs: 10, backoff: 2 } })
+      const outcome = await run(function* () {
+        yield* install(JsonCodec)
+        // install-time defaults: connect() below passes no options at all
+        yield* install(Ws, { reconnect: { retries: 3, delayMs: 10, backoff: 2 } })
 
-          const connection = yield* Ws.actions.connect(`ws://localhost:${server.port}`)
-          const subscription = yield* connection.messages
+        const connection = yield* Ws.actions.connect(`ws://localhost:${server.port}`)
+        const subscription = yield* connection.messages
 
-          const end = yield* subscription.next() // blocks until the budget is exhausted
-          const info = yield* connection.closed
+        const end = yield* subscription.next() // blocks until the budget is exhausted
+        const info = yield* connection.closed
 
-          if (!end.done || !isFailure(end.value)) {
-            return 'unexpected-flow-close'
-          }
+        if (!end.done || !isFailure(end.value)) {
+          return 'unexpected-flow-close'
+        }
 
-          return {
-            tag: String(end.value.error),
-            message: end.value.message,
-            info,
-            reconnects: connection.reconnects,
-          }
-        }),
-      )
+        return {
+          tag: String(end.value.error),
+          message: end.value.message,
+          info,
+          reconnects: connection.reconnects,
+        }
+      })
 
       expect(unwrap(outcome)).toEqual({
         tag: 'ws/reconnect-exhausted',

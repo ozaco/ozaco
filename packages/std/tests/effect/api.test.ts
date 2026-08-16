@@ -75,10 +75,8 @@ describe('api (std:plugin/api)', () => {
     })
 
     const outcome = await run(function* () {
-      return yield* scoped(function* () {
-        yield* Database.around({ query: () => constant(['FAKE']) })
-        return yield* Database.actions.query('users')
-      })
+      yield* Database.around({ query: () => constant(['FAKE']) })
+      return yield* Database.actions.query('users')
     })
 
     expect(unwrap(outcome)).toEqual(['FAKE'])

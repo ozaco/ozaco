@@ -1,6 +1,6 @@
 import type { ConfigDef } from 'std:config'
 import { Config } from 'std:config'
-import { run, scoped } from 'std:effect'
+import { run } from 'std:effect'
 import { install } from 'std:plugin'
 import { unwrap } from 'std:result'
 
@@ -43,18 +43,16 @@ describe('config provenance + env overlay', () => {
       )
       await writeFile(join(app, 'preset.json'), jsonText({ mode: 'preset' }))
 
-      const outcome = await run(() =>
-        scoped(function* () {
-          yield* bootstrap({ cwd: app, home: root })
+      const outcome = await run(function* () {
+        yield* bootstrap({ cwd: app, home: root })
 
-          return {
-            explained: yield* Config.actions.explain('mode'),
-            origin: yield* Config.actions.origin('mode'),
-            unknownExplained: yield* Config.actions.explain('nope'),
-            unknownOrigin: yield* Config.actions.origin('nope'),
-          }
-        }),
-      )
+        return {
+          explained: yield* Config.actions.explain('mode'),
+          origin: yield* Config.actions.origin('mode'),
+          unknownExplained: yield* Config.actions.explain('nope'),
+          unknownOrigin: yield* Config.actions.origin('nope'),
+        }
+      })
 
       expect(unwrap(outcome)).toEqual({
         explained: [
@@ -85,18 +83,16 @@ describe('config provenance + env overlay', () => {
         jsonText({ server: { port: 3000 }, label: 'file' }),
       )
 
-      const outcome = await run(() =>
-        scoped(function* () {
-          yield* bootstrap({ cwd: root, home: root })
+      const outcome = await run(function* () {
+        yield* bootstrap({ cwd: root, home: root })
 
-          return {
-            port: yield* Config.actions.get('server.port'),
-            verbose: yield* Config.actions.get('flags.verbose'),
-            label: yield* Config.actions.get('label'),
-            explained: yield* Config.actions.explain('server.port'),
-          }
-        }),
-      )
+        return {
+          port: yield* Config.actions.get('server.port'),
+          verbose: yield* Config.actions.get('flags.verbose'),
+          label: yield* Config.actions.get('label'),
+          explained: yield* Config.actions.explain('server.port'),
+        }
+      })
 
       expect(unwrap(outcome)).toEqual({
         port: 8080,
@@ -123,12 +119,10 @@ describe('config provenance + env overlay', () => {
       await writeFile(join(root, '.cfgspec.json'), jsonText({ mode: 'base', keep: true }))
       await writeFile(join(root, '.prod.cfgspec.json'), jsonText({ mode: 'prod' }))
 
-      const outcome = await run(() =>
-        scoped(function* () {
-          yield* bootstrap({ cwd: root, home: root })
-          return yield* Config.actions.get()
-        }),
-      )
+      const outcome = await run(function* () {
+        yield* bootstrap({ cwd: root, home: root })
+        return yield* Config.actions.get()
+      })
 
       expect(unwrap(outcome)).toEqual({ mode: 'prod', keep: true })
     } finally {

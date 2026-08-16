@@ -33,19 +33,17 @@ describe('config discovery', () => {
         jsonText({ app: 'demo', server: { port: 3000 } }),
       )
 
-      const outcome = await run(() =>
-        scoped(function* () {
-          yield* bootstrap({ cwd: root, home: root })
+      const outcome = await run(function* () {
+        yield* bootstrap({ cwd: root, home: root })
 
-          return {
-            whole: yield* Config.actions.get(),
-            port: yield* Config.actions.get('server.port'),
-            has: yield* Config.actions.has('server.port'),
-            missing: yield* Config.actions.has('server.tls'),
-            keys: yield* Config.actions.keys(),
-          }
-        }),
-      )
+        return {
+          whole: yield* Config.actions.get(),
+          port: yield* Config.actions.get('server.port'),
+          has: yield* Config.actions.has('server.port'),
+          missing: yield* Config.actions.has('server.tls'),
+          keys: yield* Config.actions.keys(),
+        }
+      })
 
       expect(unwrap(outcome)).toEqual({
         whole: { app: 'demo', server: { port: 3000 } },
@@ -73,16 +71,14 @@ describe('config discovery', () => {
         jsonText({ level: 'inner', inner: { only: 1 }, db: { port: 2 } }),
       )
 
-      const outcome = await run(() =>
-        scoped(function* () {
-          yield* bootstrap({ cwd: app, home: root })
+      const outcome = await run(function* () {
+        yield* bootstrap({ cwd: app, home: root })
 
-          return {
-            merged: yield* Config.actions.get(),
-            paths: (yield* Config.actions.tree()).map(source => source.path),
-          }
-        }),
-      )
+        return {
+          merged: yield* Config.actions.get(),
+          paths: (yield* Config.actions.tree()).map(source => source.path),
+        }
+      })
 
       expect(unwrap(outcome)).toEqual({
         merged: {
@@ -179,17 +175,15 @@ describe('config discovery', () => {
       await writeFile(join(app, '.cfgspec', 'extra.json'), jsonText({ fromDir: 1 }))
       await writeFile(join(app, '.dev.cfgspec.json'), jsonText({ source: 'variant' }))
 
-      const outcome = await run(() =>
-        scoped(function* () {
-          // FILE only: no chain walk, no variant overlay, no config dir, no env overlay
-          yield* bootstrap({ cwd: app, home: root, variant: 'dev', features: Features.FILE })
+      const outcome = await run(function* () {
+        // FILE only: no chain walk, no variant overlay, no config dir, no env overlay
+        yield* bootstrap({ cwd: app, home: root, variant: 'dev', features: Features.FILE })
 
-          return {
-            merged: yield* Config.actions.get(),
-            chainLength: (yield* Config.actions.tree()).length,
-          }
-        }),
-      )
+        return {
+          merged: yield* Config.actions.get(),
+          chainLength: (yield* Config.actions.tree()).length,
+        }
+      })
 
       expect(unwrap(outcome)).toEqual({ merged: { source: 'base' }, chainLength: 1 })
     } finally {
@@ -202,20 +196,18 @@ describe('config discovery', () => {
     try {
       await writeFile(join(root, '.cfgspec.toml'), 'port = 8080\n\n[server]\nhost = "local"\n')
 
-      const outcome = await run(() =>
-        scoped(function* () {
-          yield* install(BunIO)
-          yield* install(TomlCodec)
-          // no codec option: the default TomlCodec applies and `ext` derives to `toml`
-          yield* install(Config, { name: 'cfgspec', cwd: root, home: root })
-          yield* Config.actions.load()
+      const outcome = await run(function* () {
+        yield* install(BunIO)
+        yield* install(TomlCodec)
+        // no codec option: the default TomlCodec applies and `ext` derives to `toml`
+        yield* install(Config, { name: 'cfgspec', cwd: root, home: root })
+        yield* Config.actions.load()
 
-          return {
-            port: yield* Config.actions.get('port'),
-            host: yield* Config.actions.get('server.host'),
-          }
-        }),
-      )
+        return {
+          port: yield* Config.actions.get('port'),
+          host: yield* Config.actions.get('server.host'),
+        }
+      })
 
       expect(unwrap(outcome)).toEqual({ port: 8080, host: 'local' })
     } finally {

@@ -42,37 +42,33 @@ function* bootstrap(options?: FetchDef.Options) {
 
 describe('codec option', () => {
   it('a per-request codec pins body() decoding even when routing would pick another', async () => {
-    const outcome = await run(() =>
-      scoped(function* () {
-        yield* bootstrap()
+    const outcome = await run(function* () {
+      yield* bootstrap()
 
-        const pinned = yield* Fetch.actions.get(base, { codec: JsonCodec })
-        const routed = yield* Fetch.actions.get(base)
+      const pinned = yield* Fetch.actions.get(base, { codec: JsonCodec })
+      const routed = yield* Fetch.actions.get(base)
 
-        const routedOutcome = yield* attempt(() => routed.body())
+      const routedOutcome = yield* attempt(() => routed.body())
 
-        return {
-          pinned: yield* pinned.body<typeof PAYLOAD>(),
-          routedFailed: isFailure(routedOutcome) ? 'mangled' : 'decoded',
-        }
-      }),
-    )
+      return {
+        pinned: yield* pinned.body<typeof PAYLOAD>(),
+        routedFailed: isFailure(routedOutcome) ? 'mangled' : 'decoded',
+      }
+    })
 
     expect(unwrap(outcome)).toEqual({ pinned: PAYLOAD, routedFailed: 'mangled' })
   })
 
   it('a per-request codec pins flow() decoding as well', async () => {
-    const outcome = await run(() =>
-      scoped(function* () {
-        yield* bootstrap()
+    const outcome = await run(function* () {
+      yield* bootstrap()
 
-        const response = yield* Fetch.actions.get(base, { codec: JsonCodec })
-        const decoded = yield* response.flow<typeof PAYLOAD>()
-        const subscription = yield* decoded
+      const response = yield* Fetch.actions.get(base, { codec: JsonCodec })
+      const decoded = yield* response.flow<typeof PAYLOAD>()
+      const subscription = yield* decoded
 
-        return (yield* subscription.next()).value
-      }),
-    )
+      return (yield* subscription.next()).value
+    })
 
     expect(unwrap(outcome)).toEqual(PAYLOAD)
   })
@@ -92,16 +88,14 @@ describe('codec option', () => {
   })
 
   it('a per-request codec overrides the install-wide one', async () => {
-    const outcome = await run(() =>
-      scoped(function* () {
-        // install-wide default is the mangling codec; the request pins JsonCodec over it
-        yield* bootstrap({ codec: noisy })
+    const outcome = await run(function* () {
+      // install-wide default is the mangling codec; the request pins JsonCodec over it
+      yield* bootstrap({ codec: noisy })
 
-        const response = yield* Fetch.actions.get(base, { codec: JsonCodec })
+      const response = yield* Fetch.actions.get(base, { codec: JsonCodec })
 
-        return yield* response.body<typeof PAYLOAD>()
-      }),
-    )
+      return yield* response.body<typeof PAYLOAD>()
+    })
 
     expect(unwrap(outcome)).toEqual(PAYLOAD)
   })
