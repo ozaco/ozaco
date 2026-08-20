@@ -19,6 +19,7 @@
       "name": "@ozaco/panel",
       "version": "0.0.0",
       "devDependencies": {
+        "@ozaco/client": "workspace:*",
         "@tailwindcss/vite": "^4.0.0",
         "@types/react": "^19.0.0",
         "@types/react-dom": "^19.0.0",
@@ -30,54 +31,6 @@
         "typescript": "^7.0.2",
         "vite": "^7.0.0",
         "vite-plugin-singlefile": "^2.0.0",
-      },
-    },
-    "examples/backend": {
-      "name": "@ozaco/example-backend",
-      "version": "0.0.0",
-      "devDependencies": {
-        "@ozaco/client": "workspace:*",
-        "@ozaco/db": "workspace:*",
-        "@ozaco/devkit": "workspace:*",
-        "@ozaco/server": "workspace:*",
-        "@ozaco/std": "workspace:*",
-        "zod": "^4.4.3",
-      },
-    },
-    "examples/cli-demo": {
-      "name": "@ozaco/cli-demo",
-      "version": "0.0.0",
-      "dependencies": {
-        "@ozaco/ai": "workspace:*",
-        "@ozaco/cli": "workspace:*",
-        "@ozaco/db": "workspace:*",
-        "@ozaco/server": "workspace:*",
-        "@ozaco/std": "workspace:*",
-      },
-      "devDependencies": {
-        "@ozaco/devkit": "workspace:*",
-        "tsdown": "catalog:build",
-        "zod": "latest",
-      },
-    },
-    "examples/dataflow": {
-      "name": "@ozaco/example-dataflow",
-      "version": "0.0.0",
-      "devDependencies": {
-        "@ozaco/server": "workspace:*",
-        "@ozaco/std": "workspace:*",
-        "zod": "^4.4.3",
-      },
-    },
-    "examples/wizard-examples": {
-      "name": "@ozaco/example-wizard-examples",
-      "version": "0.0.0",
-      "devDependencies": {
-        "@ozaco/client": "workspace:*",
-        "@ozaco/db": "workspace:*",
-        "@ozaco/server": "workspace:*",
-        "@ozaco/std": "workspace:*",
-        "zod": "^4.4.3",
       },
     },
     "packages/ai": {
@@ -488,19 +441,11 @@
 
     "@ozaco/cli": ["@ozaco/cli@workspace:packages/cli"],
 
-    "@ozaco/cli-demo": ["@ozaco/cli-demo@workspace:examples/cli-demo"],
-
     "@ozaco/client": ["@ozaco/client@workspace:packages/client"],
 
     "@ozaco/db": ["@ozaco/db@workspace:packages/db"],
 
     "@ozaco/devkit": ["@ozaco/devkit@workspace:packages/devkit"],
-
-    "@ozaco/example-backend": ["@ozaco/example-backend@workspace:examples/backend"],
-
-    "@ozaco/example-dataflow": ["@ozaco/example-dataflow@workspace:examples/dataflow"],
-
-    "@ozaco/example-wizard-examples": ["@ozaco/example-wizard-examples@workspace:examples/wizard-examples"],
 
     "@ozaco/panel": ["@ozaco/panel@workspace:apps/panel"],
 

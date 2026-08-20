@@ -1,3 +1,5 @@
+import { createSseParser } from '@ozaco/client'
+import type { AsyncSession, RequestHandle } from '@ozaco/client'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Button,
@@ -31,11 +33,12 @@ import { KvEditor, kvToRecord } from '../components/kv-editor'
 import type { KvRow } from '../components/kv-editor'
 import { SplitLayout } from '../components/layout'
 import { SchemaTree } from '../components/schema-tree'
+import { messageOf } from '../components/session'
 import { Timeline } from '../components/timeline'
 import type { TimelineEntry, TimelineTone } from '../components/timeline'
 import { useToasts } from '../components/toasts'
 import { ActionButton, MethodChip, PathDisplay, UrlBarShell } from '../components/url-bar'
-import { buildRequest, createSseParser, execute, formatBytes, skeletonOf, walkSchema } from '../lib'
+import { formatBytes, getToken, skeletonOf, walkSchema } from '../lib'
 import type { FnEntry, ResponseKind, UploadFile } from '../lib'
 
 /**
@@ -43,7 +46,19 @@ import type { FnEntry, ResponseKind, UploadFile } from '../lib'
  * pane. Request sub-tabs: Params / Body / Files / Headers / Auth / Docs; response sub-tabs:
  * Body / Headers / Timeline with a status header and per-tab run history. All state lives here,
  * so it survives tab switches while the tab stays open.
+ *
+ * Addressing, auth, multipart framing and the round trip are the client's (`session.request`):
+ * it answers with the full response metadata and an UNREAD body, which is what lets this view
+ * stream ndjson/sse/bytes instead of parsing eagerly. Cancel halts the request's task.
  */
+
+/** `:param` segments filled from args — the same resolution the URL bar renders. */
+const resolvePath = (path: string, args: Readonly<Record<string, unknown>>): string =>
+  path.replaceAll(/:([A-Za-z0-9_]+)/gu, (whole, name: string) => {
+    const value = args[name]
+
+    return value === undefined ? whole : encodeURIComponent(String(value))
+  })
 
 type ParsedArgs =
   | { readonly ok: true; readonly value: Record<string, unknown>; readonly wrapped: boolean }
@@ -176,15 +191,16 @@ let recordSeq = 0
 export const HttpTab = ({
   entry,
   base,
-  token,
+  session,
   split,
   onSplit,
   stacked,
   onOpenSettings,
 }: {
   readonly entry: FnEntry
+  /** Display only — the session already knows where to send. */
   readonly base: string
-  readonly token: string
+  readonly session: AsyncSession
   readonly split: number
   readonly onSplit: (pct: number) => void
   readonly stacked: boolean
@@ -199,12 +215,21 @@ export const HttpTab = ({
   const [history, setHistory] = useState<readonly RunRecord[]>([])
   const [reqTab, setReqTab] = useState('params')
   const [bodyView, setBodyView] = useState<'pretty' | 'raw'>('pretty')
-  const controller = useRef<AbortController | null>(null)
+  // display only: the session resolves the live token itself on every request
+  const globalToken = getToken()
+  const inflight = useRef<{ handle: RequestHandle; cancelled: boolean } | null>(null)
   const runSeq = useRef(0)
 
   useEffect(
     () => () => {
-      controller.current?.abort()
+      const current = inflight.current
+
+      inflight.current = null
+
+      if (current !== null) {
+        current.cancelled = true
+        void current.handle.cancel()
+      }
     },
     [],
   )
@@ -277,7 +302,12 @@ export const HttpTab = ({
   }
 
   const cancel = (): void => {
-    controller.current?.abort()
+    const current = inflight.current
+
+    if (current !== null) {
+      current.cancelled = true
+      void current.handle.cancel()
+    }
   }
 
   const send = async (raw: string): Promise<void> => {
@@ -293,27 +323,36 @@ export const HttpTab = ({
       return
     }
 
-    controller.current?.abort()
+    cancel()
     runSeq.current += 1
 
     const id = runSeq.current
-    const abort = new AbortController()
-
-    controller.current = abort
-
-    const effectiveToken = authOverride.trim() === '' ? token : authOverride.trim()
-    const built = buildRequest(route, {
+    const override = authOverride.trim()
+    const handle = session.request({
+      resource: entry.service,
+      fn: entry.key,
       args: args.value,
-      files,
-      ...(effectiveToken === '' ? {} : { token: effectiveToken }),
-      base,
+      files: files.map(upload => ({ field: upload.field, file: upload.file })),
+      headers: {
+        ...kvToRecord(headerRows),
+        // an explicit Auth override beats the session's own token resolver
+        ...(override === '' ? {} : { authorization: `Bearer ${override}` }),
+      },
     })
-    const withExtras = { ...built, headers: { ...built.headers, ...kvToRecord(headerRows) } }
+    const record = { handle, cancelled: false }
+
+    inflight.current = record
 
     setRun({
       ...IDLE_RUN,
       phase: 'running',
-      lines: [{ at: Date.now(), tone: 'out', text: `${built.method} ${built.url}` }],
+      lines: [
+        {
+          at: Date.now(),
+          tone: 'out',
+          text: `${route.method.toUpperCase()} ${base}${resolvePath(route.path, args.value)}`,
+        },
+      ],
     })
 
     const started = performance.now()
@@ -329,7 +368,7 @@ export const HttpTab = ({
     }
 
     try {
-      const executed = await execute(withExtras, { signal: abort.signal })
+      const executed = await handle.done
       const headerMs = Math.round(performance.now() - started)
 
       patch(id, prev => ({
@@ -366,7 +405,7 @@ export const HttpTab = ({
       )
 
       if (executed.kind === 'json' || executed.kind === 'text') {
-        const text = await executed.response.text()
+        const text = await executed.native.text()
 
         patch(id, prev => ({ ...prev, text }))
         finish('done', byteLength(text))
@@ -375,7 +414,7 @@ export const HttpTab = ({
       }
 
       if (executed.kind === 'bytes') {
-        const buffer = await executed.response.arrayBuffer()
+        const buffer = await executed.native.arrayBuffer()
         const bytes = new Uint8Array(buffer)
 
         patch(id, prev => ({ ...prev, bytes: { size: bytes.length, hex: hexPreview(bytes) } }))
@@ -384,7 +423,7 @@ export const HttpTab = ({
         return
       }
 
-      const body = executed.response.body
+      const body = executed.native.body
 
       if (body === null) {
         finish('done', null)
@@ -465,19 +504,26 @@ export const HttpTab = ({
 
       finish('done', received)
     } catch (error) {
-      if (abort.signal.aborted) {
+      if (record.cancelled) {
         pushLine(id, 'err', 'cancelled')
         finish('aborted', null)
 
         return
       }
 
-      const message = error instanceof Error ? error.message : String(error)
+      const message = messageOf(error)
 
       patch(id, prev => ({ ...prev, failure: `Request failed: ${message}` }))
       pushLine(id, 'err', message)
       finish('failed', null)
       toasts.error(`Request failed: ${message}`)
+    } finally {
+      // the response body is readable only while the handle is open — release it once read
+      if (inflight.current === record) {
+        inflight.current = null
+      }
+
+      await handle.close()
     }
   }
 
@@ -772,10 +818,10 @@ export const HttpTab = ({
             <div className='flex max-w-md flex-col gap-3'>
               <div className='flex items-center gap-2'>
                 <SectionTitle>Bearer token</SectionTitle>
-                {token === '' ? (
+                {globalToken === '' ? (
                   <StatePill label='no global token' tone='muted' />
                 ) : (
-                  <StatePill label={`global ••••${token.slice(-4)}`} tone='ok' />
+                  <StatePill label={`global ••••${globalToken.slice(-4)}`} tone='ok' />
                 )}
               </div>
               <TextField

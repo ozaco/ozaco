@@ -42,7 +42,7 @@ interface FnAddress {
 const doCall = operation(function* (state: ClientState, address: FnAddress, args: unknown) {
   yield* resolveManifest(state)
 
-  const prepared = yield* prepareRequest(state, addressOf(state, address), args)
+  const prepared = yield* prepareRequest(state, addressOf(state, address), { args })
   const init: FetchDef.Init = {
     method: prepared.method,
     headers: prepared.headers,

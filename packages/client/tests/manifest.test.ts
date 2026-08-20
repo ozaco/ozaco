@@ -1,13 +1,7 @@
-import { describe, expect, test } from 'bun:test'
+import { acceptsFiles, findEntry, indexManifest, realtimeServices, ssePathOf } from 'client:core'
+import type { ManifestDoc } from 'client:core'
 
-import {
-  acceptsFiles,
-  findFn,
-  indexManifest,
-  realtimeServices,
-  ssePathOf,
-} from '../src/lib/manifest'
-import type { Manifest } from '../src/lib/manifest'
+import { describe, expect, test } from 'bun:test'
 
 const realtime = {
   path: '/todos/_realtime',
@@ -15,7 +9,7 @@ const realtime = {
   server: { sync: {}, delta: {}, reset: {}, error: {} },
 }
 
-const manifest: Manifest = {
+const manifest: ManifestDoc = {
   ozaco: '1.0',
   app: { title: 'Demo', version: '1.0.0' },
   auth: { bearer: true },
@@ -77,8 +71,8 @@ describe('indexManifest', () => {
   test('findFn resolves by id', () => {
     const entries = indexManifest(manifest)
 
-    expect(findFn(entries, 'todos.create')?.title).toBe('Create todo')
-    expect(findFn(entries, 'nope.nope')).toBeUndefined()
+    expect(findEntry(entries, 'todos.create')?.title).toBe('Create todo')
+    expect(findEntry(entries, 'nope.nope')).toBeUndefined()
   })
 })
 
@@ -103,7 +97,7 @@ describe('acceptsFiles', () => {
   test('true only for parts-wired inputs', () => {
     const entries = indexManifest(manifest)
 
-    expect(acceptsFiles(findFn(entries, 'files.upload')!)).toBe(true)
-    expect(acceptsFiles(findFn(entries, 'todos.list')!)).toBe(false)
+    expect(acceptsFiles(findEntry(entries, 'files.upload')!)).toBe(true)
+    expect(acceptsFiles(findEntry(entries, 'todos.list')!)).toBe(false)
   })
 })

@@ -6,6 +6,8 @@ toolchains:
 tasks:
   build:
     command: bun x vite build
+    deps:
+      - client:build
     inputs:
       - index.html
       - src/**/*

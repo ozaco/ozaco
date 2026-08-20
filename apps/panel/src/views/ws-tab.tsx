@@ -1,4 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import type {
+  AsyncRealtimeLink,
+  AsyncSession,
+  AsyncWatchHandle,
+  FrameLog,
+  LinkStatus,
+} from '@ozaco/client'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
 import {
   Button,
   Cell,
@@ -36,18 +44,21 @@ import {
 import { ChevronIcon } from '../components/icons'
 import { SplitLayout } from '../components/layout'
 import { SchemaTree } from '../components/schema-tree'
+import { messageOf } from '../components/session'
 import { Timeline } from '../components/timeline'
 import type { TimelineEntry, TimelineTone } from '../components/timeline'
 import { useToasts } from '../components/toasts'
 import { ActionButton, MethodChip, UrlBarShell } from '../components/url-bar'
-import { createRealtimeEngine, realtimeServices } from '../lib'
-import type { EngineStatus, LogEntry, Manifest, RealtimeEngine } from '../lib'
+import { realtimeServices } from '../lib'
+import type { Manifest } from '../lib'
 
 /**
  * A WebSocket realtime channel as an Insomnia-style request: URL bar with the ws path and a
  * Connect/Disconnect toggle, Watch/Docs request sub-tabs, and a response side with the
- * materialized Live Rows table plus the color-coded frame Timeline. Driven by the lib's
- * createRealtimeEngine (auto-reconnect with `since` resume).
+ * materialized Live Rows table plus the color-coded frame Timeline.
+ *
+ * The socket, the `since`-resuming reconnect and the row materialization are ALL the client's
+ * (`session.realtime`) — this view only renders the link's frame tap and its watch handle.
  */
 
 const FRAME_LIMIT = 300
@@ -55,7 +66,13 @@ const FRAME_LIMIT = 300
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
 
-const toneOf = (entry: LogEntry): TimelineTone => {
+/** Rows are `_id`-keyed exactly when EVERY row carries one — the client's own rule. */
+const keyOf = (row: unknown): string | null =>
+  isRecord(row) && typeof row['_id'] === 'string' ? row['_id'] : null
+
+const rowKey = (row: unknown, index: number): string => keyOf(row) ?? `#${index}`
+
+const toneOf = (entry: FrameLog): TimelineTone => {
   if (entry.dir !== 'in') {
     return entry.dir
   }
@@ -98,11 +115,30 @@ interface RowItem {
   readonly cells: Readonly<Record<string, string>>
 }
 
+const CLIENT_FRAMES = ['watch', 'unwatch'] as const
+const SERVER_FRAMES = ['sync', 'delta', 'reset', 'error'] as const
+
+/** Render the declared frame schemas of a realtime block; absent ones are simply not listed. */
+const frameSchemas = (
+  block: Record<string, Record<string, unknown>> | undefined,
+  names: readonly string[],
+): ReactNode =>
+  names.map(name => {
+    const schema = block?.[name]
+
+    return schema === undefined ? null : (
+      <Fragment key={name}>
+        <span className='text-muted font-mono text-[11.5px]'>{name}</span>
+        <SchemaTree schema={schema} />
+      </Fragment>
+    )
+  })
+
 export const WsTab = ({
   service,
   manifest,
   base,
-  token,
+  session,
   split,
   onSplit,
   stacked,
@@ -110,8 +146,9 @@ export const WsTab = ({
   /** Realtime service name, or null for the custom-path pseudo entry. */
   readonly service: string | null
   readonly manifest: Manifest
+  /** Display only — the session already knows where to dial. */
   readonly base: string
-  readonly token: string
+  readonly session: AsyncSession
   readonly split: number
   readonly onSplit: (pct: number) => void
   readonly stacked: boolean
@@ -128,17 +165,23 @@ export const WsTab = ({
   const [path, setPath] = useState(() => resource?.realtime.path ?? '/realtime')
   const [fnKey, setFnKey] = useState(() => resource?.functions[0] ?? '')
   const [argsText, setArgsText] = useState('')
-  const [status, setStatus] = useState<EngineStatus>('idle')
+  const [status, setStatus] = useState<LinkStatus>('idle')
   const [version, setVersion] = useState(-1)
   const [keyed, setKeyed] = useState(false)
   const [rows, setRows] = useState<readonly (readonly [string, unknown])[]>([])
   const [frames, setFrames] = useState<readonly TimelineEntry[]>([])
-  const engineRef = useRef<RealtimeEngine | null>(null)
-  const watchIdRef = useRef<string | null>(null)
+  const linkRef = useRef<AsyncRealtimeLink | null>(null)
+  const watchRef = useRef<AsyncWatchHandle | null>(null)
+  const untapRef = useRef<(() => void) | null>(null)
 
   useEffect(
     () => () => {
-      engineRef.current?.stop()
+      untapRef.current?.()
+
+      const link = linkRef.current
+
+      linkRef.current = null
+      void link?.close()
     },
     [],
   )
@@ -171,13 +214,27 @@ export const WsTab = ({
 
   const connected = status === 'connecting' || status === 'open' || status === 'reconnecting'
 
-  const disconnect = (): void => {
-    engineRef.current?.stop()
-    engineRef.current = null
-    watchIdRef.current = null
+  const teardown = async (): Promise<void> => {
+    untapRef.current?.()
+    untapRef.current = null
+    watchRef.current = null
+
+    const link = linkRef.current
+
+    linkRef.current = null
+
+    if (link !== null) {
+      await link.close()
+    }
   }
 
-  const startWatch = (engine: RealtimeEngine): void => {
+  const disconnect = (): void => {
+    void teardown().finally(() => {
+      setStatus('closed')
+    })
+  }
+
+  const startWatch = async (link: AsyncRealtimeLink): Promise<void> => {
     const fn = fnKey.trim()
 
     if (fn === '') {
@@ -195,56 +252,76 @@ export const WsTab = ({
     setRows([])
     setVersion(-1)
     setKeyed(false)
-    watchIdRef.current = engine.watch(fn, watch.args)
+
+    watchRef.current = await link.watch({
+      fn,
+      args: watch.args,
+      onRows: (next, rowVersion) => {
+        setRows(next.map((row, index) => [rowKey(row, index), row] as const))
+        setKeyed(next.length > 0 && next.every(row => keyOf(row) !== null))
+        setVersion(rowVersion)
+      },
+      options: {
+        onError: failure => {
+          toasts.error(messageOf(failure))
+        },
+      },
+    })
   }
 
   const connect = (): void => {
-    disconnect()
-    setFrames([])
+    void (async () => {
+      await teardown()
+      setFrames([])
 
-    const engine = createRealtimeEngine({
-      base,
-      path,
-      ...(token === '' ? {} : { token: () => token }),
-      onStatus: setStatus,
-      onLog: entry => {
-        setFrames(prev => [
-          ...prev.slice(-(FRAME_LIMIT - 1)),
-          { at: entry.at, tone: toneOf(entry), text: entry.text },
-        ])
-      },
-      onRows: (id, _next, rowVersion) => {
-        const watch = engineRef.current?.entry(id)
+      try {
+        // the client dials (and auto-reconnects with `since`); the tap is this view's timeline
+        const link = await session.realtime({ path })
 
-        if (watch !== undefined) {
-          setRows([...watch.rows.entries()])
-          setKeyed(watch.keyed)
-        }
+        linkRef.current = link
+        untapRef.current = link.tap(frame => {
+          setFrames(prev => [
+            ...prev.slice(-(FRAME_LIMIT - 1)),
+            { at: frame.at, tone: toneOf(frame), text: frame.text },
+          ])
+          setStatus(link.status())
+        })
+        setStatus(link.status())
 
-        setVersion(rowVersion)
-      },
-    })
-
-    engineRef.current = engine
-    engine.connect()
-    startWatch(engine)
+        await startWatch(link)
+        setStatus(link.status())
+      } catch (error) {
+        toasts.error(messageOf(error))
+        setStatus('closed')
+      }
+    })()
   }
 
   const applyWatch = (): void => {
-    const engine = engineRef.current
+    void (async () => {
+      const link = linkRef.current
 
-    if (engine === null) {
-      toasts.error('Connect the socket first')
+      if (link === null) {
+        toasts.error('Connect the socket first')
 
-      return
-    }
+        return
+      }
 
-    if (watchIdRef.current !== null) {
-      engine.unwatch(watchIdRef.current)
-      watchIdRef.current = null
-    }
+      const previous = watchRef.current
 
-    startWatch(engine)
+      watchRef.current = null
+
+      // the link is pinned by `session.realtime`, so dropping the last watch keeps the socket
+      if (previous !== null) {
+        await previous.stop()
+      }
+
+      try {
+        await startWatch(link)
+      } catch (error) {
+        toasts.error(messageOf(error))
+      }
+    })()
   }
 
   const columns = useMemo(() => {
@@ -415,21 +492,11 @@ export const WsTab = ({
               <div className='flex flex-col gap-4'>
                 <div className='flex flex-col gap-1'>
                   <SectionTitle>Client frames</SectionTitle>
-                  <span className='text-muted font-mono text-[11.5px]'>watch</span>
-                  <SchemaTree schema={resource.realtime.client.watch} />
-                  <span className='text-muted font-mono text-[11.5px]'>unwatch</span>
-                  <SchemaTree schema={resource.realtime.client.unwatch} />
+                  {frameSchemas(resource.realtime.client, CLIENT_FRAMES)}
                 </div>
                 <div className='flex flex-col gap-1'>
                   <SectionTitle>Server frames</SectionTitle>
-                  <span className='text-muted font-mono text-[11.5px]'>sync</span>
-                  <SchemaTree schema={resource.realtime.server.sync} />
-                  <span className='text-muted font-mono text-[11.5px]'>delta</span>
-                  <SchemaTree schema={resource.realtime.server.delta} />
-                  <span className='text-muted font-mono text-[11.5px]'>reset</span>
-                  <SchemaTree schema={resource.realtime.server.reset} />
-                  <span className='text-muted font-mono text-[11.5px]'>error</span>
-                  <SchemaTree schema={resource.realtime.server.error} />
+                  {frameSchemas(resource.realtime.server, SERVER_FRAMES)}
                 </div>
               </div>
             )}

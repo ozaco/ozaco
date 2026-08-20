@@ -11,6 +11,7 @@ import {
   usePersistedNumber,
   useStacked,
 } from './components/layout'
+import { messageOf, usePanelSession } from './components/session'
 import { SettingsDialog } from './components/settings-dialog'
 import type { PanelSettings } from './components/settings-dialog'
 import { Sidebar } from './components/sidebar'
@@ -21,7 +22,6 @@ import { ToastProvider, useToasts } from './components/toasts'
 import {
   DEFAULT_DOCS_PATH,
   effectiveBase,
-  fetchManifest,
   findFn,
   getTheme,
   getToken,
@@ -124,19 +124,29 @@ const PanelApp = () => {
 
   const docsPath = docsPathFor(settings.base)
   const probeUrl = `${settings.base}${docsPath}/manifest`
+  const { session, error: sessionError } = usePanelSession(settings.base, docsPath)
 
   const load = useCallback(
-    async (base: string, quiet: boolean): Promise<void> => {
+    async (quiet: boolean): Promise<void> => {
+      if (session === null) {
+        return
+      }
+
       if (!quiet) {
         setState({ phase: 'loading' })
       }
 
       try {
-        const manifest = await fetchManifest(base, docsPathFor(base))
+        // the client fetches and caches the manifest; `refresh: true` forces a re-read
+        const manifest = await session.manifest({ refresh: quiet })
+
+        if (manifest === null) {
+          throw new Error(`no manifest served at ${probeUrl}`)
+        }
 
         setState({ phase: 'ready', manifest, entries: indexManifest(manifest) })
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
+        const message = messageOf(error)
 
         if (quiet) {
           toasts.error(`Manifest reload failed: ${message}`)
@@ -145,13 +155,21 @@ const PanelApp = () => {
         }
       }
     },
-    [toasts],
+    [probeUrl, session, toasts],
   )
 
-  // initial load + reload whenever the effective base changes (settings save)
+  // a fresh session (first mount, or a base/docsPath change) re-reads the manifest
   useEffect(() => {
-    void load(settings.base, false)
-  }, [load, settings.base])
+    if (session === null) {
+      setState(
+        sessionError === null ? { phase: 'loading' } : { phase: 'error', message: sessionError },
+      )
+
+      return
+    }
+
+    void load(false)
+  }, [load, session, sessionError])
 
   const applySettings = (next: PanelSettings): void => {
     setBaseOverride(next.base)
@@ -209,7 +227,7 @@ const PanelApp = () => {
   const baseLabel = settings.base === '' ? 'same origin' : settings.base
 
   const renderTab = (spec: TabSpec): ReactNode => {
-    if (ready === null) {
+    if (ready === null || session === null) {
       return null
     }
 
@@ -230,9 +248,9 @@ const PanelApp = () => {
           entry={entry}
           onOpenSettings={() => setSettingsOpen(true)}
           onSplit={setSplit}
+          session={session}
           split={split}
           stacked={stacked}
-          token={settings.token}
         />
       )
     }
@@ -244,9 +262,9 @@ const PanelApp = () => {
           manifest={ready.manifest}
           onSplit={setSplit}
           service={spec.service}
+          session={session}
           split={split}
           stacked={stacked}
-          token={settings.token}
         />
       )
     }
@@ -258,9 +276,9 @@ const PanelApp = () => {
           manifest={ready.manifest}
           onSplit={setSplit}
           service={spec.service}
+          session={session}
           split={split}
           stacked={stacked}
-          token={settings.token}
         />
       )
     }
@@ -280,7 +298,7 @@ const PanelApp = () => {
           onOpen={openTab}
           onOpenSettings={() => setSettingsOpen(true)}
           onRefresh={() => {
-            void load(settings.base, ready !== null)
+            void load(ready !== null)
           }}
           onToggleTheme={toggleTheme}
           theme={settings.theme}
@@ -302,7 +320,7 @@ const PanelApp = () => {
               message={state.phase === 'error' ? state.message : ''}
               onOpenSettings={() => setSettingsOpen(true)}
               onRetry={() => {
-                void load(settings.base, false)
+                void load(false)
               }}
               probeUrl={probeUrl}
             />

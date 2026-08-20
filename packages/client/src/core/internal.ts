@@ -9,10 +9,19 @@ import type { Result } from 'std:result'
 import { JsonCodec } from 'std:codec/impl/json'
 
 import { ClientErrors } from './errors'
-import type { ClientState, ManifestDoc, ManifestFunctionDoc } from './types'
+import type {
+  CallAddress,
+  ClientState,
+  ManifestDoc,
+  ManifestFunctionDoc,
+  RequestFile,
+} from './types'
 
 /** Methods whose remaining args travel as a query string instead of a JSON body. */
 const QUERY_METHODS = new Set(['GET', 'HEAD', 'DELETE'])
+
+/** Where the docs plugin is mounted by default (`Docs.actions.mount()`). */
+export const DEFAULT_DOCS_PATH = '/docs'
 
 let watchCounter = 0
 
@@ -111,8 +120,9 @@ export const resolveManifest = operation(function* (state: ClientState) {
     return state.manifest
   }
 
+  const docsPath = state.options.docsPath ?? DEFAULT_DOCS_PATH
   const fetched = yield* attempt(function* () {
-    const response = yield* Fetch.actions.get(joinUrl(state.options.url, '/docs/manifest'))
+    const response = yield* Fetch.actions.get(joinUrl(state.options.url, `${docsPath}/manifest`))
 
     if (!response.ok) {
       return null
@@ -127,11 +137,6 @@ export const resolveManifest = operation(function* (state: ClientState) {
 
   return state.manifest
 })
-
-export interface CallAddress {
-  readonly method: string
-  readonly path: string
-}
 
 const joinPrefix = (prefix: string, path: string): string => {
   const cleanPrefix = prefix === '/' ? '' : trimSlash(prefix)
@@ -180,21 +185,32 @@ export const realtimePathOf = (state: ClientState, resource: string): string => 
   return `/${resource}/_realtime`
 }
 
-export interface PreparedRequest {
-  readonly url: string
-  readonly method: string
-  readonly headers: Record<string, string>
-  readonly body: string | undefined
-}
-
 const isQueryMethod = (method: string): boolean => QUERY_METHODS.has(method)
 
-/** Fill `:name` path params from args (consumed), split the rest into query string or body. */
+/** A multipart field value: strings verbatim, everything else as JSON. */
+const fieldValue = operation(function* (value: unknown) {
+  return typeof value === 'string' ? value : yield* JsonCodec.actions.stringify(value)
+})
+
+export interface PrepareInput {
+  readonly args: unknown
+  /** Any attachment forces `multipart/form-data`. */
+  readonly files?: readonly RequestFile[] | undefined
+  /** Merged OVER the session headers and the bearer token. */
+  readonly headers?: Record<string, string> | undefined
+}
+
+/**
+ * Fill `:name` path params from args (consumed), then frame the rest: attachments force multipart
+ * (fields FIRST, files after — the edge folds leading fields into the action params), GET/HEAD/
+ * DELETE take a query string, everything else a JSON body.
+ */
 export const prepareRequest = operation(function* (
   state: ClientState,
   address: CallAddress,
-  args: unknown,
+  input: PrepareInput,
 ) {
+  const { args, files = [] } = input
   const source: Record<string, unknown> = isRecord(args) ? args : {}
   const consumed = new Set<string>()
 
@@ -223,12 +239,33 @@ export const prepareRequest = operation(function* (
   const headers: Record<string, string> = { ...state.options.headers }
   const token = resolveToken(state)
 
-  if (token !== undefined) {
+  if (token !== undefined && token !== '') {
     headers['authorization'] = `Bearer ${token}`
   }
 
+  Object.assign(headers, input.headers)
+
   let url = joinUrl(state.options.url, path)
-  let body: string | undefined
+
+  if (files.length > 0) {
+    // fields FIRST — the edge treats every field before the first file as an action param, and
+    // the browser sets the multipart content-type (with its boundary) itself
+    const form = new FormData()
+
+    for (const [key, value] of Object.entries(payload)) {
+      form.append(key, yield* fieldValue(value))
+    }
+
+    for (const attachment of files) {
+      const filename = attachment.filename ?? (attachment.file as File).name
+
+      form.append(attachment.field, attachment.file, filename)
+    }
+
+    Reflect.deleteProperty(headers, 'content-type')
+
+    return { url, method: address.method, headers, body: form, bodyKind: 'multipart' } as const
+  }
 
   if (isQueryMethod(address.method)) {
     const query = yield* buildQuery(payload)
@@ -236,12 +273,19 @@ export const prepareRequest = operation(function* (
     if (query !== '') {
       url = `${url}?${query}`
     }
-  } else if (args !== undefined) {
-    headers['content-type'] = 'application/json'
-    body = yield* JsonCodec.actions.stringify(isRecord(args) ? payload : args)
+
+    return { url, method: address.method, headers, body: undefined, bodyKind: 'none' } as const
   }
 
-  return { url, method: address.method, headers, body }
+  if (args === undefined) {
+    return { url, method: address.method, headers, body: undefined, bodyKind: 'none' } as const
+  }
+
+  headers['content-type'] = 'application/json'
+
+  const body = yield* JsonCodec.actions.stringify(isRecord(args) ? payload : args)
+
+  return { url, method: address.method, headers, body, bodyKind: 'json' } as const
 })
 
 /**

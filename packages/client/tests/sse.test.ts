@@ -1,6 +1,6 @@
-import { describe, expect, test } from 'bun:test'
+import { createSseParser } from 'client:core'
 
-import { createSseParser } from '../src/lib/sse'
+import { describe, expect, test } from 'bun:test'
 
 const ENCODER = new TextEncoder()
 

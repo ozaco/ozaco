@@ -1,6 +1,7 @@
+import type { LinkStatus } from '@ozaco/client'
 import type { ReactNode } from 'react'
 
-import type { EngineStatus, FnKind } from '../lib'
+import type { FnKind } from '../lib'
 
 /** Method / kind / protocol tags and status pills — the workspace's color spine. */
 
@@ -56,15 +57,14 @@ const PILL_TONE: Readonly<Record<PillTone, string>> = {
   muted: 'border-line text-muted',
 }
 
-const CONN_PILL: Readonly<
-  Record<EngineStatus, { readonly tone: PillTone; readonly label: string }>
-> = {
-  idle: { tone: 'muted', label: 'idle' },
-  connecting: { tone: 'warn', label: 'connecting' },
-  open: { tone: 'ok', label: 'live' },
-  reconnecting: { tone: 'warn', label: 'reconnecting' },
-  closed: { tone: 'muted', label: 'closed' },
-}
+const CONN_PILL: Readonly<Record<LinkStatus, { readonly tone: PillTone; readonly label: string }>> =
+  {
+    idle: { tone: 'muted', label: 'idle' },
+    connecting: { tone: 'warn', label: 'connecting' },
+    open: { tone: 'ok', label: 'live' },
+    reconnecting: { tone: 'warn', label: 'reconnecting' },
+    closed: { tone: 'muted', label: 'closed' },
+  }
 
 const TAG =
   'inline-flex w-10 shrink-0 items-center justify-end font-mono text-[10px] font-bold tracking-wider'
@@ -149,10 +149,14 @@ export const StatePill = ({
   </span>
 )
 
-export const ConnPill = ({ status }: { readonly status: EngineStatus }) => (
-  <StatePill
-    label={CONN_PILL[status].label}
-    pulse={status === 'reconnecting' || status === 'connecting'}
-    tone={CONN_PILL[status].tone}
-  />
-)
+export const ConnPill = ({ status }: { readonly status: LinkStatus }) => {
+  const pill = CONN_PILL[status] ?? CONN_PILL.idle
+
+  return (
+    <StatePill
+      label={pill.label}
+      pulse={status === 'reconnecting' || status === 'connecting'}
+      tone={pill.tone}
+    />
+  )
+}

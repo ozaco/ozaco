@@ -1,3 +1,4 @@
+// oxlint-disable import/exports-last
 import { attempt, box, fork, operation, sleep, withResolvers } from 'std:effect'
 import { fail, isFailure, isSuccess } from 'std:result'
 import type { Result } from 'std:result'
@@ -10,8 +11,14 @@ import { ClientErrors } from './errors'
 import { isRecord, nextWatchId, realtimePathOf, resolveToken, toWsUrl } from './internal'
 import type {
   ClientState,
+  FrameDirection,
+  FrameTap,
+  LinkStatus,
+  RealtimeLink,
+  RealtimeTarget,
   ResourceLink,
   WatchEntry,
+  WatchHandle,
   WatchOptions,
   WatchRows,
   WatchStop,
@@ -50,6 +57,42 @@ const emit = (entry: WatchEntry): void => {
   entry.onRows([...entry.rows.values()], entry.version)
 }
 
+/** Publish one frame (or engine note) to every observer of a link. Taps never break the pump. */
+const note = (link: ResourceLink, dir: FrameDirection, text: string): void => {
+  if (link.taps.size === 0) {
+    return
+  }
+
+  const frame = { at: Date.now(), dir, text }
+
+  for (const tap of link.taps) {
+    try {
+      tap(frame)
+    } catch {
+      // an observer that throws is the observer's problem, never the socket's
+    }
+  }
+}
+
+/**
+ * Render an incoming message for the timeline. With a codec installed, `std:ws` hands frames over
+ * ALREADY DECODED — the raw text is gone, so it is re-rendered here rather than logged as opaque.
+ */
+const frameText = operation(function* (value: unknown) {
+  if (typeof value === 'string') {
+    return value
+  }
+
+  const rendered = yield* attempt(() => JsonCodec.actions.stringify(value))
+
+  return isSuccess(rendered) ? rendered.value : '[binary frame]'
+})
+
+const setStatus = (link: ResourceLink, status: LinkStatus): void => {
+  link.status = status
+  note(link, 'sys', status)
+}
+
 const watchFrame = operation(function* (entry: WatchEntry, since?: number) {
   return yield* JsonCodec.actions.stringify({
     event: 'watch',
@@ -65,6 +108,7 @@ const sendWatch = operation(function* (link: ResourceLink, entry: WatchEntry) {
     const frame = yield* watchFrame(entry, entry.version >= 0 ? entry.version : undefined)
 
     yield* link.send(frame)
+    note(link, 'out', frame)
   }
 })
 
@@ -168,6 +212,8 @@ const monitorReconnects = operation(function* (link: ResourceLink, connection: W
     }
 
     seen = connection.reconnects
+    setStatus(link, 'open')
+    note(link, 'sys', `reconnected (#${seen}) — resending ${link.entries.size} watch(es)`)
 
     for (const entry of link.entries.values()) {
       yield* attempt(() => sendWatch(link, entry))
@@ -188,13 +234,17 @@ const notifyAll = (link: ResourceLink, failure: Result.Failure<unknown>) => {
  */
 const linkPump = operation(function* (state: ClientState, link: ResourceLink) {
   const token = resolveToken(state)
-  const query = token === undefined ? '' : `?token=${encodeURIComponent(token)}`
+  const query = token === undefined || token === '' ? '' : `?token=${encodeURIComponent(token)}`
   const url = `${toWsUrl(state.options.url)}${link.path}${query}`
+
+  setStatus(link, 'connecting')
 
   const dialed = yield* attempt(() => Ws.actions.connect(url, { reconnect: RECONNECT }))
 
   if (isFailure(dialed)) {
     link.failure = dialed
+    setStatus(link, 'closed')
+    note(link, 'err', `connect failed: ${dialed.message}`)
     link.markReady()
     notifyAll(link, dialed)
 
@@ -204,29 +254,40 @@ const linkPump = operation(function* (state: ClientState, link: ResourceLink) {
   const connection = dialed.value
 
   link.send = text => connection.send(text)
+  setStatus(link, 'open')
   link.markReady()
 
   yield* fork(() => monitorReconnects(link, connection))
 
   const messages = yield* connection.messages
 
-  for (;;) {
-    const step = yield* messages.next()
+  try {
+    for (;;) {
+      const step = yield* messages.next()
 
-    if (step.done) {
-      if (isFailure(step.value)) {
-        link.failure = step.value
-        notifyAll(link, step.value)
+      if (step.done) {
+        if (isFailure(step.value)) {
+          link.failure = step.value
+          note(link, 'err', `stream closed: ${step.value.message}`)
+          notifyAll(link, step.value)
+        }
+
+        return
       }
 
-      return
-    }
+      // rendering costs nothing when nobody is watching the timeline
+      if (link.taps.size > 0) {
+        note(link, 'in', yield* frameText(step.value))
+      }
 
-    const frame = yield* decodeMessage(step.value)
+      const frame = yield* decodeMessage(step.value)
 
-    if (frame) {
-      yield* applyFrame(link, frame)
+      if (frame) {
+        yield* applyFrame(link, frame)
+      }
     }
+  } finally {
+    setStatus(link, 'closed')
   }
 })
 
@@ -251,26 +312,26 @@ const ensureLink = (state: ClientState, path: string): ResourceLink => {
       gate.resolve()
     },
     failure: undefined,
+    status: 'idle',
+    pinned: false,
+    taps: new Set<FrameTap>(),
   }
 
   state.links.set(path, link)
-  link.task = state.scope.run(() => box(() => linkPump(state, link)))
 
   return link
 }
 
-export interface WatchInput {
-  readonly resource: string
-  readonly fn: string
-  readonly args: unknown
-  readonly onRows: WatchRows
-  readonly options?: WatchOptions | undefined
+/** Start the link's pump if it is not already running (idempotent — one pump per link). */
+const connectLink = (state: ClientState, link: ResourceLink): ResourceLink => {
+  link.task ??= state.scope.run(() => box(() => linkPump(state, link)))
+
+  return link
 }
 
-/** Start one watch: ensure the shared link, register the entry, send the `watch` frame. */
-export const startWatch = operation(function* (state: ClientState, input: WatchInput) {
-  const path = realtimePathOf(state, input.resource)
-  const link = ensureLink(state, path)
+/** Ensure a connected link and wait for its dial to settle; a failed dial raises `client.watch`. */
+const dial = operation(function* (state: ClientState, path: string) {
+  const link = connectLink(state, ensureLink(state, path))
 
   yield* link.ready
 
@@ -282,6 +343,57 @@ export const startWatch = operation(function* (state: ClientState, input: WatchI
     )
   }
 
+  return link
+})
+
+/** Send `unwatch` (best effort — a dead socket has already forgotten the subscription). */
+const sendUnwatch = operation(function* (link: ResourceLink, id: string) {
+  const send = link.send
+
+  if (!send) {
+    return
+  }
+
+  yield* attempt(function* () {
+    const frame = yield* JsonCodec.actions.stringify({ event: 'unwatch', id })
+
+    yield* send(frame)
+    note(link, 'out', frame)
+  })
+})
+
+/** Halt the pump and forget the link — the socket closes with its task. */
+const closeLink = operation(function* (state: ClientState, link: ResourceLink) {
+  state.links.delete(link.path)
+  link.entries.clear()
+  link.pinned = false
+
+  const task = link.task
+
+  link.task = undefined
+  link.send = undefined
+
+  if (task) {
+    yield* attempt(() => task.halt())
+  }
+
+  setStatus(link, 'closed')
+})
+
+export interface WatchInput {
+  readonly resource: string
+  readonly fn: string
+  readonly args: unknown
+  readonly onRows: WatchRows
+  readonly options?: WatchOptions | undefined
+}
+
+/** Register one watch on an already-dialed link and send its `watch` frame. */
+const registerWatch = operation(function* (
+  state: ClientState,
+  link: ResourceLink,
+  input: Omit<WatchInput, 'resource'>,
+) {
   const entry: WatchEntry = {
     id: nextWatchId(),
     fn: input.fn,
@@ -296,33 +408,77 @@ export const startWatch = operation(function* (state: ClientState, input: WatchI
   link.entries.set(entry.id, entry)
   yield* sendWatch(link, entry)
 
-  const stop: WatchStop = operation(function* () {
-    if (!link.entries.delete(entry.id)) {
-      return
-    }
-
-    const send = link.send
-
-    if (send) {
-      yield* attempt(function* () {
-        const frame = yield* JsonCodec.actions.stringify({ event: 'unwatch', id: entry.id })
-
-        yield* send(frame)
-      })
-    }
-
-    if (link.entries.size === 0) {
-      state.links.delete(path)
-
-      const task = link.task
-
-      link.task = undefined
-
-      if (task) {
-        yield* task.halt()
+  const handle: WatchHandle = {
+    id: entry.id,
+    rows: () => [...entry.rows.values()],
+    version: () => entry.version,
+    stop: operation(function* () {
+      if (!link.entries.delete(entry.id)) {
+        return
       }
-    }
-  })
+
+      yield* sendUnwatch(link, entry.id)
+
+      if (link.entries.size === 0 && !link.pinned) {
+        yield* closeLink(state, link)
+      }
+    }),
+  }
+
+  return handle
+})
+
+/**
+ * Raw realtime access for tooling: explicit lifecycle, a frame timeline and untyped `fn`-addressed
+ * watches. Shares the very same link (and socket) the typed `.watch()` API uses.
+ */
+export const openRealtime = operation(function* (state: ClientState, target: RealtimeTarget) {
+  if (target.path === undefined && target.resource === undefined) {
+    return yield* fail(
+      ClientErrors.Watch,
+      'realtime needs either a `resource` or an explicit `path`',
+    )
+  }
+
+  const path = target.path ?? realtimePathOf(state, target.resource as string)
+  const link = connectLink(state, ensureLink(state, path))
+
+  // the opener owns the socket now: stopping the last watch must not drop it
+  link.pinned = true
+
+  const handle: RealtimeLink = {
+    path,
+    status: () => link.status,
+    tap: observer => {
+      link.taps.add(observer)
+
+      return () => {
+        link.taps.delete(observer)
+      }
+    },
+    watch: input =>
+      operation(function* () {
+        const dialed = yield* dial(state, path)
+
+        return yield* registerWatch(state, dialed, {
+          fn: input.fn,
+          args: input.args,
+          onRows: input.onRows,
+          options: input.options,
+        })
+      })(),
+    close: () => closeLink(state, link),
+  }
+
+  return handle
+})
+
+/** Start one watch: ensure the shared link, register the entry, send the `watch` frame. */
+export const startWatch = operation(function* (state: ClientState, input: WatchInput) {
+  const path = realtimePathOf(state, input.resource)
+  const link = yield* dial(state, path)
+  const handle = yield* registerWatch(state, link, input)
+  const stop: WatchStop = handle.stop
 
   return stop
 })

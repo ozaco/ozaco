@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import type { AsyncSession, AsyncSseHandle } from '@ozaco/client'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Button,
   Input,
@@ -31,17 +32,20 @@ import {
 import { ChevronIcon } from '../components/icons'
 import { SplitLayout } from '../components/layout'
 import { SchemaTree } from '../components/schema-tree'
+import { messageOf } from '../components/session'
 import { Timeline } from '../components/timeline'
 import type { TimelineEntry, TimelineTone } from '../components/timeline'
 import { useToasts } from '../components/toasts'
 import { ActionButton, MethodChip, UrlBarShell } from '../components/url-bar'
-import { connectSse, realtimeServices, ssePathOf } from '../lib'
-import type { Manifest, SseConnection } from '../lib'
+import { realtimeServices, ssePathOf } from '../lib'
+import type { Manifest } from '../lib'
 
 /**
  * The SSE flavor of a realtime channel as a connectable request: Connect/Disconnect over
  * `GET <path>/sse?fn=&args=&since=`, with a color-coded event Timeline on the response side.
- * Uses the lib's fetch-based SSE reader so the bearer token can ride the Authorization header.
+ *
+ * The stream is the client's (`session.sse`), which reads it through `std:fetch` — that is what
+ * lets the bearer token ride the Authorization header, which `EventSource` cannot do.
  */
 
 type SseStatus = 'idle' | 'connecting' | 'open' | 'closed' | 'failed'
@@ -55,6 +59,11 @@ const STATUS_PILL: Record<SseStatus, { readonly tone: PillTone; readonly label: 
 }
 
 const FRAME_LIMIT = 300
+
+const SERVER_FRAMES = ['sync', 'delta', 'reset', 'error'] as const
+
+const textOf = (value: unknown): string =>
+  typeof value === 'string' ? value : (JSON.stringify(value) ?? String(value))
 
 const toneOfFrame = (value: unknown): TimelineTone => {
   if (typeof value === 'object' && value !== null && 'type' in value) {
@@ -84,15 +93,16 @@ export const SseTab = ({
   service,
   manifest,
   base,
-  token,
+  session,
   split,
   onSplit,
   stacked,
 }: {
   readonly service: string
   readonly manifest: Manifest
+  /** Display only — the session already knows where to dial. */
   readonly base: string
-  readonly token: string
+  readonly session: AsyncSession
   readonly split: number
   readonly onSplit: (pct: number) => void
   readonly stacked: boolean
@@ -111,11 +121,14 @@ export const SseTab = ({
   const [since, setSince] = useState('')
   const [status, setStatus] = useState<SseStatus>('idle')
   const [frames, setFrames] = useState<readonly TimelineEntry[]>([])
-  const connRef = useRef<SseConnection | null>(null)
+  const streamRef = useRef<AsyncSseHandle | null>(null)
 
   useEffect(
     () => () => {
-      connRef.current?.stop()
+      const stream = streamRef.current
+
+      streamRef.current = null
+      void stream?.stop()
     },
     [],
   )
@@ -157,8 +170,10 @@ export const SseTab = ({
   const connected = status === 'connecting' || status === 'open'
 
   const disconnect = (): void => {
-    connRef.current?.stop()
-    connRef.current = null
+    const stream = streamRef.current
+
+    streamRef.current = null
+    void stream?.stop()
   }
 
   const connect = (): void => {
@@ -179,36 +194,46 @@ export const SseTab = ({
     setStatus('connecting')
     push('out', `GET ${url}`)
 
-    const connection = connectSse({
-      url,
-      ...(token === '' ? {} : { token }),
-      onJson: value => {
-        setStatus('open')
-        push(toneOfFrame(value), JSON.stringify(value))
-      },
-      onRaw: data => {
-        setStatus('open')
-        push('in', data)
-      },
-      onComment: comment => {
-        setStatus('open')
-        push('sys', `: ${comment}`)
-      },
-      onError: error => {
-        const message = error instanceof Error ? error.message : String(error)
+    void (async () => {
+      try {
+        streamRef.current = await session.sse({
+          path,
+          fn: fnKey.trim(),
+          ...(argsText.trim() === '' ? {} : { args: JSON.parse(argsText) as unknown }),
+          ...(since.trim() === '' ? {} : { since: Number(since.trim()) }),
+          onValue: value => {
+            setStatus('open')
+            push(toneOfFrame(value), textOf(value))
+          },
+          onRaw: data => {
+            setStatus('open')
+            push('in', data)
+          },
+          onComment: comment => {
+            setStatus('open')
+            push('sys', `: ${comment}`)
+          },
+          onError: failure => {
+            const message = messageOf(failure)
+
+            setStatus('failed')
+            push('err', message)
+            toasts.error(`SSE stream failed: ${message}`)
+          },
+          onEnd: () => {
+            setStatus(prev => (prev === 'failed' ? prev : 'closed'))
+            push('sys', 'stream ended')
+            streamRef.current = null
+          },
+        })
+      } catch (error) {
+        const message = messageOf(error)
 
         setStatus('failed')
         push('err', message)
         toasts.error(`SSE stream failed: ${message}`)
-      },
-      onEnd: () => {
-        setStatus(prev => (prev === 'failed' ? prev : 'closed'))
-        push('sys', 'stream ended')
-        connRef.current = null
-      },
-    })
-
-    connRef.current = connection
+      }
+    })()
   }
 
   return (
@@ -323,14 +348,16 @@ export const SseTab = ({
                 </p>
                 <div className='flex flex-col gap-1'>
                   <SectionTitle>Server frames</SectionTitle>
-                  <span className='text-muted font-mono text-[11.5px]'>sync</span>
-                  <SchemaTree schema={resource.realtime.server.sync} />
-                  <span className='text-muted font-mono text-[11.5px]'>delta</span>
-                  <SchemaTree schema={resource.realtime.server.delta} />
-                  <span className='text-muted font-mono text-[11.5px]'>reset</span>
-                  <SchemaTree schema={resource.realtime.server.reset} />
-                  <span className='text-muted font-mono text-[11.5px]'>error</span>
-                  <SchemaTree schema={resource.realtime.server.error} />
+                  {SERVER_FRAMES.map(name => {
+                    const schema = resource.realtime.server?.[name]
+
+                    return schema === undefined ? null : (
+                      <Fragment key={name}>
+                        <span className='text-muted font-mono text-[11.5px]'>{name}</span>
+                        <SchemaTree schema={schema} />
+                      </Fragment>
+                    )
+                  })}
                 </div>
               </div>
             )}
