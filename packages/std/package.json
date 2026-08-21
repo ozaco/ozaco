@@ -229,7 +229,7 @@
     "registry": "https://registry.npmjs.org/"
   },
   "dependencies": {
-    "@streamparser/json": "0.0.22"
+    "@streamparser/json": "0.0.26"
   },
   "devDependencies": {
     "@types/fb-watchman": "2.0.6",
