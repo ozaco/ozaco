@@ -195,7 +195,10 @@ function* runAction({ state, request, entry, params, trace }: ActionCall): Opera
     abort: reason => controller.abort(reason),
   }
 
-  // the kernel action unwraps a returned Result (std plugin contract): fold it back here
+  // the kernel action unwraps a returned Result (std plugin contract): fold it back here.
+  // The dispatch runs INLINE in the request scope — a stream reply's lanes/pumps must live
+  // exactly as long as the response body; a disconnecting client aborts `call.signal`, and
+  // `invoke` halts the handler (`onDisconnect: 'cancel'`) from there.
   const outcome = yield* attempt(() => state.actions.dispatch(call))
 
   if (isFailure(outcome)) {

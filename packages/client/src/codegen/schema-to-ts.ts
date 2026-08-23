@@ -47,6 +47,7 @@ const unionOf = (variants: readonly unknown[], depth: number): string => {
 
 const objectOf = (schema: Record<string, unknown>, depth: number): string => {
   const properties = isRecord(schema['properties']) ? schema['properties'] : undefined
+
   const required = new Set(
     Array.isArray(schema['required'])
       ? schema['required'].filter(key => typeof key === 'string')
@@ -87,20 +88,25 @@ const primitiveOf = (type: string, schema: Record<string, unknown>, depth: numbe
     case 'integer': {
       return 'number'
     }
+
     case 'boolean': {
       return 'boolean'
     }
+
     case 'null': {
       return 'null'
     }
+
     case 'object': {
       return objectOf(schema, depth)
     }
+
     case 'array': {
       const items = schema['items']
 
       return items === undefined ? 'unknown[]' : `${wrapForArray(schemaToType(items, depth))}[]`
     }
+
     default: {
       return 'unknown'
     }

@@ -1,363 +1,187 @@
+/**
+ * The workspace shell: sidebar (collections) · tab strip · the active tab. Every open tab stays
+ * MOUNTED (hidden with display:none) so in-flight requests and live sockets survive switching.
+ */
 import { useCallback, useEffect, useState } from 'react'
-import type { ReactNode } from 'react'
 
-import { kindDotClass, methodDotClass, protoDotClass } from './components/badges'
-import {
-  SIDEBAR_BOUNDS,
-  SIDEBAR_KEY,
-  SPLIT_BOUNDS,
-  SPLIT_KEY,
-  SideResizer,
-  usePersistedNumber,
-  useStacked,
-} from './components/layout'
-import { messageOf, usePanelSession } from './components/session'
 import { SettingsDialog } from './components/settings-dialog'
-import type { PanelSettings } from './components/settings-dialog'
 import { Sidebar } from './components/sidebar'
-import type { ConnState } from './components/sidebar'
-import { TabStrip, tabIdOf } from './components/tab-strip'
-import type { TabItem, TabSpec } from './components/tab-strip'
-import { ToastProvider, useToasts } from './components/toasts'
+import { SideResizer, usePersistedNumber } from './components/split'
+import type { TabSpec } from './components/tab-strip'
+import { TabStrip } from './components/tab-strip'
+import type { Connection, Theme } from './lib/config'
 import {
-  DEFAULT_DOCS_PATH,
-  effectiveBase,
-  findFn,
-  getTheme,
-  getToken,
-  indexManifest,
-  setBaseOverride,
-  setTheme,
-  setToken,
-} from './lib'
-import type { FnEntry, Manifest, Theme } from './lib'
+  applyTheme,
+  connection as readConnection,
+  KEYS,
+  storage,
+  theme as readTheme,
+} from './lib/config'
+import type { Entry, Manifest } from './lib/manifest'
+import { findEntry } from './lib/manifest'
+import type { WireFailure } from './lib/ozaco'
+import { loadManifest } from './lib/ozaco'
 import { HttpTab } from './views/http-tab'
 import { ManifestTab } from './views/manifest-tab'
-import { OfflineView } from './views/offline-view'
-import { SseTab } from './views/sse-tab'
-import { WsTab } from './views/ws-tab'
+import { SocketTab } from './views/socket-tab'
 
-/**
- * LAYOUT OVERVIEW — Postman/Insomnia-style request workspace.
- *
- * Three-column shell: a resizable Sidebar (Insomnia collections tree: services as folders,
- * request rows with colored method tags, WS/SSE realtime rows, environment/base row, search,
- * settings/manifest/theme footer) | the workspace. The workspace stacks a Postman-style TabStrip
- * (every opened request is a closable tab; opening from the sidebar adds/focuses one) over the
- * active tab's view. Each tab view renders its own URL bar (method chip + resolved path + Send /
- * Connect action) above a request | response dual pane split by a draggable vertical splitter
- * (double-click resets, persisted in localStorage, stacks vertically below ~1000px). ALL open
- * tabs stay mounted (inactive ones display:none), so per-tab state — args, body, files, headers,
- * response, run history, live WS/SSE connections — survives tab switches. Tab kinds: 'http'
- * (views/http-tab), 'ws' (views/ws-tab), 'sse' (views/sse-tab) and the special 'manifest' tab.
- */
+type Status = { kind: 'loading' } | { kind: 'ok' } | { kind: 'offline'; error: WireFailure }
 
-type ManifestState =
-  | { readonly phase: 'loading' }
-  | { readonly phase: 'error'; readonly message: string }
-  | { readonly phase: 'ready'; readonly manifest: Manifest; readonly entries: readonly FnEntry[] }
+export const App = () => {
+  const [connection, setConnection] = useState<Connection>(readConnection)
+  const [theme, setTheme] = useState<Theme>(readTheme)
+  const [status, setStatus] = useState<Status>({ kind: 'loading' })
+  // the manifest outlives a reload (a token change refetches it): open tabs keep their state
+  const [manifest, setManifest] = useState<Manifest | null>(null)
+  const [tabs, setTabs] = useState<TabSpec[]>([])
+  const [active, setActive] = useState<string | null>(null)
+  const [settings, setSettings] = useState(false)
+  const [sidebarWidth, setSidebarWidth, resetSidebar] = usePersistedNumber({
+    key: KEYS.sidebar,
+    fallback: 280,
+    min: 200,
+    max: 480,
+  })
 
-interface TabState {
-  readonly tabs: readonly TabSpec[]
-  readonly active: string | null
-}
+  useEffect(() => applyTheme(theme), [theme])
 
-/** Same-origin panels are mounted AT the docs path — derive it from the page location. */
-const docsPathFor = (base: string): string => {
-  if (base !== '' || typeof location === 'undefined') {
-    return DEFAULT_DOCS_PATH
+  const refresh = useCallback(() => {
+    setStatus({ kind: 'loading' })
+    void loadManifest(connection).then(
+      loaded => {
+        setManifest(loaded)
+        setStatus({ kind: 'ok' })
+        return loaded
+      },
+      (error: WireFailure) => {
+        setStatus({ kind: 'offline', error })
+        return null
+      },
+    )
+  }, [connection])
+  useEffect(refresh, [refresh])
+
+  const open = (entry: Entry) => {
+    const spec: TabSpec =
+      entry.kind === 'action'
+        ? { id: entry.id, kind: 'http', title: entry.action.id, method: entry.action.route.method }
+        : { id: entry.id, kind: 'socket', title: entry.socket.path }
+    setTabs(prior => (prior.some(tab => tab.id === spec.id) ? prior : [...prior, spec]))
+    setActive(spec.id)
   }
-
-  const path = location.pathname.replace(/\/+$/u, '')
-
-  return path === '' ? DEFAULT_DOCS_PATH : path
-}
-
-const THEME_ORDER: readonly Theme[] = ['dark', 'light', 'system']
-
-const labelOf = (spec: TabSpec, entries: readonly FnEntry[]): TabItem => {
-  const id = tabIdOf(spec)
-
-  if (spec.kind === 'http') {
-    const entry = findFn(entries, spec.fnId)
-    const dot =
-      entry === undefined
-        ? 'bg-muted'
-        : entry.route === undefined
-          ? kindDotClass(entry.kind)
-          : methodDotClass(entry.route.method)
-
-    return { id, label: entry?.key ?? spec.fnId, dotClass: dot, hint: spec.fnId }
-  }
-
-  if (spec.kind === 'ws') {
-    const name = spec.service ?? 'custom'
-
-    return { id, label: `${name} · ws`, dotClass: protoDotClass('WS'), hint: `${name} · websocket` }
-  }
-
-  if (spec.kind === 'sse') {
-    return {
-      id,
-      label: `${spec.service} · sse`,
-      dotClass: protoDotClass('SSE'),
-      hint: `${spec.service} · sse`,
-    }
-  }
-
-  return { id, label: 'manifest', dotClass: 'bg-muted', hint: 'manifest document' }
-}
-
-const PanelApp = () => {
-  const toasts = useToasts()
-  const stacked = useStacked()
-  const [settings, setSettings] = useState<PanelSettings>(() => ({
-    base: effectiveBase(),
-    token: getToken(),
-    theme: getTheme(),
-  }))
-  const [state, setState] = useState<ManifestState>({ phase: 'loading' })
-  const [tabState, setTabState] = useState<TabState>({ tabs: [], active: null })
-  const [settingsOpen, setSettingsOpen] = useState(false)
-  const [sidebarW, setSidebarW] = usePersistedNumber(SIDEBAR_KEY, SIDEBAR_BOUNDS)
-  const [split, setSplit] = usePersistedNumber(SPLIT_KEY, SPLIT_BOUNDS)
-
-  const docsPath = docsPathFor(settings.base)
-  const probeUrl = `${settings.base}${docsPath}/manifest`
-  const { session, error: sessionError } = usePanelSession(settings.base, docsPath)
-
-  const load = useCallback(
-    async (quiet: boolean): Promise<void> => {
-      if (session === null) {
-        return
+  const close = (id: string) => {
+    setTabs(prior => {
+      const next = prior.filter(tab => tab.id !== id)
+      if (active === id) {
+        setActive(next.at(-1)?.id ?? null)
       }
-
-      if (!quiet) {
-        setState({ phase: 'loading' })
-      }
-
-      try {
-        // the client fetches and caches the manifest; `refresh: true` forces a re-read
-        const manifest = await session.manifest({ refresh: quiet })
-
-        if (manifest === null) {
-          throw new Error(`no manifest served at ${probeUrl}`)
-        }
-
-        setState({ phase: 'ready', manifest, entries: indexManifest(manifest) })
-      } catch (error) {
-        const message = messageOf(error)
-
-        if (quiet) {
-          toasts.error(`Manifest reload failed: ${message}`)
-        } else {
-          setState({ phase: 'error', message })
-        }
-      }
-    },
-    [probeUrl, session, toasts],
-  )
-
-  // a fresh session (first mount, or a base/docsPath change) re-reads the manifest
-  useEffect(() => {
-    if (session === null) {
-      setState(
-        sessionError === null ? { phase: 'loading' } : { phase: 'error', message: sessionError },
-      )
-
-      return
-    }
-
-    void load(false)
-  }, [load, session, sessionError])
-
-  const applySettings = (next: PanelSettings): void => {
-    setBaseOverride(next.base)
-    setToken(next.token)
-    setTheme(next.theme)
-    setSettings(next)
-    toasts.ok('Settings saved')
-  }
-
-  const toggleTheme = (): void => {
-    const index = THEME_ORDER.indexOf(settings.theme)
-    const next = THEME_ORDER[(index + 1) % THEME_ORDER.length] ?? 'dark'
-
-    setTheme(next)
-    setSettings(prev => ({ ...prev, theme: next }))
-  }
-
-  const openTab = useCallback((spec: TabSpec): void => {
-    const id = tabIdOf(spec)
-
-    setTabState(prev => ({
-      tabs: prev.tabs.some(tab => tabIdOf(tab) === id) ? prev.tabs : [...prev.tabs, spec],
-      active: id,
-    }))
-  }, [])
-
-  const closeTab = useCallback((id: string): void => {
-    setTabState(prev => {
-      const index = prev.tabs.findIndex(tab => tabIdOf(tab) === id)
-
-      if (index === -1) {
-        return prev
-      }
-
-      const tabs = prev.tabs.filter(tab => tabIdOf(tab) !== id)
-
-      if (prev.active !== id) {
-        return { tabs, active: prev.active }
-      }
-
-      const neighbor = tabs[Math.min(index, tabs.length - 1)]
-
-      return { tabs, active: neighbor === undefined ? null : tabIdOf(neighbor) }
+      return next
     })
-  }, [])
+  }
 
-  const selectTab = useCallback((id: string): void => {
-    setTabState(prev => ({ ...prev, active: id }))
-  }, [])
-
-  const connState: ConnState =
-    state.phase === 'loading' ? 'loading' : state.phase === 'error' ? 'error' : 'ok'
-
-  const ready = state.phase === 'ready' ? state : null
-  const baseLabel = settings.base === '' ? 'same origin' : settings.base
-
-  const renderTab = (spec: TabSpec): ReactNode => {
-    if (ready === null || session === null) {
-      return null
-    }
-
-    if (spec.kind === 'http') {
-      const entry = findFn(ready.entries, spec.fnId)
-
-      if (entry === undefined) {
-        return (
-          <div className='text-muted flex h-full items-center justify-center text-[13px]'>
-            {spec.fnId} is no longer in the manifest
-          </div>
-        )
-      }
-
-      return (
-        <HttpTab
-          base={settings.base}
-          entry={entry}
-          onOpenSettings={() => setSettingsOpen(true)}
-          onSplit={setSplit}
-          session={session}
-          split={split}
-          stacked={stacked}
-        />
-      )
-    }
-
-    if (spec.kind === 'ws') {
-      return (
-        <WsTab
-          base={settings.base}
-          manifest={ready.manifest}
-          onSplit={setSplit}
-          service={spec.service}
-          session={session}
-          split={split}
-          stacked={stacked}
-        />
-      )
-    }
-
-    if (spec.kind === 'sse') {
-      return (
-        <SseTab
-          base={settings.base}
-          manifest={ready.manifest}
-          onSplit={setSplit}
-          service={spec.service}
-          session={session}
-          split={split}
-          stacked={stacked}
-        />
-      )
-    }
-
-    return <ManifestTab manifest={ready.manifest} sourceUrl={probeUrl} />
+  const setToken = (token: string | null) => {
+    storage.set(KEYS.token, token)
+    setConnection(readConnection())
   }
 
   return (
-    <div className='bg-surface text-ink flex h-full'>
-      <div className='flex h-full shrink-0' style={{ width: sidebarW }}>
+    <div className='flex h-full w-full overflow-hidden'>
+      <div className='h-full shrink-0' style={{ width: sidebarWidth }}>
         <Sidebar
-          activeTabId={tabState.active}
-          baseLabel={baseLabel}
-          connState={connState}
-          entries={ready?.entries ?? []}
-          manifest={ready?.manifest ?? null}
-          onOpen={openTab}
-          onOpenSettings={() => setSettingsOpen(true)}
-          onRefresh={() => {
-            void load(ready !== null)
+          manifest={manifest}
+          connection={connection}
+          selected={active}
+          onOpen={open}
+          onSettings={() => setSettings(true)}
+          onManifest={() => {
+            setTabs(prior =>
+              prior.some(tab => tab.id === 'manifest')
+                ? prior
+                : [...prior, { id: 'manifest', kind: 'manifest', title: 'manifest' }],
+            )
+            setActive('manifest')
           }}
-          onToggleTheme={toggleTheme}
-          theme={settings.theme}
+          onTheme={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+          observeUrl={
+            manifest?.observe?.console ? `${connection.base}${manifest.observe.console}` : null
+          }
         />
       </div>
-      <SideResizer onWidth={setSidebarW} width={sidebarW} />
-
-      <main className='flex h-full min-w-0 flex-1 flex-col'>
-        <TabStrip
-          activeId={tabState.active}
-          onClose={closeTab}
-          onSelect={selectTab}
-          tabs={tabState.tabs.map(spec => labelOf(spec, ready?.entries ?? []))}
-        />
-        <div className='min-h-0 flex-1'>
-          {ready === null ? (
-            <OfflineView
-              loading={state.phase === 'loading'}
-              message={state.phase === 'error' ? state.message : ''}
-              onOpenSettings={() => setSettingsOpen(true)}
-              onRetry={() => {
-                void load(false)
-              }}
-              probeUrl={probeUrl}
-            />
-          ) : tabState.tabs.length === 0 ? (
-            <div className='flex h-full flex-col items-center justify-center gap-1.5'>
-              <span className='text-muted text-[13px]'>Open a request from the sidebar</span>
-              <span className='text-muted text-[11.5px] opacity-70'>
-                {ready.entries.length} functions · {Object.keys(ready.manifest.services).length}{' '}
-                services
-              </span>
+      <SideResizer onResize={setSidebarWidth} onReset={resetSidebar} />
+      <div className='flex min-w-0 flex-1 flex-col'>
+        <TabStrip tabs={tabs} active={active} onSelect={setActive} onClose={close} />
+        <div className='relative min-h-0 flex-1'>
+          {status.kind === 'loading' && (
+            <div className='p-6' style={{ color: 'var(--dim)' }}>
+              loading the manifest from {connection.base}
+              {connection.docsPath}/manifest…
             </div>
-          ) : (
-            tabState.tabs.map(spec => {
-              const id = tabIdOf(spec)
-
+          )}
+          {status.kind === 'offline' && (
+            <div className='p-6'>
+              <div style={{ color: 'var(--bad)' }}>
+                cannot reach {connection.base}
+                {connection.docsPath}/manifest
+              </div>
+              <div className='mono mt-1' style={{ color: 'var(--dim)' }}>
+                {status.error.tag}: {status.error.message}
+              </div>
+              <div className='mt-3 flex gap-2'>
+                <button className='btn btn-accent' onClick={refresh}>
+                  retry
+                </button>
+                <button className='btn' onClick={() => setSettings(true)}>
+                  settings
+                </button>
+              </div>
+            </div>
+          )}
+          {manifest &&
+            tabs.map(tab => {
+              const entry = tab.kind === 'manifest' ? null : findEntry(manifest, tab.id)
               return (
-                <div key={id} className={id === tabState.active ? 'h-full' : 'hidden'}>
-                  {renderTab(spec)}
+                <div
+                  key={tab.id}
+                  className='absolute inset-0'
+                  style={{ display: tab.id === active ? 'block' : 'none' }}>
+                  {tab.kind === 'manifest' && <ManifestTab manifest={manifest} />}
+                  {entry?.kind === 'action' && (
+                    <HttpTab action={entry.action} connection={connection} onToken={setToken} />
+                  )}
+                  {entry?.kind === 'socket' && (
+                    <SocketTab socket={entry.socket} connection={connection} />
+                  )}
+                  {tab.kind !== 'manifest' && !entry && (
+                    <div className='p-6' style={{ color: 'var(--dim)' }}>
+                      gone from the manifest
+                    </div>
+                  )}
                 </div>
               )
-            })
+            })}
+          {manifest && tabs.length === 0 && (
+            <div className='p-6' style={{ color: 'var(--dim)' }}>
+              {manifest.name} {manifest.version} · {manifest.services.length} service(s) — pick a
+              request on the left
+            </div>
           )}
         </div>
-      </main>
-
-      <SettingsDialog
-        isOpen={settingsOpen}
-        onOpenChange={setSettingsOpen}
-        onSave={applySettings}
-        settings={settings}
-      />
+      </div>
+      {settings && (
+        <SettingsDialog
+          connection={connection}
+          theme={theme}
+          onClose={() => setSettings(false)}
+          onSave={next => {
+            storage.set(KEYS.base, next.base)
+            storage.set(KEYS.docsPath, next.docsPath)
+            storage.set(KEYS.token, next.token)
+            setTheme(next.theme)
+            setConnection(readConnection())
+            setSettings(false)
+          }}
+        />
+      )}
     </div>
   )
 }
-
-export const App = () => (
-  <ToastProvider>
-    <PanelApp />
-  </ToastProvider>
-)

@@ -1,10 +1,15 @@
 import { createTags } from 'std:shared'
 
 /**
- * Client failure tags. Server-side failures pass through with their ORIGINAL tag (the `error`
- * field of the wire body / error frame) — these tags cover the conditions the client raises
- * itself: a request that could not be shaped or dispatched (`request`), a malformed realtime
- * frame (`frame`), a watch that could not be established (`watch`) and an unusable manifest
- * document (`manifest`).
+ * Client-side failures. A server failure travels with its OWN tag (`server.not-found`,
+ * `db.conflict`, `todo.kaput`, …) — these tags cover only what goes wrong before a reply exists.
  */
-export const ClientErrors = createTags('client', 'request', 'frame', 'watch', 'manifest')
+export const ClientErrors = createTags(
+  'client',
+  'configuration',
+  'no-route',
+  'network',
+  'decode',
+  'timeout',
+  'closed',
+)

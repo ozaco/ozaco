@@ -1,154 +1,91 @@
-import { useEffect, useState } from 'react'
-import {
-  Button,
-  Dialog,
-  Heading,
-  Input,
-  Label,
-  ListBox,
-  ListBoxItem,
-  Modal,
-  ModalOverlay,
-  Popover,
-  Select,
-  SelectValue,
-  TextField,
-  ToggleButton,
-} from 'react-aria-components'
+import { useState } from 'react'
 
-import type { Theme } from '../lib'
+import type { Connection, Theme } from '../lib/config'
 
-import { ChevronIcon } from './icons'
-
-/** Panel settings — base URL override, bearer token, theme — persisted via lib/config. */
-
-const FIELD_INPUT =
-  'border-line bg-surface text-ink w-full rounded-md border px-2.5 py-1.5 text-[13px]'
-
-const THEMES: readonly { readonly id: Theme; readonly label: string }[] = [
-  { id: 'dark', label: 'Dark' },
-  { id: 'light', label: 'Light' },
-  { id: 'system', label: 'System' },
-]
-
-const isTheme = (value: unknown): value is Theme =>
-  value === 'dark' || value === 'light' || value === 'system'
-
-export interface PanelSettings {
-  readonly base: string
-  readonly token: string
+interface Props {
+  readonly connection: Connection
   readonly theme: Theme
+  readonly onSave: (next: {
+    base: string
+    docsPath: string
+    token: string | null
+    theme: Theme
+  }) => void
+  readonly onClose: () => void
 }
 
-export const SettingsDialog = ({
-  isOpen,
-  onOpenChange,
-  settings,
-  onSave,
-}: {
-  readonly isOpen: boolean
-  readonly onOpenChange: (open: boolean) => void
-  readonly settings: PanelSettings
-  readonly onSave: (next: PanelSettings) => void
-}) => {
-  const [base, setBase] = useState(settings.base)
-  const [token, setToken] = useState(settings.token)
-  const [theme, setTheme] = useState<Theme>(settings.theme)
-  const [reveal, setReveal] = useState(false)
-
-  useEffect(() => {
-    if (isOpen) {
-      setBase(settings.base)
-      setToken(settings.token)
-      setTheme(settings.theme)
-      setReveal(false)
-    }
-  }, [isOpen, settings])
-
+export const SettingsDialog = ({ connection, theme, onSave, onClose }: Props) => {
+  const [base, setBase] = useState(connection.base)
+  const [docsPath, setDocsPath] = useState(connection.docsPath)
+  const [token, setToken] = useState(connection.token ?? '')
+  const [nextTheme, setNextTheme] = useState<Theme>(theme)
   return (
-    <ModalOverlay
-      className='fixed inset-0 z-40 flex items-center justify-center bg-black/50 p-4'
-      isDismissable
-      isOpen={isOpen}
-      onOpenChange={onOpenChange}>
-      <Modal className='border-line bg-panel w-full max-w-md rounded-xl border shadow-2xl'>
-        <Dialog className='flex flex-col gap-4 p-5 outline-none'>
-          <Heading className='text-ink text-base font-semibold' slot='title'>
-            Settings
-          </Heading>
-
-          <TextField className='flex flex-col gap-1' onChange={setBase} value={base}>
-            <Label className='text-muted text-[12px] font-medium'>Base URL</Label>
-            <Input className={`${FIELD_INPUT} font-mono`} placeholder='same origin' />
-            <span className='text-muted text-[11.5px]'>
-              http(s)://host:port of the ozaco server — leave empty for same origin.
-            </span>
-          </TextField>
-
-          <TextField
-            className='flex flex-col gap-1'
-            onChange={setToken}
-            type={reveal ? 'text' : 'password'}
-            value={token}>
-            <Label className='text-muted text-[12px] font-medium'>Bearer token</Label>
-            <div className='flex items-center gap-2'>
-              <Input
-                className={`${FIELD_INPUT} font-mono`}
-                placeholder='optional — persisted locally'
-              />
-              <ToggleButton
-                className='border-line text-muted data-selected:text-accent data-hovered:text-ink shrink-0 rounded-md border px-2 py-1.5 text-[12px]'
-                isSelected={reveal}
-                onChange={setReveal}>
-                {reveal ? 'hide' : 'show'}
-              </ToggleButton>
-            </div>
-          </TextField>
-
-          <Select
-            className='flex flex-col gap-1'
-            onSelectionChange={key => {
-              if (isTheme(key)) {
-                setTheme(key)
-              }
-            }}
-            selectedKey={theme}>
-            <Label className='text-muted text-[12px] font-medium'>Theme</Label>
-            <Button className='border-line bg-surface text-ink flex w-full items-center justify-between rounded-md border px-2.5 py-1.5 text-[13px]'>
-              <SelectValue />
-              <ChevronIcon className='text-muted rotate-90' />
-            </Button>
-            <Popover className='border-line bg-panel w-(--trigger-width) rounded-md border shadow-xl'>
-              <ListBox className='p-1 outline-none' items={THEMES}>
-                {item => (
-                  <ListBoxItem
-                    className='text-ink data-focused:bg-card data-selected:text-accent cursor-default rounded px-2 py-1 text-[13px] outline-none'
-                    id={item.id}
-                    textValue={item.label}>
-                    {item.label}
-                  </ListBoxItem>
-                )}
-              </ListBox>
-            </Popover>
-          </Select>
-
-          <div className='flex justify-end gap-2 pt-1'>
-            <Button
-              className='border-line text-muted data-hovered:text-ink rounded-md border px-3 py-1.5 text-[13px]'
-              onPress={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button
-              className='border-accent/60 text-accent data-hovered:bg-accent/10 rounded-md border px-3 py-1.5 text-[13px] font-medium'
-              onPress={() => {
-                onSave({ base: base.trim().replace(/\/+$/u, ''), token: token.trim(), theme })
-                onOpenChange(false)
-              }}>
-              Save changes
-            </Button>
+    <div
+      className='fixed inset-0 z-20 flex items-center justify-center'
+      style={{ background: 'rgba(0,0,0,.5)' }}
+      onClick={onClose}>
+      <div
+        className='w-[440px] rounded border p-4'
+        style={{ background: 'var(--panel)', borderColor: 'var(--line)' }}
+        onClick={event => event.stopPropagation()}>
+        <div className='mb-3 font-semibold'>settings</div>
+        <label className='mb-2 block'>
+          <div style={{ color: 'var(--dim)' }}>api base</div>
+          <input
+            className='input mono'
+            value={base}
+            onChange={event => setBase(event.target.value)}
+          />
+        </label>
+        <label className='mb-2 block'>
+          <div style={{ color: 'var(--dim)' }}>
+            docs path (manifest at &lt;docs path&gt;/manifest)
           </div>
-        </Dialog>
-      </Modal>
-    </ModalOverlay>
+          <input
+            className='input mono'
+            value={docsPath}
+            onChange={event => setDocsPath(event.target.value)}
+          />
+        </label>
+        <label className='mb-2 block'>
+          <div style={{ color: 'var(--dim)' }}>
+            bearer token (sent on every request and as ?token= on sockets)
+          </div>
+          <textarea
+            className='input'
+            rows={3}
+            value={token}
+            onChange={event => setToken(event.target.value)}
+          />
+        </label>
+        <label className='mb-4 block'>
+          <div style={{ color: 'var(--dim)' }}>theme</div>
+          <select
+            className='input'
+            value={nextTheme}
+            onChange={event => setNextTheme(event.target.value as Theme)}>
+            <option value='dark'>dark</option>
+            <option value='light'>light</option>
+          </select>
+        </label>
+        <div className='flex justify-end gap-2'>
+          <button className='btn' onClick={onClose}>
+            cancel
+          </button>
+          <button
+            className='btn btn-accent'
+            onClick={() =>
+              onSave({
+                base: base.trim().replace(/\/$/u, ''),
+                docsPath: docsPath.trim().replace(/\/$/u, '') || '/docs',
+                token: token.trim() || null,
+                theme: nextTheme,
+              })
+            }>
+            save
+          </button>
+        </div>
+      </div>
+    </div>
   )
 }

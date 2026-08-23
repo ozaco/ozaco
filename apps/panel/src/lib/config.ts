@@ -1,120 +1,87 @@
 /**
- * Panel runtime configuration: the injected base url, the persisted bearer token and the theme.
- * The host page may inject `window.__OZACO_PANEL__ = { base?: string }` BEFORE the bundle runs;
- * absent (or empty) base means same-origin relative requests.
+ * Where the panel talks to and what it remembers. Served by the docs plugin at `<docsPath>`
+ * (`/docs` by default) on the same origin as the api, so the base is `location.origin` and the
+ * docs path is the page's own path — both overridable (a dev server, another api).
  */
-
-interface StringStore {
-  getItem(key: string): string | null
-  setItem(key: string, value: string): void
-  removeItem(key: string): void
-}
-
-const createMemoryStore = (): StringStore => {
-  const values = new Map<string, string>()
-
-  return {
-    getItem: key => values.get(key) ?? null,
-    setItem: (key, value) => {
-      values.set(key, value)
-    },
-    removeItem: key => {
-      values.delete(key)
-    },
-  }
-}
-
-/** `localStorage` when available (browser), an in-memory fallback otherwise (tests, SSR). */
-const store: StringStore = typeof localStorage === 'undefined' ? createMemoryStore() : localStorage
 
 declare global {
   interface Window {
-    __OZACO_PANEL__?: PanelGlobal
+    __OZACO_PANEL__?: { base?: string; docsPath?: string }
   }
 }
 
-const isTheme = (value: string | null): value is Theme =>
-  value === 'dark' || value === 'light' || value === 'system'
+export const KEYS = {
+  base: 'ozaco-panel:base',
+  docsPath: 'ozaco-panel:docs-path',
+  token: 'ozaco-panel:token',
+  theme: 'ozaco-panel:theme',
+  split: 'ozaco-panel:split',
+  sidebar: 'ozaco-panel:sidebar-w',
+  history: 'ozaco-panel:history',
+} as const
 
-export interface PanelGlobal {
-  readonly base?: string
+const memory = new Map<string, string>()
+
+export const storage = {
+  get(key: string): string | null {
+    try {
+      return localStorage.getItem(key) ?? memory.get(key) ?? null
+    } catch {
+      return memory.get(key) ?? null
+    }
+  },
+
+  set(key: string, value: string | null): void {
+    try {
+      if (value === null) {
+        localStorage.removeItem(key)
+      } else {
+        localStorage.setItem(key, value)
+      }
+    } catch {
+      // private mode / sandbox: keep it in memory
+    }
+
+    if (value === null) {
+      memory.delete(key)
+    } else {
+      memory.set(key, value)
+    }
+  },
 }
 
-export const TOKEN_KEY = 'ozaco-panel:token'
-export const THEME_KEY = 'ozaco-panel:theme'
-export const BASE_KEY = 'ozaco-panel:base'
+/** `/docs/` → `/docs`; a page path that is not the docs path (a dev server) → `/docs`. */
+const docsPathOf = (): string => {
+  const given = window.__OZACO_PANEL__?.docsPath ?? storage.get(KEYS.docsPath)
 
-export type Theme = 'dark' | 'light' | 'system'
-
-/** Base url for every API request: injected global, trailing slash trimmed, `''` = same origin. */
-export const panelBase = (): string => {
-  const injected = typeof window === 'undefined' ? undefined : window.__OZACO_PANEL__?.base
-
-  return (injected ?? '').replace(/\/+$/u, '')
-}
-
-/** User-persisted base override (settings dialog) — beats the injected global when set. */
-export const getBaseOverride = (): string => store.getItem(BASE_KEY) ?? ''
-
-export const setBaseOverride = (base: string): void => {
-  const trimmed = base.trim().replace(/\/+$/u, '')
-
-  if (trimmed === '') {
-    store.removeItem(BASE_KEY)
-
-    return
+  if (given) {
+    return given.replace(/\/$/u, '') || '/docs'
   }
 
-  store.setItem(BASE_KEY, trimmed)
+  const path = location.pathname.replace(/\/$/u, '')
+
+  return path.length > 0 && !path.endsWith('.html') ? path : '/docs'
 }
 
-/** The base every request should use: persisted override first, injected global otherwise. */
-export const effectiveBase = (): string => {
-  const override = getBaseOverride()
-
-  return override === '' ? panelBase() : override
+export interface Connection {
+  readonly base: string
+  readonly docsPath: string
+  readonly token: string | null
 }
 
-export const getToken = (): string => store.getItem(TOKEN_KEY) ?? ''
+export const connection = (): Connection => ({
+  base:
+    window.__OZACO_PANEL__?.base ?? storage.get(KEYS.base) ?? location.origin.replace(/\/$/u, ''),
+  docsPath: docsPathOf(),
+  token: storage.get(KEYS.token),
+})
 
-export const setToken = (token: string): void => {
-  if (token === '') {
-    store.removeItem(TOKEN_KEY)
+export type Theme = 'dark' | 'light'
 
-    return
-  }
+export const theme = (): Theme => (storage.get(KEYS.theme) === 'light' ? 'light' : 'dark')
 
-  store.setItem(TOKEN_KEY, token)
-}
-
-export const getTheme = (): Theme => {
-  const stored = store.getItem(THEME_KEY)
-
-  return isTheme(stored) ? stored : 'system'
-}
-
-/** Persist the choice and stamp `data-theme` on the root element (`system` removes the stamp). */
-export const setTheme = (theme: Theme): void => {
-  store.setItem(THEME_KEY, theme)
-
-  if (typeof document === 'undefined') {
-    return
-  }
-
-  if (theme === 'system') {
-    delete document.documentElement.dataset['theme']
-
-    return
-  }
-
-  document.documentElement.dataset['theme'] = theme
-}
-
-/** Re-apply the persisted theme on boot (call once from the entrypoint). */
-export const applyStoredTheme = (): Theme => {
-  const theme = getTheme()
-
-  setTheme(theme)
-
-  return theme
+export const applyTheme = (value: Theme): void => {
+  storage.set(KEYS.theme, value)
+  document.documentElement.classList.toggle('dark', value === 'dark')
+  document.documentElement.classList.toggle('light', value === 'light')
 }

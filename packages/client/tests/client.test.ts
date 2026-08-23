@@ -1,141 +1,182 @@
-import { connectClient, createClient } from 'client:core'
-import { run, until } from 'std:effect'
-import { isFailure, unwrap } from 'std:result'
+import { generate } from 'client:codegen'
+import { ClientErrors, createClient } from 'client:core'
+import { attempt, run, sleep, until } from 'std:effect'
+import { unwrap } from 'std:result'
+import type { AnyType } from 'std:shared'
+import { wsImpl } from 'std:ws'
 
 import { describe, expect, it } from 'bun:test'
 
-import type { Api } from './helpers'
-import { bootClientEnv, bootServer, withTimeout } from './helpers'
+import type { Api } from './fixture'
+import { boot } from './fixture'
 
-describe('client calls', () => {
-  it('drives typed calls through manifest routes: create, get, list (GET + query args)', async () => {
-    const result = unwrap(
-      await run(function* () {
-        const info = yield* bootServer()
-
-        yield* bootClientEnv()
-
-        const client = yield* createClient<Api>({ url: info.url })
-
-        const first = yield* client.tasks.create({ title: 'write the client' })
-        const second = yield* client.tasks.create({ title: 'ship it', done: true })
-        const got = yield* client.tasks.get({ id: first._id })
-        const page = yield* client.tasks.list({ limit: 1 })
-        const done = yield* client.tasks.list({ done: true })
-
-        return { first, second, got, page, done }
-      }),
-    )
-
-    expect(result.first.title).toBe('write the client')
-    expect(result.first.done).toBe(false)
-    expect(result.got._id).toBe(result.first._id)
-
-    // list went through the manifest's `GET /tasks` with query args: limit clamps the page …
-    expect(result.page.data).toHaveLength(1)
-    expect(result.page.cursor).not.toBeNull()
-    expect(typeof result.page.version).toBe('number')
-
-    // … and the facet eq-param filters
-    expect(result.done.data).toHaveLength(1)
-    expect(result.done.data[0]?._id).toBe(result.second._id)
-  })
-
-  it('maps failures: original tag, requestId and status breadcrumbs', async () => {
-    const outcome = await run(function* () {
-      const info = yield* bootServer()
-
-      yield* bootClientEnv()
-
-      const client = yield* createClient<Api>({ url: info.url })
-
-      return yield* client.tasks.get({ id: 'missing' })
-    })
-
-    expect(isFailure(outcome)).toBe(true)
-
-    if (isFailure(outcome)) {
-      expect(outcome.error).toBe('server:wizard.not-found')
-      expect(outcome.message).toContain('tasks/missing')
-      expect(outcome.causes.some(cause => cause.startsWith('requestId:'))).toBe(true)
-      expect(outcome.causes).toContain('status:404')
+const drain = function* <T>(flow: AnyType): Generator<AnyType, T[], AnyType> {
+  const out: T[] = []
+  const subscription = yield* flow
+  for (;;) {
+    const step = yield* subscription.next()
+    if (step.done) {
+      return out
     }
-  })
+    out.push(step.value)
+  }
+}
 
-  it('sends the bearer token: guarded mutation fails 403 without, succeeds with', async () => {
-    const denied = await run(function* () {
-      const info = yield* bootServer()
-
-      yield* bootClientEnv()
-
-      const client = yield* createClient<Api>({ url: info.url })
-
-      return yield* client.tasks.finishAll({})
-    })
-
-    expect(isFailure(denied)).toBe(true)
-
-    if (isFailure(denied)) {
-      expect(denied.error).toBe('server:core.forbidden')
-      expect(denied.causes).toContain('status:403')
-    }
-
-    const allowed = unwrap(
+describe('client', () => {
+  it('typed calls over the manifest: query/path/json/204, failures with their tag + request id', async () => {
+    unwrap(
       await run(function* () {
-        const info = yield* bootServer()
+        const { url } = yield* boot()
+        const client = yield* createClient<Api>({ url, headers: { 'x-app': 'tests' } })
 
-        yield* bootClientEnv()
+        // GET: query params with coercion-safe strings, numbers and booleans
+        const echoed = yield* client.demo.echo({ text: '123', n: 2, flag: true })
+        expect(echoed).toEqual({ text: '123', n: 2, flag: true })
+        // path params
+        expect(yield* client.demo.byId({ id: 'a b' })).toEqual({ id: 'a b' })
+        // POST json + typed output
+        const made = yield* client.demo.make({ title: 'hello' })
+        expect(made.title).toBe('hello')
+        // 204 → undefined
+        expect(yield* client.demo.nothing(undefined)).toBeUndefined()
+        expect(client.$lastRequestId()).toBeTruthy()
 
-        const client = yield* createClient<Api>({ url: info.url, token: () => 'test-token' })
-
-        yield* client.tasks.create({ title: 'open item' })
-
-        return yield* client.tasks.finishAll({ note: 'sweep' })
-      }),
-    )
-
-    expect(allowed.finished).toBe(1)
-    expect(allowed.note).toBe('sweep')
-  })
-
-  it('round-trips through the plain-async connectClient facade', async () => {
-    const result = unwrap(
-      await run(function* () {
-        const info = yield* bootServer()
-
-        const connected = yield* until(
-          withTimeout(connectClient<Api>({ url: info.url, token: 'facade-token' })),
+        // validation failure keeps the server tag and carries the request id
+        const invalid = yield* attempt(client.demo.make({ title: '' }))
+        expect((invalid as AnyType).error).toBe('server.validation')
+        expect((invalid as AnyType).causes.some((cause: string) => cause.startsWith('req:'))).toBe(
+          true,
         )
-
-        try {
-          const created = yield* until(
-            withTimeout(connected.client.tasks.create({ title: 'via facade' })),
-          )
-          const got = yield* until(withTimeout(connected.client.tasks.get({ id: created._id })))
-          const finished = yield* until(withTimeout(connected.client.tasks.finishAll({})))
-
-          const rejected = yield* until(
-            withTimeout(
-              connected.client.tasks.get({ id: 'nope' }).then(
-                () => null,
-                (error: unknown) => error,
-              ),
-            ),
-          )
-
-          return { created, got, finished, rejected }
-        } finally {
-          yield* until(connected.close())
-        }
+        // custom error → its tag, and the per-action status
+        const teapot = yield* attempt(client.demo.explode({ code: 'demo.teapot' }))
+        expect((teapot as AnyType).error).toBe('demo.teapot')
+        // unknown action → client.no-route before any request
+        const none = yield* attempt(client.$call('demo.nope'))
+        expect((none as AnyType).error).toBe(ClientErrors.NoRoute)
+        // headers + bearer reach the server
+        const token = yield* createClient<Api>({ url, token: () => 'abc' })
+        expect(yield* token.demo.whoami(undefined)).toEqual({ authorization: 'Bearer abc' })
       }),
     )
+  })
 
-    expect(result.created.title).toBe('via facade')
-    expect(result.got._id).toBe(result.created._id)
-    expect(result.finished.finished).toBe(1)
+  it('decodes outputs by brand: ndjson/sse → Flow, text, bytes; sends stream and parts bodies', async () => {
+    unwrap(
+      await run(function* () {
+        const { url } = yield* boot()
+        const client = yield* createClient<Api>({ url })
+        expect(yield* drain<number>(yield* client.demo.count({ n: 3 }))).toEqual([0, 1, 2])
+        expect(yield* drain(yield* client.demo.ticks({ n: 2 }))).toEqual([{ tick: 0 }, { tick: 1 }])
+        expect(yield* client.demo.words({ text: 'a b c' })).toBe('a b c ')
+        const blob = yield* client.demo.blob({ size: 10 })
+        expect(blob instanceof ReadableStream).toBe(true)
+        const bytes = yield* until(new Response(blob).arrayBuffer())
+        expect(bytes.byteLength).toBe(10)
 
-    // the facade REJECTS with the Failure object — message and tag included
-    expect(isFailure(result.rejected)).toBe(true)
-    expect((result.rejected as { error: string }).error).toBe('server:wizard.not-found')
+        // a stream body
+        const body = new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(new Uint8Array(300))
+            controller.enqueue(new Uint8Array(200))
+            controller.close()
+          },
+        })
+        expect(yield* client.demo.ingest(body as AnyType)).toEqual({ size: 500 })
+        // multipart parts: fields + a file
+        const uploaded = yield* client.demo.upload({
+          fields: { name: 'pic' },
+          streams: { file: new Uint8Array(64) },
+        } as AnyType)
+        expect(uploaded).toEqual({ name: 'pic', size: 64 })
+      }),
+    )
+  })
+
+  it('resources: crud calls and a realtime watch that materializes rows', async () => {
+    unwrap(
+      await run(function* () {
+        const { url } = yield* boot()
+        const client = yield* createClient<Api>({ url })
+        const created = (yield* client.notes.create({
+          title: 'one',
+          done: false,
+        } as AnyType)) as AnyType
+        expect(created.title).toBe('one')
+        const listed = (yield* client.notes.list({ limit: 10 } as AnyType)) as AnyType
+        expect(listed.rows ?? listed.items ?? listed).toBeTruthy()
+        const fetched = (yield* client.notes.get({ id: created._id } as AnyType)) as AnyType
+        expect(fetched._id).toBe(created._id)
+
+        const rows = yield* client.$rows<{ _id: string; title: string }>('notes')
+        const first = yield* rows.next()
+        expect((first.value as AnyType).rows.map((row: AnyType) => row.title)).toEqual(['one'])
+        yield* client.notes.create({ title: 'two', done: true } as AnyType)
+        const second = yield* rows.next()
+        expect((second.value as AnyType).rows.map((row: AnyType) => row.title).toSorted()).toEqual([
+          'one',
+          'two',
+        ])
+        yield* client.notes.remove({ id: created._id } as AnyType)
+        const third = yield* rows.next()
+        expect((third.value as AnyType).rows.map((row: AnyType) => row.title)).toEqual(['two'])
+        yield* sleep(10)
+      }),
+    )
+  })
+
+  it('codegen emits an Api from the manifest with brand-aware stream types', async () => {
+    unwrap(
+      await run(function* () {
+        const { url } = yield* boot()
+        const client = yield* createClient({ url })
+        const manifest = yield* client.$manifest()
+        const source = yield* generate(manifest)
+        expect(source).toContain("import type { Flow } from '@ozaco/std/effect'")
+        expect(source).toContain('readonly count: {')
+        expect(source).toContain('readonly output: Flow<number, void>')
+        expect(source).toContain("readonly kind: 'mutation'")
+        expect(source).toContain("path: '/demo/:id'")
+        expect(source).toContain('readonly output: ReadableStream<Uint8Array>')
+        const bad = yield* attempt(generate({ nope: true }))
+        expect((bad as AnyType).error).toBe(ClientErrors.Decode)
+      }),
+    )
+  })
+})
+
+describe('client — realtime resume', () => {
+  it('a dropped socket reconnects and resumes the watch from the last token', async () => {
+    const sockets: WebSocket[] = []
+    class Spy extends WebSocket {
+      constructor(url: string | URL, options?: AnyType) {
+        super(url, options)
+        sockets.push(this)
+      }
+    }
+    unwrap(
+      await run(function* () {
+        yield* wsImpl.set(Spy as AnyType)
+        const { url } = yield* boot()
+        const client = yield* createClient<Api>({ url })
+        yield* client.notes.create({ title: 'before-drop', done: false } as AnyType)
+        const rows = yield* client.$rows<{ title: string }>('notes')
+        const first = yield* rows.next()
+        expect((first.value as AnyType).rows.map((row: AnyType) => row.title)).toEqual([
+          'before-drop',
+        ])
+        // drop the live socket under the client: it redials and re-watches with `since` — the
+        // next frame (a resync or a delta, by timing) still lands on the same flow
+        expect(sockets).toHaveLength(1)
+        sockets[0]!.close(4000, 'drop')
+        yield* sleep(50)
+        yield* client.notes.create({ title: 'after-drop', done: false } as AnyType)
+        const next = yield* rows.next()
+        expect((next.value as AnyType).rows.map((row: AnyType) => row.title).toSorted()).toEqual([
+          'after-drop',
+          'before-drop',
+        ])
+        expect(sockets.length).toBeGreaterThan(1)
+      }),
+    )
   })
 })

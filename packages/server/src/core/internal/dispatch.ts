@@ -1,7 +1,7 @@
 // oxlint-disable import/exports-last
 import { DbClient, Kv } from 'db:core'
 import type { Operation } from 'std:effect'
-import { attempt, ensure, fork, race, sleep } from 'std:effect'
+import { attempt, ensure, fork, race, sleep, withResolvers } from 'std:effect'
 import type { Result } from 'std:result'
 import { appendCauses, fail, isFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
@@ -160,7 +160,36 @@ const invoke = (kernel: ServerDef.Context, def: ServiceDef.Action) =>
         call.abort?.(ServerErrors.Cancelled)
       }
     })
-    const outcome = yield* task
+
+    // an aborted signal (the caller left, a deadline fired) interrupts the handler too: halt it
+    // in `cancel` mode so its ensures run with `ctx.signal.aborted`, let it finish in `detach`
+    const aborted = withResolvers<void>('dispatch aborted')
+
+    if (call.signal.aborted) {
+      aborted.resolve(undefined)
+    } else {
+      call.signal.addEventListener('abort', () => aborted.resolve(undefined), { once: true })
+    }
+
+    const winner = yield* race([
+      (function* () {
+        return { outcome: yield* task }
+      })(),
+      (function* () {
+        yield* aborted.operation
+
+        return { gone: true as const }
+      })(),
+    ])
+
+    if ('gone' in winner && meta.onDisconnect === 'cancel') {
+      yield* task.halt()
+      settled = true
+
+      return yield* fail(ServerErrors.Cancelled, `${call.service}.${call.action} was cancelled`)
+    }
+
+    const outcome = 'outcome' in winner ? winner.outcome : yield* task
     settled = true
 
     if (isFailure(outcome)) {

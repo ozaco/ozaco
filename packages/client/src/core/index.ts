@@ -1,50 +1,6 @@
-export * from './client'
+export * from './const'
 export * from './errors'
-export { DEFAULT_DOCS_PATH } from './internal'
-export { classifyContentType, connectSession, createSession, inspectRequest } from './inspect'
-export * from './manifest'
-export { createSseParser } from './sse'
-export type { SseParser, SseParserHandlers } from './sse'
-export type {
-  AsyncClient,
-  AsyncClientFn,
-  AsyncClientResource,
-  AsyncRealtimeLink,
-  AsyncSession,
-  AsyncSseHandle,
-  AsyncWatchHandle,
-  BodyKind,
-  CallAddress,
-  Client,
-  ClientFn,
-  ClientOptions,
-  ClientResource,
-  ClientSession,
-  ConnectedClient,
-  ConnectedSession,
-  FrameDirection,
-  FrameLog,
-  FrameTap,
-  InspectInput,
-  InspectResponse,
-  LinkStatus,
-  ManifestDoc,
-  ManifestFunctionDoc,
-  ManifestRealtimeDoc,
-  ManifestRouteDoc,
-  ManifestOptions,
-  ManifestServiceDoc,
-  PreparedRequest,
-  RealtimeLink,
-  RealtimeTarget,
-  RealtimeWatch,
-  RequestFile,
-  RequestHandle,
-  ResponseKind,
-  SseHandle,
-  SseInput,
-  WatchHandle,
-  WatchOptions,
-  WatchRows,
-  WatchStop,
-} from './types'
+export * from './types/client'
+export * from './types/manifest'
+export * from './definition/client'
+export * from './utils/client'

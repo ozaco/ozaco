@@ -1,167 +1,45 @@
 /**
- * JSON-Schema walker + skeleton generator for the docs renderer. Manifest schema documents are
- * reference-free zod exports (`type`/`properties`/`items`/`enum`/`anyOf`/`required`/`const`) or
- * the opaque `{ declared: true }` marker for non-zod schemas.
+ * JSON Schema (what the manifest carries per plane) → an example value and a flat field list
+ * for the Params form. Small on purpose: objects, arrays, primitives, enums, unions, defaults.
  */
+export type Schema = Record<string, unknown> | null | undefined
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
 
-const childNodes = (schema: Record<string, unknown>): SchemaNode[] => {
-  const required = Array.isArray(schema['required']) ? schema['required'] : []
-  const properties = schema['properties']
+const typeOf = (schema: Record<string, unknown>): string | null => {
+  const type = schema['type']
 
-  if (isRecord(properties)) {
-    return Object.entries(properties).map(([key, child]) =>
-      walkSchema(child, key, required.includes(key)),
-    )
+  if (typeof type === 'string') {
+    return type
   }
 
-  const items = schema['items']
-
-  if (isRecord(items)) {
-    return [walkSchema(items, 'items', false)]
+  if (Array.isArray(type)) {
+    return (type.find(entry => entry !== 'null') as string | undefined) ?? null
   }
 
-  const variants = schema['anyOf'] ?? schema['oneOf']
-
-  if (Array.isArray(variants)) {
-    return variants.map((variant, index) => walkSchema(variant, `#${index}`, false))
+  if ('properties' in schema) {
+    return 'object'
   }
 
-  return []
+  if ('items' in schema) {
+    return 'array'
+  }
+
+  return null
 }
 
-const primitiveSkeleton = (schema: Record<string, unknown>, type: string): unknown => {
-  switch (type) {
-    case 'string': {
-      return ''
-    }
-    case 'number':
-    case 'integer': {
-      return 0
-    }
-    case 'boolean': {
-      return false
-    }
-    case 'null': {
-      return null
-    }
-    case 'array': {
-      return []
-    }
-    case 'object': {
-      const skeleton: Record<string, unknown> = {}
-      const required = Array.isArray(schema['required']) ? schema['required'] : []
-      const properties = schema['properties']
-
-      if (isRecord(properties)) {
-        for (const [key, child] of Object.entries(properties)) {
-          if (required.includes(key)) {
-            skeleton[key] = skeletonOf(child)
-          }
-        }
-      }
-
-      return skeleton
-    }
-    default: {
-      return null
-    }
-  }
-}
-
-/** The display label of a schema — mirrors the classic panel's `schemaType`. */
-export const schemaTypeLabel = (schema: unknown): string => {
-  if (!isRecord(schema)) {
-    return 'any'
+/** A plausible value for a schema: defaults and enums first, then the shape. */
+export const exampleOf = (schema: Schema, depth = 0): unknown => {
+  if (!isRecord(schema) || depth > 6) {
+    return null
   }
 
-  if (schema['declared'] === true) {
-    return 'declared'
-  }
-
-  if (schema['const'] !== undefined) {
-    return JSON.stringify(schema['const'])
-  }
-
-  if (Array.isArray(schema['enum'])) {
-    return schema['enum'].map(value => JSON.stringify(value)).join(' | ')
-  }
-
-  if (Array.isArray(schema['anyOf'])) {
-    return 'anyOf'
-  }
-
-  if (Array.isArray(schema['oneOf'])) {
-    return 'oneOf'
-  }
-
-  if (schema['type'] !== undefined) {
-    return Array.isArray(schema['type']) ? schema['type'].join(' | ') : String(schema['type'])
-  }
-
-  return 'any'
-}
-
-export interface SchemaNode {
-  readonly name: string | undefined
-  readonly type: string
-  readonly required: boolean
-  /** The opaque `{ declared: true }` marker (schema unknown to the manifest). */
-  readonly declared: boolean
-  readonly description: string | undefined
-  readonly children: readonly SchemaNode[]
-}
-
-/** Resolve one schema document into a render tree (tolerates opaque/malformed entries). */
-export const walkSchema = (schema: unknown, name?: string, required = false): SchemaNode => {
-  if (!isRecord(schema)) {
-    return {
-      name,
-      type: 'any',
-      required,
-      declared: false,
-      description: undefined,
-      children: [],
-    }
-  }
-
-  if (schema['declared'] === true) {
-    return {
-      name,
-      type: 'declared',
-      required,
-      declared: true,
-      description: undefined,
-      children: [],
-    }
-  }
-
-  return {
-    name,
-    type: schemaTypeLabel(schema),
-    required,
-    declared: false,
-    description: typeof schema['description'] === 'string' ? schema['description'] : undefined,
-    children: childNodes(schema),
-  }
-}
-
-/**
- * Example/skeleton generator used to prefill the try-it editor: objects carry their REQUIRED keys
- * only, primitives get sensible zero values, `default`/`const`/first `enum`/first `anyOf` win.
- */
-export const skeletonOf = (schema: unknown): unknown => {
-  if (!isRecord(schema) || schema['declared'] === true) {
-    return {}
-  }
-
-  if (schema['default'] !== undefined) {
+  if ('default' in schema) {
     return schema['default']
   }
 
-  if (schema['const'] !== undefined) {
+  if ('const' in schema) {
     return schema['const']
   }
 
@@ -169,21 +47,108 @@ export const skeletonOf = (schema: unknown): unknown => {
     return schema['enum'][0]
   }
 
-  const variants = schema['anyOf'] ?? schema['oneOf']
+  for (const key of ['anyOf', 'oneOf'] as const) {
+    const variants = schema[key]
 
-  if (Array.isArray(variants) && variants.length > 0) {
-    return skeletonOf(variants[0])
+    if (Array.isArray(variants) && variants.length > 0) {
+      return exampleOf(variants[0] as Schema, depth + 1)
+    }
   }
 
-  const type = schema['type']
+  switch (typeOf(schema)) {
+    case 'object': {
+      const out: Record<string, unknown> = {}
+      const required = new Set(Array.isArray(schema['required']) ? (schema['required'] as string[]) : [])
 
-  if (Array.isArray(type)) {
-    return primitiveSkeleton(schema, String(type[0] ?? 'null'))
+      for (const [name, property] of Object.entries(
+        isRecord(schema['properties']) ? schema['properties'] : {},
+      )) {
+        if (required.has(name) || depth === 0) {
+          out[name] = exampleOf(property as Schema, depth + 1)
+        }
+      }
+
+      return out
+    }
+
+    case 'array': {
+      return []
+    }
+
+    case 'string': {
+      const format = schema['format']
+      return format === 'email' ? 'user@example.com' : format === 'date-time' ? new Date().toISOString() : ''
+    }
+    case 'number':
+    case 'integer': {
+      return typeof schema['minimum'] === 'number' ? schema['minimum'] : 0
+    }
+
+    case 'boolean': {
+      return false
+    }
+
+    default: {
+      return null
+    }
+  }
+}
+
+export interface Field {
+  readonly name: string
+  readonly type: string
+  readonly required: boolean
+  readonly description: string | undefined
+  readonly options: readonly unknown[] | null
+}
+
+/** The top-level fields of an object schema (what the Params form shows). */
+export const fieldsOf = (schema: Schema): readonly Field[] => {
+  if (!isRecord(schema) || typeOf(schema) !== 'object' || !isRecord(schema['properties'])) {
+    return []
   }
 
-  if (typeof type === 'string') {
-    return primitiveSkeleton(schema, type)
+  const required = new Set(Array.isArray(schema['required']) ? (schema['required'] as string[]) : [])
+
+  return Object.entries(schema['properties']).map(([name, property]) => {
+    const record = isRecord(property) ? property : {}
+    return {
+      name,
+      type: typeOf(record) ?? (Array.isArray(record['enum']) ? 'enum' : 'any'),
+      required: required.has(name),
+      description: typeof record['description'] === 'string' ? record['description'] : undefined,
+      options: Array.isArray(record['enum']) ? record['enum'] : null,
+    }
+  })
+}
+
+/** A form field's text as a value: numbers/booleans/JSON by the declared type, else the text. */
+export const coerceField = (text: string, type: string): unknown => {
+  if (text === '') {
+    return undefined
   }
 
-  return isRecord(schema['properties']) ? primitiveSkeleton(schema, 'object') : {}
+  switch (type) {
+    case 'number':
+    case 'integer': {
+      const number = Number(text)
+      return Number.isNaN(number) ? text : number
+    }
+
+    case 'boolean': {
+      return text === 'true'
+    }
+    case 'object':
+    case 'array': {
+      try {
+        return JSON.parse(text)
+      } catch {
+        return text
+      }
+    }
+
+    default: {
+      return text
+    }
+  }
 }

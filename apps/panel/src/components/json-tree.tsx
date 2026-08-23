@@ -1,115 +1,68 @@
-import { useMemo, useState } from 'react'
-import { Button } from 'react-aria-components'
+/** A collapsible JSON view; huge payloads fall back to flat text. */
+import { useState } from 'react'
 
-import { ChevronIcon } from './icons'
+const LIMIT = 300_000
 
-/**
- * Collapsible pretty-JSON tree: objects/arrays fold (open to depth 3 by default), primitives get
- * lightweight syntax color. Documents past the size budget render as flat preformatted text.
- */
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
 
-const FLAT_LIMIT = 300_000
-
-const primitiveClass = (value: unknown): string => {
-  if (typeof value === 'string') {
-    return 'text-ok'
-  }
-
-  return typeof value === 'number' ? 'text-post' : 'text-stream'
+const Leaf = ({ value }: { value: unknown }) => {
+  const color =
+    typeof value === 'string'
+      ? 'var(--ok)'
+      : typeof value === 'number'
+        ? 'var(--accent)'
+        : typeof value === 'boolean'
+          ? 'var(--warn)'
+          : 'var(--dim)'
+  return <span style={{ color }}>{JSON.stringify(value)}</span>
 }
 
-const pairsOf = (value: object): readonly (readonly [string, unknown])[] =>
-  Array.isArray(value)
-    ? (value as readonly unknown[]).map((item, index) => [String(index), item] as const)
-    : Object.entries(value)
-
-const JsonNode = ({
-  name,
-  value,
-  depth,
-}: {
-  readonly name: string | undefined
-  readonly value: unknown
-  readonly depth: number
-}) => {
-  const [open, setOpen] = useState(depth < 3)
-  const composite = typeof value === 'object' && value !== null
-  const pairs = composite ? pairsOf(value) : []
-
-  const label =
-    name === undefined ? null : (
-      <span className='shrink-0'>
-        <span className='text-accent'>{name}</span>
-        <span className='text-muted'>: </span>
-      </span>
-    )
-
-  if (!composite) {
+const Node = ({ name, value, depth }: { name: string | null; value: unknown; depth: number }) => {
+  const [open, setOpen] = useState(depth < 2)
+  const container = isRecord(value) || Array.isArray(value)
+  const entries = container
+    ? Array.isArray(value)
+      ? value.map((item, index) => [String(index), item] as const)
+      : Object.entries(value)
+    : []
+  const label = name === null ? null : <span style={{ color: 'var(--fg)' }}>{name}: </span>
+  if (!container) {
     return (
-      <div className='flex min-w-0 items-start pl-4'>
+      <div style={{ paddingLeft: depth * 14 }}>
         {label}
-        <span className={`min-w-0 break-all whitespace-pre-wrap ${primitiveClass(value)}`}>
-          {JSON.stringify(value) ?? 'undefined'}
-        </span>
+        <Leaf value={value} />
       </div>
     )
   }
-
-  if (pairs.length === 0) {
-    return (
-      <div className='flex min-w-0 items-start pl-4'>
-        {label}
-        <span className='text-muted'>{Array.isArray(value) ? '[]' : '{}'}</span>
-      </div>
-    )
-  }
-
+  const brackets = Array.isArray(value) ? ['[', ']'] : ['{', '}']
   return (
     <div>
-      <div className='flex items-center'>
-        <Button
-          aria-expanded={open}
-          aria-label={`${open ? 'Collapse' : 'Expand'} ${name ?? 'root'}`}
-          className='text-muted data-hovered:text-ink w-4 shrink-0 rounded outline-none'
-          onPress={() => setOpen(prev => !prev)}>
-          <ChevronIcon className={open ? 'rotate-90' : ''} height={11} width={11} />
-        </Button>
+      <div style={{ paddingLeft: depth * 14, cursor: 'pointer' }} onClick={() => setOpen(!open)}>
+        <span style={{ color: 'var(--dim)', display: 'inline-block', width: 12 }}>
+          {open ? '▾' : '▸'}
+        </span>
         {label}
-        <span className='text-muted'>
-          {Array.isArray(value) ? `array · ${pairs.length}` : `object · ${pairs.length}`}
+        <span style={{ color: 'var(--dim)' }}>
+          {brackets[0]}
+          {open ? '' : ` ${entries.length} ${brackets[1]}`}
         </span>
       </div>
-      {open ? (
-        <div className='border-line ml-[5px] border-l pl-2.5'>
-          {pairs.map(([key, item]) => (
-            <JsonNode key={key} depth={depth + 1} name={key} value={item} />
-          ))}
-        </div>
-      ) : null}
+      {open &&
+        entries.map(([key, item]) => <Node key={key} name={key} value={item} depth={depth + 1} />)}
+      {open && <div style={{ paddingLeft: depth * 14, color: 'var(--dim)' }}>{brackets[1]}</div>}
     </div>
   )
 }
 
-export const JsonTree = ({ value }: { readonly value: unknown }) => {
-  const flat = useMemo(() => {
-    try {
-      return JSON.stringify(value, null, 2) ?? 'undefined'
-    } catch {
-      return String(value)
-    }
-  }, [value])
-
-  if (flat.length > FLAT_LIMIT) {
-    return (
-      <pre className='font-mono text-[12.5px] leading-5 whitespace-pre-wrap'>
-        <code>{flat}</code>
-      </pre>
-    )
+export const JsonTree = ({ value }: { value: unknown }) => {
+  const text = JSON.stringify(value, null, 2) ?? 'undefined'
+  if (text.length > LIMIT) {
+    return <pre className='mono break-all whitespace-pre-wrap'>{text}</pre>
   }
-
   return (
-    <div className='font-mono text-[12.5px] leading-5'>
-      <JsonNode depth={0} name={undefined} value={value} />
+    <div className='mono'>
+      <Node name={null} value={value} depth={0} />
     </div>
   )
 }
