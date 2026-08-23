@@ -1,438 +1,429 @@
 // oxlint-disable import/exports-last
-import { createLease, requestId } from 'server:utils'
-import type { Lease } from 'server:utils'
-import { attempt, operation, sleep } from 'std:effect'
-import { isFailure } from 'std:result'
+import type { Operation, Scope } from 'std:effect'
+import { attempt, createContext, useScope } from 'std:effect'
+import { IO } from 'std:io'
+import { fail, isFailure } from 'std:result'
+import type { AnyType } from 'std:shared'
 
-import { findRoute } from 'rou3'
-import { JsonCodec } from 'std:codec/impl/json'
+import { addRoute, createRouter, findRoute } from 'rou3'
+import type { RouterContext } from 'rou3'
 
-import { DataType, REQUEST_ID_HEADER } from '../../const'
-import { Broker } from '../../definition'
-import { CoreErrors } from '../../errors'
-import type { Meta, Reply } from '../../types/common'
-import type { Edge, EdgeRequest, EdgeResponse } from '../../types/gateway'
-import type { Trace } from '../../types/trace'
-import { statusFor } from '../../utils/status'
-import { childTrace, rootTrace } from '../../utils/trace'
+import { HEADERS, laneOf } from '../../const'
+import { ServerErrors } from '../../errors'
+import type { EdgeDef } from '../../types/edge'
+import type { ServerDef } from '../../types/server'
+import type { ServiceDef } from '../../types/service'
+import type { TraceDef } from '../../types/trace'
+import { statusOf } from '../../utils/failure'
+import { isPartsDecl, isStreamDecl, stream } from '../../utils/stream'
+import { childTrace, report, rootTrace, withSpan } from '../../utils/trace'
+import { contextFor, materialize } from '../dispatch'
 
-import { parseJsonBody, parseUrlencoded, queryOf, readBody } from './body'
-import { GatewayRef } from './context'
-import type { GatewayCtx } from './context'
-import { parseMultipart } from './multipart'
-import { replyToResponse, streamToResponse } from './rest'
-import { registerSocket, removeSocket } from './sockets'
+import { valueBody } from './body'
+import { parseParts } from './multipart'
+import { failureResponse, responseOf } from './respond'
+import { driveSocket } from './sockets'
 
-const ENCODER = new TextEncoder()
-const BODY_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
-const REQUEST_ID_SHAPE = /^[\w-]{1,64}$/u
+/** One mounted action route. */
+interface ActionRoute {
+  readonly kind: 'action'
+  readonly service: string
+  readonly action: string
+  readonly meta: ServiceDef.Meta
+}
 
-const errorResponse = operation(function* (input: {
-  readonly status: number
-  readonly error: string
-  readonly message: string
-  readonly requestId: string
-  readonly causes?: readonly string[] | undefined
-}) {
-  const { status, ...body } = input
-  const bytes = ENCODER.encode(yield* JsonCodec.actions.stringify(body))
+interface RawRouteEntry {
+  readonly kind: 'raw'
+  readonly route: EdgeDef.RawRoute
+}
 
-  const response: EdgeResponse = {
-    status,
-    headers: { 'content-type': 'application/json', [REQUEST_ID_HEADER]: input.requestId },
-    body: bytes,
+type Entry = ActionRoute | RawRouteEntry
+
+/** Per-install engine state (the Edge impl's context holds it). */
+export interface EdgeState {
+  readonly kernel: ServerDef.Context
+  readonly actions: Pick<ServerDef.Actions, 'call' | 'emit' | 'dispatch'>
+  readonly router: RouterContext<Entry>
+  readonly sockets: RouterContext<EdgeDef.SocketRoute>
+  readonly decorators: EdgeDef.Decorator[]
+  readonly scope: Scope
+  preflight: EdgeDef.Preflight | null
+  paused: boolean
+  mounted: boolean
+  info: EdgeDef.ListenInfo | null
+}
+
+export const EdgeStateRef = createContext<EdgeState>('server:edge/state')
+
+export function* createEdgeState(
+  kernel: ServerDef.Context,
+  actions: EdgeState['actions'],
+): Operation<EdgeState> {
+  const state: EdgeState = {
+    kernel,
+    actions,
+    router: createRouter<Entry>(),
+    sockets: createRouter<EdgeDef.SocketRoute>(),
+    decorators: [],
+    scope: yield* useScope(),
+    preflight: null,
+    paused: false,
+    mounted: false,
+    info: null,
   }
+  yield* EdgeStateRef.set(state)
 
-  return response
-})
+  return state
+}
 
-const resolveRequestId = operation(function* (headers: Meta) {
-  const inbound = headers[REQUEST_ID_HEADER]
+/** Request headers as a plain record; a `?token=` query param is promoted to a bearer header
+ * (browsers cannot set handshake headers on sockets). */
+const headersOf = (request: Request): Record<string, string> => {
+  const headers = Object.fromEntries(request.headers.entries())
 
-  if (inbound && REQUEST_ID_SHAPE.test(inbound)) {
-    return inbound
-  }
+  if (!headers.authorization) {
+    const token = new URL(request.url).searchParams.get('token')
 
-  return yield* requestId()
-})
-
-const promoteToken = (headers: Meta, query: Record<string, string>): Meta => {
-  const token = query['token'] ?? query['access_token']
-
-  if (!headers['authorization'] && token) {
-    return { ...headers, authorization: `Bearer ${token}` }
+    if (token) {
+      headers.authorization = `Bearer ${token}`
+    }
   }
 
   return headers
 }
 
-const edgeTrace = operation(function* (input: {
-  readonly ctx: GatewayCtx
-  readonly rid: string
-  readonly label: string
-}) {
-  const base = yield* rootTrace({
-    origin: 'external',
-    serviceId: `${input.ctx.name}#${input.ctx.gatewayId}`,
-    requestId: input.rid,
-  })
+/** Route params, percent-decoded (a malformed escape stays as-is). */
+const decodeParams = (params: Record<string, string> | undefined): Record<string, string> =>
+  Object.fromEntries(
+    Object.entries(params ?? {}).map(([key, value]) => {
+      try {
+        return [key, decodeURIComponent(value)]
+      } catch {
+        return [key, value]
+      }
+    }),
+  )
 
-  const trace: Trace = yield* childTrace(base, {
-    service: input.ctx.name,
-    action: input.label,
+/** Mount every action of the kernel's registry (idempotent). */
+export const mountActions = (state: EdgeState): number => {
+  if (state.mounted) {
+    return 0
+  }
+
+  state.mounted = true
+  let count = 0
+
+  for (const [key, def] of state.kernel.registry.actions) {
+    const [service, action] = key.split('.') as [string, string]
+
+    addRoute(state.router, def.meta.route.method, def.meta.route.path, {
+      kind: 'action',
+      service,
+      action,
+      meta: def.meta,
+    })
+    count += 1
+  }
+
+  return count
+}
+
+/** The input of an action request, by its declared input plane. */
+function* inputOf(
+  request: Request,
+  meta: ServiceDef.Meta,
+  params: Readonly<Record<string, string>>,
+): Operation<unknown> {
+  if (meta.inputPlane === 'stream' && meta.input && isStreamDecl(meta.input)) {
+    if (!request.body) {
+      return yield* fail(ServerErrors.BadRequest, 'a stream body is required')
+    }
+
+    return stream.from(request.body, meta.input.brand)
+  }
+
+  if (meta.inputPlane === 'parts' && meta.input && isPartsDecl(meta.input)) {
+    return yield* parseParts(request, meta.input)
+  }
+
+  if (meta.inputPlane === 'none') {
+    return undefined
+  }
+
+  return yield* valueBody(request, params)
+}
+
+interface ActionCall {
+  readonly state: EdgeState
+  readonly request: Request
+  readonly entry: ActionRoute
+  readonly params: Readonly<Record<string, string>>
+  readonly trace: TraceDef.Trace
+}
+
+/** Run one action route: build the call, dispatch through the kernel, render the response. */
+function* runAction({ state, request, entry, params, trace }: ActionCall): Operation<Response> {
+  const input = yield* attempt(() => inputOf(request, entry.meta, params))
+
+  if (isFailure(input)) {
+    return failureResponse(input, trace.requestId, entry.meta)
+  }
+
+  const controller = new AbortController()
+  request.signal?.addEventListener('abort', () => controller.abort(ServerErrors.Cancelled))
+  const dispatchTrace = yield* childTrace(trace)
+
+  const hop: TraceDef.Hop = {
+    service: entry.service,
+    action: entry.action,
+    spanId: dispatchTrace.spanId,
     transport: 'edge',
+    ts: Date.now(),
+  }
+
+  const call: ServerDef.Call = {
+    cid: dispatchTrace.spanId,
+    service: entry.service,
+    action: entry.action,
+    input: input.value,
+    trace: { ...dispatchTrace, lane: [hop] },
+    headers: headersOf(request),
+    deadline: Date.now() + state.kernel.timeoutMs,
+    idempotencyKey: request.headers.get('idempotency-key') ?? undefined,
+    transport: 'edge',
+    signal: controller.signal,
+    abort: reason => controller.abort(reason),
+  }
+
+  // the kernel action unwraps a returned Result (std plugin contract): fold it back here
+  const outcome = yield* attempt(() => state.actions.dispatch(call))
+
+  if (isFailure(outcome)) {
+    return failureResponse(outcome, trace.requestId, entry.meta)
+  }
+
+  return responseOf(yield* materialize(outcome.value), trace.requestId)
+}
+
+interface Finish {
+  readonly state: EdgeState
+  readonly request: Request
+  readonly response: Response
+  readonly requestId: string
+}
+
+/** Decorate and stamp the request id on every response (errors included). */
+function* finish({ state, request, response, requestId }: Finish): Operation<Response> {
+  let out = response
+
+  for (const decorator of state.decorators) {
+    out = yield* decorator(request, out)
+  }
+
+  if (!out.headers.get(HEADERS.requestId)) {
+    out = new Response(out.body, out)
+    out.headers.set(HEADERS.requestId, requestId)
+  }
+
+  return out
+}
+
+/**
+ * Handle one HTTP request end to end: request id (accepted or minted, always echoed), an
+ * `edge` span + a request row, raw routes, action routes (input by plane → kernel dispatch →
+ * response by brand), preflight for unrouted OPTIONS, 404 otherwise, 503 while paused.
+ */
+export function* handleRequest(state: EdgeState, request: Request): Operation<Response> {
+  const { kernel } = state
+  const url = new URL(request.url)
+  const requestId = request.headers.get(HEADERS.requestId) ?? (yield* IO.actions.uuid())
+  const trace = yield* rootTrace(kernel.serviceId, 'external', requestId)
+  const startedAt = Date.now()
+  let routed: ActionRoute | null = null
+
+  const response: Response = yield* withSpan(
+    { kernel, trace, kind: 'edge', name: `${request.method} ${url.pathname}` },
+    function* (): Operation<Response> {
+      if (state.paused) {
+        return failureResponse(
+          fail(ServerErrors.Paused, 'the edge is draining') as AnyType,
+          requestId,
+        )
+      }
+      const match = findRoute(state.router, request.method, url.pathname, { params: true })
+      if (match) {
+        const params = decodeParams(match.params)
+        const entry = match.data
+        if (entry.kind === 'raw') {
+          const raw = yield* attempt(() => entry.route.handler(request, params))
+          return isFailure(raw) ? failureResponse(raw, requestId) : raw.value
+        }
+        routed = entry
+        return yield* runAction({ state, request, entry, params, trace })
+      }
+      if (request.method === 'OPTIONS' && state.preflight) {
+        const answered = yield* attempt(() => state.preflight!(request))
+        if (!isFailure(answered) && answered.value) {
+          return answered.value
+        }
+      }
+      return failureResponse(
+        fail(ServerErrors.NotFound, `no route for ${request.method} ${url.pathname}`) as AnyType,
+        requestId,
+      )
+    },
+  )
+  const decorated = yield* finish({ state, request, response, requestId })
+  const endedAt = Date.now()
+  const entry = routed as ActionRoute | null
+
+  yield* report(kernel, {
+    t: 'request',
+    row: {
+      requestId,
+      origin: 'external',
+      service: entry?.service ?? null,
+      action: entry?.action ?? null,
+      edge: 'http',
+      method: request.method,
+      path: url.pathname,
+      socket: null,
+      status: decorated.status,
+      serviceId: kernel.serviceId,
+      instance: kernel.instance,
+      lane: entry ? laneOf([{ service: entry.service }]) : '',
+      startedAt,
+      endedAt,
+      durationMs: endedAt - startedAt,
+      error:
+        decorated.status >= 400
+          ? (decorated.headers.get(HEADERS.error) ?? String(decorated.status))
+          : null,
+      attrs: null,
+    },
   })
-
-  return trace
-})
-
-interface ResolvedInput {
-  readonly params: unknown
-  readonly sources?: ReadonlyMap<string, unknown> | undefined
-}
-
-const mergeParams = (
-  query: Record<string, string>,
-  body: unknown,
-  pathParams: Record<string, string> | undefined,
-): unknown => {
-  const bodyObject =
-    body !== null && typeof body === 'object' && !Array.isArray(body)
-      ? (body as Record<string, unknown>)
-      : undefined
-  const merged = { ...query, ...bodyObject, ...pathParams }
-
-  if (bodyObject === undefined && body !== undefined) {
-    // non-object body (array/string/number) wins when nothing else was provided
-    return Object.keys(merged).length === 0 ? body : { ...merged, body }
-  }
-
-  // REST semantics: params are always an object at the edge ({} when nothing was provided)
-  return merged
-}
-
-const resolveInput = operation(function* (input: {
-  readonly ctx: GatewayCtx
-  readonly request: EdgeRequest
-  readonly acceptsParts: boolean
-  readonly query: Record<string, string>
-  readonly pathParams: Record<string, string> | undefined
-}) {
-  const { ctx, request, acceptsParts, query, pathParams } = input
-  const contentType = request.headers['content-type'] ?? ''
-  const hasBody = BODY_METHODS.has(request.method) && request.body !== undefined
-
-  if (hasBody && acceptsParts && contentType.includes('multipart/form-data')) {
-    const parsed = yield* parseMultipart(request.headers, request.body as never)
-    const sources = new Map<string, unknown>([[DataType.multistream, parsed.multistream]])
-
-    const resolved: ResolvedInput = {
-      params: mergeParams({ ...query, ...parsed.fields }, undefined, pathParams),
-      sources,
-    }
-
-    return resolved
-  }
-
-  if (hasBody && contentType.includes('application/x-www-form-urlencoded')) {
-    const bytes = yield* readBody(request.body as never, ctx.maxBodyBytes)
-
-    const resolved: ResolvedInput = {
-      params: mergeParams({ ...query, ...parseUrlencoded(bytes) }, undefined, pathParams),
-    }
-
-    return resolved
-  }
-
-  if (hasBody) {
-    const bytes = yield* readBody(request.body as never, ctx.maxBodyBytes)
-    const body = yield* parseJsonBody(bytes)
-
-    const resolved: ResolvedInput = { params: mergeParams(query, body, pathParams) }
-
-    return resolved
-  }
-
-  const resolved: ResolvedInput = { params: mergeParams(query, undefined, pathParams) }
-
-  return resolved
-})
-
-const decorate = (ctx: GatewayCtx, request: EdgeRequest, response: EdgeResponse): EdgeResponse => {
-  let decorated = response
-
-  for (const decorator of ctx.decorators) {
-    try {
-      decorated = decorator(request, decorated)
-    } catch {
-      // decorators are pure by contract; a broken one must not kill the response
-    }
-  }
 
   return decorated
 }
 
-/** The single HTTP entry — adapters call this for every non-upgrade request. */
-export const handleFetch = operation(function* (request: EdgeRequest) {
-  const ctx = yield* GatewayRef.expect()
-  const rid = yield* resolveRequestId(request.headers)
-
-  if (ctx.state.paused) {
-    return decorate(
-      ctx,
-      request,
-      yield* errorResponse({
-        status: 503,
-        error: CoreErrors.Paused,
-        message: 'gateway is paused',
-        requestId: rid,
-      }),
-    )
-  }
-
-  ctx.state.inflight += 1
-
-  const outcome = yield* attempt(function* () {
-    const { path, query } = queryOf(request.url)
-    const match = findRoute(ctx.router, request.method, path, { params: true })
-
-    if (!match) {
-      if (request.method === 'OPTIONS' && ctx.hooks.preflight) {
-        const preflight = yield* ctx.hooks.preflight(request)
-
-        if (preflight) {
-          return preflight
-        }
-      }
-
-      return yield* errorResponse({
-        status: 404,
-        error: CoreErrors.NoRoute,
-        message: `no route for ${request.method} ${path}`,
-        requestId: rid,
-      })
-    }
-
-    const target = match.data
-    const meta = promoteToken(request.headers, query)
-    const resolved = yield* resolveInput({
-      ctx,
-      request,
-      acceptsParts: target.action.meta.wire.input.includes('parts'),
-      query,
-      pathParams: match.params,
-    })
-    const trace = yield* edgeTrace({ ctx, rid, label: `${request.method} ${path}` })
-
-    const result = yield* attempt(() =>
-      Broker.actions.exchange(target.service, target.actionKey, resolved.params, {
-        trace,
-        origin: 'external',
-        meta,
-        sources: resolved.sources,
-      }),
-    )
-
-    if (isFailure(result)) {
-      yield* ctx.log.warn('edge dispatch raised', {
-        requestId: rid,
-        method: request.method,
-        path,
-        error: String(result.error),
-      })
-
-      return yield* errorResponse({
-        status: statusFor(result),
-        error: String(result.error),
-        message: result.message,
-        requestId: rid,
-        causes: ctx.debug ? result.causes : undefined,
-      })
-    }
-
-    const reply = result.value as Reply
-
-    if (reply.kind === 'stream') {
-      return yield* streamToResponse({ reply, requestId: rid, route: target.action.meta.route })
-    }
-
-    return yield* replyToResponse({ reply, requestId: rid, debug: ctx.debug })
-  })
-
-  ctx.state.inflight -= 1
-
-  if (isFailure(outcome)) {
-    yield* ctx.log.error('edge handler crashed', {
-      requestId: rid,
-      error: String(outcome.error),
-      causes: [...outcome.causes],
-    })
-
-    return decorate(
-      ctx,
-      request,
-      yield* errorResponse({
-        status: 500,
-        error: CoreErrors.Internal,
-        message: 'internal error',
-        requestId: rid,
-      }),
-    )
-  }
-
-  return decorate(ctx, request, outcome.value)
-})
-
-/** The single upgrade path — one handshake, one 401/404 semantic, every runtime. */
-export const handleUpgrade = operation(function* (request: EdgeRequest) {
-  const ctx = yield* GatewayRef.expect()
-  const { path, query } = queryOf(request.url)
-
-  if (ctx.state.paused) {
-    const rejection: Edge.Upgrade = { kind: 'reject', status: 503 }
-
-    return rejection
-  }
-
-  const match = findRoute(ctx.socketRouter, 'WS', path, { params: true })
+/** Decide an upgrade: a socket route, its `authorize`, then a handler scope per socket. */
+export function* decideUpgrade(state: EdgeState, request: Request): Operation<EdgeDef.Upgrade> {
+  const { kernel } = state
+  const url = new URL(request.url)
+  const requestId = request.headers.get(HEADERS.requestId) ?? (yield* IO.actions.uuid())
+  const match = findRoute(state.sockets, 'WS', url.pathname, { params: true })
 
   if (!match) {
-    const rejection: Edge.Upgrade = { kind: 'reject', status: 404 }
+    return {
+      kind: 'reject',
 
-    return rejection
+      response: failureResponse(
+        fail(ServerErrors.NotFound, `no socket route for ${url.pathname}`) as AnyType,
+        requestId,
+      ),
+    }
   }
 
   const route = match.data
-  const meta = promoteToken(request.headers, query)
 
   if (route.authorize) {
-    const allowed = yield* attempt(() =>
-      (route.authorize as NonNullable<typeof route.authorize>)({ ...request, headers: meta }),
-    )
+    const allowed = yield* attempt(() => route.authorize!(request))
 
-    if (isFailure(allowed) || !allowed.value) {
-      const rejection: Edge.Upgrade = { kind: 'reject', status: 401 }
-
-      return rejection
+    if (isFailure(allowed)) {
+      return { kind: 'reject', response: failureResponse(allowed, requestId) }
     }
   }
 
-  const handlers: Edge.SocketHandlers = {
-    open: operation(function* (socket: Edge.Socket) {
-      const handle = registerSocket({
-        registry: ctx.sockets,
-        gatewayId: ctx.gatewayId,
-        edge: socket,
-        meta,
-        params: match.params ?? {},
-      })
+  const params = decodeParams(match.params)
+  const headers = headersOf(request)
+  const trace = yield* rootTrace(kernel.serviceId, 'external', requestId)
 
-      let lease: Lease | undefined
-      let watch
+  return {
+    kind: 'accept',
 
-      if (ctx.idle) {
-        const config = ctx.idle
-        const armed = createLease({ ttlMs: config.ttlMs })
-
-        lease = armed
-        // detached: an idle-loop failure must never touch the gateway scope
-        watch = ctx.scope.run(() => idleWatch(socket, armed, config), { detached: true })
-      }
-
-      ctx.bindings.set(socket.id, { route, handle, lease, watch })
-
-      if (route.open) {
-        const opened = yield* attempt(() => (route.open as NonNullable<typeof route.open>)(handle))
-
-        if (isFailure(opened)) {
-          yield* ctx.log.warn('socket open handler failed', {
-            socket: socket.id,
-            error: String(opened.error),
-          })
-        }
-      }
-    }),
-
-    message: operation(function* (socket: Edge.Socket, data: string | Uint8Array) {
-      const binding = ctx.bindings.get(socket.id)
-
-      if (!binding) {
-        return
-      }
-
-      binding.lease?.renew()
-
-      const handled = yield* attempt(() => binding.route.message(binding.handle, data))
-
-      if (isFailure(handled)) {
-        yield* ctx.log.warn('socket message handler failed', {
-          socket: socket.id,
-          error: String(handled.error),
+    attach: raw => {
+      void state.scope.run(function* () {
+        const startedAt = Date.now()
+        const controller = new AbortController()
+        const outcome = yield* attempt(function* () {
+          const ctx = yield* contextFor(
+            kernel,
+            { trace, headers, signal: controller.signal, name: route.path },
+            state.actions,
+          )
+          yield* withSpan({ kernel, trace, kind: 'edge', name: `WS ${route.path}` }, () =>
+            driveSocket({ kernel, route, raw, params, headers, ctx, trace }),
+          )
         })
-      }
-    }),
-
-    pong: operation(function* (socket: Edge.Socket) {
-      ctx.bindings.get(socket.id)?.lease?.renew()
-    }),
-
-    close: operation(function* (socket: Edge.Socket, code: number, reason: string) {
-      const binding = ctx.bindings.get(socket.id)
-
-      ctx.bindings.delete(socket.id)
-      removeSocket(ctx.sockets, socket.id)
-
-      if (binding?.watch) {
-        yield* attempt(() => (binding.watch as NonNullable<typeof binding.watch>).halt())
-      }
-
-      if (binding?.route.close) {
-        const closed = yield* attempt(() =>
-          (binding.route.close as NonNullable<typeof binding.route.close>)(
-            binding.handle,
-            code,
-            reason,
-          ),
-        )
-
-        if (isFailure(closed)) {
-          yield* ctx.log.warn('socket close handler failed', {
-            socket: socket.id,
-            error: String(closed.error),
-          })
-        }
-      }
-    }),
+        controller.abort('closed')
+        const endedAt = Date.now()
+        yield* report(kernel, {
+          t: 'request',
+          row: {
+            requestId,
+            origin: 'external',
+            service: null,
+            action: null,
+            edge: 'ws',
+            method: null,
+            path: null,
+            socket: route.path,
+            status: isFailure(outcome) ? statusOf(outcome) : 101,
+            serviceId: kernel.serviceId,
+            instance: kernel.instance,
+            lane: '',
+            startedAt,
+            endedAt,
+            durationMs: endedAt - startedAt,
+            error: isFailure(outcome) ? String(outcome.error) : null,
+            attrs: null,
+          },
+        })
+      })
+    },
   }
+}
 
-  const acceptance: Edge.Upgrade = { kind: 'accept', handlers }
-
-  return acceptance
-})
+export const isSocketRequest = (state: EdgeState, request: Request): boolean =>
+  request.headers.get('upgrade')?.toLowerCase() === 'websocket' &&
+  findRoute(state.sockets, 'WS', new URL(request.url).pathname) !== undefined
 
 /**
- * Per-socket liveness loop: pings on the interval (browsers pong automatically → adapters renew
- * the lease) and closes half-open/dead peers when the lease expires — the reap cascades through
- * the adapter's close event into binding + watch-task cleanup.
+ * Wrap a response so the request's scope can wait for its body to finish (streamed bodies keep
+ * their pumps alive that long). Resolves immediately for bodies that are not streams.
  */
-const idleWatch = operation(function* (
-  socket: Edge.Socket,
-  lease: Lease,
-  config: { readonly ttlMs: number; readonly pingMs: number },
-) {
-  const interval = config.pingMs > 0 ? config.pingMs : Math.max(Math.floor(config.ttlMs / 4), 10)
-
-  while (true) {
-    yield* sleep(interval)
-
-    if (lease.expired()) {
-      socket.close(4000, 'idle timeout')
-
-      return
-    }
-
-    if (config.pingMs > 0) {
-      socket.ping?.()
-    }
+export const trackBody = (response: Response): { response: Response; done: Promise<void> } => {
+  if (!response.body) {
+    return { response, done: Promise.resolve() }
   }
-})
+
+  let settle: () => void = () => {}
+
+  const done = new Promise<void>(resolve => {
+    settle = resolve
+  })
+  const source = response.body.getReader()
+
+  const body = new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      try {
+        const step = await source.read()
+        if (step.done) {
+          controller.close()
+          settle()
+          return
+        }
+        controller.enqueue(step.value)
+      } catch (error) {
+        controller.error(error)
+        settle()
+      }
+    },
+    async cancel(reason) {
+      await source.cancel(reason).catch(() => {})
+      settle()
+    },
+  })
+
+  return { response: new Response(body, response), done }
+}

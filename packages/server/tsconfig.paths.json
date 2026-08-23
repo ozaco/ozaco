@@ -3,49 +3,23 @@
   "compilerOptions": {
     "paths": {
       "server:core": ["./src/core/index.ts", "./dist/index.d.ts"],
-      "server:utils": ["./src/utils/index.ts", "./dist/utils.d.ts"],
-      "server:gateway/bun": ["./src/gateway/bun/index.ts", "./dist/gateway/bun.d.ts"],
-      "server:gateway/node": ["./src/gateway/node/index.ts", "./dist/gateway/node.d.ts"],
-      "server:gateway/deno": ["./src/gateway/deno/index.ts", "./dist/gateway/deno.d.ts"],
-      "server:transport/worker": [
-        "./src/transport/worker/index.ts",
-        "./dist/transport/worker.d.ts"
+      "server:impl/edge/bun": ["./src/impl/edge/bun/index.ts", "./dist/edge/bun.d.ts"],
+      "server:impl/edge/node": ["./src/impl/edge/node/index.ts", "./dist/edge/node.d.ts"],
+      "server:impl/edge/deno": ["./src/impl/edge/deno/index.ts", "./dist/edge/deno.d.ts"],
+      "server:impl/carrier/network": [
+        "./src/impl/carrier/network/index.ts",
+        "./dist/carrier/network.d.ts"
       ],
-      "server:transport/nats": ["./src/transport/nats/index.ts", "./dist/transport/nats.d.ts"],
-      "server:policy/cache": ["./src/policy/cache/index.ts", "./dist/policy/cache.d.ts"],
-      "server:policy/fallback": ["./src/policy/fallback/index.ts", "./dist/policy/fallback.d.ts"],
-      "server:policy/bucket": ["./src/policy/bucket/index.ts", "./dist/policy/bucket.d.ts"],
-      "server:policy/bulk": ["./src/policy/bulk/index.ts", "./dist/policy/bulk.d.ts"],
-      "server:policy/rate-limit": [
-        "./src/policy/rate-limit/index.ts",
-        "./dist/policy/rate-limit.d.ts"
+      "server:plugins": ["./src/plugins/index.ts", "./dist/plugins.d.ts"],
+      "server:plugins/observe/otlp": [
+        "./src/plugins/observe/impl/otlp/index.ts",
+        "./dist/plugins/observe/otlp.d.ts"
       ],
-      "server:policy/retry": ["./src/policy/retry/index.ts", "./dist/policy/retry.d.ts"],
-      "server:policy/circuit-breaker": [
-        "./src/policy/circuit-breaker/index.ts",
-        "./dist/policy/circuit-breaker.d.ts"
+      "server:plugins/metrics/starrocks": [
+        "./src/plugins/metrics/impl/starrocks/index.ts",
+        "./dist/plugins/metrics/starrocks.d.ts"
       ],
-      "server:policy/metrics": ["./src/policy/metrics/index.ts", "./dist/policy/metrics.d.ts"],
-      "server:policy/timeout": ["./src/policy/timeout/index.ts", "./dist/policy/timeout.d.ts"],
-      "server:wizard": ["./src/wizard/index.ts", "./dist/wizard.d.ts"],
-      "server:plugin/metrics": ["./src/plugin/metrics/index.ts", "./dist/plugin/metrics.d.ts"],
-      "server:plugin/metrics/memory": [
-        "./src/plugin/metrics/memory/index.ts",
-        "./dist/plugin/metrics/memory.d.ts"
-      ],
-      "server:plugin/metrics/starrocks": [
-        "./src/plugin/metrics/starrocks/index.ts",
-        "./dist/plugin/metrics/starrocks.d.ts"
-      ],
-      "server:plugin/trace": ["./src/plugin/trace/index.ts", "./dist/plugin/trace.d.ts"],
-      "server:plugin/trace/otlp": [
-        "./src/plugin/trace/otlp/index.ts",
-        "./dist/plugin/trace/otlp.d.ts"
-      ],
-      "server:plugin/auth": ["./src/plugin/auth/index.ts", "./dist/plugin/auth.d.ts"],
-      "server:plugin/docs": ["./src/plugin/docs/index.ts", "./dist/plugin/docs.d.ts"],
-      "server:daemon": ["./src/daemon/index.ts", "./dist/daemon.d.ts"],
-      "server:plugin/cors": ["./src/plugin/cors/index.ts", "./dist/plugin/cors.d.ts"],
+      "server:app": ["./src/app/index.ts", "./dist/app.d.ts"],
       "std:shared": ["./node_modules/@ozaco/std/dist/shared"],
       "std:result": ["./node_modules/@ozaco/std/dist/result"],
       "std:effect": ["./node_modules/@ozaco/std/dist/effect"],
@@ -54,17 +28,25 @@
       "std:io": ["./node_modules/@ozaco/std/dist/io"],
       "std:io/impl/bun": ["./node_modules/@ozaco/std/dist/io/impl/bun"],
       "std:io/impl/node": ["./node_modules/@ozaco/std/dist/io/impl/node"],
-      "std:fetch": ["./node_modules/@ozaco/std/dist/fetch"],
-      "std:ws": ["./node_modules/@ozaco/std/dist/ws"],
       "std:codec": ["./node_modules/@ozaco/std/dist/codec"],
       "std:codec/impl/json": ["./node_modules/@ozaco/std/dist/codec/impl/json"],
       "std:logger": ["./node_modules/@ozaco/std/dist/logger"],
       "std:logger/transport/console": ["./node_modules/@ozaco/std/dist/logger/transport/console"],
+      "std:fetch": ["./node_modules/@ozaco/std/dist/fetch"],
+      "std:ws": ["./node_modules/@ozaco/std/dist/ws"],
+      "std:config": ["./node_modules/@ozaco/std/dist/config"],
+      "transport:core": ["./node_modules/@ozaco/transport/dist/index"],
+      "transport:impl/memory": ["./node_modules/@ozaco/transport/dist/impl/memory"],
+      "transport:impl/nats": ["./node_modules/@ozaco/transport/dist/impl/nats"],
+      "transport:impl/redis": ["./node_modules/@ozaco/transport/dist/impl/redis"],
+      "transport:impl/worker": ["./node_modules/@ozaco/transport/dist/impl/worker"],
       "db:core": ["./node_modules/@ozaco/db/dist/index"],
       "db:impl/memory": ["./node_modules/@ozaco/db/dist/impl/memory"],
       "db:impl/sqlite": ["./node_modules/@ozaco/db/dist/impl/sqlite"],
       "db:impl/pg": ["./node_modules/@ozaco/db/dist/impl/pg"],
-      "db:impl/bun-sql": ["./node_modules/@ozaco/db/dist/impl/bun-sql"]
+      "db:impl/bun-sql": ["./node_modules/@ozaco/db/dist/impl/bun-sql"],
+      "db:impl/kv/memory": ["./node_modules/@ozaco/db/dist/impl/kv/memory"],
+      "db:impl/kv/redis": ["./node_modules/@ozaco/db/dist/impl/kv/redis"]
     }
   }
 }

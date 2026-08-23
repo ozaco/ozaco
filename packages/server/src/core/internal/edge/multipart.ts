@@ -1,80 +1,40 @@
-import type { Flow, Queue, Subscription } from 'std:effect'
-import { createQueue, each, fork, operation, until, withResolvers } from 'std:effect'
+import type { Flow, Operation, Queue } from 'std:effect'
+import { createQueue, fork, toReadable, until, withResolvers } from 'std:effect'
 import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import { Busboy } from '@fastify/busboy'
 
-import { CoreErrors } from '../../errors'
-import type { Meta } from '../../types/common'
-import type { Multistream, Part, PartClose } from '../../types/gateway'
-import { flowOf } from '../../utils/lanes'
+import { ServerErrors } from '../../errors'
+import type { StreamDef } from '../../types/stream'
+import { brandStream } from '../../utils/stream'
 
-/** Backpressure watermarks: pause the busboy file stream beyond HIGH buffered chunks. */
+import { coerce } from './body'
+
+/** Busboy's file stream is paused beyond HIGH buffered chunks and resumed below LOW. */
 const HIGH_WATER = 64
 const LOW_WATER = 16
 
-/** A queue-backed flow that resumes the paused producer as the consumer drains. */
-const meteredFileFlow = (
-  queue: Queue<Uint8Array, PartClose>,
-  meter: { pending: number; paused: boolean; resume: () => void },
-): Flow<Uint8Array, PartClose> => ({
-  *[Symbol.iterator]() {
-    const subscription: Subscription<Uint8Array, PartClose> = {
-      *next() {
-        const result = yield* queue.next()
-
-        if (!result.done) {
-          meter.pending -= 1
-
-          if (meter.paused && meter.pending <= LOW_WATER) {
-            meter.paused = false
-            meter.resume()
-          }
-        }
-
-        return result
-      },
-    }
-
-    return subscription
-  },
-})
-
-export interface ParsedMultipart {
-  /** Fields that arrived BEFORE the first file — merged into the action params. */
-  readonly fields: Record<string, string>
-  /** Files (and any trailing fields) as the multistream source. */
-  readonly multistream: Multistream
+interface Lane {
+  readonly queue: Queue<Uint8Array, void>
+  fed: boolean
+  resume?: (() => void) | undefined
 }
 
 /**
- * Bridges busboy into the effect world. Leading fields resolve before the dispatch (they become
- * params); file parts stream through queues while the handler runs, with pause/resume watermarks
- * so a slow handler stalls the socket instead of buffering the upload in memory.
+ * A multipart body as a `parts` input: the fields that arrive BEFORE the first file resolve the
+ * dispatch (they are the value plane), every declared stream is a branded `ReadableStream` fed by
+ * the matching file part as the parser reaches it — so the handler should read them in body
+ * order; a stream nobody sends ends empty. Busboy's backpressure reaches the socket.
  */
-export const parseMultipart = operation(function* (
-  headers: Meta,
-  source: Flow<Uint8Array, unknown>,
-) {
-  const contentType = headers['content-type']
+export function* parseParts(
+  request: Request,
+  decl: StreamDef.PartsDecl,
+): Operation<StreamDef.Parts<unknown, string>> {
+  const contentType = request.headers.get('content-type')
 
-  if (!contentType) {
-    return yield* fail(CoreErrors.BadRequest, 'multipart request without content-type')
-  }
-
-  const parts = createQueue<Part, PartClose>()
-  const fields: Record<string, string> = {}
-  const ready = withResolvers<void>()
-
-  let sawFile = false
-  let settled = false
-
-  const settle = () => {
-    if (!settled) {
-      settled = true
-      ready.resolve(undefined as void)
-    }
+  if (!contentType || !request.body) {
+    return yield* fail(ServerErrors.BadRequest, 'multipart request without a body')
   }
 
   let busboy: InstanceType<typeof Busboy>
@@ -82,86 +42,122 @@ export const parseMultipart = operation(function* (
   try {
     busboy = new Busboy({ headers: { 'content-type': contentType } })
   } catch {
-    return yield* fail(CoreErrors.BadRequest, 'malformed multipart content-type')
+    return yield* fail(ServerErrors.BadRequest, 'malformed multipart content-type')
+  }
+
+  const fields: Record<string, unknown> = {}
+
+  const lanes = new Map<string, Lane>(
+    Object.keys(decl.streams).map(name => [
+      name,
+      { queue: createQueue<Uint8Array, void>(), fed: false },
+    ]),
+  )
+  const ready = withResolvers<void>('multipart fields')
+  let settled = false
+
+  const settle = () => {
+    if (!settled) {
+      settled = true
+      ready.resolve(undefined)
+    }
   }
 
   busboy.on('field', (name: string, value: AnyType) => {
-    if (sawFile) {
-      parts.add({ kind: 'field', name, value: String(value) })
-
-      return
+    if (!settled) {
+      fields[name] = coerce(String(value))
     }
-
-    fields[name] = String(value)
   })
 
   busboy.on(
     'file',
-    // oxlint-disable-next-line max-params
-    (name: string, file: AnyType, filename: string, _encoding: string, mimetype: string) => {
-      sawFile = true
+    // oxlint-disable-next-line max-params -- busboy's signature
+    (name: string, file: AnyType, _filename: string, _encoding: string, _mime: string) => {
       settle()
-
-      const data = createQueue<Uint8Array, PartClose>()
-      const meter = {
-        pending: 0,
-        paused: false,
-        resume: () => {
-          file.resume()
-        },
+      const lane = lanes.get(name)
+      if (!lane) {
+        file.resume()
+        return
       }
-
+      lane.fed = true
+      let pending = 0
+      let paused = false
       file.on('data', (chunk: Uint8Array) => {
-        data.add(new Uint8Array(chunk))
-        meter.pending += 1
-
-        if (!meter.paused && meter.pending >= HIGH_WATER) {
-          meter.paused = true
+        lane.queue.add(new Uint8Array(chunk))
+        pending += 1
+        if (!paused && pending >= HIGH_WATER) {
+          paused = true
           file.pause()
         }
       })
-      file.on('end', () => data.close(true))
-
-      parts.add({
-        kind: 'file',
-        name,
-        filename,
-        contentType: mimetype,
-        data: meteredFileFlow(data, meter),
-      })
+      file.on('end', () => lane.queue.close(undefined))
+      lane.resume = () => {
+        pending -= 1
+        if (paused && pending <= LOW_WATER) {
+          paused = false
+          file.resume()
+        }
+      }
     },
   )
 
   busboy.on('finish', () => {
     settle()
-    parts.close(true)
+    for (const lane of lanes.values()) {
+      if (!lane.fed) {
+        lane.queue.close(undefined)
+      }
+    }
   })
 
   busboy.on('error', () => {
     settle()
-    parts.close(true)
+    for (const lane of lanes.values()) {
+      lane.queue.close(undefined)
+    }
   })
 
+  const reader = request.body.getReader()
+
   yield* fork(function* () {
-    for (const chunk of yield* each(source)) {
-      if (!busboy.write(Buffer.from(chunk))) {
-        // honor busboy's writable backpressure (propagates the paused file stream upstream)
+    for (;;) {
+      const step = yield* until(reader.read())
+      if (step.done) {
+        busboy.end()
+        return
+      }
+      if (!busboy.write(Buffer.from(step.value))) {
         yield* until(
           new Promise<void>(resolve => {
-            busboy.once('drain', () => {
-              resolve()
-            })
+            busboy.once('drain', () => resolve())
           }),
         )
       }
-
-      yield* each.next()
     }
-
-    busboy.end()
   })
-
   yield* ready.operation
 
-  return { fields, multistream: { parts: flowOf(parts) } } satisfies ParsedMultipart
-})
+  const streams: Record<string, StreamDef.Branded> = {}
+
+  for (const [name, lane] of lanes) {
+    // one pull-paced platform stream per declared part (pump forked in the request's scope)
+    const flow: Flow<Uint8Array, void> = {
+      *[Symbol.iterator]() {
+        return {
+          *next() {
+            const step = yield* lane.queue.next()
+
+            if (!step.done) {
+              lane.resume?.()
+            }
+
+            return step
+          },
+        }
+      },
+    }
+    streams[name] = brandStream(yield* toReadable(flow), decl.streams[name]!.brand)
+  }
+
+  return { fields, streams }
+}

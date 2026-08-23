@@ -1,19 +1,18 @@
 import { createTags } from 'std:shared'
 
 /**
- * Core failure tags. Every boundary-crossing operation in the server is assumed fallible; failures
- * are always `Result` failures carrying one of these tags (or a service-defined tag) plus a cause
- * chain of trace breadcrumbs — never bare throws.
+ * The server error taxonomy — every failure crossing a boundary (edge, carrier, plugin, handler)
+ * is a Result failure carrying one of these tags (or a service-defined tag) plus breadcrumb
+ * causes (`action:… req:… span:… where:…`); nothing throws.
  *
- * Timeout taxonomy (fulfillment model):
- * - `TimeoutUnreached` — the dispatch was never acknowledged; the handler never started. Retrying
- *   is safe.
- * - `TimeoutPending` — the dispatch was acknowledged but no reply arrived in time; the outcome is
- *   unknown. Do NOT retry blindly — reconcile via `Broker.actions.outcome(cid)` or use an
- *   `idempotencyKey`.
+ * Fulfillment model:
+ * - `timeout-unreached` — nobody took the dispatch (no responder / never acknowledged). Safe to
+ *   retry.
+ * - `timeout-pending` — a handler took it but no reply arrived in time; the outcome is unknown.
+ *   Do not retry blindly — reconcile via `Outcomes` or use an `idempotencyKey`.
  */
-export const CoreErrors = createTags(
-  'server:core',
+export const ServerErrors = createTags(
+  'server',
   'configuration',
   'validation',
   'bad-request',
@@ -29,7 +28,38 @@ export const CoreErrors = createTags(
   'timeout-pending',
   'cancelled',
   'paused',
-  'destroyed',
-  'no-route',
   'internal',
 )
+
+/** Failure tag → HTTP status (a service may override per action via `errors`). */
+export const STATUS_OF: Readonly<Record<string, number>> = {
+  [ServerErrors.Validation]: 400,
+  [ServerErrors.BadRequest]: 400,
+  [ServerErrors.Unauthorized]: 401,
+  [ServerErrors.Forbidden]: 403,
+  [ServerErrors.NotFound]: 404,
+  [ServerErrors.Conflict]: 409,
+  [ServerErrors.PayloadTooLarge]: 413,
+  [ServerErrors.RateLimited]: 429,
+  [ServerErrors.Unsupported]: 501,
+  [ServerErrors.Unavailable]: 503,
+  [ServerErrors.Paused]: 503,
+  [ServerErrors.TimeoutUnreached]: 504,
+  [ServerErrors.TimeoutPending]: 504,
+  [ServerErrors.Cancelled]: 499,
+  [ServerErrors.Configuration]: 500,
+  [ServerErrors.Internal]: 500,
+
+  // the database's own taxonomy, as handlers usually let it through
+  'db.validation': 400,
+  'db.not-found': 404,
+  'db.data-integrity': 409,
+  'db.unique': 409,
+  'db.foreign-key': 400,
+  'db.not-null': 400,
+  'db.check': 400,
+  'db.conflict': 409,
+  'db.cursor': 400,
+  'db.unsupported': 501,
+  'db.unavailable': 503,
+}

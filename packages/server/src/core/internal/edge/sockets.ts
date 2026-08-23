@@ -1,153 +1,83 @@
 // oxlint-disable import/exports-last
-import { operation } from 'std:effect'
+import type { Operation } from 'std:effect'
+import { createQueue, scoped } from 'std:effect'
+import { IO } from 'std:io'
 
-import { Broker } from '../../definition'
-import type { Meta } from '../../types/common'
-import type { Edge, SocketHandle } from '../../types/gateway'
+import type { EdgeDef } from '../../types/edge'
+import type { ServerDef } from '../../types/server'
+import type { TraceDef } from '../../types/trace'
+import { report } from '../../utils/trace'
 
-/** Cross-replica room/broadcast relay event (string payloads only — bytes stay local). */
-export const GW_FANOUT = '$gw.fanout'
-
-export interface FanoutPayload {
-  readonly gateway: string
-  readonly op: 'room' | 'broadcast'
-  readonly room?: string | undefined
-  readonly data: string
+interface SocketInput {
+  readonly kernel: ServerDef.Context
+  readonly route: EdgeDef.SocketRoute
+  readonly raw: EdgeDef.RawSocket
+  readonly params: Readonly<Record<string, string>>
+  readonly headers: Readonly<Record<string, string>>
+  readonly ctx: ServerDef.Ctx
+  readonly trace: TraceDef.Trace
 }
 
-interface Registered {
-  readonly handle: SocketHandle
-  readonly edge: Edge.Socket
-  readonly rooms: Set<string>
-}
+const decoder = new TextDecoder()
 
-export interface SocketRegistry {
-  readonly handles: Map<string, Registered>
-  readonly rooms: Map<string, Set<string>>
-}
+/**
+ * Drive one accepted socket: inbound frames (JSON text) feed a queue the handler consumes as a
+ * Flow; `send` encodes values as JSON text; the handler runs in its own scope that ends with the
+ * socket (a close from either side halts it). Every frame is an observe event.
+ */
+export function* driveSocket(input: SocketInput): Operation<void> {
+  const { kernel, route, raw, trace } = input
+  const id = (yield* IO.actions.uuid()).slice(0, 8)
+  const inbound = createQueue<unknown, void>()
 
-export const createSocketRegistry = (): SocketRegistry => ({
-  handles: new Map(),
-  rooms: new Map(),
-})
-
-export const deliverRoom = (
-  registry: SocketRegistry,
-  room: string,
-  data: string | Uint8Array,
-): void => {
-  const members = registry.rooms.get(room)
-
-  if (!members) {
-    return
-  }
-
-  for (const id of members) {
-    registry.handles.get(id)?.edge.send(data)
-  }
-}
-
-export const deliverBroadcast = (registry: SocketRegistry, data: string | Uint8Array): void => {
-  for (const entry of registry.handles.values()) {
-    entry.edge.send(data)
-  }
-}
-
-const detach = (registry: SocketRegistry, id: string): void => {
-  const entry = registry.handles.get(id)
-
-  if (!entry) {
-    return
-  }
-
-  for (const room of entry.rooms) {
-    const members = registry.rooms.get(room)
-
-    members?.delete(id)
-
-    if (members && members.size === 0) {
-      registry.rooms.delete(room)
+  raw.onMessage(data => {
+    const text = typeof data === 'string' ? data : decoder.decode(data)
+    try {
+      inbound.add(JSON.parse(text))
+    } catch {
+      inbound.add(text)
     }
-  }
+  })
 
-  registry.handles.delete(id)
-}
+  raw.onClose(() => {
+    inbound.close(undefined)
+  })
 
-export const removeSocket = (registry: SocketRegistry, id: string): void => detach(registry, id)
+  const frame = (kind: 'socket-in' | 'socket-out') =>
+    report(kernel, {
+      t: 'event',
+      row: { requestId: trace.requestId, kind, name: route.path, size: null, ts: Date.now() },
+    })
 
-export interface HandleInput {
-  readonly registry: SocketRegistry
-  readonly gatewayId: string
-  readonly edge: Edge.Socket
-  readonly meta: Meta
-  readonly params: Record<string, string>
-}
+  const socket: EdgeDef.Socket = {
+    id,
+    params: input.params,
+    headers: input.headers,
+    ctx: input.ctx,
 
-/** Registers the connection and returns the engine-level handle a SocketRoute works with. */
-export const registerSocket = (input: HandleInput): SocketHandle => {
-  const { registry, gatewayId, edge, meta, params } = input
-  const rooms = new Set<string>()
+    messages: {
+      *[Symbol.iterator]() {
+        return {
+          *next() {
+            const step = yield* inbound.next()
 
-  const handle: SocketHandle = {
-    id: edge.id,
-    meta,
-    params,
-    send: data => edge.send(data),
-    close: (code, reason) => edge.close(code, reason),
-    join: room => {
-      rooms.add(room)
+            if (!step.done) {
+              yield* frame('socket-in')
+            }
 
-      const members = registry.rooms.get(room) ?? new Set<string>()
-
-      members.add(edge.id)
-      registry.rooms.set(room, members)
+            return step
+          },
+        }
+      },
     },
-    leave: room => {
-      rooms.delete(room)
-      registry.rooms.get(room)?.delete(edge.id)
+    *send(value) {
+      raw.send(JSON.stringify(value))
+      yield* frame('socket-out')
     },
-    toRoom: operation(function* (room: string, data: string | Uint8Array) {
-      deliverRoom(registry, room, data)
-
-      if (typeof data === 'string') {
-        const payload: FanoutPayload = { gateway: gatewayId, op: 'room', room, data }
-
-        yield* Broker.actions.broadcast(GW_FANOUT, payload)
-      }
-    }),
-    broadcast: operation(function* (data: string | Uint8Array) {
-      deliverBroadcast(registry, data)
-
-      if (typeof data === 'string') {
-        const payload: FanoutPayload = { gateway: gatewayId, op: 'broadcast', data }
-
-        yield* Broker.actions.broadcast(GW_FANOUT, payload)
-      }
-    }),
+    *close(code, reason) {
+      raw.close(code, reason)
+    },
   }
 
-  registry.handles.set(edge.id, { handle, edge, rooms })
-
-  return handle
-}
-
-/** Applies a fanout event coming from ANOTHER gateway replica. */
-export const applyFanout = (
-  registry: SocketRegistry,
-  gatewayId: string,
-  payload: FanoutPayload,
-): void => {
-  if (payload.gateway === gatewayId) {
-    return
-  }
-
-  if (payload.op === 'room' && payload.room) {
-    deliverRoom(registry, payload.room, payload.data)
-
-    return
-  }
-
-  if (payload.op === 'broadcast') {
-    deliverBroadcast(registry, payload.data)
-  }
+  yield* scoped(() => route.handler(socket))
 }

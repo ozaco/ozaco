@@ -1,83 +1,89 @@
-import { attempt, each, operation } from 'std:effect'
-import type { Flow } from 'std:effect'
+import type { Operation } from 'std:effect'
+import { attempt, until } from 'std:effect'
 import { fail, isFailure } from 'std:result'
 
-import { JsonCodec } from 'std:codec/impl/json'
+import { ServerErrors } from '../../errors'
 
-import { CoreErrors } from '../../errors'
+/** `"true"` → true, `"3"` → 3, `"[1,2]"` → [1,2], anything else stays a string: what a query
+ * string or a form field can say, read with the schema's eyes. */
+export const coerce = (text: string): unknown => {
+  if (text === '') {
+    return text
+  }
 
-const DECODER = new TextDecoder()
+  const first = text[0]
 
-/** Buffers a request body, failing `payload-too-large` beyond the limit. */
-export const readBody = operation(function* (source: Flow<Uint8Array, unknown>, maxBytes: number) {
-  const chunks: Uint8Array[] = []
-  let total = 0
-
-  for (const chunk of yield* each(source)) {
-    total += chunk.byteLength
-
-    if (total > maxBytes) {
-      return yield* fail(
-        CoreErrors.PayloadTooLarge,
-        `request body exceeds ${maxBytes} bytes`,
-        'edge: read-body',
-      )
+  if (
+    text === 'true' ||
+    text === 'false' ||
+    text === 'null' ||
+    first === '{' ||
+    first === '[' ||
+    first === '"' ||
+    /^-?\d+(\.\d+)?$/u.test(text)
+  ) {
+    try {
+      return JSON.parse(text)
+    } catch {
+      return text
     }
-
-    chunks.push(chunk)
-    yield* each.next()
   }
 
-  const merged = new Uint8Array(total)
-  let offset = 0
+  return text
+}
 
-  for (const chunk of chunks) {
-    merged.set(chunk, offset)
-    offset += chunk.byteLength
-  }
+/** Query-string / form fields as an object: repeated keys become arrays. */
+export const objectOf = (entries: Iterable<[string, string]>): Record<string, unknown> => {
+  const out: Record<string, unknown> = {}
 
-  return merged
-})
+  for (const [key, value] of entries) {
+    const coerced = coerce(value)
 
-/** Parses a JSON body — malformed input fails `bad-request` (never a raw codec error). */
-export const parseJsonBody = operation(function* (bytes: Uint8Array) {
-  if (bytes.byteLength === 0) {
-    return undefined
-  }
-
-  const parsed = yield* attempt(() => JsonCodec.actions.parse<unknown>(DECODER.decode(bytes)))
-
-  if (isFailure(parsed)) {
-    return yield* fail(CoreErrors.BadRequest, 'malformed JSON body', 'edge: parse-body')
-  }
-
-  return parsed.value
-})
-
-export const parseUrlencoded = (bytes: Uint8Array): Record<string, string> => {
-  const params = new URLSearchParams(DECODER.decode(bytes))
-  const out: Record<string, string> = {}
-
-  for (const [key, value] of params) {
-    out[key] = value
+    if (key in out) {
+      const prior = out[key]
+      out[key] = Array.isArray(prior) ? [...prior, coerced] : [prior, coerced]
+    } else {
+      out[key] = coerced
+    }
   }
 
   return out
 }
 
-export const queryOf = (url: string): { path: string; query: Record<string, string> } => {
-  const index = url.indexOf('?')
+/** The value-plane input of a request: path params + query (GET) or body (JSON / form). */
+export function* valueBody(
+  request: Request,
+  params: Readonly<Record<string, string>>,
+): Operation<unknown> {
+  const url = new URL(request.url)
+  const fromParams = objectOf(Object.entries(params))
 
-  if (index === -1) {
-    return { path: url, query: {} }
+  if (request.method === 'GET' || request.method === 'HEAD' || request.method === 'DELETE') {
+    return { ...objectOf(url.searchParams.entries()), ...fromParams }
   }
 
-  const params = new URLSearchParams(url.slice(index + 1))
-  const query: Record<string, string> = {}
+  const type = request.headers.get('content-type') ?? ''
 
-  for (const [key, value] of params) {
-    query[key] = value
+  if (type.includes('application/x-www-form-urlencoded')) {
+    const text = yield* until(request.text())
+    return { ...objectOf(new URLSearchParams(text).entries()), ...fromParams }
   }
 
-  return { path: url.slice(0, index), query }
+  const text = yield* until(request.text())
+
+  if (text.trim() === '') {
+    return { ...objectOf(url.searchParams.entries()), ...fromParams }
+  }
+
+  const parsed = yield* attempt(() => until(Promise.resolve().then(() => JSON.parse(text))))
+
+  if (isFailure(parsed)) {
+    return yield* fail(ServerErrors.BadRequest, 'request body is not valid JSON')
+  }
+
+  const body = parsed.value
+
+  return body && typeof body === 'object' && !Array.isArray(body)
+    ? { ...body, ...fromParams }
+    : body
 }

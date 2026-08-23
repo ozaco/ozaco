@@ -1,17 +1,9 @@
 import { createContext } from 'std:effect'
-import type { Context } from 'std:effect'
 
-import type { BrokerContext } from '../types/broker'
-import type { PolicyEntry } from '../types/policy'
-import type { TransportDef } from '../types/transport'
+import type { Helpers } from '../types/helpers'
 
-/** The running broker — set scope-wide by `DefaultBroker.setup` so carriers and `invoke` reach it. */
-export const BrokerRef: Context<BrokerContext> = createContext<BrokerContext>('server:core:broker')
-
-export const TransportRegistryContext: Context<readonly TransportDef.Entry[]> = createContext<
-  readonly TransportDef.Entry[]
->('server:core:transports', [])
-
-export const PolicyRegistryContext: Context<readonly PolicyEntry[]> = createContext<
-  readonly PolicyEntry[]
->('server:core:policies', [])
+/** Private state contexts of the core's own impls (never exported from the barrel). */
+export const OutcomesMemoryRef =
+  createContext<Helpers.OutcomesMemoryState>('server:outcomes/memory')
+export const OutcomesDbRef = createContext<Helpers.OutcomesDbState>('server:outcomes/db')
+export const LocalCarrierRef = createContext<Helpers.LocalCarrierState>('server:carrier/local')

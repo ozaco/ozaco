@@ -8,7 +8,8 @@ tasks:
     command: bun x tsdown --config-loader unrun
     deps:
       - std:build
-      - panel:embed
+      - transport:build
+      - db:build
     inputs:
       - src/**/*
       - tsdown.config.ts
@@ -25,6 +26,8 @@ tasks:
     command: bun x tsc -p tsconfig.json --noEmit
     deps:
       - std:build
+      - transport:build
+      - db:build
     inputs:
       - src/**/*
       - tests/**/*
@@ -35,44 +38,14 @@ tasks:
       - server:build
     inputs:
       - tests/**/*
-  test-starrocks:
-    command: bash scripts/test-starrocks.sh
+  test-network:
+    command: bash scripts/test-network.sh
     deps:
       - server:build
     inputs:
       - src/**/*
-      - tests/**/*
-      - scripts/test-starrocks.sh
-    options:
-      cache: false
-  test-nats:
-    command: bash scripts/test-nats.sh
-    deps:
-      - server:build
-    inputs:
-      - src/**/*
-      - tests/**/*
-      - scripts/test-nats.sh
-    options:
-      cache: false
-  test-node:
-    command: bash scripts/test-node.sh
-    deps:
-      - server:build
-    inputs:
-      - src/**/*
-      - scripts/test-node.sh
-      - scripts/smoke-node.mjs
-      - scripts/smoke-node-child.mjs
-    options:
-      cache: false
-  test-deno:
-    command: bash scripts/test-deno.sh
-    deps:
-      - server:build
-    inputs:
-      - src/**/*
-      - scripts/test-deno.sh
-      - scripts/smoke-deno.mjs
+      - tests/carrier/**/*
+      - tests/suites/carrier.ts
+      - scripts/test-network.sh
     options:
       cache: false
