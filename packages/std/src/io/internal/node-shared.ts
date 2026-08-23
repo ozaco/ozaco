@@ -1,4 +1,4 @@
-import type { Operation} from 'std:effect';
+import type { Operation } from 'std:effect'
 import { until } from 'std:effect'
 import type { IOStat, WalkEntry, WalkOptions } from 'std:io'
 import { IO_FLAGS } from 'std:io'

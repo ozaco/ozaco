@@ -1,10 +1,10 @@
 import type { Operation } from 'std:effect'
-import { createApi, createContext, operation } from 'std:effect'
+import { createApi, createContext, operation, useScope } from 'std:effect'
 import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 import { flatten } from 'std:shared'
 
-import { PLUGIN } from '../const'
+import { PLUGIN, USE } from '../const'
 import type { Impl } from '../types/impl'
 import type { Plugin } from '../types/plugin'
 import type { Protocol } from '../types/protocol'
@@ -188,7 +188,7 @@ export const buildPlugin = (
     pluginTag,
   )
 
-  return {
+  const handle = {
     _t: PLUGIN,
     _st: runtime.subtype,
 
@@ -201,7 +201,22 @@ export const buildPlugin = (
     actions: createActionProxy((key, args) => runtime.pinned(pluginTag, key, args)),
 
     setup,
+    // `Plugin.use(...args)`: the install of THIS plugin as an Operation that also names the
+    // plugin — what a consumer (`createServer({ plugins })`) takes instead of the handle, so the
+    // arguments travel with it. Control surface, not an action: it runs before any dispatch.
+    use: (...args: unknown[]): Plugin.Use<unknown, unknown[]> => ({
+      _t: USE,
+      plugin: handle,
+      args,
+      *[Symbol.iterator]() {
+        const scope = yield* useScope()
+        const value = yield* setup(...args)
+        scope.set(pluginContext, value)
+        return value
+      },
+    }),
     getKeys: () => [...Object.keys(runtime.defaults), ...Object.keys(actions)],
     getMeta: (key: string) => meta.get(key),
   } satisfies Plugin<AnyType, AnyType[]>
+  return handle
 }

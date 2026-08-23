@@ -1,7 +1,7 @@
 import type { Context, Operation } from 'std:effect'
 import type { AnyType, EmptyType } from 'std:shared'
 
-import type { PLUGIN } from '../const'
+import type { PLUGIN, USE } from '../const'
 
 import type { Hooks } from './hooks'
 
@@ -22,6 +22,17 @@ export type Plugin<
 export namespace Plugin {
   export type InferContext<T> = T extends Plugin<infer V> ? V : never
 
+  /**
+   * The install of a plugin as an Operation (`yield*` it where the plugin should live) that also
+   * names the plugin and its arguments — what consumers such as `createServer({ plugins })` take,
+   * so they can both install it and keep its handle.
+   */
+  export interface Use<TContext, TArgs extends unknown[]> extends Operation<TContext> {
+    readonly _t: typeof USE
+    readonly plugin: Plugin<TContext, TArgs, AnyType>
+    readonly args: TArgs
+  }
+
   export interface Control<TContext, TArgs extends unknown[]> {
     _t: typeof PLUGIN
     _st?: symbol | undefined
@@ -35,6 +46,9 @@ export namespace Plugin {
     context: Context<TContext>
 
     setup(...args: TArgs): Operation<TContext>
+    /** The install with these arguments as an Operation (`yield* X.use(...)`), which also names
+     * the plugin — what consumers such as `createServer({ plugins })` take. */
+    use(...args: TArgs): Use<TContext, TArgs>
     getKeys(): string[]
     getMeta(key: string): Record<string, AnyType> | undefined
   }

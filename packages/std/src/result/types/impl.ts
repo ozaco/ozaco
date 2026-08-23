@@ -5,17 +5,17 @@ import type { Result } from './result'
 
 export namespace Impl {
   export interface Succeed {
-    (): Result<void, never>
+    (): Result.Success<void>
 
-    <T extends `${string}`>(value: T): Result<T, never>
-    <const T>(value: T): Result<T, never>
+    <T extends `${string}`>(value: T): Result.Success<T>
+    <const T>(value: T): Result.Success<T>
   }
 
   export interface Fail {
-    (): Result<never, void>
+    (): Result.Failure<never>
 
-    <E extends `${string}`>(error: E): Result<never, E>
-    <const E>(error: E, message?: string, ...causes: string[]): Result<never, E>
+    <E extends `${string}`>(error: E): Result.Failure<E>
+    <const E>(error: E, message?: string, ...causes: string[]): Result.Failure<E>
   }
 
   export interface Auto {

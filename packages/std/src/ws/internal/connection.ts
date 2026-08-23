@@ -90,9 +90,13 @@ export const createConnection = (
     // unhooked and disposed so nothing leaks.
     const dial = operation(function* () {
       // headers require the Bun/Node options-object constructor form; without them, use the
-      // standard `protocols` second arg so the browser WebSocket stays happy.
+      // standard `protocols` second arg so the browser WebSocket stays happy. A browser cannot
+      // set handshake headers at all (its constructor rejects the options form): they are
+      // dropped there — carry a token as a `?token=` query param instead.
       let socket: WsDef.SocketLike
-      if (options.headers) {
+      const inBrowser = typeof document !== 'undefined' && typeof window !== 'undefined'
+
+      if (options.headers && !inBrowser) {
         socket = new Ctor(url, {
           headers: options.headers,
           ...(options.protocols ? { protocols: options.protocols } : {}),
