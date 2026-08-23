@@ -1,16 +1,46 @@
+/** HLC version tokens are 22 Crockford chars (see std:io `hlc`). */
+const TOKEN_LENGTH = 22
+
+/** Protocol subtype markers (`Db` / `DbAdapter` / `DbBus`). */
+export const DATABASE = Symbol.for('db:db')
+export const DATABASE_ADAPTER = Symbol.for('db:adapter')
+
+/** Protocol subtype marker of the `Kv` store protocol. */
+export const KV_STORE = Symbol.for('db:kv')
+
+/** The key namespace a Kv install uses when none is given. */
+export const DEFAULT_KV_PREFIX = 'kv'
+
+/** The transport topic `DbBus` carries envelopes on (under the transport's prefix). */
+export const DEFAULT_BUS_TOPIC = 'db.change'
+
 /** Marker symbols for the schema DSL's runtime objects. */
 export const COLUMN = Symbol.for('db:column')
 export const TABLE = Symbol.for('db:table')
-export const SCHEMA = Symbol.for('db:schema')
 
-/** System-field column names stamped on every stored document. */
-export const ID = '_id'
-export const CREATED = '_createdAt'
-export const UPDATED = '_updatedAt'
-export const VERSION = '_version'
+/** The system fields stamped on every stored document (never declared by the schema). */
+export enum FIELDS {
+  id = '_id',
+  created = '_createdAt',
+  updated = '_updatedAt',
+  version = '_version',
+}
 
-/** The default keyset-pagination / watch sort column. */
-export const DEFAULT_ORDER = CREATED
+/** The default keyset-pagination sort column. */
+export const DEFAULT_ORDER = FIELDS.created
 
-/** Names of the system columns (present on every table, never declared by the schema). */
-export const SYSTEM_NAMES: readonly string[] = [ID, CREATED, UPDATED, VERSION]
+/** The "unversioned" row/table token: the smallest token, decodes to time 0 / origin `00000000`.
+ * DDL default of `_version`, and what `db.version(table)` reports before any change. */
+export const VERSION_ZERO = '0'.repeat(TOKEN_LENGTH)
+
+/** Name prefix of the hidden per-table change-log tables (`__changes_<table>`); `table()` names
+ * starting with `__` are reserved for them. */
+export const CHANGES_PREFIX = '__changes_'
+
+/** Default `replayWindowMs`: how far back (by `ts`) a replay / `since` check re-scans the change
+ * log to catch commits whose tokens are older than what was already applied. */
+export const DEFAULT_REPLAY_WINDOW_MS = 5000
+
+/** Outbox defaults. */
+export const DEFAULT_MAX_PENDING = 4096
+export const DEFAULT_DRAIN_TIMEOUT_MS = 1000

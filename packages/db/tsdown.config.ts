@@ -1,6 +1,6 @@
 import { defineConfig } from 'tsdown'
 
-import { dbResolve, stdResolve } from '../devkit/src/resolve'
+import { dbResolve, stdResolve, transportResolve } from '../devkit/src/resolve'
 
 // oxlint-disable-next-line import/no-default-export
 export default defineConfig({
@@ -10,6 +10,8 @@ export default defineConfig({
     'impl/sqlite': './src/impl/sqlite/index.ts',
     'impl/pg': './src/impl/pg/index.ts',
     'impl/bun-sql': './src/impl/bun-sql/index.ts',
+    'impl/kv/memory': './src/impl/kv/memory/index.ts',
+    'impl/kv/redis': './src/impl/kv/redis/index.ts',
   },
   format: ['esm', 'cjs'],
   dts: true,
@@ -19,9 +21,9 @@ export default defineConfig({
   deps: {
     onlyBundle: [],
     // driver packages stay external so each adapter module keeps a static, bundler-visible import
-    neverBundle: ['pg', 'bun', 'bun:sqlite'],
+    neverBundle: ['pg', 'bun', 'bun:sqlite', 'redis'],
   },
   // `db:core` resolves to the external `@ozaco/db` (dist/index.js), NOT inlined per bundle — so the
   // `DbAdapter`/`Db` protocol singletons stay shared across the impl modules.
-  plugins: [stdResolve.rolldown(), dbResolve.rolldown()],
+  plugins: [stdResolve.rolldown(), transportResolve.rolldown(), dbResolve.rolldown()],
 })

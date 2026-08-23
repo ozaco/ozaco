@@ -7,6 +7,13 @@
       "db:impl/sqlite": ["./src/impl/sqlite/index.ts", "./dist/impl/sqlite.d.ts"],
       "db:impl/pg": ["./src/impl/pg/index.ts", "./dist/impl/pg.d.ts"],
       "db:impl/bun-sql": ["./src/impl/bun-sql/index.ts", "./dist/impl/bun-sql.d.ts"],
+      "db:impl/kv/memory": ["./src/impl/kv/memory/index.ts", "./dist/impl/kv/memory.d.ts"],
+      "db:impl/kv/redis": ["./src/impl/kv/redis/index.ts", "./dist/impl/kv/redis.d.ts"],
+
+      "transport:core": ["./node_modules/@ozaco/transport/dist/index"],
+      "transport:impl/memory": ["./node_modules/@ozaco/transport/dist/impl/memory"],
+      "transport:impl/nats": ["./node_modules/@ozaco/transport/dist/impl/nats"],
+      "transport:impl/redis": ["./node_modules/@ozaco/transport/dist/impl/redis"],
 
       "std:shared": ["./node_modules/@ozaco/std/dist/shared"],
       "std:result": ["./node_modules/@ozaco/std/dist/result"],
@@ -14,6 +21,7 @@
       "std:event": ["./node_modules/@ozaco/std/dist/event"],
       "std:plugin": ["./node_modules/@ozaco/std/dist/plugin"],
       "std:io": ["./node_modules/@ozaco/std/dist/io"],
+      "std:io/impl/bun": ["./node_modules/@ozaco/std/dist/io/impl/bun"],
       "std:codec": ["./node_modules/@ozaco/std/dist/codec"],
       "std:codec/impl/json": ["./node_modules/@ozaco/std/dist/codec/impl/json"],
       "std:logger": ["./node_modules/@ozaco/std/dist/logger"]

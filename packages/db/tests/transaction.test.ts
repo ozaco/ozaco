@@ -1,4 +1,4 @@
-import type { AdapterDef } from 'db:core'
+import type { Adapter } from 'db:core'
 import { adapterDefaults, DbAdapter, DbClient, DbErrors } from 'db:core'
 import type { Operation } from 'std:effect'
 import { attempt, operation, run } from 'std:effect'
@@ -9,11 +9,13 @@ import type { AnyType } from 'std:shared'
 import { describe, expect, it } from 'bun:test'
 
 import { MemoryAdapter } from 'db:impl/memory'
+import { BunIO } from 'std:io/impl/bun'
 
 import { posts, users } from './helpers'
 
 const bootstrap = function* (): Operation<AnyType> {
   yield* install(MemoryAdapter)
+  yield* install(BunIO)
   return yield* install(DbClient, { tables: [users, posts] })
 }
 
@@ -34,9 +36,9 @@ describe('transactions — memory adapter', () => {
 
         const first = yield* feed.next()
         const second = yield* feed.next()
-        expect((first.value as AnyType).doc.name).toBe('ada')
-        expect((second.value as AnyType).doc.name).toBe('grace')
-        expect((second.value as AnyType).version).toBe(2)
+        expect((first.value as AnyType).id).toBe(created._id)
+        expect((second.value as AnyType).op).toBe('insert')
+        expect((second.value as AnyType).token > (first.value as AnyType).token).toBe(true)
       }),
     )
   })
@@ -58,9 +60,9 @@ describe('transactions — memory adapter', () => {
         expect(yield* db.query('users').count()).toBe(0)
 
         // the next event on the feed is the marker write, not anything from the rolled-back tx
-        yield* db.insert('users', { name: 'marker' })
+        const marker = yield* db.insert('users', { name: 'marker' })
         const step = yield* feed.next()
-        expect((step.value as AnyType).doc.name).toBe('marker')
+        expect((step.value as AnyType).id).toBe(marker._id)
       }),
     )
   })
@@ -88,39 +90,46 @@ describe('transactions — memory adapter', () => {
 
 describe('transactions — capability gating and retry', () => {
   const minimalActions = {
-    find: operation(function* () {
+    *find() {
       return []
-    }),
-    count: operation(function* () {
+    },
+    *count() {
       return 0
-    }),
-    insert: operation(function* (_table: AnyType, rows: AnyType) {
+    },
+    *insert(_table: AnyType, rows: AnyType) {
       return rows
-    }),
-    update: operation(function* () {
+    },
+    *update() {
       return []
-    }),
-    remove: operation(function* () {
+    },
+    *remove() {
       return []
-    }),
-    introspect: operation(function* () {
+    },
+    *introspect() {
       return { columns: [] }
-    }),
-    migrate: operation(function* () {}),
+    },
+    *tables() {
+      return []
+    },
+    *migrate() {},
   }
 
   it('fails db.unsupported when the adapter lacks transactions', async () => {
-    const NoTxAdapter = DbAdapter.implement<AdapterDef.Info, []>({
+    const NoTxAdapter = DbAdapter.implement<Adapter.Options, []>({
       name: 'no-tx',
       version: '0.0.0',
       *setup() {
-        return { adapter: 'no-tx', capabilities: { transactions: false, live: false, raw: false } }
+        return {
+          adapter: 'no-tx',
+          capabilities: { transactions: false, raw: false, alterColumn: false },
+        }
       },
     }).build({ ...adapterDefaults('no-tx'), ...minimalActions })
 
     unwrap(
       await run(function* () {
         yield* install(NoTxAdapter)
+        yield* install(BunIO)
         const db = yield* install(DbClient, { tables: [users] })
         const outcome = yield* attempt(
           db.transaction(function* () {
@@ -135,11 +144,14 @@ describe('transactions — capability gating and retry', () => {
   it('retries the whole body on db.conflict', async () => {
     let calls = 0
     let bodyRuns = 0
-    const FlakyAdapter = DbAdapter.implement<AdapterDef.Info, []>({
+    const FlakyAdapter = DbAdapter.implement<Adapter.Options, []>({
       name: 'flaky',
       version: '0.0.0',
       *setup() {
-        return { adapter: 'flaky', capabilities: { transactions: true, live: false, raw: false } }
+        return {
+          adapter: 'flaky',
+          capabilities: { transactions: true, raw: false, alterColumn: false },
+        }
       },
     }).build({
       ...adapterDefaults('flaky'),
@@ -156,6 +168,7 @@ describe('transactions — capability gating and retry', () => {
     unwrap(
       await run(function* () {
         yield* install(FlakyAdapter)
+        yield* install(BunIO)
         const db = yield* install(DbClient, { tables: [users] })
         const value = yield* db.transaction(function* () {
           bodyRuns += 1

@@ -1,4 +1,4 @@
-import { schemaFrom, tableSpecOf } from 'db:core'
+import { isTable, tableSpecOf } from 'db:core'
 
 import { describe, expect, it } from 'bun:test'
 
@@ -19,9 +19,10 @@ describe('schema DSL', () => {
     expect(byName.joined).toMatchObject({ kind: 'timestamp', optional: true })
   })
 
-  it('brands reference columns with the target table', () => {
+  it('id columns are plain text columns (the table name is a type-level brand only)', () => {
     const author = posts.columns.find(entry => entry.name === 'author')
-    expect(author).toMatchObject({ kind: 'text', reference: 'users' })
+    expect(author).toMatchObject({ kind: 'text' })
+    expect('reference' in (author as object)).toBe(false)
   })
 
   it('collects default factories', () => {
@@ -49,8 +50,9 @@ describe('schema DSL', () => {
     expect(spec.columns.map(entry => entry.name)).toContain('name')
   })
 
-  it('assembles schemas keyed by table name', () => {
-    const schema = schemaFrom([users, posts])
-    expect(Object.keys(schema.tables)).toEqual(['users', 'posts'])
+  it('marks declarations with the runtime table tag', () => {
+    expect(isTable(users)).toBe(true)
+    expect(isTable(posts)).toBe(true)
+    expect(isTable({ name: 'users' })).toBe(false)
   })
 })

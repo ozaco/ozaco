@@ -18,6 +18,7 @@ import { createTags } from 'std:shared'
  */
 export const DbErrors = createTags(
   'db',
+
   'validation',
   'not-found',
   'data-integrity',
@@ -33,3 +34,14 @@ export const DbErrors = createTags(
   'cursor',
   'query',
 )
+
+/**
+ * The Kv store error taxonomy — what a `Kv` impl (memory, redis, …) surfaces; every failure is a
+ * Result failure carrying one of these tags.
+ *
+ * - `connection` — the backend could not be reached / answered with a transport error
+ * - `encoding` — a value could not be encoded or decoded through the installed codec
+ * - `unsupported` — the installed store lacks the capability (`atomic` increments, `keys` scans…)
+ * - `configuration` — bad install wiring (invalid prefix, no codec, …)
+ */
+export const KvErrors = createTags('kv', 'connection', 'encoding', 'unsupported', 'configuration')

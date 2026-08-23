@@ -11,6 +11,7 @@ import { join } from 'node:path'
 
 import { MemoryAdapter } from 'db:impl/memory'
 import { SqliteAdapter } from 'db:impl/sqlite'
+import { BunIO } from 'std:io/impl/bun'
 
 import { users } from './helpers'
 
@@ -19,6 +20,7 @@ describe('migrations — plan and apply', () => {
     unwrap(
       await run(function* () {
         yield* install(MemoryAdapter)
+        yield* install(BunIO)
         yield* install(DbClient, { tables: [users] })
         const plan = yield* Db.actions.planMigration()
         const structural = plan.steps.filter((step: AnyType) => step.kind !== 'create-index')
@@ -31,6 +33,7 @@ describe('migrations — plan and apply', () => {
     unwrap(
       await run(function* () {
         yield* install(MemoryAdapter)
+        yield* install(BunIO)
         const db = yield* install(DbClient, { tables: [users], migrations: 'manual' })
 
         const before = yield* attempt(db.query('users').collect())
@@ -53,6 +56,7 @@ describe('migrations — plan and apply', () => {
       unwrap(
         await run(function* () {
           yield* install(SqliteAdapter, { path })
+          yield* install(BunIO)
           const db = yield* install(DbClient, { tables: [v1] })
           yield* db.insert('items', { a: 'one', extra: 'keep?' })
         }),
@@ -62,6 +66,7 @@ describe('migrations — plan and apply', () => {
       unwrap(
         await run(function* () {
           yield* install(SqliteAdapter, { path })
+          yield* install(BunIO)
           const db = yield* install(DbClient, { tables: [v2], migrations: 'manual', safe: true })
 
           const plan = yield* Db.actions.planMigration()
@@ -84,6 +89,7 @@ describe('migrations — plan and apply', () => {
       unwrap(
         await run(function* () {
           yield* install(SqliteAdapter, { path })
+          yield* install(BunIO)
           yield* install(DbClient, { tables: [v2] })
           const rows = yield* Db.actions.raw('SELECT * FROM "items"')
           expect(rows.rows[0]).not.toHaveProperty('extra')
@@ -98,6 +104,7 @@ describe('migrations — plan and apply', () => {
     unwrap(
       await run(function* () {
         yield* install(SqliteAdapter)
+        yield* install(BunIO)
         const db = yield* install(DbClient, { tables: [users] })
         yield* db.insert('users', { name: 'ada' })
 

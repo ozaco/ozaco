@@ -1,80 +1,96 @@
-import type { Flow, Operation } from 'std:effect'
+import type { Operation } from 'std:effect'
+import type { Plugin } from 'std:plugin'
+import type { AnyType } from 'std:shared'
 
-import type { LiveChange } from './change'
-import type { Doc } from './common'
-import type { CountSpec, DeleteSpec, FindSpec, UpdateSpec } from './query'
-import type { ColumnSpec, IndexSpec, TableSpec } from './schema'
+import type { Spec } from './spec'
 
-/** One schema-reconcile step, as pure data — each adapter compiles it to its own DDL. `create-table`
- * and `create-index` must be idempotent (`IF NOT EXISTS` semantics). */
-export type MigrateStep =
-  | { readonly kind: 'create-table'; readonly table: TableSpec }
-  | { readonly kind: 'add-column'; readonly table: string; readonly column: ColumnSpec }
-  | { readonly kind: 'drop-column'; readonly table: string; readonly column: string }
-  | { readonly kind: 'create-index'; readonly table: string; readonly index: IndexSpec }
-  | { readonly kind: 'drop-index'; readonly table: string; readonly index: string }
-  | { readonly kind: 'drop-table'; readonly table: string }
-  | { readonly kind: 'reindex'; readonly table: string; readonly indexes: readonly IndexSpec[] }
-
-export interface MigrationPlan {
-  readonly steps: readonly MigrateStep[]
-}
-
-/** Steps that destroy data — skipped by `safe: true` installs / `migrate()` runs. */
-export type DestructiveKind = 'drop-column' | 'drop-table'
-
-export namespace AdapterDef {
+/**
+ * The `DbAdapter` protocol surface: what a database+driver binding (`db:impl/*`) implements.
+ * Specs are portable data; values crossing this boundary are app-level (`Date` for `timestamp`,
+ * parsed values for `json`, real booleans) — the adapter owns all storage en/decoding and
+ * classifies its backend's native errors into `DbErrors` tags.
+ */
+export namespace Adapter {
   /** What the installed backend can do beyond the structured data plane. Core checks these before
    * dispatching the capability-gated actions (which also fail cleanly via protocol defaults). */
+
   export interface Capabilities {
     readonly transactions: boolean
-    /** the adapter can emit a native change feed (external writes become visible to watchers). */
-    readonly live: boolean
+
     /** the adapter accepts dialect-native statements via `raw`. */
     readonly raw: boolean
+
+    /** the backend can change a column's type in place (`alter-column`); where it can't, the
+     * planner still REPORTS the drift (`unsupported: true`) and `migrate()` leaves it alone. */
+    readonly alterColumn: boolean
   }
 
-  /** The adapter protocol context — what `setup()` resolves. */
-  export interface Info {
+  /** The adapter protocol context — what an adapter's `setup()` resolves. */
+  export interface Options {
     readonly adapter: string
     readonly capabilities: Capabilities
   }
 
   /** The live storage shape of one table (introspection), or `null` when the table is absent. */
-  export interface TableShape {
-    readonly columns: readonly string[]
+  /** One live column: its backend-native type (lowercase; `null` when the backend does not
+   * say) and, for a declared column, the native type its declared kind compiles to on this
+   * backend — the planner reports a type drift when the two disagree. */
+
+  export interface ShapeColumn {
+    readonly name: string
+    readonly type: string | null
+    readonly expected: string | null
+  }
+
+  export interface Shape {
+    readonly columns: readonly ShapeColumn[]
   }
 
   export interface RawResult {
-    readonly rows: readonly Doc[]
+    readonly rows: readonly Spec.Doc[]
     readonly rowCount: number
   }
 
-  /**
-   * The contract every database+driver binding implements. Specs are portable data; values crossing
-   * this boundary are app-level (`Date` for `timestamp`, parsed values for `json`, real booleans) —
-   * the adapter owns all storage en/decoding, and classifies its backend's native errors into
-   * `DbErrors` tags. `transaction`/`raw`/`live` are capability-gated: the protocol provides failing
-   * (resp. `null`) defaults for adapters that omit them.
-   */
+  /** The adapter contract. `describe` resolves the impl's {@link Info} (a protocol default —
+   * adapters never implement it); `transaction`/`raw` are capability-gated with failing protocol
+   * defaults, so an adapter only implements what its backend supports. Reactivity is NOT an
+   * adapter concern: every backend is plain write-through storage, the core owns change tracking. */
+
   export interface Actions {
-    find(spec: FindSpec): Operation<readonly Doc[]>
-    count(spec: CountSpec): Operation<number>
+    /** The installed impl's identity + capabilities. */
+    describe(): Operation<Options>
+    find(spec: Spec.Find): Operation<readonly Spec.Doc[]>
+    count(spec: Spec.Count): Operation<number>
+
     /** Insert fully-stamped rows and return the stored documents (in input order). */
-    insert(table: TableSpec, rows: readonly Doc[]): Operation<readonly Doc[]>
-    /** Apply assignments (+ atomic `bump` increments) and return the updated documents. */
-    update(spec: UpdateSpec): Operation<readonly Doc[]>
+    insert(table: Spec.Table, rows: readonly Spec.Doc[]): Operation<readonly Spec.Doc[]>
+
+    /** Apply assignments and return the updated documents. */
+    update(spec: Spec.Update): Operation<readonly Spec.Doc[]>
+
     /** Delete matching rows and return the removed documents. */
-    remove(spec: DeleteSpec): Operation<readonly Doc[]>
-    introspect(table: TableSpec): Operation<TableShape | null>
-    migrate(steps: readonly MigrateStep[]): Operation<void>
+    remove(spec: Spec.Delete): Operation<readonly Spec.Doc[]>
+    introspect(table: Spec.Table): Operation<Shape | null>
+
+    /** Every table name the storage currently holds (the planner's view of what exists beyond
+     * the declared schema — undeclared tables that carry a change log are leftovers of THIS
+     * library and get reconciled; anything else is never touched). */
+    tables(): Operation<readonly string[]>
+    migrate(steps: readonly Spec.Step[]): Operation<void>
+
     /** Run `body` atomically. Nested calls become savepoints where the backend supports them. */
     transaction<T>(body: () => Operation<T>): Operation<T>
-    /** Open the native change feed for the given tables, or resolve `null` when unsupported. */
-    live(tables: readonly TableSpec[]): Operation<Flow<LiveChange, void> | null>
+
     /** Dialect-native escape hatch (SQL text for SQL backends). Params are normalized from app
      * values (`Date` → storage timestamp, booleans/objects per dialect); when `table` is given,
      * result rows are decoded by its declared column kinds. */
-    raw(statement: string, params?: readonly unknown[], table?: TableSpec): Operation<RawResult>
+    raw(statement: string, params?: readonly unknown[], table?: Spec.Table): Operation<RawResult>
   }
+
+  /** The actions every adapter gets for free from {@link Actions} (`adapterDefaults`). */
+  export type Defaults = Pick<Actions, 'describe' | 'transaction' | 'raw'>
+
+  /** A built adapter plugin (`MemoryAdapter`, `PgAdapter`, …) — pass one as `Database.Options.adapter`
+   * to pin a `DbClient` to it when several adapters share a scope. */
+  export type Handle = Plugin<Options, AnyType[], Actions>
 }

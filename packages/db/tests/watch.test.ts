@@ -1,7 +1,8 @@
-import type { AdapterDef, BusEvent, LiveChange } from 'db:core'
-import { adapterDefaults, Db, DbAdapter, DbClient } from 'db:core'
+import type { Bus } from 'db:core'
+import { Db, DbBus, DbClient } from 'db:core'
 import type { Operation } from 'std:effect'
-import { createChannel, createSignal, operation, run } from 'std:effect'
+import { run, sleep } from 'std:effect'
+import { IO } from 'std:io'
 import { install } from 'std:plugin'
 import { unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
@@ -9,11 +10,15 @@ import type { AnyType } from 'std:shared'
 import { describe, expect, it } from 'bun:test'
 
 import { MemoryAdapter } from 'db:impl/memory'
+import { BunIO } from 'std:io/impl/bun'
+import { Transport } from 'transport:core'
+import { createLink, MemoryTransport } from 'transport:impl/memory'
 
 import { posts, users } from './helpers'
 
 const bootstrap = function* (): Operation<AnyType> {
   yield* install(MemoryAdapter)
+  yield* install(BunIO)
   return yield* install(DbClient, { tables: [users, posts] })
 }
 
@@ -32,17 +37,16 @@ describe('reactivity — changes feed', () => {
         expect(first.value).toMatchObject({
           table: 'users',
           op: 'insert',
-          version: 1,
           source: 'local',
         })
-        expect((first.value as AnyType).doc.name).toBe('ada')
+        expect('new' in (first.value as AnyType)).toBe(false)
 
         const second = yield* feed.next()
-        expect(second.value).toMatchObject({ op: 'update', version: 2 })
+        expect(second.value).toMatchObject({ op: 'update', fields: ['age'] })
 
         const third = yield* feed.next()
-        expect(third.value).toMatchObject({ op: 'delete', version: 3 })
-        expect(db.version('users')).toBe(3)
+        expect(third.value).toMatchObject({ op: 'delete' })
+        expect(db.version('users')).toBe((third.value as AnyType).token)
       }),
     )
   })
@@ -79,7 +83,7 @@ describe('reactivity — query watch', () => {
           'ada',
           'grace',
         ])
-        expect((updated.value as AnyType).version).toBe(db.version('users'))
+        expect((updated.value as AnyType).token).toBe(db.version('users'))
       }),
     )
   })
@@ -110,135 +114,81 @@ describe('reactivity — query watch', () => {
 })
 
 describe('reactivity — cross-node bus', () => {
-  const makeBus = (origin: string) => {
-    const events = createSignal<BusEvent, never>()
-    const published: BusEvent[] = []
-    return {
-      origin,
-      publish: operation(function* (batch: readonly BusEvent[]) {
-        published.push(...batch)
-      }),
-      events,
-      published,
-    }
+  /** The bus over an in-process transport: the test records what this node ships through its
+   * own subscription on the topic and injects what "peers" ship by publishing on it. */
+  const makeBus = function* () {
+    yield* install(MemoryTransport, { prefix: 'app', link: createLink() })
+    const shipped = yield* Transport.actions.subscribe<Bus.Envelope>('db.change')
+    yield* install(DbBus)
+    const inject = (envelope: Bus.Envelope) => Transport.actions.publish('db.change', envelope)
+    return { shipped, inject }
   }
 
-  it('publishes local writes and surfaces foreign events (echoes dropped)', async () => {
+  it('publishes local writes (id/op/fields/token) and surfaces foreign events (echoes dropped)', async () => {
     unwrap(
       await run(function* () {
         const db = yield* bootstrap()
-        const bus = makeBus('node-a')
+        const { shipped, inject } = yield* makeBus()
 
-        expect(yield* Db.actions.hasBus()).toBe(false)
-        expect(yield* Db.actions.connectBus(bus)).toBe(true)
-        expect(yield* Db.actions.connectBus(bus)).toBe(false)
-        expect(yield* Db.actions.hasBus()).toBe(true)
+        // a bus installed AFTER the client is picked up by an explicit bridge (idempotent)
+        expect(yield* Db.actions.bridge()).toBe(1)
+        expect(yield* Db.actions.bridge()).toBe(0)
+        expect((yield* DbBus.actions.describe()).transport).toBe('memory')
 
-        yield* db.insert('users', { name: 'ada' })
-        expect(bus.published).toHaveLength(1)
-        expect(bus.published[0]).toMatchObject({ table: 'users', op: 'insert', origin: 'node-a' })
+        const ada = yield* db.insert('users', { name: 'ada' })
+        yield* db.patch('users', ada._id, { age: 40 })
+        // the outbox ships asynchronously
+        const published = [
+          ((yield* shipped.next()) as AnyType).value.value as Bus.Envelope,
+          ((yield* shipped.next()) as AnyType).value.value as Bus.Envelope,
+        ]
+        const origin = (yield* Db.actions.bus()).origin
+        expect(published[0]).toMatchObject({ origin, seq: 1 })
+        expect(published[0]!.events[0]).toMatchObject({ table: 'users', id: ada._id, op: 'insert' })
+        expect(published[0]!.events[0]!.token.endsWith(origin)).toBe(true)
+        expect(published[1]).toMatchObject({ seq: 2 })
+        expect(published[1]!.events[0]).toMatchObject({ op: 'update', fields: ['age'] })
+        expect('new' in (published[1]!.events[0] as AnyType)).toBe(false)
 
         const feed = yield* db.changes('users')
-        // own echo (origin node-a) must be dropped; foreign event must surface
-        bus.events.send({ ...bus.published[0]!, origin: 'node-a' })
-        bus.events.send({
-          table: 'users',
+        // own echo (same origin) must be dropped; a foreign envelope must surface
+        yield* inject(published[0]!)
+        const foreign = yield* IO.actions.hlc({ origin: 'NDEB0002' })
+        yield* inject({
+          origin: 'NDEB0002',
+          seq: 1,
+          tx: foreign,
+          events: [{ table: 'users', id: 'remote-1', op: 'insert', token: foreign }],
+        })
+        const step = yield* feed.next()
+        expect(step.value).toMatchObject({
           id: 'remote-1',
           op: 'insert',
-          version: 9,
-          origin: 'node-b',
+          source: 'bus',
+          token: foreign,
         })
-        const step = yield* feed.next()
-        expect(step.value).toMatchObject({ id: 'remote-1', source: 'bus', version: 9 })
-        expect(db.version('users')).toBe(9)
-      }),
-    )
-  })
-})
+        expect(db.version('users')).toBe(foreign)
 
-describe('reactivity — native live feed', () => {
-  const makeLiveAdapter = () => {
-    const liveChannel = createChannel<LiveChange, void>()
-    const adapter = DbAdapter.implement<AdapterDef.Info, []>({
-      name: 'fake-live',
-      version: '0.0.0',
-      *setup() {
-        return {
-          adapter: 'fake-live',
-          capabilities: { transactions: false, live: true, raw: false },
-        }
-      },
-    }).build({
-      ...adapterDefaults('fake-live'),
-      find: operation(function* () {
-        return []
-      }),
-      count: operation(function* () {
-        return 0
-      }),
-      insert: operation(function* (_table: AnyType, rows: AnyType) {
-        return rows
-      }),
-      update: operation(function* () {
-        return []
-      }),
-      remove: operation(function* () {
-        return []
-      }),
-      introspect: operation(function* () {
-        return { columns: [] }
-      }),
-      migrate: operation(function* () {}),
-      live: operation(function* () {
-        return liveChannel
-      }),
-    })
-    return { adapter, liveChannel }
-  }
-
-  it('the live feed owns the change stream — local writes are not double-emitted', async () => {
-    const { adapter: FakeLiveAdapter, liveChannel } = makeLiveAdapter()
-    unwrap(
-      await run(function* () {
-        yield* install(FakeLiveAdapter)
-        const db = yield* install(DbClient, { tables: [users] })
-        const feed = yield* db.changes('users')
-
-        // a local write reaches the backend, but the hub does NOT synthesize an event for it
-        yield* db.insert('users', { name: 'ada' })
-
-        // …the backend's live feed is the single source of truth (external writes included)
-        yield* liveChannel.send({
-          table: 'users',
-          id: 'ext-1',
-          op: 'insert',
-          doc: { _id: 'ext-1', name: 'external' },
+        // the same envelope again is a duplicate; a later one with a hole is a gap → replay
+        yield* inject({
+          origin: 'NDEB0002',
+          seq: 1,
+          tx: foreign,
+          events: [{ table: 'users', id: 'remote-1', op: 'insert', token: foreign }],
         })
-        const step = yield* feed.next()
-        expect(step.value).toMatchObject({ id: 'ext-1', source: 'live', version: 1 })
-      }),
-    )
-  })
-
-  it('a dying feed degrades to write-through instead of killing reactivity', async () => {
-    const { adapter: FakeLiveAdapter, liveChannel } = makeLiveAdapter()
-    unwrap(
-      await run(function* () {
-        yield* install(FakeLiveAdapter)
-        const db = yield* install(DbClient, { tables: [users] })
-        const feed = yield* db.changes('users')
-
-        // the backend feed dies (reconnect budget exhausted, upstream gone, …)
-        yield* liveChannel.close(undefined)
-
-        // the hub falls back: a healing table-level touch, then local writes emit again
-        const heal = yield* feed.next()
-        expect(heal.value).toMatchObject({ op: 'touch', id: '', source: 'local' })
-
-        yield* db.insert('users', { name: 'ada' })
-        const local = yield* feed.next()
-        expect(local.value).toMatchObject({ op: 'insert', source: 'local' })
-        expect((local.value as AnyType).doc.name).toBe('ada')
+        const third = yield* IO.actions.hlc({ origin: 'NDEB0002' })
+        yield* inject({
+          origin: 'NDEB0002',
+          seq: 3,
+          tx: third,
+          events: [{ table: 'users', id: 'remote-3', op: 'insert', token: third }],
+        })
+        expect(((yield* feed.next()).value as AnyType).id).toBe('remote-3')
+        yield* sleep(10)
+        const stats = yield* Db.actions.busStats()
+        // own echoes never reach the hub (dropped by origin before counting)
+        expect(stats).toMatchObject({ published: 2, received: 3, deduped: 1, gaps: 2 })
+        expect(stats.peers.NDEB0002?.seq).toBe(3)
       }),
     )
   })

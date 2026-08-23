@@ -7,7 +7,6 @@ import { runAdapterSuite } from './helpers'
 runAdapterSuite({
   label: 'sqlite',
   enabled: true,
-  live: false,
   raw: true,
   install: () => install(SqliteAdapter),
 })

@@ -1,4 +1,4 @@
-import type { Filter, Infer } from 'db:core'
+import type { Schema, Spec } from 'db:core'
 import {
   clampLimit,
   column,
@@ -19,6 +19,7 @@ import type { AnyType } from 'std:shared'
 import { describe, expect, it } from 'bun:test'
 
 import { MemoryAdapter } from 'db:impl/memory'
+import { BunIO } from 'std:io/impl/bun'
 import { z } from 'zod'
 
 import { posts, users } from './helpers'
@@ -33,6 +34,7 @@ describe('core semantics (adapter-independent)', () => {
     unwrap(
       await run(function* () {
         yield* install(MemoryAdapter)
+        yield* install(BunIO)
         const db = yield* install(DbClient, { tables: [people] })
         const short = yield* attempt(db.insert('people', { name: 'a' }))
         expect(isFailure(short)).toBe(true)
@@ -47,13 +49,14 @@ describe('core semantics (adapter-independent)', () => {
     unwrap(
       await run(function* () {
         yield* install(MemoryAdapter)
+        yield* install(BunIO)
         yield* install(DbClient, { tables: [users, posts] })
         const db = yield* useDb(users, posts)
         const doc = yield* db.insert('users', { name: 'typed' })
         // compile-time: doc is the resolved row type of `users`
-        const typed: Infer<typeof users> = doc
+        const typed: Schema.Infer<typeof users> = doc
         expect(typed.name).toBe('typed')
-        expect(db.version('users')).toBeGreaterThan(0)
+        expect(db.version('users')).toBe(doc._version)
       }),
     )
   })
@@ -74,8 +77,8 @@ describe('wire-filter sanitizing', () => {
             { op: 'gt', field: 'age', value: 30 },
           ],
         })
-        expect(matches({ role: 'admin', age: 45 }, clean as Filter)).toBe(true)
-        expect(matches({ role: 'member', age: 45 }, clean as Filter)).toBe(false)
+        expect(matches({ role: 'admin', age: 45 }, clean as Spec.Filter)).toBe(true)
+        expect(matches({ role: 'member', age: 45 }, clean as Spec.Filter)).toBe(false)
       }),
     )
   })
@@ -127,6 +130,7 @@ describe('adapter middleware', () => {
     unwrap(
       await run(function* () {
         yield* install(MemoryAdapter)
+        yield* install(BunIO)
         const db = yield* install(DbClient, { tables: [users] })
         const seen: string[] = []
         yield* DbAdapter.around({

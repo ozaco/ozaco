@@ -57,6 +57,28 @@
       },
       "source": "./src/impl/pg/index.ts"
     },
+    "./impl/kv/memory": {
+      "import": {
+        "types": "./dist/impl/kv/memory.d.ts",
+        "default": "./dist/impl/kv/memory.js"
+      },
+      "require": {
+        "types": "./dist/impl/kv/memory.d.cts",
+        "default": "./dist/impl/kv/memory.cjs"
+      },
+      "source": "./src/impl/kv/memory/index.ts"
+    },
+    "./impl/kv/redis": {
+      "import": {
+        "types": "./dist/impl/kv/redis.d.ts",
+        "default": "./dist/impl/kv/redis.js"
+      },
+      "require": {
+        "types": "./dist/impl/kv/redis.d.cts",
+        "default": "./dist/impl/kv/redis.cjs"
+      },
+      "source": "./src/impl/kv/redis/index.ts"
+    },
     "./impl/bun-sql": {
       "import": {
         "types": "./dist/impl/bun-sql.d.ts",
@@ -76,18 +98,25 @@
   },
   "devDependencies": {
     "@ozaco/std": "workspace:*",
+    "@ozaco/transport": "workspace:*",
     "@types/pg": "^8.20.0",
     "pg": "^8.22.0",
+    "redis": "^6.2.1",
     "tsdown": "catalog:build",
     "unrun": "catalog:build",
     "zod": "^4.4.3"
   },
   "peerDependencies": {
     "@ozaco/std": "*",
-    "pg": "^8.0.0"
+    "@ozaco/transport": "*",
+    "pg": "^8.0.0",
+    "redis": "^6.0.0"
   },
   "peerDependenciesMeta": {
     "pg": {
+      "optional": true
+    },
+    "redis": {
       "optional": true
     }
   }
