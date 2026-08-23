@@ -12,9 +12,11 @@ const stepsFor = (
   shape: Adapter.Shape | null,
   alterColumn: boolean,
 ): Spec.Step[] => {
-  const indexSteps = spec.indexes.map(
-    (index): Spec.Step => ({ kind: 'create-index', table: spec.name, index }),
-  )
+  const indexSteps = spec.indexes.map((index): Spec.Step => ({
+    kind: 'create-index',
+    table: spec.name,
+    index,
+  }))
 
   if (!shape) {
     return [{ kind: 'create-table', table: spec }, ...indexSteps]

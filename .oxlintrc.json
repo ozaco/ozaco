@@ -75,6 +75,8 @@
     "eslint/no-underscore-dangle": "off",
     "eslint/no-useless-return": "off",
     "prefer-named-capture-group": "off",
+    "eslint/one-var": "off",
+    "eslint/no-redeclare": "off",
 
     "typescript/ban-types": "off",
     "typescript/consistent-type-definitions": "off",

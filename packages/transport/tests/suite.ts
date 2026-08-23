@@ -573,7 +573,6 @@ export const runTransportSuite = (target: TransportTarget): void => {
             (async () => {
               const writer = writable.getWriter()
               // sequential on purpose: each write resolves once its chunk is on the wire
-              // oxlint-disable-next-line no-await-in-loop
               for (let offset = 0; offset < payload.length; offset += 16 * 1024) {
                 // oxlint-disable-next-line no-await-in-loop
                 await writer.write(payload.subarray(offset, offset + 16 * 1024))

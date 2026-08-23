@@ -42,13 +42,15 @@ export type LiteralUnion<LiteralType, BaseType extends Primitive> =
   | (BaseType & Record<never, never>)
 
 export type KnownKeys<T> = keyof {
-  [K in keyof T as string extends K
-    ? never
-    : number extends K
+  [
+    K in keyof T as string extends K
       ? never
-      : symbol extends K
+      : number extends K
         ? never
-        : K]: T[K]
+        : symbol extends K
+          ? never
+          : K
+  ]: T[K]
 }
 
 export type ExplicitObject<T> = Pick<T, KnownKeys<T> & keyof T>

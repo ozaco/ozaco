@@ -100,7 +100,7 @@
     "@ozaco/std": "workspace:*",
     "@ozaco/transport": "workspace:*",
     "@types/pg": "^8.20.0",
-    "pg": "^8.22.0",
+    "pg": "^8.23.0",
     "redis": "^6.2.1",
     "tsdown": "catalog:build",
     "unrun": "catalog:build",

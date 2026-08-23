@@ -87,6 +87,7 @@ export const createCoroutine = <T>({
       return iterator!.next(resumeWith.value)
     },
     perform(effect) {
+      // oxlint-disable-next-line no-multi-assign
       const resolve = (resolver = result => {
         if (resolver === resolve) {
           resolver = null
