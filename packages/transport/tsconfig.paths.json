@@ -1,0 +1,22 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "paths": {
+      "transport:core": ["./src/core/index.ts", "./dist/index.d.ts"],
+      "transport:impl/memory": ["./src/impl/memory/index.ts", "./dist/impl/memory.d.ts"],
+      "transport:impl/nats": ["./src/impl/nats/index.ts", "./dist/impl/nats.d.ts"],
+      "transport:impl/redis": ["./src/impl/redis/index.ts", "./dist/impl/redis.d.ts"],
+      "transport:impl/worker": ["./src/impl/worker/index.ts", "./dist/impl/worker.d.ts"],
+
+      "std:shared": ["./node_modules/@ozaco/std/dist/shared"],
+      "std:result": ["./node_modules/@ozaco/std/dist/result"],
+      "std:effect": ["./node_modules/@ozaco/std/dist/effect"],
+      "std:event": ["./node_modules/@ozaco/std/dist/event"],
+      "std:plugin": ["./node_modules/@ozaco/std/dist/plugin"],
+      "std:io": ["./node_modules/@ozaco/std/dist/io"],
+      "std:io/impl/bun": ["./node_modules/@ozaco/std/dist/io/impl/bun"],
+      "std:codec": ["./node_modules/@ozaco/std/dist/codec"],
+      "std:codec/impl/json": ["./node_modules/@ozaco/std/dist/codec/impl/json"]
+    }
+  }
+}

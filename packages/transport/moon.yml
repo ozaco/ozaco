@@ -1,0 +1,56 @@
+language: typescript
+layer: library
+toolchains:
+  default: bun
+
+tasks:
+  build:
+    command: bun x tsdown --config-loader unrun
+    deps:
+      - std:build
+    inputs:
+      - src/**/*
+      - tsdown.config.ts
+    outputs:
+      - dist/**/*
+  dev:
+    command: bun x tsdown --config-loader unrun --watch
+    inputs:
+      - src/**/*
+      - tsdown.config.ts
+    outputs:
+      - dist/**/*
+  types:
+    command: bun x tsc -p tsconfig.json --noEmit
+    deps:
+      - std:build
+    inputs:
+      - src/**/*
+      - tests/**/*
+      - tsdown.config.ts
+  test:
+    command: bun test --pass-with-no-tests
+    deps:
+      - transport:build
+    inputs:
+      - tests/**/*
+  test-nats:
+    command: bash scripts/test-nats.sh
+    deps:
+      - transport:build
+    inputs:
+      - src/**/*
+      - tests/**/*
+      - scripts/test-nats.sh
+    options:
+      cache: false
+  test-redis:
+    command: bash scripts/test-redis.sh
+    deps:
+      - transport:build
+    inputs:
+      - src/**/*
+      - tests/**/*
+      - scripts/test-redis.sh
+    options:
+      cache: false

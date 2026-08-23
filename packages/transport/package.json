@@ -1,0 +1,107 @@
+{
+  "name": "@ozaco/transport",
+  "version": "0.2.0",
+  "homepage": "https://ozaco.com/",
+  "author": "giveerr (https://github.com/giveerr)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ozaco/ozaco.git"
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      },
+      "source": "./src/core/index.ts"
+    },
+    "./impl/memory": {
+      "import": {
+        "types": "./dist/impl/memory.d.ts",
+        "default": "./dist/impl/memory.js"
+      },
+      "require": {
+        "types": "./dist/impl/memory.d.cts",
+        "default": "./dist/impl/memory.cjs"
+      },
+      "source": "./src/impl/memory/index.ts"
+    },
+    "./impl/nats": {
+      "import": {
+        "types": "./dist/impl/nats.d.ts",
+        "default": "./dist/impl/nats.js"
+      },
+      "require": {
+        "types": "./dist/impl/nats.d.cts",
+        "default": "./dist/impl/nats.cjs"
+      },
+      "source": "./src/impl/nats/index.ts"
+    },
+    "./impl/worker": {
+      "import": {
+        "types": "./dist/impl/worker.d.ts",
+        "default": "./dist/impl/worker.js"
+      },
+      "require": {
+        "types": "./dist/impl/worker.d.cts",
+        "default": "./dist/impl/worker.cjs"
+      },
+      "source": "./src/impl/worker/index.ts"
+    },
+    "./impl/redis": {
+      "import": {
+        "types": "./dist/impl/redis.d.ts",
+        "default": "./dist/impl/redis.js"
+      },
+      "require": {
+        "types": "./dist/impl/redis.d.cts",
+        "default": "./dist/impl/redis.cjs"
+      },
+      "source": "./src/impl/redis/index.ts"
+    }
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true,
+    "registry": "https://registry.npmjs.org/"
+  },
+  "devDependencies": {
+    "@nats-io/jetstream": "^3.4.0",
+    "@nats-io/nats-core": "^3.4.0",
+    "@nats-io/transport-node": "^3.4.0",
+    "@ozaco/std": "workspace:*",
+    "redis": "^6.2.1",
+    "tsdown": "catalog:build",
+    "unrun": "catalog:build"
+  },
+  "peerDependencies": {
+    "@nats-io/jetstream": "^3.0.0",
+    "@nats-io/nats-core": "^3.0.0",
+    "@nats-io/transport-node": "^3.0.0",
+    "@ozaco/std": "*",
+    "redis": "^6.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@nats-io/jetstream": {
+      "optional": true
+    },
+    "@nats-io/nats-core": {
+      "optional": true
+    },
+    "@nats-io/transport-node": {
+      "optional": true
+    },
+    "redis": {
+      "optional": true
+    }
+  }
+}
