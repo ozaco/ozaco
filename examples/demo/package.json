@@ -1,0 +1,23 @@
+{
+  "name": "@ozaco/example-demo",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "bun run src/main.ts",
+    "cluster": "bun run scripts/cluster.ts",
+    "client": "bun run src/client.ts",
+    "codegen": "bun run scripts/codegen.ts"
+  },
+  "dependencies": {
+    "@ozaco/client": "workspace:*",
+    "@ozaco/db": "workspace:*",
+    "@ozaco/server": "workspace:*",
+    "@ozaco/std": "workspace:*",
+    "@ozaco/transport": "workspace:*",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2"
+  }
+}

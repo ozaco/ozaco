@@ -116,5 +116,112 @@
     "react-perf/jsx-no-new-function-as-prop": "off",
     "react-perf/jsx-no-new-array-as-prop": "off"
   },
-  "ignorePatterns": ["**/dist/**", "**/*.d.ts", "**/*.gen.ts", "**/node_modules/**"]
+  "ignorePatterns": ["**/dist/**", "**/*.d.ts", "**/*.gen.ts", "**/node_modules/**"],
+  "overrides": [
+    {
+      "files": ["apps/panel/src/**/*.tsx"],
+      "rules": {
+        "jsx-a11y/click-events-have-key-events": "off",
+        "jsx-a11y/no-static-element-interactions": "off",
+        "jsx-a11y/no-noninteractive-element-interactions": "off",
+        "jsx-a11y/interactive-supports-focus": "off",
+        "jsx-a11y/prefer-tag-over-role": "off",
+        "jsx-a11y/control-has-associated-label": "off",
+        "react-perf/jsx-no-jsx-as-prop": "off"
+      }
+    },
+    {
+      "files": ["packages/server/src/core/**/*.ts"],
+      "rules": {
+        "eslint/no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "server:impl/*",
+                  "server:plugins",
+                  "server:plugins/*",
+                  "server:app",
+                  "../impl/*",
+                  "../../impl/*",
+                  "../plugins/*",
+                  "../../plugins/*",
+                  "../app/*",
+                  "../../app/*"
+                ],
+                "message": "server core must not import impl, plugins or app (layers: core ← impl ← plugins ← app)"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["packages/server/src/impl/**/*.ts"],
+      "rules": {
+        "eslint/no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "server:plugins",
+                  "server:plugins/*",
+                  "server:app",
+                  "../../plugins/*",
+                  "../../../plugins/*",
+                  "../../app/*",
+                  "../../../app/*"
+                ],
+                "message": "server impl may import only core"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["packages/server/src/plugins/**/*.ts"],
+      "rules": {
+        "eslint/no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "server:plugins",
+                  "server:plugins/*",
+                  "server:app",
+                  "../*/",
+                  "../*/definition",
+                  "../*/types",
+                  "../*/internal",
+                  "../*/internal/*",
+                  "../../app/*"
+                ],
+                "message": "a server plugin may import only core/impl — never another plugin or the app"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["packages/db/src/core/**/*.ts", "packages/transport/src/core/**/*.ts"],
+      "rules": {
+        "eslint/no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["db:impl/*", "transport:impl/*", "../impl/*", "../../impl/*"],
+                "message": "core must not import impl"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
 }

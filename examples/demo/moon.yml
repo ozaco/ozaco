@@ -1,0 +1,41 @@
+language: typescript
+layer: application
+toolchains:
+  default: bun
+
+tasks:
+  types:
+    command: bun x tsc -p tsconfig.json --noEmit
+    deps:
+      - std:build
+      - transport:build
+      - db:build
+      - server:build
+      - client:build
+    inputs:
+      - src/**/*
+      - tests/**/*
+      - scripts/**/*
+  test:
+    command: bun test --pass-with-no-tests
+    deps:
+      - std:build
+      - transport:build
+      - db:build
+      - server:build
+      - client:build
+    inputs:
+      - src/**/*
+      - tests/**/*
+  start:
+    command: bun run src/main.ts
+    deps:
+      - server:build
+      - client:build
+    preset: server
+  cluster:
+    command: bun run scripts/cluster.ts
+    deps:
+      - server:build
+      - client:build
+    preset: server

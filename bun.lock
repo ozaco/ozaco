@@ -17,9 +17,10 @@
     },
     "apps/panel": {
       "name": "@ozaco/panel",
-      "version": "0.0.0",
+      "version": "0.5.0",
       "devDependencies": {
         "@ozaco/client": "workspace:*",
+        "@ozaco/std": "workspace:*",
         "@tailwindcss/vite": "^4.0.0",
         "@types/react": "^19.0.0",
         "@types/react-dom": "^19.0.0",
@@ -31,6 +32,21 @@
         "typescript": "^7.0.2",
         "vite": "^7.0.0",
         "vite-plugin-singlefile": "^2.0.0",
+      },
+    },
+    "examples/demo": {
+      "name": "@ozaco/example-demo",
+      "version": "0.0.0",
+      "dependencies": {
+        "@ozaco/client": "workspace:*",
+        "@ozaco/db": "workspace:*",
+        "@ozaco/server": "workspace:*",
+        "@ozaco/std": "workspace:*",
+        "@ozaco/transport": "workspace:*",
+        "zod": "^4.4.3",
+      },
+      "devDependencies": {
+        "typescript": "^7.0.2",
       },
     },
     "packages/ai": {
@@ -64,11 +80,12 @@
     },
     "packages/client": {
       "name": "@ozaco/client",
-      "version": "0.4.0",
+      "version": "0.5.0",
       "devDependencies": {
         "@ozaco/db": "workspace:*",
         "@ozaco/server": "workspace:*",
         "@ozaco/std": "workspace:*",
+        "@ozaco/transport": "workspace:*",
         "tsdown": "catalog:build",
         "unrun": "catalog:build",
         "zod": "^4.4.3",
@@ -82,18 +99,23 @@
       "version": "0.4.0",
       "devDependencies": {
         "@ozaco/std": "workspace:*",
+        "@ozaco/transport": "workspace:*",
         "@types/pg": "^8.20.0",
         "pg": "^8.22.0",
+        "redis": "^6.2.1",
         "tsdown": "catalog:build",
         "unrun": "catalog:build",
         "zod": "^4.4.3",
       },
       "peerDependencies": {
         "@ozaco/std": "*",
+        "@ozaco/transport": "*",
         "pg": "^8.0.0",
+        "redis": "^6.0.0",
       },
       "optionalPeers": [
         "pg",
+        "redis",
       ],
     },
     "packages/devkit": {
@@ -121,7 +143,7 @@
     },
     "packages/server": {
       "name": "@ozaco/server",
-      "version": "0.4.0",
+      "version": "0.5.0",
       "dependencies": {
         "@fastify/busboy": "^3.2.0",
         "jose": "^6.2.4",
@@ -129,11 +151,9 @@
         "zod": "^4.4.3",
       },
       "devDependencies": {
-        "@nats-io/jetstream": "^3.4.0",
-        "@nats-io/nats-core": "^3.4.0",
-        "@nats-io/transport-node": "^3.4.0",
         "@ozaco/db": "workspace:*",
         "@ozaco/std": "workspace:*",
+        "@ozaco/transport": "workspace:*",
         "@types/ws": "^8.18.1",
         "mysql2": "^3.15.2",
         "tsdown": "catalog:build",
@@ -141,19 +161,13 @@
         "ws": "^8.21.1",
       },
       "peerDependencies": {
-        "@nats-io/jetstream": "^3.0.0",
-        "@nats-io/nats-core": "^3.0.0",
-        "@nats-io/transport-node": "^3.0.0",
         "@ozaco/db": "*",
         "@ozaco/std": "*",
+        "@ozaco/transport": "*",
         "mysql2": "^3.0.0",
         "ws": "^8.0.0",
       },
       "optionalPeers": [
-        "@nats-io/jetstream",
-        "@nats-io/nats-core",
-        "@nats-io/transport-node",
-        "@ozaco/db",
         "mysql2",
         "ws",
       ],
@@ -176,6 +190,32 @@
         "js-yaml": "^5.0.0",
         "smol-toml": "^1.7.0",
       },
+    },
+    "packages/transport": {
+      "name": "@ozaco/transport",
+      "version": "0.2.0",
+      "devDependencies": {
+        "@nats-io/jetstream": "^3.4.0",
+        "@nats-io/nats-core": "^3.4.0",
+        "@nats-io/transport-node": "^3.4.0",
+        "@ozaco/std": "workspace:*",
+        "redis": "^6.2.1",
+        "tsdown": "catalog:build",
+        "unrun": "catalog:build",
+      },
+      "peerDependencies": {
+        "@nats-io/jetstream": "^3.0.0",
+        "@nats-io/nats-core": "^3.0.0",
+        "@nats-io/transport-node": "^3.0.0",
+        "@ozaco/std": "*",
+        "redis": "^6.0.0",
+      },
+      "optionalPeers": [
+        "@nats-io/jetstream",
+        "@nats-io/nats-core",
+        "@nats-io/transport-node",
+        "redis",
+      ],
     },
   },
   "catalogs": {
@@ -447,15 +487,29 @@
 
     "@ozaco/devkit": ["@ozaco/devkit@workspace:packages/devkit"],
 
+    "@ozaco/example-demo": ["@ozaco/example-demo@workspace:examples/demo"],
+
     "@ozaco/panel": ["@ozaco/panel@workspace:apps/panel"],
 
     "@ozaco/server": ["@ozaco/server@workspace:packages/server"],
 
     "@ozaco/std": ["@ozaco/std@workspace:packages/std"],
 
+    "@ozaco/transport": ["@ozaco/transport@workspace:packages/transport"],
+
     "@quansync/fs": ["@quansync/fs@1.0.0", "", { "dependencies": { "quansync": "^1.0.0" } }, "sha512-4TJ3DFtlf1L5LDMaM6CanJ/0lckGNtJcMjQ1NAV6zDmA0tEHKZtxNKin8EgPaVX1YzljbxckyT2tJrpQKAtngQ=="],
 
     "@react-types/shared": ["@react-types/shared@3.36.1", "", { "peerDependencies": { "react": "^16.8.0 || ^17.0.0-rc.1 || ^18.0.0 || ^19.0.0-rc.1" } }, "sha512-AzsuD9OfxTOZMMvTRhlN3oHBwOmFN7tDh27LzqmHt4+uOgPhJT7ZM7/kVs/8/o0WxayMUIk3hBmCFRHv1FUoag=="],
+
+    "@redis/bloom": ["@redis/bloom@6.2.1", "", { "peerDependencies": { "@redis/client": "^6.2.1" } }, "sha512-huQgNLaCIZfQ9SeLn4q9124uOUd8HbZDYHwwUzNcRgHqCHiHKl2dDxMqJCeWh8cMqZAoWuHR8XnWbDMIf+o7ag=="],
+
+    "@redis/client": ["@redis/client@6.2.1", "", { "dependencies": { "cluster-key-slot": "1.1.2" }, "peerDependencies": { "@node-rs/xxhash": "^1.1.0", "@opentelemetry/api": ">=1 <2" }, "optionalPeers": ["@node-rs/xxhash", "@opentelemetry/api"] }, "sha512-LzxBY7SIBvvJiyCgcaJZZakE3fJrZZ++i24+EDW9fKpCl68D35uJcKFpZZwCfOoG9WZTbyZlMzMeM0gtOAMU9Q=="],
+
+    "@redis/json": ["@redis/json@6.2.1", "", { "peerDependencies": { "@redis/client": "^6.2.1" } }, "sha512-AFIUJ8Gj0DaaSBHYuSt8+O0oYWM+50OK1c0OmodB7XERIA8+BbyV3O4v76f9iccWasd1/7qjfZTpuzexUaZtrQ=="],
+
+    "@redis/search": ["@redis/search@6.2.1", "", { "peerDependencies": { "@redis/client": "^6.2.1" } }, "sha512-2vfOAOyYFE7UUw3sBBlkqqruBtOUS4HRY5MtW4hp83llrwvtrTE4r22CEqXddlV+54zkLxBE4nmsIJ/dpezQrQ=="],
+
+    "@redis/time-series": ["@redis/time-series@6.2.1", "", { "peerDependencies": { "@redis/client": "^6.2.1" } }, "sha512-kiYniph04dJOole+L359B6C9E+jYS2uDP7hca6Onj0xF38ZIpyxARO0Iq0W4ZRn1e8Q6vqW00QFZVSMRA/2Ijw=="],
 
     "@rolldown/binding-android-arm64": ["@rolldown/binding-android-arm64@1.2.0", "", { "os": "android", "cpu": "arm64" }, "sha512-9yB1l95IrJuNGDFdOYe79vdApdz6WWBCObE+rQ2LUliYUlcyFwSYIb2xb5/Ifw7dAtMy2ZqNyd8QTSOc7duAKw=="],
 
@@ -711,7 +765,7 @@
 
     "base64-js": ["base64-js@1.5.1", "", {}, "sha512-AKpaYlHn8t4SVbOHCy+b5+KKgvR4vrsD8vbvrbiQJps7fKDTkjkDry6ji0rUJjC0kzbNePLwzxq8iypo41qeWA=="],
 
-    "baseline-browser-mapping": ["baseline-browser-mapping@2.11.14", "", { "bin": { "baseline-browser-mapping": "dist/cli.cjs" } }, "sha512-JyJ954WzuIR8/FFzX0o5krdSTrBAkcCSRfWSleRsIHSWV+cZe2FI1PKggVkFke1hBldRs+LRxUczzE9iPmgZww=="],
+    "baseline-browser-mapping": ["baseline-browser-mapping@2.11.18", "", { "bin": { "baseline-browser-mapping": "dist/cli.cjs" } }, "sha512-1iEmLEYSiE1SeBoAfPo/Mnx3PzfzHUkDK61ASkCpuk3YXugYLH5DYK1SzqV55F8FMI6s0F+/tCP7Polz1QRjxw=="],
 
     "bl": ["bl@4.1.0", "", { "dependencies": { "buffer": "^5.5.0", "inherits": "^2.0.4", "readable-stream": "^3.4.0" } }, "sha512-1W07cM9gS6DcLperZfFSj+bWLtaPGSOHWhPiGzXmvVJbRLdG82sH/Kn8EtW1VqWVA54AKf2h5k5BbnIbwF3h6w=="],
 
@@ -749,6 +803,8 @@
 
     "clsx": ["clsx@2.1.1", "", {}, "sha512-eYm0QWBtUrBWZWG0d386OGAw16Z995PiOVo2B7bjWSbHedGl5e0ZWaq65kOGgUSNesEIDkB9ISbTg/JK9dhCZA=="],
 
+    "cluster-key-slot": ["cluster-key-slot@1.1.2", "", {}, "sha512-RMr0FhtfXemyinomL4hrWcYJxmX6deFdCxpJzhDttxgO1+bcCnkk+9drydLVDmAMG7NE6aN/fl4F7ucU/90gAA=="],
+
     "color-convert": ["color-convert@2.0.1", "", { "dependencies": { "color-name": "~1.1.4" } }, "sha512-RRECPsj7iu/xb5oKYcsFHSppFNnsj/52OVTRKb4zP5onXwVF3zVmmToNcOfGC+CRDpfK/U584fMg38ZHCaElKQ=="],
 
     "color-name": ["color-name@1.1.4", "", {}, "sha512-dOy+3AuW3a2wNbZHIuMZpTcgjGuLU/uBL/ubcZF9OXbDo8ff4O8yVp5Bf0efS8uEoYo5q4Fx7dY9OgQGXgAsQA=="],
@@ -777,7 +833,7 @@
 
     "dts-resolver": ["dts-resolver@3.0.0", "", { "peerDependencies": { "oxc-resolver": ">=11.0.0" }, "optionalPeers": ["oxc-resolver"] }, "sha512-1T1f+z+4tl9XD+m+0HBgWoL/nm0bOIffyWaUuUSBlFg/86IWvfx+wjNaO/ybU0AJzG9/Mi5hBUgGV6zCmWEN7Q=="],
 
-    "electron-to-chromium": ["electron-to-chromium@1.5.407", "", {}, "sha512-4R8XgQOdfxexCd/u63lRm6wCHjECwI45MV9wxAs2ggtfWe2hwlo1ql97jKsju2IcJ+jFSTwBssyYoiWhh7mauQ=="],
+    "electron-to-chromium": ["electron-to-chromium@1.5.412", "", {}, "sha512-z4rMe3esBzlzovKHj4gxJnsCGZRK5l4baUvm+gCGJBPE+gsyUMKsuU9tnEUtI1dOebXz1ytAPGjvXhmQ7rIPwA=="],
 
     "emoji-regex": ["emoji-regex@10.6.0", "", {}, "sha512-toUI84YS5YmxW219erniWD0CIVOo46xGKColeNQRgOzDorgBi1v4D71/OFzgD9GO2UGKIv1C3Sp8DAn0+j5w7A=="],
 
@@ -982,6 +1038,8 @@
     "react-stately": ["react-stately@3.49.0", "", { "dependencies": { "@internationalized/date": "^3.12.3", "@internationalized/number": "^3.6.7", "@internationalized/string": "^3.2.10", "@react-types/shared": "^3.36.1", "@swc/helpers": "^0.5.0", "use-sync-external-store": "^1.6.0" }, "peerDependencies": { "react": "^16.8.0 || ^17.0.0-rc.1 || ^18.0.0 || ^19.0.0-rc.1" } }, "sha512-13iNq2KzBrRAzxRc+n53hgROfIistiYY/sPtIhCw1qUB7/kmo+X1xEU2uiS5zcCIrc55AUPwoHqOIIpKWSwB9A=="],
 
     "readable-stream": ["readable-stream@3.6.2", "", { "dependencies": { "inherits": "^2.0.3", "string_decoder": "^1.1.1", "util-deprecate": "^1.0.1" } }, "sha512-9u/sniCrY3D5WdsERHzHE4G2YCXqoG5FTHUiCC4SIbr6XcLZBY05ya9EKjYek9O5xOAwjGq+1JdGBAS7Q9ScoA=="],
+
+    "redis": ["redis@6.2.1", "", { "dependencies": { "@redis/bloom": "6.2.1", "@redis/client": "6.2.1", "@redis/json": "6.2.1", "@redis/search": "6.2.1", "@redis/time-series": "6.2.1" } }, "sha512-Z9VHtgYs48PiQC77X9O2Er8Hj4T+5BtFjT91/vi5Is1D04N72cA946ZslM1ImJw8ZctFBZWAVjM7S5wJNeHMpg=="],
 
     "require-from-string": ["require-from-string@2.0.2", "", {}, "sha512-Xf0nWe6RseziFMu+Ap9biiUbmplq6S9/p+7w7YXP/JBHhrUDDUhwa+vANyubuqfZWTveU//DYVGsDG7RKL/vEw=="],
 
