@@ -20,6 +20,7 @@ import {
 import { readEnv } from '../internal/env'
 import { readFileFlow, writeFileFlow } from '../internal/flow'
 import { fromReadable } from '../internal/from-readable'
+import { hlcDecode, hlcObserve, hlcToken } from '../internal/hlc'
 import { tcpConnect, tcpListen, udpBind } from '../internal/net'
 import { mapStat, walkRecursive } from '../internal/node-shared'
 import { nodePath } from '../internal/path-node'
@@ -51,6 +52,9 @@ export const NodeIO = IO.implement({
 
   ulid: ulidId,
   uuid: uuidId,
+  hlc: hlcToken,
+  decodeHlc: hlcDecode,
+  observeHlc: hlcObserve,
 
   hmac: operation(function* (algorithm, key, data) {
     const mac = createHmac(toNodeHash(algorithm), key).update(data).digest()

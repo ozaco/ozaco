@@ -1,8 +1,8 @@
 // oxlint-disable import/exports-last
 import type { Helpers } from 'ai:core'
 import { AiErrors } from 'ai:core'
-import type { Context, Flow, Queue } from 'std:effect'
-import { createContext, createQueue, operation } from 'std:effect'
+import type { Context, Flow, Operation, Queue } from 'std:effect'
+import { createContext, createQueue } from 'std:effect'
 import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 
@@ -42,9 +42,9 @@ interface ResolveInput<TSpec, TValue> {
 }
 
 /** Resolve one scripted response for a call (advancing the queue cursor where applicable). */
-export const resolveResponder = operation(function* <TSpec, TValue>(
+export function* resolveResponder<TSpec, TValue>(
   input: ResolveInput<TSpec, TValue>,
-): Generator<AnyType, TValue, AnyType> {
+): Operation<TValue> {
   const { responder } = input
   if (responder === undefined) {
     return input.fallback
@@ -65,7 +65,7 @@ export const resolveResponder = operation(function* <TSpec, TValue>(
     return responder.queue[cursor] as TValue
   }
   return responder as TValue
-})
+}
 
 /** Complete a scripted partial into a full {@link Helpers.ChatResult} against the resolved spec. */
 export const completeChatResult = (

@@ -1,9 +1,8 @@
 // oxlint-disable import/exports-last
 import type { Helpers } from 'ai:core'
 import type { Flow, Operation, Queue, Subscription } from 'std:effect'
-import { createQueue, fork, operation } from 'std:effect'
+import { createQueue, fork } from 'std:effect'
 import { asFailure } from 'std:result'
-import type { AnyType } from 'std:shared'
 
 /** The OpenAI SSE sentinel that ends a token stream. */
 export const SSE_DONE = '[DONE]'
@@ -40,7 +39,7 @@ interface PumpInput<T> {
 /** Drain the raw byte subscription, parse each complete SSE event, and feed the queue. A raised
  * failure (mid-stream `{"error":…}` frame, unparseable chunk, transport fault) closes the queue
  * with that Failure instead of a clean `true`. */
-const pump = operation(function* <T>(input: PumpInput<T>): Generator<AnyType, void, AnyType> {
+function* pump<T>(input: PumpInput<T>): Operation<void> {
   const decoder = new TextDecoder()
   let buffer = ''
   let close: Helpers.StreamClose = true
@@ -80,7 +79,7 @@ const pump = operation(function* <T>(input: PumpInput<T>): Generator<AnyType, vo
   } finally {
     input.queue.close(close)
   }
-})
+}
 
 /**
  * Turn a raw SSE byte flow (from `response.raw()`) into a parsed value flow. `parse` maps one
@@ -92,22 +91,22 @@ const pump = operation(function* <T>(input: PumpInput<T>): Generator<AnyType, vo
  * suspension, which sits INSIDE the subscribe). Halting the consuming scope tears the pump down
  * and aborts the request that produced `raw` (its abort signal is owned by the same scope).
  */
-export const sseFlow = operation(function* <T>(
+export function* sseFlow<T>(
   raw: Flow<Uint8Array, void>,
   parse: (data: string) => Operation<T | undefined>,
-): Generator<AnyType, Flow<T, Helpers.StreamClose>, AnyType> {
+): Operation<Flow<T, Helpers.StreamClose>> {
   const subscription = yield* raw
   const queue = createQueue<T, Helpers.StreamClose>()
   yield* fork(() => pump({ subscription, queue, parse }))
   return asFlow(queue)
-})
+}
 
 interface CopyInput {
   readonly subscription: Subscription<Uint8Array, void>
   readonly queue: Queue<Uint8Array, Helpers.StreamClose>
 }
 
-const copy = operation(function* (input: CopyInput): Generator<AnyType, void, AnyType> {
+function* copy(input: CopyInput): Operation<void> {
   let close: Helpers.StreamClose = true
   try {
     for (;;) {
@@ -122,18 +121,18 @@ const copy = operation(function* (input: CopyInput): Generator<AnyType, void, An
   } finally {
     input.queue.close(close)
   }
-})
+}
 
 /**
  * Re-channel a raw byte flow into a `Flow<Uint8Array, Helpers.StreamClose>` forwarding chunks
  * verbatim — clean end closes `true`, a mid-flight fault closes with the Failure. Same
  * subscribe-then-fork contract as {@link sseFlow}. Used by `ttsStream`.
  */
-export const byteFlow = operation(function* (
+export function* byteFlow(
   raw: Flow<Uint8Array, void>,
-): Generator<AnyType, Flow<Uint8Array, Helpers.StreamClose>, AnyType> {
+): Operation<Flow<Uint8Array, Helpers.StreamClose>> {
   const subscription = yield* raw
   const queue = createQueue<Uint8Array, Helpers.StreamClose>()
   yield* fork(() => copy({ subscription, queue }))
   return asFlow(queue)
-})
+}

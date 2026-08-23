@@ -1,6 +1,6 @@
 // oxlint-disable import/exports-last
 import type { Operation } from 'std:effect'
-import { operation, useContext } from 'std:effect'
+import { useContext } from 'std:effect'
 import { defineProtocol } from 'std:plugin'
 import { fail } from 'std:result'
 
@@ -55,7 +55,7 @@ const AiClientImpl = AiProtocol.implement<AiDef.Context, [options?: AiDef.Option
 })
 
 export const AiClient: AiDef = AiClientImpl.build({
-  chat: operation(function* (messages: Helpers.MessagesInit, options: AiDef.ChatOptions = {}) {
+  *chat(messages: Helpers.MessagesInit, options: AiDef.ChatOptions = {}) {
     const state = yield* useContext(AiProtocol)
     const spec = yield* resolveChatSpec({ state, messages, options, streaming: false })
     const retries = options.retries ?? state.retries
@@ -68,40 +68,37 @@ export const AiClient: AiDef = AiClientImpl.build({
       })
     }
     return yield* withRetry(retries, () => AiProvider.actions.chat(spec))
-  }),
+  },
 
-  chatStream: operation(function* (
-    messages: Helpers.MessagesInit,
-    options: AiDef.ChatStreamOptions = {},
-  ) {
+  *chatStream(messages: Helpers.MessagesInit, options: AiDef.ChatStreamOptions = {}) {
     const state = yield* useContext(AiProtocol)
     const spec = yield* resolveChatSpec({ state, messages, options, streaming: true })
     return yield* AiProvider.actions.chatStream(spec)
-  }),
+  },
 
-  embed: operation(function* (input: string | readonly string[], options: AiDef.EmbedOptions = {}) {
+  *embed(input: string | readonly string[], options: AiDef.EmbedOptions = {}) {
     const state = yield* useContext(AiProtocol)
     const spec = yield* resolveEmbedSpec({ state, input, options })
     return yield* withRetry(options.retries ?? state.retries, () => AiProvider.actions.embed(spec))
-  }),
+  },
 
-  tts: operation(function* (text: string, options: AiDef.SpeechOptions = {}) {
+  *tts(text: string, options: AiDef.SpeechOptions = {}) {
     const state = yield* useContext(AiProtocol)
     const spec = yield* resolveSpeechSpec({ state, text, options })
     return yield* AiProvider.actions.tts(spec)
-  }),
+  },
 
-  ttsStream: operation(function* (text: string, options: AiDef.SpeechOptions = {}) {
+  *ttsStream(text: string, options: AiDef.SpeechOptions = {}) {
     const state = yield* useContext(AiProtocol)
     const spec = yield* resolveSpeechSpec({ state, text, options })
     return yield* AiProvider.actions.ttsStream(spec)
-  }),
+  },
 
-  stt: operation(function* (audio: Uint8Array | Blob, options: AiDef.TranscribeOptions = {}) {
+  *stt(audio: Uint8Array | Blob, options: AiDef.TranscribeOptions = {}) {
     const state = yield* useContext(AiProtocol)
     const spec = yield* resolveTranscribeSpec({ state, audio, options })
     return yield* AiProvider.actions.stt(spec)
-  }),
+  },
 })
 
 /** Resolve the installed client state (provider info, per-modality models, merged defaults). */

@@ -1,7 +1,6 @@
 // oxlint-disable import/exports-last
-import type { Flow, Subscription } from 'std:effect'
+import type { Flow, ManualOperation, Operation, Subscription } from 'std:effect'
 import { operation } from 'std:effect'
-import type { AnyType } from 'std:shared'
 
 import { JsonCodec } from 'std:codec/impl/json'
 
@@ -77,7 +76,7 @@ export const replyToResponse = operation(function* (input: {
 
 interface MapState {
   readonly source: Subscription<unknown, unknown>
-  readonly frame: (value: unknown) => Generator<AnyType, Uint8Array, AnyType>
+  readonly frame: (value: unknown) => Operation<Uint8Array>
   opened: boolean
   readonly opener?: Uint8Array | undefined
 }
@@ -85,7 +84,7 @@ interface MapState {
 const mappedFlow = (state: MapState): Flow<Uint8Array, unknown> => ({
   *[Symbol.iterator]() {
     const subscription: Subscription<Uint8Array, unknown> = {
-      *next(): Generator<AnyType, IteratorResult<Uint8Array, unknown>, AnyType> {
+      *next(): ManualOperation<IteratorResult<Uint8Array, unknown>> {
         if (!state.opened && state.opener) {
           state.opened = true
 

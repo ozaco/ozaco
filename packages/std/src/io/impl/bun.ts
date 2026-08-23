@@ -18,6 +18,7 @@ import {
 import { readEnv } from '../internal/env'
 import { readFileFlow, writeFileFlow } from '../internal/flow'
 import { fromReadable } from '../internal/from-readable'
+import { hlcDecode, hlcObserve, hlcToken } from '../internal/hlc'
 import { tcpConnect, tcpListen, udpBind } from '../internal/net'
 import { mapStat, walkRecursive } from '../internal/node-shared'
 import { nodePath } from '../internal/path-node'
@@ -42,6 +43,9 @@ export const BunIO = IO.implement({
   randomBytes: webRandomBytes,
   ulid: ulidId,
   uuid: uuidId,
+  hlc: hlcToken,
+  decodeHlc: hlcDecode,
+  observeHlc: hlcObserve,
   hmac: webHmac,
   hash: webHash,
   encrypt: encryptSecret,

@@ -1,5 +1,6 @@
 import { CodecErrors } from 'std:codec'
-import { attempt, operation } from 'std:effect'
+import type { Operation } from 'std:effect'
+import { attempt } from 'std:effect'
 import { fail, isFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
 
@@ -15,9 +16,7 @@ import { withRetry } from './retry'
 /** JSON-parse a tool call's arguments through the installed `JsonCodec` into the handler's object
  * (empty string → `{}`). Garbage or a non-object payload is the MODEL's fault: `ai.bad-response`;
  * any other failure (e.g. `JsonCodec` missing from the scope) re-raises untouched. */
-const parseArguments = operation(function* (
-  call: Helpers.ToolCall,
-): Generator<AnyType, Record<string, unknown>, AnyType> {
+function* parseArguments(call: Helpers.ToolCall): Operation<Record<string, unknown>> {
   const raw = call.arguments.trim() === '' ? '{}' : call.arguments
   const outcome = yield* attempt(JsonCodec.actions.parse<AnyType>(raw))
   if (isFailure(outcome) && outcome.error !== CodecErrors.Parse) {
@@ -36,15 +35,12 @@ const parseArguments = operation(function* (
     )
   }
   return parsed as Record<string, unknown>
-})
+}
 
 /** The `role: 'tool'` message answering one call — non-string handler results are JSON-encoded
  * through the installed `JsonCodec` (a value it serializes to nothing, e.g. `undefined`, falls
  * back to `'null'`). */
-const toolMessage = operation(function* (
-  call: Helpers.ToolCall,
-  value: unknown,
-): Generator<AnyType, Helpers.Message, AnyType> {
+function* toolMessage(call: Helpers.ToolCall, value: unknown): Operation<Helpers.Message> {
   const encoded =
     typeof value === 'string'
       ? value
@@ -55,19 +51,19 @@ const toolMessage = operation(function* (
     name: call.name,
     toolCallId: call.id,
   }
-})
+}
 
-const invokeTool = operation(function* (
+function* invokeTool(
   run: Readonly<Record<string, AiDef.ToolRunner>>,
   call: Helpers.ToolCall,
-): Generator<AnyType, unknown, AnyType> {
+): Operation<unknown> {
   const runner = Object.hasOwn(run, call.name) ? run[call.name] : undefined
   if (!runner) {
     return yield* fail(AiErrors.BadResponse, `the model called an unknown tool "${call.name}"`)
   }
   const args = yield* parseArguments(call)
   return yield* runner(args)
-})
+}
 
 export interface ToolLoopInput {
   readonly spec: Helpers.ChatSpec
@@ -81,9 +77,7 @@ export interface ToolLoopInput {
  * handler for every requested tool call, append the assistant message and the tool results, and
  * re-ask — until a round returns no tool calls or the round budget is exhausted (`ai.request`).
  */
-export const runToolLoop = operation(function* (
-  input: ToolLoopInput,
-): Generator<AnyType, Helpers.ChatResult, AnyType> {
+export function* runToolLoop(input: ToolLoopInput): Operation<Helpers.ChatResult> {
   const messages = [...input.spec.messages]
 
   for (let round = 0; round < input.maxRounds; round += 1) {
@@ -108,4 +102,4 @@ export const runToolLoop = operation(function* (
     AiErrors.Request,
     `tool loop exceeded ${input.maxRounds} rounds without a final answer`,
   )
-})
+}

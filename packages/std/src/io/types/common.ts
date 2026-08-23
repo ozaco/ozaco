@@ -81,6 +81,29 @@ export interface UlidOptions {
   bucket?: string | undefined
 }
 
+/** Options for {@link IOActions.hlc}. */
+export interface HlcOptions {
+  /** This node's identity — exactly 8 Crockford base32 characters (`0-9 A-H J K M N P-T V-Z`). */
+  origin: string
+}
+
+/** Options for {@link IOActions.observeHlc}. */
+export interface ObserveHlcOptions {
+  /** A remote timestamp further ahead of the local clock than this is NOT adopted (a misconfigured
+   * peer clock must not drag the whole cluster into the future). Default `60_000`. */
+  maxDriftMs?: number | undefined
+}
+
+/** The decoded parts of an HLC token. */
+export interface Hlc {
+  /** Hybrid-logical milliseconds — ordering only, not wall time. */
+  ts: number
+  /** Same-millisecond sequence (0-based). */
+  counter: number
+  /** The minting node, 8 Crockford characters. */
+  origin: string
+}
+
 /** Options shared by {@link IOActions.exec} and {@link IOActions.spawn}. */
 export interface ProcessOptions {
   /** Working directory for the child. Defaults to the parent's cwd. */

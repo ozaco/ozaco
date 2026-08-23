@@ -1,5 +1,4 @@
 import type { Operation } from 'std:effect'
-import { operation } from 'std:effect'
 import { defineProtocol } from 'std:plugin'
 import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
@@ -9,9 +8,9 @@ import type { ProviderDef } from './types/provider'
 
 /** A failing action for a capability the provider does not implement. */
 const unsupported = (subject: string, action: string): AnyType =>
-  operation(function* () {
+  function* () {
     return yield* fail(AiErrors.Unsupported, `${subject} does not support ${action}`)
-  }) as AnyType
+  } as AnyType
 
 const gated = (subject: string): ProviderDef.Actions => ({
   chat: unsupported(subject, 'chat'),

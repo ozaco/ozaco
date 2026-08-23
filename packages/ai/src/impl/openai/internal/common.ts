@@ -1,7 +1,7 @@
 // oxlint-disable import/exports-last
 import { AiErrors, RETRY_AFTER_CAUSE } from 'ai:core'
-import type { Context } from 'std:effect'
-import { attempt, createContext, operation } from 'std:effect'
+import type { Context, Operation } from 'std:effect'
+import { attempt, createContext } from 'std:effect'
 import type { FetchDef } from 'std:fetch'
 import { Fetch } from 'std:fetch'
 import { fail, isFailure } from 'std:result'
@@ -41,16 +41,16 @@ export const createState = (options: OpenAIProviderOptions): OpenAIState => {
 
 /** Init for a JSON request: state headers with `content-type` pinned, the body encoded through
  * the installed `JsonCodec`, deadline. */
-export const jsonInit = operation(function* (
+export function* jsonInit(
   state: OpenAIState,
   body: Record<string, unknown>,
-): Generator<AnyType, FetchDef.MethodInit, AnyType> {
+): Operation<FetchDef.MethodInit> {
   return {
     headers: { ...state.headers, 'content-type': 'application/json' },
     body: yield* JsonCodec.actions.stringify(body),
     ...(state.timeoutMs === undefined ? {} : { timeoutMs: state.timeoutMs }),
   }
-})
+}
 
 /** Init for a multipart request: `content-type` stays unset so the platform writes the boundary. */
 export const formInit = (state: OpenAIState, form: FormData): FetchDef.MethodInit => {
@@ -111,22 +111,18 @@ const retryAfterSeconds = (header: string | null): number | undefined => {
 
 /** Best-effort decode of the provider's error envelope — any parse failure degrades to
  * `undefined` so classification falls back to the status and raw body. */
-const decodeErrorBody = operation(function* (
-  body: string,
-): Generator<AnyType, ProviderError | undefined, AnyType> {
+function* decodeErrorBody(body: string): Operation<ProviderError | undefined> {
   const outcome = yield* attempt(JsonCodec.actions.parse<AnyType>(body))
   if (isFailure(outcome)) {
     return undefined
   }
   const error = outcome.value?.error
   return error && typeof error === 'object' ? (error as ProviderError) : undefined
-})
+}
 
 /** Read a non-2xx response and raise the matching `ai.*` failure. Rate limits carry the provider's
  * retry-after hint as a `retry-after:<seconds>` cause so the client's retry can honor it. */
-const failResponse = operation(function* (
-  response: FetchDef.Response,
-): Generator<AnyType, never, AnyType> {
+function* failResponse(response: FetchDef.Response): Operation<never> {
   const read = yield* attempt(response.text())
   const body = isFailure(read) ? '' : read.value
   const error = yield* decodeErrorBody(body)
@@ -140,18 +136,18 @@ const failResponse = operation(function* (
     }
   }
   return yield* fail(tag, message)
-})
+}
 
 /**
  * POST to an endpoint through the `Fetch` plugin (the ONLY transport this provider uses) and
  * resolve the ok response. Transport faults classify as `ai.timeout`/`ai.request`; non-2xx
  * statuses classify via {@link failResponse}.
  */
-export const send = operation(function* (
+export function* send(
   state: OpenAIState,
   path: string,
   init: FetchDef.MethodInit,
-): Generator<AnyType, FetchDef.Response, AnyType> {
+): Operation<FetchDef.Response> {
   const outcome = yield* attempt(Fetch.actions.post(`${state.base}/${path}`, init))
   if (isFailure(outcome)) {
     if (outcome.error === 'timeout') {
@@ -167,12 +163,10 @@ export const send = operation(function* (
     return yield* failResponse(response)
   }
   return response
-})
+}
 
 /** Read an ok response's JSON body; an unparseable 2xx body fails `ai.bad-response`. */
-export const readJson = operation(function* (
-  response: FetchDef.Response,
-): Generator<AnyType, unknown, AnyType> {
+export function* readJson(response: FetchDef.Response): Operation<unknown> {
   const outcome = yield* attempt(response.json<unknown>())
   if (isFailure(outcome)) {
     return yield* fail(
@@ -181,15 +175,13 @@ export const readJson = operation(function* (
     )
   }
   return outcome.value
-})
+}
 
 /** Read an ok response's bytes; a read fault classifies as `ai.request`. */
-export const readBytes = operation(function* (
-  response: FetchDef.Response,
-): Generator<AnyType, Uint8Array, AnyType> {
+export function* readBytes(response: FetchDef.Response): Operation<Uint8Array> {
   const outcome = yield* attempt(response.bytes())
   if (isFailure(outcome)) {
     return yield* fail(AiErrors.Request, `reading the response body from ${response.url} failed`)
   }
   return outcome.value as Uint8Array
-})
+}

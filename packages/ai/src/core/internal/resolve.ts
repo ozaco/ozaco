@@ -1,7 +1,6 @@
 // oxlint-disable import/exports-last
-import { operation } from 'std:effect'
+import type { Operation } from 'std:effect'
 import { fail } from 'std:result'
-import type { AnyType } from 'std:shared'
 
 import { AiErrors } from '../errors'
 import type { AiDef } from '../types/ai'
@@ -45,9 +44,7 @@ interface ChatInput {
 
 /** Resolve a chat call into a {@link Helpers.ChatSpec}: capability gates, per-modality model,
  * sampling merge, message normalization. */
-export const resolveChatSpec = operation(function* (
-  input: ChatInput,
-): Generator<AnyType, Helpers.ChatSpec, AnyType> {
+export function* resolveChatSpec(input: ChatInput): Operation<Helpers.ChatSpec> {
   const { state, options } = input
   const { capabilities } = state.provider
   if (input.streaming ? !capabilities.chatStream : !capabilities.chat) {
@@ -83,7 +80,7 @@ export const resolveChatSpec = operation(function* (
     sampling: mergeSampling(state.defaults, options),
     ...(options.extra ? { extra: options.extra } : {}),
   }
-})
+}
 
 interface EmbedInput {
   readonly state: AiDef.Context
@@ -91,9 +88,7 @@ interface EmbedInput {
   readonly options: AiDef.EmbedOptions
 }
 
-export const resolveEmbedSpec = operation(function* (
-  input: EmbedInput,
-): Generator<AnyType, Helpers.EmbedSpec, AnyType> {
+export function* resolveEmbedSpec(input: EmbedInput): Operation<Helpers.EmbedSpec> {
   const { state, options } = input
   if (!state.provider.capabilities.embed) {
     return yield* fail(
@@ -111,7 +106,7 @@ export const resolveEmbedSpec = operation(function* (
     ...(options.dimensions === undefined ? {} : { dimensions: options.dimensions }),
     ...(options.extra ? { extra: options.extra } : {}),
   }
-})
+}
 
 interface SpeechInput {
   readonly state: AiDef.Context
@@ -119,9 +114,7 @@ interface SpeechInput {
   readonly options: AiDef.SpeechOptions
 }
 
-export const resolveSpeechSpec = operation(function* (
-  input: SpeechInput,
-): Generator<AnyType, Helpers.SpeechSpec, AnyType> {
+export function* resolveSpeechSpec(input: SpeechInput): Operation<Helpers.SpeechSpec> {
   const { state, options } = input
   if (!state.provider.capabilities.tts) {
     return yield* fail(
@@ -148,7 +141,7 @@ export const resolveSpeechSpec = operation(function* (
     ...(options.speed === undefined ? {} : { speed: options.speed }),
     ...(options.extra ? { extra: options.extra } : {}),
   }
-})
+}
 
 interface TranscribeInput {
   readonly state: AiDef.Context
@@ -156,9 +149,7 @@ interface TranscribeInput {
   readonly options: AiDef.TranscribeOptions
 }
 
-export const resolveTranscribeSpec = operation(function* (
-  input: TranscribeInput,
-): Generator<AnyType, Helpers.TranscribeSpec, AnyType> {
+export function* resolveTranscribeSpec(input: TranscribeInput): Operation<Helpers.TranscribeSpec> {
   const { state, options } = input
   if (!state.provider.capabilities.stt) {
     return yield* fail(
@@ -179,4 +170,4 @@ export const resolveTranscribeSpec = operation(function* (
     ...(options.contentType === undefined ? {} : { contentType: options.contentType }),
     ...(options.extra ? { extra: options.extra } : {}),
   }
-})
+}

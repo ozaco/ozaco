@@ -3,17 +3,20 @@ import type { Operation, Flow } from 'std:effect'
 import type {
   ExecOptions,
   ExecResult,
+  FlowClose,
   HashAlgorithm,
+  Hlc,
+  HlcOptions,
   IOStat,
   KeyPair,
   NetworkInterface,
+  ObserveHlcOptions,
   PathLike,
   ProcessHandle,
   ReadableLike,
   S3Client,
   S3Options,
   SpawnOptions,
-  FlowClose,
   TcpConnectOptions,
   TcpHandler,
   TcpListenOptions,
@@ -39,6 +42,15 @@ export type IOActions = {
   ulid: (options?: UlidOptions) => Operation<string>
   /** Generate an RFC 4122 version-4 (random) UUID string. */
   uuid: () => Operation<string>
+  /** Mint a hybrid-logical-clock token: 22 Crockford chars = 48-bit ms time | 16-bit counter |
+   * 40-bit origin. Lexicographic order = causal order; decodable via {@link decodeHlc}. State is
+   * kept per origin; `ts = max(now, observed floor, last)`, same-ms mints bump the counter. */
+  hlc: (options: HlcOptions) => Operation<string>
+  /** Decode a token into `{ ts, counter, origin }`; fails `hlc-invalid` on malformed input. */
+  decodeHlc: (token: string) => Operation<Hlc>
+  /** The HLC receive rule: pull the local clock floor up to a remote token's time (bounded by
+   * `maxDriftMs`). Resolves `true` when adopted, `false` when rejected as drift. */
+  observeHlc: (token: string, options?: ObserveHlcOptions) => Operation<boolean>
   hmac: (algorithm: HashAlgorithm, key: Uint8Array, data: Uint8Array) => Operation<Uint8Array>
   hash: (algorithm: HashAlgorithm, data: Uint8Array) => Operation<Uint8Array>
 

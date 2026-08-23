@@ -7,6 +7,7 @@ import type { AnyType } from 'std:shared'
 
 import { readWebEnv } from '../internal/env'
 import { fromReadable } from '../internal/from-readable'
+import { hlcDecode, hlcObserve, hlcToken } from '../internal/hlc'
 import { webPath } from '../internal/path-web'
 import { createS3 } from '../internal/s3'
 import { toReadable } from '../internal/to-readable'
@@ -43,6 +44,9 @@ export const WebIO = IO.implement({
   randomBytes: webRandomBytes,
   ulid: ulidId,
   uuid: uuidId,
+  hlc: hlcToken,
+  decodeHlc: hlcDecode,
+  observeHlc: hlcObserve,
   hmac: webHmac,
   hash: webHash,
   encrypt: unsupported('encrypt'),

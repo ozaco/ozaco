@@ -1,6 +1,6 @@
 import type { Helpers, ProviderDef } from 'ai:core'
 import { AiErrors, AiProvider } from 'ai:core'
-import { operation, useContext } from 'std:effect'
+import { useContext } from 'std:effect'
 import { Fetch } from 'std:fetch'
 import { fail } from 'std:result'
 
@@ -73,44 +73,44 @@ export const OpenAIProvider = AiProvider.implement<
     return { provider: 'openai', capabilities: CAPABILITIES }
   },
 }).build({
-  chat: operation(function* (spec: Helpers.ChatSpec) {
+  *chat(spec: Helpers.ChatSpec) {
     const state = yield* useContext(StateRef)
     const init = yield* jsonInit(state, chatBody(spec, false))
     const response = yield* send(state, 'chat/completions', init)
     return yield* decodeChatResult(yield* readJson(response), spec.model)
-  }),
+  },
 
-  chatStream: operation(function* (spec: Helpers.ChatSpec) {
+  *chatStream(spec: Helpers.ChatSpec) {
     const state = yield* useContext(StateRef)
     const init = yield* jsonInit(state, chatBody(spec, true))
     const response = yield* send(state, 'chat/completions', init)
     const raw = yield* response.raw()
     return yield* sseFlow(raw, decodeChatDelta)
-  }),
+  },
 
-  embed: operation(function* (spec: Helpers.EmbedSpec) {
+  *embed(spec: Helpers.EmbedSpec) {
     const state = yield* useContext(StateRef)
     const init = yield* jsonInit(state, embedBody(spec))
     const response = yield* send(state, 'embeddings', init)
     return yield* decodeEmbedResult(yield* readJson(response), spec)
-  }),
+  },
 
-  tts: operation(function* (spec: Helpers.SpeechSpec) {
+  *tts(spec: Helpers.SpeechSpec) {
     const state = yield* useContext(StateRef)
     const init = yield* jsonInit(state, speechBody(spec))
     const response = yield* send(state, 'audio/speech', init)
     return yield* readBytes(response)
-  }),
+  },
 
-  ttsStream: operation(function* (spec: Helpers.SpeechSpec) {
+  *ttsStream(spec: Helpers.SpeechSpec) {
     const state = yield* useContext(StateRef)
     const init = yield* jsonInit(state, speechBody(spec))
     const response = yield* send(state, 'audio/speech', init)
     const raw = yield* response.raw()
     return yield* byteFlow(raw)
-  }),
+  },
 
-  stt: operation(function* (spec: Helpers.TranscribeSpec) {
+  *stt(spec: Helpers.TranscribeSpec) {
     const state = yield* useContext(StateRef)
     const response = yield* send(
       state,
@@ -118,5 +118,5 @@ export const OpenAIProvider = AiProvider.implement<
       formInit(state, transcribeForm(spec)),
     )
     return yield* decodeTranscription(yield* readJson(response))
-  }),
+  },
 })

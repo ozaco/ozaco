@@ -1,8 +1,7 @@
 import type { Operation } from 'std:effect'
-import { attempt, operation, sleep } from 'std:effect'
+import { attempt, sleep } from 'std:effect'
 import type { Result } from 'std:result'
 import { isSuccess } from 'std:result'
-import type { AnyType } from 'std:shared'
 
 import { RETRY_AFTER_CAUSE, RETRY_BASE_DELAY_MS } from '../const'
 import { AiErrors } from '../errors'
@@ -24,10 +23,7 @@ export const retryAfterMs = (failure: Result.Failure<unknown>): number | undefin
 /** Run `body`, retrying `ai.rate-limit` failures up to `retries` times — honoring the provider's
  * retry-after hint, else backing off exponentially from {@link RETRY_BASE_DELAY_MS}. Any other
  * failure (and an exhausted budget) re-raises untouched. */
-export const withRetry = operation(function* <T>(
-  retries: number,
-  body: () => Operation<T>,
-): Generator<AnyType, T, AnyType> {
+export function* withRetry<T>(retries: number, body: () => Operation<T>): Operation<T> {
   for (let round = 0; ; round += 1) {
     const outcome = (yield* attempt(body())) as Result<T, unknown>
     if (isSuccess(outcome)) {
@@ -38,4 +34,4 @@ export const withRetry = operation(function* <T>(
     }
     yield* sleep(retryAfterMs(outcome) ?? RETRY_BASE_DELAY_MS * 2 ** round)
   }
-})
+}

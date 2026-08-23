@@ -1,6 +1,6 @@
 import type { Helpers, ProviderDef } from 'ai:core'
 import { AiProvider } from 'ai:core'
-import { operation, useContext } from 'std:effect'
+import { useContext } from 'std:effect'
 
 import type { MockState } from './internal'
 import { completeChatResult, resolveResponder, scriptedFlow, StateRef } from './internal'
@@ -47,7 +47,7 @@ export const MockProvider = AiProvider.implement<MockInfo, [script?: MockScript]
     }
   },
 }).build({
-  chat: operation(function* (spec: Helpers.ChatSpec) {
+  *chat(spec: Helpers.ChatSpec) {
     const state = yield* useContext(StateRef)
     state.calls.chat.push(spec)
     const partial = yield* resolveResponder({
@@ -58,9 +58,9 @@ export const MockProvider = AiProvider.implement<MockInfo, [script?: MockScript]
       fallback: {},
     })
     return completeChatResult(spec, partial)
-  }),
+  },
 
-  chatStream: operation(function* (spec: Helpers.ChatSpec) {
+  *chatStream(spec: Helpers.ChatSpec) {
     const state = yield* useContext(StateRef)
     state.calls.chatStream.push(spec)
     const script = yield* resolveResponder({
@@ -71,9 +71,9 @@ export const MockProvider = AiProvider.implement<MockInfo, [script?: MockScript]
       fallback: { chunks: [] },
     })
     return scriptedFlow(script)
-  }),
+  },
 
-  embed: operation(function* (spec: Helpers.EmbedSpec) {
+  *embed(spec: Helpers.EmbedSpec) {
     const state = yield* useContext(StateRef)
     state.calls.embed.push(spec)
     const vectors = yield* resolveResponder({
@@ -84,9 +84,9 @@ export const MockProvider = AiProvider.implement<MockInfo, [script?: MockScript]
       fallback: spec.input.map(() => [0]),
     })
     return { vectors, model: spec.model, usage: undefined }
-  }),
+  },
 
-  tts: operation(function* (spec: Helpers.SpeechSpec) {
+  *tts(spec: Helpers.SpeechSpec) {
     const state = yield* useContext(StateRef)
     state.calls.tts.push(spec)
     return yield* resolveResponder({
@@ -96,9 +96,9 @@ export const MockProvider = AiProvider.implement<MockInfo, [script?: MockScript]
       responder: state.script.tts,
       fallback: new Uint8Array(0),
     })
-  }),
+  },
 
-  ttsStream: operation(function* (spec: Helpers.SpeechSpec) {
+  *ttsStream(spec: Helpers.SpeechSpec) {
     const state = yield* useContext(StateRef)
     state.calls.ttsStream.push(spec)
     const script = yield* resolveResponder({
@@ -109,9 +109,9 @@ export const MockProvider = AiProvider.implement<MockInfo, [script?: MockScript]
       fallback: { chunks: [] },
     })
     return scriptedFlow(script)
-  }),
+  },
 
-  stt: operation(function* (spec: Helpers.TranscribeSpec) {
+  *stt(spec: Helpers.TranscribeSpec) {
     const state = yield* useContext(StateRef)
     state.calls.stt.push(spec)
     return yield* resolveResponder({
@@ -121,5 +121,5 @@ export const MockProvider = AiProvider.implement<MockInfo, [script?: MockScript]
       responder: state.script.stt,
       fallback: '',
     })
-  }),
+  },
 })

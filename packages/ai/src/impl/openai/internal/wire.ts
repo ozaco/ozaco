@@ -2,7 +2,8 @@
 import type { Helpers } from 'ai:core'
 import { AiErrors, textOf } from 'ai:core'
 import { CodecErrors } from 'std:codec'
-import { attempt, operation } from 'std:effect'
+import type { Operation } from 'std:effect'
+import { attempt } from 'std:effect'
 import { fail, isFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
 
@@ -142,9 +143,7 @@ const decodeUsage = (raw: AnyType): Helpers.Usage | undefined =>
       }
     : undefined
 
-const decodeToolCalls = operation(function* (
-  raw: AnyType,
-): Generator<AnyType, readonly Helpers.ToolCall[], AnyType> {
+function* decodeToolCalls(raw: AnyType): Operation<readonly Helpers.ToolCall[]> {
   if (raw === undefined || raw === null) {
     return []
   }
@@ -156,13 +155,13 @@ const decodeToolCalls = operation(function* (
     name: String(call?.function?.name ?? ''),
     arguments: String(call?.function?.arguments ?? ''),
   }))
-})
+}
 
 /** Normalize a `/chat/completions` response; a body without a message fails `ai.bad-response`. */
-export const decodeChatResult = operation(function* (
+export function* decodeChatResult(
   body: unknown,
   fallbackModel: string,
-): Generator<AnyType, Helpers.ChatResult, AnyType> {
+): Operation<Helpers.ChatResult> {
   const raw = body as AnyType
   const choice = raw?.choices?.[0]
   const rawMessage = choice?.message
@@ -184,13 +183,13 @@ export const decodeChatResult = operation(function* (
     usage: decodeUsage(raw.usage),
     model: typeof raw.model === 'string' ? raw.model : fallbackModel,
   }
-})
+}
 
 /** Normalize an `/embeddings` response; a body without a vector array fails `ai.bad-response`. */
-export const decodeEmbedResult = operation(function* (
+export function* decodeEmbedResult(
   body: unknown,
   spec: Helpers.EmbedSpec,
-): Generator<AnyType, Helpers.EmbedResult, AnyType> {
+): Operation<Helpers.EmbedResult> {
   const raw = body as AnyType
   if (!Array.isArray(raw?.data)) {
     return yield* fail(AiErrors.BadResponse, 'openai returned an embeddings response without data')
@@ -207,12 +206,10 @@ export const decodeEmbedResult = operation(function* (
     model: typeof raw.model === 'string' ? raw.model : spec.model,
     usage: decodeUsage(raw.usage),
   }
-})
+}
 
 /** Pull the transcript out of an `/audio/transcriptions` response; anything else fails. */
-export const decodeTranscription = operation(function* (
-  body: unknown,
-): Generator<AnyType, string, AnyType> {
+export function* decodeTranscription(body: unknown): Operation<string> {
   const text = (body as AnyType)?.text
   if (typeof text !== 'string') {
     return yield* fail(
@@ -221,7 +218,7 @@ export const decodeTranscription = operation(function* (
     )
   }
   return text
-})
+}
 
 const decodeToolCallDeltas = (raw: AnyType): readonly Helpers.ToolCallDelta[] | undefined => {
   if (!Array.isArray(raw) || raw.length === 0) {
@@ -250,9 +247,7 @@ const decodeToolCallDeltas = (raw: AnyType): readonly Helpers.ToolCallDelta[] | 
  * failure and an unparseable chunk raises `ai.bad-response` — either closes the stream with that
  * Failure instead of silently forwarding an empty delta.
  */
-export const decodeChatDelta = operation(function* (
-  data: string,
-): Generator<AnyType, Helpers.ChatDelta | undefined, AnyType> {
+export function* decodeChatDelta(data: string): Operation<Helpers.ChatDelta | undefined> {
   if (data === SSE_DONE) {
     return undefined
   }
@@ -286,4 +281,4 @@ export const decodeChatDelta = operation(function* (
     delta.usage = usage
   }
   return delta
-})
+}
