@@ -60,6 +60,9 @@ export namespace EdgeDef {
     /** what travels on it, for docs (`resource` = watch/unwatch ↔ sync/delta frames). */
     readonly protocol?: string | undefined
     readonly description?: string | undefined
+
+    /** opening-frame defaults documented in the manifest (e.g. `{ cursor: 0 }` on realtime). */
+    readonly defaults?: Readonly<Record<string, unknown>> | undefined
   }
 
   /** A mounted socket route as the kernel lists it (docs, manifest). */
@@ -68,6 +71,9 @@ export namespace EdgeDef {
     readonly service: string | null
     readonly protocol: string | null
     readonly description: string | null
+
+    /** opening-frame defaults documented in the manifest (e.g. `{ cursor: 0 }` on realtime). */
+    readonly defaults: Readonly<Record<string, unknown>> | null
   }
 
   /** A raw route served outside the action model (static files, dev consoles). */

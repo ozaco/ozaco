@@ -41,6 +41,7 @@ export type Manifest = ManifestDef.Manifest
 export type Action = ManifestDef.Action
 export type Socket = ManifestDef.Socket
 export type WatchFrame = ClientDef.WatchFrame<Record<string, unknown>>
+export type WindowInfo = ClientDef.WindowInfo
 
 type Handle = ClientDef.ConnectedHandle<Record<string, Record<string, ClientDef.Ref>>>
 

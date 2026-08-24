@@ -5,28 +5,23 @@
  */
 import { action, service, stream } from '@ozaco/server'
 import type { Flow } from '@ozaco/std/effect'
-import { sleep } from '@ozaco/std/effect'
+import { flowOf, sleep } from '@ozaco/std/effect'
 import { z } from 'zod'
 
 const Tick = z.object({ n: z.number(), at: z.number() })
 
-/** A Flow of `n` ticks, `everyMs` apart (the handler's own scope cancels it with the request). */
-const ticks = (n: number, everyMs: number): Flow<{ n: number; at: number }, void> => ({
-  *[Symbol.iterator]() {
-    let at = 0
-    return {
-      *next() {
-        if (at >= n) {
-          return { done: true as const, value: undefined }
-        }
-        if (at > 0) {
-          yield* sleep(everyMs)
-        }
-        return { done: false as const, value: { n: at++, at: Date.now() } }
-      },
+/** A Flow of `n` ticks, `everyMs` apart — `flowOf`: emit values, `return` ends the stream (the
+ * handler's own scope cancels it with the request). */
+const ticks = (n: number, everyMs: number): Flow<{ n: number; at: number }, void> =>
+  flowOf(function* (emit) {
+    for (let at = 0; at < n; at += 1) {
+      if (at > 0) {
+        yield* sleep(everyMs)
+      }
+
+      yield* emit({ n: at, at: Date.now() })
     }
-  },
-})
+  })
 
 export const feed = service(
   'feed',
@@ -64,21 +59,12 @@ export const feed = service(
         description: 'A text stream, one word at a time',
       },
       function* ({ input }) {
-        const words = input.text.split(' ')
-        return {
-          *[Symbol.iterator]() {
-            let at = 0
-            return {
-              *next() {
-                if (at >= words.length) {
-                  return { done: true as const, value: undefined }
-                }
-                yield* sleep(10)
-                return { done: false as const, value: `${words[at++]} ` }
-              },
-            }
-          },
-        }
+        return flowOf<string>(function* (emit) {
+          for (const word of input.text.split(' ')) {
+            yield* sleep(10)
+            yield* emit(`${word} `)
+          }
+        })
       },
     ),
     download: action.stream(

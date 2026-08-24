@@ -130,7 +130,7 @@ export const watchQuery = (input: Helpers.QueryWatch): Flow<AnyType, never> => (
               : yield* input.resolve(input.options.since)
           const initial = yield* recompute()
           if (verdict !== 'skip') {
-            return { done: false as const, value: emission(initial) }
+            return { done: false as const, value: { ...emission(initial), baseline: true } }
           }
         }
         for (;;) {

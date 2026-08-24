@@ -35,10 +35,12 @@ type Frame =
  * reconnects by itself; after every reopen the watch is re-sent with `since: <last token>` so the
  * consumer sees one continuous sequence. `error` frames close the flow with that failure.
  */
+// oxlint-disable-next-line max-params -- ctx · resource · options · pager hooks
 export const watch = <TRow>(
   ctx: ClientDef.Context,
   resource: string,
   options: ClientDef.WatchOptions | undefined,
+  hooks?: WatchHooks,
 ): Flow<ClientDef.WatchFrame<TRow>, void> => ({
   *[Symbol.iterator]() {
     const id = yield* IO.actions.uuid()
@@ -51,15 +53,40 @@ export const watch = <TRow>(
       reconnect: { retries: 10, delayMs: 100, backoff: 2, maxDelayMs: 5000 },
     })
     let since = options?.since
+    let cursor = options?.cursor
+    let back = options?.back === true
     const subscribe = (): Operation<void> =>
       connection.send({
         t: 'watch',
         id,
         filter: options?.filter,
         order: options?.order,
+        ...(options?.limit === undefined ? {} : { limit: options.limit, cursor, back }),
         since,
       })
     yield* subscribe()
+
+    // page turns arrive from promise land: a fresh watch on the SAME id replaces the window
+    if (hooks?.register) {
+      const turns = createQueue<{ cursor: string | null; back: boolean }, void>()
+
+      yield* fork(function* () {
+        for (;;) {
+          const step = yield* turns.next()
+
+          if (step.done) {
+            return
+          }
+
+          cursor = step.value.cursor ?? undefined
+          back = step.value.back
+          since = undefined
+          yield* attempt(subscribe)
+        }
+      })
+
+      hooks.register((next, backward) => turns.add({ cursor: next, back: backward === true }))
+    }
 
     const frames = createQueue<Frame, AnyType>()
     // pump: every frame of this watch into the queue
@@ -111,6 +138,7 @@ export const watch = <TRow>(
           return yield* fail(frame.tag, frame.message)
         }
         since = frame.token
+        hooks?.onPage?.((frame as AnyType).page ?? null)
         return { done: false, value: frame as ClientDef.WatchFrame<TRow> }
       },
     }
@@ -118,15 +146,24 @@ export const watch = <TRow>(
   },
 })
 
-/** `watch` folded into the current rows (`_id`-keyed) plus the last token. */
+/** The hooks a pager wires into a watch: page turns in, pager info out. */
+export interface WatchHooks {
+  readonly register?: ((turn: (cursor: string | null, back?: boolean) => void) => void) | undefined
+  readonly onPage?: ((page: ClientDef.WindowInfo | null) => void) | undefined
+}
+
+/** `watch` folded into the current rows (`_id`-keyed) plus the last token and pager info. */
+// oxlint-disable-next-line max-params -- ctx · resource · options · pager hooks
 export const rows = <TRow>(
   ctx: ClientDef.Context,
   resource: string,
   options: ClientDef.WatchOptions | undefined,
+  hooks?: WatchHooks,
 ): Flow<ClientDef.Materialized<TRow>, void> => ({
   *[Symbol.iterator]() {
-    const source = yield* watch<TRow>(ctx, resource, options)
+    const source = yield* watch<TRow>(ctx, resource, options, hooks)
     const byId = new Map<string, TRow>()
+    let page: ClientDef.WindowInfo | undefined
     const subscription: Subscription<ClientDef.Materialized<TRow>, void> = {
       *next() {
         const step = yield* source.next()
@@ -139,7 +176,7 @@ export const rows = <TRow>(
           for (const row of frame.rows) {
             byId.set(String((row as AnyType)._id), row)
           }
-        } else {
+        } else if (frame.t === 'delta') {
           for (const row of [...frame.added, ...frame.changed]) {
             byId.set(String((row as AnyType)._id), row)
           }
@@ -147,7 +184,13 @@ export const rows = <TRow>(
             byId.delete(id)
           }
         }
-        return { done: false, value: { rows: [...byId.values()], token: frame.token } }
+        if ((frame as AnyType).page) {
+          page = (frame as AnyType).page
+        }
+        return {
+          done: false,
+          value: { rows: [...byId.values()], token: frame.token, ...(page ? { page } : {}) },
+        }
       },
     }
     return subscription

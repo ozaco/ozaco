@@ -18,7 +18,7 @@ import type { StreamDef } from '../types/stream'
 import type { TraceDef } from '../types/trace'
 import type { WireDef } from '../types/wire'
 import { statusOf } from '../utils/failure'
-import { ref } from '../utils/service'
+import { isSocketAction, ref } from '../utils/service'
 import { brandOf, brandStream, isBranded } from '../utils/stream'
 import { childTrace, continueTrace, report, rootTrace, toWire, withSpan } from '../utils/trace'
 
@@ -190,7 +190,7 @@ export const serverFor = (
   function* (dispatch, inputs) {
     const def = service.actions[dispatch.action]
 
-    if (!def) {
+    if (!def || isSocketAction(def)) {
       return yield* fail(ServerErrors.NotFound, `no action "${service.name}.${dispatch.action}"`)
     }
 
@@ -277,7 +277,12 @@ export const apiOf = <TServices extends readonly ServiceDef.Service[]>(
   Object.fromEntries(
     services.map(def => [
       def.name,
-      Object.fromEntries(Object.keys(def.actions).map(name => [name, ref(def.name, name)])),
+
+      Object.fromEntries(
+        Object.entries(def.actions)
+          .filter(([, entry]) => !isSocketAction(entry))
+          .map(([name]) => [name, ref(def.name, name)]),
+      ),
     ]),
   ) as AnyType
 

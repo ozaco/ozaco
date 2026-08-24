@@ -1,7 +1,6 @@
-// oxlint-disable import/exports-last
 import type { Operation } from 'std:effect'
 import { until } from 'std:effect'
-import { fail } from 'std:result'
+import { fail, isFailure } from 'std:result'
 
 import { DEFAULT_DOCS_PATH } from '../const'
 import { ClientErrors } from '../errors'
@@ -20,7 +19,13 @@ export function* manifestOf(ctx: ClientDef.Context): Operation<ManifestDef.Manif
   try {
     response = yield* until(doFetch(url.toString(), { headers: { accept: 'application/json' } }))
   } catch (error) {
-    return yield* fail(ClientErrors.Network, `manifest: ${String(error)}`)
+    const failure = isFailure(error) ? error : null
+
+    return yield* fail(
+      ClientErrors.Network,
+      `manifest: ${failure ? `${String(failure.error ?? 'failure')}${failure.message ? `: ${failure.message}` : ''}` : String(error)}`,
+      ...(failure ? failure.causes.map(String) : []),
+    )
   }
 
   if (!response.ok) {

@@ -2,7 +2,7 @@
 import type { Operation } from 'std:effect'
 import { ensure, until } from 'std:effect'
 import { IO } from 'std:io'
-import { fail } from 'std:result'
+import { fail, isFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import { DEFAULT_TIMEOUT_MS, HEADERS } from '../const'
@@ -59,6 +59,23 @@ const resolvePath = (
   })
 
   return { path: resolved, rest: record ? Object.fromEntries(record) : input, failure }
+}
+
+/** A thrown thing as text: failures keep their message AND their causes (never `[object
+ * Object]` — the reader must see WHY the wire call died). */
+const reasonOf = (error: unknown): { message: string; causes: readonly string[] } => {
+  if (isFailure(error)) {
+    return {
+      message: `${String(error.error ?? 'failure')}${error.message ? `: ${error.message}` : ''}`,
+      causes: error.causes.map(String),
+    }
+  }
+
+  if (error instanceof Error) {
+    return { message: error.message || error.name, causes: [] }
+  }
+
+  return { message: String(error), causes: [] }
 }
 
 const authorization = (options: ClientDef.Options): string | undefined => {
@@ -233,7 +250,8 @@ export function* request(
       return yield* fail(ClientErrors.Timeout, `${action.id} exceeded ${timeoutMs}ms`)
     }
 
-    return yield* fail(ClientErrors.Network, `${action.id}: ${String(error)}`)
+    const reason = reasonOf(error)
+    return yield* fail(ClientErrors.Network, `${action.id}: ${reason.message}`, ...reason.causes)
   }
   const echoed = response.headers.get(HEADERS.requestId) ?? requestId
   ctx.lastRequestId = echoed

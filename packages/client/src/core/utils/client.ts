@@ -103,10 +103,62 @@ export function* createClient<TApi = Record<string, Record<string, ClientDef.Ref
     $call: call,
     $callWithMeta: callWithMeta,
     $manifest: () => toFuture(scope, () => manifestOf(ctx)),
-    $watch: <TRow>(resource: string, watchOptions?: ClientDef.WatchOptions) =>
-      createFutureFlow(scope, watch<TRow>(ctx, resource, watchOptions)),
+    $watch: <TRow>(resource: string, watchOptions?: ClientDef.WatchOptions) => {
+      let turnTo: (cursor: string | null, back?: boolean) => void = () => {}
+
+      const flow = createFutureFlow(
+        scope,
+        watch<TRow>(ctx, resource, watchOptions, {
+          register: turn => {
+            turnTo = turn
+          },
+        }),
+      )
+
+      return Object.assign(flow, {
+        turn: (cursor: string | null, back?: boolean) => {
+          turnTo(cursor, back)
+        },
+      }) satisfies ClientDef.WatchFeed<TRow>
+    },
     $rows: <TRow>(resource: string, watchOptions?: ClientDef.WatchOptions) =>
       createFutureFlow(scope, rows<TRow>(ctx, resource, watchOptions)),
+    $window: <TRow>(resource: string, watchOptions?: ClientDef.WatchOptions) => {
+      let turnTo: (cursor: string | null, back?: boolean) => void = () => {}
+      let last: ClientDef.WindowInfo | null = null
+
+      const flow = rows<TRow>(ctx, resource, watchOptions, {
+        register: turn => {
+          turnTo = turn
+        },
+
+        onPage: page => {
+          last = page ?? last
+        },
+      })
+
+      return {
+        rows: createFutureFlow(scope, flow),
+        page: () => last,
+
+        next: () => {
+          const cursor = last?.next
+
+          if (cursor !== null && cursor !== undefined) {
+            turnTo(cursor)
+          }
+        },
+
+        prev: () => {
+          const cursor = last?.prev ?? null
+          turnTo(cursor, cursor !== null)
+        },
+
+        turn: (cursor, back) => {
+          turnTo(cursor, back)
+        },
+      } satisfies ClientDef.Window<TRow>
+    },
     $lastRequestId: () => ctx.lastRequestId,
     $setToken: token => {
       tokenOverride = token

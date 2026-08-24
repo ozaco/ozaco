@@ -14,6 +14,10 @@ import { watchQuery } from './watch'
 
 const EMPTY: Helpers.QueryState = { match: {}, filters: [], order: null }
 
+/** A bare row id used as a cursor (opaque cursors are base64 of JSON — far longer, with
+ * punctuation). The page then STARTS at that row (inclusive) instead of after a boundary. */
+const BARE_ID = /^[0-9A-Za-z]{8,64}$/u
+
 const predicatesOf = (query: Helpers.QueryState): Spec.Filter[] => [
   ...Object.entries(query.match).map(([field, value]) => eq(field, value)),
   ...query.filters,
@@ -86,10 +90,42 @@ function* paginate(
   const sort = query.order?.direction ?? 'asc'
   const backward = options.direction === 'backward'
 
-  const decoded = options.cursor ? yield* decodeCursor(options.cursor) : null
+  let cursor: Spec.Cursor | null = null
+  // a bare row id names an INCLUSIVE boundary — "the window starts at this row"
+  let inclusive = false
 
-  // a cursor minted for another sort is ignored rather than producing a nonsensical window
-  const cursor = decoded && decoded.column === column && decoded.direction === sort ? decoded : null
+  if (options.cursor && BARE_ID.test(options.cursor)) {
+    inclusive = true
+
+    if (column === FIELDS.id) {
+      // no lookup needed: the boundary value IS the id (a vanished row degrades gracefully)
+      cursor = { column, direction: sort, value: options.cursor, id: options.cursor }
+    } else {
+      const boundary = yield* target.state.adapter.find({
+        table: target.spec,
+        filter: eq(FIELDS.id, options.cursor),
+        order: [{ field: FIELDS.id, direction: 'asc' }],
+        limit: 1,
+        offset: null,
+      })
+
+      if (boundary.length === 0) {
+        return yield* fail(DbErrors.Cursor, `cursor names no existing row: ${options.cursor}`)
+      }
+
+      cursor = {
+        column,
+        direction: sort,
+        value: boundary[0]![column] as Spec.FilterValue,
+        id: options.cursor,
+      }
+    }
+  } else if (options.cursor) {
+    const decoded = yield* decodeCursor(options.cursor)
+
+    // a cursor minted for another sort is ignored rather than producing a nonsensical window
+    cursor = decoded.column === column && decoded.direction === sort ? decoded : null
+  }
 
   const ahead = sort === 'asc' ? gt : lt
   const behind = sort === 'asc' ? lt : gt
@@ -101,9 +137,11 @@ function* paginate(
   if (cursor) {
     const boundary = cursor.value as Spec.FilterValue
 
-    predicates.push(
-      or(seek(column, boundary), and(eq(column, boundary), seek(FIELDS.id, cursor.id))),
-    )
+    const tie = inclusive
+      ? or(seek(FIELDS.id, cursor.id), eq(FIELDS.id, cursor.id))
+      : seek(FIELDS.id, cursor.id)
+
+    predicates.push(or(seek(column, boundary), and(eq(column, boundary), tie)))
   }
 
   const found = yield* target.state.adapter.find({

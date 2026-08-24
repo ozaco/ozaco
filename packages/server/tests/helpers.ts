@@ -1,4 +1,3 @@
-// oxlint-disable import/exports-last
 import { column, DbClient, table } from 'db:core'
 import { action, service, stream } from 'server:core'
 import type { Operation } from 'std:effect'
@@ -88,9 +87,9 @@ export const api = {
 } as const
 
 /** The storage every kernel test needs: memory db (with the todos table), memory kv, bun io. */
-export function* storage(): Operation<void> {
+export function* storage(db?: { replayWindowMs?: number }): Operation<void> {
   yield* MemoryAdapter.use()
   yield* BunIO.use()
-  yield* DbClient.use({ tables: [todosTable] })
+  yield* DbClient.use({ tables: [todosTable], ...db })
   yield* MemoryKv.use()
 }

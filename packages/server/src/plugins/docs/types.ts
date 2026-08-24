@@ -45,6 +45,9 @@ export namespace DocsDef {
     /** `resource` = watch/unwatch ↔ sync/delta/error frames; anything else is custom. */
     readonly protocol: string | null
     readonly description: string | null
+
+    /** opening-frame defaults (e.g. `{ cursor: 0 }` on realtime — start of the set). */
+    readonly defaults?: Readonly<Record<string, unknown>> | null | undefined
   }
 
   export interface ServiceDoc {

@@ -3,7 +3,7 @@ import { Server, ServerErrors } from 'server:core'
 import { definePlugin } from 'std:plugin'
 import { fail } from 'std:result'
 
-import { realtime } from './internal'
+import { guardHandshake, realtime } from './internal'
 import type { ResourceDef } from './types'
 
 /**
@@ -34,9 +34,11 @@ export const Resource = definePlugin<ServerDef.PluginContext, [options: Resource
               yield* edge.actions.socket({
                 path: `/${resource.service.name}${suffix}`,
                 handler: realtime(resource),
+                authorize: guardHandshake(resource),
                 service: resource.service.name,
                 protocol: 'resource',
                 description: 'watch/unwatch frames in, sync/delta/error frames out',
+                defaults: { cursor: 0 },
               })
             }
           },

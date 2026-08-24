@@ -57,20 +57,43 @@ export namespace ClientDef {
     readonly brand: string | null
   }
 
-  /** A delta-watch frame from a resource's realtime route. */
+  /** The pager of a WINDOWED watch: keyset cursors + the set's total, as of the frame token. */
+  export interface WindowInfo {
+    readonly next: string | null
+    readonly prev: string | null
+    readonly total: number
+  }
+
+  /** A watch frame from a resource's realtime route. Windowed watches carry `page`; `notify`
+   * says the SET changed around an untouched window (another client's write moved the
+   * range/total) — same token space as every frame. */
   export type WatchFrame<TRow = unknown> =
-    | { readonly t: 'sync'; readonly rows: readonly TRow[]; readonly token: string }
+    | {
+        readonly t: 'sync'
+        readonly rows: readonly TRow[]
+        readonly token: string
+        readonly page?: WindowInfo | undefined
+      }
     | {
         readonly t: 'delta'
         readonly added: readonly TRow[]
         readonly changed: readonly TRow[]
         readonly removed: readonly string[]
         readonly token: string
+        readonly page?: WindowInfo | undefined
       }
+    | { readonly t: 'notify'; readonly token: string; readonly page: WindowInfo }
 
   export interface WatchOptions {
     readonly filter?: unknown
     readonly order?: { readonly field: string; readonly direction?: 'asc' | 'desc' } | undefined
+
+    /** a WINDOWED watch: subscribe one keyset page of this size (`cursor` picks the page,
+     * `back` pages backward from a `prev` cursor). `0` — the manifest default — is the start
+     * of the set; a bare row `_id` starts the window AT that row. */
+    readonly limit?: number | undefined
+    readonly cursor?: string | number | undefined
+    readonly back?: boolean | undefined
 
     /** resume from a token (the last frame's) — a reconnect does this by itself. */
     readonly since?: string | undefined
@@ -80,6 +103,29 @@ export namespace ClientDef {
   export interface Materialized<TRow = unknown> {
     readonly rows: readonly TRow[]
     readonly token: string
+
+    /** present on windowed watches. */
+    readonly page?: WindowInfo | undefined
+  }
+
+  /** A watch's frame feed: `turn(cursor)` re-sends the watch over the SAME socket and id
+   * (windowed watches only — the server replaces the window and answers with a fresh sync). */
+  export type WatchFeed<TRow = unknown> = FutureFlow<WatchFrame<TRow>> & {
+    turn(cursor: string | null, back?: boolean): void
+  }
+
+  /** A windowed subscription with its pager: `next()`/`prev()` turn THIS subscriber's page
+   * (a fresh `sync` of the new window arrives on `rows`); other subscribers are untouched. */
+  export interface Window<TRow = unknown> {
+    readonly rows: FutureFlow<Materialized<TRow>>
+
+    /** the latest pager info (`null` until the first sync lands). */
+    page(): WindowInfo | null
+    next(): void
+    prev(): void
+
+    /** jump to a cursor (`null` = the first page; `back` pages backward from a prev cursor). */
+    turn(cursor: string | null, back?: boolean): void
   }
 
   // --- typing from the server's api (or a generated `Api`) --------------------------------------
@@ -193,17 +239,18 @@ export namespace ClientDef {
     /** the manifest (fetched on first use). */
     readonly $manifest: () => Future<ManifestDef.Manifest>
 
-    /** a resource's realtime watch as frames (reconnects resume with `since`). */
-    readonly $watch: <TRow = unknown>(
-      resource: string,
-      options?: WatchOptions,
-    ) => FutureFlow<WatchFrame<TRow>>
+    /** a resource's realtime watch as frames (reconnects resume with `since`); windowed
+     * watches page with `turn(cursor)` — same socket, same id. */
+    readonly $watch: <TRow = unknown>(resource: string, options?: WatchOptions) => WatchFeed<TRow>
 
     /** `$watch` materialized into the current rows. */
     readonly $rows: <TRow = unknown>(
       resource: string,
       options?: WatchOptions,
     ) => FutureFlow<Materialized<TRow>>
+
+    /** A WINDOWED watch with its pager (`options.limit` required to page). */
+    readonly $window: <TRow = unknown>(resource: string, options?: WatchOptions) => Window<TRow>
 
     /** the last request id a call received. */
     readonly $lastRequestId: () => string | null

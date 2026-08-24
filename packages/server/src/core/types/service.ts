@@ -118,7 +118,42 @@ export namespace ServiceDef {
     readonly [OUTPUT]?: TOutput
   }
 
-  export type ActionMap = Record<string, Action<AnyType, AnyType>>
+  /** A socket declared INSIDE a service (`action.socket`): mounted as a WS route at the edge,
+   * listed under the service in the manifest — not callable, not carried. */
+  export interface SocketConfig {
+    /** the WS path. Default `/<service>/<action>`. */
+    readonly path?: string | undefined
+
+    /** what travels on it, for docs (`resource`, `chat`, …). */
+    readonly protocol?: string | undefined
+    readonly description?: string | undefined
+
+    /** runs before the upgrade; a failure rejects the handshake with its status. */
+    readonly authorize?: ((request: Request) => Operation<void>) | undefined
+  }
+
+  export interface SocketSpec {
+    readonly path: string
+    readonly protocol: string | null
+    readonly description: string | null
+    readonly authorize: ((request: Request) => Operation<void>) | null
+  }
+
+  export interface SocketAction {
+    readonly _t: typeof ACTION
+    readonly socket: SocketSpec
+    readonly handler: (socket: AnyType) => Operation<void>
+  }
+
+  /** A registered socket, service attached — what the registry hands the edge. */
+  export interface ServiceSocket extends SocketSpec {
+    readonly service: string
+    readonly handler: (socket: AnyType) => Operation<void>
+  }
+
+  export type ActionEntry = Action<AnyType, AnyType> | SocketAction
+
+  export type ActionMap = Record<string, ActionEntry>
 
   export interface Service<TName extends string = string, TActions extends ActionMap = ActionMap> {
     readonly _t: typeof SERVICE
@@ -149,7 +184,9 @@ export namespace ServiceDef {
 
   export type Api<TServices extends readonly Service[]> = {
     readonly [S in TServices[number] as S['name']]: {
-      readonly [K in keyof S['actions']]: Ref<S['actions'][K]>
+      readonly [K in keyof S['actions'] as S['actions'][K] extends SocketAction ? never : K]: Ref<
+        Extract<S['actions'][K], Action<AnyType, AnyType>>
+      >
     }
   }
 }

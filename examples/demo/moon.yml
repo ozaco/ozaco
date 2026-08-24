@@ -49,7 +49,7 @@ tasks:
     options:
       runDepsInParallel: false
   cluster:
-    command: bun run scripts/cluster.ts
+    command: DB_PATH=local/demo.sqlite bun run scripts/cluster.ts
     deps:
       - panel:embed
       - observe:embed

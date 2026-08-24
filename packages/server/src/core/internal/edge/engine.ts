@@ -134,6 +134,20 @@ export const mountActions = (state: EdgeState): number => {
     count += 1
   }
 
+  // sockets declared inside services (`action.socket`): already in kernel.sockets (the
+  // manifest), routed here
+  for (const socket of state.kernel.registry.sockets) {
+    addRoute(state.sockets, 'WS', socket.path, {
+      path: socket.path,
+      handler: socket.handler,
+      authorize: socket.authorize ?? undefined,
+      service: socket.service,
+      protocol: socket.protocol ?? undefined,
+      description: socket.description ?? undefined,
+    })
+    count += 1
+  }
+
   return count
 }
 

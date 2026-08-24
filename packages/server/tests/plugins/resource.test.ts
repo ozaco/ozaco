@@ -103,7 +103,8 @@ describe('resource', () => {
     const todos = crud(todosTable)
     unwrap(
       await run(function* () {
-        yield* storage()
+        // a tiny replay window so a spaced `since` resume is provably current (silent)
+        yield* storage({ replayWindowMs: 10 })
         const server = yield* createServer({
           services: [todos.service],
           edge: BunEdge,
@@ -111,17 +112,23 @@ describe('resource', () => {
         })
         const info = yield* server.listen({ port: 0 })
         const ws = new WebSocket(`${info.url!.replace('http', 'ws')}/todos/_realtime`)
+        // record EVERY frame continuously — silence assertions need eyes between reads
         const frames: AnyType[] = []
-        const next = () =>
+        ws.addEventListener('message', event => frames.push(JSON.parse(String(event.data))))
+        const next = (after: number) =>
           until(
-            new Promise<AnyType>(resolve => {
-              const listener = (event: MessageEvent) => {
-                ws.removeEventListener('message', listener)
-                const frame = JSON.parse(String(event.data))
-                frames.push(frame)
-                resolve(frame)
+            new Promise<AnyType>((resolve, reject) => {
+              const deadline = Date.now() + 3000
+              const poll = () => {
+                if (frames.length > after) {
+                  resolve(frames[after])
+                } else if (Date.now() > deadline) {
+                  reject(new Error(`no frame ${after} — got ${JSON.stringify(frames)}`))
+                } else {
+                  setTimeout(poll, 10)
+                }
               }
-              ws.addEventListener('message', listener)
+              poll()
             }),
           )
         yield* until(
@@ -136,21 +143,24 @@ describe('resource', () => {
             filter: { op: 'eq', field: 'done', value: false },
           }),
         )
-        const sync = yield* next()
+        const sync = yield* next(0)
         expect(sync).toMatchObject({ t: 'sync', id: 'w1', rows: [] })
+        yield* sleep(30)
         yield* server.call((server.api as AnyType).todos.create, { title: 'live', done: false })
-        const delta = yield* next()
+        const delta = yield* next(1)
         expect(delta.t).toBe('delta')
         expect(delta.added.map((row: AnyType) => row.title)).toEqual(['live'])
         // a row leaving the filter is a removal
+        yield* sleep(30)
         yield* server.call((server.api as AnyType).todos.update, {
           id: delta.added[0]._id,
           done: true,
         })
-        const gone = yield* next()
+        const gone = yield* next(2)
         expect(gone.removed).toEqual([delta.added[0]._id])
-        // resume from the last token: nothing happened since → no initial sync at all
+        // resume from the last token: provably current → NO initial sync at all
         ws.send(JSON.stringify({ t: 'unwatch', id: 'w1' }))
+        yield* sleep(30)
         ws.send(
           JSON.stringify({
             t: 'watch',
@@ -159,12 +169,26 @@ describe('resource', () => {
             since: gone.token,
           }),
         )
-        yield* sleep(100)
+        yield* sleep(150)
         expect(frames.filter(frame => frame.id === 'w2')).toHaveLength(0)
+        // the FIRST frame after a silent resume is a live diff — a `delta`, never a `sync`
         yield* server.call((server.api as AnyType).todos.create, { title: 'after', done: false })
-        const resumed = yield* next()
+        const resumed = yield* next(3)
         expect(resumed.id).toBe('w2')
+        expect(resumed.t).toBe('delta')
         expect(resumed.added.map((row: AnyType) => row.title)).toEqual(['after'])
+        // a stale/garbage token self-heals with a FULL baseline sync
+        ws.send(
+          JSON.stringify({
+            t: 'watch',
+            id: 'w3',
+            filter: { op: 'eq', field: 'done', value: false },
+            since: 'garbage',
+          }),
+        )
+        const healed = yield* next(4)
+        expect(healed).toMatchObject({ t: 'sync', id: 'w3' })
+        expect(healed.rows.map((row: AnyType) => row.title)).toEqual(['after'])
         ws.close()
         yield* server.stop()
       }),

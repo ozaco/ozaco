@@ -103,16 +103,24 @@ export namespace Change {
   export interface Snapshot<TDoc = Spec.Doc> {
     readonly rows: readonly TDoc[]
     readonly token: string
+
+    /** stamped on the initial (primed) emission only — never on live recomputes. */
+    readonly baseline?: true
   }
 
   /** One emission of a watched query in delta mode: what changed since the previous emission
-   * (`removed` carries ids). The first emission lists every row as `added`. */
+   * (`removed` carries ids). The initial baseline emission lists every row as `added` and is
+   * stamped `baseline: true` — a `since` resume that is provably current skips it entirely, so
+   * its consumer's FIRST emission may be a live diff. */
 
   export interface Delta<TDoc = Spec.Doc> {
     readonly added: readonly TDoc[]
     readonly changed: readonly TDoc[]
     readonly removed: readonly string[]
     readonly token: string
+
+    /** stamped on the initial (primed) emission only — never on live diffs. */
+    readonly baseline?: true
   }
 
   /** Options for `query().watch()`. */

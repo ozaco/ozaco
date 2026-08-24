@@ -186,4 +186,23 @@ export const Auth = AuthImpl.build<AuthDef.Actions>({
     }
     return principal
   },
+
+  *authorize(requirement, headers) {
+    const context = yield* AuthImpl.context.expect()
+    const token = bearerOf(headers)
+    let principal: AuthDef.Principal | undefined = undefined
+    if (token) {
+      const verified = yield* verify(context.material, token)
+      if (verified.type === 'refresh') {
+        return yield* fail(
+          ServerErrors.Unauthorized,
+          'a refresh token cannot authenticate',
+          AuthErrors.InvalidToken,
+        )
+      }
+      principal = verified
+    }
+    yield* authorize(principal, requirement)
+    return principal ?? null
+  },
 })

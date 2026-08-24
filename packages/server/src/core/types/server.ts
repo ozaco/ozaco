@@ -173,6 +173,9 @@ export namespace ServerDef {
   export interface Registry {
     readonly services: ReadonlyMap<string, ServiceDef.Service>
     readonly actions: ReadonlyMap<string, ServiceDef.Action>
+
+    /** sockets declared inside services (`action.socket`) — the edge mounts them at `mount()`. */
+    readonly sockets: readonly ServiceDef.ServiceSocket[]
   }
 
   export interface Context {

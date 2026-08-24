@@ -9,7 +9,7 @@ import type { Line } from '../components/timeline'
 import { Timeline } from '../components/timeline'
 import type { Connection } from '../lib/config'
 import { KEYS } from '../lib/config'
-import type { Socket, WatchFrame, Watching } from '../lib/ozaco'
+import type { Socket, WatchFrame, Watching, WindowInfo } from '../lib/ozaco'
 import { clientOf, watch } from '../lib/ozaco'
 
 interface Props {
@@ -30,9 +30,13 @@ const socketUrl = (connection: Connection, path: string): string => {
 
 export const SocketTab = ({ socket, connection }: Props) => {
   const isResource = socket.protocol === 'resource'
+  const defaults = (socket.defaults ?? {}) as { cursor?: number | string }
   const [filter, setFilter] = useState('')
   const [order, setOrder] = useState('')
   const [since, setSince] = useState('')
+  const [limit, setLimit] = useState('')
+  const [cursor, setCursor] = useState(String(defaults.cursor ?? 0))
+  const [page, setPage] = useState<WindowInfo | null>(null)
   const [frameText, setFrameText] = useState('{ "text": "hello" }')
   const [connected, setConnected] = useState(false)
   const [lines, setLines] = useState<Line[]>([])
@@ -49,6 +53,14 @@ export const SocketTab = ({ socket, connection }: Props) => {
 
   const apply = (frame: WatchFrame) => {
     setToken(frame.token)
+    if (frame.t === 'notify') {
+      setPage(frame.page)
+      log('info', `notify · the set changed around this window · total ${frame.page.total}`)
+      return
+    }
+    if (frame.page) {
+      setPage(frame.page)
+    }
     if (frame.t === 'sync') {
       setRows([...frame.rows])
       log('in', `sync ${frame.rows.length} row(s) · ${frame.token}`)
@@ -79,38 +91,70 @@ export const SocketTab = ({ socket, connection }: Props) => {
     log('info', 'disconnected')
   }
 
+  const openWatch = (turnCursor: string | null) => {
+    let parsedFilter: unknown
+    let parsedOrder: { field: string; direction?: 'asc' | 'desc' } | undefined
+    try {
+      parsedFilter = filter.trim() ? JSON.parse(filter) : undefined
+      parsedOrder = order.trim() ? (JSON.parse(order) as typeof parsedOrder) : undefined
+    } catch {
+      log('error', 'filter/order must be JSON')
+      setConnected(false)
+      return
+    }
+    const window = Number(limit)
+    const opening = turnCursor ?? cursor.trim() ?? ''
+    log(
+      'out',
+      `watch ${resourceOf(socket)} ${filter.trim() || ''}${window > 0 ? ` limit ${window}` : ''}${opening && opening !== '0' ? ' (cursor)' : ''}${since.trim() ? ` since ${since}` : ''}`,
+    )
+    watching.current = watch(
+      clientOf(connection),
+      resourceOf(socket),
+      {
+        filter: parsedFilter,
+        order: parsedOrder,
+        since: since.trim() || undefined,
+        ...(window > 0 ? { limit: window, cursor: opening || undefined } : {}),
+      },
+      {
+        onFrame: apply,
+        onEnd: error => {
+          log(error ? 'error' : 'info', error ? `${error.tag}: ${error.message}` : 'closed')
+
+          if (error && !connection.token) {
+            log(
+              'info',
+              'no connection token is set — guarded resources reject the handshake (login, then “use accessToken as the connection token”)',
+            )
+          } else if (error) {
+            log(
+              'info',
+              'the handshake may have been rejected — expired or invalid tokens are refused; refresh the token in Settings',
+            )
+          }
+
+          setConnected(false)
+        },
+      },
+    )
+  }
+
+  // a page turn replaces ONLY this subscription's window — same socket, no reconnect;
+  // the fresh sync of the new page swaps the rows when it lands
+  const turnTo = (to: string | null, back = false) => {
+    log('out', `turn ${back ? '‹ ' : ''}${to ?? '(first page)'}`)
+    watching.current?.turn(to, back)
+  }
+
   const connect = () => {
     startedAt.current = performance.now()
     setLines([])
     setRows([])
+    setPage(null)
     setConnected(true)
     if (isResource) {
-      let parsedFilter: unknown
-      let parsedOrder: { field: string; direction?: 'asc' | 'desc' } | undefined
-      try {
-        parsedFilter = filter.trim() ? JSON.parse(filter) : undefined
-        parsedOrder = order.trim() ? (JSON.parse(order) as typeof parsedOrder) : undefined
-      } catch {
-        log('error', 'filter/order must be JSON')
-        setConnected(false)
-        return
-      }
-      log(
-        'out',
-        `watch ${resourceOf(socket)} ${filter.trim() || ''} ${since.trim() ? `since ${since}` : ''}`,
-      )
-      watching.current = watch(
-        clientOf(connection),
-        resourceOf(socket),
-        { filter: parsedFilter, order: parsedOrder, since: since.trim() || undefined },
-        {
-          onFrame: apply,
-          onEnd: error => {
-            log(error ? 'error' : 'info', error ? `${error.tag}: ${error.message}` : 'closed')
-            setConnected(false)
-          },
-        },
-      )
+      openWatch(null)
       return
     }
     const ws = new WebSocket(socketUrl(connection, socket.path))
@@ -122,7 +166,9 @@ export const SocketTab = ({ socket, connection }: Props) => {
       log('info', `close ${event.code} ${event.reason}`)
       setConnected(false)
     })
-    ws.addEventListener('error', () => log('error', 'socket error'))
+    ws.addEventListener('error', () =>
+      log('error', 'socket error — the upgrade may have been rejected (missing/expired token?)'),
+    )
   }
 
   const sendFrame = () => {
@@ -195,6 +241,43 @@ export const SocketTab = ({ socket, connection }: Props) => {
                 </button>
               )}
             </label>
+            <label className='flex items-center gap-2'>
+              <span className='mono w-[80px]'>limit</span>
+              <input
+                className='input mono'
+                placeholder='window size (empty = unbounded watch)'
+                value={limit}
+                onChange={event => setLimit(event.target.value)}
+              />
+            </label>
+            <label className='flex items-center gap-2'>
+              <span className='mono w-[80px]'>cursor</span>
+              <input
+                className='input mono'
+                placeholder='0 = start · a row _id starts the window at that row'
+                value={cursor}
+                onChange={event => setCursor(event.target.value)}
+              />
+            </label>
+            {page && (
+              <div className='flex items-center gap-2'>
+                <span className='mono' style={{ color: 'var(--dim)' }}>
+                  window · total {page.total}
+                </span>
+                <button
+                  className='btn'
+                  disabled={!connected || page.prev === null}
+                  onClick={() => turnTo(page.prev, page.prev !== null)}>
+                  ‹ prev
+                </button>
+                <button
+                  className='btn'
+                  disabled={!connected || page.next === null}
+                  onClick={() => turnTo(page.next)}>
+                  next ›
+                </button>
+              </div>
+            )}
             <div className='mt-2 font-semibold'>live rows ({rows.length})</div>
             <div className='overflow-auto'>
               <table className='mono w-full border-collapse text-[11px]'>

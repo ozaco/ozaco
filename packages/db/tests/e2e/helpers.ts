@@ -295,6 +295,22 @@ export const runAdapterSuite = (target: AdapterTarget): void => {
 
           const garbage = yield* attempt(query().paginate({ limit: 2, cursor: '???' }))
           expect((garbage as AnyType).error).toBe(DbErrors.Cursor)
+
+          // a bare row id is an INCLUSIVE boundary: the page STARTS at that row — here on a
+          // non-id order column (the boundary row is looked up for its order value)
+          const cId = String(pageTwo.data[0]!._id)
+          const fromRow = yield* query().paginate({ limit: 2, cursor: cId })
+          expect(fromRow.data.map((row: AnyType) => row.name)).toEqual(['c', 'd'])
+
+          // and on the default `_id` order — no lookup, a vanished row degrades gracefully
+          const fromId = yield* db.query('users').paginate({ limit: 3, cursor: cId })
+          expect(fromId.data[0]!.name).toBe('c')
+
+          // a bare id naming no row on a value-ordered paginate is a clear failure
+          const missing = yield* attempt(
+            query().paginate({ limit: 2, cursor: '00000000000000000000000000000000' }),
+          )
+          expect((missing as AnyType).error).toBe(DbErrors.Cursor)
         }),
       )
     })

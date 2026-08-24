@@ -1,4 +1,3 @@
-// oxlint-disable import/exports-last
 import { z } from 'zod'
 
 /** The loose shape of an OZACO MANIFEST v1 — what a consumer may validate a fetched manifest
@@ -35,4 +34,17 @@ export const manifestSchema = z.object({
     }),
   ),
   errors: z.record(z.string(), z.number()),
+  sockets: z
+    .array(
+      z.object({
+        path: z.string(),
+        service: z.string().nullable(),
+        protocol: z.string().nullable(),
+        description: z.string().nullable(),
+
+        /** opening-frame defaults (realtime documents `{ cursor: 0 }` — the start of the set). */
+        defaults: z.record(z.string(), z.unknown()).nullable().optional(),
+      }),
+    )
+    .optional(),
 })

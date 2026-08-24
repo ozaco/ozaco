@@ -181,6 +181,9 @@ export interface WatchHandlers<TRow = unknown> {
 
 export interface Watching {
   stop(): Promise<void>
+
+  /** Windowed watches: turn THIS subscription's page — same socket, no reconnect. */
+  turn(cursor: string | null, back?: boolean): void
 }
 
 /** Watch a resource's realtime feed; frames arrive through the handlers until `stop()`. */
@@ -191,8 +194,9 @@ export const watch = <TRow = unknown>(
   options: ClientDef.WatchOptions,
   handlers: WatchHandlers<TRow>,
 ): Watching => {
-  let flow: FutureFlow<ClientDef.WatchFrame<TRow>> | null = null
+  let flow: ClientDef.WatchFeed<TRow> | null = null
   let stopped = false
+  let queued: { cursor: string | null; back?: boolean } | undefined
 
   void (async () => {
     try {
@@ -202,6 +206,11 @@ export const watch = <TRow = unknown>(
       if (stopped) {
         await (flow.cancel() as AnyType)
         return
+      }
+
+      if (queued !== undefined) {
+        flow.turn(queued.cursor, queued.back)
+        queued = undefined
       }
 
       for await (const frame of flow) {
@@ -218,6 +227,14 @@ export const watch = <TRow = unknown>(
     stop: async () => {
       stopped = true
       await (flow?.cancel() as AnyType)
+    },
+
+    turn: (cursor, back) => {
+      if (flow) {
+        flow.turn(cursor, back)
+      } else {
+        queued = { cursor, ...(back === undefined ? {} : { back }) }
+      }
     },
   }
 }

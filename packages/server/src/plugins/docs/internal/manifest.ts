@@ -1,5 +1,5 @@
 import type { ServerDef, ServiceDef } from 'server:core'
-import { isPartsDecl, isStreamDecl, STATUS_OF } from 'server:core'
+import { isPartsDecl, isSocketAction, isStreamDecl, STATUS_OF } from 'server:core'
 
 import { z } from 'zod'
 
@@ -79,6 +79,10 @@ export const serviceDocOf = (
   const actions: DocsDef.ActionDoc[] = []
 
   for (const [name, actionDef] of Object.entries(def.actions)) {
+    if (isSocketAction(actionDef)) {
+      continue
+    }
+
     const { meta } = actionDef
 
     actions.push({

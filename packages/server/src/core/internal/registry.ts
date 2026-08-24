@@ -6,6 +6,7 @@ import { fail, isFailure } from 'std:result'
 import { ServerErrors } from '../errors'
 import type { ServerDef } from '../types/server'
 import type { ServiceDef } from '../types/service'
+import { isSocketAction } from '../utils/service'
 import { isPartsDecl, isStreamDecl } from '../utils/stream'
 import { validate } from '../utils/validation'
 
@@ -18,6 +19,7 @@ export function* buildRegistry(
 ): Operation<ServerDef.Registry> {
   const byName = new Map<string, ServiceDef.Service>()
   const actions = new Map<string, ServiceDef.Action>()
+  const sockets: ServiceDef.ServiceSocket[] = []
 
   for (const def of services) {
     if (byName.has(def.name)) {
@@ -27,11 +29,16 @@ export function* buildRegistry(
     byName.set(def.name, def)
 
     for (const [name, def2] of Object.entries(def.actions)) {
+      if (isSocketAction(def2)) {
+        sockets.push({ ...def2.socket, service: def.name, handler: def2.handler })
+        continue
+      }
+
       actions.set(actionKey(def.name, name), def2)
     }
   }
 
-  return { services: byName, actions }
+  return { services: byName, actions, sockets }
 }
 
 const brandOfDecl = (declaration: ServiceDef.Declaration | null): string | null => {

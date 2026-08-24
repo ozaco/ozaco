@@ -36,17 +36,7 @@ import { RedisTransport } from '@ozaco/transport/impl/redis'
 
 import type { Db } from './auth'
 import { authProvider, seedUsers } from './auth'
-import {
-  account,
-  chatSocket,
-  cluster,
-  feed,
-  live,
-  media,
-  reports,
-  todoStats,
-  todos,
-} from './services'
+import { account, cluster, feed, live, media, reports, todoStats, todos } from './services'
 import { tables } from './tables'
 
 export const services = [
@@ -186,7 +176,6 @@ export function* createDemo(options: DemoOptions = {}): Operation<AppDef.Handle<
 
   if (withEdge) {
     // routes outside the action model: a custom socket and a raw route
-    yield* Edge.actions.socket(chatSocket())
 
     yield* Edge.actions.raw({
       method: 'GET',

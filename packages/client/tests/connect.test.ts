@@ -82,6 +82,54 @@ describe('connectClient — Futures in promise land', () => {
       }),
     )
   })
+
+  it('$window: a live page, notify around it, and next() turning ONLY this window', async () => {
+    unwrap(
+      await run(function* () {
+        const { url } = yield* boot()
+
+        yield* until(
+          (async () => {
+            const client = await connectClient<Api>({ url })
+
+            for (const title of ['a', 'b', 'c']) {
+              // oxlint-disable-next-line no-await-in-loop -- ordered seeds
+              unwrap(await client.notes.create({ title, done: false }))
+            }
+
+            const win = client.$window<{ title: string }>('notes', {
+              limit: 2,
+              order: { field: 'title' },
+            })
+            const iterator = win.rows[Symbol.asyncIterator]()
+
+            const firstStep = await iterator.next()
+            const first = firstStep.value as ClientDef.Materialized<{ title: string }>
+            expect(first.rows.map(row => row.title)).toEqual(['a', 'b'])
+            expect(first.page).toMatchObject({ prev: null, total: 3 })
+            expect(win.page()?.total).toBe(3)
+
+            // another client's out-of-window insert: the window is untouched, the pager moves
+            unwrap(await client.notes.create({ title: 'z', done: false }))
+            const secondStep = await iterator.next()
+            const second = secondStep.value as ClientDef.Materialized<{ title: string }>
+            expect(second.rows.map(row => row.title)).toEqual(['a', 'b'])
+            expect(second.page?.total).toBe(4)
+
+            // next() turns THIS subscriber's page — a fresh sync of the new window
+            win.next()
+            const thirdStep = await iterator.next()
+            const third = thirdStep.value as ClientDef.Materialized<{ title: string }>
+            expect(third.rows.map(row => row.title)).toEqual(['c', 'z'])
+            expect(third.page?.prev).toBeTruthy()
+
+            await win.rows.cancel()
+            await client.$close()
+          })(),
+        )
+      }),
+    )
+  }, 15_000)
 })
 
 describe('futures — ONE handle, both worlds', () => {

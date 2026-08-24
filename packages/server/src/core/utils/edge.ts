@@ -108,6 +108,7 @@ export const edgeActions = (driver: EdgeDef.Driver): Omit<EdgeDef.Actions, 'desc
       service: route.service ?? null,
       protocol: route.protocol ?? null,
       description: route.description ?? null,
+      defaults: route.defaults ?? null,
     })
   },
   *decorate(decorator) {

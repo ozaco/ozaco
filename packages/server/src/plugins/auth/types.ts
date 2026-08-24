@@ -122,5 +122,14 @@ export namespace AuthDef {
 
     /** The principal of the running dispatch (`ctx.auth`), or a failure when anonymous. */
     principal(): Operation<Principal>
+
+    /** Enforce a requirement OUTSIDE a dispatch (socket handshakes, raw routes): a presented
+     * bearer is ALWAYS verified (expired/malformed → `server.unauthorized`, refresh tokens
+     * rejected), then the requirement gates. Resolves the principal (`null` when anonymous
+     * and nothing was required). */
+    authorize(
+      requirement: Requirement,
+      headers: Readonly<Record<string, string>>,
+    ): Operation<Principal | null>
   }
 }

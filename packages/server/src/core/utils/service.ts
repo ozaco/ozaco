@@ -1,7 +1,9 @@
 // oxlint-disable import/exports-last
+import type { Operation } from 'std:effect'
 import type { AnyType, StandardSchemaV1 } from 'std:shared'
 
 import { ACTION, SERVICE } from '../const'
+import type { EdgeDef } from '../types/edge'
 import type { ServerDef } from '../types/server'
 import type { ServiceDef } from '../types/service'
 
@@ -74,6 +76,10 @@ const metaOf = (kind: ServiceDef.Kind, config: ServiceDef.Config): ServiceDef.Me
   }
 }
 
+/** A socket entry in an action map (`action.socket`). */
+export const isSocketAction = (value: unknown): value is ServiceDef.SocketAction =>
+  typeof value === 'object' && value !== null && 'socket' in value
+
 const define =
   (kind: ServiceDef.Kind) =>
   <
@@ -102,6 +108,24 @@ export const action = Object.assign(define('action'), {
   mutation: define('mutation'),
   action: define('action'),
   stream: define('stream'),
+
+  /** A socket INSIDE the service: `chat: action.socket({ protocol: 'chat' }, function* (socket)
+   * {…})` mounts a WS route (default `/<service>/<action>`), listed under the service. */
+  socket: (
+    config: ServiceDef.SocketConfig,
+    handler: (socket: EdgeDef.Socket) => Operation<void>,
+  ): ServiceDef.SocketAction => ({
+    _t: ACTION,
+
+    socket: {
+      path: config.path ?? '',
+      protocol: config.protocol ?? null,
+      description: config.description ?? null,
+      authorize: config.authorize ?? null,
+    },
+
+    handler: handler as AnyType,
+  }),
 })
 
 /** Define a service: a name and its actions. Routes default to `/<service>/<action>`. */
@@ -111,12 +135,23 @@ export const service = <const TName extends string, const TActions extends Servi
   options?: ServiceDef.ServiceOptions,
 ): ServiceDef.Service<TName, TActions> => {
   const stamped = Object.fromEntries(
-    Object.entries(actions).map(([key, def]) => [
-      key,
-      def.meta.route.path === ''
-        ? { ...def, meta: { ...def.meta, route: { ...def.meta.route, path: `/${name}/${key}` } } }
-        : def,
-    ]),
+    Object.entries(actions).map(([key, def]) => {
+      if (isSocketAction(def)) {
+        return [
+          key,
+          def.socket.path === ''
+            ? { ...def, socket: { ...def.socket, path: `/${name}/${key}` } }
+            : def,
+        ]
+      }
+
+      return [
+        key,
+        def.meta.route.path === ''
+          ? { ...def, meta: { ...def.meta, route: { ...def.meta.route, path: `/${name}/${key}` } } }
+          : def,
+      ]
+    }),
   ) as TActions
 
   return {

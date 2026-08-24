@@ -39,7 +39,14 @@ const ServerImpl = Server.implement<ServerDef.Context, [options: ServerDef.Optio
       hosted: new Set(options.hosted ?? registry.services.keys()),
       kv: false,
       inflight: 0,
-      sockets: [],
+
+      sockets: registry.sockets.map(socket => ({
+        path: socket.path,
+        service: socket.service,
+        protocol: socket.protocol,
+        description: socket.description,
+        defaults: null,
+      })),
     }
   },
 })

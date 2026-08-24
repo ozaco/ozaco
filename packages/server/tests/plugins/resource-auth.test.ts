@@ -1,0 +1,118 @@
+/**
+ * The realtime handshake is GUARDED: the resource's `read` requirement gates the upgrade, and a
+ * presented bearer — `?token=` included — is ALWAYS verified: an EXPIRED or malformed token
+ * rejects the handshake even on an open resource. Regression for "expired tokens could still
+ * connect to realtime".
+ */
+import { column, DbClient, table } from 'db:core'
+import { createServer } from 'server:core'
+import type { AuthDef } from 'server:plugins'
+import { Auth, crud, Resource } from 'server:plugins'
+import { run, sleep, until } from 'std:effect'
+import { unwrap } from 'std:result'
+
+import { describe, expect, it } from 'bun:test'
+
+import { MemoryKv } from 'db:impl/kv/memory'
+import { MemoryAdapter } from 'db:impl/memory'
+import { BunEdge } from 'server:impl/edge/bun'
+import { BunIO } from 'std:io/impl/bun'
+
+import { todosTable } from '../helpers'
+
+const provider = (): AuthDef.Provider => ({
+  *authenticate(credentials) {
+    return credentials['user'] === 'ada' ? { sub: 'u-ada', roles: ['admin'] } : undefined
+  },
+
+  *loadUser(sub) {
+    return sub === 'u-ada' ? { sub, roles: ['admin'] } : undefined
+  },
+})
+
+const openTable = table('open_items', { title: column.text() })
+
+/** Resolves 'open' when the socket answers a watch, 'rejected' when the handshake fails. */
+const probe = (url: string): Promise<'open' | 'rejected'> =>
+  new Promise(resolve => {
+    const ws = new WebSocket(url)
+
+    ws.addEventListener('open', () => {
+      ws.send(JSON.stringify({ t: 'watch', id: 'p' }))
+    })
+
+    ws.addEventListener('message', () => {
+      ws.close()
+      resolve('open')
+    })
+
+    ws.addEventListener('error', () => resolve('rejected'))
+
+    ws.addEventListener('close', event => {
+      resolve(event.code === 1000 ? 'open' : 'rejected')
+    })
+  })
+
+function* boot(sessionTtlMs: number) {
+  yield* MemoryAdapter.use()
+  yield* BunIO.use()
+  yield* DbClient.use({ tables: [todosTable, openTable] })
+  yield* MemoryKv.use()
+  const guarded = crud(todosTable, { auth: { read: 'user', write: 'user' } })
+  const open = crud(openTable)
+  const server = yield* createServer({
+    services: [guarded.service, open.service],
+    edge: BunEdge,
+    plugins: [
+      Auth.use({ provider: provider(), secret: 'test-secret', sessionTtlMs }),
+      Resource.use({ resources: [guarded, open] }),
+    ],
+  })
+  const info = yield* server.listen({ port: 0 })
+  return { server, ws: info.url!.replace('http', 'ws') }
+}
+
+describe('resource — realtime handshake auth', () => {
+  it('`read` gates the upgrade; garbage tokens never pass, valid ones do', async () => {
+    unwrap(
+      await run(function* () {
+        const { server, ws } = yield* boot(60_000)
+        const tokens = yield* Auth.actions.login({ user: 'ada' })
+
+        // guarded: no token / garbage → rejected; a valid token → open
+        expect(yield* until(probe(`${ws}/todos/_realtime`))).toBe('rejected')
+        expect(yield* until(probe(`${ws}/todos/_realtime?token=garbage`))).toBe('rejected')
+        expect(yield* until(probe(`${ws}/todos/_realtime?token=${tokens.accessToken}`))).toBe(
+          'open',
+        )
+
+        // open resource: anonymous is fine — but PRESENTED credentials must be valid
+        expect(yield* until(probe(`${ws}/open_items/_realtime`))).toBe('open')
+        expect(yield* until(probe(`${ws}/open_items/_realtime?token=garbage`))).toBe('rejected')
+
+        yield* server.stop()
+      }),
+    )
+  }, 15_000)
+
+  it('an EXPIRED token is rejected — guarded and open resources alike', async () => {
+    unwrap(
+      await run(function* () {
+        const { server, ws } = yield* boot(1)
+        const tokens = yield* Auth.actions.login({ user: 'ada' })
+
+        // jwt `exp` has second granularity: outlive it
+        yield* sleep(1100)
+
+        expect(yield* until(probe(`${ws}/todos/_realtime?token=${tokens.accessToken}`))).toBe(
+          'rejected',
+        )
+        expect(yield* until(probe(`${ws}/open_items/_realtime?token=${tokens.accessToken}`))).toBe(
+          'rejected',
+        )
+
+        yield* server.stop()
+      }),
+    )
+  }, 15_000)
+})
