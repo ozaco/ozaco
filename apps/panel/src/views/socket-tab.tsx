@@ -222,7 +222,7 @@ export const SocketTab = ({ socket, connection }: Props) => {
               <span className='mono w-[80px]'>order</span>
               <input
                 className='input mono'
-                placeholder='{"field":"_createdAt","direction":"desc"}'
+                placeholder='{"field":"_created_at","direction":"desc"}'
                 value={order}
                 onChange={event => setOrder(event.target.value)}
               />

@@ -14,7 +14,7 @@ export namespace ObserveDef {
   export type Level = 'debug' | 'info' | 'warn' | 'error'
 
   export interface RequestRow {
-    readonly requestId: string
+    readonly request_id: string
     readonly origin: TraceDef.Origin
 
     /** the root action (`service.action`) when the request entered through one. */
@@ -25,14 +25,14 @@ export namespace ObserveDef {
     readonly path: string | null
     readonly socket: string | null
     readonly status: number | null
-    readonly serviceId: string
+    readonly service_id: string
 
     /** the node that answered. */
     readonly instance: string
     readonly lane: string
-    readonly startedAt: number
-    readonly endedAt: number | null
-    readonly durationMs: number | null
+    readonly started_at: number
+    readonly ended_at: number | null
+    readonly duration_ms: number | null
     readonly error: string | null
     readonly attrs: Readonly<Record<string, unknown>> | null
 
@@ -46,8 +46,8 @@ export namespace ObserveDef {
   }
 
   export interface LogRow {
-    readonly requestId: string | null
-    readonly spanId: string | null
+    readonly request_id: string | null
+    readonly span_id: string | null
     readonly level: Level
     readonly msg: string
     readonly data: Readonly<Record<string, unknown>> | null
@@ -55,8 +55,8 @@ export namespace ObserveDef {
   }
 
   export interface FailureRow {
-    readonly requestId: string | null
-    readonly spanId: string | null
+    readonly request_id: string | null
+    readonly span_id: string | null
     readonly tag: string
     readonly message: string
     readonly causes: readonly string[]
@@ -68,7 +68,7 @@ export namespace ObserveDef {
   export type EventKind = 'emit' | 'socket-in' | 'socket-out' | 'lane-open' | 'lane-close'
 
   export interface EventRow {
-    readonly requestId: string | null
+    readonly request_id: string | null
     readonly kind: EventKind
     readonly name: string
     readonly size: number | null
@@ -80,13 +80,13 @@ export namespace ObserveDef {
 
   /** A streamed body finished AFTER its request row went out: the final size and duration. */
   export interface RequestUpdate {
-    readonly requestId: string
+    readonly request_id: string
 
     readonly patch: {
       readonly input?: Readonly<Record<string, unknown>> | null
       readonly output?: Readonly<Record<string, unknown>> | null
-      readonly durationMs?: number
-      readonly endedAt?: number
+      readonly duration_ms?: number
+      readonly ended_at?: number
     }
   }
 
@@ -141,11 +141,11 @@ export namespace ObserveDef {
   /** One node as the store has seen it lately: its edge/dispatch/carrier spans in the window. */
   export interface InstanceStats {
     readonly instance: string
-    readonly serviceId: string
+    readonly service_id: string
     readonly spans: number
     readonly failed: number
-    readonly p95Ms: number | null
-    readonly lastSeen: number
+    readonly p95_ms: number | null
+    readonly last_seen: number
   }
 
   /** The cluster as observed: presence members per service + per-instance request stats. */

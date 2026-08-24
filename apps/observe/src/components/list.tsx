@@ -50,15 +50,15 @@ export const RequestList = ({
       .filter(row => matches(row, filter))
       .map(row => (
         <div
-          key={row.requestId}
+          key={row.request_id}
           className='row-hover grid cursor-pointer grid-cols-[72px_1fr_60px_64px] gap-2 border-b px-3 py-1.5'
           style={{
             borderColor: 'var(--line)',
-            background: selected === row.requestId ? '#1d2230' : undefined,
+            background: selected === row.request_id ? '#1d2230' : undefined,
           }}
-          onClick={() => onOpen(row.requestId)}>
+          onClick={() => onOpen(row.request_id)}>
           <span style={{ color: 'var(--dim)' }}>
-            {new Date(row.startedAt).toLocaleTimeString()}
+            {new Date(row.started_at).toLocaleTimeString()}
           </span>
           <span className='truncate'>
             {nameOf(row)} <span style={{ color: 'var(--dim)' }}>{row.lane}</span>
@@ -67,7 +67,7 @@ export const RequestList = ({
             {row.status ?? ''}
           </span>
           <span className='text-right' style={{ color: 'var(--dim)' }}>
-            {row.durationMs === null ? '' : `${row.durationMs}ms`}
+            {row.duration_ms === null ? '' : `${row.duration_ms}ms`}
           </span>
         </div>
       ))}

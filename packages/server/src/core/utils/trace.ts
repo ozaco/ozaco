@@ -27,10 +27,10 @@ export function* rootTrace(
   id?: string,
 ): Operation<TraceDef.Trace> {
   return {
-    requestId: id ?? (yield* requestId()),
-    spanId: yield* spanId(),
+    request_id: id ?? (yield* requestId()),
+    span_id: yield* spanId(),
     origin,
-    serviceId,
+    service_id: serviceId,
     lane: [],
   }
 }
@@ -38,14 +38,14 @@ export function* rootTrace(
 /** The trace of a child step under `parent` (same request, new span). */
 export function* childTrace(
   parent: TraceDef.Trace,
-  serviceId = parent.serviceId,
+  serviceId = parent.service_id,
 ): Operation<TraceDef.Trace> {
   return {
-    requestId: parent.requestId,
-    spanId: yield* spanId(),
-    parentSpanId: parent.spanId,
+    request_id: parent.request_id,
+    span_id: yield* spanId(),
+    parentSpanId: parent.span_id,
     origin: parent.origin,
-    serviceId,
+    service_id: serviceId,
     lane: parent.lane,
   }
 }
@@ -53,18 +53,18 @@ export function* childTrace(
 /** Continue a trace that arrived over the wire on this node. */
 export function* continueTrace(wire: TraceDef.Wire, serviceId: string): Operation<TraceDef.Trace> {
   return {
-    requestId: wire.requestId,
-    spanId: yield* spanId(),
-    parentSpanId: wire.spanId,
+    request_id: wire.request_id,
+    span_id: yield* spanId(),
+    parentSpanId: wire.span_id,
     origin: 'external',
-    serviceId,
+    service_id: serviceId,
     lane: wire.lane,
   }
 }
 
 export const toWire = (trace: TraceDef.Trace): TraceDef.Wire => ({
-  requestId: trace.requestId,
-  spanId: trace.spanId,
+  request_id: trace.request_id,
+  span_id: trace.span_id,
   parentSpanId: trace.parentSpanId,
   lane: trace.lane,
 })
@@ -107,22 +107,30 @@ export function* withSpan<T>(input: Helpers.SpanInput, body: () => Operation<T>)
   } finally {
     const endedAt = Date.now()
 
+    // a failed span carries WHAT failed — exporters surface it as the span's error content
+    const failedAttrs = failure
+      ? {
+          error: String((failure as AnyType).error),
+          'error.message': String((failure as AnyType).message ?? ''),
+        }
+      : null
+
     yield* report(kernel, {
       t: 'span',
       row: {
-        requestId: trace.requestId,
-        spanId: trace.spanId,
-        parentSpanId: trace.parentSpanId ?? null,
+        request_id: trace.request_id,
+        span_id: trace.span_id,
+        parent_span_id: trace.parentSpanId ?? null,
         kind: input.kind,
         name: input.name,
-        serviceId: trace.serviceId,
+        service_id: trace.service_id,
         instance: kernel.instance,
-        actionId: input.actionId ?? null,
+        action_id: input.actionId ?? null,
         transport: input.transport ?? null,
-        startedAt,
-        endedAt,
+        started_at: startedAt,
+        ended_at: endedAt,
         status,
-        attrs: input.attrs ?? null,
+        attrs: input.attrs || failedAttrs ? { ...input.attrs, ...failedAttrs } : null,
       },
     })
 
@@ -132,8 +140,8 @@ export function* withSpan<T>(input: Helpers.SpanInput, body: () => Operation<T>)
       yield* report(kernel, {
         t: 'failure',
         row: {
-          requestId: trace.requestId,
-          spanId: trace.spanId,
+          request_id: trace.request_id,
+          span_id: trace.span_id,
           tag: String(failed.error),
           message: String(failed.message ?? ''),
           causes: [...(failed.causes ?? [])],

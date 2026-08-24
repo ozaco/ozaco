@@ -1,4 +1,3 @@
-// oxlint-disable import/exports-last
 import type { Operation } from 'std:effect'
 import { createQueue, scoped } from 'std:effect'
 import { IO } from 'std:io'
@@ -53,7 +52,7 @@ export function* driveSocket(input: SocketInput): Operation<void> {
     return report(kernel, {
       t: 'event',
       row: {
-        requestId: trace.requestId,
+        request_id: trace.request_id,
         kind,
         name: route.path,
         size: text === null || text === undefined ? null : text.length,

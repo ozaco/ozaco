@@ -8,7 +8,7 @@ import { serviceDocOf } from '../../docs/internal/manifest'
 import { ObserveErrors } from '../errors'
 
 /** Rows come straight from the store: assert the key, pass the rest through. */
-const requestRow = z.looseObject({ requestId: z.string() })
+const requestRow = z.looseObject({ request_id: z.string() })
 
 const page = z.object({
   requests: z.array(requestRow),

@@ -95,8 +95,8 @@ export const DbOutcomes: OutcomesDef.Handle = Outcomes.implement<
     yield* db.insert(outcomesTable.name, {
       cid: outcome.cid,
       state: outcome.state,
-      serviceId: outcome.serviceId,
-      actionId: outcome.actionId,
+      service_id: outcome.service_id,
+      action_id: outcome.action_id,
       error: outcome.error ?? undefined,
       ts: outcome.ts,
     })
@@ -111,8 +111,8 @@ export const DbOutcomes: OutcomesDef.Handle = Outcomes.implement<
     return {
       cid: String(row.cid),
       state: row.state,
-      serviceId: String(row.serviceId),
-      actionId: String(row.actionId),
+      service_id: String(row.service_id),
+      action_id: String(row.action_id),
       error: row.error ?? null,
       ts: Number(row.ts),
     }

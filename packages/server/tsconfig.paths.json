@@ -15,9 +15,9 @@
         "./src/plugins/observe/impl/otlp/index.ts",
         "./dist/plugins/observe/otlp.d.ts"
       ],
-      "server:plugins/metrics/starrocks": [
-        "./src/plugins/metrics/impl/starrocks/index.ts",
-        "./dist/plugins/metrics/starrocks.d.ts"
+      "server:plugins/observe/openobserve": [
+        "./src/plugins/observe/impl/openobserve/index.ts",
+        "./dist/plugins/observe/openobserve.d.ts"
       ],
       "server:app": ["./src/app/index.ts", "./dist/app.d.ts"],
       "std:shared": ["./node_modules/@ozaco/std/dist/shared"],

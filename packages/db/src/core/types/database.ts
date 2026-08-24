@@ -75,7 +75,7 @@ export namespace Database {
     /** the columns the statement changed (names only) — lets query watchers skip. */
     readonly fields?: readonly string[] | undefined
 
-    /** re-version the returned rows (`_version` = the change's token, `_updatedAt` = now) with a
+    /** re-version the returned rows (`_version` = the change's token, `_updated_at` = now) with a
      * structured update in the same session/transaction, so delta watchers and `ifVersion` see
      * the change. Default `true` for insert/update, ignored for delete. */
     readonly stamp?: boolean | undefined

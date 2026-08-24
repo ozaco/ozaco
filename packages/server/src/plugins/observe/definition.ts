@@ -143,7 +143,7 @@ export const ObservePlugin: ObserveDef.Handle = Observe.implement<
     const rows = yield* exec(state, db =>
       db
         .query(spans.name)
-        .filter(and(gte('startedAt', since), oneOf('kind', ['edge', 'dispatch', 'carrier'])))
+        .filter(and(gte('started_at', since), oneOf('kind', ['edge', 'dispatch', 'carrier'])))
         .collect(),
     )
     return {

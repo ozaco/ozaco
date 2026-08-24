@@ -95,6 +95,25 @@ const DbImpl = Db.implement<Database.Context, [options: Database.Options]>({
         `table name "${reserved.name}" is reserved (names starting with "__" belong to the change logs)`,
       )
     }
+
+    // snake_case is the law of the schema: declared table and column names (system fields are
+    // the framework's own and already conform)
+    for (const def of options.tables) {
+      if (!TABLE_NAME.test(def.name)) {
+        return yield* fail(
+          DbErrors.Configuration,
+          `table name "${def.name}" must be snake_case — "${def.name}" is not accepted`,
+        )
+      }
+
+      const bad = def.columns.find(column => !COLUMN_NAME.test(column.name))
+      if (bad) {
+        return yield* fail(
+          DbErrors.Configuration,
+          `column "${def.name}.${bad.name}" must be snake_case — "${bad.name}" is not accepted`,
+        )
+      }
+    }
     const base = {
       tables: new Map(options.tables.map(def => [def.name, def])),
       specs: new Map(options.tables.map(def => [def.name, tableSpecOf(def)])),
@@ -146,6 +165,12 @@ const DbImpl = Db.implement<Database.Context, [options: Database.Options]>({
     return createHandle(state)
   },
 })
+
+/** Declared TABLE names: snake_case, one optional leading underscore (framework tables). */
+const TABLE_NAME = /^_?[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/u
+
+/** Declared COLUMN names: snake_case, no underscore prefix (that namespace is the system's). */
+const COLUMN_NAME = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/u
 
 export const DbClient: Database.Client = DbImpl.build({
   *migrate() {

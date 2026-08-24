@@ -215,8 +215,8 @@ function* warnVersions(
     yield* report(kernel, {
       t: 'log',
       row: {
-        requestId: null,
-        spanId: null,
+        request_id: null,
+        span_id: null,
         level: 'warn',
         msg: `presence: ${entry.name} runs ${entry.version} on ${beat.instance}, ${local} here`,
         data: { service: entry.name, instance: beat.instance, theirs: entry.version, ours: local },

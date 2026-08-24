@@ -43,7 +43,7 @@ export const ClusterPane = ({ view }: { view: ClusterView }) => (
     {view.instances.map(instance => (
       <div key={instance.instance} className='grid grid-cols-[220px_1fr_70px] gap-2 py-[3px]'>
         <span className='truncate'>
-          {instance.instance} <span style={{ color: 'var(--dim)' }}>{instance.serviceId}</span>
+          {instance.instance} <span style={{ color: 'var(--dim)' }}>{instance.service_id}</span>
         </span>
         <span>
           {instance.spans} ·{' '}
@@ -52,7 +52,7 @@ export const ClusterPane = ({ view }: { view: ClusterView }) => (
           </span>
         </span>
         <span className='text-right' style={{ color: 'var(--dim)' }}>
-          {instance.p95Ms === null ? '' : `${instance.p95Ms}ms`}
+          {instance.p95_ms === null ? '' : `${instance.p95_ms}ms`}
         </span>
       </div>
     ))}

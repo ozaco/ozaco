@@ -90,16 +90,16 @@
       },
       "source": "./src/plugins/observe/impl/otlp/index.ts"
     },
-    "./plugins/metrics/starrocks": {
+    "./plugins/observe/openobserve": {
       "import": {
-        "types": "./dist/plugins/metrics/starrocks.d.ts",
-        "default": "./dist/plugins/metrics/starrocks.js"
+        "types": "./dist/plugins/observe/openobserve.d.ts",
+        "default": "./dist/plugins/observe/openobserve.js"
       },
       "require": {
-        "types": "./dist/plugins/metrics/starrocks.d.cts",
-        "default": "./dist/plugins/metrics/starrocks.cjs"
+        "types": "./dist/plugins/observe/openobserve.d.cts",
+        "default": "./dist/plugins/observe/openobserve.cjs"
       },
-      "source": "./src/plugins/metrics/impl/starrocks/index.ts"
+      "source": "./src/plugins/observe/impl/openobserve/index.ts"
     },
     "./app": {
       "import": {
@@ -129,7 +129,6 @@
     "@ozaco/std": "workspace:*",
     "@ozaco/transport": "workspace:*",
     "@types/ws": "^8.18.1",
-    "mysql2": "^3.23.4",
     "tsdown": "catalog:build",
     "unrun": "catalog:build",
     "ws": "^8.21.3"
@@ -138,13 +137,9 @@
     "@ozaco/db": "*",
     "@ozaco/std": "*",
     "@ozaco/transport": "*",
-    "mysql2": "^3.0.0",
     "ws": "^8.0.0"
   },
   "peerDependenciesMeta": {
-    "mysql2": {
-      "optional": true
-    },
     "ws": {
       "optional": true
     }

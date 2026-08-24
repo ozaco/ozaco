@@ -72,10 +72,10 @@ const SpanMeta = ({ span }: { span: SpanRow }) => (
     className='mb-1 rounded border p-2'
     style={{ background: 'var(--panel)', borderColor: 'var(--line)' }}>
     <div style={{ color: 'var(--dim)' }}>
-      span {span.spanId}
-      {span.parentSpanId ? ` · parent ${span.parentSpanId}` : ''} · {span.serviceId} ·{' '}
+      span {span.span_id}
+      {span.parent_span_id ? ` · parent ${span.parent_span_id}` : ''} · {span.service_id} ·{' '}
       {span.instance}
-      {span.actionId ? ` · ${span.actionId}` : ''}
+      {span.action_id ? ` · ${span.action_id}` : ''}
       {span.transport ? ` · via ${span.transport}` : ''}
     </div>
     {span.attrs && Object.keys(span.attrs).length > 0 ? (
@@ -175,8 +175,8 @@ const Frames = ({ socket, frames }: { socket: string; frames: readonly EventRow[
 
 export const RequestDetail = ({ view }: { view: RequestView }) => {
   const { request, spans, logs, failures, events } = view
-  const start = request.startedAt
-  const total = Math.max(1, (request.endedAt ?? Date.now()) - start)
+  const start = request.started_at
+  const total = Math.max(1, (request.ended_at ?? Date.now()) - start)
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set())
 
   const toggle = (spanId: string) => {
@@ -201,11 +201,11 @@ export const RequestDetail = ({ view }: { view: RequestView }) => {
           {request.status ?? ''}
         </span>{' '}
         <span style={{ color: 'var(--dim)' }}>
-          {request.durationMs === null ? '' : `${request.durationMs}ms`}
+          {request.duration_ms === null ? '' : `${request.duration_ms}ms`}
         </span>
       </h2>
       <div style={{ color: 'var(--dim)' }}>
-        request {request.requestId} · lane {request.lane || '—'} · {request.serviceId}
+        request {request.request_id} · lane {request.lane || '—'} · {request.service_id}
         {request.error && (
           <>
             {' · '}
@@ -219,16 +219,16 @@ export const RequestDetail = ({ view }: { view: RequestView }) => {
         click a span for its attributes
       </div>
       {spans.map(span => {
-        const left = (((span.startedAt - start) / total) * 100).toFixed(1)
-        const width = Math.max(0.5, ((span.endedAt - span.startedAt) / total) * 100).toFixed(1)
+        const left = (((span.started_at - start) / total) * 100).toFixed(1)
+        const width = Math.max(0.5, ((span.ended_at - span.started_at) / total) * 100).toFixed(1)
 
         return (
-          <div key={span.spanId}>
+          <div key={span.span_id}>
             <div
               className='row-hover grid cursor-pointer grid-cols-[220px_1fr_70px] items-center gap-2 py-[3px]'
-              onClick={() => toggle(span.spanId)}>
+              onClick={() => toggle(span.span_id)}>
               <span className='truncate'>
-                <span style={{ color: 'var(--dim)' }}>{open.has(span.spanId) ? '▾' : '▸'}</span>{' '}
+                <span style={{ color: 'var(--dim)' }}>{open.has(span.span_id) ? '▾' : '▸'}</span>{' '}
                 <span className='tag'>{span.kind}</span>
                 {span.name}
               </span>
@@ -248,10 +248,10 @@ export const RequestDetail = ({ view }: { view: RequestView }) => {
                 />
               </div>
               <span className='text-right' style={{ color: 'var(--dim)' }}>
-                {span.endedAt - span.startedAt}ms
+                {span.ended_at - span.started_at}ms
               </span>
             </div>
-            {open.has(span.spanId) && <SpanMeta span={span} />}
+            {open.has(span.span_id) && <SpanMeta span={span} />}
           </div>
         )
       })}

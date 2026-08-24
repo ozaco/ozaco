@@ -21,8 +21,8 @@ export const TABLE = Symbol.for('db:table')
 /** The system fields stamped on every stored document (never declared by the schema). */
 export enum FIELDS {
   id = '_id',
-  created = '_createdAt',
-  updated = '_updatedAt',
+  created = '_created_at',
+  updated = '_updated_at',
   version = '_version',
 }
 

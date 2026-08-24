@@ -51,8 +51,8 @@ function* contextOf({ kernel, call, meta, actions }: ContextInput): Operation<Se
       yield* report(kernel, {
         t: 'log',
         row: {
-          requestId: trace.requestId,
-          spanId: trace.spanId,
+          request_id: trace.request_id,
+          span_id: trace.span_id,
           level,
           msg,
           data: data ?? null,
@@ -62,8 +62,8 @@ function* contextOf({ kernel, call, meta, actions }: ContextInput): Operation<Se
     }
 
   return {
-    requestId: trace.requestId,
-    spanId: trace.spanId,
+    requestId: trace.request_id,
+    spanId: trace.span_id,
     trace,
     service: call.service,
     action: call.action,
@@ -121,7 +121,7 @@ export function* contextFor(
   return yield* contextOf({
     kernel,
     call: {
-      cid: call.trace.spanId,
+      cid: call.trace.span_id,
       service: '$edge',
       action: call.name,
       input: undefined,
@@ -295,8 +295,8 @@ export function* runDispatch(
     return appendCauses(
       outcome,
       breadcrumb(`action:${call.service}.${call.action}`, {
-        requestId: call.trace.requestId,
-        spanId: call.trace.spanId,
+        requestId: call.trace.request_id,
+        spanId: call.trace.span_id,
       }),
     ) as AnyType
   }
@@ -318,7 +318,7 @@ export function* callLocal(local: Helpers.LocalCall): Operation<unknown> {
   }
 
   const controller = new AbortController()
-  const cid = local.trace.spanId
+  const cid = local.trace.span_id
 
   const call: ServerDef.Call = {
     cid,
@@ -350,8 +350,8 @@ export function* callLocal(local: Helpers.LocalCall): Operation<unknown> {
       yield* local.actions.outcome({
         cid,
         state: isFailure(outcome) ? 'failed' : 'fulfilled',
-        serviceId: kernel.serviceId,
-        actionId: `${call.service}.${call.action}`,
+        service_id: kernel.serviceId,
+        action_id: `${call.service}.${call.action}`,
         error: isFailure(outcome) ? String(outcome.error) : null,
         ts: Date.now(),
       })
@@ -379,8 +379,8 @@ export function* callLocal(local: Helpers.LocalCall): Operation<unknown> {
       yield* local.actions.outcome({
         cid,
         state: 'cancelled',
-        serviceId: kernel.serviceId,
-        actionId: `${call.service}.${call.action}`,
+        service_id: kernel.serviceId,
+        action_id: `${call.service}.${call.action}`,
         error: ServerErrors.TimeoutPending,
         ts: Date.now(),
       })
@@ -389,7 +389,7 @@ export function* callLocal(local: Helpers.LocalCall): Operation<unknown> {
     return yield* fail(
       ServerErrors.TimeoutPending,
       `${local.service}.${local.action} did not reply within ${local.timeoutMs}ms`,
-      breadcrumb('local', { requestId: local.trace.requestId, spanId: local.trace.spanId }),
+      breadcrumb('local', { requestId: local.trace.request_id, spanId: local.trace.span_id }),
     )
   }
 

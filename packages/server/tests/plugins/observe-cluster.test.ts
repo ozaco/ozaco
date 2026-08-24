@@ -70,7 +70,7 @@ describe('observe — cluster', () => {
 
           const page = yield* Observe.actions.query({ service: 'todos', action: 'create' })
           expect(page.requests.length).toBeGreaterThan(0)
-          const view = yield* Observe.actions.request(page.requests[0]!.requestId)
+          const view = yield* Observe.actions.request(page.requests[0]!.request_id)
           expect(view).not.toBeNull()
           const instances = new Set(view!.spans.map(span => span.instance))
           // the gateway's dispatch/carrier spans AND the service node's dispatch span, one tree

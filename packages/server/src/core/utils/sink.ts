@@ -28,6 +28,10 @@ interface SinkOptions<T> {
 
   /** deliver one batch; a failure is counted, never raised. */
   readonly send: (rows: readonly T[]) => Operation<void>
+
+  /** called once per failure STREAK (the first failed batch after a success) — surface
+   * misconfiguration (wrong url, missing auth) without flooding. */
+  readonly onError?: ((failure: unknown) => void) | undefined
 }
 
 /** A batching sink for exporters: `push` rows, they leave by size or age, one batch at a time. */
@@ -38,6 +42,7 @@ export const createSink = <T>(options: SinkOptions<T>): Sink<T> => {
   const pending: T[] = []
   const stats = { sent: 0, dropped: 0, failed: 0 }
   let sending = false
+  let failing = false
 
   const flush = function* (): Operation<void> {
     if (sending) {
@@ -53,7 +58,13 @@ export const createSink = <T>(options: SinkOptions<T>): Sink<T> => {
 
         if (isFailure(outcome)) {
           stats.failed += batch.length
+
+          if (!failing) {
+            failing = true
+            options.onError?.(outcome)
+          }
         } else {
+          failing = false
           stats.sent += batch.length
         }
       }

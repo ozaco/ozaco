@@ -13,7 +13,7 @@ export default defineConfig({
     'carrier/network': './src/impl/carrier/network/index.ts',
     plugins: './src/plugins/index.ts',
     'plugins/observe/otlp': './src/plugins/observe/impl/otlp/index.ts',
-    'plugins/metrics/starrocks': './src/plugins/metrics/impl/starrocks/index.ts',
+    'plugins/observe/openobserve': './src/plugins/observe/impl/openobserve/index.ts',
     app: './src/app/index.ts',
   },
   format: ['esm', 'cjs'],
@@ -23,7 +23,7 @@ export default defineConfig({
   outDir: './dist',
   deps: {
     onlyBundle: [],
-    neverBundle: ['bun', 'ws', 'mysql2'],
+    neverBundle: ['bun', 'ws'],
   },
   // `server:core` resolves to the external `@ozaco/server` dist, NOT inlined per bundle — so the
   // protocol singletons stay shared across the impl/plugin modules

@@ -21,10 +21,10 @@ export namespace Schema {
   /** The fields stamped on every stored document, regardless of backend. */
   export interface SystemFields {
     readonly _id: string
-    readonly _createdAt: number
+    readonly _created_at: number
 
-    /** Epoch millis of the last `patch`/`replace` (equals `_createdAt` until then). */
-    readonly _updatedAt: number
+    /** Epoch millis of the last `patch`/`replace` (equals `_created_at` until then). */
+    readonly _updated_at: number
 
     /** The HLC token of the last write that produced this row (`VERSION_ZERO` for rows written
      * outside the handle). Time-sortable; `ifVersion` compares it by equality. */

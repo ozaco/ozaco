@@ -9,7 +9,7 @@ const SYSTEM_FIELDS: ReadonlySet<string> = new Set(Object.values(FIELDS))
 export const isTable = (value: unknown): value is Schema.Table =>
   typeof value === 'object' && value !== null && (value as Schema.Table)._t === TABLE
 
-/** Whether a column name is one of the implicit system fields (`_id`, `_createdAt`, …). */
+/** Whether a column name is one of the implicit system fields (`_id`, `_created_at`, …). */
 export const isSystemField = (name: string): boolean => SYSTEM_FIELDS.has(name)
 
 /** Whether a reconcile step destroys data (skipped by `safe: true`). */

@@ -10,7 +10,7 @@ export const mirror = (event: ObserveDef.Event): void => {
       const status = row.error ? `FAIL ${row.error}` : `ok ${row.status ?? ''}`
 
       console.log(
-        `[oz] ${row.requestId.slice(0, 8)} ${what} ${status} ${row.durationMs ?? '?'}ms lane=${row.lane}`,
+        `[oz] ${row.request_id.slice(0, 8)} ${what} ${status} ${row.duration_ms ?? '?'}ms lane=${row.lane}`,
       )
 
       return
@@ -20,7 +20,7 @@ export const mirror = (event: ObserveDef.Event): void => {
       const { row } = event
 
       console.log(
-        `[oz] ${(row.requestId ?? '--------').slice(0, 8)}   ✗ ${row.tag} at ${row.where}: ${row.message}`,
+        `[oz] ${(row.request_id ?? '--------').slice(0, 8)}   ✗ ${row.tag} at ${row.where}: ${row.message}`,
       )
 
       return
@@ -30,7 +30,7 @@ export const mirror = (event: ObserveDef.Event): void => {
       const { row } = event
 
       console.log(
-        `[oz] ${(row.requestId ?? '--------').slice(0, 8)}   ${row.level} ${row.msg}${row.data ? ` ${JSON.stringify(row.data)}` : ''}`,
+        `[oz] ${(row.request_id ?? '--------').slice(0, 8)}   ${row.level} ${row.msg}${row.data ? ` ${JSON.stringify(row.data)}` : ''}`,
       )
 
       return

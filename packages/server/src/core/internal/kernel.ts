@@ -32,7 +32,7 @@ export function* callRemote(
 ): Operation<unknown> {
   const carrier = yield* carrierOf(kernel)
   const { args, inputs } = lanesOf(remote.input)
-  const cid = remote.trace.spanId
+  const cid = remote.trace.span_id
 
   const dispatch: WireDef.Dispatch = {
     k: 'dispatch',
@@ -87,7 +87,7 @@ export function* traceFor(
   const hop: TraceDef.Hop = {
     service,
     action,
-    spanId: base.spanId,
+    span_id: base.span_id,
     transport: kernel.registry.services.has(service) ? 'local' : 'carrier',
     ts: Date.now(),
   }
@@ -127,7 +127,7 @@ function* outcomeOf(kernel: ServerDef.Context, outcome: TraceDef.Outcome): Opera
  * request row is reported when it ends. */
 export function* asRequest<T>({ kernel, trace, target, body }: Helpers.RootCall<T>): Operation<T> {
   const startedAt = Date.now()
-  const root: TraceDef.Trace = { ...trace, spanId: `${trace.spanId}-root`, lane: [] }
+  const root: TraceDef.Trace = { ...trace, span_id: `${trace.span_id}-root`, lane: [] }
   const outcome = yield* TraceRef.with(root, () => attempt(body))
   const endedAt = Date.now()
   const failure = isFailure(outcome) ? outcome : null
@@ -135,7 +135,7 @@ export function* asRequest<T>({ kernel, trace, target, body }: Helpers.RootCall<
   yield* report(kernel, {
     t: 'request',
     row: {
-      requestId: trace.requestId,
+      request_id: trace.request_id,
       origin: trace.origin,
       service: target.service,
       action: target.action,
@@ -144,12 +144,12 @@ export function* asRequest<T>({ kernel, trace, target, body }: Helpers.RootCall<
       path: null,
       socket: null,
       status: failure ? statusOf(failure) : 200,
-      serviceId: kernel.serviceId,
+      service_id: kernel.serviceId,
       instance: kernel.instance,
       lane: laneOf(trace.lane),
-      startedAt,
-      endedAt,
-      durationMs: endedAt - startedAt,
+      started_at: startedAt,
+      ended_at: endedAt,
+      duration_ms: endedAt - startedAt,
       error: failure ? String(failure.error) : null,
       attrs: null,
       headers: null,

@@ -14,22 +14,22 @@ bun test                       # monolith e2e + cluster e2e
 
 ## Use-case map
 
-| Feature                                                                                | Where                                             |
-| -------------------------------------------------------------------------------------- | ------------------------------------------------- |
-| query / mutation / action kinds, routes, validation, custom errors                     | `services/*.ts`                                   |
-| crud resource (`/todos`, If-Match conflicts) + realtime socket (`/todos/_realtime`)    | `services/todos.ts`                               |
-| ndjson / sse / text / bytes outputs, deadline + cancel                                 | `services/feed.ts`                                |
-| multipart `parts` input, raw byte body input, db-backed streaming download             | `services/media.ts`                               |
-| cache (`cache`, tags, `invalidate`, table change invalidation)                         | `services/reports.ts`, `media.list`               |
-| retry / breaker / bulkhead / singleflight / rateLimit / timeout + fallback             | `services/reports.ts`                             |
-| nested `ctx.call` (local or over the carrier)                                          | `reports.overview`                                |
-| events (`ctx.emit`, `Server.actions.events`) relayed as SSE, custom socket route       | `services/live.ts`                                |
-| auth: login / refresh rotation / replay detection / `auth: 'user'` / roles             | `services/account.ts`, `auth.ts`                  |
-| presence: members, who served a call                                                   | `services/cluster.ts`                             |
-| app roles, env-driven transport (memory/nats/redis), db (sqlite/pg), kv (memory/redis) | `app.ts`                                          |
-| observe console, forward/collect across nodes, OTLP + StarRocks sinks                  | `app.ts` (`OBSERVE`, `OTLP_URL`, `STARROCKS_URL`) |
-| docs manifest + OpenAPI (`/docs/openapi.json`) + panel, cors, health, raw route        | `app.ts`                                          |
-| typed client: calls, streams, uploads, realtime `$rows`, failures                      | `client.ts`                                       |
+| Feature                                                                                | Where                               |
+| -------------------------------------------------------------------------------------- | ----------------------------------- |
+| query / mutation / action kinds, routes, validation, custom errors                     | `services/*.ts`                     |
+| crud resource (`/todos`, If-Match conflicts) + realtime socket (`/todos/_realtime`)    | `services/todos.ts`                 |
+| ndjson / sse / text / bytes outputs, deadline + cancel                                 | `services/feed.ts`                  |
+| multipart `parts` input, raw byte body input, db-backed streaming download             | `services/media.ts`                 |
+| cache (`cache`, tags, `invalidate`, table change invalidation)                         | `services/reports.ts`, `media.list` |
+| retry / breaker / bulkhead / singleflight / rateLimit / timeout + fallback             | `services/reports.ts`               |
+| nested `ctx.call` (local or over the carrier)                                          | `reports.overview`                  |
+| events (`ctx.emit`, `Server.actions.events`) relayed as SSE, custom socket route       | `services/live.ts`                  |
+| auth: login / refresh rotation / replay detection / `auth: 'user'` / roles             | `services/account.ts`, `auth.ts`    |
+| presence: members, who served a call                                                   | `services/cluster.ts`               |
+| app roles, env-driven transport (memory/nats/redis), db (sqlite/pg), kv (memory/redis) | `app.ts`                            |
+| observe console, forward/collect across nodes, OTLP traces/logs/metrics export         | `app.ts` (`OBSERVE`, `OTLP_URL`)    |
+| docs manifest + OpenAPI (`/docs/openapi.json`) + panel, cors, health, raw route        | `app.ts`                            |
+| typed client: calls, streams, uploads, realtime `$rows`, failures                      | `client.ts`                         |
 
 ## Cluster with real brokers
 

@@ -119,18 +119,18 @@ export const instanceStats = (
 
   for (const span of spans) {
     const entry = grouped.get(span.instance) ?? {
-      serviceId: span.serviceId,
+      serviceId: span.service_id,
       durations: [],
       failed: 0,
       last: 0,
     }
-    entry.durations.push(span.endedAt - span.startedAt)
+    entry.durations.push(span.ended_at - span.started_at)
 
     if (span.status === 'failed') {
       entry.failed += 1
     }
 
-    entry.last = Math.max(entry.last, span.endedAt)
+    entry.last = Math.max(entry.last, span.ended_at)
     grouped.set(span.instance, entry)
   }
 
@@ -140,11 +140,11 @@ export const instanceStats = (
       const at = Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95))
       return {
         instance,
-        serviceId: entry.serviceId,
+        service_id: entry.serviceId,
         spans: sorted.length,
         failed: entry.failed,
-        p95Ms: sorted.length > 0 ? sorted[at]! : null,
-        lastSeen: entry.last,
+        p95_ms: sorted.length > 0 ? sorted[at]! : null,
+        last_seen: entry.last,
       }
     })
     .toSorted((left, right) => left.instance.localeCompare(right.instance))

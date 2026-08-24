@@ -99,7 +99,7 @@ describe('observe — what happened is a db row', () => {
 
         // the create request: one dispatch span + one log line bound to it
         const created = page.requests.find(row => row.action === 'create')!
-        const view = yield* Observe.actions.request(created.requestId)
+        const view = yield* Observe.actions.request(created.request_id)
         expect(view).not.toBeNull()
         expect(view!.spans.map(span => `${span.kind}:${span.name}:${span.status}`)).toEqual([
           'dispatch:todos.create:ok',
@@ -110,10 +110,10 @@ describe('observe — what happened is a db row', () => {
           msg: 'creating',
           data: { title: 'observed' },
         })
-        expect(view!.logs[0]!.spanId).toBe(view!.spans[0]!.spanId)
+        expect(view!.logs[0]!.span_id).toBe(view!.spans[0]!.span_id)
 
         // the failed one carries its failure row with the breadcrumb `where`
-        const view2 = yield* Observe.actions.request(failed.requests[0]!.requestId)
+        const view2 = yield* Observe.actions.request(failed.requests[0]!.request_id)
         expect(view2!.failures).toHaveLength(1)
         expect(view2!.failures[0]).toMatchObject({
           tag: 'todo.kaput',
@@ -122,11 +122,11 @@ describe('observe — what happened is a db row', () => {
 
         // the nested one: two dispatch spans in a parent/child chain + an emit event
         const nested = page.requests.find(row => row.action === 'nested')!
-        const view3 = yield* Observe.actions.request(nested.requestId)
+        const view3 = yield* Observe.actions.request(nested.request_id)
         // spans come back in start order: the parent started first
         expect(view3!.spans.map(span => span.name)).toEqual(['todos.nested', 'todos.create'])
         const [outer, inner] = view3!.spans
-        expect(inner!.parentSpanId).toBe(outer!.spanId)
+        expect(inner!.parent_span_id).toBe(outer!.span_id)
         expect(view3!.events.map(event => `${event.kind}:${event.name}`)).toEqual([
           'emit:todo.created',
         ])

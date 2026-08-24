@@ -42,8 +42,8 @@ describe('schema DSL', () => {
     const spec = tableSpecOf(users)
     expect(spec.columns.slice(0, 4).map(entry => entry.name)).toEqual([
       '_id',
-      '_createdAt',
-      '_updatedAt',
+      '_created_at',
+      '_updated_at',
       '_version',
     ])
     expect(spec.columns[0]).toMatchObject({ primary: true, system: true })

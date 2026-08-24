@@ -84,7 +84,7 @@ export function* walk(url: string, report: (step: Step) => void = () => {}): Ope
       { headers: { 'if-match': created._version } },
     ),
   )
-  const page = yield* client.todos.list({ limit: 10, order: '_createdAt', direction: 'desc' })
+  const page = yield* client.todos.list({ limit: 10, order: '_created_at', direction: 'desc' })
 
   note('todos crud', {
     created: created.title,

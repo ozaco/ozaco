@@ -21,7 +21,7 @@ export namespace Spec {
     readonly hasDefault: boolean
     readonly enumValues: readonly string[] | null
 
-    /** true for the implicit `_id`/`_createdAt`/`_updatedAt`/`_version` columns. */
+    /** true for the implicit `_id`/`_created_at`/`_updated_at`/`_version` columns. */
     readonly system: boolean
 
     /** true for the primary-key column (`_id`). */

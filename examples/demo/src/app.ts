@@ -10,8 +10,11 @@
  *   PORT=3000                      the edge port (edge roles)
  *   INSTANCE=gw-1                  this node's name in presence / traces
  *   OBSERVE=local|forward|collect  where observe rows go (cluster: services forward, gateway collects)
- *   OTLP_URL=http://localhost:4318 export spans/logs to an OTLP collector
- *   STARROCKS_URL=http://fe:8030   stream-load request/span metrics (STARROCKS_DB, STARROCKS_USER/PASSWORD)
+ *   OTLP_URL=http://localhost:4318 export spans/logs/metrics to an OTLP collector
+ *     (for OpenObserve use http://localhost:5080/api/default and set OTLP_AUTH)
+ *   OTLP_AUTH=user:pass|token      authorization for the OTLP endpoint (basic or bearer)
+ *   OPENOBSERVE_URL=http://localhost:5080  ship raw observe rows to per-kind streams
+ *     (OPENOBSERVE_ORG, OPENOBSERVE_AUTH=user:pass|token, OPENOBSERVE_BODIES=1)
  *   AUTH_SECRET=…                  HS256 secret (default: a demo value)
  */
 import { DbBus, DbClient } from '@ozaco/db'
@@ -26,7 +29,7 @@ import { createApp } from '@ozaco/server/app'
 import { NetworkCarrier } from '@ozaco/server/carrier/network'
 import { BunEdge } from '@ozaco/server/edge/bun'
 import { Auth, Cache, Cors, Docs, ObservePlugin, Resilience, Resource } from '@ozaco/server/plugins'
-import { StarRocksMetrics } from '@ozaco/server/plugins/metrics/starrocks'
+import { OpenObserveExporter } from '@ozaco/server/plugins/observe/openobserve'
 import { OtlpExporter } from '@ozaco/server/plugins/observe/otlp'
 import type { Operation } from '@ozaco/std/effect'
 import { BunIO } from '@ozaco/std/io/impl/bun'
@@ -142,17 +145,30 @@ export function* createDemo(options: DemoOptions = {}): Operation<AppDef.Handle<
     Resource.use({ resources: [todos] }),
   ]
 
+  // `user:pass` → basic, anything else → bearer
+  const authHeader = (value: string): string =>
+    value.includes(':') ? `Basic ${btoa(value)}` : `Bearer ${value}`
+
   if (env('OTLP_URL')) {
-    plugins.push(OtlpExporter.use({ url: env('OTLP_URL')! }))
+    const auth = env('OTLP_AUTH')
+
+    plugins.push(
+      OtlpExporter.use({
+        url: env('OTLP_URL')!,
+        ...(auth ? { headers: { authorization: authHeader(auth) } } : {}),
+      }),
+    )
   }
 
-  if (env('STARROCKS_URL')) {
+  if (env('OPENOBSERVE_URL')) {
+    const auth = env('OPENOBSERVE_AUTH')
+
     plugins.push(
-      StarRocksMetrics.use({
-        url: env('STARROCKS_URL')!,
-        database: env('STARROCKS_DB') ?? 'demo',
-        user: env('STARROCKS_USER'),
-        password: env('STARROCKS_PASSWORD'),
+      OpenObserveExporter.use({
+        url: env('OPENOBSERVE_URL')!,
+        org: env('OPENOBSERVE_ORG') ?? 'default',
+        bodies: env('OPENOBSERVE_BODIES') === '1',
+        ...(auth ? { headers: { authorization: authHeader(auth) } } : {}),
       }),
     )
   }

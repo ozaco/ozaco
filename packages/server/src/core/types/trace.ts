@@ -10,24 +10,24 @@ export namespace TraceDef {
   export interface Hop {
     readonly service: string
     readonly action: string
-    readonly spanId: string
+    readonly span_id: string
     readonly transport: string
     readonly ts: number
   }
 
   export interface Trace {
-    readonly requestId: string
-    readonly spanId: string
+    readonly request_id: string
+    readonly span_id: string
     readonly parentSpanId?: string | undefined
     readonly origin: Origin
-    readonly serviceId: string
+    readonly service_id: string
     readonly lane: readonly Hop[]
   }
 
   /** What a carrier puts on the wire (and the edge on HTTP headers) to continue a trace. */
   export interface Wire {
-    readonly requestId: string
-    readonly spanId: string
+    readonly request_id: string
+    readonly span_id: string
     readonly parentSpanId?: string | undefined
     readonly lane: readonly Hop[]
   }
@@ -45,21 +45,21 @@ export namespace TraceDef {
 
   /** A finished span as the kernel reports it. */
   export interface Span {
-    readonly requestId: string
-    readonly spanId: string
-    readonly parentSpanId: string | null
+    readonly request_id: string
+    readonly span_id: string
+    readonly parent_span_id: string | null
     readonly kind: SpanKind
     readonly name: string
-    readonly serviceId: string
+    readonly service_id: string
 
     /** the node that ran it (`ServerDef.Options.instance`). */
     readonly instance: string
 
     /** `service.action` for dispatch spans (and whatever a plugin span names). */
-    readonly actionId: string | null
+    readonly action_id: string | null
     readonly transport: string | null
-    readonly startedAt: number
-    readonly endedAt: number
+    readonly started_at: number
+    readonly ended_at: number
     readonly status: SpanStatus
     readonly attrs: Readonly<Record<string, unknown>> | null
   }
@@ -70,8 +70,8 @@ export namespace TraceDef {
   export interface Outcome {
     readonly cid: string
     readonly state: OutcomeState
-    readonly serviceId: string
-    readonly actionId: string
+    readonly service_id: string
+    readonly action_id: string
     readonly error: string | null
     readonly ts: number
   }

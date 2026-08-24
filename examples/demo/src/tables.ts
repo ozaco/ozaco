@@ -21,8 +21,8 @@ export const uploadsTable = table('uploads', {
 })
 
 /** File content, base64 per chunk row — written on upload, streamed back on download. */
-export const uploadChunksTable = table('uploadChunks', {
-  uploadId: column.text(),
+export const uploadChunksTable = table('upload_chunks', {
+  upload_id: column.text(),
   seq: column.int(),
   data: column.text(),
 })

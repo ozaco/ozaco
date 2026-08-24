@@ -83,9 +83,9 @@ export const runAdapterSuite = (target: AdapterTarget): void => {
           const db = yield* bootstrap()
           const doc = yield* db.insert('users', { name: 'ada', age: 36, junk: 'nope' })
           expect(typeof doc._id).toBe('string')
-          expect(typeof doc._createdAt).toBe('number')
+          expect(typeof doc._created_at).toBe('number')
           expect(doc._version).toMatch(TOKEN)
-          expect(doc._updatedAt).toBe(doc._createdAt)
+          expect(doc._updated_at).toBe(doc._created_at)
           expect(doc.role).toBe('member')
           expect(doc.active).toBe(true)
           expect(doc.meta).toBeNull()
@@ -128,7 +128,7 @@ export const runAdapterSuite = (target: AdapterTarget): void => {
           expect(patched?.age).toBe(37)
           expect(patched?._version).toMatch(TOKEN)
           expect(String(patched?._version) > String(created._version)).toBe(true)
-          expect(Number(patched?._updatedAt)).toBeGreaterThan(Number(created._createdAt))
+          expect(Number(patched?._updated_at)).toBeGreaterThan(Number(created._created_at))
 
           const replaced = yield* db.replace('users', id, { name: 'lovelace' })
           expect(replaced?.name).toBe('lovelace')
@@ -871,6 +871,17 @@ export const runAdapterSuite = (target: AdapterTarget): void => {
             install(DbClient, { tables: [table('__secret', { x: column.text() })] }),
           )
           expect((reserved as AnyType).error).toBe(DbErrors.Configuration)
+
+          // the schema speaks snake_case: camelCase table and column names are refused
+          const camelTable = yield* attempt(
+            install(DbClient, { tables: [table('uploadChunks', { x: column.text() })] }),
+          )
+          expect((camelTable as AnyType).error).toBe(DbErrors.Configuration)
+          const camelColumn = yield* attempt(
+            install(DbClient, { tables: [table('chunks', { requestId: column.text() })] }),
+          )
+          expect((camelColumn as AnyType).error).toBe(DbErrors.Configuration)
+          expect((camelColumn as AnyType).message).toContain('requestId')
 
           yield* Db.actions.dropTable('posts')
           const plan = yield* Db.actions.planMigration()

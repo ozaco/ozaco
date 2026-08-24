@@ -14,7 +14,7 @@ import type { EdgeDef } from '../../types/edge'
 import type { ServerDef } from '../../types/server'
 import type { ServiceDef } from '../../types/service'
 import type { TraceDef } from '../../types/trace'
-import { statusOf } from '../../utils/failure'
+import { statusOf, tagOf } from '../../utils/failure'
 import {
   brandOf,
   brandStream,
@@ -205,7 +205,13 @@ function* runAction({
   const input = yield* attempt(() => inputOf(request, entry.meta, params))
 
   if (isFailure(input)) {
-    return failureResponse(input, trace.requestId, entry.meta)
+    return yield* reportedFailure(state, {
+      requestId: trace.request_id,
+      spanId: trace.span_id,
+      failure: input,
+      where: `edge:input ${entry.service}.${entry.action}`,
+      meta: entry.meta,
+    })
   }
 
   if (watched) {
@@ -241,13 +247,13 @@ function* runAction({
   const hop: TraceDef.Hop = {
     service: entry.service,
     action: entry.action,
-    spanId: dispatchTrace.spanId,
+    span_id: dispatchTrace.span_id,
     transport: 'edge',
     ts: Date.now(),
   }
 
   const call: ServerDef.Call = {
-    cid: dispatchTrace.spanId,
+    cid: dispatchTrace.span_id,
     service: entry.service,
     action: entry.action,
     input: callInput,
@@ -267,14 +273,14 @@ function* runAction({
   const outcome = yield* attempt(() => state.actions.dispatch(call))
 
   if (isFailure(outcome)) {
-    return failureResponse(outcome, trace.requestId, entry.meta)
+    return failureResponse(outcome, trace.request_id, entry.meta)
   }
 
   if (watched) {
     captured.output = capturedValue(outcome.value)
   }
 
-  const response = responseOf(yield* materialize(outcome.value), trace.requestId)
+  const response = responseOf(yield* materialize(outcome.value), trace.request_id)
   const kind = captured.output?.['kind']
 
   if (watched && captured.output && (kind === 'stream' || kind === 'flow') && response.body) {
@@ -322,6 +328,36 @@ function* finish({ state, request, response, requestId }: Finish): Operation<Res
   return out
 }
 
+/** A failure RETURNED as a response never raises through a span — report its row here, so
+ * unrouted 404s, rejected upgrades and validation errors land in the observe store and every
+ * exporter (the dispatch path is NOT routed through this: `withSpan` already reports it). */
+function* reportedFailure(
+  state: EdgeState,
+  input: {
+    readonly requestId: string
+    readonly spanId?: string | undefined
+    readonly failure: AnyType
+    readonly where: string
+    readonly meta?: Pick<ServiceDef.Meta, 'errors'> | undefined
+  },
+): Operation<Response> {
+  yield* report(state.kernel, {
+    t: 'failure',
+    row: {
+      request_id: input.requestId,
+      span_id: input.spanId ?? null,
+      tag: tagOf(input.failure),
+      message: String(input.failure.message ?? ''),
+      causes: [...(input.failure.causes ?? [])].map(String),
+      status: statusOf(input.failure, input.meta),
+      where: input.where,
+      ts: Date.now(),
+    },
+  })
+
+  return failureResponse(input.failure, input.requestId, input.meta)
+}
+
 /**
  * Handle one HTTP request end to end: request id (accepted or minted, always echoed), an
  * `edge` span + a request row, raw routes, action routes (input by plane → kernel dispatch →
@@ -340,10 +376,12 @@ export function* handleRequest(state: EdgeState, request: Request): Operation<Re
     { kernel, trace, kind: 'edge', name: `${request.method} ${url.pathname}` },
     function* (): Operation<Response> {
       if (state.paused) {
-        return failureResponse(
-          fail(ServerErrors.Paused, 'the edge is draining') as AnyType,
+        return yield* reportedFailure(state, {
           requestId,
-        )
+          spanId: trace.span_id,
+          failure: fail(ServerErrors.Paused, 'the edge is draining') as AnyType,
+          where: 'edge:paused',
+        })
       }
       const match = findRoute(state.router, request.method, url.pathname, { params: true })
       if (match) {
@@ -351,7 +389,17 @@ export function* handleRequest(state: EdgeState, request: Request): Operation<Re
         const entry = match.data
         if (entry.kind === 'raw') {
           const raw = yield* attempt(() => entry.route.handler(request, params))
-          return isFailure(raw) ? failureResponse(raw, requestId) : raw.value
+
+          if (isFailure(raw)) {
+            return yield* reportedFailure(state, {
+              requestId,
+              spanId: trace.span_id,
+              failure: raw,
+              where: `edge:raw ${url.pathname}`,
+            })
+          }
+
+          return raw.value
         }
         routed = entry
         return yield* runAction({ state, request, entry, params, trace, captured })
@@ -362,10 +410,15 @@ export function* handleRequest(state: EdgeState, request: Request): Operation<Re
           return answered.value
         }
       }
-      return failureResponse(
-        fail(ServerErrors.NotFound, `no route for ${request.method} ${url.pathname}`) as AnyType,
+      return yield* reportedFailure(state, {
         requestId,
-      )
+        spanId: trace.span_id,
+        failure: fail(
+          ServerErrors.NotFound,
+          `no route for ${request.method} ${url.pathname}`,
+        ) as AnyType,
+        where: 'edge:route',
+      })
     },
   )
   const decorated = yield* finish({ state, request, response, requestId })
@@ -375,7 +428,7 @@ export function* handleRequest(state: EdgeState, request: Request): Operation<Re
   yield* report(kernel, {
     t: 'request',
     row: {
-      requestId,
+      request_id: requestId,
       origin: 'external',
       service: entry?.service ?? null,
       action: entry?.action ?? null,
@@ -384,12 +437,12 @@ export function* handleRequest(state: EdgeState, request: Request): Operation<Re
       path: url.pathname,
       socket: null,
       status: decorated.status,
-      serviceId: kernel.serviceId,
+      service_id: kernel.serviceId,
       instance: kernel.instance,
       lane: entry ? laneOf([{ service: entry.service }]) : '',
-      startedAt,
-      endedAt,
-      durationMs: endedAt - startedAt,
+      started_at: startedAt,
+      ended_at: endedAt,
+      duration_ms: endedAt - startedAt,
       error:
         decorated.status >= 400
           ? (decorated.headers.get(HEADERS.error) ?? String(decorated.status))
@@ -413,12 +466,12 @@ export function* handleRequest(state: EdgeState, request: Request): Operation<Re
         yield* report(kernel, {
           t: 'request-update',
           update: {
-            requestId,
+            request_id: requestId,
             patch: {
               input: captured.input,
               output: captured.output,
-              durationMs: finishedAt - startedAt,
-              endedAt: finishedAt,
+              duration_ms: finishedAt - startedAt,
+              ended_at: finishedAt,
             },
           },
         })
@@ -441,10 +494,11 @@ export function* decideUpgrade(state: EdgeState, request: Request): Operation<Ed
     return {
       kind: 'reject',
 
-      response: failureResponse(
-        fail(ServerErrors.NotFound, `no socket route for ${url.pathname}`) as AnyType,
+      response: yield* reportedFailure(state, {
         requestId,
-      ),
+        failure: fail(ServerErrors.NotFound, `no socket route for ${url.pathname}`) as AnyType,
+        where: `edge:socket ${url.pathname}`,
+      }),
     }
   }
 
@@ -454,7 +508,15 @@ export function* decideUpgrade(state: EdgeState, request: Request): Operation<Ed
     const allowed = yield* attempt(() => route.authorize!(request))
 
     if (isFailure(allowed)) {
-      return { kind: 'reject', response: failureResponse(allowed, requestId) }
+      return {
+        kind: 'reject',
+
+        response: yield* reportedFailure(state, {
+          requestId,
+          failure: allowed,
+          where: `edge:socket ${url.pathname}`,
+        }),
+      }
     }
   }
 
@@ -485,7 +547,7 @@ export function* decideUpgrade(state: EdgeState, request: Request): Operation<Ed
         yield* report(kernel, {
           t: 'request',
           row: {
-            requestId,
+            request_id: requestId,
             origin: 'external',
             service: null,
             action: null,
@@ -494,12 +556,12 @@ export function* decideUpgrade(state: EdgeState, request: Request): Operation<Ed
             path: null,
             socket: route.path,
             status: isFailure(outcome) ? statusOf(outcome) : 101,
-            serviceId: kernel.serviceId,
+            service_id: kernel.serviceId,
             instance: kernel.instance,
             lane: '',
-            startedAt,
-            endedAt,
-            durationMs: endedAt - startedAt,
+            started_at: startedAt,
+            ended_at: endedAt,
+            duration_ms: endedAt - startedAt,
             error: isFailure(outcome) ? String(outcome.error) : null,
             attrs: null,
             headers: socketHeaders,

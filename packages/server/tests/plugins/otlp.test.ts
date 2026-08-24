@@ -5,11 +5,19 @@ import type { AnyType } from 'std:shared'
 
 import { describe, expect, it } from 'bun:test'
 
-import { OtlpExporter } from 'server:plugins/observe/otlp'
+import { OtlpExporter, toCamelDeep } from 'server:plugins/observe/otlp'
 
 import { storage, todos } from '../helpers'
 
 describe('observe/otlp', () => {
+  it('toCamelDeep renames every nested key; leading underscores survive', () => {
+    expect(toCamelDeep({ a_b: { c_d: [{ e_f: 1 }] }, _x_y: 2, plain: 3 })).toEqual({
+      aB: { cD: [{ eF: 1 }] },
+      _xY: 2,
+      plain: 3,
+    })
+  })
+
   it('exports spans and logs as OTLP/JSON under the request trace; failures are counted', async () => {
     const received: { url: string; body: AnyType }[] = []
     let failing = false
@@ -31,6 +39,7 @@ describe('observe/otlp', () => {
               url: 'http://collector:4318/',
               fetch: fakeFetch,
               batch: { ms: 20 },
+              metrics: { intervalMs: 30 },
               resource: { 'deployment.environment': 'test' },
             }),
           ],
@@ -53,8 +62,17 @@ describe('observe/otlp', () => {
           key: 'ozaco.kind',
           value: { stringValue: 'dispatch' },
         })
+        // the recursive transformer fed it: the snake row crossed into camel attr world
+        expect(create.attributes.some((attr: AnyType) => attr.key === 'ozaco.serviceId')).toBe(true)
         const explode = spans.find((span: AnyType) => span.name === 'todos.explode')
         expect(explode.status.code).toBe(2)
+        // the error CONTENT rides on the span: tag + message attributes, human status message
+        expect(explode.attributes).toContainEqual({
+          key: 'error',
+          value: { stringValue: 'x.y' },
+        })
+        expect(explode.status.message.length).toBeGreaterThan(0)
+        expect(explode.status.message).not.toBe('failed')
         const resource = traces[0]!.body.resourceSpans[0].resource.attributes
         expect(resource).toContainEqual({
           key: 'service.name',
@@ -71,6 +89,37 @@ describe('observe/otlp', () => {
         const failure = records.find((record: AnyType) => record.severityText === 'ERROR')
         expect(failure.attributes).toContainEqual({
           key: 'exception.type',
+          value: { stringValue: 'x.y' },
+        })
+
+        // CUMULATIVE metrics beat: request counters, the duration histogram, failure counters
+        const metricPayloads = received.filter(entry => entry.url.endsWith('/v1/metrics'))
+        expect(metricPayloads.length).toBeGreaterThan(0)
+        const metrics = metricPayloads.at(-1)!.body.resourceMetrics[0].scopeMetrics[0].metrics
+        const requests = metrics.find((metric: AnyType) => metric.name === 'ozaco.requests')
+        const createCount = requests.sum.dataPoints.find((point: AnyType) =>
+          point.attributes.some(
+            (attr: AnyType) =>
+              attr.key === 'ozaco.action' && attr.value.stringValue === 'todos.create',
+          ),
+        )
+        expect(createCount).toMatchObject({ asInt: '1' })
+        expect(createCount.attributes).toContainEqual({
+          key: 'ozaco.status',
+          value: { stringValue: 'ok' },
+        })
+        const duration = metrics.find((metric: AnyType) => metric.name === 'ozaco.request.duration')
+        const histogram = duration.histogram.dataPoints.find((point: AnyType) =>
+          point.attributes.some(
+            (attr: AnyType) =>
+              attr.key === 'ozaco.action' && attr.value.stringValue === 'todos.create',
+          ),
+        )
+        expect(Number(histogram.count)).toBeGreaterThanOrEqual(1)
+        expect(histogram.explicitBounds.length + 1).toBe(histogram.bucketCounts.length)
+        const failCounts = metrics.find((metric: AnyType) => metric.name === 'ozaco.failures')
+        expect(failCounts.sum.dataPoints[0].attributes).toContainEqual({
+          key: 'ozaco.tag',
           value: { stringValue: 'x.y' },
         })
 

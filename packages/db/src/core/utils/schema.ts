@@ -75,7 +75,7 @@ const builderOf = <TName extends string, TDoc, TInsert>(
   }
 }
 
-/** Declare a table from a column shape. System fields (`_id`/`_createdAt`/`_updatedAt`/
+/** Declare a table from a column shape. System fields (`_id`/`_created_at`/`_updated_at`/
  * `_version`) are implicit. The returned type carries the resolved row/insert types, not the DSL
  * shape. */
 export const table = <TName extends string, TShape extends Schema.Shape>(

@@ -9,8 +9,8 @@ export const outcomesTable = table(
   {
     cid: column.text(),
     state: column.enumOf('fulfilled', 'failed', 'cancelled'),
-    serviceId: column.text(),
-    actionId: column.text(),
+    service_id: column.text(),
+    action_id: column.text(),
     error: column.text().optional(),
     ts: column.int(),
   },

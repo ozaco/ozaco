@@ -75,7 +75,7 @@ describe('cache', () => {
         const page = yield* Observe.actions.query({ action: 'get' })
         const views: AnyType[] = []
         for (const row of page.requests) {
-          views.push(yield* Observe.actions.request(row.requestId))
+          views.push(yield* Observe.actions.request(row.request_id))
         }
         const names = views.flatMap(view =>
           view!.spans

@@ -77,7 +77,7 @@ export const media = service(
           const data = Buffer.from(concat(pending, pendingSize)).toString('base64')
           pending = []
           pendingSize = 0
-          yield* ctx.db.insert('uploadChunks', { uploadId: id, seq: seq++, data })
+          yield* ctx.db.insert('upload_chunks', { upload_id: id, seq: seq++, data })
         }
 
         for (;;) {
@@ -140,8 +140,8 @@ export const media = service(
                   }
 
                   const page = yield* ctx.db
-                    .query('uploadChunks')
-                    .filter({ op: 'eq', field: 'uploadId', value: input.id })
+                    .query('upload_chunks')
+                    .filter({ op: 'eq', field: 'upload_id', value: input.id })
                     .order('seq', 'asc')
                     .paginate({ limit: 4, cursor })
 
@@ -177,7 +177,7 @@ export const media = service(
         description: 'Uploads so far (cached; the uploads table change feed invalidates it)',
       },
       function* ({ ctx }) {
-        const rows = yield* ctx.db.query('uploads').order('_createdAt', 'desc').collect()
+        const rows = yield* ctx.db.query('uploads').order('_created_at', 'desc').collect()
         return rows.map(row => ({
           id: String(row._id),
           name: String(row.name),

@@ -20,19 +20,19 @@ export { wireFailureOf as failureOf } from '@ozaco/client'
 // --- the rows as the store writes them ---------------------------------------------------------
 
 export interface RequestRow {
-  readonly requestId: string
+  readonly request_id: string
   readonly service: string | null
   readonly action: string | null
   readonly method: string | null
   readonly path: string | null
   readonly socket: string | null
   readonly status: number | null
-  readonly serviceId: string
+  readonly service_id: string
   readonly instance: string
   readonly lane: string
-  readonly startedAt: number
-  readonly endedAt: number | null
-  readonly durationMs: number | null
+  readonly started_at: number
+  readonly ended_at: number | null
+  readonly duration_ms: number | null
   readonly error: string | null
   readonly attrs: Readonly<Record<string, unknown>> | null
 
@@ -54,16 +54,16 @@ export interface BodySnapshot {
 }
 
 export interface SpanRow {
-  readonly spanId: string
-  readonly parentSpanId: string | null
+  readonly span_id: string
+  readonly parent_span_id: string | null
   readonly name: string
   readonly kind: string
-  readonly serviceId: string
+  readonly service_id: string
   readonly instance: string
-  readonly actionId: string | null
+  readonly action_id: string | null
   readonly transport: string | null
-  readonly startedAt: number
-  readonly endedAt: number
+  readonly started_at: number
+  readonly ended_at: number
   readonly status: string
   readonly attrs: Readonly<Record<string, unknown>> | null
 }
@@ -117,10 +117,10 @@ export interface Member {
 
 export interface InstanceStat {
   readonly instance: string
-  readonly serviceId: string
+  readonly service_id: string
   readonly spans: number
   readonly failed: number
-  readonly p95Ms: number | null
+  readonly p95_ms: number | null
 }
 
 export interface ClusterView {

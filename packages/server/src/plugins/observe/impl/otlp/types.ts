@@ -14,6 +14,14 @@ export namespace OtlpDef {
 
     /** export logs and failures as OTLP log records too. Default true. */
     readonly logs?: boolean | undefined
+
+    /** export CUMULATIVE metrics to `/v1/metrics` — `ozaco.requests` (per kind/action/status),
+     * the `ozaco.request.duration` histogram and `ozaco.failures` (per tag). `false` disables;
+     * `intervalMs` (default 10000) paces the export, `buckets` are the histogram bounds (ms). */
+    readonly metrics?:
+      | false
+      | { readonly intervalMs?: number | undefined; readonly buckets?: readonly number[] }
+      | undefined
     readonly batch?: { readonly size?: number; readonly ms?: number; readonly maxPending?: number }
 
     /** `fetch` to use (tests). */
@@ -26,6 +34,9 @@ export namespace OtlpDef {
     readonly stats: () => {
       readonly spans: { sent: number; dropped: number; failed: number }
       readonly logs: { sent: number; dropped: number; failed: number }
+
+      /** metric EXPORTS (one per interval), not individual points. */
+      readonly metrics: { sent: number; dropped: number; failed: number }
     }
   }
 

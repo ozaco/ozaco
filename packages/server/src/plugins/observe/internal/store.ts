@@ -128,7 +128,7 @@ export function* writeBatch(db: Db, batch: readonly ObserveDef.Event[]): Operati
   // a streamed body finished after its row: patch in the final size + duration
   for (const update of updates) {
     yield* attempt(function* () {
-      const row = yield* db.query(requests.name).filter(eq('requestId', update.requestId)).first()
+      const row = yield* db.query(requests.name).filter(eq('request_id', update.request_id)).first()
 
       if (row) {
         yield* db.patch(requests.name, String((row as AnyType)._id), clean(update.patch) as AnyType)
@@ -138,18 +138,18 @@ export function* writeBatch(db: Db, batch: readonly ObserveDef.Event[]): Operati
 }
 
 export function* requestView(db: Db, requestId: string): Operation<ObserveDef.RequestView | null> {
-  const request = yield* db.query(requests.name).filter(eq('requestId', requestId)).first()
+  const request = yield* db.query(requests.name).filter(eq('request_id', requestId)).first()
 
   if (!request) {
     return null
   }
 
   const by = (table: string, order: string) =>
-    db.query(table).filter(eq('requestId', requestId)).order(order, 'asc').collect()
+    db.query(table).filter(eq('request_id', requestId)).order(order, 'asc').collect()
 
   // start order; same millisecond → parents before children (depth in the span tree)
-  const raw = (yield* by(spans.name, 'startedAt')) as AnyType[]
-  const parents = new Map(raw.map(span => [span.spanId, span.parentSpanId ?? null]))
+  const raw = (yield* by(spans.name, 'started_at')) as AnyType[]
+  const parents = new Map(raw.map(span => [span.span_id, span.parent_span_id ?? null]))
 
   const depthOf = (id: string): number => {
     let depth = 0
@@ -165,8 +165,8 @@ export function* requestView(db: Db, requestId: string): Operation<ObserveDef.Re
 
   const ordered = raw.toSorted(
     (left, right) =>
-      Number(left.startedAt) - Number(right.startedAt) ||
-      depthOf(left.spanId) - depthOf(right.spanId),
+      Number(left.started_at) - Number(right.started_at) ||
+      depthOf(left.span_id) - depthOf(right.span_id),
   )
 
   return {
@@ -202,11 +202,11 @@ const filtersOf = (query: ObserveDef.Query) => {
   }
 
   if (query.slowerThan !== undefined) {
-    filters.push(gt('durationMs', query.slowerThan))
+    filters.push(gt('duration_ms', query.slowerThan))
   }
 
   if (query.since !== undefined) {
-    filters.push(gte('startedAt', query.since))
+    filters.push(gte('started_at', query.since))
   }
 
   return filters
@@ -216,7 +216,7 @@ export function* queryRequests(db: Db, query: ObserveDef.Query): Operation<Obser
   const filters = filtersOf(query)
   const base = db.query(requests.name)
   const page = yield* (filters.length > 0 ? base.filter(and(...filters)) : base)
-    .order('startedAt', 'desc')
+    .order('started_at', 'desc')
     .paginate({ limit: Math.max(1, Math.min(500, query.limit ?? 50)), cursor: query.cursor })
 
   return { requests: page.data as AnyType, cursor: page.pageInfo.nextCursor }
@@ -228,8 +228,8 @@ export const matchesQuery = (row: ObserveDef.RequestRow, query: ObserveDef.Query
   (query.status !== 'ok' || row.error === null) &&
   (query.status !== 'failed' || row.error !== null) &&
   (query.tag === undefined || row.error === query.tag) &&
-  (query.slowerThan === undefined || (row.durationMs ?? 0) > query.slowerThan) &&
-  (query.since === undefined || row.startedAt >= query.since)
+  (query.slowerThan === undefined || (row.duration_ms ?? 0) > query.slowerThan) &&
+  (query.since === undefined || row.started_at >= query.since)
 
 /** Delete rows older than a floor across the tables; resolves how many went. */
 export function* pruneBefore(
@@ -237,8 +237,8 @@ export function* pruneBefore(
   floors: { requests: number; logs: number },
 ): Operation<number> {
   const plan: readonly [string, string, number][] = [
-    [requests.name, 'startedAt', floors.requests],
-    [spans.name, 'startedAt', floors.requests],
+    [requests.name, 'started_at', floors.requests],
+    [spans.name, 'started_at', floors.requests],
     [failures.name, 'ts', floors.requests],
     [logs.name, 'ts', floors.logs],
     [events.name, 'ts', floors.logs],

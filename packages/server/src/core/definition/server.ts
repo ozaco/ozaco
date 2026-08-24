@@ -128,7 +128,13 @@ export const ServerClient: ServerDef.Client = ServerImpl.build({
     })
     yield* report(kernel, {
       t: 'event',
-      row: { requestId: trace?.requestId ?? null, kind: 'emit', name, size: null, ts: Date.now() },
+      row: {
+        request_id: trace?.request_id ?? null,
+        kind: 'emit',
+        name,
+        size: null,
+        ts: Date.now(),
+      },
     })
   },
 

@@ -50,8 +50,8 @@ export const App = () => {
         cursorRef.current = page.cursor
         setExhausted(page.cursor === null)
         setRows(prior => {
-          const seen = new Set(prior.map(row => row.requestId))
-          return [...prior, ...page.requests.filter(row => !seen.has(row.requestId))]
+          const seen = new Set(prior.map(row => row.request_id))
+          return [...prior, ...page.requests.filter(row => !seen.has(row.request_id))]
         })
         return page
       })
@@ -93,8 +93,8 @@ export const App = () => {
           for await (const batch of flow) {
             setRows(prior => {
               const cap = Math.max(500, prior.length)
-              const incoming = new Set(batch.map(row => row.requestId))
-              return [...batch, ...prior.filter(row => !incoming.has(row.requestId))].slice(0, cap)
+              const incoming = new Set(batch.map(row => row.request_id))
+              return [...batch, ...prior.filter(row => !incoming.has(row.request_id))].slice(0, cap)
             })
           }
         } catch {

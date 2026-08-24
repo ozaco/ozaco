@@ -71,8 +71,8 @@ export const patchSchema = (table: Schema.Table): z.ZodObject =>
 export const docSchema = (table: Schema.Table): z.ZodObject =>
   z.object({
     _id: z.string(),
-    _createdAt: z.coerce.date(),
-    _updatedAt: z.coerce.date(),
+    _created_at: z.coerce.date(),
+    _updated_at: z.coerce.date(),
     _version: z.string(),
     ...Object.fromEntries(
       table.columns.map(column => [

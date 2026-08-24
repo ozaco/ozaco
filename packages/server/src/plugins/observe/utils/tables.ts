@@ -5,7 +5,7 @@ import { OBSERVE_PREFIX } from 'server:core'
 export const requests = table(
   `${OBSERVE_PREFIX}requests`,
   {
-    requestId: column.text(),
+    request_id: column.text(),
     origin: column.enumOf('external', 'internal'),
     service: column.text().optional(),
     action: column.text().optional(),
@@ -14,12 +14,12 @@ export const requests = table(
     path: column.text().optional(),
     socket: column.text().optional(),
     status: column.int().optional(),
-    serviceId: column.text(),
+    service_id: column.text(),
     instance: column.text(),
     lane: column.text(),
-    startedAt: column.int(),
-    endedAt: column.int().optional(),
-    durationMs: column.int().optional(),
+    started_at: column.int(),
+    ended_at: column.int().optional(),
+    duration_ms: column.int().optional(),
     error: column.text().optional(),
     attrs: column.json().optional(),
     headers: column.json().optional(),
@@ -28,37 +28,37 @@ export const requests = table(
   },
   { log: false },
 )
-  .unique('by_request', ['requestId'])
-  .index('by_started', ['startedAt'])
+  .unique('by_request', ['request_id'])
+  .index('by_started', ['started_at'])
   .index('by_error', ['error'])
 
 export const spans = table(
   `${OBSERVE_PREFIX}spans`,
   {
-    requestId: column.text(),
-    spanId: column.text(),
-    parentSpanId: column.text().optional(),
+    request_id: column.text(),
+    span_id: column.text(),
+    parent_span_id: column.text().optional(),
     kind: column.enumOf('edge', 'dispatch', 'plugin', 'carrier', 'db', 'cache', 'lane', 'custom'),
     name: column.text(),
-    serviceId: column.text(),
+    service_id: column.text(),
     instance: column.text(),
-    actionId: column.text().optional(),
+    action_id: column.text().optional(),
     transport: column.text().optional(),
-    startedAt: column.int(),
-    endedAt: column.int(),
+    started_at: column.int(),
+    ended_at: column.int(),
     status: column.enumOf('ok', 'failed', 'cancelled'),
     attrs: column.json().optional(),
   },
   { log: false },
 )
-  .index('by_request', ['requestId'])
-  .index('by_started', ['startedAt'])
+  .index('by_request', ['request_id'])
+  .index('by_started', ['started_at'])
 
 export const logs = table(
   `${OBSERVE_PREFIX}logs`,
   {
-    requestId: column.text().optional(),
-    spanId: column.text().optional(),
+    request_id: column.text().optional(),
+    span_id: column.text().optional(),
     level: column.enumOf('debug', 'info', 'warn', 'error'),
     msg: column.text(),
     data: column.json().optional(),
@@ -66,14 +66,14 @@ export const logs = table(
   },
   { log: false },
 )
-  .index('by_request', ['requestId'])
+  .index('by_request', ['request_id'])
   .index('by_ts', ['ts'])
 
 export const failures = table(
   `${OBSERVE_PREFIX}failures`,
   {
-    requestId: column.text().optional(),
-    spanId: column.text().optional(),
+    request_id: column.text().optional(),
+    span_id: column.text().optional(),
     tag: column.text(),
     message: column.text(),
     causes: column.json<readonly string[]>(),
@@ -83,13 +83,13 @@ export const failures = table(
   },
   { log: false },
 )
-  .index('by_request', ['requestId'])
+  .index('by_request', ['request_id'])
   .index('by_tag', ['tag'])
 
 export const events = table(
   `${OBSERVE_PREFIX}events`,
   {
-    requestId: column.text().optional(),
+    request_id: column.text().optional(),
     kind: column.enumOf('emit', 'socket-in', 'socket-out', 'lane-open', 'lane-close'),
     name: column.text(),
     size: column.int().optional(),
@@ -98,7 +98,7 @@ export const events = table(
   },
   { log: false },
 )
-  .index('by_request', ['requestId'])
+  .index('by_request', ['request_id'])
   .index('by_ts', ['ts'])
 
 export const observeTables = [requests, spans, logs, failures, events] as const
