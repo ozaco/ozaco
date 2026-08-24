@@ -35,6 +35,14 @@ export namespace ObserveDef {
     readonly durationMs: number | null
     readonly error: string | null
     readonly attrs: Readonly<Record<string, unknown>> | null
+
+    /** Captured only while an observer is installed: the request headers, secrets redacted. */
+    readonly headers: Readonly<Record<string, string>> | null
+
+    /** What went in / came out — `{ kind: 'data'|'stream'|'flow'|'parts', brand?, contentType?,
+     * data?, size?, truncated?, streams? }`; `data` is capped, big bodies keep only the size. */
+    readonly input: Readonly<Record<string, unknown>> | null
+    readonly output: Readonly<Record<string, unknown>> | null
   }
 
   export interface LogRow {
@@ -65,11 +73,27 @@ export namespace ObserveDef {
     readonly name: string
     readonly size: number | null
     readonly ts: number
+
+    /** socket frames keep their FULL payload (captured while observing) — replayable. */
+    readonly data?: unknown
+  }
+
+  /** A streamed body finished AFTER its request row went out: the final size and duration. */
+  export interface RequestUpdate {
+    readonly requestId: string
+
+    readonly patch: {
+      readonly input?: Readonly<Record<string, unknown>> | null
+      readonly output?: Readonly<Record<string, unknown>> | null
+      readonly durationMs?: number
+      readonly endedAt?: number
+    }
   }
 
   /** One thing the kernel observed. */
   export type Event =
     | { readonly t: 'request'; readonly row: RequestRow }
+    | { readonly t: 'request-update'; readonly update: RequestUpdate }
     | { readonly t: 'span'; readonly row: TraceDef.Span }
     | { readonly t: 'log'; readonly row: LogRow }
     | { readonly t: 'failure'; readonly row: FailureRow }

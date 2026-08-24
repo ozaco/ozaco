@@ -34,6 +34,23 @@ export interface RequestRow {
   readonly endedAt: number | null
   readonly durationMs: number | null
   readonly error: string | null
+  readonly attrs: Readonly<Record<string, unknown>> | null
+
+  /** captured while observing: redacted request headers + the in/out body snapshots. */
+  readonly headers: Readonly<Record<string, string>> | null
+  readonly input: BodySnapshot | null
+  readonly output: BodySnapshot | null
+}
+
+/** What went through one plane: capped data, or a stream/flow/parts descriptor. */
+export interface BodySnapshot {
+  readonly kind: 'data' | 'stream' | 'flow' | 'parts'
+  readonly brand?: string | null
+  readonly data?: unknown
+  readonly fields?: unknown
+  readonly streams?: Readonly<Record<string, string>>
+  readonly size?: number | null
+  readonly truncated?: boolean
 }
 
 export interface SpanRow {
@@ -41,9 +58,14 @@ export interface SpanRow {
   readonly parentSpanId: string | null
   readonly name: string
   readonly kind: string
+  readonly serviceId: string
+  readonly instance: string
+  readonly actionId: string | null
+  readonly transport: string | null
   readonly startedAt: number
   readonly endedAt: number
   readonly status: string
+  readonly attrs: Readonly<Record<string, unknown>> | null
 }
 
 export interface LogRow {
@@ -62,6 +84,10 @@ export interface FailureRow {
 export interface EventRow {
   readonly kind: string
   readonly name: string
+  readonly size: number | null
+
+  /** socket frames carry their FULL payload while observing — replayable. */
+  readonly data?: unknown
 }
 
 export interface RequestView {

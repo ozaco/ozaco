@@ -7,6 +7,7 @@ import type { EdgeDef } from '../../types/edge'
 import type { ServerDef } from '../../types/server'
 import type { TraceDef } from '../../types/trace'
 import { report } from '../../utils/trace'
+import { observing } from '../capture'
 
 interface SocketInput {
   readonly kernel: ServerDef.Context
@@ -43,11 +44,24 @@ export function* driveSocket(input: SocketInput): Operation<void> {
     inbound.close(undefined)
   })
 
-  const frame = (kind: 'socket-in' | 'socket-out') =>
-    report(kernel, {
+  const watched = observing(kernel)
+
+  // while observing, every frame keeps its FULL payload — the console can replay the exchange
+  const frame = (kind: 'socket-in' | 'socket-out', payload: unknown) => {
+    const text = watched ? JSON.stringify(payload) : null
+
+    return report(kernel, {
       t: 'event',
-      row: { requestId: trace.requestId, kind, name: route.path, size: null, ts: Date.now() },
+      row: {
+        requestId: trace.requestId,
+        kind,
+        name: route.path,
+        size: text === null || text === undefined ? null : text.length,
+        ts: Date.now(),
+        ...(watched ? { data: payload } : {}),
+      },
     })
+  }
 
   const socket: EdgeDef.Socket = {
     id,
@@ -62,7 +76,7 @@ export function* driveSocket(input: SocketInput): Operation<void> {
             const step = yield* inbound.next()
 
             if (!step.done) {
-              yield* frame('socket-in')
+              yield* frame('socket-in', step.value)
             }
 
             return step
@@ -72,7 +86,7 @@ export function* driveSocket(input: SocketInput): Operation<void> {
     },
     *send(value) {
       raw.send(JSON.stringify(value))
-      yield* frame('socket-out')
+      yield* frame('socket-out', value)
     },
     *close(code, reason) {
       raw.close(code, reason)

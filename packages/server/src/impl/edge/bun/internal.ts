@@ -16,6 +16,9 @@ export const driver: EdgeDef.Driver = {
     const server = Bun.serve<BunEdgeDef.SocketData>({
       port: options.port ?? 0,
       hostname: options.hostname ?? '127.0.0.1',
+      // Bun's default (10s) cuts quiet long-lived responses — the SSE keepalives fire every
+      // 15s, so anything above that keeps live feeds and sockets healthy
+      idleTimeout: 120,
       async fetch(request, bunServer) {
         if (handlers.isSocket(request)) {
           const decision = await handlers.upgrade(request)

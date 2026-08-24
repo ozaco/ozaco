@@ -152,6 +152,9 @@ export function* asRequest<T>({ kernel, trace, target, body }: Helpers.RootCall<
       durationMs: endedAt - startedAt,
       error: failure ? String(failure.error) : null,
       attrs: null,
+      headers: null,
+      input: null,
+      output: null,
     },
   })
 

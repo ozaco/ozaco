@@ -1,6 +1,6 @@
 // oxlint-disable import/exports-last
 import type { Operation, Scope } from 'std:effect'
-import { attempt, createContext, useScope } from 'std:effect'
+import { attempt, createContext, until, useScope } from 'std:effect'
 import { IO } from 'std:io'
 import { fail, isFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
@@ -15,8 +15,17 @@ import type { ServerDef } from '../../types/server'
 import type { ServiceDef } from '../../types/service'
 import type { TraceDef } from '../../types/trace'
 import { statusOf } from '../../utils/failure'
-import { isPartsDecl, isStreamDecl, stream } from '../../utils/stream'
+import {
+  brandOf,
+  brandStream,
+  isBranded,
+  isPartsDecl,
+  isStreamDecl,
+  stream,
+} from '../../utils/stream'
 import { childTrace, report, rootTrace, withSpan } from '../../utils/trace'
+import type { Captured } from '../capture'
+import { capturedHeaders, capturedValue, countingStream, emptyCapture, observing } from '../capture'
 import { contextFor, materialize } from '../dispatch'
 
 import { valueBody } from './body'
@@ -159,14 +168,56 @@ interface ActionCall {
   readonly entry: ActionRoute
   readonly params: Readonly<Record<string, string>>
   readonly trace: TraceDef.Trace
+
+  /** filled while the action runs (only when an observer is installed). */
+  readonly captured: Captured
 }
 
 /** Run one action route: build the call, dispatch through the kernel, render the response. */
-function* runAction({ state, request, entry, params, trace }: ActionCall): Operation<Response> {
+function* runAction({
+  state,
+  request,
+  entry,
+  params,
+  trace,
+  captured,
+}: ActionCall): Operation<Response> {
+  const watched = observing(state.kernel)
+
+  if (watched) {
+    captured.headers = capturedHeaders(headersOf(request))
+  }
+
   const input = yield* attempt(() => inputOf(request, entry.meta, params))
 
   if (isFailure(input)) {
     return failureResponse(input, trace.requestId, entry.meta)
+  }
+
+  if (watched) {
+    captured.input = capturedValue(input.value)
+  }
+
+  // a big stream body is observed as its SIZE — counted as it flows, never buffered
+  let callInput = input.value
+
+  if (watched && isBranded(input.value)) {
+    const snapshot = captured.input
+    const brand = brandOf(input.value)
+    let settle: () => void = () => {}
+
+    captured.pending.push(
+      new Promise<void>(resolve => {
+        settle = resolve
+      }),
+    )
+    callInput = brandStream(
+      countingStream(input.value as ReadableStream<Uint8Array>, bytes => {
+        captured.input = { ...snapshot, size: bytes }
+        settle()
+      }),
+      brand,
+    )
   }
 
   const controller = new AbortController()
@@ -185,7 +236,7 @@ function* runAction({ state, request, entry, params, trace }: ActionCall): Opera
     cid: dispatchTrace.spanId,
     service: entry.service,
     action: entry.action,
-    input: input.value,
+    input: callInput,
     trace: { ...dispatchTrace, lane: [hop] },
     headers: headersOf(request),
     deadline: Date.now() + state.kernel.timeoutMs,
@@ -205,7 +256,33 @@ function* runAction({ state, request, entry, params, trace }: ActionCall): Opera
     return failureResponse(outcome, trace.requestId, entry.meta)
   }
 
-  return responseOf(yield* materialize(outcome.value), trace.requestId)
+  if (watched) {
+    captured.output = capturedValue(outcome.value)
+  }
+
+  const response = responseOf(yield* materialize(outcome.value), trace.requestId)
+  const kind = captured.output?.['kind']
+
+  if (watched && captured.output && (kind === 'stream' || kind === 'flow') && response.body) {
+    const snapshot = captured.output
+    let settle: () => void = () => {}
+
+    captured.pending.push(
+      new Promise<void>(resolve => {
+        settle = resolve
+      }),
+    )
+
+    return new Response(
+      countingStream(response.body, bytes => {
+        captured.output = { ...snapshot, size: bytes }
+        settle()
+      }),
+      { status: response.status, headers: response.headers },
+    )
+  }
+
+  return response
 }
 
 interface Finish {
@@ -243,6 +320,7 @@ export function* handleRequest(state: EdgeState, request: Request): Operation<Re
   const trace = yield* rootTrace(kernel.serviceId, 'external', requestId)
   const startedAt = Date.now()
   let routed: ActionRoute | null = null
+  const captured = emptyCapture()
 
   const response: Response = yield* withSpan(
     { kernel, trace, kind: 'edge', name: `${request.method} ${url.pathname}` },
@@ -262,7 +340,7 @@ export function* handleRequest(state: EdgeState, request: Request): Operation<Re
           return isFailure(raw) ? failureResponse(raw, requestId) : raw.value
         }
         routed = entry
-        return yield* runAction({ state, request, entry, params, trace })
+        return yield* runAction({ state, request, entry, params, trace, captured })
       }
       if (request.method === 'OPTIONS' && state.preflight) {
         const answered = yield* attempt(() => state.preflight!(request))
@@ -303,8 +381,37 @@ export function* handleRequest(state: EdgeState, request: Request): Operation<Re
           ? (decorated.headers.get(HEADERS.error) ?? String(decorated.status))
           : null,
       attrs: null,
+      headers: captured.headers,
+      input: captured.input,
+      output: captured.output,
     },
   })
+
+  // a streamed body outlives the row above: patch in the final size + true duration once done
+  if (captured.pending.length > 0) {
+    const pending = [...captured.pending]
+
+    state.scope.run(
+      function* () {
+        yield* until(Promise.all(pending))
+        const finishedAt = Date.now()
+
+        yield* report(kernel, {
+          t: 'request-update',
+          update: {
+            requestId,
+            patch: {
+              input: captured.input,
+              output: captured.output,
+              durationMs: finishedAt - startedAt,
+              endedAt: finishedAt,
+            },
+          },
+        })
+      },
+      { detached: true },
+    )
+  }
 
   return decorated
 }
@@ -339,6 +446,7 @@ export function* decideUpgrade(state: EdgeState, request: Request): Operation<Ed
 
   const params = decodeParams(match.params)
   const headers = headersOf(request)
+  const socketHeaders = observing(kernel) ? capturedHeaders(headers) : null
   const trace = yield* rootTrace(kernel.serviceId, 'external', requestId)
 
   return {
@@ -380,6 +488,9 @@ export function* decideUpgrade(state: EdgeState, request: Request): Operation<Ed
             durationMs: endedAt - startedAt,
             error: isFailure(outcome) ? String(outcome.error) : null,
             attrs: null,
+            headers: socketHeaders,
+            input: null,
+            output: null,
           },
         })
       })

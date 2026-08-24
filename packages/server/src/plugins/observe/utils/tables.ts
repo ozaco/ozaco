@@ -22,6 +22,9 @@ export const requests = table(
     durationMs: column.int().optional(),
     error: column.text().optional(),
     attrs: column.json().optional(),
+    headers: column.json().optional(),
+    input: column.json().optional(),
+    output: column.json().optional(),
   },
   { log: false },
 )
@@ -90,6 +93,7 @@ export const events = table(
     kind: column.enumOf('emit', 'socket-in', 'socket-out', 'lane-open', 'lane-close'),
     name: column.text(),
     size: column.int().optional(),
+    data: column.json().optional(),
     ts: column.int(),
   },
   { log: false },

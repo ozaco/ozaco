@@ -8,6 +8,13 @@ import { brandOf, brandSpecOf, isBranded } from '../../utils/stream'
 
 const encoder = new TextEncoder()
 
+/** SSE comment-frame interval: keeps quiet streams alive through connection idle timeouts
+ * (Bun closes idle connections after ~10s by default). Env-tunable for tests. */
+const keepaliveMs = (): number => {
+  const given = Number(process.env['OZACO_SSE_KEEPALIVE_MS'])
+  return Number.isFinite(given) && given > 0 ? given : 15_000
+}
+
 /** Encode a flow-brand chunk (one codec value) for the wire: ndjson lines or SSE frames. */
 const frameOf = (brand: string, value: unknown): Uint8Array => {
   const json = JSON.stringify(value)
@@ -25,6 +32,7 @@ const bodyOf = (stream: StreamDef.Branded): { body: ReadableStream<Uint8Array>; 
   }
 
   const reader = (stream as ReadableStream<unknown>).getReader()
+  let pending: Promise<IteratorResult<unknown, undefined>> | null = null
 
   const body = new ReadableStream<Uint8Array>({
     start(controller) {
@@ -35,6 +43,46 @@ const bodyOf = (stream: StreamDef.Branded): { body: ReadableStream<Uint8Array>; 
       }
     },
     async pull(controller) {
+      // sse: a quiet stream still writes `: keepalive` comments, so idle timeouts never cut a
+      // live feed that simply has nothing to say (the console's live SSE, an event relay)
+      if (brand === 'sse') {
+        pending ??= reader.read() as Promise<IteratorResult<unknown, undefined>>
+
+        const step = await new Promise<IteratorResult<unknown, undefined> | null>(resolve => {
+          const timer = setTimeout(() => {
+            resolve(null)
+          }, keepaliveMs())
+
+          pending!.then(
+            result => {
+              clearTimeout(timer)
+              resolve(result)
+              return null
+            },
+            () => {
+              clearTimeout(timer)
+              resolve({ done: true, value: undefined })
+              return null
+            },
+          )
+        })
+
+        if (step === null) {
+          controller.enqueue(encoder.encode(': keepalive\n\n'))
+          return
+        }
+
+        pending = null
+
+        if (step.done) {
+          controller.close()
+          return
+        }
+
+        controller.enqueue(frameOf(brand, step.value))
+        return
+      }
+
       const step = await reader.read()
       if (step.done) {
         controller.close()

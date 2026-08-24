@@ -1,7 +1,7 @@
 import { DbAdapter } from 'db:core'
-import { createServer, Observe } from 'server:core'
+import { createServer, Edge, Observe } from 'server:core'
 import { ObservePlugin } from 'server:plugins'
-import { attempt, fork, run, sleep } from 'std:effect'
+import { attempt, fork, run, sleep, until } from 'std:effect'
 import { unwrap } from 'std:result'
 
 import { describe, expect, it } from 'bun:test'
@@ -10,10 +10,65 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { SqliteAdapter } from 'db:impl/sqlite'
+import { BunEdge } from 'server:impl/edge/bun'
 
 import { storage, todos } from '../helpers'
 
 describe('observe — what happened is a db row', () => {
+  it('an edge request captures redacted headers plus the input/output bodies', async () => {
+    unwrap(
+      await run(function* () {
+        yield* storage()
+        const server = yield* createServer({
+          services: [todos],
+          edge: BunEdge,
+          plugins: [ObservePlugin.use({ batch: { ms: 10 } })],
+        })
+        yield* server.listen()
+
+        const created = yield* Edge.actions.handle(
+          new Request('http://edge/todos/create', {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/json',
+              authorization: 'Bearer sekrit',
+              'x-tool': 'observe-test',
+            },
+            body: JSON.stringify({ title: 'captured' }),
+          }),
+        )
+        expect(created.status).toBe(200)
+
+        const streamed = yield* Edge.actions.handle(new Request('http://edge/todos/count?n=2'))
+        yield* until(streamed.text())
+        yield* sleep(30) // the streamed body's size patches the row after it closes
+
+        const page = yield* Observe.actions.query({ service: 'todos' })
+        const createRow = page.requests.find(row => row.action === 'create')!
+        const countRow = page.requests.find(row => row.action === 'count')!
+
+        // headers land redacted, never the bearer
+        expect(createRow.headers).toMatchObject({ authorization: '•••', 'x-tool': 'observe-test' })
+
+        // the value planes keep (capped) data
+        expect(createRow.input).toMatchObject({
+          kind: 'data',
+          data: { title: 'captured' },
+          truncated: false,
+        })
+        expect(createRow.output).toMatchObject({ kind: 'data' })
+        expect((createRow.output!['data'] as { title: string }).title).toBe('captured')
+
+        // a flow reply keeps its shape + the streamed SIZE, never its items
+        expect(countRow.input).toMatchObject({ kind: 'data', data: { n: 2 } })
+        expect(countRow.output).toMatchObject({ kind: 'flow', brand: 'ndjson' })
+        expect(countRow.output!['size'] as number).toBeGreaterThan(0)
+
+        yield* server.stop()
+      }),
+    )
+  })
+
   it('a request leaves request/span/log/failure rows; request() assembles them; query() filters', async () => {
     unwrap(
       await run(function* () {

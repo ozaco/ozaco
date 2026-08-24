@@ -31,6 +31,13 @@ tasks:
       - tests/**/*
     options:
       runDepsInParallel: false
+  seed:
+    command: bun run scripts/seed.ts
+    deps:
+      - std:build
+      - db:build
+    options:
+      cache: false
   start:
     command: bun run src/main.ts
     deps:

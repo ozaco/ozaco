@@ -73,7 +73,9 @@ export function* exec<T>(
   return yield* settled.operation
 }
 
-const rowOf = (event: ObserveDef.Event): { table: string; row: Record<string, unknown> } => {
+const rowOf = (
+  event: Exclude<ObserveDef.Event, { t: 'request-update' }>,
+): { table: string; row: Record<string, unknown> } => {
   switch (event.t) {
     case 'request': {
       return { table: requests.name, row: { ...event.row } }
@@ -101,11 +103,17 @@ const rowOf = (event: ObserveDef.Event): { table: string; row: Record<string, un
 const clean = (row: Record<string, unknown>): Record<string, unknown> =>
   Object.fromEntries(Object.entries(row).map(([key, value]) => [key, value ?? undefined]))
 
-/** Write a batch of events grouped per table in one insert each. */
+/** Write a batch of events grouped per table in one insert each; updates patch after. */
 export function* writeBatch(db: Db, batch: readonly ObserveDef.Event[]): Operation<void> {
   const grouped = new Map<string, Record<string, unknown>[]>()
+  const updates: ObserveDef.RequestUpdate[] = []
 
   for (const event of batch) {
+    if (event.t === 'request-update') {
+      updates.push(event.update)
+      continue
+    }
+
     const { table, row } = rowOf(event)
     const rows = grouped.get(table) ?? []
     rows.push(clean(row))
@@ -115,6 +123,17 @@ export function* writeBatch(db: Db, batch: readonly ObserveDef.Event[]): Operati
   for (const [table, rows] of grouped) {
     // a failing batch must never take the server down: drop it, count it
     yield* attempt(() => db.insertMany(table, rows as AnyType))
+  }
+
+  // a streamed body finished after its row: patch in the final size + duration
+  for (const update of updates) {
+    yield* attempt(function* () {
+      const row = yield* db.query(requests.name).filter(eq('requestId', update.requestId)).first()
+
+      if (row) {
+        yield* db.patch(requests.name, String((row as AnyType)._id), clean(update.patch) as AnyType)
+      }
+    })
   }
 }
 
