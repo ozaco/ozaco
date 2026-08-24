@@ -4,6 +4,33 @@ toolchains:
   default: bun
 
 tasks:
+  # EVERY test task in the repo — the fast suites AND the docker-backed legs (pg, redis, nats,
+  # network, chaos, bus) — as one target: `moon run :test-all`; moon runs the deps in parallel
+  # (dependency-aware), cap with `-c/--concurrency N`.
+  test-all:
+    command: noop
+    deps:
+      - ai:test
+      - cli:test
+      - client:test
+      - db:test
+      - db:test-bus
+      - db:test-chaos
+      - db:test-pg
+      - db:test-redis
+      - demo:test
+      - devkit:test
+      - observe:test
+      - panel:test
+      - server:test
+      - server:test-network
+      - std:test
+      - transport:test
+      - transport:test-nats
+      - transport:test-redis
+    options:
+      runInCI: false
+      cache: false
   check:
     options:
       runInCI: true

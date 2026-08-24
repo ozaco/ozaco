@@ -2,8 +2,8 @@
 import { useState } from 'react'
 
 import type { Connection } from '../lib/config'
-import type { Entry, Manifest } from '../lib/manifest'
-import { groupsOf, matches, orphanSockets } from '../lib/manifest'
+import type { Entry, Manifest } from '../lib/ozaco'
+import { groupsOf, matches, orphanSockets } from '../lib/ozaco'
 
 import { MethodTag, WsTag } from './badges'
 
@@ -16,6 +16,7 @@ interface Props {
   readonly onManifest: () => void
   readonly onTheme: () => void
   readonly observeUrl: string | null
+  readonly openapiUrl: string | null
 }
 
 const Row = ({
@@ -55,6 +56,7 @@ export const Sidebar = ({
   onManifest,
   onTheme,
   observeUrl,
+  openapiUrl,
 }: Props) => {
   const [query, setQuery] = useState('')
   const [closed, setClosed] = useState<Set<string>>(new Set())
@@ -155,6 +157,16 @@ export const Sidebar = ({
         <button className='btn' onClick={onManifest} title='manifest'>
           {'{}'}
         </button>
+        {openapiUrl && (
+          <a
+            className='btn'
+            href={openapiUrl}
+            target='_blank'
+            rel='noreferrer'
+            title='OpenAPI 3.1 schema'>
+            ⧉ openapi
+          </a>
+        )}
         {observeUrl && (
           <a
             className='btn'

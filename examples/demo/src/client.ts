@@ -49,8 +49,7 @@ export function* walk(url: string, report: (step: Step) => void = () => {}): Ope
     steps.push({ name, detail })
     report({ name, detail })
   }
-  let token: string | undefined
-  const client = yield* createClient<Api>({ url, token: () => token })
+  const client = yield* createClient<Api>({ url })
 
   // --- manifest + docs --------------------------------------------------------------------
   const manifest = yield* client.$manifest()
@@ -64,14 +63,14 @@ export function* walk(url: string, report: (step: Step) => void = () => {}): Ope
   const anonymous = yield* attempt(client.account.whoami())
   note('whoami anonymous', isFailure(anonymous) ? anonymous.error : anonymous.value)
   const tokens = yield* client.account.login({ email: 'ada@example.com', password: 'ada' })
-  token = tokens.accessToken
+  client.$setToken(tokens.accessToken)
   const me = yield* client.account.whoami()
   note('login + whoami', me)
   const rotated = yield* client.account.refresh({ refreshToken: tokens.refreshToken! })
   note('refresh', { rotated: rotated.refreshToken !== tokens.refreshToken })
   const replay = yield* attempt(client.account.refresh({ refreshToken: tokens.refreshToken! }))
   note('refresh replay', isFailure(replay) ? replay.error : 'accepted?!')
-  token = rotated.accessToken
+  client.$setToken(rotated.accessToken)
   const promoted = yield* client.account.promote({ email: 'bob@example.com' })
   note('admin-only promote', promoted)
 
@@ -130,12 +129,17 @@ export function* walk(url: string, report: (step: Step) => void = () => {}): Ope
   const ingest = yield* client.media.ingest(bytesOf(5000))
   yield* sleep(50)
   const after = yield* client.media.list()
+  const stored = yield* client.media.download({ id: upload.id })
+  const storedBytes = yield* until(new Response(stored).arrayBuffer())
+  const missing = yield* attempt(client.media.download({ id: 'nope' }))
 
   note('uploads', {
     upload: upload.size,
     ingest: ingest.size,
     listBefore: before.length,
     listAfter: after.length,
+    downloaded: storedBytes.byteLength,
+    missing: isFailure(missing) ? missing.error : 'accepted?!',
   })
 
   // --- cache + resilience ---------------------------------------------------------------

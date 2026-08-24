@@ -1,4 +1,4 @@
-import type { Flow, Operation } from 'std:effect'
+import type { Flow, Future, FutureFlow, Operation } from 'std:effect'
 import type { AnyType } from 'std:shared'
 
 import type { ManifestDef } from './manifest'
@@ -41,6 +41,10 @@ export namespace ClientDef {
 
     /** request id to send (one is minted otherwise). */
     readonly requestId?: string | undefined
+
+    /** Abort the AWAITED call (and whatever stream it opened). A `yield*`ed call needs no
+     * signal — it is cancelled with the caller's task. */
+    readonly signal?: AbortSignal | undefined
   }
 
   /** An action by name: `'demo.echo'` or `{ service, action }` (a server ref works). */
@@ -101,22 +105,22 @@ export namespace ClientDef {
       : never
 
   /** What a call returns for an output declaration, by brand: `ndjson`/`sse` (a Flow on the
-   * server) → `Flow<T, void>`, `text` → `string`, `bytes:*` → `ReadableStream<Uint8Array>`,
-   * values as-is. */
+   * server) → `FutureFlow` (`yield*` OR `for await`), `text` → `string`, `bytes:*` →
+   * `ReadableStream<Uint8Array>`, values as-is. */
   export type Decoded<TOutput> = 0 extends 1 & TOutput
     ? unknown
     : [BrandOf<TOutput>] extends [never]
       ? TOutput extends ReadableStream<infer T>
         ? T extends Uint8Array
           ? ReadableStream<Uint8Array>
-          : Flow<T, void>
+          : FutureFlow<T>
         : TOutput
       : BrandOf<TOutput> extends 'text'
         ? string
         : BrandOf<TOutput> extends `bytes:${string}`
           ? ReadableStream<Uint8Array>
           : Extract<TOutput, Flow<AnyType, AnyType>> extends Flow<infer T, AnyType>
-            ? Flow<T, void>
+            ? FutureFlow<T>
             : ReadableStream<Uint8Array>
 
   /** The phantom action of a server ref: the one non-string member. */
@@ -155,7 +159,10 @@ export namespace ClientDef {
       ? [input?: I, options?: CallOptions]
       : [input: I, options?: CallOptions]
 
-  export type Callable<R> = (...args: CallArgs<InputOf<R>>) => Operation<Decoded<OutputOf<R>>>
+  /** Every call is a {@link Future}: `yield*` it (inline, the caller's task) OR `await` it
+   * (a detached job of the client's scope; resolves a `Result` success, rejects with the
+   * failure). Nothing is given up on either side. */
+  export type Callable<R> = (...args: CallArgs<InputOf<R>>) => Future<Decoded<OutputOf<R>>>
 
   export type ClientOf<TApi> = {
     readonly [S in keyof TApi]: {
@@ -165,35 +172,45 @@ export namespace ClientDef {
 
   export type Handle<TApi> = ClientOf<TApi> & Statics
 
+  /** What {@link connectClient} resolves: the same handle plus the session teardown. */
+  export type ConnectedHandle<TApi> = Handle<TApi> & {
+    /** Tear the connection down: every open stream and socket dies with the scope. */
+    readonly $close: () => Promise<void>
+  }
+
   /** The untyped half of a handle (the same on every client). */
   export interface Statics {
     /** call by name (untyped). */
-    readonly $call: (target: Target, input?: unknown, options?: CallOptions) => Operation<unknown>
+    readonly $call: (target: Target, input?: unknown, options?: CallOptions) => Future<unknown>
 
     /** like `$call`, resolving `{ value, meta }`. */
     readonly $callWithMeta: (
       target: Target,
       input?: unknown,
       options?: CallOptions,
-    ) => Operation<{ readonly value: unknown; readonly meta: Meta }>
+    ) => Future<{ readonly value: unknown; readonly meta: Meta }>
 
     /** the manifest (fetched on first use). */
-    readonly $manifest: () => Operation<ManifestDef.Manifest>
+    readonly $manifest: () => Future<ManifestDef.Manifest>
 
-    /** a resource's realtime watch as a Flow of frames (reconnects resume with `since`). */
+    /** a resource's realtime watch as frames (reconnects resume with `since`). */
     readonly $watch: <TRow = unknown>(
       resource: string,
       options?: WatchOptions,
-    ) => Flow<WatchFrame<TRow>, void>
+    ) => FutureFlow<WatchFrame<TRow>>
 
     /** `$watch` materialized into the current rows. */
     readonly $rows: <TRow = unknown>(
       resource: string,
       options?: WatchOptions,
-    ) => Flow<Materialized<TRow>, void>
+    ) => FutureFlow<Materialized<TRow>>
 
     /** the last request id a call received. */
     readonly $lastRequestId: () => string | null
+
+    /** Replace the bearer token from here on (`null` clears it; the option resolver is the
+     * fallback until the first set). */
+    readonly $setToken: (token: string | null) => void
   }
 
   export interface Context {

@@ -71,6 +71,41 @@ const optionsDoc = (options: Readonly<Record<string, unknown>>): Record<string, 
     JSON.stringify(options, (_key, value) => (typeof value === 'function' ? undefined : value)),
   )
 
+/** One service as its manifest doc — also what the observe service's own manifest rides. */
+export const serviceDocOf = (
+  def: ServiceDef.Service,
+  sockets: readonly DocsDef.SocketDoc[],
+): DocsDef.ServiceDoc => {
+  const actions: DocsDef.ActionDoc[] = []
+
+  for (const [name, actionDef] of Object.entries(def.actions)) {
+    const { meta } = actionDef
+
+    actions.push({
+      id: `${def.name}.${name}`,
+      service: def.name,
+      action: name,
+      kind: meta.kind,
+      title: meta.title,
+      description: meta.description,
+      route: meta.route,
+      input: planeDoc(meta.input, meta.inputPlane),
+      output: planeDoc(meta.output, meta.outputPlane),
+      errors: meta.errors,
+      tags: meta.tags,
+      options: optionsDoc(meta.options),
+    })
+  }
+
+  return {
+    name: def.name,
+    version: def.version,
+    description: def.description,
+    actions,
+    sockets,
+  }
+}
+
 export const manifestOf = (
   kernel: ServerDef.Context,
   docs: { readonly path: string; readonly console: boolean },
@@ -78,34 +113,12 @@ export const manifestOf = (
   const services: DocsDef.ServiceDoc[] = []
 
   for (const def of kernel.registry.services.values()) {
-    const actions: DocsDef.ActionDoc[] = []
-
-    for (const [name, actionDef] of Object.entries(def.actions)) {
-      const { meta } = actionDef
-
-      actions.push({
-        id: `${def.name}.${name}`,
-        service: def.name,
-        action: name,
-        kind: meta.kind,
-        title: meta.title,
-        description: meta.description,
-        route: meta.route,
-        input: planeDoc(meta.input, meta.inputPlane),
-        output: planeDoc(meta.output, meta.outputPlane),
-        errors: meta.errors,
-        tags: meta.tags,
-        options: optionsDoc(meta.options),
-      })
-    }
-
-    services.push({
-      name: def.name,
-      version: def.version,
-      description: def.description,
-      actions,
-      sockets: kernel.sockets.filter(socket => socket.service === def.name),
-    })
+    services.push(
+      serviceDocOf(
+        def,
+        kernel.sockets.filter(socket => socket.service === def.name),
+      ),
+    )
   }
 
   return {
@@ -116,7 +129,7 @@ export const manifestOf = (
     services,
     errors: STATUS_OF,
     sockets: [...kernel.sockets],
-    observe: { console: docs.console ? '/_ozaco' : null },
-    docs: { path: docs.path },
+    observe: { console: docs.console ? '/_observe' : null },
+    docs: { path: docs.path, openapi: `${docs.path}/openapi.json` },
   }
 }

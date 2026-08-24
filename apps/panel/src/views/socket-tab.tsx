@@ -9,9 +9,8 @@ import type { Line } from '../components/timeline'
 import { Timeline } from '../components/timeline'
 import type { Connection } from '../lib/config'
 import { KEYS } from '../lib/config'
-import type { Socket } from '../lib/manifest'
-import type { WatchFrame, Watching } from '../lib/ozaco'
-import { watch } from '../lib/ozaco'
+import type { Socket, WatchFrame, Watching } from '../lib/ozaco'
+import { clientOf, watch } from '../lib/ozaco'
 
 interface Props {
   readonly socket: Socket
@@ -101,13 +100,15 @@ export const SocketTab = ({ socket, connection }: Props) => {
         `watch ${resourceOf(socket)} ${filter.trim() || ''} ${since.trim() ? `since ${since}` : ''}`,
       )
       watching.current = watch(
-        connection,
+        clientOf(connection),
         resourceOf(socket),
         { filter: parsedFilter, order: parsedOrder, since: since.trim() || undefined },
-        apply,
-        error => {
-          log(error ? 'error' : 'info', error ? `${error.tag}: ${error.message}` : 'closed')
-          setConnected(false)
+        {
+          onFrame: apply,
+          onEnd: error => {
+            log(error ? 'error' : 'info', error ? `${error.tag}: ${error.message}` : 'closed')
+            setConnected(false)
+          },
         },
       )
       return

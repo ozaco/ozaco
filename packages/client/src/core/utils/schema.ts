@@ -1,6 +1,9 @@
+// oxlint-disable import/exports-last
 /**
- * JSON Schema (what the manifest carries per plane) → an example value and a flat field list
- * for the Params form. Small on purpose: objects, arrays, primitives, enums, unions, defaults.
+ * JSON Schema (what the manifest carries per plane) → an example value, a flat field list and
+ * text coercion — what any tool that builds a call or a form from the manifest needs (the docs
+ * panel's Params form, a CLI try-it, tests). Small on purpose: objects, arrays, primitives,
+ * enums, unions, defaults.
  */
 export type Schema = Record<string, unknown> | null | undefined
 
@@ -58,7 +61,9 @@ export const exampleOf = (schema: Schema, depth = 0): unknown => {
   switch (typeOf(schema)) {
     case 'object': {
       const out: Record<string, unknown> = {}
-      const required = new Set(Array.isArray(schema['required']) ? (schema['required'] as string[]) : [])
+      const required = new Set(
+        Array.isArray(schema['required']) ? (schema['required'] as string[]) : [],
+      )
 
       for (const [name, property] of Object.entries(
         isRecord(schema['properties']) ? schema['properties'] : {},
@@ -77,7 +82,11 @@ export const exampleOf = (schema: Schema, depth = 0): unknown => {
 
     case 'string': {
       const format = schema['format']
-      return format === 'email' ? 'user@example.com' : format === 'date-time' ? new Date().toISOString() : ''
+      return format === 'email'
+        ? 'user@example.com'
+        : format === 'date-time'
+          ? new Date().toISOString()
+          : ''
     }
     case 'number':
     case 'integer': {
@@ -108,7 +117,9 @@ export const fieldsOf = (schema: Schema): readonly Field[] => {
     return []
   }
 
-  const required = new Set(Array.isArray(schema['required']) ? (schema['required'] as string[]) : [])
+  const required = new Set(
+    Array.isArray(schema['required']) ? (schema['required'] as string[]) : [],
+  )
 
   return Object.entries(schema['properties']).map(([name, property]) => {
     const record = isRecord(property) ? property : {}

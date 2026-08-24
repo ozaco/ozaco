@@ -69,6 +69,6 @@ export namespace DocsDef {
     /** every socket route, those without a service included. */
     readonly sockets: readonly SocketDoc[]
     readonly observe: { readonly console: string | null }
-    readonly docs: { readonly path: string }
+    readonly docs: { readonly path: string; readonly openapi: string }
   }
 }

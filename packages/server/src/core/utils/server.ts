@@ -67,7 +67,8 @@ export function* createServer<const TServices extends readonly ServiceDef.Servic
   yield* validateOptions(kernel)
   kernel.kv = !isFailure(yield* attempt(() => Kv.actions.describe()))
 
-  for (const def of options.services) {
+  // the registry, not `options.services`: a plugin-registered service (observe) serves too
+  for (const def of kernel.registry.services.values()) {
     if (kernel.hosted.has(def.name)) {
       yield* kernel.carrier.actions.serve(def.name, serverFor(kernel, def))
     }

@@ -1,3 +1,4 @@
+// oxlint-disable import/exports-last
 /**
  * Where the panel talks to and what it remembers. Served by the docs plugin at `<docsPath>`
  * (`/docs` by default) on the same origin as the api, so the base is `location.origin` and the

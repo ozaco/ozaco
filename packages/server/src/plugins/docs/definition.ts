@@ -4,13 +4,15 @@ import { definePlugin } from 'std:plugin'
 import { fail } from 'std:result'
 
 import { manifestOf } from './internal/manifest'
+import { openapiOf } from './internal/openapi'
 import { PANEL_HTML } from './internal/panel.gen'
 import type { DocsDef } from './types'
 
 /**
  * The docs plugin: the Ozaco Manifest v1 at `<path>/manifest` (services, actions, routes,
- * planes/brands, JSON Schemas, options, errors) and a self-contained panel at `<path>` with
- * try-it. The client consumes the manifest; nothing is fetched from a CDN.
+ * planes/brands, JSON Schemas, options, errors), an OpenAPI 3.1 rendering of it at
+ * `<path>/openapi.json`, and a self-contained panel at `<path>` with try-it. The client
+ * consumes the manifest; nothing is fetched from a CDN.
  */
 export const Docs = definePlugin<
   ServerDef.PluginContext & { manifest(): DocsDef.Manifest },
@@ -47,6 +49,13 @@ export const Docs = definePlugin<
           })
           yield* edge.actions.raw({
             method: 'GET',
+            path: `${path}/openapi.json`,
+            *handler() {
+              return Response.json(openapiOf(manifest()))
+            },
+          })
+          yield* edge.actions.raw({
+            method: 'GET',
             path,
             *handler() {
               return new Response(
@@ -65,5 +74,10 @@ export const Docs = definePlugin<
   /** The manifest without an edge (tests, codegen). */
   *manifest() {
     return (yield* Docs.context.expect()).manifest()
+  },
+
+  /** The manifest as an OpenAPI 3.1 document (also served at `<path>/openapi.json`). */
+  *openapi() {
+    return openapiOf((yield* Docs.context.expect()).manifest())
   },
 })

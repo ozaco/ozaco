@@ -53,6 +53,6 @@ export namespace ManifestDef {
     readonly errors: Readonly<Record<string, number>>
     readonly sockets?: readonly Socket[] | undefined
     readonly observe?: { readonly console: string | null } | undefined
-    readonly docs?: { readonly path: string } | undefined
+    readonly docs?: { readonly path: string; readonly openapi?: string | undefined } | undefined
   }
 }

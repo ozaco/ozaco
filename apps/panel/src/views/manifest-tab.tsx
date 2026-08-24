@@ -1,5 +1,5 @@
 import { JsonTree } from '../components/json-tree'
-import type { Manifest } from '../lib/manifest'
+import type { Manifest } from '../lib/ozaco'
 
 export const ManifestTab = ({ manifest }: { manifest: Manifest }) => (
   <div className='h-full overflow-auto p-3'>

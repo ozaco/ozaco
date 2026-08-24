@@ -20,4 +20,11 @@ export const uploadsTable = table('uploads', {
   mime: column.text(),
 })
 
-export const tables = [todosTable, usersTable, uploadsTable]
+/** File content, base64 per chunk row — written on upload, streamed back on download. */
+export const uploadChunksTable = table('uploadChunks', {
+  uploadId: column.text(),
+  seq: column.int(),
+  data: column.text(),
+})
+
+export const tables = [todosTable, usersTable, uploadsTable, uploadChunksTable]

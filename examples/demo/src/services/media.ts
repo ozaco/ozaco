@@ -1,12 +1,20 @@
 /**
  * Media: INPUT planes — a multipart upload (`parts`: fields + a file stream), a raw byte body
- * (`stream.bytes`), and listing what was uploaded (with the db's uploads table).
+ * (`stream.bytes`), listing what was uploaded — and the way back OUT: `download` streams the
+ * stored content from the db (base64 chunk rows read page by page, never the whole file at once).
  */
+import { Buffer } from 'node:buffer'
+
 import { action, service, stream } from '@ozaco/server'
+import type { Flow } from '@ozaco/std/effect'
 import { until } from '@ozaco/std/effect'
+import { fail } from '@ozaco/std/result'
 import { z } from 'zod'
 
 const Upload = z.object({ id: z.string(), name: z.string(), size: z.number(), mime: z.string() })
+
+/** One chunk row per this many raw bytes (base64 in the row, so ~341KB of text). */
+const CHUNK_SIZE = 256 * 1024
 
 function* sizeOf(body: ReadableStream<Uint8Array>) {
   const reader = body.getReader()
@@ -23,6 +31,18 @@ function* sizeOf(body: ReadableStream<Uint8Array>) {
   }
 }
 
+const concat = (parts: readonly Uint8Array[], total: number): Uint8Array => {
+  const out = new Uint8Array(total)
+  let at = 0
+
+  for (const part of parts) {
+    out.set(part, at)
+    at += part.length
+  }
+
+  return out
+}
+
 export const media = service(
   'media',
   {
@@ -37,17 +57,107 @@ export const media = service(
         }),
         output: Upload,
         auth: 'user',
-        description: 'multipart/form-data: `name`, `mime` fields then a `file` part',
+        description:
+          'multipart/form-data: `name`, `mime` fields then a `file` part — content lands in the db',
       },
       function* ({ input, ctx }) {
-        const size = yield* sizeOf(input.streams.file as ReadableStream<Uint8Array>)
         const row = yield* ctx.db.insert('uploads', {
           name: input.fields.name,
-          size,
+          size: 0,
           mime: input.fields.mime,
         })
-        yield* ctx.emit('media.uploaded', { id: String(row._id), name: input.fields.name, size })
-        return { id: String(row._id), name: input.fields.name, size, mime: input.fields.mime }
+        const id = String(row._id)
+        const reader = (input.streams.file as ReadableStream<Uint8Array>).getReader()
+        let size = 0
+        let seq = 0
+        let pending: Uint8Array[] = []
+        let pendingSize = 0
+
+        function* flush() {
+          const data = Buffer.from(concat(pending, pendingSize)).toString('base64')
+          pending = []
+          pendingSize = 0
+          yield* ctx.db.insert('uploadChunks', { uploadId: id, seq: seq++, data })
+        }
+
+        for (;;) {
+          const step = yield* until(reader.read())
+
+          if (step.done) {
+            break
+          }
+
+          size += step.value.length
+          pending.push(step.value)
+          pendingSize += step.value.length
+
+          if (pendingSize >= CHUNK_SIZE) {
+            yield* flush()
+          }
+        }
+
+        if (pendingSize > 0) {
+          yield* flush()
+        }
+
+        yield* ctx.db.patch('uploads', id, { size })
+        yield* ctx.emit('media.uploaded', { id, name: input.fields.name, size })
+        return { id, name: input.fields.name, size, mime: input.fields.mime }
+      },
+    ),
+    download: action.stream(
+      {
+        input: z.object({ id: z.string() }),
+        output: stream.bytes('application/octet-stream'),
+        route: { method: 'GET', path: '/media/download/:id' },
+        errors: { 'media.not-found': 404 },
+        description: 'The stored content, streamed back from the db one chunk page at a time',
+      },
+      function* ({ input, ctx }) {
+        const upload = yield* ctx.db.get('uploads', input.id)
+
+        if (!upload) {
+          return yield* fail('media.not-found', `no upload ${input.id}`)
+        }
+
+        const flow: Flow<Uint8Array, void> = {
+          *[Symbol.iterator]() {
+            let cursor: string | null = null
+            let exhausted = false
+            let buffered: Uint8Array[] = []
+
+            return {
+              *next() {
+                for (;;) {
+                  const chunk = buffered.shift()
+
+                  if (chunk) {
+                    return { done: false as const, value: chunk }
+                  }
+
+                  if (exhausted) {
+                    return { done: true as const, value: undefined }
+                  }
+
+                  const page = yield* ctx.db
+                    .query('uploadChunks')
+                    .filter({ op: 'eq', field: 'uploadId', value: input.id })
+                    .order('seq', 'asc')
+                    .paginate({ limit: 4, cursor })
+
+                  cursor = page.pageInfo.nextCursor
+                  exhausted = !page.pageInfo.hasNext
+
+                  buffered = page.data.map(
+                    row => new Uint8Array(Buffer.from(String(row.data), 'base64')),
+                  )
+                }
+              },
+            }
+          },
+        }
+
+        return flow
       },
     ),
     ingest: action.action(
@@ -77,5 +187,5 @@ export const media = service(
       },
     ),
   },
-  { version: '1.0.0', description: 'Uploads and raw bodies' },
+  { version: '1.0.0', description: 'Uploads, raw bodies and db-backed downloads' },
 )

@@ -5,11 +5,13 @@ import { attempt, createQueue, ensure, fork, sleep, useContext } from 'std:effec
 import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 
+import { ObserveErrors } from './errors'
 import { instanceStats, membersView, runCluster } from './internal/cluster'
 import { enqueue, flush, startFlusher } from './internal/collector'
 import { mountConsole } from './internal/console'
 import { DAY_MS, StateRef } from './internal/context'
 import { mirror } from './internal/mirror'
+import { observeService } from './internal/service'
 import {
   exec,
   matchesQuery,
@@ -25,7 +27,7 @@ import { requests, spans } from './utils/tables'
  * The observe store: every request, span, log line, failure and event the kernel reports becomes
  * a row in the `_ob_*` tables of a private `DbClient` (over the app's adapter, or the given
  * one), written in batches off the request path. `Observe.actions.request/query/watch` read it
- * back; `console: true` serves the dev console at `/_ozaco`; `mirror: true` echoes to stdout.
+ * back; `console: true` serves the dev console at `/_observe`; `mirror: true` echoes to stdout.
  */
 export const ObservePlugin: ObserveDef.Handle = Observe.implement<
   ObserveDef.Options,
@@ -73,6 +75,16 @@ export const ObservePlugin: ObserveDef.Handle = Observe.implement<
         'Observe forward/collect need a carrier (createServer installs it before plugins)',
       )
     }
+    // the observe API is a REAL service (typed calls, docs, the console): registered here so
+    // the edge mounts it with everything else; local only — never served over the carrier
+    if (kernel.registry.services.has(observeService.name)) {
+      return yield* fail(ObserveErrors.Taken, 'a service named "observe" is already declared')
+    }
+    ;(kernel.registry.services as Map<string, AnyType>).set(observeService.name, observeService)
+    for (const [name, def] of Object.entries(observeService.actions)) {
+      ;(kernel.registry.actions as Map<string, AnyType>).set(`${observeService.name}.${name}`, def)
+    }
+    kernel.hosted.add(observeService.name)
     yield* StateRef.set(state)
     yield* openStore(state.jobs, options?.db)
     yield* ensure(() => {

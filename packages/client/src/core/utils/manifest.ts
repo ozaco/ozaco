@@ -1,16 +1,15 @@
-/** The manifest, indexed the way the workspace browses it. */
-import type { ManifestDef } from '@ozaco/client'
-
-export type Manifest = ManifestDef.Manifest
-export type Action = ManifestDef.Action
-export type Socket = ManifestDef.Socket
-
-export type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
+// oxlint-disable import/exports-last
+/**
+ * Manifest navigation: the manifest indexed the way a browsing tool walks it — services as
+ * groups of openable entries (actions + their sockets), free sockets, lookup by id, `:param`
+ * names, text filtering. Pure data helpers over `ManifestDef`.
+ */
+import type { ManifestDef } from '../types/manifest'
 
 /** One openable thing in the sidebar. */
 export type Entry =
-  | { readonly kind: 'action'; readonly id: string; readonly action: Action }
-  | { readonly kind: 'socket'; readonly id: string; readonly socket: Socket }
+  | { readonly kind: 'action'; readonly id: string; readonly action: ManifestDef.Action }
+  | { readonly kind: 'socket'; readonly id: string; readonly socket: ManifestDef.Socket }
 
 export interface ServiceGroup {
   readonly name: string
@@ -19,7 +18,7 @@ export interface ServiceGroup {
   readonly entries: readonly Entry[]
 }
 
-export const groupsOf = (manifest: Manifest): readonly ServiceGroup[] =>
+export const groupsOf = (manifest: ManifestDef.Manifest): readonly ServiceGroup[] =>
   manifest.services.map(service => ({
     name: service.name,
     version: service.version,
@@ -35,10 +34,10 @@ export const groupsOf = (manifest: Manifest): readonly ServiceGroup[] =>
   }))
 
 /** Socket routes that belong to no service (custom sockets mounted by the app). */
-export const orphanSockets = (manifest: Manifest): readonly Socket[] =>
+export const orphanSockets = (manifest: ManifestDef.Manifest): readonly ManifestDef.Socket[] =>
   (manifest.sockets ?? []).filter(socket => socket.service === null)
 
-export const findEntry = (manifest: Manifest, id: string): Entry | null => {
+export const findEntry = (manifest: ManifestDef.Manifest, id: string): Entry | null => {
   for (const group of groupsOf(manifest)) {
     const entry = group.entries.find(candidate => candidate.id === id)
 

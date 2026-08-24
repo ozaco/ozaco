@@ -32,7 +32,7 @@ export namespace ObservePluginDef {
      * observability in its own database. */
     readonly db?: ServerDef.PluginLike | undefined
 
-    /** Serve the dev console at `/_ozaco` (needs an edge). Default false. */
+    /** Serve the dev console at `/_observe` (needs an edge). Default false. */
     readonly console?: boolean | undefined
 
     /** Mirror every request/failure/log line to stdout (dev). Default false. */

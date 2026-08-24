@@ -17,7 +17,7 @@ await main(function* () {
   )
   if (info.url) {
     console.log(
-      `[demo] docs ${info.url}/docs · observe ${info.url}/_ozaco · health ${info.url}/_health`,
+      `[demo] docs ${info.url}/docs · observe ${info.url}/_observe · health ${info.url}/_health`,
     )
   }
   yield* suspend()

@@ -32,7 +32,8 @@ describe('docs', () => {
         const manifest = (yield* until(response.json())) as AnyType
         expect(manifestSchema.safeParse(manifest).success).toBe(true)
         expect(manifest.name).toBe('demo')
-        expect(manifest.observe.console).toBe('/_ozaco')
+        expect(manifest.observe.console).toBe('/_observe')
+        expect(manifest.docs).toEqual({ path: '/docs', openapi: '/docs/openapi.json' })
         const todosDoc = manifest.services.find((entry: { name: string }) => entry.name === 'todos')
         const create = todosDoc.actions.find(
           (entry: { action: string }) => entry.action === 'create',
@@ -54,15 +55,32 @@ describe('docs', () => {
         expect(slow.options).toEqual({})
         expect(manifest.errors['server.not-found']).toBe(404)
 
+        const openapi = yield* Edge.actions.handle(new Request('http://edge/docs/openapi.json'))
+        expect(openapi.status).toBe(200)
+        const oas = (yield* until(openapi.json())) as AnyType
+        expect(oas.openapi).toBe('3.1.0')
+        expect(oas.info).toEqual({ title: 'demo', version: '2.0.0' })
+        const createOp = oas.paths['/todos/create'].post
+        expect(createOp.operationId).toBe('todos.create')
+        expect(createOp.summary).toBe('todos.create')
+        expect(createOp.requestBody.content['application/json'].schema.properties.title.type).toBe(
+          'string',
+        )
+        expect(createOp.responses['200'].content['application/json'].schema.required).toEqual([
+          'id',
+          'title',
+          'done',
+        ])
+
         const panel = yield* Edge.actions.handle(new Request('http://edge/docs'))
         expect(panel.headers.get('content-type')).toContain('text/html')
         const html = yield* until(panel.text())
         expect(html).toContain('demo api')
         expect(html).not.toMatch(/https?:\/\/(cdn|unpkg|jsdelivr)/u)
         // the observe console is mounted too
-        const console = yield* Edge.actions.handle(new Request('http://edge/_ozaco'))
+        const console = yield* Edge.actions.handle(new Request('http://edge/_observe'))
         expect(console.status).toBe(200)
-        const live = yield* Edge.actions.handle(new Request('http://edge/_ozaco/api/requests'))
+        const live = yield* Edge.actions.handle(new Request('http://edge/_observe/api/requests'))
         expect(live.status).toBe(200)
         yield* server.stop()
       }),

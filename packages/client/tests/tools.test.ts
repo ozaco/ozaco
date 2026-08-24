@@ -1,8 +1,18 @@
+import type { ManifestDef } from 'client:core'
+import {
+  coerceField,
+  exampleOf,
+  fieldsOf,
+  findEntry,
+  groupsOf,
+  matches,
+  orphanSockets,
+  pathParams,
+} from 'client:core'
+
 import { describe, expect, it } from 'bun:test'
 
-import type { Manifest } from '../src/lib/manifest'
-import { findEntry, groupsOf, matches, orphanSockets, pathParams } from '../src/lib/manifest'
-import { coerceField, exampleOf, fieldsOf } from '../src/lib/schema'
+type Manifest = ManifestDef.Manifest
 
 const manifest: Manifest = {
   manifest: 'ozaco/1',

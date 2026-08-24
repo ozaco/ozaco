@@ -17,10 +17,8 @@ import {
   storage,
   theme as readTheme,
 } from './lib/config'
-import type { Entry, Manifest } from './lib/manifest'
-import { findEntry } from './lib/manifest'
-import type { WireFailure } from './lib/ozaco'
-import { loadManifest } from './lib/ozaco'
+import type { Entry, Manifest, WireFailure } from './lib/ozaco'
+import { clientOf, findEntry, loadManifest } from './lib/ozaco'
 import { HttpTab } from './views/http-tab'
 import { ManifestTab } from './views/manifest-tab'
 import { SocketTab } from './views/socket-tab'
@@ -47,7 +45,7 @@ export const App = () => {
 
   const refresh = useCallback(() => {
     setStatus({ kind: 'loading' })
-    void loadManifest(connection).then(
+    void loadManifest(clientOf(connection)).then(
       loaded => {
         setManifest(loaded)
         setStatus({ kind: 'ok' })
@@ -104,6 +102,11 @@ export const App = () => {
           onTheme={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
           observeUrl={
             manifest?.observe?.console ? `${connection.base}${manifest.observe.console}` : null
+          }
+          openapiUrl={
+            manifest
+              ? `${connection.base}${manifest.docs?.openapi ?? `${connection.docsPath}/openapi.json`}`
+              : null
           }
         />
       </div>

@@ -33,6 +33,7 @@ describe('demo — every use case end to end', () => {
           'reports',
           'live',
           'cluster',
+          'observe',
         ])
         expect(detail(steps, 'manifest').sockets).toEqual(['/live/chat', '/todos/_realtime'])
         expect(detail(steps, 'whoami anonymous')).toBe('server.unauthorized')
@@ -53,6 +54,8 @@ describe('demo — every use case end to end', () => {
           ingest: 5000,
           listBefore: 0,
           listAfter: 1,
+          downloaded: 3000,
+          missing: 'media.not-found',
         })
         expect(detail(steps, 'cache')).toEqual({ hit: true, recomputedAfterInvalidate: true })
         const resilience = detail(steps, 'resilience')
@@ -83,8 +86,8 @@ describe('demo — every use case end to end', () => {
         for (const path of [
           '/docs',
           '/docs/manifest',
-          '/_ozaco',
-          '/_ozaco/api/cluster',
+          '/_observe',
+          '/_observe/api/cluster',
           '/_health',
           '/',
         ]) {
@@ -142,13 +145,17 @@ describe('demo — cluster', () => {
           feed: ['api-2'],
         })
         expect(detail(steps, 'streams')).toEqual({ ndjson: 3, sse: 2, text: 'a b c ', bytes: 4096 })
-        expect(detail(steps, 'uploads')).toMatchObject({ upload: 3000, ingest: 5000 })
+        expect(detail(steps, 'uploads')).toMatchObject({
+          upload: 3000,
+          ingest: 5000,
+          downloaded: 3000,
+        })
         expect(detail(steps, 'nested ctx.call')).toEqual({ todos: 2, uploads: 1 })
         expect(detail(steps, 'realtime watch')).toEqual({ syncRows: 1, afterCreate: 2 })
 
         // the gateway's observe store holds the service nodes' spans (forward → collect)
         yield* sleep(300)
-        const clusterView = yield* until(fetch(`${info.url}/_ozaco/api/cluster`))
+        const clusterView = yield* until(fetch(`${info.url}/_observe/api/cluster`))
         const view = (yield* until(clusterView.json())) as AnyType
         expect(view.instances.map((entry: AnyType) => entry.instance).toSorted()).toEqual([
           'api-1',

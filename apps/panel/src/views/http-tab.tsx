@@ -15,11 +15,8 @@ import type { Line } from '../components/timeline'
 import { Timeline } from '../components/timeline'
 import type { Connection } from '../lib/config'
 import { KEYS } from '../lib/config'
-import type { Action } from '../lib/manifest'
-import { pathParams } from '../lib/manifest'
-import type { Chunk, InFlight, Outcome } from '../lib/ozaco'
-import { send } from '../lib/ozaco'
-import { coerceField, exampleOf, fieldsOf } from '../lib/schema'
+import type { Action, Chunk, InFlight, Outcome } from '../lib/ozaco'
+import { clientOf, coerceField, exampleOf, fieldsOf, pathParams, send } from '../lib/ozaco'
 
 interface Props {
   readonly action: Action
@@ -28,7 +25,7 @@ interface Props {
 }
 
 type ReqTab = 'params' | 'body' | 'files' | 'headers' | 'auth' | 'docs'
-type ResTab = 'pretty' | 'raw' | 'headers' | 'timeline'
+type ResTab = 'pretty' | 'raw' | 'headers' | 'meta' | 'timeline'
 
 const SubTabs = <T extends string>({
   tabs,
@@ -151,7 +148,8 @@ export const HttpTab = ({ action, connection, onToken }: Props) => {
     startedAt.current = performance.now()
     setLines([{ at: 0, tone: 'out', text: `${action.route.method} ${resolvedPath}` }])
     const flight = send(
-      { connection, service: action.service, action: action.action, input, headers: extraHeaders },
+      clientOf(connection),
+      { service: action.service, action: action.action, input, headers: extraHeaders },
       chunk => {
         setChunks(prior => [...prior, chunk])
         setLines(prior => [
@@ -437,18 +435,6 @@ export const HttpTab = ({ action, connection, onToken }: Props) => {
           <>
             <StatusPill status={outcome.status} ok={outcome.ok} />
             <span style={{ color: 'var(--dim)' }}>{outcome.elapsedMs} ms</span>
-            <span style={{ color: 'var(--dim)' }}>{fmtBytes(size)}</span>
-            {outcome.brand && (
-              <span className='pill' style={{ background: 'var(--panel-2)', color: 'var(--dim)' }}>
-                {outcome.brand}
-              </span>
-            )}
-            <span
-              className='mono ml-auto truncate'
-              style={{ color: 'var(--dim)' }}
-              title='x-request-id'>
-              {outcome.requestId}
-            </span>
           </>
         ) : inFlight ? (
           <span style={{ color: 'var(--dim)' }}>
@@ -473,6 +459,7 @@ export const HttpTab = ({ action, connection, onToken }: Props) => {
           ['pretty', 'Pretty'],
           ['raw', 'Raw'],
           ['headers', 'Headers'],
+          ['meta', 'Meta'],
           ['timeline', 'Timeline'],
         ]}
         value={resTab}
@@ -536,6 +523,40 @@ export const HttpTab = ({ action, connection, onToken }: Props) => {
             }
           />
         )}
+        {resTab === 'meta' &&
+          (outcome ? (
+            <div className='flex flex-col gap-1'>
+              {(
+                [
+                  [
+                    'status',
+                    outcome.status === null
+                      ? outcome.ok
+                        ? 'ok'
+                        : 'error'
+                      : String(outcome.status),
+                  ],
+                  ['elapsed', `${outcome.elapsedMs} ms`],
+                  ['size', fmtBytes(size)],
+                  ['brand', outcome.brand ?? 'json'],
+                  ['x-request-id', outcome.requestId ?? '—'],
+                  ['chunks', String(chunks.length)],
+                  ...(outcome.error
+                    ? ([['error', `${outcome.error.tag}: ${outcome.error.message}`]] as const)
+                    : []),
+                ] as readonly (readonly [string, string])[]
+              ).map(([label, value]) => (
+                <div key={label} className='flex items-baseline gap-2'>
+                  <span className='w-[110px] shrink-0' style={{ color: 'var(--dim)' }}>
+                    {label}
+                  </span>
+                  <span className='mono break-all'>{value}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{ color: 'var(--dim)' }}>no response yet</div>
+          ))}
         {resTab === 'timeline' && <Timeline lines={lines} />}
       </div>
     </div>

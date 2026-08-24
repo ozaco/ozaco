@@ -65,6 +65,19 @@ export interface Subscription<T, TDone> {
 
 export type Flow<T, TReturn> = Operation<Subscription<T, TReturn>>
 
+/**
+ * A {@link Flow} that is ALSO async-iterable — the {@link Future} idea applied to streams, so
+ * neither world gives anything up: `yield*` opens it inline (the consuming scope paces and
+ * cancels it, plain Flow semantics), while `for await` runs a demand-pulled pump as a detached
+ * task of the scope it was created on. `cancel()` halts every open async iteration (a `Future` —
+ * `await` or `yield*` it); `done` settles once the async side finished (an iterator completed or
+ * failed, or `cancel()` was called) — nothing settles it while the flow is only used as a Flow.
+ */
+export interface FutureFlow<T> extends Flow<T, void>, AsyncIterable<T> {
+  readonly done: Future<void>
+  cancel(): Future<void>
+}
+
 export interface Signal<T, TClose> extends Flow<T, TClose> {
   send(value: T): void
   close(value: TClose): void

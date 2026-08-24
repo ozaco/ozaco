@@ -193,7 +193,7 @@ export function* createDemo(options: DemoOptions = {}): Operation<AppDef.Handle<
       path: '/',
       *handler() {
         return new Response(
-          `ozaco demo · ${role} · docs at /docs · observe at /_ozaco · health at /_health\n`,
+          `ozaco demo · ${role} · docs at /docs · observe at /_observe · health at /_health\n`,
           { headers: { 'content-type': 'text/plain; charset=utf-8' } },
         )
       },

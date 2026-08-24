@@ -143,4 +143,5 @@ pnpm-lock.yaml
 .ozaco
 local
 .codex
-cluster.*
+# generated at build time by apps/panel + apps/observe embed tasks
+*.gen.ts

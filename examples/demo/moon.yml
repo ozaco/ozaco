@@ -22,20 +22,32 @@ tasks:
       - std:build
       - transport:build
       - db:build
+      - panel:embed
+      - observe:embed
       - server:build
       - client:build
     inputs:
       - src/**/*
       - tests/**/*
+    options:
+      runDepsInParallel: false
   start:
     command: bun run src/main.ts
     deps:
+      - panel:embed
+      - observe:embed
       - server:build
       - client:build
     preset: server
+    options:
+      runDepsInParallel: false
   cluster:
     command: bun run scripts/cluster.ts
     deps:
+      - panel:embed
+      - observe:embed
       - server:build
       - client:build
     preset: server
+    options:
+      runDepsInParallel: false

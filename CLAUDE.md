@@ -9,6 +9,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 bun install                           # Install dependencies (Bun 1.3.9 pinned via Moon)
 moon run :check                       # Full lint + format check (oxlint + oxfmt)
+moon run :test                        # Every package's fast test suite (parallel; cap with -c/--concurrency N)
+moon run :test-all                    # EVERYTHING incl. docker legs (pg, redis, nats, network, chaos, bus)
 moon run :apply                       # Auto-fix formatting and lint
 moon run :apply-unsafe                # Auto-fix with dangerous rewrites (oxlint --fix-dangerous)
 moon run :clean                       # Reset build artifacts (dist, .ozaco)
