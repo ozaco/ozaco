@@ -6,6 +6,7 @@ import type { AnyType } from 'std:shared'
 
 import { parse, stringify } from 'smol-toml'
 
+import pkg from '../../../package.json'
 import { Codec } from '../definitions'
 import { CodecErrors } from '../errors'
 import type { CodecDef } from '../types'
@@ -24,7 +25,7 @@ const getSelf = (): CodecDef => TomlCodec
  */
 export const TomlCodec = Codec.implement({
   name: 'std/toml-codec',
-  version: '0.0.0',
+  version: pkg.version,
   *setup(options: CodecDef.Options = {}) {
     const name = options.name ?? 'std/toml-codec'
     const priority = options.priority ?? 500

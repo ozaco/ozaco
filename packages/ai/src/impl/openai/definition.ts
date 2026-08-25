@@ -4,6 +4,8 @@ import { useContext } from 'std:effect'
 import { Fetch } from 'std:fetch'
 import { fail } from 'std:result'
 
+import pkg from '../../../package.json'
+
 import {
   createState,
   formInit,
@@ -57,7 +59,7 @@ export const OpenAIProvider = AiProvider.implement<
   [options: OpenAIProviderOptions]
 >({
   name: 'openai',
-  version: '0.1.0',
+  version: pkg.version,
   description: 'OpenAI-compatible AI provider over std:fetch',
   *setup(options) {
     if (!(yield* Fetch.context.get())) {

@@ -1,6 +1,7 @@
 import { definePlugin } from 'std:plugin'
 import { fail } from 'std:result'
 
+import pkg from '../../../package.json'
 import { ClientErrors } from '../errors'
 import type { ClientDef } from '../types/client'
 
@@ -10,7 +11,7 @@ import type { ClientDef } from '../types/client'
  */
 export const Client = definePlugin<ClientDef.Context, [options: ClientDef.Options]>({
   name: 'client',
-  version: '0.5.0',
+  version: pkg.version,
   description: 'Typed client of an @ozaco/server over its manifest',
 
   *setup(options) {

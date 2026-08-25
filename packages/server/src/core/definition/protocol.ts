@@ -3,6 +3,7 @@ import type { Protocol } from 'std:plugin'
 import { defineProtocol } from 'std:plugin'
 import { fail } from 'std:result'
 
+import pkg from '../../../package.json'
 import { SERVER, SERVER_CARRIER, SERVER_EDGE, SERVER_OBSERVE, SERVER_OUTCOMES } from '../const'
 import { ServerErrors } from '../errors'
 import type { CarrierDef } from '../types/carrier'
@@ -18,7 +19,7 @@ import type { ServerDef } from '../types/server'
  */
 export const Server = defineProtocol<ServerDef.Context, ServerDef.Actions>({
   name: 'server',
-  version: '0.5.0',
+  version: pkg.version,
   description: 'The service/action kernel: dispatch, tracing, manifest',
 
   subtype: SERVER,
@@ -34,7 +35,7 @@ export const Edge: Protocol<EdgeDef.Options, EdgeDef.Actions> = defineProtocol<
   EdgeDef.Actions
 >({
   name: 'server-edge',
-  version: '0.5.0',
+  version: pkg.version,
   description: 'HTTP + WebSocket edge over a runtime driver',
 
   cloneable: true,
@@ -57,7 +58,7 @@ export const Carrier: Protocol<CarrierDef.Options, CarrierDef.Actions> = defineP
   CarrierDef.Actions
 >({
   name: 'server-carrier',
-  version: '0.5.0',
+  version: pkg.version,
   description: 'Cross-node dispatch carrier',
 
   cloneable: true,
@@ -76,7 +77,7 @@ export const Outcomes: Protocol<OutcomesDef.Options, OutcomesDef.Actions> = defi
   OutcomesDef.Actions
 >({
   name: 'server-outcomes',
-  version: '0.5.0',
+  version: pkg.version,
   description: 'Dispatch outcome records for timeout-pending reconciliation',
 
   cloneable: true,
@@ -99,7 +100,7 @@ export const Observe: Protocol<ObserveDef.Options, ObserveDef.Actions> = defineP
   ObserveDef.Actions
 >({
   name: 'server-observe',
-  version: '0.5.0',
+  version: pkg.version,
   description: 'Requests, spans, logs, failures and events as queryable rows',
 
   subtype: SERVER_OBSERVE,

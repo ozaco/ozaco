@@ -5,6 +5,8 @@ import { definePlugin } from 'std:plugin'
 import { fail, isFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
 
+import pkg from '../../../../../package.json'
+
 import {
   attributesOf,
   createOtlpMetrics,
@@ -25,7 +27,7 @@ import type { OtlpDef } from './types'
  */
 export const OtlpExporter = definePlugin<OtlpDef.Context, [options: OtlpDef.Options]>({
   name: 'server-observe-otlp',
-  version: '0.5.0',
+  version: pkg.version,
   description: 'OTLP/HTTP exporter of spans, logs and failures',
 
   *setup(options) {
@@ -50,7 +52,7 @@ export const OtlpExporter = definePlugin<OtlpDef.Context, [options: OtlpDef.Opti
         ...options.resource,
       }),
     }
-    const scope = { name: '@ozaco/server', version: '0.5.0' }
+    const scope = { name: '@ozaco/server', version: pkg.version }
 
     const complain = (target: string) => (failure: unknown) =>
       console.warn(

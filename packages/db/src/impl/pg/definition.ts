@@ -5,6 +5,7 @@ import { attempt, ensure, until } from 'std:effect'
 
 import { Pool } from 'pg'
 
+import pkg from '../../../package.json'
 import { sqlActions } from '../shared/actions'
 import { postgresDialect } from '../shared/dialects'
 import { runSqlTransaction } from '../shared/transaction'
@@ -20,7 +21,7 @@ import type { Pg } from './types'
  */
 export const PgAdapter = DbAdapter.implement<Adapter.Options, [options: Pg.Options]>({
   name: 'pg',
-  version: '0.1.0',
+  version: pkg.version,
   description: 'Postgres adapter over node-postgres',
 
   *setup(options) {

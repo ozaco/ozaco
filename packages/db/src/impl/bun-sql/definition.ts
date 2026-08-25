@@ -3,6 +3,7 @@ import { adapterDefaults, DbAdapter } from 'db:core'
 import type { Operation } from 'std:effect'
 import { attempt, ensure, until } from 'std:effect'
 
+import pkg from '../../../package.json'
 import { sqlActions } from '../shared/actions'
 import { postgresDialect } from '../shared/dialects'
 import { runSqlTransaction } from '../shared/transaction'
@@ -17,7 +18,7 @@ import type { BunSql } from './types'
  */
 export const BunSqlAdapter = DbAdapter.implement<Adapter.Options, [options: BunSql.Options]>({
   name: 'bun-sql',
-  version: '0.1.0',
+  version: pkg.version,
   description: 'Postgres adapter over the built-in Bun SQL client',
 
   *setup(options) {

@@ -1,13 +1,15 @@
 import { useContext } from 'std:effect'
 import { definePlugin } from 'std:plugin'
 
+import pkg from '../../package.json'
+
 import { buildContext } from './internal/context'
 import { makeInstance, openInstance } from './internal/instance'
 import type { ConfigDef } from './types'
 
 const ConfigImpl = definePlugin<ConfigDef.Context, [options?: ConfigDef.Options]>({
   name: 'std/config',
-  version: '0.0.0',
+  version: pkg.version,
   description: 'Hierarchical config discovery, merge, and edit',
 
   *setup(options) {

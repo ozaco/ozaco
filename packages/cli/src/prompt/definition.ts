@@ -2,6 +2,8 @@
 import { defineProtocol } from 'std:plugin'
 import type { AnyType } from 'std:shared'
 
+import pkg from '../../package.json'
+
 import { autocomplete } from './internal/actions/autocomplete'
 import { confirm } from './internal/actions/confirm'
 import { multiselect } from './internal/actions/multiselect'
@@ -19,13 +21,13 @@ import type { PromptDef } from './types/prompt'
  */
 export const Prompt = defineProtocol<PromptDef.Context, PromptDef.Actions>({
   name: 'cli-prompt',
-  version: '0.1.0',
+  version: pkg.version,
   description: 'Interactive terminal prompts',
 })
 
 export const DefaultPrompt = Prompt.implement<PromptDef.Context, []>({
   name: 'cli-default-prompt',
-  version: '0.1.0',
+  version: pkg.version,
   description: 'The built-in prompt set',
   *setup() {
     return {}

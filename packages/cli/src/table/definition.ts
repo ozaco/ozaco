@@ -1,5 +1,7 @@
 import { defineProtocol } from 'std:plugin'
 
+import pkg from '../../package.json'
+
 import { table } from './internal/actions'
 import type { TableDef } from './types/table'
 
@@ -10,13 +12,13 @@ import type { TableDef } from './types/table'
  */
 export const Table = defineProtocol<TableDef.Context, TableDef.Actions>({
   name: 'cli-table',
-  version: '0.1.0',
+  version: pkg.version,
   description: 'Streaming terminal tables',
 })
 
 export const DefaultTable = Table.implement<TableDef.Context, []>({
   name: 'cli-default-table',
-  version: '0.1.0',
+  version: pkg.version,
   description: 'The built-in table renderer',
   *setup() {
     return {}

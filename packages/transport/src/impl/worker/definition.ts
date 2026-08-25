@@ -13,6 +13,8 @@ import {
   TransportErrors,
 } from 'transport:core'
 
+import pkg from '../../../package.json'
+
 import { attached, deliver, driver, isFrame, StateRef } from './internal'
 import type { Worker } from './types'
 
@@ -29,7 +31,7 @@ export const WorkerTransport: TransportDef.Handle = Transport.implement<
   [options: Worker.Options]
 >({
   name: 'transport-worker',
-  version: '0.2.0',
+  version: pkg.version,
   description: 'Worker-thread transport over postMessage',
 
   *setup(options) {

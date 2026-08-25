@@ -3,6 +3,7 @@ import { createSignal, useContext } from 'std:effect'
 import { useBufferedEvent } from 'std:event'
 import { fail } from 'std:result'
 
+import pkg from '../../../package.json'
 import { ServerErrors } from '../errors'
 import { LocalCarrierRef } from '../internal/context'
 import type { CarrierDef } from '../types/carrier'
@@ -18,7 +19,7 @@ import { Carrier, Server } from './protocol'
  */
 export const LocalCarrier: CarrierDef.Handle = Carrier.implement<CarrierDef.Options, []>({
   name: 'server-carrier-local',
-  version: '0.5.0',
+  version: pkg.version,
   description: 'In-process carrier',
 
   *setup() {

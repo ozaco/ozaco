@@ -17,7 +17,7 @@
     },
     "apps/observe": {
       "name": "@ozaco/observe",
-      "version": "0.5.0",
+      "version": "0.4.0",
       "devDependencies": {
         "@ozaco/client": "workspace:*",
         "@ozaco/std": "workspace:*",
@@ -35,7 +35,7 @@
     },
     "apps/panel": {
       "name": "@ozaco/panel",
-      "version": "0.5.0",
+      "version": "0.4.0",
       "devDependencies": {
         "@ozaco/client": "workspace:*",
         "@ozaco/std": "workspace:*",
@@ -99,7 +99,7 @@
     },
     "packages/client": {
       "name": "@ozaco/client",
-      "version": "0.5.0",
+      "version": "0.4.0",
       "devDependencies": {
         "@ozaco/db": "workspace:*",
         "@ozaco/server": "workspace:*",
@@ -139,7 +139,7 @@
     },
     "packages/devkit": {
       "name": "@ozaco/devkit",
-      "version": "0.2.8",
+      "version": "0.3.0",
       "devDependencies": {
         "@ozaco/ai": "workspace:*",
         "@ozaco/cli": "workspace:*",
@@ -162,7 +162,7 @@
     },
     "packages/server": {
       "name": "@ozaco/server",
-      "version": "0.5.0",
+      "version": "0.4.0",
       "dependencies": {
         "@fastify/busboy": "^3.2.2",
         "jose": "^6.2.10",
@@ -190,7 +190,7 @@
     },
     "packages/std": {
       "name": "@ozaco/std",
-      "version": "0.3.14",
+      "version": "0.4.0",
       "dependencies": {
         "@streamparser/json": "0.0.26",
       },

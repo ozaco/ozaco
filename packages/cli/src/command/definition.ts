@@ -2,6 +2,8 @@ import type { StandardSchemaV1 } from 'cli:core'
 import type { Operation } from 'std:effect'
 import type { AnyType, EmptyType } from 'std:shared'
 
+import pkg from '../../package.json'
+
 import { ACTION, COMMAND } from './const'
 import { get, register, run } from './internal/registry-actions'
 import { Registry } from './registry'
@@ -18,7 +20,7 @@ export const DefaultRegistry = Registry.implement<
   [options?: RegistryDef.Options]
 >({
   name: 'cli-default-registry',
-  version: '0.1.0',
+  version: pkg.version,
   description: 'In-memory command registry',
   *setup(options: RegistryDef.Options = {}) {
     return {

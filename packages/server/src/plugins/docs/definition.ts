@@ -3,6 +3,8 @@ import { Server, ServerErrors } from 'server:core'
 import { definePlugin } from 'std:plugin'
 import { fail } from 'std:result'
 
+import pkg from '../../../package.json'
+
 import { manifestOf } from './internal/manifest'
 import { openapiOf } from './internal/openapi'
 import { PANEL_HTML } from './internal/panel.gen'
@@ -19,7 +21,7 @@ export const Docs = definePlugin<
   [options?: DocsDef.Options]
 >({
   name: 'server-docs',
-  version: '0.5.0',
+  version: pkg.version,
   description: 'Ozaco manifest + docs panel',
 
   *setup(options) {

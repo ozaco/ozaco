@@ -4,6 +4,8 @@ import { attempt } from 'std:effect'
 import { definePlugin } from 'std:plugin'
 import { fail, isFailure } from 'std:result'
 
+import pkg from '../../../package.json'
+
 import {
   options,
   withBreaker,
@@ -23,7 +25,7 @@ import type { ResilienceDef } from './types'
  */
 export const Resilience = definePlugin<ServerDef.PluginContext, []>({
   name: 'server-resilience',
-  version: '0.5.0',
+  version: pkg.version,
   description:
     'Timeouts, retries, circuit breakers, bulkheads, singleflight, rate limits, fallbacks',
 

@@ -6,6 +6,7 @@ import { fail, isFailure } from 'std:result'
 
 import { JsonCodec } from 'std:codec/impl/json'
 
+import pkg from '../../../package.json'
 import { CHANGES_PREFIX, DEFAULT_REPLAY_WINDOW_MS, FIELDS } from '../const'
 import { DbErrors } from '../errors'
 import { bridgeTransports, createBus, logOf, publishWrites, specOf } from '../internal/client'
@@ -42,7 +43,7 @@ import { Db, DbAdapter } from './protocol'
  */
 const DbImpl = Db.implement<Database.Context, [options: Database.Options]>({
   name: 'db-client',
-  version: '0.1.0',
+  version: pkg.version,
   description: 'The reactive database engine over the installed adapter',
 
   *setup(options) {

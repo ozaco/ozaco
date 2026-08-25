@@ -4,6 +4,7 @@ import type { AnyType } from 'std:shared'
 
 import { z } from 'zod'
 
+import pkg from '../../../../package.json'
 import { serviceDocOf } from '../../docs/internal/manifest'
 import { ObserveErrors } from '../errors'
 
@@ -128,5 +129,5 @@ export const observeService = service(
       },
     ),
   },
-  { version: '0.5.0', description: 'The observe store, over the wire' },
+  { version: pkg.version, description: 'The observe store, over the wire' },
 )

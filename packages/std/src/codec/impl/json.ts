@@ -6,6 +6,7 @@ import type { AnyType } from 'std:shared'
 
 import { JSONParser } from '@streamparser/json'
 
+import pkg from '../../../package.json'
 import { Codec } from '../definitions'
 import { CodecErrors } from '../errors'
 import type { CodecDef } from '../types'
@@ -17,7 +18,7 @@ const getSelf = (): CodecDef => JsonCodec
 
 export const JsonCodec = Codec.implement({
   name: 'std/json-codec',
-  version: '0.0.0',
+  version: pkg.version,
   *setup(options: CodecDef.Options = {}) {
     const name = options.name ?? 'std/json-codec'
     const priority = options.priority ?? 999

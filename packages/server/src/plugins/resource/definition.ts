@@ -3,6 +3,8 @@ import { Server, ServerErrors } from 'server:core'
 import { definePlugin } from 'std:plugin'
 import { fail } from 'std:result'
 
+import pkg from '../../../package.json'
+
 import { guardHandshake, realtime } from './internal'
 import type { ResourceDef } from './types'
 
@@ -13,7 +15,7 @@ import type { ResourceDef } from './types'
 export const Resource = definePlugin<ServerDef.PluginContext, [options: ResourceDef.PluginOptions]>(
   {
     name: 'server-resource',
-    version: '0.5.0',
+    version: pkg.version,
     description: 'CRUD resources with realtime delta watches',
 
     *setup(options) {

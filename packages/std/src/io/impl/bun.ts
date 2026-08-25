@@ -8,6 +8,7 @@ import { hasFlag } from 'std:shared'
 import fs from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 
+import pkg from '../../../package.json'
 import {
   decryptSecret,
   encryptSecret,
@@ -33,7 +34,7 @@ import { webHash, webHmac, webRandomBytes } from '../internal/webcrypto'
 
 export const BunIO = IO.implement({
   name: 'bun-io',
-  version: '0.0.1',
+  version: pkg.version,
   *setup() {
     return null
   },

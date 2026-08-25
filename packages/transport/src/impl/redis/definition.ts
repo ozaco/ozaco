@@ -14,6 +14,8 @@ import {
   TransportErrors,
 } from 'transport:core'
 
+import pkg from '../../../package.json'
+
 import { driver, StateRef } from './internal'
 import type { Redis } from './types'
 import { redisImpl } from './utils'
@@ -31,7 +33,7 @@ export const RedisTransport: TransportDef.Handle = Transport.implement<
   [options: Redis.Options]
 >({
   name: 'transport-redis',
-  version: '0.2.0',
+  version: pkg.version,
   description: 'Redis transport over pub/sub + Streams',
 
   *setup(options) {

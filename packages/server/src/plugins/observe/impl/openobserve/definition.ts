@@ -4,6 +4,8 @@ import { definePlugin } from 'std:plugin'
 import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 
+import pkg from '../../../../../package.json'
+
 import { ooEvent, ooFailure, ooLog, ooRequest, ooRequestUpdate, ooSpan, post } from './internal'
 import type { OpenObserveDef } from './types'
 
@@ -29,7 +31,7 @@ export const OpenObserveExporter = definePlugin<
   [options: OpenObserveDef.Options]
 >({
   name: 'server-observe-openobserve',
-  version: '0.5.0',
+  version: pkg.version,
   description: 'OpenObserve exporter of requests, spans, logs, failures and events',
 
   *setup(options) {

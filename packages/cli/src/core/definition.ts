@@ -4,6 +4,8 @@ import { defineProtocol } from 'std:plugin'
 import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 
+import pkg from '../../package.json'
+
 import { ansi } from './const'
 import { CliErrors } from './errors'
 import { acquireLease, leaseStateOf, releaseLease } from './internal/lease'
@@ -119,7 +121,7 @@ const renderer = function* (
 export const Terminal = defineProtocol<TerminalDef.Info, TerminalDef.Actions, TerminalDef.Handlers>(
   {
     name: 'cli-terminal',
-    version: '0.1.0',
+    version: pkg.version,
     description: 'Platform terminal binding: streams in, capabilities + portable actions out',
     defaults: {
       resize: operation(function* () {

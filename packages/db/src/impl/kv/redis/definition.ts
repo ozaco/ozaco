@@ -9,6 +9,8 @@ import type { AnyType } from 'std:shared'
 import { RESP_TYPES } from 'redis'
 import { JsonCodec } from 'std:codec/impl/json'
 
+import pkg from '../../../../package.json'
+
 import { driver, StateRef } from './internal'
 import type { RedisKvDef } from './types'
 import { redisKvImpl } from './utils/context'
@@ -21,7 +23,7 @@ import { redisKvImpl } from './utils/context'
  */
 export const RedisKv: KvDef.Handle = Kv.implement<KvDef.Options, [options: RedisKvDef.Options]>({
   name: 'kv-redis',
-  version: '0.1.0',
+  version: pkg.version,
   description: 'Redis key/value store',
 
   *setup(options) {

@@ -8,6 +8,8 @@ import type { AnyType } from 'std:shared'
 import type { TransportDef } from 'transport:core'
 import { Transport } from 'transport:core'
 
+import pkg from '../../../../package.json'
+
 import {
   announce,
   attachLane,
@@ -33,7 +35,7 @@ export const NetworkCarrier: CarrierDef.Handle = Carrier.implement<
   [options?: NetworkCarrierDef.Options]
 >({
   name: 'server-carrier-network',
-  version: '0.5.0',
+  version: pkg.version,
   description: 'Cross-node carrier over @ozaco/transport',
 
   *setup(options) {

@@ -4,12 +4,14 @@ import { fail } from 'std:result'
 
 import { createServer as createHttpServer } from 'node:http'
 
+import pkg from '../../../../package.json'
+
 import { driver, StateRef } from './internal'
 
 /** The Node edge: `node:http` (+ the optional `ws` peer for socket routes) behind the core engine. */
 export const NodeEdge: EdgeDef.Handle = Edge.implement<EdgeDef.Options, []>({
   name: 'server-edge-node',
-  version: '0.5.0',
+  version: pkg.version,
   description: 'HTTP + WebSocket edge on node:http',
 
   *setup() {

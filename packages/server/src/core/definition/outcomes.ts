@@ -3,6 +3,7 @@ import { useContext } from 'std:effect'
 import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 
+import pkg from '../../../package.json'
 import { DEFAULT_OUTCOME_TTL_MS } from '../const'
 import { ServerErrors } from '../errors'
 import { OutcomesDbRef, OutcomesMemoryRef } from '../internal/context'
@@ -18,7 +19,7 @@ export const MemoryOutcomes: OutcomesDef.Handle = Outcomes.implement<
   [options?: { readonly ttlMs?: number | undefined }]
 >({
   name: 'server-outcomes-memory',
-  version: '0.5.0',
+  version: pkg.version,
   description: 'In-process outcome records',
 
   *setup(options) {
@@ -64,7 +65,7 @@ export const DbOutcomes: OutcomesDef.Handle = Outcomes.implement<
   [options?: { readonly ttlMs?: number | undefined }]
 >({
   name: 'server-outcomes-db',
-  version: '0.5.0',
+  version: pkg.version,
   description: 'Outcome records in the database',
 
   *setup(options) {

@@ -1,6 +1,8 @@
 import { operation } from 'std:effect'
 import { defineProtocol } from 'std:plugin'
 
+import pkg from '../../package.json'
+
 import {
   codecDecodeFrameHandler,
   codecEncodeFrameHandler,
@@ -31,7 +33,7 @@ export const hasCodec = operation(function* () {
  */
 export const Codec = defineProtocol<CodecDef.Context, CodecDef.Actions, CodecDef.Handlers>({
   name: 'std/codec',
-  version: '0.0.0',
+  version: pkg.version,
 
   subtype: CODEC,
   cloneable: true,

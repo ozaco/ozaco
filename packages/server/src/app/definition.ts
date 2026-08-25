@@ -4,12 +4,14 @@ import { attempt, sleep } from 'std:effect'
 import { definePlugin } from 'std:plugin'
 import { fail } from 'std:result'
 
+import pkg from '../../package.json'
+
 import { awaitDependencies, healthOf, hostedOf, infoOf, roleOf } from './internal'
 import type { AppDef } from './types'
 
 const AppImpl = definePlugin<AppDef.State, [options: AppDef.Options]>({
   name: 'server-app',
-  version: '0.5.0',
+  version: pkg.version,
   description: 'A deployable node: role, hosted services, health, graceful stop',
 
   *setup(options) {

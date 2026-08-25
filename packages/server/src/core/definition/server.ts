@@ -2,6 +2,7 @@ import { createEvent } from 'std:event'
 import { IO } from 'std:io'
 import type { AnyType } from 'std:shared'
 
+import pkg from '../../../package.json'
 import { DEFAULT_TIMEOUT_MS, serviceIdOf } from '../const'
 import { TraceRef } from '../context'
 import { callLocal, runDispatch } from '../internal/dispatch'
@@ -15,7 +16,7 @@ import { Server } from './protocol'
 /** The kernel: one per scope, installed FIRST by {@link createServer}. */
 const ServerImpl = Server.implement<ServerDef.Context, [options: ServerDef.Options]>({
   name: 'server-kernel',
-  version: '0.5.0',
+  version: pkg.version,
   description: 'The service/action kernel',
 
   *setup(options) {

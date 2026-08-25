@@ -5,6 +5,7 @@ import { IO } from 'std:io'
 import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 
+import pkg from '../../../package.json'
 import { readWebEnv } from '../internal/env'
 import { fromReadable } from '../internal/from-readable'
 import { hlcDecode, hlcObserve, hlcToken } from '../internal/hlc'
@@ -34,7 +35,7 @@ const unsupportedFlow = (action: string): Flow<Uint8Array, FlowClose> =>
  */
 export const WebIO = IO.implement({
   name: 'web-io',
-  version: '0.0.1',
+  version: pkg.version,
   *setup() {
     return null
   },

@@ -5,6 +5,7 @@ import { ensure } from 'std:effect'
 
 import { Database } from 'bun:sqlite'
 
+import pkg from '../../../package.json'
 import { sqlActions } from '../shared/actions'
 import { sqliteDialect } from '../shared/dialects'
 import { runSqlTransaction } from '../shared/transaction'
@@ -19,7 +20,7 @@ import type { Sqlite } from './types'
  */
 export const SqliteAdapter = DbAdapter.implement<Adapter.Options, [options?: Sqlite.Options]>({
   name: 'sqlite',
-  version: '0.1.0',
+  version: pkg.version,
   description: 'SQLite adapter over bun:sqlite',
 
   *setup(options) {

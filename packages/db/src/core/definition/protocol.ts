@@ -3,6 +3,7 @@ import type { Protocol } from 'std:plugin'
 import { defineProtocol } from 'std:plugin'
 import { fail } from 'std:result'
 
+import pkg from '../../../package.json'
 import { DATABASE, DATABASE_ADAPTER, KV_STORE } from '../const'
 import { DbErrors } from '../errors'
 import type { Adapter } from '../types/adapter'
@@ -16,7 +17,7 @@ import type { KvDef } from '../types/kv'
  */
 export const Db = defineProtocol<Database.Context, Database.Actions>({
   name: 'db',
-  version: '0.1.0',
+  version: pkg.version,
   description: 'Reactive, adapter-agnostic database plugin',
 
   cloneable: true,
@@ -35,7 +36,7 @@ export const Db = defineProtocol<Database.Context, Database.Actions>({
  */
 export const DbAdapter = defineProtocol<Adapter.Options, Adapter.Actions>({
   name: 'db-adapter',
-  version: '0.1.0',
+  version: pkg.version,
   description: 'Structured database adapter: portable specs in, decoded documents out',
 
   cloneable: true,
@@ -72,7 +73,7 @@ export const DbAdapter = defineProtocol<Adapter.Options, Adapter.Actions>({
  */
 export const Kv = defineProtocol<KvDef.Options, KvDef.Actions>({
   name: 'kv',
-  version: '0.1.0',
+  version: pkg.version,
   description: 'Namespaced key/value store: TTLs, tags, atomic counters, cache-aside wrap',
 
   cloneable: true,

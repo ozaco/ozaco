@@ -2,6 +2,8 @@ import type { Helpers, ProviderDef } from 'ai:core'
 import { AiProvider } from 'ai:core'
 import { useContext } from 'std:effect'
 
+import pkg from '../../../package.json'
+
 import type { MockState } from './internal'
 import { completeChatResult, resolveResponder, scriptedFlow, StateRef } from './internal'
 import type { MockInfo, MockScript } from './types'
@@ -31,7 +33,7 @@ const FULL: ProviderDef.Capabilities = {
  */
 export const MockProvider = AiProvider.implement<MockInfo, [script?: MockScript]>({
   name: 'mock',
-  version: '0.1.0',
+  version: pkg.version,
   description: 'Scripted in-memory AI provider for tests and development',
   *setup(script) {
     const state: MockState = {

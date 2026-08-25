@@ -1,5 +1,7 @@
 import { defineProtocol } from 'std:plugin'
 
+import pkg from '../../package.json'
+
 import type { RegistryDef } from './types/registry'
 
 /**
@@ -9,6 +11,6 @@ import type { RegistryDef } from './types/registry'
  */
 export const Registry = defineProtocol<RegistryDef.Context, RegistryDef.Actions>({
   name: 'cli-registry',
-  version: '0.1.0',
+  version: pkg.version,
   description: 'Top-level command registry and argv dispatcher',
 })

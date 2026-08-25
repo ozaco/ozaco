@@ -6,6 +6,8 @@ import { fail } from 'std:result'
 
 import { JsonCodec } from 'std:codec/impl/json'
 
+import pkg from '../../../../package.json'
+
 import { createLink, driver, StateRef } from './internal'
 import type { MemoryKvDef } from './types'
 
@@ -16,7 +18,7 @@ import type { MemoryKvDef } from './types'
  */
 export const MemoryKv: KvDef.Handle = Kv.implement<KvDef.Options, [options?: MemoryKvDef.Options]>({
   name: 'kv-memory',
-  version: '0.1.0',
+  version: pkg.version,
   description: 'In-process key/value store',
 
   *setup(options) {

@@ -4,6 +4,8 @@ import { useContext } from 'std:effect'
 import { defineProtocol } from 'std:plugin'
 import { fail } from 'std:result'
 
+import pkg from '../../package.json'
+
 import { DEFAULT_MAX_ROUNDS } from './const'
 import { AiErrors } from './errors'
 import { runToolLoop } from './internal/loop'
@@ -27,7 +29,7 @@ import type { Helpers } from './types/helpers'
  */
 const AiProtocol = defineProtocol<AiDef.Context, AiDef.Actions>({
   name: 'ai',
-  version: '0.1.0',
+  version: pkg.version,
   description: 'Provider-agnostic AI client plugin',
 })
 
@@ -35,7 +37,7 @@ export const Ai = AiProtocol
 
 const AiClientImpl = AiProtocol.implement<AiDef.Context, [options?: AiDef.Options]>({
   name: 'ai-client',
-  version: '0.1.0',
+  version: pkg.version,
   description: 'The spec-resolving AI client over the installed provider',
   *setup(options) {
     const info = yield* AiProvider.context.get()

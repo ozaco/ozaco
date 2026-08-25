@@ -15,6 +15,8 @@ import {
   TransportErrors,
 } from 'transport:core'
 
+import pkg from '../../../package.json'
+
 import { driver, ensureStream, StateRef, streamNameOf, streamSpecOf } from './internal'
 import type { Nats } from './types'
 import { natsImpl } from './utils'
@@ -33,7 +35,7 @@ export const NatsTransport: TransportDef.Handle = Transport.implement<
   [options: Nats.Options]
 >({
   name: 'transport-nats',
-  version: '0.2.0',
+  version: pkg.version,
   description: 'NATS transport over @nats-io JetStream (one stream per application prefix)',
 
   *setup(options) {

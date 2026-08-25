@@ -1,6 +1,8 @@
 // oxlint-disable import/exports-last
 import { defineProtocol } from 'std:plugin'
 
+import pkg from '../../package.json'
+
 import { createRequestAction } from './internal'
 import type { FetchDef } from './types'
 
@@ -14,7 +16,7 @@ import type { FetchDef } from './types'
  */
 export const Fetch = defineProtocol<FetchDef.Context, FetchDef.Contract>({
   name: 'std/fetch',
-  version: '0.0.0',
+  version: pkg.version,
   description: 'HTTP client protocol: every request flows through the hookable `request` dispatch',
 })
 
@@ -31,7 +33,7 @@ const method = (targetMethod: string) =>
  */
 const FetchClientImpl = Fetch.implement<FetchDef.Context, [options?: FetchDef.Options]>({
   name: 'std/fetch',
-  version: '0.0.0',
+  version: pkg.version,
   description: 'Effect-native HTTP client over the platform fetch',
 
   *setup(options) {

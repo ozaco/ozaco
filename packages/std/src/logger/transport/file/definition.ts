@@ -1,6 +1,7 @@
 import { operation, useContext } from 'std:effect'
 import { IO, IO_FLAGS } from 'std:io'
 
+import pkg from '../../../../package.json'
 import { LogLevel } from '../../const'
 import { LoggerTransport } from '../../definitions'
 import { toNdjson } from '../../internal/serialize'
@@ -11,7 +12,7 @@ import type { FileDef } from './types'
 
 const FileTransportImpl = LoggerTransport.implement<FileDef.Context, [options: FileDef.Options]>({
   name: 'file-transport',
-  version: '0.0.1',
+  version: pkg.version,
 
   *setup(options) {
     const name = `file:${options.path}`

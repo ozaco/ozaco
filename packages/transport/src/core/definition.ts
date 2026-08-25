@@ -1,6 +1,8 @@
 import type { Operation } from 'std:effect'
 import { defineProtocol } from 'std:plugin'
 
+import pkg from '../../package.json'
+
 import { TRANSPORT } from './const'
 import type { TransportDef } from './types/transport'
 
@@ -14,7 +16,7 @@ import type { TransportDef } from './types/transport'
  */
 export const Transport = defineProtocol<TransportDef.Options, TransportDef.Actions>({
   name: 'transport',
-  version: '0.2.0',
+  version: pkg.version,
   description: 'Topic-addressed messaging: data, event, flow, stream and package planes',
 
   cloneable: true,

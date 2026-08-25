@@ -3,6 +3,8 @@ import { HEADERS, Server, ServerErrors } from 'server:core'
 import { definePlugin } from 'std:plugin'
 import { fail } from 'std:result'
 
+import pkg from '../../../package.json'
+
 import { allowed } from './internal'
 import type { CorsDef } from './types'
 
@@ -13,7 +15,7 @@ import type { CorsDef } from './types'
  */
 export const Cors = definePlugin<ServerDef.PluginContext, [options?: CorsDef.Options]>({
   name: 'server-cors',
-  version: '0.5.0',
+  version: pkg.version,
   description: 'Cross-origin resource sharing over the edge',
 
   *setup(options) {

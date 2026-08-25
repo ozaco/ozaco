@@ -6,6 +6,8 @@ import { isFailure, unwrap } from 'std:result'
 
 import { afterAll, describe, expect, it } from 'bun:test'
 
+import pkg from '../../package.json'
+
 const server = Bun.serve({
   port: 0,
   async fetch(req) {
@@ -249,7 +251,7 @@ describe('request-level failures', () => {
       expect((outcome.error as { code?: string }).code).toBe('ConnectionRefused')
       // the cause chain names the dispatched action and its plugin tag
       expect(outcome.causes).toContain('request')
-      expect(outcome.causes).toContain('std/fetch@0.0.0')
+      expect(outcome.causes).toContain(`std/fetch@${pkg.version}`)
     }
   })
 

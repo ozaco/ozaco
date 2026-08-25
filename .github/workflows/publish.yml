@@ -33,6 +33,9 @@ jobs:
         working-directory: 'packages/std'
 
       - run: 'npm publish --access public || true'
+        working-directory: 'packages/transport'
+
+      - run: 'npm publish --access public || true'
         working-directory: 'packages/server'
 
       - run: 'npm publish --access public || true'
@@ -42,10 +45,10 @@ jobs:
         working-directory: 'packages/ai'
 
       - run: 'npm publish --access public || true'
-        working-directory: 'packages/devkit'
-
-      - run: 'npm publish --access public || true'
         working-directory: 'packages/cli'
 
       - run: 'npm publish --access public || true'
         working-directory: 'packages/client'
+
+      - run: 'npm publish --access public || true'
+        working-directory: 'packages/devkit'

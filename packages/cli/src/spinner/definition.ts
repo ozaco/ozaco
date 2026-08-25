@@ -1,5 +1,7 @@
 import { defineProtocol } from 'std:plugin'
 
+import pkg from '../../package.json'
+
 import { bar, group, start } from './internal/actions'
 import type { SpinnerDef } from './types/spinner'
 
@@ -10,13 +12,13 @@ import type { SpinnerDef } from './types/spinner'
  */
 export const Spinner = defineProtocol<SpinnerDef.Context, SpinnerDef.Actions>({
   name: 'cli-spinner',
-  version: '0.1.0',
+  version: pkg.version,
   description: 'Spinners, progress bars and task trees',
 })
 
 export const DefaultSpinner = Spinner.implement<SpinnerDef.Context, []>({
   name: 'cli-default-spinner',
-  version: '0.1.0',
+  version: pkg.version,
   description: 'The built-in spinner renderer',
   *setup() {
     return {}

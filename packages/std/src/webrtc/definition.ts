@@ -2,13 +2,15 @@ import { operation } from 'std:effect'
 import { definePlugin } from 'std:plugin'
 import { fail } from 'std:result'
 
+import pkg from '../../package.json'
+
 import { resolveImpl } from './internal/impl'
 import { createPeer } from './internal/peer'
 import type { RtcDef } from './types/rtc'
 
 const RtcImpl = definePlugin<RtcDef.Context, [defaults?: RtcDef.Options]>({
   name: 'std/webrtc',
-  version: '0.0.0',
+  version: pkg.version,
   description: 'Scoped WebRTC peer with perfect negotiation, Flow channels, and ICE restart',
 
   *setup(defaults) {

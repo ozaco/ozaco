@@ -3,6 +3,8 @@ import { defineProtocol } from 'std:plugin'
 import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 
+import pkg from '../../package.json'
+
 import { AiErrors } from './errors'
 import type { ProviderDef } from './types/provider'
 
@@ -34,7 +36,7 @@ const gated = (subject: string): ProviderDef.Actions => ({
  */
 export const AiProvider = defineProtocol<ProviderDef.Info, ProviderDef.Actions>({
   name: 'ai-provider',
-  version: '0.1.0',
+  version: pkg.version,
   description: 'Structured AI provider: portable specs in, normalized results out',
   defaults: gated('the installed ai provider') as Partial<ProviderDef.Actions>,
 })

@@ -10,6 +10,7 @@ import { createHash, createHmac, randomBytes as nodeRandomBytes } from 'node:cry
 import fs from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 
+import pkg from '../../../package.json'
 import {
   decryptSecret,
   encryptSecret,
@@ -39,7 +40,7 @@ const toNodeHash = (alg: HashAlgorithm) =>
 
 export const NodeIO = IO.implement({
   name: 'node-io',
-  version: '0.0.1',
+  version: pkg.version,
   *setup() {
     return null
   },

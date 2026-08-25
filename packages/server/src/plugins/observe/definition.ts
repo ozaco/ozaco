@@ -5,6 +5,8 @@ import { attempt, createQueue, ensure, fork, sleep, useContext } from 'std:effec
 import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 
+import pkg from '../../../package.json'
+
 import { ObserveErrors } from './errors'
 import { instanceStats, membersView, runCluster } from './internal/cluster'
 import { enqueue, flush, startFlusher } from './internal/collector'
@@ -34,7 +36,7 @@ export const ObservePlugin: ObserveDef.Handle = Observe.implement<
   [options?: ObservePluginDef.Options]
 >({
   name: 'server-observe-db',
-  version: '0.5.0',
+  version: pkg.version,
   description: 'Observability rows in the database',
 
   *setup(options) {

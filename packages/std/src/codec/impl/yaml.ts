@@ -6,6 +6,7 @@ import type { AnyType } from 'std:shared'
 
 import { dump, load } from 'js-yaml'
 
+import pkg from '../../../package.json'
 import { Codec } from '../definitions'
 import { CodecErrors } from '../errors'
 import type { CodecDef } from '../types'
@@ -34,7 +35,7 @@ const getSelf = (): CodecDef => YamlCodec
  */
 export const YamlCodec = Codec.implement({
   name: 'std/yaml-codec',
-  version: '0.0.0',
+  version: pkg.version,
   *setup(options: CodecDef.Options = {}) {
     const name = options.name ?? 'std/yaml-codec'
     const priority = options.priority ?? 500

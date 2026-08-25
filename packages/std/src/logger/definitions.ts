@@ -1,13 +1,15 @@
 import { all } from 'std:effect'
 import { defineProtocol } from 'std:plugin'
 
+import pkg from '../../package.json'
+
 import { LOGGER, LOGGER_TRANSPORT } from './const'
 import type { LoggerDef } from './types/logger'
 import type { LoggerTransportDef } from './types/transport'
 
 export const Logger = defineProtocol<LoggerDef.Context, LoggerDef.Actions>({
   name: 'logger',
-  version: '0.0.1',
+  version: pkg.version,
   subtype: LOGGER,
 })
 
@@ -16,7 +18,7 @@ export const LoggerTransport = defineProtocol<
   LoggerTransportDef.Actions
 >({
   name: 'logger-transport',
-  version: '0.0.1',
+  version: pkg.version,
   subtype: LOGGER_TRANSPORT,
   cloneable: true,
 

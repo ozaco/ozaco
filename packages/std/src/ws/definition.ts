@@ -2,13 +2,15 @@ import { operation } from 'std:effect'
 import { definePlugin } from 'std:plugin'
 import { fail } from 'std:result'
 
+import pkg from '../../package.json'
+
 import { wsImpl } from './context'
 import { createConnection } from './internal/connection'
 import type { WsDef } from './types'
 
 const WsImpl = definePlugin<WsDef.Context, [defaults?: WsDef.Options]>({
   name: 'std/ws',
-  version: '0.0.0',
+  version: pkg.version,
   description: 'Scoped WebSocket client with auto-reconnect and keepalive',
 
   *setup(defaults) {

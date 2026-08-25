@@ -6,6 +6,8 @@ import { definePlugin } from 'std:plugin'
 import { fail, isFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
 
+import pkg from '../../../package.json'
+
 import { keyOf, options } from './internal'
 import type { CacheDef } from './types'
 
@@ -18,7 +20,7 @@ import type { CacheDef } from './types'
  */
 export const Cache = definePlugin<ServerDef.PluginContext, [options?: CacheDef.PluginOptions]>({
   name: 'server-cache',
-  version: '0.5.0',
+  version: pkg.version,
   description: 'Response cache over the Kv store with tag + db-change invalidation',
 
   *setup(given) {

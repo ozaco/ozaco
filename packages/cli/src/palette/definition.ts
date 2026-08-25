@@ -3,6 +3,8 @@ import { Terminal } from 'cli:core'
 import type { Operation } from 'std:effect'
 import { defineProtocol } from 'std:plugin'
 
+import pkg from '../../package.json'
+
 import { colorsAction, symbolsAction } from './internal/actions'
 import type { DefinePaletteOptions, PaletteDef } from './types'
 import { createColors } from './utils/colors'
@@ -15,7 +17,7 @@ import { createSymbols } from './utils/symbols'
  */
 export const Palette = defineProtocol<PaletteDef.Context, PaletteDef.Actions>({
   name: 'cli-palette',
-  version: '0.1.0',
+  version: pkg.version,
   description: 'Shared cli color and symbol tables',
 })
 
@@ -38,7 +40,7 @@ const resolve = function* (options: PaletteDef.Options = {}): Operation<PaletteD
 export const definePalette = (definition: DefinePaletteOptions = {}) =>
   Palette.implement<PaletteDef.Context, [options?: PaletteDef.Options]>({
     name: definition.name ?? 'cli-custom-palette',
-    version: definition.version ?? '0.1.0',
+    version: definition.version ?? pkg.version,
     *setup(options: PaletteDef.Options = {}) {
       return yield* resolve({
         color: options.color ?? definition.color,
@@ -55,7 +57,7 @@ export const definePalette = (definition: DefinePaletteOptions = {}) =>
 export const DefaultPalette = Palette.implement<PaletteDef.Context, [options?: PaletteDef.Options]>(
   {
     name: 'cli-default-palette',
-    version: '0.1.0',
+    version: pkg.version,
     description: 'Terminal-capability-driven palette',
     setup: resolve,
   },

@@ -5,6 +5,8 @@ import { attempt, useContext } from 'std:effect'
 import { fail, isFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
 
+import pkg from '../../../package.json'
+
 import {
   applySteps,
   checkUnique,
@@ -25,7 +27,7 @@ import type { Memory } from './types'
  */
 export const MemoryAdapter = DbAdapter.implement<Adapter.Options, []>({
   name: 'memory',
-  version: '0.1.0',
+  version: pkg.version,
   description: 'In-memory reference adapter',
 
   *setup() {

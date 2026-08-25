@@ -13,6 +13,8 @@ import {
   TransportErrors,
 } from 'transport:core'
 
+import pkg from '../../../package.json'
+
 import { driver, StateRef } from './internal'
 import type { Memory } from './types'
 import { createLink } from './utils'
@@ -29,7 +31,7 @@ export const MemoryTransport: TransportDef.Handle = Transport.implement<
   [options: Memory.Options]
 >({
   name: 'transport-memory',
-  version: '0.2.0',
+  version: pkg.version,
   description: 'In-process transport over a shared link',
 
   *setup(options) {

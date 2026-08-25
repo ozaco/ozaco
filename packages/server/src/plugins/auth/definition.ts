@@ -4,6 +4,8 @@ import { IO } from 'std:io'
 import { definePlugin } from 'std:plugin'
 import { fail } from 'std:result'
 
+import pkg from '../../../package.json'
+
 import { AuthErrors } from './errors'
 import {
   authorize,
@@ -23,7 +25,7 @@ const AuthImpl = definePlugin<
   [options: AuthDef.Options]
 >({
   name: 'server-auth',
-  version: '0.5.0',
+  version: pkg.version,
   description: 'JWT sessions / access+refresh rotation / service tokens, as action options',
 
   *setup(given) {

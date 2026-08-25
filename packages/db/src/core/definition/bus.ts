@@ -7,13 +7,14 @@ import { fail, isFailure } from 'std:result'
 import type { TransportDef } from 'transport:core'
 import { Transport } from 'transport:core'
 
+import pkg from '../../../package.json'
 import { DEFAULT_BUS_TOPIC } from '../const'
 import { DbErrors } from '../errors'
 import type { Bus } from '../types/bus'
 
 const DbBusImpl = definePlugin<Bus.Context, [options?: Bus.Options]>({
   name: 'db-bus',
-  version: '0.2.0',
+  version: pkg.version,
   description: 'Cross-node change bus over an @ozaco/transport plugin',
 
   *setup(options) {
