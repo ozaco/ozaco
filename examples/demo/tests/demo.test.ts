@@ -32,10 +32,15 @@ describe('demo — every use case end to end', () => {
           'media',
           'reports',
           'live',
+          'rtc',
           'cluster',
           'observe',
         ])
-        expect(detail(steps, 'manifest').sockets).toEqual(['/live/chat', '/todos/_realtime'])
+        expect(detail(steps, 'manifest').sockets).toEqual([
+          '/live/chat',
+          '/rtc/:room',
+          '/todos/_realtime',
+        ])
         expect(detail(steps, 'whoami anonymous')).toBe('server.unauthorized')
         expect(detail(steps, 'login + whoami')).toMatchObject({ roles: ['admin'], type: 'access' })
         expect(detail(steps, 'refresh')).toEqual({ rotated: true })
@@ -125,7 +130,7 @@ describe('demo — cluster', () => {
         })
         const api2 = yield* node({
           ROLE: 'service',
-          SERVICE: 'todo-stats,feed,reports,live,cluster',
+          SERVICE: 'todo-stats,feed,reports,live,rtc,cluster',
           INSTANCE: 'api-2',
           OBSERVE: 'forward',
         })

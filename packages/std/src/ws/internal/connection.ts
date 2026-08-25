@@ -1,11 +1,11 @@
+import { Codec } from 'std:codec'
 import type { Flow, Future, Operation } from 'std:effect'
 import { attempt, createQueue, fork, operation, resource, sleep, withResolvers } from 'std:effect'
 import type { Result } from 'std:result'
 import { fail, isSuccess } from 'std:result'
+import type { AnyType } from 'std:shared'
 
 import type { WsDef } from '../types'
-
-import { decodeFrame, encodeFrame } from './frame'
 
 const CONNECTING = 0
 const OPEN = 1
@@ -239,11 +239,11 @@ export const createConnection = (
         if (state.ended || !socket || socket.readyState !== OPEN) {
           continue
         }
-        const encoded = yield* attempt(() => encodeFrame(payload, options.codec))
+        const encoded = yield* attempt(() => Codec.actions.encodeFrame(payload, options.codec))
         if (!isSuccess(encoded)) {
           return
         }
-        socket.send(encoded.value)
+        socket.send(encoded.value as AnyType)
       }
     }, 'ws-keepalive')
 
@@ -272,7 +272,10 @@ export const createConnection = (
             if (item.done) {
               return item
             }
-            return { done: false, value: yield* decodeFrame(item.value, options.codec) }
+            return {
+              done: false,
+              value: yield* Codec.actions.decodeFrame(item.value, options.codec),
+            }
           }),
         }
       },
@@ -290,14 +293,14 @@ export const createConnection = (
         return state.reconnects
       },
       send: operation(function* (data: unknown) {
-        const payload = yield* encodeFrame(data, options.codec)
+        const payload = yield* Codec.actions.encodeFrame(data, options.codec)
         while (true) {
           if (state.ended || state.closedByClient) {
             return // permanently closed → WHATWG silent discard
           }
           const socket = state.socket
           if (socket && socket.readyState === OPEN) {
-            socket.send(payload)
+            socket.send(payload as AnyType)
             return
           }
           if (!reconnect) {

@@ -1,4 +1,4 @@
-import type { Operation, Flow } from 'std:effect'
+import type { Flow, Operation } from 'std:effect'
 import type { Plugin } from 'std:plugin'
 import type { Result } from 'std:result'
 
@@ -47,5 +47,8 @@ export namespace CodecDef {
     register(transport: CodecDef, entryCtx: CodecDef.Context): Operation<void>
     unregister(transport: CodecDef): Operation<void>
     getTransports(): Operation<CodecDef[]>
+
+    encodeFrame<T>(data: unknown, preferred?: CodecDef): Operation<T>
+    decodeFrame<T>(data: unknown, preferred?: CodecDef): Operation<T>
   }
 }

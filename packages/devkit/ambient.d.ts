@@ -57,6 +57,9 @@ declare module 'std:config' {
 declare module 'std:ws' {
   export * from '@ozaco/std/ws'
 }
+declare module 'std:webrtc' {
+  export * from '@ozaco/std/webrtc'
+}
 
 // --------- SERVER ---------
 

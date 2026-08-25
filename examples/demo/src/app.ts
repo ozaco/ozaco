@@ -4,7 +4,9 @@
  *
  *   ROLE=monolith|gateway|service   (default: SERVICE set → service, else monolith)
  *   SERVICE=todos,media            services this node hosts (service role)
- *   TRANSPORT=memory|nats|redis    the carrier's transport (NATS_URL / REDIS_URL)
+ *   TRANSPORT=memory|nats|redis    the carrier's transport. `nats` speaks JetStream (run your
+ *     own server: `nats-server -js`) and reads NATS_URL (default nats://localhost:4222);
+ *     `redis` reads REDIS_URL. Cross-node WebRTC signaling rides this carrier's event plane.
  *   DB=sqlite|pg                   the database (DB_PATH / DATABASE_URL)
  *   KV=memory|redis                the cache store (REDIS_URL)
  *   PORT=3000                      the edge port (edge roles)
@@ -32,14 +34,27 @@ import { Auth, Cache, Cors, Docs, ObservePlugin, Resilience, Resource } from '@o
 import { OpenObserveExporter } from '@ozaco/server/plugins/observe/openobserve'
 import { OtlpExporter } from '@ozaco/server/plugins/observe/otlp'
 import type { Operation } from '@ozaco/std/effect'
+import { attempt, fork } from '@ozaco/std/effect'
 import { BunIO } from '@ozaco/std/io/impl/bun'
+import { isFailure } from '@ozaco/std/result'
 import { MemoryTransport } from '@ozaco/transport/impl/memory'
 import { NatsTransport } from '@ozaco/transport/impl/nats'
 import { RedisTransport } from '@ozaco/transport/impl/redis'
 
 import type { Db } from './auth'
 import { authProvider, seedUsers } from './auth'
-import { account, cluster, feed, live, media, reports, todoStats, todos } from './services'
+import {
+  account,
+  cluster,
+  feed,
+  live,
+  media,
+  reports,
+  rtc,
+  startRtcRelay,
+  todoStats,
+  todos,
+} from './services'
 import { tables } from './tables'
 
 export const services = [
@@ -50,6 +65,7 @@ export const services = [
   media,
   reports,
   live,
+  rtc,
   cluster,
 ] as const
 
@@ -191,6 +207,16 @@ export function* createDemo(options: DemoOptions = {}): Operation<AppDef.Handle<
   })
 
   if (withEdge) {
+    // The WebRTC signaling rooms live on the node that ACCEPTED each socket, so every edge node
+    // folds the others' room events into its own view (see services/rtc.ts). Failing to reach
+    // the carrier must not take the node down — a single-edge deployment simply stays local.
+    yield* fork(function* () {
+      const outcome = yield* attempt(() => startRtcRelay())
+      if (isFailure(outcome)) {
+        console.warn(`[demo] rtc relay pump stopped: ${String(outcome.error)}`)
+      }
+    })
+
     // routes outside the action model: a custom socket and a raw route
 
     yield* Edge.actions.raw({

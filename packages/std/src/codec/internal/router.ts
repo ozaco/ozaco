@@ -1,6 +1,7 @@
-import { filter, operation, some, toSorted, useContext } from 'std:effect'
-import { fail } from 'std:result'
+import { attempt, filter, operation, some, toSorted, useContext } from 'std:effect'
+import { fail, isSuccess } from 'std:result'
 
+import { Codec } from '../definitions'
 import type { CodecDef } from '../types'
 
 import { CodecRegistryContext } from './context'
@@ -58,3 +59,25 @@ export const codecGetTransportsHandler: CodecDef.Handlers['getTransports'] = ope
     return (yield* CodecRegistryContext.get()) ?? []
   },
 )
+
+export const codecEncodeFrameHandler = function* (data: unknown, preferred?: CodecDef) {
+  if (typeof data === 'string') {
+    return data
+  }
+  if (data instanceof ArrayBuffer || ArrayBuffer.isView(data)) {
+    return data
+  }
+  return yield* (preferred ?? Codec).actions.stringify(data)
+} as CodecDef.Handlers['encodeFrame']
+
+export const codecDecodeFrameHandler = function* (data: unknown, preferred?: CodecDef) {
+  if (typeof data !== 'string') {
+    return data
+  }
+  const trimmed = data.trim()
+  if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+    const parsed = yield* attempt((preferred ?? Codec).actions.parse(data))
+    return isSuccess(parsed) ? parsed.value : data
+  }
+  return data
+} as CodecDef.Handlers['decodeFrame']
