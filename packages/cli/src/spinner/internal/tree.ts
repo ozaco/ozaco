@@ -1,6 +1,6 @@
-import type { PaletteDef } from 'cli:core'
+import type { PaletteDef } from 'cli:palette'
 
-import type { TreeNode } from '../types'
+import type { TreeNode } from '../types/internal'
 
 const glyph = (node: TreeNode, palette: PaletteDef.Context, frame: number): string => {
   const { colors, symbols } = palette
@@ -74,8 +74,8 @@ export const renderTree = (
   const walk = (items: readonly TreeNode[], depth: number, indent: string): string[] => {
     const out: string[] = []
 
-    for (const [index, node] of Object.entries(items)) {
-      const isLast = +index === items.length - 1
+    for (const [index, node] of items.entries()) {
+      const isLast = index === items.length - 1
       const connector = depth === 0 ? '' : isLast ? '└ ' : '├ '
       out.push(`${palette.colors.muted(indent + connector)}${line(node, palette, frame)}`)
 

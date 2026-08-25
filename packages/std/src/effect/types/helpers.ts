@@ -1,54 +1,31 @@
 import type { Maybe, Result } from 'std:result'
-import type { AnyFunction, AnyType } from 'std:shared'
+import type { AnyType } from 'std:shared'
 
-import type { Future, Operation, Scope, Subscription } from './operation'
+import type { API } from '../const'
+
+import type { Api, Around, Context, Future, Operation, Scope, Subscription } from './operation'
 
 export namespace Helpers {
-  export type Yielded<T extends Operation<unknown>> =
-    T extends Operation<infer TYield> ? TYield : never
-
-  export interface ErrorBoundary {
-    raise(error: unknown): void
-  }
-
-  export type CoroutineFuture<T> = Promise<Maybe<Result<T, unknown>>> &
-    Operation<Maybe<Result<T, unknown>>>
-
-  export type Settleware = (
-    outcome: Maybe<Result<unknown, unknown>>,
-    next: (outcome: Maybe<Result<unknown, unknown>>) => void,
-  ) => void
-
   export type Resolve<T> = (value: T) => void
+
+  export type Provide<T> = (value: T) => Operation<void>
+
+  export type Executor<T> = (
+    resolve: (value: T) => void,
+    reject: (error: unknown) => void,
+  ) => () => void
+
+  export type Callable<
+    T extends Operation<unknown> | Promise<unknown> | unknown,
+    TArgs extends unknown[] = [],
+  > = (...args: TArgs) => T
 
   export type Effect<T> = {
     enter: (
-      resolve: Helpers.Resolve<Result<T, unknown>>,
+      resolve: Resolve<Result<T>>,
       routine: Coroutine,
-    ) => (resolve: Helpers.Resolve<Result<void, unknown>>) => void
+    ) => (resolve: Resolve<Result<void>>) => void
     cause: string
-  }
-
-  export interface Coroutine<T = unknown> {
-    scope: Scope
-    future: Helpers.CoroutineFuture<T>
-    settle(outcome: Maybe<Result<unknown, unknown>>): void
-    data: {
-      iterator: Iterator<Effect<unknown> | Result.Failure<unknown>, T, unknown>
-      exit(resolve: Helpers.Resolve<Result<unknown, unknown>>): void
-      resumeWith: Result<unknown, unknown>
-      enqueued: boolean
-      critical: boolean
-      unwinding: boolean
-    }
-    // resume the coroutine with `result` once any active effect's exit has run
-    resume(result: Result<unknown, unknown>): void
-    // begin unwinding (early return) the coroutine — used to halt/cancel
-    unwind(): void
-    // advance the underlying iterator one step (next / return / throw, per resumeWith + unwinding)
-    step(): IteratorResult<Effect<unknown>, T>
-    // enter an effect, wiring its single-shot resolve back into resume
-    perform(effect: Effect<unknown>): void
   }
 
   export interface CoroutineOptions<T> {
@@ -56,24 +33,21 @@ export namespace Helpers {
     operation(): Operation<T>
   }
 
-  export interface Exit {
-    status: number
-    message?: string
-    signal?: string
-    error?: unknown
-  }
-
-  export interface HostOperation<T> {
-    deno(): Operation<T>
-    node(): Operation<T>
-    bun(): Operation<T>
-    browser(): Operation<T>
-  }
-
-  export interface FutureWithResolvers<T> {
-    future: Future<T>
-    resolve(value: T): void
-    reject(error: unknown): void
+  export interface Coroutine<T = unknown> {
+    future: Future<Maybe<Result<T>>>
+    scope: Scope
+    data: {
+      exit(resolve: Resolve<Result<unknown>>): void
+      enqueued: boolean
+      critical: boolean
+      unwinding: boolean
+      resumeWith: Result<unknown>
+    }
+    resume(result: Result<unknown>): void
+    step(): IteratorResult<Effect<unknown>, T>
+    unwind(): void
+    perform(effect: Effect<unknown>): void
+    settle(outcome: Maybe<Result<T>>): void
   }
 
   export interface WithResolvers<T> {
@@ -82,16 +56,28 @@ export namespace Helpers {
     reject(error: unknown): void
   }
 
-  export type EventTypeFromEventTarget<T, K extends string> = `on${K}` extends keyof T
-    ? Parameters<Extract<T[`on${K}`], AnyFunction>>[0]
-    : Event
+  export type Settleware = (
+    outcome: Maybe<Result<unknown>>,
+    next: (outcome: Maybe<Result<unknown>>) => void,
+  ) => void
 
-  export type EventList<T> = T extends {
-    addEventListener(type: infer P, ...args: AnyType): void
-    addEventListener(type: infer P, ...args: AnyType): void
+  export interface ErrorBoundary {
+    raise(error: unknown): void
   }
-    ? P & string
-    : never
+
+  export interface ScopeInternal extends Scope, AsyncDisposable {
+    contexts: Record<string, unknown>
+    ensure(op: () => Operation<void>): () => void
+    destroy(): Operation<void>
+  }
+
+  export interface TaskOptions<T> {
+    owner: ScopeInternal
+    operation(): Operation<T>
+    prioritize?: boolean | undefined
+    /** Detached tasks deliver failures ONLY through their future — they never crash the owner. */
+    detached?: boolean | undefined
+  }
 
   export interface EachLoop<T> {
     subscription: Subscription<T, unknown>
@@ -100,39 +86,53 @@ export namespace Helpers {
     stale?: true
   }
 
-  export type Callable<
-    T extends Operation<unknown> | Promise<unknown> | unknown,
-    TArgs extends unknown[] = [],
-  > = (...args: TArgs) => T
+  export type EventTypeFromEventTarget<T, K extends string> = `on${K}` extends keyof T
+    ? Parameters<Extract<T[`on${K}`], (...args: AnyType[]) => AnyType>>[0]
+    : Event
+
+  export type EventList<T> = T extends {
+    addEventListener(type: infer P, ...args: AnyType): void
+    addEventListener(type: infer _P2, ...args: AnyType): void
+  }
+    ? P & string
+    : never
 
   export interface AsyncIterableType<T, TReturn = unknown> {
     [Symbol.asyncIterator](): AsyncIterator<T, TReturn>
   }
 
-  export type All<T extends readonly Operation<unknown>[] | []> = {
-    -readonly [P in keyof T]: Yielded<T[P]>
+  export interface FutureWithResolvers<T> {
+    future: Future<T>
+    resolve(value: T): void
+    reject(error: Result.Failure<unknown>): void
   }
 
-  export type Executor<T> = (
-    resolve: (value: T) => void,
-    reject: (error: unknown) => void,
-  ) => () => void
-
-  export interface ScopeInternal extends Scope, AsyncDisposable {
-    contexts: Record<string, unknown>
-    snapshotKeys: Set<string>
-    ensure(op: () => Operation<void>): () => void
+  export interface ScopeApi {
+    create(parent: Scope): [Scope, () => Operation<void>]
+    destroy(scope: Scope): Operation<void>
+    set<T>(scope: Scope, context: Context<T>, value: T): T
+    delete<T>(scope: Scope, context: Context<T>): boolean
   }
 
-  export type Provide<T> = (value: T) => Operation<void>
-
-  export interface TaskOptions<T> {
-    owner: Helpers.ScopeInternal
-    operation(): Operation<T>
-    prioritize?: boolean
+  export interface Apis {
+    scope: Api<ScopeApi>
   }
 
-  export type AllSettled<T extends readonly Operation<unknown>[] | []> = {
-    -readonly [P in keyof T]: Result<Helpers.Yielded<T[P]>, unknown>
+  export interface Decorator<A> {
+    min?: Partial<Around<A>> | undefined
+    max?: Partial<Around<A>> | undefined
+  }
+
+  export interface ApiState<A> {
+    local: Decorator<A>
+    total: Decorator<A>
+    handle: A
+  }
+
+  export interface ApiInternal<A> extends Api<A> {
+    _t: typeof API
+
+    context: Context<ApiState<A>>
+    core: A
   }
 }

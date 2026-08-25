@@ -1,4 +1,4 @@
-import type { Queue, Stream } from 'std:effect'
+import type { Queue, Flow } from 'std:effect'
 import {
   action,
   attempt,
@@ -18,7 +18,7 @@ import type { Socket } from 'node:net'
 import { connect, createServer } from 'node:net'
 
 import type {
-  StreamClose,
+  FlowClose,
   TcpConnectOptions,
   TcpHandler,
   TcpListenOptions,
@@ -29,7 +29,7 @@ import type {
 
 import { errorMessage, toBytes } from './process'
 
-const queueStream = <T, TClose>(queue: Queue<T, TClose>): Stream<T, TClose> => ({
+const queueFlow = <T, TClose>(queue: Queue<T, TClose>): Flow<T, TClose> => ({
   *[Symbol.iterator]() {
     return queue
   },
@@ -74,9 +74,9 @@ const makeHandle = (socket: Socket): TcpSocket => {
   // even when the handler does async work (e.g. connecting an upstream) before consuming `data`. A
   // lazy subscribe would drop the first bytes under Bun's node:net (it does not buffer a paused
   // accepted socket the way Node does). Trade-off: no native backpressure — a slow consumer buffers.
-  const queue = createQueue<Uint8Array, StreamClose>()
+  const queue = createQueue<Uint8Array, FlowClose>()
   let settled = false
-  const settle = (close: StreamClose) => {
+  const settle = (close: FlowClose) => {
     if (!settled) {
       settled = true
       queue.close(close)
@@ -91,7 +91,7 @@ const makeHandle = (socket: Socket): TcpSocket => {
     remoteAddress: socket.remoteAddress ?? '',
     remotePort: socket.remotePort ?? 0,
     localPort: socket.localPort ?? 0,
-    data: queueStream(queue),
+    data: queueFlow(queue),
     write: chunk => nodeWrite(socket, chunk),
     close: () => nodeClose(socket),
   }
@@ -103,9 +103,13 @@ export const tcpListen = operation(function* (options: TcpListenOptions, onConne
   const server = createServer(socket => {
     const handle = makeHandle(socket)
     void scope
-      .safeRun(() => onConnection(handle))
+      .run(() => onConnection(handle))
       .finally(() => {
         socket.destroy()
+      })
+      .catch(() => {
+        // a handler halted at listen-scope teardown rejects this materialized promise — expected
+        // during shutdown, and the socket is already destroyed above
       })
   })
 
@@ -186,7 +190,7 @@ export const tcpConnect = operation(function* (options: TcpConnectOptions) {
 })
 
 export const udpBind = operation(function* (options?: UdpBindOptions) {
-  const queue = createQueue<UdpDatagram, StreamClose>()
+  const queue = createQueue<UdpDatagram, FlowClose>()
   const socket = createSocket('udp4')
 
   socket.on('message', (msg, rinfo) => {
@@ -262,5 +266,5 @@ export const udpBind = operation(function* (options?: UdpBindOptions) {
     )
   })
 
-  return { port: socket.address().port, messages: queueStream(queue), send, close }
+  return { port: socket.address().port, messages: queueFlow(queue), send, close }
 })

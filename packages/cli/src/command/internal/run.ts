@@ -1,18 +1,21 @@
-import { Palette, Terminal } from 'cli:core'
+import { CliErrors, Terminal } from 'cli:core'
+import type { StandardSchemaV1 } from 'cli:core'
+import { usePalette } from 'cli:palette'
 import type { Operation } from 'std:effect'
-import { scoped, useContext } from 'std:effect'
+import { scoped } from 'std:effect'
 import { install } from 'std:plugin'
 import { fail, isFailure } from 'std:result'
-import type { AnyType, StandardSchemaV1 } from 'std:shared'
+import type { AnyType } from 'std:shared'
 import { validateSync } from 'std:shared'
 
-import { CommandErrors, HELP_FLAGS, VERSION_FLAGS } from '../const'
+import { HELP_FLAGS, VERSION_FLAGS } from '../const'
 import type { CommandDef } from '../types/command'
 import type { ActionHelp, RuntimeNode } from '../types/internal'
 
+import { processArgv } from './argv'
 import { build } from './build'
 import { renderActionHelp, renderCommandHelp } from './help'
-import { optionsFromSchema } from './schema'
+import { optionsFromAction } from './schema'
 import { tokenize } from './tokenize'
 
 const hasFlag = (argv: string[], flags: string[]): boolean =>
@@ -36,11 +39,12 @@ function* descend(node: RuntimeNode, rest: string[], path: string[]): Operation<
   if (token !== undefined && !token.startsWith('-') && node.children[token] !== undefined) {
     const next = node.children[token]!
     return yield* scoped(function* () {
-      // Install ONLY the child on the invoked path — never its siblings. Each subcommand gets its own
-      // child scope (which inherits the parent's contexts via the scope prototype chain), so sibling
-      // commands stay isolated: their `setup`s don't run and their contexts never leak in. This is
-      // also what lets subcommands be compiled as independent bundles (each carrying its own copy of
-      // @ozaco/*) — co-installing two separate bundles into one scope would otherwise collide.
+      // Install ONLY the child on the invoked path — never its siblings. Each subcommand gets its
+      // own child scope (which inherits the parent's contexts via the scope prototype chain), so
+      // sibling commands stay isolated: their `setup`s don't run and their contexts never leak in.
+      // This is also what lets subcommands be compiled as independent bundles (each carrying its
+      // own copy of @ozaco/*) — co-installing two separate bundles into one scope would otherwise
+      // collide.
       yield* install(next.plugin as AnyType)
       return yield* descend(next, rest.slice(1), [...path, token])
     })
@@ -50,7 +54,7 @@ function* descend(node: RuntimeNode, rest: string[], path: string[]): Operation<
 }
 
 function* dispatch(node: RuntimeNode, rest: string[], path: string[]): Operation<void> {
-  const palette = yield* useContext(Palette)
+  const palette = yield* usePalette()
   const command = node.plugin
 
   const keys = command.getKeys()
@@ -77,7 +81,7 @@ function* dispatch(node: RuntimeNode, rest: string[], path: string[]): Operation
   }
 
   const meta = (command.getMeta(actionKey) ?? {}) as CommandDef.ActionMeta
-  const infos = optionsFromSchema(meta.input)
+  const infos = yield* optionsFromAction(meta)
   const short = meta.short ?? {}
   const argsOrder = meta.args ?? []
   const actionHelp: ActionHelp = {
@@ -111,31 +115,32 @@ function* dispatch(node: RuntimeNode, rest: string[], path: string[]): Operation
     const text = errors.join('\n')
     const help = renderActionHelp(actionHelp, palette)
     yield* Terminal.actions.write(`${palette.colors.error(text)}\n\n${help}\n`)
-    return yield* fail(CommandErrors.Parse, text)
+    return yield* fail(CliErrors.Parse, text)
   }
 
   yield* command.actions[actionKey]!(ctx)
 }
 
 /**
- * Parse argv against a command tree and dispatch the matched action (the CLI analog of `Broker.call`).
+ * Parse argv against a command tree and dispatch the matched action (the CLI analog of
+ * `Broker.call`).
  *
  * Walks `subcommands` LAZILY: the root is installed in its own scope here, then to descend into a
  * child it opens a fresh child scope and installs ONLY that child — its `setup` runs then, the CLI
- * analog of "entering" a command — so only the commands on the invoked path are ever set up, siblings
- * stay isolated, and each level's context is visible to the levels below (child scopes inherit their
- * parent). When no child token matches, the current node's leaf action is resolved, its argv built +
- * validated, and dispatched.
+ * analog of "entering" a command — so only the commands on the invoked path are ever set up,
+ * siblings stay isolated, and each level's context is visible to the levels below (child scopes
+ * inherit their parent). When no child token matches, the current node's leaf action is resolved,
+ * its argv built + validated, and dispatched.
  *
- * Requires Terminal + Palette installed. The root node is built + stored by `register` but its `setup`
- * is NOT run there — it runs here, lazily, so registering many top-level commands never collides.
+ * Requires Terminal + Palette installed. The root node is built + stored by `register` but its
+ * `setup` is NOT run there — it runs here, lazily, so registering many top-level commands never
+ * collides.
  */
 export function* runCommand(root: RuntimeNode, argv?: string[]): Operation<void> {
-  const fromProcess = typeof process === 'undefined' ? [] : process.argv.slice(2)
-  const args = (argv ?? fromProcess).slice()
+  const args = (argv ?? processArgv()).slice()
   // Install the root command in its OWN scope (running its setup) here, not at register — the
-  // top-level analog of how `descend` enters a child. Only the invoked command's setup ever runs, so
-  // sibling top-level commands (e.g. two plugins that each install YamlCodec) never collide.
+  // top-level analog of how `descend` enters a child. Only the invoked command's setup ever runs,
+  // so sibling top-level commands (e.g. two plugins that each install YamlCodec) never collide.
   return yield* scoped(function* () {
     yield* install(root.plugin as AnyType)
     return yield* descend(root, args, [root.name])

@@ -1,107 +1,196 @@
-import type { Future } from 'std:effect'
-import type { Plugin, Protocol } from 'std:plugin'
-import type { AnyType, EmptyType } from 'std:shared'
+// oxlint-disable import/exports-last
+import type { Operation } from 'std:effect'
+import type { AnyType, StandardSchemaV1 } from 'std:shared'
 
-import type { SERVICE } from '../const'
+import type { ACTION, SERVICE } from '../const'
 
-import type { Action } from './action'
+import type { StreamDef } from './stream'
 
 /**
- * A service is a {@link Protocol} whose self-actions are its own route table.
- *
- * A protocol rather than a plain plugin, because a service has to answer questions about itself —
- * which addresses does it serve, what is the action at this path — and a plugin has nowhere to put
- * them. The table those questions read is a real `Map` built at definition time, NOT a walk over
- * `service.actions`: that is a `createProxy`, and a proxy answers every key with another callable
- * proxy, so a `_has` implemented over it reports `true` for a path nobody defined.
+ * The user-facing definition model: `service(name, { action: action.query({...}, handler) })`.
+ * Everything the kernel, the edge, the carriers, the plugins and the docs read about an action
+ * is resolved ONCE here into plain data (`ActionDef.meta`) — no runtime sniffing.
  */
-export interface Service<
-  TContext = unknown,
-  TArgs extends unknown[] = unknown[],
-  TActions extends EmptyType = EmptyType,
-> extends Protocol<TContext, TArgs, TActions, Service.Handlers<TContext, TArgs, TActions>> {
-  _st: typeof SERVICE
-}
+export namespace ServiceDef {
+  export type Schema = StandardSchemaV1
 
-export namespace Service {
-  /** The actions record a service was defined with. */
-  export type ActionsOf<TService> =
-    TService extends Service<AnyType, AnyType[], infer TActions> ? TActions : never
+  /** The function taxonomy (Convex-flavored): drives the default HTTP method, the manifest and
+   * the client behaviour. */
+  export type Kind = 'query' | 'mutation' | 'action' | 'stream'
+
+  export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
+
+  export interface Route {
+    readonly method: HttpMethod
+    readonly path: string
+  }
+
+  /** What `input` / `output` accept: a bare schema (the value plane), a branded stream, a
+   * multipart declaration, or nothing. */
+  export type Declaration = Schema | StreamDef.Decl | StreamDef.PartsDecl
+
+  /** What happens to a running handler when the caller disconnects or abandons the call. */
+  export type DisconnectMode = 'cancel' | 'detach'
 
   /**
-   * Every callable path, dotted exactly as `flatten` produced it — `create`, `admin.purge`.
-   *
-   * Constraining an address to this is what turns a typo into a compile error instead of a runtime
-   * miss, and it is why an address stays two plain values rather than one opaque string: a
-   * formatted `"notes#admin.purge"` cannot be checked against anything.
+   * An action's configuration. Plugins extend it with their own top-level keys (`cache`,
+   * `timeoutMs`, `auth`, …) — typed through their `options()` helpers, validated at
+   * `createServer` time against the schemas the plugins declare. Unknown keys are a
+   * configuration failure: an option nobody handles is a typo, not a feature.
    */
-  export type PathsIn<TActions, TDepth extends unknown[] = []> = TDepth['length'] extends 5
-    ? never
-    : {
-        [K in keyof TActions & string]: TActions[K] extends Action<AnyType[], AnyType>
-          ? K
-          : TActions[K] extends Record<string, AnyType>
-            ? `${K}.${PathsIn<TActions[K], [unknown, ...TDepth]> & string}`
-            : never
-      }[keyof TActions & string]
+  export interface Config<
+    TInput extends Declaration | undefined = Declaration | undefined,
+    TOutput extends Declaration | undefined = Declaration | undefined,
+  > {
+    readonly title?: string | undefined
+    readonly description?: string | undefined
+    readonly input?: TInput
+    readonly output?: TOutput
+    readonly route?: Route | undefined
+    readonly onDisconnect?: DisconnectMode | undefined
 
-  export type Paths<TService> = PathsIn<ActionsOf<TService>>
+    /** Always persist this action's outcome (otherwise only undeliverable replies are). */
+    readonly outcome?: boolean | undefined
 
-  /** Walk a dotted path into the actions record. */
-  export type At<TActions, TPath extends string> = TPath extends `${infer Head}.${infer Rest}`
-    ? Head extends keyof TActions
-      ? At<TActions[Head], Rest>
-      : never
-    : TPath extends keyof TActions
-      ? TActions[TPath]
-      : never
+    /** Failure tag → HTTP status overrides; also feeds the docs error catalog. */
+    readonly errors?: Readonly<Record<string, number>> | undefined
+    readonly tags?: readonly string[] | undefined
 
-  /** What the action at `TPath` returns — so a call's outcome is typed, not `unknown`. */
-  export type Returns<TService, TPath extends string> =
-    At<ActionsOf<TService>, TPath> extends Action<AnyType[], infer TReturn> ? TReturn : unknown
-
-  /** The args tuple the action at `TPath` declares — what a call's normal sources carry, in order.
-   * Falls back to `unknown[]` (an unconstrained call) when the action is untyped. */
-  export type Args<TService, TPath extends string> =
-    At<ActionsOf<TService>, TPath> extends Action<infer TArgs, AnyType> ? TArgs : unknown[]
-
-  /** What a claim puts in a routing table: the action plus who owns the address. */
-  export interface Route {
-    service: Service
-    action: Action
-    /** the dotted key this action answers to, kept so a carrier can be told what to serve */
-    path: string
+    /** plugin options — see the plugin's `options()` helper for the typed shape. */
+    readonly [option: string]: unknown
   }
 
-  export interface Handlers<TContext, TArgs extends unknown[], TActions extends EmptyType> {
-    /**
-     * Compile and install in one step: `yield* AuthService.actions.install()`.
-     *
-     * The reason a service is never handed to the bare `install()` — a protocol is not installable,
-     * only the plugin that `_compile()` seals out of it is. Not underscored, because unlike the
-     * lookups this is the public verb.
-     */
-    install(...args: TArgs): Future<TContext>
+  /** The handler's `params` type: the value plane of the input. */
+  export type Params<D> = D extends undefined
+    ? undefined
+    : D extends StandardSchemaV1
+      ? StandardSchemaV1.InferOutput<D>
+      : D extends StreamDef.Decl<string, infer T>
+        ? StreamDef.Branded<string, T>
+        : D extends StreamDef.PartsDecl<infer TFields, infer TStreams>
+          ? StreamDef.Parts<TFields, TStreams>
+          : unknown
 
-    /**
-     * Underscored because they are plumbing — and because an author's own `get`/`list` action must
-     * not collide with the service's own vocabulary. That collision is why the prefix exists.
-     */
-    _has(path: string): Future<boolean>
-    _get(path: string): Future<Action | undefined>
-    _list(): Future<[path: string, action: Action][]>
+  /** The handler's return type: the value plane of the output, or a branded stream. */
+  export type Returns<D> = D extends undefined
+    ? void
+    : D extends StandardSchemaV1
+      ? StandardSchemaV1.InferOutput<D>
+      : D extends StreamDef.Decl<infer B, infer T>
+        ? StreamDef.Branded<B, AnyType> | StreamDef.Source<T>
+        : unknown
 
-    /** the dotted path an action answers to, or `undefined` if it is not ours */
-    _pathOf(action: Action): Future<string | undefined>
+  /** Everything resolved about an action: what the kernel/edge/carriers/plugins/docs read. */
+  export interface Meta {
+    readonly kind: Kind
+    readonly title: string | undefined
+    readonly description: string | undefined
+    readonly input: Declaration | null
+    readonly output: Declaration | null
 
-    /**
-     * The seal — the last moment at which every declaration is present and nothing is wired yet.
-     *
-     * Built through the protocol's own `implement`, NOT a fresh `definePlugin`: that shares the
-     * protocol's context, so `useContext(service)` inside an action resolves to what `setup`
-     * returned. A separately defined plugin would carry a context of its own, and the service would
-     * be unable to see its own state.
-     */
-    _compile(): Future<Plugin<TContext, TArgs, TActions>>
+    /** value | stream | parts — derived from the declarations. */
+    readonly inputPlane: 'none' | 'value' | 'stream' | 'parts'
+    readonly outputPlane: 'none' | 'value' | 'stream'
+    readonly route: Route
+    readonly onDisconnect: DisconnectMode
+    readonly outcome: boolean
+    readonly errors: Readonly<Record<string, number>>
+    readonly tags: readonly string[]
+
+    /** plugin options as given (validated at createServer). */
+    readonly options: Readonly<Record<string, unknown>>
+  }
+
+  /** The handler signature: ONE argument. */
+  export type Handler<TParams, TResult, TCtx> = (call: {
+    readonly input: TParams
+    readonly ctx: TCtx
+  }) => Operation<TResult>
+
+  export interface Action<
+    TInput extends Declaration | undefined = Declaration | undefined,
+    TOutput extends Declaration | undefined = Declaration | undefined,
+  > {
+    readonly _t: typeof ACTION
+    readonly meta: Meta
+    readonly handler: Handler<Params<TInput>, Returns<TOutput>, AnyType>
+    readonly [INPUT]?: TInput
+    readonly [OUTPUT]?: TOutput
+  }
+
+  /** A socket declared INSIDE a service (`action.socket`): mounted as a WS route at the edge,
+   * listed under the service in the manifest — not callable, not carried. */
+  export interface SocketConfig {
+    /** the WS path. Default `/<service>/<action>`. */
+    readonly path?: string | undefined
+
+    /** what travels on it, for docs (`resource`, `chat`, …). */
+    readonly protocol?: string | undefined
+    readonly description?: string | undefined
+
+    /** runs before the upgrade; a failure rejects the handshake with its status. */
+    readonly authorize?: ((request: Request) => Operation<void>) | undefined
+  }
+
+  export interface SocketSpec {
+    readonly path: string
+    readonly protocol: string | null
+    readonly description: string | null
+    readonly authorize: ((request: Request) => Operation<void>) | null
+  }
+
+  export interface SocketAction {
+    readonly _t: typeof ACTION
+    readonly socket: SocketSpec
+    readonly handler: (socket: AnyType) => Operation<void>
+  }
+
+  /** A registered socket, service attached — what the registry hands the edge. */
+  export interface ServiceSocket extends SocketSpec {
+    readonly service: string
+    readonly handler: (socket: AnyType) => Operation<void>
+  }
+
+  export type ActionEntry = Action<AnyType, AnyType> | SocketAction
+
+  export type ActionMap = Record<string, ActionEntry>
+
+  export interface Service<TName extends string = string, TActions extends ActionMap = ActionMap> {
+    readonly _t: typeof SERVICE
+    readonly name: TName
+    readonly version: string
+    readonly description: string | undefined
+    readonly actions: TActions
+  }
+
+  export interface ServiceOptions {
+    readonly version?: string | undefined
+    readonly description?: string | undefined
+  }
+
+  // --- typed references (what `ctx.call` / the client take) ----------------------------------
+
+  export type ActionKey<S extends Service> = keyof S['actions'] & string
+
+  export type InputOf<A> = A extends Action<infer I, AnyType> ? Params<I> : never
+  export type OutputOf<A> = A extends Action<AnyType, infer O> ? Returns<O> : never
+
+  /** A typed pointer to one action of one service: `api.todos.list`. */
+  export interface Ref<A extends Action = Action> {
+    readonly service: string
+    readonly action: string
+    readonly [ACTION_REF]?: A
+  }
+
+  export type Api<TServices extends readonly Service[]> = {
+    readonly [S in TServices[number] as S['name']]: {
+      readonly [K in keyof S['actions'] as S['actions'][K] extends SocketAction ? never : K]: Ref<
+        Extract<S['actions'][K], Action<AnyType, AnyType>>
+      >
+    }
   }
 }
+
+declare const INPUT: unique symbol
+declare const OUTPUT: unique symbol
+declare const ACTION_REF: unique symbol

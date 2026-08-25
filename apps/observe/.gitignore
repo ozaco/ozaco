@@ -1,0 +1,4 @@
+dist
+
+# the root .gitignore has `lib/` (a declarations outDir) — src/lib here is SOURCE
+!src/lib/

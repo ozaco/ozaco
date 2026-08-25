@@ -1,7 +1,11 @@
 import { operation } from 'std:effect'
 import { defineProtocol } from 'std:plugin'
 
+import pkg from '../../package.json'
+
 import {
+  codecDecodeFrameHandler,
+  codecEncodeFrameHandler,
   codecGetTransportsHandler,
   codecRegisterHandler,
   codecUnregisterHandler,
@@ -27,14 +31,9 @@ export const hasCodec = operation(function* () {
  * `JsonCodec`) to populate the registry. Lives in `std` so any std consumer — `std:fetch`, the server
  * broker/transport, … — can encode/decode without coupling to a higher layer.
  */
-export const Codec = defineProtocol<
-  CodecDef.Context,
-  unknown[],
-  CodecDef.Actions,
-  CodecDef.Handlers
->({
+export const Codec = defineProtocol<CodecDef.Context, CodecDef.Actions, CodecDef.Handlers>({
   name: 'std/codec',
-  version: '0.0.0',
+  version: pkg.version,
 
   subtype: CODEC,
   cloneable: true,
@@ -49,8 +48,7 @@ export const Codec = defineProtocol<
     for (const entry of entries) {
       if (
         !best ||
-        (entry.contextValue as CodecDef.Context).priority >=
-          (best.contextValue as CodecDef.Context).priority
+        (entry.value as CodecDef.Context).priority >= (best.value as CodecDef.Context).priority
       ) {
         best = entry
       }
@@ -63,5 +61,7 @@ export const Codec = defineProtocol<
     register: codecRegisterHandler,
     unregister: codecUnregisterHandler,
     getTransports: codecGetTransportsHandler,
+    encodeFrame: codecEncodeFrameHandler,
+    decodeFrame: codecDecodeFrameHandler,
   },
 })

@@ -1,0 +1,60 @@
+language: typescript
+layer: application
+toolchains:
+  default: bun
+
+tasks:
+  types:
+    command: bun x tsc -p tsconfig.json --noEmit
+    deps:
+      - std:build
+      - transport:build
+      - db:build
+      - server:build
+      - client:build
+    inputs:
+      - src/**/*
+      - tests/**/*
+      - scripts/**/*
+  test:
+    command: bun test --pass-with-no-tests
+    deps:
+      - std:build
+      - transport:build
+      - db:build
+      - panel:embed
+      - observe:embed
+      - server:build
+      - client:build
+    inputs:
+      - src/**/*
+      - tests/**/*
+    options:
+      runDepsInParallel: false
+  seed:
+    command: bun run scripts/seed.ts
+    deps:
+      - std:build
+      - db:build
+    options:
+      cache: false
+  start:
+    command: bun run src/main.ts
+    deps:
+      - panel:embed
+      - observe:embed
+      - server:build
+      - client:build
+    preset: server
+    options:
+      runDepsInParallel: false
+  cluster:
+    command: DB_PATH=local/demo.sqlite bun run scripts/cluster.ts
+    deps:
+      - panel:embed
+      - observe:embed
+      - server:build
+      - client:build
+    preset: server
+    options:
+      runDepsInParallel: false

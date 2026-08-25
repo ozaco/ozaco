@@ -1,5 +1,5 @@
-import { isPromise } from 'std:shared'
 import type { AnyType } from 'std:shared'
+import { isPromise } from 'std:shared'
 
 import type { Impl } from '../types/impl'
 
@@ -30,6 +30,5 @@ export const unwrap: Impl.Unwrap = ((...args: AnyType[]): AnyType => {
     return apply(firstArgument)
   }
 
-  // not a Result/Promise — already a plain value; hand it back as-is (never a curried function)
   return firstArgument
 }) as AnyType

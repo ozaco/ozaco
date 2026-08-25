@@ -1,13 +1,33 @@
 {
+  "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "paths": {
-      "std:effect": ["./node_modules/@ozaco/std/dist/effect.d.ts"],
-      "std:result": ["./node_modules/@ozaco/std/dist/result.d.ts"],
-      "std:shared": ["./node_modules/@ozaco/std/dist/shared.d.ts"],
-      "std:ws": ["./node_modules/@ozaco/std/dist/ws.d.ts"],
-      "std:fetch": ["./node_modules/@ozaco/std/dist/fetch.d.ts"],
-      "std:plugin": ["./node_modules/@ozaco/std/dist/plugin.d.ts"],
-      "std:codec/impl/json": ["./node_modules/@ozaco/std/dist/codec/impl/json.d.ts"]
+      "client:core": ["./src/core/index.ts", "./dist/index.d.ts"],
+      "client:codegen": ["./src/codegen/index.ts", "./dist/codegen.d.ts"],
+
+      "std:shared": ["./node_modules/@ozaco/std/dist/shared"],
+      "std:result": ["./node_modules/@ozaco/std/dist/result"],
+      "std:effect": ["./node_modules/@ozaco/std/dist/effect"],
+      "std:plugin": ["./node_modules/@ozaco/std/dist/plugin"],
+      "std:fetch": ["./node_modules/@ozaco/std/dist/fetch"],
+      "std:ws": ["./node_modules/@ozaco/std/dist/ws"],
+      "std:io": ["./node_modules/@ozaco/std/dist/io"],
+      "std:io/impl/web": ["./node_modules/@ozaco/std/dist/io/impl/web"],
+      "std:codec": ["./node_modules/@ozaco/std/dist/codec"],
+      "std:codec/impl/json": ["./node_modules/@ozaco/std/dist/codec/impl/json"],
+      "std:logger": ["./node_modules/@ozaco/std/dist/logger"],
+      "std:io/impl/bun": ["./node_modules/@ozaco/std/dist/io/impl/bun"],
+
+      "server:core": ["./node_modules/@ozaco/server/dist/index"],
+      "server:impl/edge/bun": ["./node_modules/@ozaco/server/dist/edge/bun"],
+      "server:plugins": ["./node_modules/@ozaco/server/dist/plugins"],
+
+      "db:core": ["./node_modules/@ozaco/db/dist/index"],
+      "db:impl/memory": ["./node_modules/@ozaco/db/dist/impl/memory"],
+      "db:impl/kv/memory": ["./node_modules/@ozaco/db/dist/impl/kv/memory"],
+
+      "transport:core": ["./node_modules/@ozaco/transport/dist/index"],
+      "transport:impl/memory": ["./node_modules/@ozaco/transport/dist/impl/memory"]
     }
   }
 }

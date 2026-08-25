@@ -1,5 +1,5 @@
-import type { Stream } from 'std:effect'
-import { createSignal, operation, resource, spawn, until } from 'std:effect'
+import type { Flow } from 'std:effect'
+import { createSignal, fork, operation, resource, until } from 'std:effect'
 
 import { watch as fsWatch, stat } from 'node:fs/promises'
 import { basename, dirname } from 'node:path'
@@ -142,7 +142,7 @@ const drainNative = (
  * resource, so the fallback iterator is drained from a background task; teardown ends the Watchman
  * client or aborts the iterator (releasing the OS watcher).
  */
-export const watchPath = (path: string, options?: WatchOptions): Stream<WatchEvent, never> =>
+export const watchPath = (path: string, options?: WatchOptions): Flow<WatchEvent, never> =>
   resource(function* (provide) {
     const events = createSignal<WatchEvent, never>()
     const emit = (event: WatchEvent) => events.send(event)
@@ -151,7 +151,7 @@ export const watchPath = (path: string, options?: WatchOptions): Stream<WatchEve
     const controller = stopWatchman ? undefined : new AbortController()
 
     if (controller) {
-      yield* spawn(
+      yield* fork(
         drainNative(
           { path, recursive: options?.recursive ?? false, signal: controller.signal },
           emit,

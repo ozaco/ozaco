@@ -1,6 +1,6 @@
 {
   "name": "@ozaco/cli",
-  "version": "0.3.6",
+  "version": "0.4.0",
   "homepage": "https://ozaco.com/",
   "author": "giveerr (https://github.com/giveerr)",
   "repository": {
@@ -13,14 +13,14 @@
   ],
   "type": "module",
   "exports": {
-    "./core": {
+    ".": {
       "import": {
-        "types": "./dist/core.d.ts",
-        "default": "./dist/core.js"
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
       },
       "require": {
-        "types": "./dist/core.d.cts",
-        "default": "./dist/core.cjs"
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
       },
       "source": "./src/core/index.ts"
     },
@@ -33,29 +33,7 @@
         "types": "./dist/palette.d.cts",
         "default": "./dist/palette.cjs"
       },
-      "source": "./src/palette/definition.ts"
-    },
-    "./spinner": {
-      "import": {
-        "types": "./dist/spinner.d.ts",
-        "default": "./dist/spinner.js"
-      },
-      "require": {
-        "types": "./dist/spinner.d.cts",
-        "default": "./dist/spinner.cjs"
-      },
-      "source": "./src/spinner/definition.ts"
-    },
-    "./command": {
-      "import": {
-        "types": "./dist/command.d.ts",
-        "default": "./dist/command.js"
-      },
-      "require": {
-        "types": "./dist/command.d.cts",
-        "default": "./dist/command.cjs"
-      },
-      "source": "./src/command/definition.ts"
+      "source": "./src/palette/index.ts"
     },
     "./prompt": {
       "import": {
@@ -66,7 +44,18 @@
         "types": "./dist/prompt.d.cts",
         "default": "./dist/prompt.cjs"
       },
-      "source": "./src/prompt/definition.ts"
+      "source": "./src/prompt/index.ts"
+    },
+    "./spinner": {
+      "import": {
+        "types": "./dist/spinner.d.ts",
+        "default": "./dist/spinner.js"
+      },
+      "require": {
+        "types": "./dist/spinner.d.cts",
+        "default": "./dist/spinner.cjs"
+      },
+      "source": "./src/spinner/index.ts"
     },
     "./table": {
       "import": {
@@ -77,18 +66,18 @@
         "types": "./dist/table.d.cts",
         "default": "./dist/table.cjs"
       },
-      "source": "./src/table/definition.ts"
+      "source": "./src/table/index.ts"
     },
-    "./terminal/bun": {
+    "./command": {
       "import": {
-        "types": "./dist/terminal/bun.d.ts",
-        "default": "./dist/terminal/bun.js"
+        "types": "./dist/command.d.ts",
+        "default": "./dist/command.js"
       },
       "require": {
-        "types": "./dist/terminal/bun.d.cts",
-        "default": "./dist/terminal/bun.cjs"
+        "types": "./dist/command.d.cts",
+        "default": "./dist/command.cjs"
       },
-      "source": "./src/terminal/bun.ts"
+      "source": "./src/command/index.ts"
     }
   },
   "publishConfig": {

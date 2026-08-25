@@ -18,6 +18,7 @@ const STD_MODULES: Record<string, ModuleEntry> = {
   'std:io/impl/web': { subpath: 'io/impl/web', source: 'io/impl/web.ts' },
   'std:fetch': { subpath: 'fetch', source: 'fetch/index.ts' },
   'std:ws': { subpath: 'ws', source: 'ws/index.ts' },
+  'std:webrtc': { subpath: 'webrtc', source: 'webrtc/index.ts' },
   'std:codec': { subpath: 'codec', source: 'codec/index.ts' },
   'std:codec/impl/json': { subpath: 'codec/impl/json', source: 'codec/impl/json.ts' },
   'std:codec/impl/toml': { subpath: 'codec/impl/toml', source: 'codec/impl/toml.ts' },
@@ -35,108 +36,62 @@ const STD_MODULES: Record<string, ModuleEntry> = {
 }
 
 const SERVER_MODULES: Record<string, ModuleEntry> = {
-  'server:core': { subpath: 'core', source: 'core/index.ts' },
-  'server:transport/nats': {
-    subpath: 'transport/nats',
-    source: 'transport/nats/index.ts',
+  'server:core': { subpath: '', source: 'core/index.ts' },
+  'server:impl/edge/bun': { subpath: 'edge/bun', source: 'impl/edge/bun/index.ts' },
+  'server:impl/edge/node': { subpath: 'edge/node', source: 'impl/edge/node/index.ts' },
+  'server:impl/edge/deno': { subpath: 'edge/deno', source: 'impl/edge/deno/index.ts' },
+  'server:impl/carrier/network': {
+    subpath: 'carrier/network',
+    source: 'impl/carrier/network/index.ts',
   },
-  'server:transport/worker': {
-    subpath: 'transport/worker',
-    source: 'transport/worker/index.ts',
+  'server:plugins': { subpath: 'plugins', source: 'plugins/index.ts' },
+  'server:plugins/observe/otlp': {
+    subpath: 'plugins/observe/otlp',
+    source: 'plugins/observe/impl/otlp/index.ts',
   },
-  'server:policy/bucket': {
-    subpath: 'policy/bucket',
-    source: 'policy/bucket/index.ts',
+  'server:plugins/metrics/starrocks': {
+    subpath: 'plugins/metrics/starrocks',
+    source: 'plugins/metrics/impl/starrocks/index.ts',
   },
-  'server:policy/retry': {
-    subpath: 'policy/retry',
-    source: 'policy/retry/index.ts',
-  },
-  'server:policy/cache': {
-    subpath: 'policy/cache',
-    source: 'policy/cache/index.ts',
-  },
-  'server:policy/circuit-breaker': {
-    subpath: 'policy/circuit-breaker',
-    source: 'policy/circuit-breaker/index.ts',
-  },
-  'server:policy/bulk': {
-    subpath: 'policy/bulk',
-    source: 'policy/bulk/index.ts',
-  },
-  'server:policy/timeout': {
-    subpath: 'policy/timeout',
-    source: 'policy/timeout/index.ts',
-  },
-  'server:policy/fallback': {
-    subpath: 'policy/fallback',
-    source: 'policy/fallback/index.ts',
-  },
-  'server:policy/metrics': {
-    subpath: 'policy/metrics',
-    source: 'policy/metrics/index.ts',
-  },
-  'server:gateway/bun': {
-    subpath: 'gateway/bun',
-    source: 'gateway/bun/index.ts',
-  },
-  'server:gateway/node': {
-    subpath: 'gateway/node',
-    source: 'gateway/node/index.ts',
-  },
-  'server:plugin/cors': {
-    subpath: 'plugin/cors',
-    source: 'plugin/cors/index.ts',
-  },
-  'server:plugin/docs': {
-    subpath: 'plugin/docs',
-    source: 'plugin/docs/index.ts',
-  },
-  'server:plugin/auth': {
-    subpath: 'plugin/auth',
-    source: 'plugin/auth/index.ts',
-  },
-  'server:daemon': {
-    subpath: 'daemon',
-    source: 'daemon/index.ts',
-  },
-  'server:wizard': {
-    subpath: 'wizard',
-    source: 'wizard/index.ts',
-  },
-  'server:metrics': {
-    subpath: 'metrics',
-    source: 'metrics/index.ts',
-  },
+  'server:app': { subpath: 'app', source: 'app/index.ts' },
 }
 
 const DB_MODULES: Record<string, ModuleEntry> = {
   'db:core': { subpath: '', source: 'core/index.ts' },
-  'db:realtime': { subpath: 'realtime', source: 'realtime/index.ts' },
-  'db:impl/pg': { subpath: 'impl/pg', source: 'impl/pg.ts' },
-  'db:impl/bun': { subpath: 'impl/bun', source: 'impl/bun.ts' },
-  'db:impl/sqlite': { subpath: 'impl/sqlite', source: 'impl/sqlite.ts' },
-  'db:impl/surreal': { subpath: 'impl/surreal', source: 'impl/surreal.ts' },
+  'db:impl/memory': { subpath: 'impl/memory', source: 'impl/memory/index.ts' },
+  'db:impl/sqlite': { subpath: 'impl/sqlite', source: 'impl/sqlite/index.ts' },
+  'db:impl/pg': { subpath: 'impl/pg', source: 'impl/pg/index.ts' },
+  'db:impl/bun-sql': { subpath: 'impl/bun-sql', source: 'impl/bun-sql/index.ts' },
+  'db:impl/kv/memory': { subpath: 'impl/kv/memory', source: 'impl/kv/memory/index.ts' },
+  'db:impl/kv/redis': { subpath: 'impl/kv/redis', source: 'impl/kv/redis/index.ts' },
+}
+
+const TRANSPORT_MODULES: Record<string, ModuleEntry> = {
+  'transport:core': { subpath: '', source: 'core/index.ts' },
+  'transport:impl/memory': { subpath: 'impl/memory', source: 'impl/memory/index.ts' },
+  'transport:impl/nats': { subpath: 'impl/nats', source: 'impl/nats/index.ts' },
+  'transport:impl/redis': { subpath: 'impl/redis', source: 'impl/redis/index.ts' },
+  'transport:impl/worker': { subpath: 'impl/worker', source: 'impl/worker/index.ts' },
 }
 
 const AI_MODULES: Record<string, ModuleEntry> = {
-  'ai:core': { subpath: 'core', source: 'index.ts' },
-  'ai:impl/openai': { subpath: 'impl/openai', source: 'impl/openai.ts' },
+  'ai:core': { subpath: '', source: 'core/index.ts' },
+  'ai:impl/openai': { subpath: 'impl/openai', source: 'impl/openai/index.ts' },
+  'ai:impl/mock': { subpath: 'impl/mock', source: 'impl/mock/index.ts' },
 }
 
 const CLI_MODULES: Record<string, ModuleEntry> = {
-  'cli:core': { subpath: 'core', source: 'core/index.ts' },
-  'cli:palette': { subpath: 'palette', source: 'palette/definition.ts' },
-  'cli:prompt': { subpath: 'prompt', source: 'prompt/definition.ts' },
-  'cli:spinner': { subpath: 'spinner', source: 'spinner/definition.ts' },
-  'cli:command': { subpath: 'command', source: 'command/definition.ts' },
-  'cli:table': { subpath: 'table', source: 'table/definition.ts' },
-  'cli:terminal/bun': { subpath: 'terminal/bun', source: 'terminal/bun.ts' },
+  'cli:core': { subpath: '', source: 'core/index.ts' },
+  'cli:palette': { subpath: 'palette', source: 'palette/index.ts' },
+  'cli:prompt': { subpath: 'prompt', source: 'prompt/index.ts' },
+  'cli:spinner': { subpath: 'spinner', source: 'spinner/index.ts' },
+  'cli:command': { subpath: 'command', source: 'command/index.ts' },
+  'cli:table': { subpath: 'table', source: 'table/index.ts' },
 }
 
 const CLIENT_MODULES: Record<string, ModuleEntry> = {
-  'client:core': { subpath: 'core', source: 'index.ts' },
-  'client:codegen': { subpath: 'codegen', source: 'codegen/definition.ts' },
+  'client:core': { subpath: '', source: 'core/index.ts' },
+  'client:codegen': { subpath: 'codegen', source: 'codegen/index.ts' },
 }
 
 interface ResolveAliasOptions {
@@ -200,6 +155,14 @@ const dbResolve: UnpluginInstance<ResolveOptions | undefined, false> = createUnp
     ),
 )
 
+const transportResolve: UnpluginInstance<ResolveOptions | undefined, false> = createUnplugin(
+  (options?: ResolveOptions) =>
+    resolveFactory('@ozaco/devkit:resolve:transport')(
+      buildAliases(TRANSPORT_MODULES, '@ozaco/transport', options?.sourceDir),
+      !options?.sourceDir,
+    ),
+)
+
 const aiResolve: UnpluginInstance<ResolveOptions | undefined, false> = createUnplugin(
   (options?: ResolveOptions) =>
     resolveFactory('@ozaco/devkit:resolve:ai')(
@@ -224,5 +187,14 @@ const clientResolve: UnpluginInstance<ResolveOptions | undefined, false> = creat
     ),
 )
 
-export { aiResolve, clientResolve, cliResolve, dbResolve, resolveAlias, serverResolve, stdResolve }
+export {
+  aiResolve,
+  clientResolve,
+  cliResolve,
+  dbResolve,
+  resolveAlias,
+  serverResolve,
+  stdResolve,
+  transportResolve,
+}
 export type { ResolveAliasOptions, ResolveOptions }

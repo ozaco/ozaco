@@ -4,7 +4,7 @@ import type { AnyType } from '../types/common'
  * Checks if value is an promise
  */
 export const isPromise = (value: unknown): value is PromiseLike<AnyType> =>
-  typeof value === 'object' && typeof (value as AnyType)?.then === 'function'
+  !!value && typeof (value as AnyType)?.then === 'function'
 
 // oxlint-disable-next-line typescript/no-unsafe-function-type
 export const isFunction = (value: unknown): value is Function => typeof value === 'function'

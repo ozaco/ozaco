@@ -57,65 +57,38 @@ declare module 'std:config' {
 declare module 'std:ws' {
   export * from '@ozaco/std/ws'
 }
+declare module 'std:webrtc' {
+  export * from '@ozaco/std/webrtc'
+}
 
 // --------- SERVER ---------
 
 declare module 'server:core' {
-  export * from '@ozaco/server/core'
+  export * from '@ozaco/server'
 }
-declare module 'server:transport/nats' {
-  export * from '@ozaco/server/transport/nats'
+declare module 'server:impl/edge/bun' {
+  export * from '@ozaco/server/edge/bun'
 }
-declare module 'server:transport/worker' {
-  export * from '@ozaco/server/transport/worker'
+declare module 'server:impl/edge/node' {
+  export * from '@ozaco/server/edge/node'
 }
-declare module 'server:policy/bucket' {
-  export * from '@ozaco/server/policy/bucket'
+declare module 'server:impl/edge/deno' {
+  export * from '@ozaco/server/edge/deno'
 }
-declare module 'server:policy/retry' {
-  export * from '@ozaco/server/policy/retry'
+declare module 'server:impl/carrier/network' {
+  export * from '@ozaco/server/carrier/network'
 }
-declare module 'server:policy/cache' {
-  export * from '@ozaco/server/policy/cache'
+declare module 'server:plugins' {
+  export * from '@ozaco/server/plugins'
 }
-declare module 'server:policy/circuit-breaker' {
-  export * from '@ozaco/server/policy/circuit-breaker'
+declare module 'server:plugins/observe/otlp' {
+  export * from '@ozaco/server/plugins/observe/otlp'
 }
-declare module 'server:policy/bulk' {
-  export * from '@ozaco/server/policy/bulk'
+declare module 'server:plugins/metrics/starrocks' {
+  export * from '@ozaco/server/plugins/metrics/starrocks'
 }
-declare module 'server:policy/timeout' {
-  export * from '@ozaco/server/policy/timeout'
-}
-declare module 'server:policy/fallback' {
-  export * from '@ozaco/server/policy/fallback'
-}
-declare module 'server:policy/metrics' {
-  export * from '@ozaco/server/policy/metrics'
-}
-declare module 'server:gateway/bun' {
-  export * from '@ozaco/server/gateway/bun'
-}
-declare module 'server:gateway/node' {
-  export * from '@ozaco/server/gateway/node'
-}
-declare module 'server:plugin/cors' {
-  export * from '@ozaco/server/plugin/cors'
-}
-declare module 'server:plugin/docs' {
-  export * from '@ozaco/server/plugin/docs'
-}
-declare module 'server:plugin/auth' {
-  export * from '@ozaco/server/plugin/auth'
-}
-declare module 'server:daemon' {
-  export * from '@ozaco/server/daemon'
-}
-declare module 'server:wizard' {
-  export * from '@ozaco/server/wizard'
-}
-declare module 'server:metrics' {
-  export * from '@ozaco/server/metrics'
+declare module 'server:app' {
+  export * from '@ozaco/server/app'
 }
 
 // --------- DB ---------
@@ -123,33 +96,57 @@ declare module 'server:metrics' {
 declare module 'db:core' {
   export * from '@ozaco/db'
 }
-declare module 'db:realtime' {
-  export * from '@ozaco/db/realtime'
-}
-declare module 'db:impl/pg' {
-  export * from '@ozaco/db/impl/pg'
-}
-declare module 'db:impl/bun' {
-  export * from '@ozaco/db/impl/bun'
+declare module 'db:impl/memory' {
+  export * from '@ozaco/db/impl/memory'
 }
 declare module 'db:impl/sqlite' {
   export * from '@ozaco/db/impl/sqlite'
 }
-declare module 'db:impl/surreal' {
-  export * from '@ozaco/db/impl/surreal'
+declare module 'db:impl/pg' {
+  export * from '@ozaco/db/impl/pg'
+}
+declare module 'db:impl/bun-sql' {
+  export * from '@ozaco/db/impl/bun-sql'
+}
+declare module 'db:impl/kv/memory' {
+  export * from '@ozaco/db/impl/kv/memory'
+}
+declare module 'db:impl/kv/redis' {
+  export * from '@ozaco/db/impl/kv/redis'
+}
+
+// --------- TRANSPORT ---------
+
+declare module 'transport:core' {
+  export * from '@ozaco/transport'
+}
+declare module 'transport:impl/memory' {
+  export * from '@ozaco/transport/impl/memory'
+}
+declare module 'transport:impl/nats' {
+  export * from '@ozaco/transport/impl/nats'
+}
+declare module 'transport:impl/redis' {
+  export * from '@ozaco/transport/impl/redis'
+}
+declare module 'transport:impl/worker' {
+  export * from '@ozaco/transport/impl/worker'
 }
 
 // --------- AI ---------
 declare module 'ai:core' {
-  export * from '@ozaco/ai/core'
+  export * from '@ozaco/ai'
 }
 declare module 'ai:impl/openai' {
   export * from '@ozaco/ai/impl/openai'
 }
+declare module 'ai:impl/mock' {
+  export * from '@ozaco/ai/impl/mock'
+}
 
 // --------- CLI ---------
 declare module 'cli:core' {
-  export * from '@ozaco/cli/core'
+  export * from '@ozaco/cli'
 }
 
 declare module 'cli:palette' {
@@ -170,10 +167,6 @@ declare module 'cli:command' {
 
 declare module 'cli:table' {
   export * from '@ozaco/cli/table'
-}
-
-declare module 'cli:terminal/bun' {
-  export * from '@ozaco/cli/terminal/bun'
 }
 
 // --------- CLIENT ---------

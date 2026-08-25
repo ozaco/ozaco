@@ -1,9 +1,12 @@
-import type { SpinnerDef } from 'cli:core'
-import { ansi, Palette, Terminal } from 'cli:core'
-import type { Task } from 'std:effect'
-import { ensure, operation, sleep, spawn, useContext } from 'std:effect'
+import { Terminal, useTerminal } from 'cli:core'
+import type { TerminalDef } from 'cli:core'
+import { usePalette } from 'cli:palette'
+import type { PaletteDef } from 'cli:palette'
+import type { Operation, Task } from 'std:effect'
+import { ensure, operation, sleep, spawn } from 'std:effect'
 
-import type { TreeNode, TreeRunnerOptions } from '../types'
+import type { TreeNode } from '../types/internal'
+import type { SpinnerDef } from '../types/spinner'
 
 import { barNode, clamp, renderTree, spinnerNode } from './tree'
 
@@ -15,25 +18,25 @@ const normalize = (options?: string | SpinnerDef.StartOptions): SpinnerDef.Start
 const normalizeBar = (options?: string | SpinnerDef.BarOptions): SpinnerDef.BarOptions =>
   typeof options === 'string' ? { message: options } : (options ?? {})
 
-const setupTree = operation(function* (options: TreeRunnerOptions = {}) {
-  const ctx = yield* useContext(Terminal)
-  const palette = yield* useContext(Palette)
-  const { columns } = yield* Terminal.actions.size()
+/**
+ * Shared runner for the tree renderers (`group`/`bar`): acquires the render lease, spawns the
+ * animation loop while interactive, and commits the final tree on finish. All drawing goes through
+ * the lease — no cursor codes are written here, so the cursor can never leak hidden.
+ */
+const setupTree = operation(function* (intervalMs: number) {
+  const info = yield* useTerminal()
+  const palette = yield* usePalette()
+  const interactive = info.capabilities.interactive
 
-  const interactive = ctx.interactive
-  const intervalMs = options.interval ?? DEFAULT_INTERVAL
-
-  const renderer = yield* Terminal.actions.renderer(columns)
+  const lease: TerminalDef.Renderer = yield* Terminal.actions.renderer()
   const state = { roots: [] as TreeNode[], frame: 0, stopped: false }
 
   let task: Task<void> | undefined
 
   if (interactive) {
-    ctx.output.write(ansi.hideCursor)
-
     task = yield* spawn(function* () {
       while (!state.stopped) {
-        yield* renderer.render(renderTree(state.roots, palette, state.frame))
+        yield* lease.render(renderTree(state.roots, palette, state.frame))
         state.frame += 1
         yield* sleep(intervalMs)
       }
@@ -50,21 +53,18 @@ const setupTree = operation(function* (options: TreeRunnerOptions = {}) {
       yield* task.halt()
     }
 
-    yield* renderer.done(renderTree(state.roots, palette, state.frame))
-
-    if (interactive) {
-      ctx.output.write(ansi.showCursor)
-    }
+    // commit the final tree and release the lease
+    yield* lease.done(renderTree(state.roots, palette, state.frame))
   })
 
   yield* ensure(function* () {
     yield* finish()
   })
 
-  return { state, finish }
+  return { state, palette, finish }
 })
 
-const makeBarHandle = (node: TreeNode): SpinnerDef.BarHandle => ({
+const makeBarHandle = (node: TreeNode, finish?: () => Operation<void>): SpinnerDef.BarHandle => ({
   update: operation(function* (value: number) {
     node.value = clamp(node, value)
   }),
@@ -75,14 +75,25 @@ const makeBarHandle = (node: TreeNode): SpinnerDef.BarHandle => ({
     node.status = 'success'
     node.value = node.total
     node.message = message ?? node.message
+    if (finish) {
+      yield* finish()
+    }
   }),
   fail: operation(function* (message?: string) {
     node.status = 'fail'
     node.message = message ?? node.message
+    if (finish) {
+      yield* finish()
+    }
   }),
   stop: operation(function* (message?: string) {
-    node.status = 'success'
+    if (node.status === 'pending') {
+      node.status = 'success'
+    }
     node.message = message ?? node.message
+    if (finish) {
+      yield* finish()
+    }
   }),
 })
 
@@ -120,29 +131,26 @@ const makeTaskHandle = (node: TreeNode): SpinnerDef.TaskHandle => ({
 
 export const start = operation(function* (options?: string | SpinnerDef.StartOptions) {
   const opts = normalize(options)
-  const ctx = yield* useContext(Terminal)
-  const palette = yield* useContext(Palette)
-  const { columns } = yield* Terminal.actions.size()
+  const info = yield* useTerminal()
+  const palette = yield* usePalette()
 
-  const interactive = ctx.interactive
+  const interactive = info.capabilities.interactive
   const frames = opts.frames ?? palette.symbols.spinner
   const intervalMs = opts.interval ?? DEFAULT_INTERVAL
   const color = opts.color ?? palette.colors.primary
 
-  const renderer = yield* Terminal.actions.renderer(columns)
+  const lease: TerminalDef.Renderer = yield* Terminal.actions.renderer()
   const state = { message: opts.message ?? '', stopped: false }
 
   let task: Task<void> | undefined
 
   if (interactive) {
-    ctx.output.write(ansi.hideCursor)
-
     task = yield* spawn(function* () {
       let index = 0
 
       while (!state.stopped) {
         const frame = frames[index % frames.length] ?? ''
-        yield* renderer.render(`${color(frame)} ${state.message}`)
+        yield* lease.render(`${color(frame)} ${state.message}`)
         index += 1
         yield* sleep(intervalMs)
       }
@@ -159,23 +167,15 @@ export const start = operation(function* (options?: string | SpinnerDef.StartOpt
       yield* task.halt()
     }
 
-    // oxlint-disable-next-line unicorn/prefer-ternary
-    if (line === null) {
-      yield* renderer.clear()
-    } else {
-      yield* renderer.done(line)
-    }
-
-    if (interactive) {
-      ctx.output.write(ansi.showCursor)
-    }
+    // `done` clears the live region itself; `null` releases without committing a line
+    yield* lease.done(line ?? undefined)
   })
 
   yield* ensure(function* () {
     yield* stopWith(null)
   })
 
-  const lead = (symbol: string, paint: (text: string) => string) => (message?: string) =>
+  const lead = (symbol: string, paint: PaletteDef.Style) => (message?: string) =>
     stopWith(`${paint(symbol)} ${message ?? state.message}`)
 
   const handle: SpinnerDef.Handle = {
@@ -193,7 +193,7 @@ export const start = operation(function* (options?: string | SpinnerDef.StartOpt
 })
 
 export const group = operation(function* (options?: SpinnerDef.GroupOptions) {
-  const runner = yield* setupTree(options ?? {})
+  const runner = yield* setupTree(options?.interval ?? DEFAULT_INTERVAL)
 
   const handle: SpinnerDef.GroupHandle = {
     task: operation(function* (message: string) {
@@ -214,33 +214,9 @@ export const group = operation(function* (options?: SpinnerDef.GroupOptions) {
 
 export const bar = operation(function* (options?: string | SpinnerDef.BarOptions) {
   const opts = normalizeBar(options)
-  const runner = yield* setupTree({ frames: opts.frames, interval: opts.interval })
+  const runner = yield* setupTree(opts.interval ?? DEFAULT_INTERVAL)
   const node = barNode(opts.message ?? '', { total: opts.total, width: opts.width })
   runner.state.roots.push(node)
 
-  const handle: SpinnerDef.BarHandle = {
-    update: operation(function* (value: number) {
-      node.value = clamp(node, value)
-    }),
-    advance: operation(function* (delta?: number) {
-      node.value = clamp(node, node.value + (delta ?? 1))
-    }),
-    succeed: operation(function* (message?: string) {
-      node.status = 'success'
-      node.value = node.total
-      node.message = message ?? node.message
-      yield* runner.finish()
-    }),
-    fail: operation(function* (message?: string) {
-      node.status = 'fail'
-      node.message = message ?? node.message
-      yield* runner.finish()
-    }),
-    stop: operation(function* (message?: string) {
-      node.message = message ?? node.message
-      yield* runner.finish()
-    }),
-  }
-
-  return handle
+  return makeBarHandle(node, runner.finish)
 })

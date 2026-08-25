@@ -1,10 +1,10 @@
-import type { PromptDef } from 'cli:core'
 import { operation } from 'std:effect'
 
-import type { MultiSelectState, PromptSpec } from '../../types'
+import type { MultiSelectState } from '../../types/internal'
+import type { PromptDef, PromptSpec } from '../../types/prompt'
+import { runPrompt } from '../../utils'
 import { firstEnabled, indicesToValues, labelOf, resolveSelected } from '../choice'
 import { activeLine, cancelledLine, hint, label, submittedLine } from '../chrome'
-import { runPrompt } from '../engine'
 import { isEnter, isDown, isSpace, isUp } from '../keys'
 import { paginate, step } from '../list'
 
@@ -102,9 +102,6 @@ export const multiselect = operation(function* <T>(options: PromptDef.MultiSelec
       return submittedLine(ctx, options.message, text === '' ? 'none' : text)
     },
     cancelled: (_state, ctx) => cancelledLine(ctx, options.message),
-    *fallback() {
-      return indicesToValues(resolveSelected(options.initial, choices), choices)
-    },
   }
 
   return yield* runPrompt(spec)

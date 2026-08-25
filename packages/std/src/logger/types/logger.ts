@@ -1,4 +1,4 @@
-import type { Future, Operation } from 'std:effect'
+import type { Operation } from 'std:effect'
 import type { Plugin } from 'std:plugin'
 import type { Result } from 'std:result'
 
@@ -53,22 +53,22 @@ export namespace LoggerDef {
   >
 
   export interface Actions {
-    log(level: LogLevel, ...args: Payload[]): Future<void>
+    log(level: LogLevel, ...args: Payload[]): Operation<void>
 
-    trace(...args: Payload[]): Future<void>
-    debug(...args: Payload[]): Future<void>
-    info(...args: Payload[]): Future<void>
-    warn(...args: Payload[]): Future<void>
-    error(...args: Payload[]): Future<void>
-    fatal(...args: Payload[]): Future<void>
+    trace(...args: Payload[]): Operation<void>
+    debug(...args: Payload[]): Operation<void>
+    info(...args: Payload[]): Operation<void>
+    warn(...args: Payload[]): Operation<void>
+    error(...args: Payload[]): Operation<void>
+    fatal(...args: Payload[]): Operation<void>
 
-    child<R>(bindings: Record<string, unknown>, fn: () => Operation<R>): Future<R>
+    child<R>(bindings: Record<string, unknown>, fn: () => Operation<R>): Operation<R>
 
-    bind(bindings: Record<string, unknown>): Future<void>
-    setLevel(level: LogLevel): Future<void>
-    isLevelEnabled(level: LogLevel): Future<boolean>
+    bind(bindings: Record<string, unknown>): Operation<void>
+    setLevel(level: LogLevel): Operation<void>
+    isLevelEnabled(level: LogLevel): Operation<boolean>
 
-    flush(): Future<void>
-    close(): Future<void>
+    flush(): Operation<void>
+    close(): Operation<void>
   }
 }

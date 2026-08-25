@@ -1,11 +1,12 @@
-import type { Stream } from 'std:effect'
-import { createChannel, each, ensure, operation, spawn } from 'std:effect'
+import type { Flow } from 'std:effect'
+import { createChannel, each, ensure, fork, operation } from 'std:effect'
 import type { Result } from 'std:result'
 import { asFailure, fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import { dump, load } from 'js-yaml'
 
+import pkg from '../../../package.json'
 import { Codec } from '../definitions'
 import { CodecErrors } from '../errors'
 import type { CodecDef } from '../types'
@@ -34,7 +35,7 @@ const getSelf = (): CodecDef => YamlCodec
  */
 export const YamlCodec = Codec.implement({
   name: 'std/yaml-codec',
-  version: '0.0.0',
+  version: pkg.version,
   *setup(options: CodecDef.Options = {}) {
     const name = options.name ?? 'std/yaml-codec'
     const priority = options.priority ?? 500
@@ -86,13 +87,13 @@ export const YamlCodec = Codec.implement({
     }
   }),
 
-  encodeStream: operation(function* (stream) {
+  encodeFlow: operation(function* (flow) {
     const channel = createChannel<Uint8Array, true | Result.Failure<unknown>>()
 
-    yield* spawn(function* () {
+    yield* fork(function* () {
       let close: true | Result.Failure<unknown> = true
       try {
-        for (const chunk of yield* each(stream)) {
+        for (const chunk of yield* each(flow)) {
           let encoded: Uint8Array
           try {
             encoded = encoder.encode(dump(chunk, encodeOptions))
@@ -108,6 +109,10 @@ export const YamlCodec = Codec.implement({
 
           yield* each.next()
         }
+      } catch (error) {
+        // the source closed with a Failure (raised by `each`) — forward the truncation through
+        // this flow's own close instead of pretending a clean end
+        close = asFailure(error)
       } finally {
         yield* channel.close(close)
       }
@@ -120,15 +125,15 @@ export const YamlCodec = Codec.implement({
     return channel
   }),
 
-  decodeStream: operation(function* (stream) {
+  decodeFlow: operation(function* (flow) {
     const channel = createChannel<unknown, true | Result.Failure<unknown>>()
 
-    yield* spawn(function* () {
+    yield* fork(function* () {
       const streamDecoder = new TextDecoder()
       const parts: string[] = []
       let close: true | Result.Failure<unknown> = true
 
-      const subscription = yield* stream
+      const subscription = yield* flow
       for (;;) {
         const next = yield* subscription.next()
         if (next.done) {
@@ -154,6 +159,6 @@ export const YamlCodec = Codec.implement({
       }
     })
 
-    return channel as Stream<AnyType, AnyType>
+    return channel as Flow<AnyType, AnyType>
   }),
 })

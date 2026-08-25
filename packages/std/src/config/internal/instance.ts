@@ -1,5 +1,5 @@
 import type { Operation } from 'std:effect'
-import { attempt, createSignal, debounce, each, operation, spawn } from 'std:effect'
+import { attempt, createSignal, debounce, each, fork, operation } from 'std:effect'
 import { IO } from 'std:io'
 import { isSuccess } from 'std:result'
 import type { AnyType } from 'std:shared'
@@ -152,6 +152,9 @@ export const makeInstance = (getCtx: () => Operation<ConfigDef.Context>): Config
     // Every watcher event bumps a shared signal; `debounce` collapses a burst into one tick so a
     // single save (which fires several fs events) triggers just one re-discover.
     const bump = createSignal<void, never>()
+    // Change detection pins JsonCodec deliberately: config treats an installed JsonCodec as a
+    // baseline dependency, and canonical JSON is one deterministic fingerprint for the merged view
+    // regardless of which codec the config FILES use.
     let last = yield* JsonCodec.actions.stringify(ctx.merged)
 
     const feed = (stream: ReturnType<typeof IO.actions.watch>) =>
@@ -162,12 +165,12 @@ export const makeInstance = (getCtx: () => Operation<ConfigDef.Context>): Config
         }
       })
 
-    return yield* spawn(function* () {
+    return yield* fork(function* () {
       for (const dir of recursiveDirs) {
-        yield* spawn(feed(IO.actions.watch(dir, { recursive: true })))
+        yield* fork(feed(IO.actions.watch(dir, { recursive: true })))
       }
       for (const file of files) {
-        yield* spawn(feed(IO.actions.watch(file)))
+        yield* fork(feed(IO.actions.watch(file)))
       }
 
       for (const _ of yield* each(debounce(bump, options?.debounce ?? 50))) {

@@ -1,4 +1,4 @@
-import type { PaletteDef } from 'cli:core'
+import type { PaletteDef } from '../types'
 
 const unicodeSymbols: PaletteDef.Symbols = {
   question: '?',

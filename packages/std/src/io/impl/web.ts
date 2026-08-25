@@ -1,12 +1,14 @@
-import type { Stream } from 'std:effect'
+import type { Flow } from 'std:effect'
 import { operation, resource } from 'std:effect'
-import type { StreamClose } from 'std:io'
+import type { FlowClose } from 'std:io'
 import { IO } from 'std:io'
 import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 
+import pkg from '../../../package.json'
 import { readWebEnv } from '../internal/env'
 import { fromReadable } from '../internal/from-readable'
+import { hlcDecode, hlcObserve, hlcToken } from '../internal/hlc'
 import { webPath } from '../internal/path-web'
 import { createS3 } from '../internal/s3'
 import { toReadable } from '../internal/to-readable'
@@ -20,10 +22,10 @@ const unsupported = (action: string): AnyType =>
     return yield* fail('io-unsupported', `IO.${action} is not available in a web environment`)
   })
 
-const unsupportedStream = (action: string): Stream<Uint8Array, StreamClose> =>
+const unsupportedFlow = (action: string): Flow<Uint8Array, FlowClose> =>
   resource(function* () {
     return yield* fail('io-unsupported', `IO.${action} is not available in a web environment`)
-  }) as Stream<Uint8Array, StreamClose>
+  }) as Flow<Uint8Array, FlowClose>
 
 /**
  * The web implementation of `std:io`. Crypto (`randomBytes`/`hmac`/`hash`) runs on the Web Crypto
@@ -33,7 +35,7 @@ const unsupportedStream = (action: string): Stream<Uint8Array, StreamClose> =>
  */
 export const WebIO = IO.implement({
   name: 'web-io',
-  version: '0.0.1',
+  version: pkg.version,
   *setup() {
     return null
   },
@@ -43,6 +45,9 @@ export const WebIO = IO.implement({
   randomBytes: webRandomBytes,
   ulid: ulidId,
   uuid: uuidId,
+  hlc: hlcToken,
+  decodeHlc: hlcDecode,
+  observeHlc: hlcObserve,
   hmac: webHmac,
   hash: webHash,
   encrypt: unsupported('encrypt'),
@@ -53,9 +58,9 @@ export const WebIO = IO.implement({
 
   fromReadable,
   toReadable,
-  readStream: () => unsupportedStream('readStream'),
-  watch: () => unsupportedStream('watch') as AnyType,
-  writeStream: unsupported('writeStream'),
+  readFlow: () => unsupportedFlow('readFlow'),
+  watch: () => unsupportedFlow('watch') as AnyType,
+  writeFlow: unsupported('writeFlow'),
 
   read: unsupported('read'),
   readText: unsupported('readText'),

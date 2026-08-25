@@ -1,4 +1,4 @@
-import type { Future, Stream } from 'std:effect'
+import type { Flow, Operation } from 'std:effect'
 import type { Plugin } from 'std:plugin'
 import type { Result } from 'std:result'
 
@@ -21,31 +21,34 @@ export namespace CodecDef {
   export type DecodeError = (typeof CodecErrors)['Decode']
 
   export interface Actions {
-    encode(value: unknown): Future<Uint8Array>
-    decode<T>(data: Uint8Array): Future<T>
+    encode(value: unknown): Operation<Uint8Array>
+    decode<T>(data: Uint8Array): Operation<T>
 
     /** Like `encode`, but returns the serialized text instead of `Uint8Array` bytes. */
-    stringify(value: unknown): Future<string>
+    stringify(value: unknown): Operation<string>
     /** Like `decode`, but takes the serialized text instead of `Uint8Array` bytes. */
-    parse<T>(text: string): Future<T>
+    parse<T>(text: string): Operation<T>
 
-    encodeStream<T>(
-      stream: Stream<T, unknown>,
-    ): Future<Stream<Uint8Array, true | Result.Failure<unknown>>>
-    decodeStream<T>(
-      stream: Stream<Uint8Array, unknown>,
+    encodeFlow<T>(
+      flow: Flow<T, unknown>,
+    ): Operation<Flow<Uint8Array, true | Result.Failure<unknown>>>
+    decodeFlow<T>(
+      flow: Flow<Uint8Array, unknown>,
       json?: boolean,
-    ): Future<Stream<T, true | Result.Failure<unknown>>>
+    ): Operation<Flow<T, true | Result.Failure<unknown>>>
   }
 
   export interface JsonActions extends Omit<CodecDef.Actions, 'stringify'> {
     /** Like `encode`, but returns the serialized text instead of `Uint8Array` bytes. */
-    stringify(value: unknown, space?: number): Future<string>
+    stringify(value: unknown, space?: number): Operation<string>
   }
 
   export interface Handlers {
-    register(transport: CodecDef, entryCtx: CodecDef.Context): Future<void>
-    unregister(transport: CodecDef): Future<void>
-    getTransports(): Future<CodecDef[]>
+    register(transport: CodecDef, entryCtx: CodecDef.Context): Operation<void>
+    unregister(transport: CodecDef): Operation<void>
+    getTransports(): Operation<CodecDef[]>
+
+    encodeFrame<T>(data: unknown, preferred?: CodecDef): Operation<T>
+    decodeFrame<T>(data: unknown, preferred?: CodecDef): Operation<T>
   }
 }

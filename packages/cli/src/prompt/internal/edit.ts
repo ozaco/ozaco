@@ -1,6 +1,7 @@
-import type { Key, PaletteDef } from 'cli:core'
+import type { Key } from 'cli:core'
+import type { PaletteDef } from 'cli:palette'
 
-import type { InputState, RenderInputOptions } from '../types'
+import type { InputState, RenderInputOptions } from '../types/internal'
 
 const DEL = String.fromCodePoint(127)
 

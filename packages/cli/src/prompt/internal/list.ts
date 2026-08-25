@@ -1,4 +1,4 @@
-import type { Page, StepOptions } from '../types'
+import type { Page, StepOptions } from '../types/internal'
 
 export const wrapIndex = (index: number, length: number): number =>
   length === 0 ? 0 : ((index % length) + length) % length

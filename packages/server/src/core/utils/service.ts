@@ -1,99 +1,173 @@
-import type { Plugin } from 'std:plugin'
-import { defineProtocol, install } from 'std:plugin'
-import type { AnyType } from 'std:shared'
-import { flatten } from 'std:shared'
+// oxlint-disable import/exports-last
+import type { Operation } from 'std:effect'
+import type { AnyType, StandardSchemaV1 } from 'std:shared'
 
-import { SERVICE } from '../const'
-import type { Action } from '../types/action'
-import type { Impl } from '../types/impl'
+import { ACTION, SERVICE } from '../const'
+import type { EdgeDef } from '../types/edge'
+import type { ServerDef } from '../types/server'
+import type { ServiceDef } from '../types/service'
 
-import { ServiceContext } from './context'
-import { isAction } from './is'
+import { isPartsDecl, isStreamDecl } from './stream'
 
-/**
- * Build a service, and its route table with it.
- *
- * `flatten` supplies the grammar: a nested `actions` record becomes dotted paths (`admin.purge`),
- * so a route's key and the `actionKey` a carrier puts on the wire are the same string. One spelling
- * of an address is the whole point — it used to be derived in several places and they disagreed.
- */
-export const defineService: Impl.DefineService = (options): AnyType => {
-  const routes = new Map<string, Action>()
+const RESERVED = new Set([
+  'title',
+  'description',
+  'input',
+  'output',
+  'route',
+  'onDisconnect',
+  'outcome',
+  'errors',
+  'tags',
+])
 
-  for (const [path, candidate] of Object.entries(flatten(options.actions as AnyType))) {
-    if (isAction(candidate)) {
-      routes.set(path, candidate)
+const METHOD_OF: Readonly<Record<ServiceDef.Kind, ServiceDef.HttpMethod>> = {
+  query: 'GET',
+  mutation: 'POST',
+  action: 'POST',
+  stream: 'GET',
+}
+
+const planeOf = (
+  declaration: ServiceDef.Declaration | undefined,
+  side: 'input' | 'output',
+): ServiceDef.Meta['inputPlane'] => {
+  if (declaration === undefined) {
+    return 'none'
+  }
+
+  if (isStreamDecl(declaration)) {
+    return 'stream'
+  }
+
+  if (isPartsDecl(declaration)) {
+    return side === 'input' ? 'parts' : 'value'
+  }
+
+  return 'value'
+}
+
+/** Resolve an action config into its meta once — the route is decided here (`/<service>/<action>`
+ * unless given), the plugin options are collected under `options` for validation at
+ * `createServer`. The service name is stamped in by `service()`. */
+const metaOf = (kind: ServiceDef.Kind, config: ServiceDef.Config): ServiceDef.Meta => {
+  const options: Record<string, unknown> = {}
+
+  for (const [key, value] of Object.entries(config)) {
+    if (!RESERVED.has(key) && value !== undefined) {
+      options[key] = value
     }
   }
 
-  // The reverse direction, built alongside rather than scanned on demand: a carrier holding an
-  // action and needing its address asks this, and asking used to mean walking every registered
-  // service's actions on every call.
-  const paths = new Map<Action, string>()
-  for (const [path, action] of routes) {
-    paths.set(action, path)
+  return {
+    kind,
+    title: config.title,
+    description: config.description,
+    input: config.input ?? null,
+    output: config.output ?? null,
+    inputPlane: planeOf(config.input, 'input'),
+    outputPlane: planeOf(config.output, 'output') as ServiceDef.Meta['outputPlane'],
+    route: config.route ?? { method: METHOD_OF[kind], path: '' },
+    onDisconnect: config.onDisconnect ?? 'cancel',
+    outcome: config.outcome ?? false,
+    errors: config.errors ?? {},
+    tags: config.tags ?? [],
+    options,
   }
+}
 
-  // Sealed once. Compiling twice hands out two plugins over one definition, and installing both
-  // gives the service two contexts — the same object disagreeing with itself.
-  let compiled: Plugin<AnyType, AnyType[], AnyType> | undefined
+/** A socket entry in an action map (`action.socket`). */
+export const isSocketAction = (value: unknown): value is ServiceDef.SocketAction =>
+  typeof value === 'object' && value !== null && 'socket' in value
 
-  const service: AnyType = defineProtocol({
-    subtype: SERVICE,
-
-    name: options.name,
-    version: options.version,
-    ...(options.description === undefined ? {} : { description: options.description }),
-
-    handlers: {
-      *_has(path: string) {
-        return routes.has(path)
-      },
-
-      *_get(path: string) {
-        return routes.get(path)
-      },
-
-      *_list() {
-        return [...routes.entries()]
-      },
-
-      *_pathOf(action: Action) {
-        return paths.get(action)
-      },
-
-      /**
-       * `yield* AuthService.actions.install()` — the only way a service reaches a scope.
-       *
-       * A handler, not a property bolted onto the protocol object: the Protocol shape is fixed and
-       * a service must not widen it. It seals first and installs the result, so the two can never
-       * happen out of order and the first can never be skipped.
-       */
-      *install(...args: AnyType[]) {
-        return yield* install(yield* service.actions._compile(), ...args)
-      },
-
-      *_compile() {
-        compiled ??= service
-          .implement({
-            name: options.name,
-            version: options.version,
-            ...(options.description === undefined ? {} : { description: options.description }),
-
-            *setup(...args: AnyType[]) {
-              yield* ServiceContext.set(service)
-
-              if (options.setup) {
-                return yield* options.setup(...(args as AnyType))
-              }
-            },
-          })
-          .build(options.actions ?? {})
-
-        return compiled
-      },
-    } as AnyType,
+const define =
+  (kind: ServiceDef.Kind) =>
+  <
+    TInput extends ServiceDef.Declaration | undefined = undefined,
+    TOutput extends ServiceDef.Declaration | undefined = undefined,
+  >(
+    config: ServiceDef.Config<TInput, TOutput>,
+    handler: ServiceDef.Handler<
+      ServiceDef.Params<TInput>,
+      ServiceDef.Returns<TOutput>,
+      ServerDef.Ctx
+    >,
+  ): ServiceDef.Action<TInput, TOutput> => ({
+    _t: ACTION,
+    meta: metaOf(kind, config as ServiceDef.Config),
+    handler: handler as AnyType,
   })
 
-  return service
+/**
+ * Define an action: `action.query({ input, output, ...options }, function* ({ input, ctx }) {…})`.
+ * The kind only fixes the default HTTP method, the manifest entry and the client behaviour —
+ * `action(...)` alone is a plain `action` kind.
+ */
+export const action = Object.assign(define('action'), {
+  query: define('query'),
+  mutation: define('mutation'),
+  action: define('action'),
+  stream: define('stream'),
+
+  /** A socket INSIDE the service: `chat: action.socket({ protocol: 'chat' }, function* (socket)
+   * {…})` mounts a WS route (default `/<service>/<action>`), listed under the service. */
+  socket: (
+    config: ServiceDef.SocketConfig,
+    handler: (socket: EdgeDef.Socket) => Operation<void>,
+  ): ServiceDef.SocketAction => ({
+    _t: ACTION,
+
+    socket: {
+      path: config.path ?? '',
+      protocol: config.protocol ?? null,
+      description: config.description ?? null,
+      authorize: config.authorize ?? null,
+    },
+
+    handler: handler as AnyType,
+  }),
+})
+
+/** Define a service: a name and its actions. Routes default to `/<service>/<action>`. */
+export const service = <const TName extends string, const TActions extends ServiceDef.ActionMap>(
+  name: TName,
+  actions: TActions,
+  options?: ServiceDef.ServiceOptions,
+): ServiceDef.Service<TName, TActions> => {
+  const stamped = Object.fromEntries(
+    Object.entries(actions).map(([key, def]) => {
+      if (isSocketAction(def)) {
+        return [
+          key,
+          def.socket.path === ''
+            ? { ...def, socket: { ...def.socket, path: `/${name}/${key}` } }
+            : def,
+        ]
+      }
+
+      return [
+        key,
+        def.meta.route.path === ''
+          ? { ...def, meta: { ...def.meta, route: { ...def.meta.route, path: `/${name}/${key}` } } }
+          : def,
+      ]
+    }),
+  ) as TActions
+
+  return {
+    _t: SERVICE,
+    name,
+    version: options?.version ?? '1.0.0',
+    description: options?.description,
+    actions: stamped,
+  }
 }
+
+/** A typed reference to one action (what `ctx.call` takes); `server.api` builds these. */
+export const ref = <A extends ServiceDef.Action>(
+  serviceName: string,
+  actionName: string,
+): ServiceDef.Ref<A> => ({ service: serviceName, action: actionName })
+
+export const isSchema = (value: unknown): value is StandardSchemaV1 =>
+  typeof value === 'object' && value !== null && '~standard' in value

@@ -23,7 +23,7 @@ tasks:
   types:
     command: bun x tsc -p tsconfig.json --noEmit
     deps:
-      - ai:build
+      - std:build
     inputs:
       - src/**/*
       - tests/**/*
@@ -33,5 +33,4 @@ tasks:
     deps:
       - ai:build
     inputs:
-      - src/**/*
       - tests/**/*

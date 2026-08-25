@@ -1,5 +1,6 @@
 import { operation, useContext } from 'std:effect'
 
+import pkg from '../../../../package.json'
 import { LogLevel } from '../../const'
 import { Logger, LoggerTransport } from '../../definitions'
 import { toJson } from '../../internal/serialize'
@@ -13,7 +14,7 @@ const ConsoleTransportImpl = LoggerTransport.implement<
   [options?: ConsoleDef.Options]
 >({
   name: 'console-transport',
-  version: '0.0.1',
+  version: pkg.version,
 
   *setup(options = {}) {
     const name = 'console'

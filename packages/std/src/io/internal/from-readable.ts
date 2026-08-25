@@ -1,6 +1,6 @@
-import type { Stream } from 'std:effect'
-import { createSignal, resource, spawn, until } from 'std:effect'
-import type { NodeReadableLike, ReadableLike, StreamClose } from 'std:io'
+import type { Flow } from 'std:effect'
+import { createSignal, fork, resource, until } from 'std:effect'
+import type { NodeReadableLike, ReadableLike, FlowClose } from 'std:io'
 import { asFailure } from 'std:result'
 import { isBoolean } from 'std:shared'
 
@@ -9,9 +9,9 @@ const isNodeReadable = (target: ReadableLike): target is NodeReadableLike =>
 
 /**
  * Adapt either a Node `Readable` (event-based) or a web `ReadableStreamDefaultReader`-like
- * (`read()`/`cancel()`/`releaseLock()`) into a `Stream<Uint8Array>`. Free of any `node:*` import so
+ * (`read()`/`cancel()`/`releaseLock()`) into a `Flow<Uint8Array>`. Free of any `node:*` import so
  * it bundles for the browser (used by `WebIO`); the Node-specific file streams live in
- * `./stream.ts`. The close value is `true` on a clean end and the failure when the source errored
+ * `./flow.ts`. The close value is `true` on a clean end and the failure when the source errored
  * mid-stream — consumers must check it, or truncation is indistinguishable from completion.
  */
 export const fromReadable = (
@@ -19,13 +19,13 @@ export const fromReadable = (
   options: {
     destroy?: boolean
   } = {},
-): Stream<Uint8Array, StreamClose> =>
+): Flow<Uint8Array, FlowClose> =>
   resource(function* (provide) {
     if (!isBoolean(options.destroy)) {
       options.destroy = true
     }
 
-    const signal = createSignal<Uint8Array, StreamClose>()
+    const signal = createSignal<Uint8Array, FlowClose>()
     const subscription = yield* signal
 
     if (isNodeReadable(target)) {
@@ -35,7 +35,7 @@ export const fromReadable = (
         signal.send(chunk instanceof Uint8Array ? chunk : new Uint8Array(chunk))
       }
 
-      const settle = (close: StreamClose) => {
+      const settle = (close: FlowClose) => {
         if (!settled) {
           settled = true
           signal.close(close)
@@ -66,8 +66,8 @@ export const fromReadable = (
       return
     }
 
-    yield* spawn(function* () {
-      let close: StreamClose = true
+    yield* fork(function* () {
+      let close: FlowClose = true
       try {
         while (true) {
           const { done, value } = yield* until(target.read())

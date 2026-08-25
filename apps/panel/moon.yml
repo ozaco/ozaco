@@ -1,0 +1,47 @@
+language: typescript
+layer: application
+toolchains:
+  default: bun
+
+tasks:
+  build:
+    command: bun x vite build
+    deps:
+      - client:build
+      - std:build
+    inputs:
+      - index.html
+      - src/**/*
+      - vite.config.ts
+    outputs:
+      - dist/**/*
+  # Regenerates packages/server/src/plugins/docs/internal/panel.gen.ts from a fresh panel build.
+  # Run `moon run panel:embed` after any panel change — server:build does NOT depend on it.
+  embed:
+    command: bun run scripts/embed.ts ../../packages/server/src/plugins/docs/internal/panel.gen.ts
+    deps:
+      - panel:build
+    inputs:
+      - dist/**/*
+      - scripts/embed.ts
+    options:
+      cache: false
+  types:
+    command: bun x tsc -p tsconfig.json --noEmit
+    deps:
+      - client:build
+      - std:build
+    inputs:
+      - index.html
+      - src/**/*
+      - tests/**/*
+      - vite.config.ts
+      - tsconfig.json
+  test:
+    command: bun test --pass-with-no-tests
+    deps:
+      - client:build
+      - std:build
+    inputs:
+      - src/**/*
+      - tests/**/*

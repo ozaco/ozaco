@@ -1,173 +1,46 @@
-import { CodecErrors } from 'std:codec'
-import { createTags } from 'std:shared'
+/** Protocol subtype markers. */
+export const SERVER = Symbol.for('server:server')
+export const SERVER_EDGE = Symbol.for('server:edge')
+export const SERVER_CARRIER = Symbol.for('server:carrier')
+export const SERVER_OUTCOMES = Symbol.for('server:outcomes')
+export const SERVER_OBSERVE = Symbol.for('server:observe')
 
-export const DEFAULT_STATUS = 500
+/** Brands on definition-time values. */
+export const SERVICE = Symbol.for('server:service')
+export const ACTION = Symbol.for('server:action')
+export const STREAM_DECL = Symbol.for('server:stream-decl')
+export const PARTS_DECL = Symbol.for('server:parts-decl')
 
-export const ACTION = Symbol.for('server:core:action')
-export const SERVICE = Symbol.for('server:core:service')
-export const BROKER = Symbol.for('server:core:broker')
-export const TRANSPORT = Symbol.for('broker:core:transport')
-export const TRACER = Symbol.for('server:core:tracer')
-export const POLICY = Symbol.for('server:core:policy')
-export const POLICY_SETTING = Symbol.for('server:core:policy-setting')
+/** The brand a runtime stream carries (`Branded<B>`). */
+export const STREAM_BRAND = Symbol.for('server:stream-brand')
 
-export const GATEWAY = Symbol.for('server:core:gateway')
+/** Wire header names (carried by the transport; mirrored as HTTP headers at the edge). */
+export enum HEADERS {
+  cid = 'oz-cid',
+  requestId = 'x-request-id',
+  span = 'oz-span',
+  parent = 'oz-parent',
+  traceparent = 'traceparent',
+  lane = 'oz-lane',
 
-export const CHANNEL = Symbol.for('server:core:channel')
+  /** server → client: the brand of a streamed body. */
+  brand = 'oz-brand',
 
-/**
- * Where a call came from, as a SYMBOL rather than a string or a boolean.
- *
- * Set by whoever admitted the call and never copied out of a payload — which is the point of a
- * symbol: it cannot survive a codec, so a client cannot put `origin: 'internal'` on the wire and
- * have a downstream check believe it.
- */
-export const INTERNAL_ORIGIN = Symbol.for('server:core:internal')
-export const EXTERNAL_ORIGIN = Symbol.for('server:core:external')
-
-/** Request-meta key carrying the WebSocket id into a `session` dispatch — survives a remote hop. */
-export const SOCKET_ID_META = 'x-ozaco-socket'
-
-/**
- * A `session` connection is a LEASE, not an open-ended promise.
- *
- * Neither end can tell a quiet peer from a dead one: a killed gateway runs no teardown, and once a
- * stream reply is adopted the transport never cancels it again. So the gateway renews every open
- * channel on the inbound stream it already holds, the owner heartbeats on its outbound stream, and
- * each side reaps a session the other stopped speaking on. Without this a lost peer leaks one live
- * pump per connection, forever — re-running its queries on every change in the wizard's case.
- */
-export const SESSION_PING_MS = 10_000
-/** Three missed renewals. Generous enough to ride out a slow tick, short enough to reap promptly. */
-export const SESSION_IDLE_MS = 32_000
-
-/**
- * What one channel of a call carries.
- *
- * A call holds AT MOST ONE source per kind, which is what makes `useSource(type)` unambiguous and
- * what makes a call's shape a SET rather than a list: it either has a socket or it does not.
- * Several byte lanes at once are one `multistream`, never several `stream`s.
- */
-export const DataType = {
-  /** a single value */
-  normal: 'normal',
-  /** one lane — a feed of values, or a feed of raw bytes */
-  stream: 'stream',
-  /** several named lanes at once, e.g. a multipart body */
-  multistream: 'multistream',
-  /** a duplex connection, whose lifetime is a lease rather than the dispatch that opened it */
-  socket: 'socket',
-} as const
-
-// oxlint-disable-next-line no-redeclare
-export type DataType = (typeof DataType)[keyof typeof DataType]
-
-// Default layering of the built-in policies. Policies are applied as an onion sorted ascending by
-// priority: the LOWEST number is the OUTERMOST layer. Timeout is innermost (highest) on purpose —
-// a timeout must surface as a normal thrown CoreErrors.Timeout that the outer stateful policies
-// (circuit-breaker, metrics, retry, fallback) observe through their catch blocks. If timeout sat
-// outside them it would HALT their generators, and a halt runs neither catch nor finally (only
-// scope `ensure` cleanup) — so they could neither record the failure nor release their state.
-export const PolicyPriority = {
-  Cache: 0,
-  Fallback: 5,
-  Bucket: 10,
-  Bulk: 20,
-  Retry: 30,
-  CircuitBreaker: 40,
-  Metrics: 50,
-  Timeout: 60,
-} as const
-
-export const CoreErrors = createTags(
-  'server:core',
-
-  'validation',
-  'random-hex',
-
-  'forbidden',
-  'not-found',
-  'not-registered',
-  'unauthorized',
-  'exists',
-  'precondition-failed',
-  'broker-internal',
-  'broker-paused',
-  'payload-too-large',
-  'missing-settings',
-  'protocol-not-cloneable',
-
-  'transport-dispatch',
-  'transport-emit',
-  'transport-broadcast',
-
-  'circuit-open',
-  'bulk-queue-full',
-  'bulk-queue-timeout',
-  'timeout',
-)
-
-export const CoreStatusMap = {
-  [CoreErrors.Validation]: 400,
-  [CoreErrors.RandomHex]: 500,
-
-  [CoreErrors.Forbidden]: 403,
-  [CoreErrors.NotFound]: 404,
-  [CoreErrors.NotRegistered]: 404,
-  [CoreErrors.Unauthorized]: 401,
-  [CoreErrors.Exists]: 409,
-  [CoreErrors.PreconditionFailed]: 412,
-  [CoreErrors.BrokerInternal]: 500,
-  [CoreErrors.BrokerPaused]: 503,
-  [CoreErrors.PayloadTooLarge]: 413,
-  [CoreErrors.MissingSettings]: 500,
-  [CoreErrors.ProtocolNotCloneable]: 500,
-
-  [CodecErrors.Encode]: 500,
-  [CodecErrors.Decode]: 400,
-
-  [CoreErrors.TransportDispatch]: 502,
-  [CoreErrors.TransportEmit]: 502,
-  [CoreErrors.TransportBroadcast]: 502,
-
-  [CoreErrors.CircuitOpen]: 503,
-  [CoreErrors.BulkQueueFull]: 503,
-  [CoreErrors.BulkQueueTimeout]: 504,
-  [CoreErrors.Timeout]: 504,
+  /** server → client: the failure tag of an error response. */
+  error = 'oz-error',
 }
 
-export const OTEL_RPC_SYSTEM = 'ozaco-broker'
-export const OTEL_MESSAGING_SYSTEM = 'ozaco-broker'
+/** Default deadlines. */
+export const DEFAULT_TIMEOUT_MS = 30_000
+export const DEFAULT_OUTCOME_TTL_MS = 10 * 60 * 1000
 
-export const OtelSpanKind = {
-  INTERNAL: 1,
-  SERVER: 2,
-  CLIENT: 3,
-  PRODUCER: 4,
-  CONSUMER: 5,
-} as const
+/** Observe tables live under this prefix (`__` is the db's own, so one underscore). */
+export const OBSERVE_PREFIX = '_ob_'
 
-export const OtelSpanStatusCode = {
-  UNSET: 0,
-  OK: 1,
-  ERROR: 2,
-} as const
+/** The service id format: `name@version#instance`. */
+export const serviceIdOf = (name: string, version: string, instance: string): string =>
+  `${name}@${version}#${instance}`
 
-export const OtelAttrs = {
-  RPC_SYSTEM: 'rpc.system',
-  RPC_SERVICE: 'rpc.service',
-  RPC_METHOD: 'rpc.method',
-
-  MESSAGING_SYSTEM: 'messaging.system',
-  MESSAGING_OPERATION: 'messaging.operation',
-  MESSAGING_DESTINATION_NAME: 'messaging.destination.name',
-
-  BROKER_NAME: 'broker.name',
-  BROKER_NODE_ID: 'broker.node_id',
-
-  SERVICE_NAME: 'service.name',
-  SERVICE_VERSION: 'service.version',
-  SERVICE_INSTANCE_ID: 'service.instance.id',
-
-  EXCEPTION_MESSAGE: 'exception.message',
-} as const
+/** `gw>todos>ai` — the hops of a request tree, rendered. */
+export const laneOf = (hops: readonly { readonly service: string }[]): string =>
+  hops.map(hop => hop.service).join('>')

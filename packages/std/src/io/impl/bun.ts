@@ -8,6 +8,7 @@ import { hasFlag } from 'std:shared'
 import fs from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 
+import pkg from '../../../package.json'
 import {
   decryptSecret,
   encryptSecret,
@@ -16,13 +17,14 @@ import {
   verifyData,
 } from '../internal/crypto'
 import { readEnv } from '../internal/env'
+import { readFileFlow, writeFileFlow } from '../internal/flow'
 import { fromReadable } from '../internal/from-readable'
+import { hlcDecode, hlcObserve, hlcToken } from '../internal/hlc'
 import { tcpConnect, tcpListen, udpBind } from '../internal/net'
 import { mapStat, walkRecursive } from '../internal/node-shared'
 import { nodePath } from '../internal/path-node'
 import { bunExec, bunSpawn } from '../internal/process-bun'
 import { createS3 } from '../internal/s3'
-import { readFileStream, writeFileStream } from '../internal/stream'
 import { readInterfaces, readTmpDir } from '../internal/sys'
 import { toReadable } from '../internal/to-readable'
 import { ulidId } from '../internal/ulid'
@@ -32,7 +34,7 @@ import { webHash, webHmac, webRandomBytes } from '../internal/webcrypto'
 
 export const BunIO = IO.implement({
   name: 'bun-io',
-  version: '0.0.1',
+  version: pkg.version,
   *setup() {
     return null
   },
@@ -42,6 +44,9 @@ export const BunIO = IO.implement({
   randomBytes: webRandomBytes,
   ulid: ulidId,
   uuid: uuidId,
+  hlc: hlcToken,
+  decodeHlc: hlcDecode,
+  observeHlc: hlcObserve,
   hmac: webHmac,
   hash: webHash,
   encrypt: encryptSecret,
@@ -52,9 +57,9 @@ export const BunIO = IO.implement({
 
   fromReadable,
   toReadable,
-  readStream: path => readFileStream(toPath(path)),
+  readFlow: path => readFileFlow(toPath(path)),
   watch: (path, options) => watchPath(toPath(path), options),
-  writeStream: (path, source, options) => writeFileStream(toPath(path), source, options?.flags),
+  writeFlow: (path, source, options) => writeFileFlow(toPath(path), source, options?.flags),
 
   read: operation(function* (path) {
     const p = toPath(path)

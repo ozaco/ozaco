@@ -1,6 +1,8 @@
 import type { Operation } from 'std:effect'
 import { operation, useContext } from 'std:effect'
 
+import pkg from '../../package.json'
+
 import { LogLevel } from './const'
 import { Logger, LoggerTransport } from './definitions'
 import { LoggerBindingsContext } from './internal/context'
@@ -9,7 +11,7 @@ import type { LoggerDef } from './types/logger'
 
 export const DefaultLogger = Logger.implement({
   name: 'default-logger',
-  version: '0.0.1',
+  version: pkg.version,
   description: 'logger; reads transports from the LoggerTransport registry',
 
   *setup(options: LoggerDef.Options = {}) {

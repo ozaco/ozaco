@@ -1,13 +1,11 @@
-import type { PromptDef } from 'cli:core'
-import { CoreErrors } from 'cli:core'
 import { operation } from 'std:effect'
-import { fail } from 'std:result'
 
-import type { AutocompleteState, PromptSpec } from '../../types'
+import type { AutocompleteState } from '../../types/internal'
+import type { PromptDef, PromptSpec } from '../../types/prompt'
+import { runPrompt } from '../../utils'
 import { labelOf } from '../choice'
 import { activeLine, cancelledLine, hint, label, submittedLine } from '../chrome'
 import { createInput, editLine, renderInput } from '../edit'
-import { runPrompt } from '../engine'
 import { isEnter, isDown, isUp } from '../keys'
 import { paginate, wrapIndex } from '../list'
 
@@ -74,13 +72,6 @@ export const autocomplete = operation(function* <T>(options: PromptDef.Autocompl
     submitted: (value, _state, ctx) =>
       submittedLine(ctx, options.message, labelOf(value, options.choices)),
     cancelled: (_state, ctx) => cancelledLine(ctx, options.message),
-    *fallback() {
-      const choice = options.choices[0]
-      if (choice) {
-        return choice.value
-      }
-      return yield* fail(CoreErrors.NotInteractive, 'autocomplete has no available choice')
-    },
   }
 
   return yield* runPrompt(spec)

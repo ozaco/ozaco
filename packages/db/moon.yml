@@ -8,6 +8,7 @@ tasks:
     command: bun x tsdown --config-loader unrun
     deps:
       - std:build
+      - transport:build
     inputs:
       - src/**/*
       - tsdown.config.ts
@@ -24,6 +25,7 @@ tasks:
     command: bun x tsc -p tsconfig.json --noEmit
     deps:
       - std:build
+      - transport:build
     inputs:
       - src/**/*
       - tests/**/*
@@ -34,3 +36,44 @@ tasks:
       - db:build
     inputs:
       - tests/**/*
+  test-pg:
+    command: bash scripts/test-postgres.sh
+    deps:
+      - db:build
+    inputs:
+      - src/**/*
+      - tests/**/*
+      - scripts/test-postgres.sh
+    options:
+      cache: false
+  test-chaos:
+    command: bun test tests/chaos.test.ts
+    env:
+      DB_CHAOS_SEEDS: '200'
+    deps:
+      - db:build
+    inputs:
+      - src/**/*
+      - tests/chaos.test.ts
+    options:
+      cache: false
+  test-bus:
+    command: bash scripts/test-bus.sh
+    deps:
+      - db:build
+    inputs:
+      - src/**/*
+      - tests/bus-network.test.ts
+      - scripts/test-bus.sh
+    options:
+      cache: false
+  test-redis:
+    command: bash scripts/test-redis.sh
+    deps:
+      - db:build
+    inputs:
+      - src/**/*
+      - tests/kv/**/*
+      - scripts/test-redis.sh
+    options:
+      cache: false

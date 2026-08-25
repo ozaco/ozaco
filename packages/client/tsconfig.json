@@ -1,9 +1,9 @@
 {
+  "extends": "./tsconfig.paths.json",
   "compilerOptions": {
-    "lib": ["esnext", "dom"],
+    "lib": ["ESNext", "DOM"],
     "types": ["node", "bun"]
   },
-  "extends": ["../../tsconfig.base.json", "./tsconfig.paths.json"],
-  "include": ["src"],
+  "include": ["src", "tests"],
   "references": []
 }

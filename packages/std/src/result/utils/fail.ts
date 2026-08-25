@@ -1,5 +1,4 @@
 import type { AnyType, Writable } from 'std:shared'
-import { isPromise } from 'std:shared'
 
 import { RESULT_FAILURE } from '../const'
 import type { Impl } from '../types/impl'
@@ -24,23 +23,9 @@ export const fail: Impl.Fail = (...args: AnyType[]) => {
     return failure as AnyType
   }
 
-  const error = args[0]
-  const message = args[1] ?? ''
-  const causes = args.slice(2)
-
-  if (isPromise(error)) {
-    return error.then(resolved => {
-      failure.causes = causes
-      failure.message = message
-      failure.error = resolved
-
-      return failure
-    }) as AnyType
-  }
-
-  failure.causes = causes
-  failure.message = message
-  failure.error = error
+  failure.error = args[0]
+  failure.message = args[1] ?? ''
+  failure.causes = args.slice(2)
 
   return failure as AnyType
 }

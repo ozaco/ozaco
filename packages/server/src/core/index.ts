@@ -1,37 +1,39 @@
+/**
+ * `@ozaco/server` — the service/action kernel. Define services with `service()` / `action.*`,
+ * build a node with `createServer({ services, edge, carrier, plugins })`, and every other
+ * concern — HTTP/WS edges (`server:impl/edge/*`), cross-node carriers
+ * (`server:impl/carrier/network`), observability, auth, cache, resilience, docs, resources
+ * (`server:plugins`) — is a std plugin the kernel wires in. Streams are branded; "what happened"
+ * is a db row.
+ */
 export * from './const'
-export * from './definitions'
+export * from './errors'
 
-export * from './types/action'
-export * from './types/broker'
-export * from './types/channel'
-export * from './types/common'
-export * from './types/gateway'
-export * from './types/policy'
-export * from './types/role'
-export * from './types/service'
-export * from './types/socket'
-export * from './types/source'
-export * from './types/tracer'
-export * from './types/transport'
+export * from './definition/local'
+export * from './definition/outcomes'
+export * from './definition/protocol'
+export * from './definition/server'
 
-export * from './impl/broker'
-export * from './impl/tracer'
-export * from './impl/transport'
-
-export * from './internal/invoke'
-export * from './internal/respond'
-export * from './internal/wire'
-
-export * from './utils/action'
-export * from './utils/channel'
-export * from './utils/context'
-export * from './utils/create'
-export * from './utils/define-policy'
-export * from './utils/fault'
-export * from './utils/hooks'
-export * from './utils/is'
-export * from './utils/policy'
-export * from './utils/role'
+export * from './utils/defaults'
+export * from './utils/edge'
+export * from './utils/failure'
+export * from './utils/outcomes'
+export * from './utils/server'
 export * from './utils/service'
-export * from './utils/socket'
-export * from './utils/status'
+export * from './utils/sink'
+export * from './utils/stream'
+
+export * from './context'
+export * from './utils/trace'
+export * from './utils/validation'
+
+export type * from './types/carrier'
+export type * from './types/edge'
+export type * from './types/helpers'
+export type * from './types/observe'
+export type * from './types/outcomes'
+export type * from './types/server'
+export type * from './types/service'
+export type * from './types/stream'
+export type * from './types/trace'
+export type * from './types/wire'

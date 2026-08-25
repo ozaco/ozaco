@@ -1,26 +1,34 @@
-import type { PaletteDef } from 'cli:core'
-import { Palette, Terminal } from 'cli:core'
-import { attempt, useContext } from 'std:effect'
-import { IO } from 'std:io'
-import { isSuccess } from 'std:result'
+// oxlint-disable import/exports-last
+import { Terminal } from 'cli:core'
+import type { Operation } from 'std:effect'
+import { defineProtocol } from 'std:plugin'
+
+import pkg from '../../package.json'
 
 import { colorsAction, symbolsAction } from './internal/actions'
-import type { DefinePaletteOptions, ResolveOptions } from './types'
+import type { DefinePaletteOptions, PaletteDef } from './types'
 import { createColors } from './utils/colors'
-import { detectColor, detectUnicode } from './utils/detect'
 import { createSymbols } from './utils/symbols'
 
-const resolve = function* (options: ResolveOptions = {}) {
-  const terminal = yield* attempt(useContext(Terminal))
-  const isTTY = isSuccess(terminal) ? Boolean(terminal.value.output.isTTY) : false
+/**
+ * The palette protocol: the shared color/symbol vocabulary every renderer (prompt, spinner, table,
+ * command help) paints with. Defaults follow the installed terminal's detected capabilities; a
+ * palette installed without a terminal degrades to plain ASCII, uncolored.
+ */
+export const Palette = defineProtocol<PaletteDef.Context, PaletteDef.Actions>({
+  name: 'cli-palette',
+  version: pkg.version,
+  description: 'Shared cli color and symbol tables',
+})
 
-  const detected = yield* IO.actions.env(env => ({
-    color: detectColor({ env, isTTY }),
-    unicode: detectUnicode({ env }),
-  }))
+/** Resolve the installed palette context; install `DefaultPalette` (or a custom one) first. */
+export const usePalette = (): Operation<PaletteDef.Context> => Palette.context.expect()
 
-  const color = options.color ?? detected.color
-  const unicode = options.unicode ?? detected.unicode
+const resolve = function* (options: PaletteDef.Options = {}): Operation<PaletteDef.Context> {
+  const info = yield* Terminal.context.get()
+
+  const color = options.color ?? (info !== undefined && info.capabilities.color !== 'none')
+  const unicode = options.unicode ?? info?.capabilities.unicode ?? false
 
   const colors: PaletteDef.Colors = { ...createColors(color), ...options.colors }
   const symbols: PaletteDef.Symbols = { ...createSymbols(unicode), ...options.symbols }
@@ -28,10 +36,11 @@ const resolve = function* (options: ResolveOptions = {}) {
   return { color, unicode, colors, symbols }
 }
 
-export const definePalette = (definition: DefinePaletteOptions = {}): PaletteDef =>
-  Palette.implement({
-    name: definition.name ?? 'cli/custom-palette',
-    version: definition.version ?? '0.0.0',
+/** Build a branded palette plugin with baked-in overrides (install-time options still win). */
+export const definePalette = (definition: DefinePaletteOptions = {}) =>
+  Palette.implement<PaletteDef.Context, [options?: PaletteDef.Options]>({
+    name: definition.name ?? 'cli-custom-palette',
+    version: definition.version ?? pkg.version,
     *setup(options: PaletteDef.Options = {}) {
       return yield* resolve({
         color: options.color ?? definition.color,
@@ -45,13 +54,14 @@ export const definePalette = (definition: DefinePaletteOptions = {}): PaletteDef
     symbols: symbolsAction,
   })
 
-export const DefaultPalette = Palette.implement({
-  name: 'cli/default-palette',
-  version: '0.0.0',
-  setup: resolve,
-}).build({
+export const DefaultPalette = Palette.implement<PaletteDef.Context, [options?: PaletteDef.Options]>(
+  {
+    name: 'cli-default-palette',
+    version: pkg.version,
+    description: 'Terminal-capability-driven palette',
+    setup: resolve,
+  },
+).build({
   colors: colorsAction,
   symbols: symbolsAction,
 })
-
-export type { DefinePaletteOptions } from './types'

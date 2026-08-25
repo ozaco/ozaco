@@ -3,7 +3,7 @@
     "lib": ["esnext"],
     "types": ["node", "bun"]
   },
-  "extends": ["../../tsconfig.base.json", "./tsconfig.paths.json"],
+  "extends": "./tsconfig.paths.json",
   "include": ["src", "tests"],
   "references": []
 }

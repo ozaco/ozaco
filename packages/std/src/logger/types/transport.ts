@@ -1,4 +1,4 @@
-import type { Future } from 'std:effect'
+import type { Operation } from 'std:effect'
 import type { Plugin } from 'std:plugin'
 
 import type { LogLevel } from '../const'
@@ -18,8 +18,8 @@ export namespace LoggerTransportDef {
   }
 
   export interface Actions {
-    write(entry: LoggerDef.Entry): Future<void>
-    flush(): Future<void>
-    close(): Future<void>
+    write(entry: LoggerDef.Entry): Operation<void>
+    flush(): Operation<void>
+    close(): Operation<void>
   }
 }

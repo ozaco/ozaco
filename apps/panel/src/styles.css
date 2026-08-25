@@ -1,0 +1,140 @@
+@import 'tailwindcss';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --bg: #f5f6f8;
+  --panel: #ffffff;
+  --panel-2: #eef0f4;
+  --line: #d9dce3;
+  --fg: #1c2030;
+  --dim: #6b7385;
+  --accent: #3b6fe0;
+  --accent-contrast: #ffffff;
+  --ok: #1f9d55;
+  --bad: #d93a3a;
+  --warn: #c77d0b;
+  --method-get: #1f9d55;
+  --method-post: #d97706;
+  --method-put: #2563eb;
+  --method-patch: #0d9488;
+  --method-delete: #dc2626;
+  --ws: #7c3aed;
+}
+
+.dark {
+  --bg: #0f1115;
+  --panel: #171a21;
+  --panel-2: #1d2130;
+  --line: #262a33;
+  --fg: #e6e8ee;
+  --dim: #8b93a7;
+  --accent: #7aa2f7;
+  --accent-contrast: #0f1115;
+  --ok: #3ddc84;
+  --bad: #ff5d5d;
+  --warn: #ffb454;
+  --method-get: #3ddc84;
+  --method-post: #ffb454;
+  --method-put: #7aa2f7;
+  --method-patch: #2dd4bf;
+  --method-delete: #ff5d5d;
+  --ws: #c084fc;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font:
+    13px/1.45 ui-sans-serif,
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+}
+
+.btn {
+  @apply inline-flex items-center gap-1 rounded border px-2 py-1 text-[12px] leading-none;
+  border-color: var(--line);
+  background: var(--panel-2);
+  color: var(--fg);
+}
+.btn:hover {
+  filter: brightness(1.08);
+}
+.btn[data-disabled] {
+  opacity: 0.5;
+}
+.btn-accent {
+  background: var(--accent);
+  color: var(--accent-contrast);
+  border-color: transparent;
+  font-weight: 600;
+}
+.btn-bad {
+  background: var(--bad);
+  color: #fff;
+  border-color: transparent;
+}
+
+.input {
+  @apply w-full rounded border px-2 py-1 text-[12px] outline-none;
+  background: var(--bg);
+  border-color: var(--line);
+  color: var(--fg);
+}
+.input:focus {
+  border-color: var(--accent);
+}
+textarea.input {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  resize: vertical;
+}
+
+.subtabs {
+  @apply flex gap-0 border-b text-[12px];
+  border-color: var(--line);
+}
+.subtab {
+  @apply cursor-pointer px-3 py-1.5;
+  color: var(--dim);
+  border-bottom: 2px solid transparent;
+}
+.subtab[data-selected] {
+  color: var(--fg);
+  border-bottom-color: var(--accent);
+}
+
+.pill {
+  @apply inline-block rounded px-1.5 text-[11px] leading-[18px] font-semibold;
+}
+
+.row-hover:hover {
+  background: var(--panel-2);
+}
+
+.tree-row[data-selected] {
+  background: var(--panel-2);
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 4px;
+}

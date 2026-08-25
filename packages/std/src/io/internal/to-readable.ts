@@ -1,9 +1,9 @@
-import type { Operation, Stream } from 'std:effect'
+import type { Operation, Flow } from 'std:effect'
 import { ensure, operation, race, until, withResolvers } from 'std:effect'
 import { asFailure, isFailure } from 'std:result'
 
 /**
- * IO action — adapt an effect `Stream<Uint8Array>` into a web `ReadableStream<Uint8Array>`, the
+ * IO action — adapt an effect `Flow<Uint8Array>` into a web `ReadableStream<Uint8Array>`, the
  * inverse of `fromReadable`. Free of any `node:*` import so it bundles for the browser (`WebIO`); the
  * result is a WHATWG stream usable as a `Response` body, a structured-clone transfer, or anything
  * that reads bytes. Reached as `IO.actions.toReadable(source)`.
@@ -16,7 +16,7 @@ import { asFailure, isFailure } from 'std:result'
  * `controller.error()` so a truncated source surfaces as a stream error rather than a clean end; the
  * consumer's `cancel()` ends the pump immediately, even while it is parked waiting for the next value.
  */
-export const toReadable = operation(function* (source: Stream<Uint8Array, unknown>) {
+export const toReadable = operation(function* (source: Flow<Uint8Array, unknown>) {
   let controller: ReadableStreamDefaultController<Uint8Array>
   let cancelled = false
   let settled = false

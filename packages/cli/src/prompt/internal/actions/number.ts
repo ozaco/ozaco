@@ -1,10 +1,10 @@
-import type { PromptDef } from 'cli:core'
 import { operation } from 'std:effect'
 
-import type { FieldState, NumberParsed, PromptSpec } from '../../types'
+import type { FieldState, NumberParsed } from '../../types/internal'
+import type { PromptDef, PromptSpec } from '../../types/prompt'
+import { runPrompt } from '../../utils'
 import { cancelledLine, inlineFrame, submittedLine } from '../chrome'
 import { createInput, editLine, isPrintable, renderInput } from '../edit'
-import { runPrompt } from '../engine'
 import { isEnter } from '../keys'
 
 export const number = operation(function* (options: PromptDef.NumberOptions) {
@@ -61,9 +61,6 @@ export const number = operation(function* (options: PromptDef.NumberOptions) {
     },
     submitted: (value, _state, ctx) => submittedLine(ctx, options.message, String(value)),
     cancelled: (_state, ctx) => cancelledLine(ctx, options.message),
-    *fallback() {
-      return options.initial ?? 0
-    },
   }
 
   return yield* runPrompt(spec)

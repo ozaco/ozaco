@@ -1,8 +1,8 @@
+import type { Operation } from 'std:effect'
 import { until } from 'std:effect'
 import type { IOStat, WalkEntry, WalkOptions } from 'std:io'
 import { IO_FLAGS } from 'std:io'
 import { hasFlag } from 'std:shared'
-import type { AnyType } from 'std:shared'
 
 import type { Stats } from 'node:fs'
 import fs from 'node:fs/promises'
@@ -24,7 +24,7 @@ export function* walkRecursive(
   options: Required<Pick<WalkOptions, 'flags' | 'maxDepth'>> & Pick<WalkOptions, 'match' | 'skip'>,
   depth: number,
   results: WalkEntry[],
-): Generator<AnyType, void, AnyType> {
+): Operation<void> {
   const flags = options.flags ?? 0
 
   if (options.maxDepth !== undefined && depth > options.maxDepth) {

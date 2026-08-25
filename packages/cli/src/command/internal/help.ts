@@ -1,7 +1,8 @@
-import type { PaletteDef, RegistryDef } from 'cli:core'
+import type { PaletteDef } from 'cli:palette'
 
 import type { CommandDef } from '../types/command'
 import type { ActionHelp, RuntimeNode } from '../types/internal'
+import type { RegistryDef } from '../types/registry'
 
 // Pad the left column on its plain width, then paint it (keeps ANSI from breaking alignment).
 const section = (entries: [string, string][], paint: (text: string) => string): string[] => {

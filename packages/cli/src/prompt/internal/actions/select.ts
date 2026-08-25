@@ -1,12 +1,10 @@
-import type { PromptDef } from 'cli:core'
-import { CoreErrors } from 'cli:core'
 import { operation } from 'std:effect'
-import { fail } from 'std:result'
 
-import type { PromptSpec, SelectState } from '../../types'
+import type { SelectState } from '../../types/internal'
+import type { PromptDef, PromptSpec } from '../../types/prompt'
+import { runPrompt } from '../../utils'
 import { labelOf, resolveIndex } from '../choice'
 import { activeLine, cancelledLine, hint, label, submittedLine } from '../chrome'
-import { runPrompt } from '../engine'
 import { isEnter, isDown, isUp } from '../keys'
 import { paginate, step } from '../list'
 
@@ -58,13 +56,6 @@ export const select = operation(function* <T>(options: PromptDef.SelectOptions<T
     },
     submitted: (value, _state, ctx) => submittedLine(ctx, options.message, labelOf(value, choices)),
     cancelled: (_state, ctx) => cancelledLine(ctx, options.message),
-    *fallback() {
-      const choice = choices[initial]
-      if (choice) {
-        return choice.value
-      }
-      return yield* fail(CoreErrors.NotInteractive, 'select has no available choice')
-    },
   }
 
   return yield* runPrompt(spec)

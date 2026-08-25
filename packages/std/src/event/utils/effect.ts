@@ -1,30 +1,31 @@
-import type { Operation, Stream, Subscription } from 'std:effect'
+import type { Operation, Flow, Subscription } from 'std:effect'
 import { createQueue, createSignal, each, ensure, resource } from 'std:effect'
 import type { AnyType } from 'std:shared'
 
 import type { EventEmitter } from '../types'
 
-export function useEvent<T extends EventEmitter<AnyType>, K extends keyof EventEmitter.Infer<T>>(
-  target: T,
-  name: K,
-): Stream<EventEmitter.InferType<T, K>, never> {
+export function useEvent<
+  T extends EventEmitter<AnyType>,
+  K extends keyof EventEmitter.Infer<T> & string,
+>(target: T, name: K): Flow<EventEmitter.InferType<T, K>, never> {
   return resource(function* (provide) {
-    const signal = createSignal<EventEmitter>()
-    const handler = (...args: AnyType) => signal.send(args)
+    const signal = createSignal<EventEmitter.InferType<T, K>, never>()
+    const handler = (...args: AnyType[]) => signal.send(args as EventEmitter.InferType<T, K>)
 
-    target.on(name as AnyType, handler)
+    target.on(name, handler)
 
     try {
-      yield* provide(
-        (yield* signal) as unknown as Subscription<EventEmitter.InferType<T, K>, never>,
-      )
+      yield* provide(yield* signal)
     } finally {
-      target.off(name as AnyType, handler)
+      target.off(name, handler)
     }
   })
 }
 
-export function onEvent<T extends EventEmitter<AnyType>, K extends keyof EventEmitter.Infer<T>>(
+export function onEvent<
+  T extends EventEmitter<AnyType>,
+  K extends keyof EventEmitter.Infer<T> & string,
+>(
   target: T,
   name: K,
   handler: (...args: EventEmitter.InferType<T, K>) => Operation<void>,
@@ -42,7 +43,7 @@ export function onEvent<T extends EventEmitter<AnyType>, K extends keyof EventEm
 
 export function useEventOnce<
   T extends EventEmitter<AnyType>,
-  K extends keyof EventEmitter.Infer<T>,
+  K extends keyof EventEmitter.Infer<T> & string,
 >(target: T, name: K): Operation<EventEmitter.InferType<T, K>> {
   return {
     *[Symbol.iterator]() {
@@ -55,20 +56,20 @@ export function useEventOnce<
 
 export function useBufferedEvent<
   T extends EventEmitter<AnyType>,
-  K extends keyof EventEmitter.Infer<T>,
+  K extends keyof EventEmitter.Infer<T> & string,
 >(target: T, name: K): Operation<Subscription<EventEmitter.InferType<T, K>, never>> {
   return {
     *[Symbol.iterator]() {
       const queue = createQueue<EventEmitter.InferType<T, K>, never>()
-      const handler = (...args: AnyType) => queue.add(args as EventEmitter.InferType<T, K>)
+      const handler = (...args: AnyType[]) => queue.add(args as EventEmitter.InferType<T, K>)
 
-      target.on(name as AnyType, handler)
+      target.on(name, handler)
 
       yield* ensure(() => {
-        target.off(name as AnyType, handler)
+        target.off(name, handler)
       })
 
       return { next: queue.next }
     },
-  } as AnyType
+  }
 }

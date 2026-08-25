@@ -26,8 +26,8 @@ export const build = (
   const byName = new Map(infos.map(info => [info.name, info]))
   const values: Record<string, unknown> = {}
 
-  for (const [index, field] of Object.entries(args)) {
-    const value = raw.positionals[+index]
+  for (const [index, field] of args.entries()) {
+    const value = raw.positionals[index]
     if (value === undefined) {
       continue
     }

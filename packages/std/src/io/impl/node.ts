@@ -10,6 +10,7 @@ import { createHash, createHmac, randomBytes as nodeRandomBytes } from 'node:cry
 import fs from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 
+import pkg from '../../../package.json'
 import {
   decryptSecret,
   encryptSecret,
@@ -18,14 +19,15 @@ import {
   verifyData,
 } from '../internal/crypto'
 import { readEnv } from '../internal/env'
+import { readFileFlow, writeFileFlow } from '../internal/flow'
 import { fromReadable } from '../internal/from-readable'
+import { hlcDecode, hlcObserve, hlcToken } from '../internal/hlc'
 import { tcpConnect, tcpListen, udpBind } from '../internal/net'
 import { mapStat, walkRecursive } from '../internal/node-shared'
 import { nodePath } from '../internal/path-node'
 import { nodeExec, nodeSpawn } from '../internal/process-node'
 import { createS3 } from '../internal/s3'
 import { fetchS3Client } from '../internal/s3-fetch'
-import { readFileStream, writeFileStream } from '../internal/stream'
 import { readInterfaces, readTmpDir } from '../internal/sys'
 import { toReadable } from '../internal/to-readable'
 import { ulidId } from '../internal/ulid'
@@ -38,7 +40,7 @@ const toNodeHash = (alg: HashAlgorithm) =>
 
 export const NodeIO = IO.implement({
   name: 'node-io',
-  version: '0.0.1',
+  version: pkg.version,
   *setup() {
     return null
   },
@@ -51,6 +53,9 @@ export const NodeIO = IO.implement({
 
   ulid: ulidId,
   uuid: uuidId,
+  hlc: hlcToken,
+  decodeHlc: hlcDecode,
+  observeHlc: hlcObserve,
 
   hmac: operation(function* (algorithm, key, data) {
     const mac = createHmac(toNodeHash(algorithm), key).update(data).digest()
@@ -69,9 +74,9 @@ export const NodeIO = IO.implement({
 
   fromReadable,
   toReadable,
-  readStream: path => readFileStream(toPath(path)),
+  readFlow: path => readFileFlow(toPath(path)),
   watch: (path, options) => watchPath(toPath(path), options),
-  writeStream: (path, source, options) => writeFileStream(toPath(path), source, options?.flags),
+  writeFlow: (path, source, options) => writeFileFlow(toPath(path), source, options?.flags),
 
   read: operation(function* (path) {
     const buf = yield* until(fs.readFile(toPath(path)))

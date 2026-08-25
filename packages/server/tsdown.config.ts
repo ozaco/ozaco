@@ -1,29 +1,20 @@
 import { defineConfig } from 'tsdown'
 
-import { dbResolve, serverResolve, stdResolve } from '../devkit/src/resolve'
+import { dbResolve, serverResolve, stdResolve, transportResolve } from '../devkit/src/resolve'
 
 // oxlint-disable-next-line import/no-default-export
 export default defineConfig({
+  // entries are added as the modules land (edge/*, carrier/network, plugins, app)
   entry: {
-    core: './src/core/index.ts',
-    'transport/nats': './src/transport/nats/index.ts',
-    'transport/worker': './src/transport/worker/index.ts',
-    'policy/bucket': './src/policy/bucket/index.ts',
-    'policy/retry': './src/policy/retry/index.ts',
-    'policy/cache': './src/policy/cache/index.ts',
-    'policy/circuit-breaker': './src/policy/circuit-breaker/index.ts',
-    'policy/bulk': './src/policy/bulk/index.ts',
-    'policy/timeout': './src/policy/timeout/index.ts',
-    'policy/fallback': './src/policy/fallback/index.ts',
-    'policy/metrics': './src/policy/metrics/index.ts',
-    'gateway/bun': './src/gateway/bun/index.ts',
-    'gateway/node': './src/gateway/node/index.ts',
-    'plugin/cors': './src/plugin/cors/index.ts',
-    'plugin/docs': './src/plugin/docs/index.ts',
-    'plugin/auth': './src/plugin/auth/index.ts',
-    daemon: './src/daemon/index.ts',
-    wizard: './src/wizard/index.ts',
-    metrics: './src/metrics/index.ts',
+    index: './src/core/index.ts',
+    'edge/bun': './src/impl/edge/bun/index.ts',
+    'edge/node': './src/impl/edge/node/index.ts',
+    'edge/deno': './src/impl/edge/deno/index.ts',
+    'carrier/network': './src/impl/carrier/network/index.ts',
+    plugins: './src/plugins/index.ts',
+    'plugins/observe/otlp': './src/plugins/observe/impl/otlp/index.ts',
+    'plugins/observe/openobserve': './src/plugins/observe/impl/openobserve/index.ts',
+    app: './src/app/index.ts',
   },
   format: ['esm', 'cjs'],
   dts: true,
@@ -32,10 +23,14 @@ export default defineConfig({
   outDir: './dist',
   deps: {
     onlyBundle: [],
+    neverBundle: ['bun', 'ws'],
   },
+  // `server:core` resolves to the external `@ozaco/server` dist, NOT inlined per bundle — so the
+  // protocol singletons stay shared across the impl/plugin modules
   plugins: [
     stdResolve.rolldown(),
-    serverResolve.rolldown({ sourceDir: './src' }),
+    transportResolve.rolldown(),
     dbResolve.rolldown(),
+    serverResolve.rolldown(),
   ],
 })

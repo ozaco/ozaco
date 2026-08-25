@@ -5,15 +5,22 @@ toolchains:
 
 tasks:
   build:
-    command: bun x tsdown --config-loader unrun
+    # ensure-gen writes placeholder *.gen.ts modules when the real ones (git-ignored, written by
+    # `moon run panel:embed` / `moon run observe:embed`) are not there yet — a task dep would put
+    # server → panel → client → server into a cycle, so the demo/e2e tasks depend on the embeds
+    script: bun run scripts/ensure-gen.ts && bun x tsdown --config-loader unrun
     deps:
       - std:build
+      - transport:build
       - db:build
     inputs:
       - src/**/*
       - tsdown.config.ts
     outputs:
       - dist/**/*
+    options:
+      # the git-ignored *.gen.ts embeds are invisible to moon's input hashing — never cache
+      cache: false
   dev:
     command: bun x tsdown --config-loader unrun --watch
     inputs:
@@ -22,9 +29,10 @@ tasks:
     outputs:
       - dist/**/*
   types:
-    command: bun x tsc -p tsconfig.json --noEmit
+    script: bun run scripts/ensure-gen.ts && bun x tsc -p tsconfig.json --noEmit
     deps:
       - std:build
+      - transport:build
       - db:build
     inputs:
       - src/**/*
@@ -36,3 +44,14 @@ tasks:
       - server:build
     inputs:
       - tests/**/*
+  test-network:
+    command: bash scripts/test-network.sh
+    deps:
+      - server:build
+    inputs:
+      - src/**/*
+      - tests/carrier/**/*
+      - tests/suites/carrier.ts
+      - scripts/test-network.sh
+    options:
+      cache: false

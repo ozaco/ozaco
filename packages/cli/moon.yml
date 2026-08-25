@@ -23,7 +23,7 @@ tasks:
   types:
     command: bun x tsc -p tsconfig.json --noEmit
     deps:
-      - cli:build
+      - std:build
     inputs:
       - src/**/*
       - tests/**/*
@@ -33,5 +33,4 @@ tasks:
     deps:
       - cli:build
     inputs:
-      - src/**/*
       - tests/**/*

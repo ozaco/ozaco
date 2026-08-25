@@ -1,6 +1,6 @@
 {
   "name": "@ozaco/std",
-  "version": "0.3.14",
+  "version": "0.4.0",
   "homepage": "https://ozaco.com/",
   "author": "giveerr (https://github.com/giveerr)",
   "repository": {
@@ -134,6 +134,17 @@
       },
       "source": "./src/ws/index.ts"
     },
+    "./webrtc": {
+      "import": {
+        "types": "./dist/webrtc.d.ts",
+        "default": "./dist/webrtc.js"
+      },
+      "require": {
+        "types": "./dist/webrtc.d.cts",
+        "default": "./dist/webrtc.cjs"
+      },
+      "source": "./src/webrtc/index.ts"
+    },
     "./codec": {
       "import": {
         "types": "./dist/codec.d.ts",
@@ -229,18 +240,20 @@
     "registry": "https://registry.npmjs.org/"
   },
   "dependencies": {
-    "@streamparser/json": "0.0.22"
+    "@streamparser/json": "0.0.26"
   },
   "devDependencies": {
     "@types/fb-watchman": "2.0.6",
-    "js-yaml": "5.2.2",
-    "smol-toml": "1.7.1",
+    "js-yaml": "5.4.0",
+    "node-datachannel": "0.33.1",
+    "smol-toml": "1.8.0",
     "tsdown": "catalog:build",
     "unrun": "catalog:build"
   },
   "optionalDependencies": {
-    "fb-watchman": "^2.0.0",
+    "fb-watchman": "^2.0.2",
     "js-yaml": "^5.0.0",
+    "node-datachannel": "^0.33.0",
     "smol-toml": "^1.7.0"
   }
 }

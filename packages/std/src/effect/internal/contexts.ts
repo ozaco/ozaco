@@ -1,33 +1,37 @@
-import { createContext } from '../methods/context'
+import { createContext } from '../base/context'
 import type { Helpers } from '../types/helpers'
-import type { Operation, Scope } from '../types/operation'
+import type { Context, Operation, Scope } from '../types/operation'
+import type { Utils } from '../types/utils'
+import { createQueue } from '../utils/queue'
 
 import { Reducer } from './reducer'
-import { TaskGroup } from './task-group'
 
-export const Routine = createContext<Helpers.Coroutine<unknown>>('std:effect:coroutine')
+export const PriorityContext = createContext<number>('std:effect:scope.generation', 0)
 
-export const Priority = createContext<number>('std:effect:scope.generation', 0)
+export const ChildrenContext = createContext<Set<Scope>>('std:effect:scope.children')
 
-export const Children = createContext<Set<Scope>>('std:effect:scope.children')
-
-export const ErrorContext = createContext<Helpers.ErrorBoundary>('std:effect:boundary', {
-  raise() {},
-})
-
+// upstream defines these next to the coroutine/trap modules; they live here so the import graph
+// stays acyclic — same defaults, same behavior
 export const SettleContext = createContext<Helpers.Settleware>(
-  'std:effect:settle',
+  'std:effect:coroutine.settle',
   (outcome, next) => next(outcome),
 )
 
+export const ErrorContext = createContext<Helpers.ErrorBoundary>('std:effect:error-boundary', {
+  raise() {},
+})
+
 export const ReducerContext = createContext<Reducer>('std:effect:reducer', new Reducer())
 
-export const TaskGroupContext = createContext<TaskGroup>('std:effect:task-group', new TaskGroup())
+export const ExitContext = createContext<(exit: Utils.Exit) => Operation<void>>('std:effect:exit')
 
-export const EachStack = createContext<Helpers.EachLoop<unknown>[]>('each')
+export const EachStack = createContext<Helpers.EachLoop<unknown>[]>('std:effect:each')
 
-export const ExitContext = createContext<(exit: Helpers.Exit) => Operation<void>>('exit')
-
-export const DebugContext = createContext<((desc: string) => void) | 'force-silence'>(
-  'std:effect:debug',
+/**
+ * Context deciding which queue implementation backs each signal subscription — override to change
+ * buffering behavior within a scope.
+ */
+export const SignalQueueFactoryContext: Context<typeof createQueue> = createContext(
+  'std:effect:signal.createQueue',
+  createQueue,
 )

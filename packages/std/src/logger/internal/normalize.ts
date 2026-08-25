@@ -25,9 +25,10 @@ export const normalizePayload = (args: readonly LoggerDef.Payload[]): Normalized
         const causes = arg.causes.length > 0 ? `: ${arg.causes.join(' > ')}` : ''
         const message = arg.message ? `: ${arg.message}` : ''
         error = `${String(arg.error)}${message}${causes}`
-      } else {
-        arg = arg.value
+        // fully consumed — falling through would spread the failure's internals into `data`
+        continue
       }
+      arg = arg.value
     }
 
     if (typeof arg === 'string') {

@@ -1,0 +1,71 @@
+@import 'tailwindcss';
+
+:root {
+  --bg: #0f1115;
+  --panel: #171a21;
+  --panel-2: #1d2130;
+  --line: #262a33;
+  --fg: #e6e8ee;
+  --dim: #8b93a7;
+  --accent: #7aa2f7;
+  --ok: #3ddc84;
+  --bad: #ff5d5d;
+  --warn: #ffb454;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font:
+    13px/1.45 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Consolas,
+    monospace;
+}
+
+.input {
+  @apply w-full rounded border px-2 py-1 text-[12px] outline-none;
+  background: var(--bg);
+  border-color: var(--line);
+  color: var(--fg);
+}
+.input:focus {
+  border-color: var(--accent);
+}
+
+.btn {
+  @apply inline-flex cursor-pointer items-center gap-1 rounded border px-2 py-1 text-[12px] leading-none;
+  border-color: var(--line);
+  background: var(--panel-2);
+  color: var(--fg);
+}
+.btn:hover {
+  filter: brightness(1.08);
+}
+
+.tag {
+  @apply mr-1.5 inline-block rounded px-1.5 text-[11px] leading-[18px];
+  background: var(--panel-2);
+  color: var(--dim);
+}
+
+.row-hover:hover {
+  background: #1d2230;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 4px;
+}

@@ -1,6 +1,9 @@
-import type { TableDef } from 'cli:core'
-import { Palette, Terminal } from 'cli:core'
-import { ensure, operation, useContext } from 'std:effect'
+import { Terminal, useTerminal } from 'cli:core'
+import { usePalette } from 'cli:palette'
+import { ensure, operation } from 'std:effect'
+
+import type { MutableRow } from '../types/internal'
+import type { TableDef } from '../types/table'
 
 import {
   bodyRow,
@@ -17,8 +20,6 @@ import {
 /** Reserve rows for the `+N more` note and one line of breathing room below the live table. */
 const RESERVED_ROWS = 2
 
-type MutableRow = TableDef.Cell[] | Record<string, TableDef.Cell>
-
 const clone = (row: TableDef.Row): MutableRow =>
   Array.isArray(row)
     ? [...(row as readonly TableDef.Cell[])]
@@ -33,18 +34,19 @@ const setCell = (cells: MutableRow, column: string | number, value: TableDef.Cel
 }
 
 export const table = operation(function* (options: TableDef.Options) {
-  const ctx = yield* useContext(Terminal)
-  const palette = yield* useContext(Palette)
+  const info = yield* useTerminal()
+  const palette = yield* usePalette()
   const size = yield* Terminal.actions.size()
 
   const opts = normalize(options)
   const state = { rows: [] as MutableRow[], ended: false }
 
-  // Interactive: keep every row, auto-fit columns, and re-render the table in place — so any row
-  // stays editable until `end()`. When the table outgrows the viewport only the last rows that fit
-  // are shown (plus a `+N more` note); `end()` clears the live window and commits the full table.
-  if (ctx.interactive) {
-    const renderer = yield* Terminal.actions.renderer(size.columns)
+  // Interactive: keep every row, auto-fit columns, and re-render the table in place through the
+  // render lease — so any row stays editable until `end()`. When the table outgrows the viewport
+  // only the last rows that fit are shown (plus a `+N more` note); `end()` clears the live window
+  // and commits the full table.
+  if (info.capabilities.interactive) {
+    const lease = yield* Terminal.actions.renderer()
     const chrome = chromeRows(opts.border, opts.head)
     const fit = Math.max(1, size.rows - chrome - RESERVED_ROWS)
     const maxBody = opts.window === undefined ? fit : Math.min(opts.window, fit)
@@ -56,7 +58,7 @@ export const table = operation(function* (options: TableDef.Options) {
         palette,
         termColumns: size.columns,
       })
-      yield* renderer.render(frame({ layout, rows: state.rows, maxBody }).text)
+      yield* lease.render(frame({ layout, rows: state.rows, maxBody }).text)
     })
 
     const finish = operation(function* () {
@@ -70,7 +72,7 @@ export const table = operation(function* (options: TableDef.Options) {
         palette,
         termColumns: size.columns,
       })
-      yield* renderer.done(frame({ layout, rows: state.rows }).text)
+      yield* lease.done(frame({ layout, rows: state.rows }).text)
     })
 
     yield* draw()
@@ -111,9 +113,9 @@ export const table = operation(function* (options: TableDef.Options) {
     } satisfies TableDef.Handle
   }
 
-  // Non-interactive (pipe/CI): fixed-width, append-only. A row is committed once the next row is
-  // appended (or on `end()`), so the most-recent row stays editable while earlier ones are already
-  // written and can't change. No cursor control is used, so nothing is ever redrawn.
+  // Non-interactive (pipe/CI): fixed-width, append-only, plain text — no cursor codes, so no lease
+  // is needed and nothing is ever redrawn. A row is committed once the next row is appended (or on
+  // `end()`), so the most-recent row stays editable while earlier ones are already written.
   const layout = makeLayout({ options: opts, rows: [], palette, termColumns: size.columns })
   const flushed = { value: 0 }
   const started = { value: false }
@@ -124,12 +126,12 @@ export const table = operation(function* (options: TableDef.Options) {
     }
     started.value = true
     if (opts.border === 'full') {
-      ctx.output.write(`${topBorder(layout)}\n`)
+      yield* Terminal.actions.write(`${topBorder(layout)}\n`)
     }
     if (opts.head) {
-      ctx.output.write(`${headerRow(layout)}\n`)
+      yield* Terminal.actions.write(`${headerRow(layout)}\n`)
       if (opts.border === 'full' || opts.border === 'header') {
-        ctx.output.write(`${separator(layout)}\n`)
+        yield* Terminal.actions.write(`${separator(layout)}\n`)
       }
     }
   })
@@ -138,7 +140,7 @@ export const table = operation(function* (options: TableDef.Options) {
     const limit = all ? state.rows.length : state.rows.length - 1
     while (flushed.value < limit) {
       yield* startOnce()
-      ctx.output.write(`${bodyRow(layout, state.rows[flushed.value]!)}\n`)
+      yield* Terminal.actions.write(`${bodyRow(layout, state.rows[flushed.value]!)}\n`)
       flushed.value += 1
     }
   })
@@ -151,7 +153,7 @@ export const table = operation(function* (options: TableDef.Options) {
     yield* flush(true)
     yield* startOnce()
     if (opts.border === 'full') {
-      ctx.output.write(`${bottomBorder(layout)}\n`)
+      yield* Terminal.actions.write(`${bottomBorder(layout)}\n`)
     }
   })
 
@@ -161,7 +163,7 @@ export const table = operation(function* (options: TableDef.Options) {
   const reflect = operation(function* (index: number) {
     if (index < flushed.value && !state.ended) {
       yield* startOnce()
-      ctx.output.write(`${bodyRow(layout, state.rows[index]!)}\n`)
+      yield* Terminal.actions.write(`${bodyRow(layout, state.rows[index]!)}\n`)
     }
   })
 
