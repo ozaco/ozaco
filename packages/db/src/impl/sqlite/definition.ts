@@ -24,6 +24,17 @@ export const SqliteAdapter = DbAdapter.implement<Adapter.Options, [options?: Sql
 
   *setup(options) {
     const db = new Database(options?.path ?? ':memory:')
+
+    // writes WAIT for a competing connection instead of failing on the spot…
+    db.exec(`PRAGMA busy_timeout = ${Math.max(0, Math.trunc(options?.busyTimeoutMs ?? 5000))}`)
+
+    // …and under WAL another process's reads never block them at all (NORMAL sync is the
+    // standard WAL pairing — durable at checkpoint, far fewer fsyncs)
+    if (options?.wal !== false) {
+      db.exec('PRAGMA journal_mode = WAL')
+      db.exec('PRAGMA synchronous = NORMAL')
+    }
+
     yield* StateRef.set({ db, lock: createLock() })
     yield* ensure(() => {
       db.close()
