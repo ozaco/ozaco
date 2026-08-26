@@ -28,6 +28,8 @@ jobs:
 
       - run: 'bun install --frozen-lockfile'
       - run: 'moon run :build --color'
+      - run: 'moon run :embed --color'
+      - run: 'moon run :build --color'
 
       - run: 'npm publish --access public || true'
         working-directory: 'packages/std'
