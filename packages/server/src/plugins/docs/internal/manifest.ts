@@ -8,14 +8,16 @@ import type { DocsDef } from '../types'
 const isZod = (value: unknown): value is z.ZodType =>
   typeof value === 'object' && value !== null && '_zod' in value
 
-const schemaDoc = (schema: unknown): DocsDef.SchemaDoc | null => {
+// input schemas are emitted by their INPUT side: a `.default()` field documents as optional
+// (the server applies the default) — generated clients then match the wire truth
+const schemaDoc = (schema: unknown, io: 'input' | 'output'): DocsDef.SchemaDoc | null => {
   if (!schema) {
     return null
   }
 
   if (isZod(schema)) {
     try {
-      const json = z.toJSONSchema(schema, { unrepresentable: 'any' }) as Record<string, unknown>
+      const json = z.toJSONSchema(schema, { unrepresentable: 'any', io }) as Record<string, unknown>
       const { $schema: _dropped, ...rest } = json
 
       return rest
@@ -27,9 +29,11 @@ const schemaDoc = (schema: unknown): DocsDef.SchemaDoc | null => {
   return { declared: true }
 }
 
+// oxlint-disable-next-line max-params -- declaration · plane · schema side
 const planeDoc = (
   declaration: ServiceDef.Declaration | null,
   plane: DocsDef.PlaneDoc['plane'],
+  io: 'input' | 'output',
 ): DocsDef.PlaneDoc => {
   if (!declaration) {
     return { plane: 'none', brand: null, contentType: null, schema: null }
@@ -40,7 +44,7 @@ const planeDoc = (
       plane: 'stream',
       brand: declaration.brand,
       contentType: declaration.spec.contentType,
-      schema: schemaDoc(declaration.spec.schema),
+      schema: schemaDoc(declaration.spec.schema, io),
     }
   }
 
@@ -49,7 +53,7 @@ const planeDoc = (
       plane: 'parts',
       brand: 'parts',
       contentType: 'multipart/form-data',
-      schema: schemaDoc(declaration.fields),
+      schema: schemaDoc(declaration.fields, io),
 
       streams: Object.fromEntries(
         Object.entries(declaration.streams).map(([name, decl]) => [name, decl.brand]),
@@ -61,7 +65,7 @@ const planeDoc = (
     plane: plane === 'none' ? 'value' : plane,
     brand: null,
     contentType: 'application/json',
-    schema: schemaDoc(declaration),
+    schema: schemaDoc(declaration, io),
   }
 }
 
@@ -93,8 +97,8 @@ export const serviceDocOf = (
       title: meta.title,
       description: meta.description,
       route: meta.route,
-      input: planeDoc(meta.input, meta.inputPlane),
-      output: planeDoc(meta.output, meta.outputPlane),
+      input: planeDoc(meta.input, meta.inputPlane, 'input'),
+      output: planeDoc(meta.output, meta.outputPlane, 'output'),
       errors: meta.errors,
       tags: meta.tags,
       options: optionsDoc(meta.options),

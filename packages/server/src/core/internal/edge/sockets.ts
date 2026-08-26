@@ -14,6 +14,7 @@ interface SocketInput {
   readonly raw: EdgeDef.RawSocket
   readonly params: Readonly<Record<string, string>>
   readonly headers: Readonly<Record<string, string>>
+  readonly url: URL
   readonly ctx: ServerDef.Ctx
   readonly trace: TraceDef.Trace
 }
@@ -66,6 +67,7 @@ export function* driveSocket(input: SocketInput): Operation<void> {
     id,
     params: input.params,
     headers: input.headers,
+    url: input.url,
     ctx: input.ctx,
 
     messages: {

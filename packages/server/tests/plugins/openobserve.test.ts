@@ -1,4 +1,4 @@
-import { createServer } from 'server:core'
+import { createServer, report, Server } from 'server:core'
 import { attempt, run, sleep, until } from 'std:effect'
 import { unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
@@ -172,6 +172,54 @@ describe('observe/openobserve', () => {
           true,
         )
         expect(received.some(entry => entry.url.includes('/logs/'))).toBe(false)
+        yield* server.stop()
+      }),
+    )
+  })
+
+  it('domain records ship to the `domain` stream (renameable), free-form fields intact', async () => {
+    const received: { url: string; body: AnyType }[] = []
+    const fakeFetch = ((url: AnyType, init: AnyType) => {
+      received.push({ url: String(url), body: JSON.parse(init.body) })
+      return Promise.resolve(new Response('{"status":[]}', { status: 200 }))
+    }) as typeof fetch
+    unwrap(
+      await run(function* () {
+        yield* storage()
+        const server = yield* createServer({
+          services: [todos],
+          name: 'oo-domain',
+          plugins: [
+            OpenObserveExporter.use({
+              url: 'http://openobserve:5080',
+              org: 'dev',
+              streams: { domain: 'clarvia_audit' },
+              fetch: fakeFetch,
+              batch: { ms: 20 },
+            }),
+          ],
+        })
+        yield* server.listen()
+        const kernel = yield* Server.actions.describe()
+        yield* report(kernel, {
+          t: 'domain',
+          row: { stream: 'audit', actor: 'u-ada', verb: 'document.signed', document: 'd-1' },
+        })
+        yield* sleep(80)
+        const rows = received
+          .filter(entry => entry.url.endsWith('/api/dev/clarvia_audit/_json'))
+          .flatMap(entry => entry.body)
+        expect(rows).toHaveLength(1)
+        expect(rows[0]).toMatchObject({
+          stream: 'audit',
+          actor: 'u-ada',
+          verb: 'document.signed',
+          document: 'd-1',
+          service_name: 'oo-domain',
+        })
+        expect(typeof rows[0]._timestamp).toBe('number')
+
+        // the observe db never stores domain rows — they are exporter-bound
         yield* server.stop()
       }),
     )

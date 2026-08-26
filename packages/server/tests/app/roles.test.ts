@@ -1,5 +1,5 @@
 import { createApp } from 'server:app'
-import { ServerErrors } from 'server:core'
+import { action, ServerErrors, service } from 'server:core'
 import { attempt, createQueue, fork, run, scoped, sleep, until } from 'std:effect'
 import { install } from 'std:plugin'
 import { unwrap } from 'std:result'
@@ -142,6 +142,53 @@ describe('app — roles', () => {
         })
         yield* ready.next()
         yield* worker.halt()
+      }),
+    )
+  })
+
+  it('hosted: [] is refused off-gateway; a service node starts without waiting for anyone', async () => {
+    const link = createLink()
+    unwrap(
+      await run(function* () {
+        // the silent trap, refused loudly: hosting nothing while not being a gateway
+        yield* scoped(function* () {
+          yield* storage()
+          yield* install(MemoryTransport, { prefix: 'trap', link })
+          const outcome = yield* attempt(
+            createApp({
+              services: [todos],
+              carrier: NetworkCarrier,
+              role: 'monolith',
+              hosted: [],
+              name: 'app',
+            }),
+          )
+          expect((outcome as AnyType).error).toBe(ServerErrors.Configuration)
+        })
+
+        // a service node's readiness is ITS OWN services: `other` is declared, NOBODY hosts
+        // it, and start still resolves at once (the old default waited for it and died)
+        const other = service('other', {
+          ping: action.query({}, function* () {}),
+        })
+        yield* scoped(function* () {
+          yield* storage()
+          yield* install(MemoryTransport, { prefix: 'trap', link })
+          const app = yield* createApp({
+            services: [todos, other],
+            carrier: NetworkCarrier,
+            role: 'service',
+            hosted: ['todos'],
+            name: 'app',
+            instance: 'first-pod',
+            readyTimeoutMs: 10_000,
+          })
+          const startedAt = Date.now()
+          const info = yield* app.start()
+          expect(info.ready).toBe(true)
+          expect(Date.now() - startedAt).toBeLessThan(1000)
+          yield* app.stop()
+        })
       }),
     )
   })

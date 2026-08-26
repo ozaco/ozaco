@@ -1,6 +1,7 @@
 import type { Schema, Spec } from 'db:core'
 import {
   clampLimit,
+  CLEAR,
   column,
   DbAdapter,
   DbClient,
@@ -41,6 +42,22 @@ describe('core semantics (adapter-independent)', () => {
         expect((short as AnyType).error).toBe(DbErrors.Validation)
         const ok = yield* db.insert('people', { name: 'ada' })
         expect((ok as AnyType).name).toBe('ada')
+      }),
+    )
+  })
+
+  it('CLEAR nulls an optional column in patch; a required column rejects it', async () => {
+    unwrap(
+      await run(function* () {
+        yield* install(MemoryAdapter)
+        yield* install(BunIO)
+        yield* install(DbClient, { tables: [users] })
+        const db = yield* useDb(users)
+        const ada = yield* db.insert('users', { name: 'ada', age: 36 })
+        const cleared = yield* db.patch('users', ada._id, { age: CLEAR })
+        expect(cleared?.age).toBeNull()
+        const denied = yield* attempt(db.patch('users', ada._id, { name: CLEAR } as AnyType))
+        expect((denied as AnyType).error).toBe(DbErrors.Validation)
       }),
     )
   })
@@ -112,6 +129,31 @@ describe('wire-filter sanitizing', () => {
         }
         const nested = yield* attempt(sanitizeFilter(deep, { fields: ['name'] }))
         expect((nested as AnyType).error).toBe(DbErrors.Validation)
+      }),
+    )
+  })
+
+  it('array ops speak `value` (and still accept the legacy `values` key on the wire)', async () => {
+    unwrap(
+      await run(function* () {
+        const canonical = yield* sanitizeFilter(
+          { op: 'in', field: 'role', value: ['admin', 'member'] },
+          { fields: ['role'] },
+        )
+        expect(canonical).toEqual({ op: 'in', field: 'role', value: ['admin', 'member'] })
+        expect(matches({ role: 'admin' }, canonical as Spec.Filter)).toBe(true)
+
+        const legacy = yield* sanitizeFilter(
+          { op: 'not-in', field: 'role', values: ['admin'] },
+          { fields: ['role'] },
+        )
+        expect(legacy).toEqual({ op: 'not-in', field: 'role', value: ['admin'] })
+        expect(matches({ role: 'member' }, legacy as Spec.Filter)).toBe(true)
+
+        const bad = yield* attempt(
+          sanitizeFilter({ op: 'in', field: 'role', value: 'admin' }, { fields: ['role'] }),
+        )
+        expect((bad as AnyType).error).toBe(DbErrors.Validation)
       }),
     )
   })

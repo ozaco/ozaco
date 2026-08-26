@@ -26,11 +26,15 @@ export namespace EdgeDef {
     readonly hostname: string
   }
 
-  /** What a socket route handler receives. */
+  /** What a socket route handler receives. `ctx.auth` carries what the route's `authorize`
+   * resolved on the handshake — a handler never verifies the token a second time. */
   export interface Socket {
     readonly id: string
     readonly params: Readonly<Record<string, string>>
     readonly headers: Readonly<Record<string, string>>
+
+    /** the upgrade request's url — query params included (`?token=`, filters, …). */
+    readonly url: URL
     readonly ctx: ServerDef.Ctx
 
     /** inbound messages (codec values). */
@@ -51,8 +55,10 @@ export namespace EdgeDef {
     readonly path: string
     readonly handler: SocketHandler
 
-    /** runs before the upgrade; a failure rejects the handshake with its status. */
-    readonly authorize?: ((request: Request) => Operation<void>) | undefined
+    /** runs before the upgrade; a failure rejects the handshake with its status. What it
+     * RESOLVES (the verified principal) becomes the socket ctx's `auth` — verified once, on
+     * the handshake. */
+    readonly authorize?: ((request: Request) => Operation<unknown>) | undefined
 
     /** the service this socket belongs to (docs list it under the service). */
     readonly service?: string | undefined

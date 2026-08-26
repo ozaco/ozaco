@@ -60,8 +60,22 @@ export namespace AuthDef {
     readonly serviceTtlMs?: number | undefined
   }
 
-  /** The `auth` action option: who may call. */
-  export type Requirement = 'user' | 'service' | 'any' | readonly string[] | false
+  /** The `auth` action option: who may call. `'authenticated'` = any verified principal
+   * (`'any'` is its deprecated alias — same meaning); an array = required ROLES; the object
+   * form requires roles AND/OR permissions; a predicate sees the full principal and decides
+   * itself (`auth: (p) => p.permissions.includes('agents:view')`). */
+  export type Requirement =
+    | 'user'
+    | 'service'
+    | 'authenticated'
+    | 'any'
+    | readonly string[]
+    | {
+        readonly roles?: readonly string[] | undefined
+        readonly permissions?: readonly string[] | undefined
+      }
+    | ((principal: Principal) => boolean)
+    | false
 
   export interface Principal {
     readonly sub: string

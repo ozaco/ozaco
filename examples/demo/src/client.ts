@@ -184,7 +184,8 @@ export function* walk(url: string, report: (step: Step) => void = () => {}): Ope
     recomputedAfterInvalidate: summary3.computations > summary1.computations,
   })
   const flaky = yield* client.reports.flaky({ failTimes: 2 })
-  const fallback = yield* client.reports.eventually({ ms: 500 })
+  // `ms` has a server-side default — the CLIENT input type keeps it optional (InferInput)
+  const fallback = yield* client.reports.eventually({})
   const limited: string[] = []
 
   for (let index = 0; index < 5; index += 1) {

@@ -46,14 +46,14 @@ export const lte = (field: string, value: Spec.FilterValue): Spec.Filter => ({
 export const oneOf = (field: string, values: readonly Spec.FilterValue[]): Spec.Filter => ({
   op: 'in',
   field,
-  values,
+  value: values,
 })
 
 /** `field` is none of `values`. */
 export const notOneOf = (field: string, values: readonly Spec.FilterValue[]): Spec.Filter => ({
   op: 'not-in',
   field,
-  values,
+  value: values,
 })
 
 /** SQL-style pattern match (`%`/`_` wildcards), case-sensitive. */

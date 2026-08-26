@@ -134,6 +134,39 @@ describe('kernel — services, dispatch, hooks', () => {
     expect((outcome2 as AnyType).error).toBe(ServerErrors.Configuration)
   })
 
+  it('a hook returning a Result envelope is normalized: values unwrap, failures re-raise', async () => {
+    // the natural observer shape — `attempt` folds the chain into a Result the hook returns
+    const Observer = definePlugin<ServerDef.PluginContext, []>({
+      name: 'test-observer',
+      version: '0.0.0',
+      *setup() {
+        return {
+          hooks: {
+            name: 'observer',
+            *dispatch(call, ctx, next) {
+              return yield* attempt(() => next(call, ctx))
+            },
+          },
+        }
+      },
+    }).build()
+    unwrap(
+      await run(function* () {
+        yield* storage()
+        const server = yield* createServer({ services: [todos], plugins: [Observer] })
+
+        // the client sees the VALUE, never `{ value: { ... } }`
+        const created = yield* server.call(todos, 'create', { title: 'enveloped' })
+        expect(created.title).toBe('enveloped')
+        expect((created as AnyType).value).toBeUndefined()
+
+        // and a captured failure propagates as a failure, not as a success payload
+        const boom = yield* attempt(server.call(todos, 'explode', { code: 'x.y' }))
+        expect((boom as AnyType).error).toBe('x.y')
+      }),
+    )
+  })
+
   it('deadlines: cancel aborts the handler; detach lets it finish and records the outcome', async () => {
     unwrap(
       await run(function* () {

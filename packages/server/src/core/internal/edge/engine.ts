@@ -173,7 +173,7 @@ function* inputOf(
     return undefined
   }
 
-  return yield* valueBody(request, params)
+  return yield* valueBody(request, params, meta.input)
 }
 
 interface ActionCall {
@@ -504,6 +504,10 @@ export function* decideUpgrade(state: EdgeState, request: Request): Operation<Ed
 
   const route = match.data
 
+  // the handshake's verdict IS the socket's principal: what `authorize` resolves rides into
+  // the socket ctx as `auth` — handlers never verify the token a second time
+  let principal: unknown
+
   if (route.authorize) {
     const allowed = yield* attempt(() => route.authorize!(request))
 
@@ -518,6 +522,8 @@ export function* decideUpgrade(state: EdgeState, request: Request): Operation<Ed
         }),
       }
     }
+
+    principal = allowed.value ?? undefined
   }
 
   const params = decodeParams(match.params)
@@ -535,11 +541,11 @@ export function* decideUpgrade(state: EdgeState, request: Request): Operation<Ed
         const outcome = yield* attempt(function* () {
           const ctx = yield* contextFor(
             kernel,
-            { trace, headers, signal: controller.signal, name: route.path },
+            { trace, headers, signal: controller.signal, name: route.path, auth: principal },
             state.actions,
           )
           yield* withSpan({ kernel, trace, kind: 'edge', name: `WS ${route.path}` }, () =>
-            driveSocket({ kernel, route, raw, params, headers, ctx, trace }),
+            driveSocket({ kernel, route, raw, params, headers, url, ctx, trace }),
           )
         })
         controller.abort('closed')

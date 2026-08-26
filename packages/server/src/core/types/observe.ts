@@ -78,6 +78,16 @@ export namespace ObserveDef {
     readonly data?: unknown
   }
 
+  /** A DOMAIN record (audit trails, business events): free-form fields under a logical
+   * `stream` name. Shipped by exporters (`OpenObserveExporter.use({ streams: { domain: … } })`),
+   * NOT stored by the observe db — `report(kernel, { t: 'domain', row: { stream: 'audit', … } })`. */
+  export interface DomainRow {
+    readonly stream: string
+    readonly ts?: number | undefined
+    readonly request_id?: string | null | undefined
+    readonly [field: string]: unknown
+  }
+
   /** A streamed body finished AFTER its request row went out: the final size and duration. */
   export interface RequestUpdate {
     readonly request_id: string
@@ -98,6 +108,7 @@ export namespace ObserveDef {
     | { readonly t: 'log'; readonly row: LogRow }
     | { readonly t: 'failure'; readonly row: FailureRow }
     | { readonly t: 'event'; readonly row: EventRow }
+    | { readonly t: 'domain'; readonly row: DomainRow }
 
   /** A request with everything that happened under it. */
   export interface RequestView {

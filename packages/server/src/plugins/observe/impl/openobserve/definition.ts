@@ -6,7 +6,16 @@ import type { AnyType } from 'std:shared'
 
 import pkg from '../../../../../package.json'
 
-import { ooEvent, ooFailure, ooLog, ooRequest, ooRequestUpdate, ooSpan, post } from './internal'
+import {
+  ooDomain,
+  ooEvent,
+  ooFailure,
+  ooLog,
+  ooRequest,
+  ooRequestUpdate,
+  ooSpan,
+  post,
+} from './internal'
 import type { OpenObserveDef } from './types'
 
 const KINDS: readonly OpenObserveDef.StreamKey[] = [
@@ -15,6 +24,7 @@ const KINDS: readonly OpenObserveDef.StreamKey[] = [
   'logs',
   'failures',
   'events',
+  'domain',
 ]
 
 const ZERO = { sent: 0, dropped: 0, failed: 0 }
@@ -126,6 +136,11 @@ export const OpenObserveExporter = definePlugin<
 
           case 'event': {
             sinks.get('events')?.push(ooEvent(event.row))
+            break
+          }
+
+          case 'domain': {
+            sinks.get('domain')?.push(ooDomain(event.row))
             break
           }
 

@@ -58,7 +58,18 @@ function* boot(sessionTtlMs: number) {
   yield* BunIO.use()
   yield* DbClient.use({ tables: [todosTable, openTable] })
   yield* MemoryKv.use()
-  const guarded = crud(todosTable, { auth: { read: 'user', write: 'user' } })
+  const subs: (string | null)[] = []
+  const guarded = crud(todosTable, {
+    auth: { read: 'user', write: 'user' },
+
+    // the handshake's verified principal lands as the socket ctx's `auth` — hooks see WHO
+    // subscribed without a second verification
+    *before({ op, ctx }) {
+      if (op === 'watch') {
+        subs.push((ctx.auth as AuthDef.Principal | undefined)?.sub ?? null)
+      }
+    },
+  })
   const open = crud(openTable)
   const server = yield* createServer({
     services: [guarded.service, open.service],
@@ -69,14 +80,14 @@ function* boot(sessionTtlMs: number) {
     ],
   })
   const info = yield* server.listen({ port: 0 })
-  return { server, ws: info.url!.replace('http', 'ws') }
+  return { server, ws: info.url!.replace('http', 'ws'), subs }
 }
 
 describe('resource — realtime handshake auth', () => {
   it('`read` gates the upgrade; garbage tokens never pass, valid ones do', async () => {
     unwrap(
       await run(function* () {
-        const { server, ws } = yield* boot(60_000)
+        const { server, ws, subs } = yield* boot(60_000)
         const tokens = yield* Auth.actions.login({ user: 'ada' })
 
         // guarded: no token / garbage → rejected; a valid token → open
@@ -85,6 +96,9 @@ describe('resource — realtime handshake auth', () => {
         expect(yield* until(probe(`${ws}/todos/_realtime?token=${tokens.accessToken}`))).toBe(
           'open',
         )
+
+        // the watch hook saw the handshake's principal on the socket ctx
+        expect(subs).toContain('u-ada')
 
         // open resource: anonymous is fine — but PRESENTED credentials must be valid
         expect(yield* until(probe(`${ws}/open_items/_realtime`))).toBe('open')

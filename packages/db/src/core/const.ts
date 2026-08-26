@@ -29,6 +29,10 @@ export enum FIELDS {
 /** The default keyset-pagination sort column. */
 export const DEFAULT_ORDER = FIELDS.created
 
+/** The `patch` clear sentinel: `db.patch(table, id, { field: CLEAR })` nulls an OPTIONAL column
+ * (typed, unlike `null as never`); a required column rejects it like `null`. */
+export const CLEAR: unique symbol = Symbol.for('db:clear')
+
 /** The "unversioned" row/table token: the smallest token, decodes to time 0 / origin `00000000`.
  * DDL default of `_version`, and what `db.version(table)` reports before any change. */
 export const VERSION_ZERO = '0'.repeat(TOKEN_LENGTH)

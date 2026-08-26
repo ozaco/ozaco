@@ -1,8 +1,9 @@
 import type { ServerDef } from 'server:core'
 
 export namespace OpenObserveDef {
-  /** The five kinds of rows the kernel observes, each shipped to its own stream. */
-  export type StreamKey = 'requests' | 'spans' | 'logs' | 'failures' | 'events'
+  /** The kinds of rows the kernel observes, each shipped to its own stream — `domain` carries
+   * the free-form `t: 'domain'` records (audit trails, business events). */
+  export type StreamKey = 'requests' | 'spans' | 'logs' | 'failures' | 'events' | 'domain'
 
   export interface Options {
     /** The OpenObserve base url (`http://localhost:5080`); `/api/<org>/<stream>/_json` is

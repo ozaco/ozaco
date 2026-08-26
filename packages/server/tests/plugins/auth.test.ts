@@ -1,8 +1,9 @@
 import { action, createServer, Edge, ServerErrors, service } from 'server:core'
 import type { AuthDef } from 'server:plugins'
 import { Auth, AuthErrors } from 'server:plugins'
+import type { Operation } from 'std:effect'
 import { attempt, run, sleep } from 'std:effect'
-import { unwrap } from 'std:result'
+import { isFailure, unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import { describe, expect, it } from 'bun:test'
@@ -19,11 +20,13 @@ const provider = (): AuthDef.Provider & { refreshes: Map<string, AuthDef.Refresh
     refreshes,
     *authenticate(credentials) {
       return credentials.user === 'ada' && credentials.pass === 'pw'
-        ? { sub: 'u-ada', roles: ['admin'], claims: { name: 'Ada' } }
+        ? { sub: 'u-ada', roles: ['admin'], permissions: ['agents:view'], claims: { name: 'Ada' } }
         : undefined
     },
     *loadUser(sub) {
-      return sub === 'u-ada' ? { sub, roles: ['admin'], claims: { name: 'Ada' } } : undefined
+      return sub === 'u-ada'
+        ? { sub, roles: ['admin'], permissions: ['agents:view'], claims: { name: 'Ada' } }
+        : undefined
     },
     *saveRefresh(record) {
       refreshes.set(record.jti, record)
@@ -79,6 +82,20 @@ const app = service('app', {
       return yield* Auth.actions.login(input)
     },
   ),
+})
+
+/** Nested-call fixture: `who` needs a user; the relays call it with and without `inherit`. */
+const relaySvc = service('relay', {
+  who: action.query({ output: z.string(), auth: 'user' }, function* ({ ctx }) {
+    return (ctx.auth as AuthDef.Principal).sub
+  }),
+  viaInherit: action.query({ output: z.string() }, function* ({ ctx }): Operation<string> {
+    return yield* ctx.call(relaySvc, 'who', undefined, { inherit: true })
+  }),
+  viaPlain: action.query({ output: z.string() }, function* ({ ctx }): Operation<string> {
+    const out = yield* attempt(() => ctx.call(relaySvc, 'who'))
+    return isFailure(out) ? String(out.error) : 'leaked?!'
+  }),
 })
 
 describe('auth', () => {
@@ -192,6 +209,82 @@ describe('auth', () => {
           }),
         )
         expect((expired as AnyType).causes).toContain(AuthErrors.ExpiredToken)
+      }),
+    )
+  })
+
+  it("requirements: 'authenticated' (+ deprecated 'any'), permissions and predicates", async () => {
+    const gated = service('gated', {
+      anyone: action.query({ output: z.string(), auth: 'authenticated' }, function* () {
+        return 'in'
+      }),
+      legacy: action.query({ output: z.string(), auth: 'any' }, function* () {
+        return 'in'
+      }),
+      viewer: action.query(
+        { output: z.string(), auth: { permissions: ['agents:view'] } },
+        function* () {
+          return 'seen'
+        },
+      ),
+      admin: action.query(
+        { output: z.string(), auth: { roles: ['admin'], permissions: ['agents:admin'] } },
+        function* () {
+          return 'never'
+        },
+      ),
+      custom: action.query(
+        {
+          output: z.string(),
+          auth: (principal: AuthDef.Principal) => principal.claims.name === 'Ada',
+        },
+        function* () {
+          return 'bespoke'
+        },
+      ),
+    })
+    unwrap(
+      await run(function* () {
+        yield* storage()
+        const server = yield* createServer({
+          services: [gated],
+          plugins: [Auth.use({ provider: provider(), secret: 'test-secret' })],
+        })
+        const tokens = yield* Auth.actions.login({ user: 'ada', pass: 'pw' })
+        const meta = { authorization: `Bearer ${tokens.accessToken}` }
+
+        // 'authenticated' and its deprecated alias 'any' mean the same thing
+        expect(yield* server.call(gated, 'anyone', undefined, { meta })).toBe('in')
+        expect(yield* server.call(gated, 'legacy', undefined, { meta })).toBe('in')
+        const anonymous = yield* attempt(server.call(gated, 'anyone'))
+        expect((anonymous as AnyType).error).toBe(ServerErrors.Unauthorized)
+
+        // permissions gate independently of roles
+        expect(yield* server.call(gated, 'viewer', undefined, { meta })).toBe('seen')
+        const missing = yield* attempt(server.call(gated, 'admin', undefined, { meta }))
+        expect((missing as AnyType).error).toBe(ServerErrors.Forbidden)
+        expect((missing as AnyType).causes).toContain('auth:permission')
+
+        // the predicate sees the FULL principal
+        expect(yield* server.call(gated, 'custom', undefined, { meta })).toBe('bespoke')
+      }),
+    )
+  })
+
+  it('nested calls: `inherit: true` carries the caller authorization; plain calls stay anonymous', async () => {
+    unwrap(
+      await run(function* () {
+        yield* storage()
+        const server = yield* createServer({
+          services: [relaySvc],
+          plugins: [Auth.use({ provider: provider(), secret: 'test-secret' })],
+        })
+        const tokens = yield* Auth.actions.login({ user: 'ada', pass: 'pw' })
+        const meta = { authorization: `Bearer ${tokens.accessToken}` }
+        expect(yield* server.call(relaySvc, 'viaInherit', undefined, { meta })).toBe('u-ada')
+        expect(yield* server.call(relaySvc, 'viaPlain', undefined, { meta })).toBe(
+          ServerErrors.Unauthorized,
+        )
       }),
     )
   })

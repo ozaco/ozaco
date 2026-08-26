@@ -106,6 +106,10 @@ export const ooEvent = (row: ObserveDef.EventRow): Record<string, unknown> =>
     data: row.data,
   })
 
+/** A domain record ships as-is (free-form fields under a logical `stream`), timestamped. */
+export const ooDomain = (row: ObserveDef.DomainRow): Record<string, unknown> =>
+  compact({ ...row, _timestamp: micros(row.ts ?? Date.now()) })
+
 /** POST one `_json` bulk payload (an ARRAY of records); non-2xx fails `server.unavailable`. */
 export function* post(
   target: OpenObserveDef.Target,

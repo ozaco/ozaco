@@ -128,15 +128,16 @@ export namespace ServiceDef {
     readonly protocol?: string | undefined
     readonly description?: string | undefined
 
-    /** runs before the upgrade; a failure rejects the handshake with its status. */
-    readonly authorize?: ((request: Request) => Operation<void>) | undefined
+    /** runs before the upgrade; a failure rejects the handshake with its status; what it
+     * resolves becomes the socket ctx's `auth`. */
+    readonly authorize?: ((request: Request) => Operation<unknown>) | undefined
   }
 
   export interface SocketSpec {
     readonly path: string
     readonly protocol: string | null
     readonly description: string | null
-    readonly authorize: ((request: Request) => Operation<void>) | null
+    readonly authorize: ((request: Request) => Operation<unknown>) | null
   }
 
   export interface SocketAction {

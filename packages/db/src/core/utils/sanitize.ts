@@ -75,11 +75,14 @@ const walk = function* (
   }
 
   if (op === 'in' || op === 'not-in') {
-    if (!Array.isArray(node.values) || !node.values.every(isValue)) {
+    // `value` is canonical; `values` stays accepted on the wire (older clients)
+    const list = node.value ?? node.values
+
+    if (!Array.isArray(list) || !list.every(isValue)) {
       return yield* reject(`"${op}" expects an array of scalar values`)
     }
 
-    return { op, field, values: node.values as Spec.FilterValue[] }
+    return { op, field, value: list as Spec.FilterValue[] }
   }
 
   if (op === 'like') {

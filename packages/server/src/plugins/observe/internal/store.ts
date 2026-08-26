@@ -114,6 +114,11 @@ export function* writeBatch(db: Db, batch: readonly ObserveDef.Event[]): Operati
       continue
     }
 
+    // domain records are exporter-bound (their fields are free-form) — no _ob_ table holds them
+    if (event.t === 'domain') {
+      continue
+    }
+
     const { table, row } = rowOf(event)
     const rows = grouped.get(table) ?? []
     rows.push(clean(row))

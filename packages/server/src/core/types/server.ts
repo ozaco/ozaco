@@ -67,6 +67,11 @@ export namespace ServerDef {
 
     /** extra wire metadata (strings) for the owner side. */
     readonly meta?: Readonly<Record<string, string>> | undefined
+
+    /** carry the CALLER's `authorization` header into this nested call (`ctx.call` only —
+     * intent stays visible at the call site, nothing travels silently; an explicit
+     * `meta.authorization` still wins). */
+    readonly inherit?: boolean | undefined
   }
 
   /** What follows `(service, action, …)` in a call: the input — omissible when the action

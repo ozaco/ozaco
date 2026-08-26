@@ -17,7 +17,7 @@
  *   error   failure shaping  every failure gains a `todos:<op>` cause before it leaves
  * Hooks wrap the BUILT-INS only — `extend` authors own their whole handler.
  */
-import { action, ServerErrors } from '@ozaco/server'
+import { action, report, Server, ServerErrors } from '@ozaco/server'
 import { crud } from '@ozaco/server/plugins'
 import { appendCauses, fail } from '@ozaco/std/result'
 import type { AnyType } from '@ozaco/std/shared'
@@ -33,7 +33,7 @@ const shout = (row: AnyType): AnyType =>
 
 export const todos = crud(todosTable, {
   maxLimit: 100,
-  auth: { read: 'any', write: 'user' },
+  auth: { read: 'authenticated', write: 'user' },
   actions: ['realtime', 'list', 'get', 'create', 'update', 'remove'],
 
   extend: {
@@ -97,6 +97,19 @@ export const todos = crud(todosTable, {
           'protected todo — remove [keep] from the title first',
         )
       }
+      const out = yield* next(input)
+      // a DOMAIN record: free-form audit shipped by exporters (OpenObserve `streams.domain`),
+      // never stored in the observe db — `ctx.auth` says who did it (socket or http alike)
+      yield* report(yield* Server.actions.describe(), {
+        t: 'domain',
+        row: {
+          stream: 'audit',
+          verb: 'todo.removed',
+          id: String((input as AnyType).id),
+          actor: (ctx.auth as AnyType)?.sub ?? null,
+        },
+      })
+      return out
     }
     return yield* next(input)
   },

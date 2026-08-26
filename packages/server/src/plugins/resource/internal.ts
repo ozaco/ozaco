@@ -237,9 +237,11 @@ export const hooked = <
  * The realtime handshake guard: a presented bearer (`authorization` header, or the `?token=`
  * the edge promotes) is ALWAYS verified — an expired or malformed token rejects the upgrade
  * even on an open resource — and the resource's `read` requirement gates who may subscribe.
+ * The verified principal is RESOLVED so the edge plants it as the socket ctx's `auth` (the
+ * hooks and handlers see who subscribed without verifying twice).
  */
 export const guardHandshake = (resource: ResourceDef.Crud) =>
-  function* (request: Request): Operation<void> {
+  function* (request: Request): Operation<unknown> {
     const requirement = (resource.auth.read ?? false) as AuthDef.Requirement
     const header = request.headers.get('authorization')
     const queryToken = new URL(request.url).searchParams.get('token')
@@ -265,7 +267,7 @@ export const guardHandshake = (resource: ResourceDef.Crud) =>
       return
     }
 
-    yield* Auth.actions.authorize(requirement, headers)
+    return yield* Auth.actions.authorize(requirement, headers)
   }
 
 /** One client watch on the realtime socket. */

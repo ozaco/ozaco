@@ -1,5 +1,6 @@
+import type { ServiceDef } from 'server:core'
 import type { Flow, Future, FutureFlow, Operation } from 'std:effect'
-import type { AnyType } from 'std:shared'
+import type { AnyType, StandardSchemaV1 } from 'std:shared'
 
 import type { ManifestDef } from './manifest'
 
@@ -176,6 +177,16 @@ export namespace ClientDef {
       ? I
       : unknown
     : unknown
+
+  /** The DECLARED input as the CLIENT sends it: a value schema is taken by its INPUT side —
+   * a field with a `.default()` stays OPTIONAL on the wire (the server applies the default);
+   * stream/parts declarations keep the handler's own input shape. */
+  export type DeclaredInput<A> =
+    A extends ServiceDef.Action<infer I, AnyType>
+      ? [I] extends [StandardSchemaV1]
+        ? StandardSchemaV1.InferInput<I>
+        : HandlerInput<A>
+      : HandlerInput<A>
   export type HandlerOutput<A> = A extends { handler: (call: AnyType) => Operation<infer O> }
     ? O
     : unknown
@@ -194,7 +205,7 @@ export namespace ClientDef {
       : SendStream
 
   export type InputOf<R> = ClientInput<
-    R extends Generated<infer I, AnyType> ? I : HandlerInput<ActionOf<R>>
+    R extends Generated<infer I, AnyType> ? I : DeclaredInput<ActionOf<R>>
   >
   export type OutputOf<R> = R extends Generated<AnyType, infer O> ? O : HandlerOutput<ActionOf<R>>
 

@@ -1,4 +1,4 @@
-import type { Adapter } from 'db:core'
+import type { Adapter, Spec } from 'db:core'
 import { adapterDefaults, DbAdapter } from 'db:core'
 import type { Operation } from 'std:effect'
 import { attempt, ensure, until } from 'std:effect'
@@ -12,6 +12,13 @@ import { runSqlTransaction } from '../shared/transaction'
 
 import { exec, StateRef, transactional } from './internal'
 import type { Pg } from './types'
+
+/** The advisory-lock key every ozaco migrate takes. Advisory locks are scoped to the CONNECTED
+ * database, so a constant serializes concurrent boots against one database without coupling
+ * unrelated ones. */
+const MIGRATE_LOCK = 727_270_001
+
+const sql = sqlActions({ dialect: postgresDialect, exec })
 
 /**
  * Postgres adapter over node-postgres (`pg.Pool`) — `install(PgAdapter, { url })`, then
@@ -38,7 +45,18 @@ export const PgAdapter = DbAdapter.implement<Adapter.Options, [options: Pg.Optio
   },
 }).build({
   ...adapterDefaults('pg'),
-  ...sqlActions({ dialect: postgresDialect, exec }),
+  ...sql,
+
+  // two nodes booting against ONE database race the reconcile DDL — a transaction-scoped
+  // advisory lock serializes them: the first creates, the rest see "already there" and pass
+  // (`xact` variant: auto-released at commit/rollback, no unlock bookkeeping, and lock + DDL
+  // provably share one connection)
+  *migrate(steps: readonly Spec.Step[]) {
+    yield* runSqlTransaction(transactional, function* () {
+      yield* exec(`SELECT pg_advisory_xact_lock(${MIGRATE_LOCK})`, [])
+      yield* sql.migrate(steps)
+    })
+  },
 
   *transaction(body: () => Operation<unknown>) {
     return yield* runSqlTransaction(transactional, body)

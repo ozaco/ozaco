@@ -158,7 +158,8 @@ export function* authorize(
     return yield* fail(ServerErrors.Unauthorized, 'authentication required', 'auth:missing')
   }
 
-  if (requirement === 'any') {
+  // 'any' is the deprecated alias of 'authenticated' — both mean "a verified principal"
+  if (requirement === 'authenticated' || requirement === 'any') {
     return
   }
 
@@ -170,16 +171,53 @@ export function* authorize(
     return yield* fail(ServerErrors.Forbidden, 'a service token is required', 'auth:user-token')
   }
 
-  if (Array.isArray(requirement)) {
-    const missing = requirement.filter(role => !principal.roles.includes(role))
-
-    if (missing.length > 0) {
-      return yield* fail(
-        ServerErrors.Forbidden,
-        `missing role(s): ${missing.join(', ')}`,
-        'auth:role',
-      )
+  if (typeof requirement === 'function') {
+    if (!requirement(principal)) {
+      return yield* fail(ServerErrors.Forbidden, 'auth predicate rejected', 'auth:predicate')
     }
+
+    return
+  }
+
+  if (Array.isArray(requirement)) {
+    return yield* requireRoles(principal, requirement as readonly string[])
+  }
+
+  if (typeof requirement === 'object') {
+    const shaped = requirement as {
+      readonly roles?: readonly string[]
+      readonly permissions?: readonly string[]
+    }
+
+    if (shaped.roles) {
+      yield* requireRoles(principal, shaped.roles)
+    }
+
+    if (shaped.permissions) {
+      const missing = shaped.permissions.filter(
+        permission => !principal.permissions.includes(permission),
+      )
+
+      if (missing.length > 0) {
+        return yield* fail(
+          ServerErrors.Forbidden,
+          `missing permission(s): ${missing.join(', ')}`,
+          'auth:permission',
+        )
+      }
+    }
+  }
+}
+
+function* requireRoles(principal: AuthDef.Principal, roles: readonly string[]): Operation<void> {
+  const missing = roles.filter(role => !principal.roles.includes(role))
+
+  if (missing.length > 0) {
+    return yield* fail(
+      ServerErrors.Forbidden,
+      `missing role(s): ${missing.join(', ')}`,
+      'auth:role',
+    )
   }
 }
 
@@ -191,9 +229,15 @@ export const options = {
   auth: z.union([
     z.literal('user'),
     z.literal('service'),
+    z.literal('authenticated'),
     z.literal('any'),
     z.literal(false),
     z.array(z.string()),
+    z.strictObject({
+      roles: z.array(z.string()).optional(),
+      permissions: z.array(z.string()).optional(),
+    }),
+    z.custom<(principal: unknown) => boolean>(value => typeof value === 'function'),
   ]),
 }
 

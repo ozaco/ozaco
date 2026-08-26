@@ -3,7 +3,7 @@ import { DbClient, Kv } from 'db:core'
 import type { Operation } from 'std:effect'
 import { attempt, ensure, fork, race, sleep, withResolvers } from 'std:effect'
 import type { Result } from 'std:result'
-import { appendCauses, fail, isFailure } from 'std:result'
+import { appendCauses, fail, isFailure, isResult } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import { CtxRef } from '../context'
@@ -35,9 +35,12 @@ interface ContextInput {
   readonly call: ServerDef.Call
   readonly meta: ServiceDef.Meta
   readonly actions: Pick<ServerDef.Actions, 'call' | 'emit'>
+
+  /** a principal decided BEFORE the dispatch (socket handshakes) — lands as `ctx.auth`. */
+  readonly auth?: unknown
 }
 
-function* contextOf({ kernel, call, meta, actions }: ContextInput): Operation<ServerDef.Ctx> {
+function* contextOf({ kernel, call, meta, actions, auth }: ContextInput): Operation<ServerDef.Ctx> {
   const db =
     (yield* DbClient.context.get()) ??
     missing('the database', 'install DbClient before createServer (or pass it as a plugin)')
@@ -70,11 +73,26 @@ function* contextOf({ kernel, call, meta, actions }: ContextInput): Operation<Se
     meta,
     db: db as AnyType,
     cache: cache as AnyType,
-    auth: undefined,
+    auth,
     log: { debug: log('debug'), info: log('info'), warn: log('warn'), error: log('error') },
     signal: call.signal,
     headers: call.headers,
-    call: actions.call,
+
+    // `inherit: true` carries THIS dispatch's authorization into the nested call — the intent
+    // stays visible at the call site; an explicit `meta.authorization` still wins
+    call: ((service: AnyType, name: AnyType, ...rest: [AnyType?, ServerDef.CallOptions?]) => {
+      const [input, options] = rest
+      const authorization = call.headers['authorization']
+
+      if (options?.inherit !== true || !authorization) {
+        return actions.call(service, name, input, options)
+      }
+
+      return actions.call(service, name, input, {
+        ...options,
+        meta: { authorization, ...options.meta },
+      })
+    }) as ServerDef.Ctx['call'],
     emit: actions.emit,
     *span(name, body, attrs) {
       return yield* withSpan(
@@ -99,7 +117,12 @@ export function* materialize(value: unknown): Operation<unknown> {
  * surface, bound to the given trace. */
 export function* contextFor(
   kernel: ServerDef.Context,
-  call: Pick<ServerDef.Call, 'trace' | 'headers' | 'signal'> & { readonly name: string },
+  call: Pick<ServerDef.Call, 'trace' | 'headers' | 'signal'> & {
+    readonly name: string
+
+    /** the handshake's verified principal (socket routes) — lands as `ctx.auth`. */
+    readonly auth?: unknown
+  },
   actions: Pick<ServerDef.Actions, 'call' | 'emit'>,
 ): Operation<ServerDef.Ctx> {
   const meta: ServiceDef.Meta = {
@@ -134,6 +157,7 @@ export function* contextFor(
     },
     meta,
     actions,
+    auth: call.auth,
   })
 }
 
@@ -235,7 +259,10 @@ const invoke = (kernel: ServerDef.Context, def: ServiceDef.Action) =>
     return result
   }
 
-/** Wrap the handler with every plugin's `dispatch` hook, outermost = first installed. */
+/** Wrap the handler with every plugin's `dispatch` hook, outermost = first installed. Every
+ * hook's return is NORMALIZED: a plugin observing the chain with `attempt(() => next(...))`
+ * returns a Result — the failure re-raises, the success unwraps — so the envelope behaves the
+ * same on every carrier and never serializes into a reply as `{ value: ... }`. */
 const chainOf = (kernel: ServerDef.Context, def: ServiceDef.Action): ServerDef.Dispatch => {
   let next: ServerDef.Dispatch = invoke(kernel, def)
 
@@ -244,7 +271,20 @@ const chainOf = (kernel: ServerDef.Context, def: ServiceDef.Action): ServerDef.D
 
     if (around) {
       const inner = next
-      next = (call, ctx) => around(call, ctx, inner)
+
+      next = function* (call, ctx) {
+        const outcome = yield* around(call, ctx, inner)
+
+        if (isFailure(outcome as AnyType)) {
+          return yield* outcome as Result.Failure<unknown>
+        }
+
+        if (isResult(outcome as AnyType)) {
+          return (outcome as Result.Success<unknown>).value
+        }
+
+        return outcome
+      }
     }
   }
 

@@ -40,10 +40,15 @@ export const infoOf = (state: AppDef.State): AppDef.Info => ({
   ready: state.ready,
 })
 
-/** The services `start()` waits for: the option, or every declared service not hosted here. */
+/** The services `start()` waits for. Default by role: a `service` node does its own work and
+ * waits for NOBODY (readiness = its own services are up — a sequential rollout's first pod
+ * must be able to start); gateway/monolith wait for everything they would forward to (a call
+ * they cannot forward must be a 503, not a surprise). */
 const dependsOnOf = (state: AppDef.State): readonly string[] =>
   state.options.dependsOn ??
-  state.options.services.map(def => def.name).filter(name => !state.hosted.includes(name))
+  (state.role === 'service'
+    ? []
+    : state.options.services.map(def => def.name).filter(name => !state.hosted.includes(name)))
 
 /** Every declared service with its members (this node's own included). */
 export function* membersOf(

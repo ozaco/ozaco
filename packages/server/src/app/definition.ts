@@ -16,6 +16,15 @@ const AppImpl = definePlugin<AppDef.State, [options: AppDef.Options]>({
 
   *setup(options) {
     const role = roleOf(options)
+
+    // an explicit empty `hosted` on a non-gateway is a silent trap: the node hosts nothing,
+    // then (by the dependsOn default) waits for its OWN services and dies at start
+    if (options.hosted !== undefined && options.hosted.length === 0 && role !== 'gateway') {
+      return yield* fail(
+        ServerErrors.Configuration,
+        `hosted: [] hosts nothing — omit the field to host every declared service, or use role: 'gateway'`,
+      )
+    }
     const hosted = hostedOf(options, role)
     if (role !== 'monolith' && !options.carrier) {
       return yield* fail(

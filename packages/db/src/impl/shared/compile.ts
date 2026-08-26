@@ -48,13 +48,13 @@ function* filterSql(builder: Sql.Builder, filter: Spec.Filter): Operation<string
     }
     case 'in':
     case 'not-in': {
-      if (filter.values.length === 0) {
+      if (filter.value.length === 0) {
         return filter.op === 'in' ? '1 = 0' : '1 = 1'
       }
 
       const placeholders: string[] = []
 
-      for (const value of filter.values) {
+      for (const value of filter.value) {
         placeholders.push(yield* bind(builder, filter.field, value))
       }
 

@@ -21,7 +21,8 @@ const echo = service('echo', {
   room: action.socket(
     { protocol: 'chat', description: 'echoes every frame back, uppercased' },
     function* (socket) {
-      yield* socket.send({ t: 'hello' })
+      // the upgrade url travels onto the socket — query params included
+      yield* socket.send({ t: 'hello', who: socket.url.searchParams.get('who') })
       const messages = yield* socket.messages
 
       for (;;) {
@@ -56,7 +57,7 @@ describe('action.socket', () => {
         expect('room' in (server.api.echo as Record<string, unknown>)).toBe(false)
 
         // it talks
-        const ws = new WebSocket(`${info.url!.replace('http', 'ws')}/echo/room`)
+        const ws = new WebSocket(`${info.url!.replace('http', 'ws')}/echo/room?who=ada`)
         const frames: string[] = []
 
         yield* until(
@@ -77,7 +78,7 @@ describe('action.socket', () => {
           }),
         )
 
-        expect(JSON.parse(frames[0]!)).toEqual({ t: 'hello' })
+        expect(JSON.parse(frames[0]!)).toEqual({ t: 'hello', who: 'ada' })
         expect(JSON.parse(frames[1]!)).toEqual({ t: 'echo', text: 'SELAM' })
         yield* server.stop()
       }),

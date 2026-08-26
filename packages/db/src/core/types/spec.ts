@@ -56,7 +56,10 @@ export namespace Spec {
     | {
         readonly op: 'in' | 'not-in'
         readonly field: string
-        readonly values: readonly FilterValue[]
+
+        /** `value` everywhere: array ops take an array value (the wire also accepts a legacy
+         * `values` key — `sanitizeFilter` normalizes it). */
+        readonly value: readonly FilterValue[]
       }
     | {
         readonly op: 'like'

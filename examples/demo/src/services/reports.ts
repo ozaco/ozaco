@@ -10,6 +10,7 @@ import { fail } from '@ozaco/std/result'
 import { z } from 'zod'
 
 import { media } from './media'
+import { todos } from './todos'
 
 let flakyCalls = 0
 let computed = 0
@@ -130,12 +131,12 @@ export const reports = service(
         output: z.object({ todos: z.number(), uploads: z.number() }),
         description: 'Composes other actions through ctx.call (local or over the carrier)',
       },
-      // typed end to end from the definitions — the SELF-call included (the return annotation
-      // breaks the inference cycle; the body is checked after `reports` has its type)
+      // typed end to end from the definitions. `inherit: true` carries THIS caller's bearer
+      // into the guarded todos.list — without it the nested call would be anonymous and 401
       function* ({ ctx }): Operation<{ todos: number; uploads: number }> {
-        const summary = yield* ctx.call(reports, 'summary', {})
+        const page = yield* ctx.call(todos.service, 'list', {}, { inherit: true })
         const uploads = yield* ctx.call(media, 'list')
-        return { todos: summary.total, uploads: uploads.length }
+        return { todos: page.data.length, uploads: uploads.length }
       },
     ),
   },

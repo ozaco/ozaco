@@ -3,6 +3,7 @@ import { fail } from 'std:result'
 import type { StandardSchemaV1 } from 'std:shared'
 import { isPromise } from 'std:shared'
 
+import { CLEAR } from '../const'
 import { DbErrors } from '../errors'
 import type { Helpers } from '../types/helpers'
 import type { Schema } from '../types/schema'
@@ -153,8 +154,9 @@ export function* prepareInsert(def: Schema.Table, value: unknown) {
   return def.validate ? yield* runValidator(def.validate, def.name, data) : data
 }
 
-/** Validate a patch: unknown keys stripped, present values kind-checked, `null` only allowed on
- * optional columns. The table validator is NOT applied (it validates whole documents). */
+/** Validate a patch: unknown keys stripped, present values kind-checked, `null` (and the
+ * `CLEAR` sentinel, which is the typed way to null a field) only allowed on optional columns.
+ * The table validator is NOT applied (it validates whole documents). */
 export function* preparePatch(def: Schema.Table, value: unknown) {
   const input = objectOf(value)
 
@@ -162,7 +164,11 @@ export function* preparePatch(def: Schema.Table, value: unknown) {
     return yield* fail(DbErrors.Validation, `patch of "${def.name}" expects an object`)
   }
 
-  const { data, problems } = normalize(def, input, false)
+  const cleared = Object.fromEntries(
+    Object.entries(input).map(([key, entry]) => [key, entry === CLEAR ? null : entry]),
+  )
+
+  const { data, problems } = normalize(def, cleared, false)
 
   if (problems.length > 0) {
     return yield* fail(DbErrors.Validation, `invalid patch of "${def.name}"`, ...problems)

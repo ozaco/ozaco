@@ -25,8 +25,9 @@ export namespace AppDef {
     readonly listen?: ServerDef.ListenOptions | undefined
 
     /** Services that must have a live member before `start()` resolves (health reports
-     * `ready: false` / 503 meanwhile). Default: every declared service this node does not host.
-     * `[]` = start at once. */
+     * `ready: false` / 503 meanwhile). Default by role: `service` nodes wait for nobody (`[]`
+     * — they start at once, so a sequential rollout's first pod comes up); gateway/monolith
+     * wait for every declared service they do not host. `[]` = start at once. */
     readonly dependsOn?: readonly string[] | undefined
 
     /** How long `start()` waits for `dependsOn`; past it `start()` fails `server.unavailable`.

@@ -1,6 +1,8 @@
 import type { Flow, Operation } from 'std:effect'
 import type { Plugin } from 'std:plugin'
 
+import type { CLEAR } from '../const'
+
 import type { Adapter } from './adapter'
 import type { Bus } from './bus'
 import type { Change } from './change'
@@ -27,6 +29,12 @@ export namespace Database {
   }
     ? TInsert
     : unknown
+
+  /** What `patch` takes: any subset of the insert shape, and `CLEAR` to null an optional
+   * column without fighting the types. */
+  export type PatchOf<TSchema, TName extends TableName<TSchema>> = {
+    readonly [K in keyof InsertOf<TSchema, TName>]?: InsertOf<TSchema, TName>[K] | typeof CLEAR
+  }
 
   /** A lazily-built, immutable query over one table. Chain refiners, then call a terminal — or
    * `watch()` it to get a live-updating snapshot flow. */
@@ -133,7 +141,7 @@ export namespace Database {
     patch<TName extends TableName<TSchema>>(
       table: TName,
       id: string,
-      value: Partial<InsertOf<TSchema, TName>>,
+      value: PatchOf<TSchema, TName>,
       options?: WriteOptions,
     ): Operation<DocOf<TSchema, TName> | null>
 

@@ -113,12 +113,12 @@ export const matches = (doc: Spec.Doc, filter: Spec.Filter): boolean => {
     }
 
     case 'in': {
-      return filter.values.some(value => compareValues(doc[filter.field], value) === 0)
+      return filter.value.some(value => compareValues(doc[filter.field], value) === 0)
     }
 
     case 'not-in': {
       const value = doc[filter.field]
-      return !isNil(value) && !filter.values.some(entry => compareValues(value, entry) === 0)
+      return !isNil(value) && !filter.value.some(entry => compareValues(value, entry) === 0)
     }
 
     case 'like': {
