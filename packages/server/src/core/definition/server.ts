@@ -1,17 +1,58 @@
+import type { Operation } from 'std:effect'
 import { createEvent } from 'std:event'
 import { IO } from 'std:io'
+import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import pkg from '../../../package.json'
-import { DEFAULT_TIMEOUT_MS, serviceIdOf } from '../const'
+import { DEFAULT_TIMEOUT_MS, SERVICE, serviceIdOf } from '../const'
 import { TraceRef } from '../context'
+import { ServerErrors } from '../errors'
 import { callLocal, runDispatch } from '../internal/dispatch'
 import { actionsOf, asRequest, callRemote, carrierOf, traceFor } from '../internal/kernel'
 import { buildRegistry, manifestOf } from '../internal/registry'
 import type { ServerDef } from '../types/server'
+import type { ServiceDef } from '../types/service'
 import { childTrace, report, rootTrace, toWire, withSpan } from '../utils/trace'
 
 import { Server } from './protocol'
+
+/** One call, TraceRef already decided: local when hosted here, over the carrier otherwise. */
+function* performCall(
+  kernel: ServerDef.Context,
+  target: { readonly service: string; readonly action: string },
+  rest: readonly [unknown?, ServerDef.CallOptions?],
+): Operation<unknown> {
+  const [input, options] = rest
+  const trace = yield* traceFor(kernel, target.service, target.action)
+  const timeoutMs = options?.timeoutMs ?? kernel.timeoutMs
+
+  if (kernel.hosted.has(target.service)) {
+    return yield* callLocal({
+      kernel,
+      trace,
+      service: target.service,
+      action: target.action,
+      input,
+      headers: options?.meta ?? {},
+      timeoutMs,
+      idempotencyKey: options?.idempotencyKey,
+      transport: 'local',
+      actions: actionsOf(kernel),
+    })
+  }
+
+  // remote: the carrier finds whoever serves it
+  return yield* callRemote(kernel, {
+    trace,
+    service: target.service,
+    action: target.action,
+    input,
+    deadline: Date.now() + timeoutMs,
+    idempotencyKey: options?.idempotencyKey,
+    meta: options?.meta,
+  })
+}
 
 /** The kernel: one per scope, installed FIRST by {@link createServer}. */
 const ServerImpl = Server.implement<ServerDef.Context, [options: ServerDef.Options]>({
@@ -76,44 +117,27 @@ export const ServerClient: ServerDef.Client = ServerImpl.build({
     return yield* runDispatch(kernel, call, actionsOf(kernel))
   },
 
-  *call(target, input, options) {
+  *call(service: ServiceDef.Service, action: string, ...rest: [unknown?, ServerDef.CallOptions?]) {
+    if (!service || (service as AnyType)._t !== SERVICE) {
+      return yield* fail(
+        ServerErrors.Configuration,
+        `call takes the service DEFINITION plus the action name — ctx.call(reports, 'summary', input)`,
+      )
+    }
     const kernel = yield* Server.context.expect()
+    const target = { service: service.name, action }
     const isRoot = (yield* TraceRef.get()) === undefined
-    const trace = yield* traceFor(kernel, target.service, target.action)
-    const timeoutMs = options?.timeoutMs ?? kernel.timeoutMs
     if (isRoot) {
       // a call from outside any dispatch is a request of its own (origin: internal)
-      return yield* asRequest({
+      const trace = yield* traceFor(kernel, target.service, target.action)
+      return (yield* asRequest({
         kernel,
         trace,
         target,
-        body: () => ServerClient.actions.call(target, input, options),
-      })
-    }
-    if (kernel.hosted.has(target.service)) {
-      return (yield* callLocal({
-        kernel,
-        trace,
-        service: target.service,
-        action: target.action,
-        input,
-        headers: options?.meta ?? {},
-        timeoutMs,
-        idempotencyKey: options?.idempotencyKey,
-        transport: 'local',
-        actions: actionsOf(kernel),
+        body: () => performCall(kernel, target, rest),
       })) as AnyType
     }
-    // remote: the carrier finds whoever serves it
-    return (yield* callRemote(kernel, {
-      trace,
-      service: target.service,
-      action: target.action,
-      input,
-      deadline: Date.now() + timeoutMs,
-      idempotencyKey: options?.idempotencyKey,
-      meta: options?.meta,
-    })) as AnyType
+    return (yield* performCall(kernel, target, rest)) as AnyType
   },
 
   *emit(name, payload) {

@@ -4,9 +4,12 @@
  * singleflight, a rate limit, a per-action timeout with a fallback, and a nested `ctx.call`.
  */
 import { action, service } from '@ozaco/server'
+import type { Operation } from '@ozaco/std/effect'
 import { sleep } from '@ozaco/std/effect'
 import { fail } from '@ozaco/std/result'
 import { z } from 'zod'
+
+import { media } from './media'
 
 let flakyCalls = 0
 let computed = 0
@@ -127,14 +130,11 @@ export const reports = service(
         output: z.object({ todos: z.number(), uploads: z.number() }),
         description: 'Composes other actions through ctx.call (local or over the carrier)',
       },
-      function* ({ ctx }) {
-        const summary = (yield* ctx.call({ service: 'reports', action: 'summary' }, {})) as {
-          total: number
-        }
-        const uploads = (yield* ctx.call(
-          { service: 'media', action: 'list' },
-          undefined,
-        )) as unknown[]
+      // typed end to end from the definitions — the SELF-call included (the return annotation
+      // breaks the inference cycle; the body is checked after `reports` has its type)
+      function* ({ ctx }): Operation<{ todos: number; uploads: number }> {
+        const summary = yield* ctx.call(reports, 'summary', {})
+        const uploads = yield* ctx.call(media, 'list')
         return { todos: summary.total, uploads: uploads.length }
       },
     ),

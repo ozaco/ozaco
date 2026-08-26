@@ -105,6 +105,37 @@ export function* walk(url: string, report: (step: Step) => void = () => {}): Ope
     })
   })
 
+  // --- crud hooks: before trims, after projects, around guards, error tags ---------------
+  const padded = yield* client.todos.create({ title: '  hooked  ', priority: 'high' })
+  const shouted = yield* client.todos.get({ id: padded._id })
+  const guarded = yield* client.todos.create({ title: '[keep] forever' })
+  const denied = yield* attempt(client.todos.remove({ id: guarded._id }))
+  const ghost = yield* attempt(client.todos.get({ id: 'missing' }))
+  // releasing the guard makes the row removable again (the walk nets zero rows)
+  yield* client.todos.update({ id: guarded._id, title: 'released' })
+  yield* client.todos.remove({ id: guarded._id })
+  yield* client.todos.remove({ id: padded._id })
+
+  note('crud hooks', {
+    trimmed: padded.title,
+    shouted: shouted.title,
+    removeDenied: isFailure(denied) ? denied.error : 'removed?!',
+    errorTagged: isFailure(ghost) ? ghost.causes.includes('todos:get') : 'found?!',
+  })
+
+  // --- crud actions + extend: a custom action on the resource, `replace` switched off --------
+  const stats = yield* client.todos.stats()
+  const noReplace = yield* attempt(client.$call('todos.replace', { id: 'x', title: 'x' }))
+
+  note('crud extend', {
+    stats,
+    replaceDisabled: isFailure(noReplace) ? noReplace.error : 'accepted?!',
+  })
+
+  // --- crud schema: the definition-time hook tightened the create input ------------------
+  const short = yield* attempt(client.todos.create({ title: 'no' }))
+  note('crud schema', { rejected: isFailure(short) ? short.error : 'accepted?!' })
+
   // --- streams: ndjson / sse / text / bytes ----------------------------------------------
   const ticks = yield* drain(yield* client.feed.ticks({ n: 3, everyMs: 5 }))
   const events = yield* drain(yield* client.feed.events({ n: 2, everyMs: 5 }))

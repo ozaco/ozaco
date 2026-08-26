@@ -172,10 +172,17 @@ export namespace ServiceDef {
 
   export type ActionKey<S extends Service> = keyof S['actions'] & string
 
+  /** The CALLABLE action keys of a service (sockets are not callable) — what `ctx.call` takes
+   * next to the service definition. */
+  export type CallableKey<S extends Service> = {
+    [K in keyof S['actions']]: S['actions'][K] extends SocketAction ? never : K
+  }[keyof S['actions']] &
+    string
+
   export type InputOf<A> = A extends Action<infer I, AnyType> ? Params<I> : never
   export type OutputOf<A> = A extends Action<AnyType, infer O> ? Returns<O> : never
 
-  /** A typed pointer to one action of one service: `api.todos.list`. */
+  /** A typed pointer to one action of one service (what the CLIENT api map carries). */
   export interface Ref<A extends Action = Action> {
     readonly service: string
     readonly action: string

@@ -69,6 +69,13 @@ export namespace ServerDef {
     readonly meta?: Readonly<Record<string, string>> | undefined
   }
 
+  /** What follows `(service, action, …)` in a call: the input — omissible when the action
+   * takes none — and the per-call options. */
+  export type CallArgs<A> =
+    ServiceDef.InputOf<A> extends undefined
+      ? [input?: undefined, options?: CallOptions]
+      : [input: ServiceDef.InputOf<A>, options?: CallOptions]
+
   /** The structured logger a handler writes with — every line lands in the observe store
    * bound to the current request/span. */
 
@@ -104,13 +111,15 @@ export namespace ServerDef {
     readonly headers: Readonly<Record<string, string>>
 
     /** Dispatch another action — local when the service is hosted here, over the carrier
-     * otherwise. Plugins, validation and tracing apply. */
+     * otherwise. Plugins, validation and tracing apply. Typed end to end from the service
+     * DEFINITION: `ctx.call(reports, 'summary', input)` — the action key, the input and the
+     * resolved output all come from it. */
 
-    call<A extends ServiceDef.Action>(
-      ref: ServiceDef.Ref<A>,
-      input: ServiceDef.InputOf<A>,
-      options?: CallOptions,
-    ): Operation<ServiceDef.OutputOf<A>>
+    call<S extends ServiceDef.Service, K extends ServiceDef.CallableKey<S>>(
+      service: S,
+      action: K,
+      ...args: CallArgs<S['actions'][K]>
+    ): Operation<ServiceDef.OutputOf<S['actions'][K]>>
 
     /** Broadcast an event to every node (at-most-once). */
     emit(name: string, payload: unknown): Operation<void>
@@ -220,12 +229,13 @@ export namespace ServerDef {
      * travels as a Result; the plugin runtime unwraps it, so callers `attempt()` it. */
     dispatch(call: Call): Operation<unknown>
 
-    /** Dispatch by reference from outside a handler (tests, scripts): local or over the carrier. */
-    call<A extends ServiceDef.Action>(
-      ref: ServiceDef.Ref<A>,
-      input: ServiceDef.InputOf<A>,
-      options?: CallOptions,
-    ): Operation<ServiceDef.OutputOf<A>>
+    /** Dispatch by service definition from outside a handler (tests, scripts): local or over
+     * the carrier — same typed shape as `ctx.call`. */
+    call<S extends ServiceDef.Service, K extends ServiceDef.CallableKey<S>>(
+      service: S,
+      action: K,
+      ...args: CallArgs<S['actions'][K]>
+    ): Operation<ServiceDef.OutputOf<S['actions'][K]>>
     emit(name: string, payload: unknown): Operation<void>
 
     /** Events arriving from every node (own emits included). */

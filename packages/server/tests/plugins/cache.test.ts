@@ -49,26 +49,25 @@ describe('cache', () => {
           plugins: [ObservePlugin.use({ batch: { ms: 5 } }), Cache],
         })
         yield* server.listen()
-        const api = server.api.c
-        expect(yield* server.call(api.get, { id: 'a' })).toEqual({ id: 'a', n: 1 })
-        expect(yield* server.call(api.get, { id: 'a' })).toEqual({ id: 'a', n: 1 })
-        expect(yield* server.call(api.get, { id: 'b' })).toEqual({ id: 'b', n: 2 })
+        expect(yield* server.call(svc, 'get', { id: 'a' })).toEqual({ id: 'a', n: 1 })
+        expect(yield* server.call(svc, 'get', { id: 'a' })).toEqual({ id: 'a', n: 1 })
+        expect(yield* server.call(svc, 'get', { id: 'b' })).toEqual({ id: 'b', n: 2 })
         expect(computed).toBe(2)
         // the store holds the entries under the cache prefix
         expect((yield* Kv.actions.keys('cache:')).keys.length).toBe(2)
 
         // a mutation with `invalidate` drops the tag
-        yield* server.call(api.bump, undefined as never)
-        expect(yield* server.call(api.get, { id: 'a' })).toEqual({ id: 'a', n: 3 })
+        yield* server.call(svc, 'bump')
+        expect(yield* server.call(svc, 'get', { id: 'a' })).toEqual({ id: 'a', n: 3 })
 
         // a db write to the tagged table invalidates too (via the change feed)
-        yield* server.call(api.write, { title: 'x' })
+        yield* server.call(svc, 'write', { title: 'x' })
         yield* sleep(30)
-        expect(yield* server.call(api.get, { id: 'a' })).toEqual({ id: 'a', n: 4 })
+        expect(yield* server.call(svc, 'get', { id: 'a' })).toEqual({ id: 'a', n: 4 })
 
         // vary on auth only: the same user shares one entry
-        expect(yield* server.call(api.mine, undefined as never)).toBe(5)
-        expect(yield* server.call(api.mine, undefined as never)).toBe(5)
+        expect(yield* server.call(svc, 'mine')).toBe(5)
+        expect(yield* server.call(svc, 'mine')).toBe(5)
 
         // cache spans say hit/miss
         yield* sleep(30)

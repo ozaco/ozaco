@@ -70,7 +70,7 @@ await main(function* () {
   yield* node(
     {
       ROLE: 'service',
-      SERVICE: 'todo-stats,feed,reports,live,rtc,cluster',
+      SERVICE: 'feed,reports,live,rtc,cluster',
       INSTANCE: 'api-2',
       OBSERVE: 'forward',
       PORT: '0',

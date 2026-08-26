@@ -45,8 +45,8 @@ describe('observe/otlp', () => {
           ],
         })
         yield* server.listen()
-        yield* server.call(server.api.todos.create, { title: 'traced' })
-        yield* attempt(server.call(server.api.todos.explode, { code: 'x.y' }))
+        yield* server.call(todos, 'create', { title: 'traced' })
+        yield* attempt(server.call(todos, 'explode', { code: 'x.y' }))
         yield* sleep(80)
 
         const traces = received.filter(entry => entry.url.endsWith('/v1/traces'))
@@ -126,7 +126,7 @@ describe('observe/otlp', () => {
         // a collector outage never reaches the caller
         failing = true
         const sent = received.length
-        const made = yield* server.call(server.api.todos.create, { title: 'unsent' })
+        const made = yield* server.call(todos, 'create', { title: 'unsent' })
         expect(made.title).toBe('unsent')
         yield* sleep(80)
         expect(received.length).toBe(sent)

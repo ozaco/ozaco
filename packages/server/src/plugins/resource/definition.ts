@@ -33,6 +33,11 @@ export const Resource = definePlugin<ServerDef.PluginContext, [options: Resource
               return
             }
             for (const resource of options.resources) {
+              // `actions` without 'realtime' switches the socket off for this resource
+              if (!resource.actions.includes('realtime')) {
+                continue
+              }
+
               yield* edge.actions.socket({
                 path: `/${resource.service.name}${suffix}`,
                 handler: realtime(resource),

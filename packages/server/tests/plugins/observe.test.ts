@@ -77,9 +77,9 @@ describe('observe — what happened is a db row', () => {
           services: [todos],
           plugins: [ObservePlugin.use({ batch: { ms: 10 } })],
         })
-        yield* server.call(server.api.todos.create, { title: 'observed' })
-        yield* attempt(server.call(server.api.todos.explode, { code: 'todo.kaput' }))
-        yield* server.call(server.api.todos.nested, { title: 'deep' })
+        yield* server.call(todos, 'create', { title: 'observed' })
+        yield* attempt(server.call(todos, 'explode', { code: 'todo.kaput' }))
+        yield* server.call(todos, 'nested', { title: 'deep' })
 
         const page = yield* Observe.actions.query({})
         expect(page.requests).toHaveLength(3)
@@ -154,8 +154,8 @@ describe('observe — what happened is a db row', () => {
           return step.value.map(row => row.action)
         })
         yield* sleep(30)
-        yield* server.call(server.api.todos.create, { title: 'fine' })
-        yield* attempt(server.call(server.api.todos.explode, { code: 'x' }))
+        yield* server.call(todos, 'create', { title: 'fine' })
+        yield* attempt(server.call(todos, 'explode', { code: 'x' }))
         expect(yield* seen).toEqual(['explode'])
 
         expect((yield* Observe.actions.query()).requests).toHaveLength(2)
@@ -182,7 +182,7 @@ describe('observe — what happened is a db row', () => {
               }),
             ],
           })
-          yield* server.call(server.api.todos.create, { title: 'elsewhere' })
+          yield* server.call(todos, 'create', { title: 'elsewhere' })
           expect((yield* Observe.actions.query()).requests).toHaveLength(1)
           // the app db never saw an observe table
           const tables = yield* DbAdapter.actions.tables()

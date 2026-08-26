@@ -70,21 +70,15 @@ export const todos = service('todos', {
   ),
   nested: action.query(
     { input: z.object({ title: z.string() }), output: Todo },
-    function* ({ input, ctx }) {
-      const created = (yield* ctx.call(api.todos.create, { title: input.title })) as Todo
+    // a SELF-call: the service definition is its own typed reference. The return annotation
+    // breaks the inference cycle (the body is then checked AFTER `todos` has its type).
+    function* ({ input, ctx }): Operation<Todo> {
+      const created = yield* ctx.call(todos, 'create', { title: input.title })
       yield* ctx.emit('todo.created', created)
       return created
     },
   ),
 })
-
-/** The typed api the handlers above use (a forward reference `createServer` also builds). */
-export const api = {
-  todos: {
-    create: { service: 'todos', action: 'create' } as const,
-    list: { service: 'todos', action: 'list' } as const,
-  },
-} as const
 
 /** The storage every kernel test needs: memory db (with the todos table), memory kv, bun io. */
 export function* storage(db?: { replayWindowMs?: number }): Operation<void> {

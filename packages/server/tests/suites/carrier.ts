@@ -80,12 +80,15 @@ const math = service('math', {
 })
 const seen: string[] = []
 
+/** A service NOBODY registers — calls to it must fail fast, not hang. */
+const ghost = service('ghost', { x: action.query({}, function* () {}) })
+
 /** The local side: a `front` service that calls `math` over the carrier. */
 const front = service('front', {
   sum: action.query(
     { input: z.object({ a: z.number(), b: z.number() }), output: z.number() },
     function* ({ input, ctx }) {
-      return (yield* ctx.call({ service: 'math', action: 'add' } as AnyType, input)) as number
+      return yield* ctx.call(math, 'add', input)
     },
   ),
 })
@@ -125,37 +128,26 @@ export const runCarrierSuite = (target: CarrierTarget): void => {
               timeoutMs: 2000,
             })
             yield* sleep(100)
-            const mathApi = {
-              add: { service: 'math', action: 'add' },
-              fail: { service: 'math', action: 'fail' },
-              slow: { service: 'math', action: 'slow' },
-              count: { service: 'math', action: 'count' },
-              size: { service: 'math', action: 'size' },
-              announce: { service: 'math', action: 'announce' },
-            } as AnyType
-
             // rpc — directly and through a local action
-            expect(yield* server.call(mathApi.add, { a: 2, b: 3 })).toBe(5)
-            expect(yield* server.call(server.api.front.sum, { a: 10, b: 5 })).toBe(15)
+            expect(yield* server.call(math, 'add', { a: 2, b: 3 })).toBe(5)
+            expect(yield* server.call(front, 'sum', { a: 10, b: 5 })).toBe(15)
 
             // a remote failure keeps its tag, message and causes
-            const failed = yield* attempt(server.call(mathApi.fail, { tag: 'math.custom' }))
+            const failed = yield* attempt(server.call(math, 'fail', { tag: 'math.custom' }))
             expect((failed as AnyType).error).toBe('math.custom')
             expect((failed as AnyType).message).toBe('remote math.custom')
             expect((failed as AnyType).causes).toContain('from:math')
             // validation happens on the owner side too
-            const invalid = yield* attempt(server.call(mathApi.add, { a: 'x' } as AnyType))
+            const invalid = yield* attempt(server.call(math, 'add', { a: 'x' } as AnyType))
             expect((invalid as AnyType).error).toBe(ServerErrors.Validation)
             // nobody serves it
-            const nobody = yield* attempt(
-              server.call({ service: 'ghost', action: 'x' } as AnyType, {}, { timeoutMs: 500 }),
-            )
+            const nobody = yield* attempt(server.call(ghost, 'x', undefined, { timeoutMs: 500 }))
             expect([ServerErrors.Unavailable, ServerErrors.TimeoutPending]).toContain(
               (nobody as AnyType).error,
             )
 
             // output stream across the wire
-            const out = yield* server.call(mathApi.count, { n: 4 })
+            const out = yield* server.call(math, 'count', { n: 4 })
             const values: number[] = []
             const flow = yield* stream.flow(out as AnyType)
             for (;;) {
@@ -170,20 +162,21 @@ export const runCarrierSuite = (target: CarrierTarget): void => {
             // input stream across the wire
             const bytes = new Uint8Array(70_000)
             const size = yield* server.call(
-              mathApi.size,
+              math,
+              'size',
               stream.from(new Blob([bytes]).stream(), 'bytes:application/octet-stream') as AnyType,
             )
             expect(size).toBe(70_000)
 
             // events travel to every node (the emitter included)
             const events = yield* server.events('math.announced')
-            yield* server.call(mathApi.announce, { what: 'hello' })
+            yield* server.call(math, 'announce', { what: 'hello' })
             const event = yield* events.next()
             expect((event.value as AnyType).payload).toBe('hello')
             expect((event.value as AnyType).origin).toContain('#b')
 
             // a caller that stops waiting cancels the remote handler
-            const pending = yield* fork(() => server.call(mathApi.slow, { ms: 5000 }))
+            const pending = yield* fork(() => server.call(math, 'slow', { ms: 5000 }))
             yield* sleep(150)
             yield* pending.halt()
             yield* sleep(300)
@@ -191,7 +184,7 @@ export const runCarrierSuite = (target: CarrierTarget): void => {
 
             // a deadline that passes is timeout-pending (the work may still be running)
             seen.length = 0
-            const late = yield* attempt(server.call(mathApi.slow, { ms: 1500 }, { timeoutMs: 200 }))
+            const late = yield* attempt(server.call(math, 'slow', { ms: 1500 }, { timeoutMs: 200 }))
             expect((late as AnyType).error).toBe(ServerErrors.TimeoutPending)
             yield* sleep(1600)
             // the owner finished on its own: the caller's timeout does not cancel it
@@ -229,7 +222,7 @@ export const runCarrierSuite = (target: CarrierTarget): void => {
             yield* sleep(150)
             // nobody hosts math: the answer is immediate, not a timeout
             const started = Date.now()
-            const nobody = yield* attempt(server.call(server.api.math.add, { a: 1, b: 1 }))
+            const nobody = yield* attempt(server.call(math, 'add', { a: 1, b: 1 }))
             expect((nobody as AnyType).error).toBe(ServerErrors.Unavailable)
             expect(Date.now() - started).toBeLessThan(1000)
             expect(yield* server.members('math')).toEqual([])
@@ -263,11 +256,11 @@ export const runCarrierSuite = (target: CarrierTarget): void => {
             expect(members.map(member => member.instance)).toEqual(['b'])
             expect(members[0]!.version).toBe(math.version)
             expect(members[0]!.draining).toBe(false)
-            expect(yield* server.call(server.api.math.add, { a: 2, b: 3 })).toBe(5)
+            expect(yield* server.call(math, 'add', { a: 2, b: 3 })).toBe(5)
 
             // B leaves while a call is in flight: the call finishes, B shows as draining,
             // then disappears and calls fail fast again
-            const slow = yield* fork(() => server.call(server.api.math.slow, { ms: 400 }))
+            const slow = yield* fork(() => server.call(math, 'slow', { ms: 400 }))
             yield* sleep(50)
             stopB.add(undefined)
             yield* sleep(50)
@@ -278,7 +271,7 @@ export const runCarrierSuite = (target: CarrierTarget): void => {
             yield* remote.halt()
             yield* sleep(presence.ttlMs + presence.heartbeatMs * 2)
             expect(yield* server.members('math')).toEqual([])
-            const gone = yield* attempt(server.call(server.api.math.add, { a: 1, b: 1 }))
+            const gone = yield* attempt(server.call(math, 'add', { a: 1, b: 1 }))
             expect((gone as AnyType).error).toBe(ServerErrors.Unavailable)
             yield* server.stop()
           })
@@ -317,7 +310,7 @@ export const runCarrierSuite = (target: CarrierTarget): void => {
               hosted: [],
             })
             yield* sleep(100)
-            expect(yield* gateway.call(gateway.api.math.add, { a: 1, b: 1 })).toBe(2)
+            expect(yield* gateway.call(math, 'add', { a: 1, b: 1 })).toBe(2)
             yield* gateway.stop()
           })
           yield* owner.halt()

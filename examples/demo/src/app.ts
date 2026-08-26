@@ -43,31 +43,10 @@ import { RedisTransport } from '@ozaco/transport/impl/redis'
 
 import type { Db } from './auth'
 import { authProvider, seedUsers } from './auth'
-import {
-  account,
-  cluster,
-  feed,
-  live,
-  media,
-  reports,
-  rtc,
-  startRtcRelay,
-  todoStats,
-  todos,
-} from './services'
+import { account, cluster, feed, live, media, reports, rtc, startRtcRelay, todos } from './services'
 import { tables } from './tables'
 
-export const services = [
-  account,
-  todos.service,
-  todoStats,
-  feed,
-  media,
-  reports,
-  live,
-  rtc,
-  cluster,
-] as const
+export const services = [account, todos.service, feed, media, reports, live, rtc, cluster] as const
 
 export type Api = ServerDef.Handle<typeof services>['api']
 

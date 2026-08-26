@@ -39,6 +39,7 @@ import { action, Server, service, stream } from '@ozaco/server'
 import type { Flow, Operation } from '@ozaco/std/effect'
 import { attempt, flowOf, until } from '@ozaco/std/effect'
 import { fail } from '@ozaco/std/result'
+import type { AnyType } from '@ozaco/std/shared'
 import { z } from 'zod'
 
 /** This process — a node ignores the echo of its own broadcasts (`events()` includes them). */
@@ -408,7 +409,8 @@ export const rtc = service(
         description:
           'join a room (max 2) — the relay drives the session: rtc:waiting, rtc:role { polite, epoch }, rtc:peer-left; rtc:restart re-pairs; every other frame is relayed to the other member',
       },
-      function* (socket) {
+      // the annotations break the self-reference cycle of `ctx.call(rtc, 'report', …)` below
+      function* (socket): Operation<void> {
         const name = socket.params.room ?? 'lobby'
         const room = roomOf(name)
         const id = socket.id
@@ -437,16 +439,14 @@ export const rtc = service(
             if (frame?.t === 'rtc:report') {
               // telemetry, not signaling: it never reaches the other member. A bad report must
               // not take the call down with it, so the dispatch is attempted, not awaited-raw.
-              yield* attempt(() =>
-                socket.ctx.call(
-                  { service: 'rtc', action: 'report' },
-                  {
-                    ...(frame.report as object),
-                    room: name,
-                    epoch: typeof frame.epoch === 'number' ? frame.epoch : room.epoch,
-                  },
-                ),
-              )
+              // the report body is untrusted socket input — the action's schema validates it
+              const report = {
+                ...(frame.report as object),
+                room: name,
+                epoch: typeof frame.epoch === 'number' ? frame.epoch : room.epoch,
+              } as AnyType
+
+              yield* attempt((): Operation<unknown> => socket.ctx.call(rtc, 'report', report))
               continue
             }
             if (frame?.t === 'rtc:restart') {

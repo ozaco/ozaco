@@ -64,7 +64,7 @@ describe('observe — cluster', () => {
           yield* gateway.listen()
           // let presence + the collector heartbeat settle on both sides
           yield* sleep(250)
-          const created = yield* gateway.call(gateway.api.todos.create, { title: 'across' })
+          const created = yield* gateway.call(todos, 'create', { title: 'across' })
           expect(created.title).toBe('across')
           yield* sleep(150)
 
@@ -107,7 +107,7 @@ describe('observe — cluster', () => {
           instance: 'alone',
         })
         yield* server.listen()
-        yield* server.call(server.api.todos.create, { title: 'kept' })
+        yield* server.call(todos, 'create', { title: 'kept' })
         yield* sleep(50)
         const page = yield* Observe.actions.query({ action: 'create' })
         expect(page.requests).toHaveLength(1)
@@ -127,7 +127,7 @@ describe('observe — cluster', () => {
           instance: 'alone',
         })
         yield* server.listen()
-        yield* server.call(server.api.todos.create, { title: 'dropped' })
+        yield* server.call(todos, 'create', { title: 'dropped' })
         yield* sleep(50)
         expect((yield* Observe.actions.query({ action: 'create' })).requests).toHaveLength(0)
         yield* server.stop()

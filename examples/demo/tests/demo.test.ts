@@ -27,7 +27,6 @@ describe('demo — every use case end to end', () => {
         expect(detail(steps, 'manifest').services).toEqual([
           'account',
           'todos',
-          'todo-stats',
           'feed',
           'media',
           'reports',
@@ -53,6 +52,17 @@ describe('demo — every use case end to end', () => {
           listed: 1,
         })
         expect(detail(steps, 'realtime watch')).toEqual({ syncRows: 1, afterCreate: 2 })
+        expect(detail(steps, 'crud hooks')).toEqual({
+          trimmed: 'hooked',
+          shouted: 'HOOKED',
+          removeDenied: 'server.forbidden',
+          errorTagged: true,
+        })
+        expect(detail(steps, 'crud extend')).toEqual({
+          stats: { low: 0, normal: 1, high: 0 },
+          replaceDisabled: 'client.no-route',
+        })
+        expect(detail(steps, 'crud schema')).toEqual({ rejected: 'server.validation' })
         expect(detail(steps, 'streams')).toEqual({ ndjson: 3, sse: 2, text: 'a b c ', bytes: 4096 })
         expect(detail(steps, 'uploads')).toMatchObject({
           upload: 3000,
@@ -130,7 +140,7 @@ describe('demo — cluster', () => {
         })
         const api2 = yield* node({
           ROLE: 'service',
-          SERVICE: 'todo-stats,feed,reports,live,rtc,cluster',
+          SERVICE: 'feed,reports,live,rtc,cluster',
           INSTANCE: 'api-2',
           OBSERVE: 'forward',
         })
@@ -157,6 +167,10 @@ describe('demo — cluster', () => {
         })
         expect(detail(steps, 'nested ctx.call')).toEqual({ todos: 2, uploads: 1 })
         expect(detail(steps, 'realtime watch')).toEqual({ syncRows: 1, afterCreate: 2 })
+        // the hooks run on the node HOSTING todos (api-1), not on the gateway
+        expect(detail(steps, 'crud hooks')).toMatchObject({ trimmed: 'hooked', shouted: 'HOOKED' })
+        // the extend action routes over the carrier like any other todos action
+        expect(detail(steps, 'crud extend')).toMatchObject({ stats: { normal: 1 } })
 
         // the gateway's observe store holds the service nodes' spans (forward → collect)
         yield* sleep(300)

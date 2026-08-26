@@ -1,10 +1,11 @@
 // oxlint-disable import/exports-last
 import type { Schema, Spec } from 'db:core'
 import { DbErrors, sanitizeFilter } from 'db:core'
-import type { EdgeDef } from 'server:core'
+import type { EdgeDef, ServerDef } from 'server:core'
 import { ServerErrors } from 'server:core'
 import type { Operation } from 'std:effect'
 import { attempt, fork, scoped, sleep } from 'std:effect'
+import type { Result } from 'std:result'
 import { fail, isFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
 
@@ -130,6 +131,109 @@ function* parseJson(text: string): Operation<{ value: unknown }> {
 }
 
 /**
+ * Run the `schema` hook ONCE, synchronously — `crud()` derives its schemas at definition time,
+ * outside any scope, so the hook may not suspend: a raised failure is thrown as-is (it refuses
+ * the definition), any other yield is a configuration error. `undefined` (or the schema itself)
+ * keeps the derived default.
+ */
+export const shaper =
+  (hook: ResourceDef.SchemaHook | undefined) =>
+  <T extends z.ZodType>(schema: T, of: ResourceDef.SchemaOf): T => {
+    if (!hook) {
+      return schema
+    }
+
+    const steps = hook(schema as AnyType, of)[Symbol.iterator]()
+    const step = steps.next()
+
+    if (!step.done) {
+      if (isFailure(step.value as AnyType)) {
+        throw step.value
+      }
+
+      throw fail(
+        ServerErrors.Configuration,
+        `the schema hook runs at definition time and must be effect-free — it suspended while deriving "${of}"`,
+      )
+    }
+
+    return (step.value === undefined ? schema : step.value) as T
+  }
+
+/**
+ * The hook chain around one crud handler: `error( around( before → handler → after ) )` — every
+ * hook may transform what flows through it (see `ResourceDef.CrudHooks`). Hooks run INSIDE the
+ * dispatch, so the input they see is already validated and the output they return still passes
+ * the action's output schema. Without hooks the handler is returned untouched.
+ */
+export const hooked = <
+  THandler extends (call: { input: AnyType; ctx: ServerDef.Ctx }) => Operation<AnyType>,
+>(
+  op: ResourceDef.Op,
+  hooks: ResourceDef.CrudHooks,
+  handler: THandler,
+): THandler => {
+  if (!hooks.before && !hooks.after && !hooks.around && !hooks.error) {
+    return handler
+  }
+
+  const chain = function* (input: AnyType, ctx: ServerDef.Ctx): Operation<AnyType> {
+    let current = input
+
+    if (hooks.before) {
+      const replaced = yield* hooks.before({ op, input: current, ctx })
+      current = replaced === undefined ? current : replaced
+    }
+
+    let output = yield* handler({ input: current, ctx })
+
+    if (hooks.after) {
+      const replaced = yield* hooks.after({ op, input: current, ctx, output })
+      output = replaced === undefined ? output : replaced
+    }
+
+    return output
+  }
+
+  const wrapped = function* ({
+    input,
+    ctx,
+  }: {
+    input: AnyType
+    ctx: ServerDef.Ctx
+  }): Operation<AnyType> {
+    const { around, error } = hooks
+    const invoke = around
+      ? () => around({ op, input, ctx }, value => chain(value, ctx))
+      : () => chain(input, ctx)
+
+    if (!error) {
+      return yield* invoke()
+    }
+
+    const outcome = yield* attempt(invoke)
+
+    if (!isFailure(outcome)) {
+      return outcome.value
+    }
+
+    const replaced = yield* error({ op, input, ctx, failure: outcome })
+
+    if (replaced === undefined) {
+      return yield* outcome
+    }
+
+    if (isFailure(replaced as AnyType)) {
+      return yield* replaced as Result.Failure<unknown>
+    }
+
+    return replaced
+  }
+
+  return wrapped as THandler
+}
+
+/**
  * The realtime handshake guard: a presented bearer (`authorization` header, or the `?token=`
  * the edge promotes) is ALWAYS verified — an expired or malformed token rejects the upgrade
  * even on an open resource — and the resource's `read` requirement gates who may subscribe.
@@ -168,31 +272,52 @@ export const guardHandshake = (resource: ResourceDef.Crud) =>
 export function* watch(
   socket: EdgeDef.Socket,
   resource: ResourceDef.Crud,
-  frame: Extract<ResourceDef.ClientFrame, { t: 'watch' }>,
+  incoming: Extract<ResourceDef.ClientFrame, { t: 'watch' }>,
 ): Operation<void> {
   const { ctx } = socket
-  const send = (out: ResourceDef.ServerFrame) => socket.send(out)
-  const filter = yield* attempt(() => filterOf(frame.filter, resource.filterable))
+  const hooks = resource.hooks
 
-  if (isFailure(filter)) {
-    yield* send({ t: 'error', id: frame.id, tag: String(filter.error), message: filter.message })
-    return
-  }
+  // the after hook projects outgoing rows: a returned value replaces the sync/delta frame
+  // (`t`/`id` pinned back so a careless hook cannot break the protocol)
+  const send = function* (out: ResourceDef.ServerFrame): Operation<void> {
+    let frame = out
 
-  let query = ctx.db.query(resource.table.name)
+    if (hooks.after && (out.t === 'sync' || out.t === 'delta')) {
+      const replaced = yield* hooks.after({ op: 'watch', input: incoming, ctx, output: out })
 
-  if (filter.value) {
-    query = query.filter(filter.value)
-  }
+      if (replaced !== undefined) {
+        frame = { ...(replaced as AnyType), t: out.t, id: out.id } as ResourceDef.ServerFrame
+      }
+    }
 
-  if (frame.order && resource.filterable.includes(frame.order.field)) {
-    query = query.order(frame.order.field, frame.order.direction ?? 'asc')
+    yield* socket.send(frame)
   }
 
   // a failing watch must SAY so — an error frame ends this watch, never the whole socket
   const outcome = yield* attempt(function* () {
+    let frame = incoming
+
+    if (hooks.before) {
+      const replaced = yield* hooks.before({ op: 'watch', input: incoming, ctx })
+
+      if (replaced !== undefined) {
+        frame = { ...(replaced as AnyType), t: 'watch', id: incoming.id }
+      }
+    }
+
+    const filter = yield* filterOf(frame.filter, resource.filterable)
+    let query = ctx.db.query(resource.table.name)
+
+    if (filter) {
+      query = query.filter(filter)
+    }
+
+    if (frame.order && resource.filterable.includes(frame.order.field)) {
+      query = query.order(frame.order.field, frame.order.direction ?? 'asc')
+    }
+
     if (frame.limit !== undefined) {
-      yield* windowed(socket, resource, frame, query)
+      yield* windowed({ ctx, resource, frame, query, send })
       return
     }
 
@@ -221,10 +346,42 @@ export function* watch(
   })
 
   if (isFailure(outcome)) {
+    let failure: Result.Failure<unknown> = outcome
+
+    // the error hook may replace the failure (returned or raised) — a watch cannot recover,
+    // so anything else keeps the original
+    if (hooks.error) {
+      const error = hooks.error
+      const replaced = yield* attempt(() =>
+        error({ op: 'watch', input: incoming, ctx, failure: outcome }),
+      )
+
+      if (isFailure(replaced)) {
+        failure = replaced
+      } else if (isFailure(replaced.value as AnyType)) {
+        failure = replaced.value as Result.Failure<unknown>
+      }
+    }
+
     yield* attempt(() =>
-      send({ t: 'error', id: frame.id, tag: String(outcome.error), message: outcome.message }),
+      socket.send({
+        t: 'error',
+        id: incoming.id,
+        tag: String(failure.error),
+        message: failure.message,
+      }),
     )
   }
+}
+
+interface WindowedArgs {
+  readonly ctx: ServerDef.Ctx
+  readonly resource: ResourceDef.Crud
+  readonly frame: Extract<ResourceDef.ClientFrame, { t: 'watch' }>
+  readonly query: AnyType
+
+  /** the watch's (hook-aware) frame sender. */
+  readonly send: (out: ResourceDef.ServerFrame) => Operation<void>
 }
 
 /**
@@ -235,15 +392,7 @@ export function* watch(
  * subscribers track versions uniformly. A new `watch` on the same id (another cursor) replaces
  * the window for THIS subscriber only.
  */
-// oxlint-disable-next-line max-params -- socket · resource · frame · prepared query
-function* windowed(
-  socket: EdgeDef.Socket,
-  resource: ResourceDef.Crud,
-  frame: Extract<ResourceDef.ClientFrame, { t: 'watch' }>,
-  query: AnyType,
-): Operation<void> {
-  const { ctx } = socket
-  const send = (out: ResourceDef.ServerFrame) => socket.send(out)
+function* windowed({ ctx, resource, frame, query, send }: WindowedArgs): Operation<void> {
   const limit = Math.max(1, Math.min(frame.limit ?? 1, resource.maxLimit))
   const cursor = cursorOf(frame.cursor)
 

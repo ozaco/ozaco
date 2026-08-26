@@ -257,7 +257,7 @@ describe.skipIf(!polyfill)('webrtc over the demo signaling relay', () => {
         })
         yield* node({
           ROLE: 'service',
-          SERVICE: 'todo-stats,feed,reports,live,rtc,cluster',
+          SERVICE: 'feed,reports,live,rtc,cluster',
           INSTANCE: 'api-2',
           PORT: '0',
         })

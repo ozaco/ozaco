@@ -43,8 +43,8 @@ describe('observe/openobserve', () => {
           ],
         })
         yield* server.listen()
-        yield* server.call(server.api.todos.create, { title: 'observed' })
-        yield* attempt(server.call(server.api.todos.explode, { code: 'x.y' }))
+        yield* server.call(todos, 'create', { title: 'observed' })
+        yield* attempt(server.call(todos, 'explode', { code: 'x.y' }))
         yield* sleep(80)
 
         // every payload hits the org's bulk `_json` endpoint with basic auth
@@ -86,7 +86,7 @@ describe('observe/openobserve', () => {
         // an OpenObserve outage is counted, never raised into the caller
         failing = true
         const sent = received.length
-        const made = yield* server.call(server.api.todos.create, { title: 'unsent' })
+        const made = yield* server.call(todos, 'create', { title: 'unsent' })
         expect(made.title).toBe('unsent')
         yield* sleep(80)
         expect(received.length).toBe(sent)
@@ -163,7 +163,7 @@ describe('observe/openobserve', () => {
           ],
         })
         yield* server.listen()
-        yield* server.call(server.api.todos.create, { title: 'renamed' })
+        yield* server.call(todos, 'create', { title: 'renamed' })
         yield* sleep(80)
 
         expect(received.length).toBeGreaterThan(0)

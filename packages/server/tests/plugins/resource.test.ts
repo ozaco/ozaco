@@ -146,13 +146,13 @@ describe('resource', () => {
         const sync = yield* next(0)
         expect(sync).toMatchObject({ t: 'sync', id: 'w1', rows: [] })
         yield* sleep(30)
-        yield* server.call((server.api as AnyType).todos.create, { title: 'live', done: false })
+        yield* server.call(todos.service, 'create', { title: 'live', done: false })
         const delta = yield* next(1)
         expect(delta.t).toBe('delta')
         expect(delta.added.map((row: AnyType) => row.title)).toEqual(['live'])
         // a row leaving the filter is a removal
         yield* sleep(30)
-        yield* server.call((server.api as AnyType).todos.update, {
+        yield* server.call(todos.service, 'update', {
           id: delta.added[0]._id,
           done: true,
         })
@@ -172,7 +172,7 @@ describe('resource', () => {
         yield* sleep(150)
         expect(frames.filter(frame => frame.id === 'w2')).toHaveLength(0)
         // the FIRST frame after a silent resume is a live diff — a `delta`, never a `sync`
-        yield* server.call((server.api as AnyType).todos.create, { title: 'after', done: false })
+        yield* server.call(todos.service, 'create', { title: 'after', done: false })
         const resumed = yield* next(3)
         expect(resumed.id).toBe('w2')
         expect(resumed.t).toBe('delta')

@@ -93,37 +93,36 @@ describe('auth', () => {
             Auth.use({ provider: provider(), secret: 'test-secret', sessionTtlMs: 60_000 }),
           ],
         })
-        const api = server.api.app
-        expect(yield* server.call(api.open, undefined as never)).toBe('anyone')
-        const anonymous = yield* attempt(server.call(api.me, undefined as never))
+        expect(yield* server.call(app, 'open')).toBe('anyone')
+        const anonymous = yield* attempt(server.call(app, 'me'))
         expect((anonymous as AnyType).error).toBe(ServerErrors.Unauthorized)
 
-        const bad = yield* attempt(server.call(api.login, { user: 'ada', pass: 'nope' }))
+        const bad = yield* attempt(server.call(app, 'login', { user: 'ada', pass: 'nope' }))
         expect((bad as AnyType).error).toBe(ServerErrors.Unauthorized)
         expect((bad as AnyType).causes).toContain(AuthErrors.BadCredentials)
 
-        const tokens = yield* server.call(api.login, { user: 'ada', pass: 'pw' })
+        const tokens = yield* server.call(app, 'login', { user: 'ada', pass: 'pw' })
         const meta = { authorization: `Bearer ${tokens.accessToken}` }
-        expect(yield* server.call(api.me, undefined as never, { meta })).toEqual({
+        expect(yield* server.call(app, 'me', undefined, { meta })).toEqual({
           sub: 'u-ada',
           name: 'Ada',
         })
-        expect(yield* server.call(api.admin, undefined as never, { meta })).toBe('secret')
-        const forbidden = yield* attempt(server.call(api.root, undefined as never, { meta }))
+        expect(yield* server.call(app, 'admin', undefined, { meta })).toBe('secret')
+        const forbidden = yield* attempt(server.call(app, 'root', undefined, { meta }))
         expect((forbidden as AnyType).error).toBe(ServerErrors.Forbidden)
-        const notService = yield* attempt(server.call(api.internal, undefined as never, { meta }))
+        const notService = yield* attempt(server.call(app, 'internal', undefined, { meta }))
         expect((notService as AnyType).error).toBe(ServerErrors.Forbidden)
 
         // service tokens
         const serviceToken = yield* Auth.actions.signService('billing')
         expect(
-          yield* server.call(api.internal, undefined as never, {
+          yield* server.call(app, 'internal', undefined, {
             meta: { authorization: `Bearer ${serviceToken}` },
           }),
         ).toBe('service:billing')
         // a garbage token is unauthorized, not a crash
         const garbage = yield* attempt(
-          server.call(api.me, undefined as never, { meta: { authorization: 'Bearer nope' } }),
+          server.call(app, 'me', undefined, { meta: { authorization: 'Bearer nope' } }),
         )
         expect((garbage as AnyType).error).toBe(ServerErrors.Unauthorized)
         expect((garbage as AnyType).causes).toContain(AuthErrors.InvalidToken)
@@ -160,12 +159,11 @@ describe('auth', () => {
             }),
           ],
         })
-        const api = server.api.app
-        const first = yield* server.call(api.login, { user: 'ada', pass: 'pw' })
+        const first = yield* server.call(app, 'login', { user: 'ada', pass: 'pw' })
         expect(first.refreshToken).toBeTruthy()
         // a refresh token cannot call actions
         const misuse = yield* attempt(
-          server.call(api.me, undefined as never, {
+          server.call(app, 'me', undefined, {
             meta: { authorization: `Bearer ${first.refreshToken}` },
           }),
         )
@@ -174,7 +172,7 @@ describe('auth', () => {
         const second = yield* Auth.actions.refresh(first.refreshToken!)
         expect(second.refreshToken).not.toBe(first.refreshToken)
         expect(
-          yield* server.call(api.me, undefined as never, {
+          yield* server.call(app, 'me', undefined, {
             meta: { authorization: `Bearer ${second.accessToken}` },
           }),
         ).toMatchObject({ sub: 'u-ada' })
@@ -186,10 +184,10 @@ describe('auth', () => {
         expect((burned as AnyType).causes).toContain(AuthErrors.Replayed)
 
         // access tokens expire (jose has second granularity)
-        const short = yield* server.call(api.login, { user: 'ada', pass: 'pw' })
+        const short = yield* server.call(app, 'login', { user: 'ada', pass: 'pw' })
         yield* sleep(1100)
         const expired = yield* attempt(
-          server.call(api.me, undefined as never, {
+          server.call(app, 'me', undefined, {
             meta: { authorization: `Bearer ${short.accessToken}` },
           }),
         )

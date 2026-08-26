@@ -81,51 +81,47 @@ describe('resilience', () => {
       await run(function* () {
         yield* storage()
         const server = yield* createServer({ services: [svc], plugins: [Resilience] })
-        const api = server.api.r
-
-        expect(yield* server.call(api.slow, { ms: 10 })).toBe('done')
-        const timedOut = yield* attempt(server.call(api.slow, { ms: 500 }))
+        expect(yield* server.call(svc, 'slow', { ms: 10 })).toBe('done')
+        const timedOut = yield* attempt(server.call(svc, 'slow', { ms: 500 }))
         expect((timedOut as AnyType).error).toBe(ServerErrors.TimeoutPending)
         expect((timedOut as AnyType).causes).toContain('resilience:timeout')
 
-        expect(yield* server.call(api.flaky, undefined as never)).toBe(3)
+        expect(yield* server.call(svc, 'flaky')).toBe(3)
 
         for (let n = 0; n < 2; n += 1) {
-          expect(
-            ((yield* attempt(server.call(api.fragile, undefined as never))) as AnyType).error,
-          ).toBe('r.broken')
+          expect(((yield* attempt(server.call(svc, 'fragile'))) as AnyType).error).toBe('r.broken')
         }
-        const open = yield* attempt(server.call(api.fragile, undefined as never))
+        const open = yield* attempt(server.call(svc, 'fragile'))
         expect((open as AnyType).error).toBe(ServerErrors.Unavailable)
         expect(counters.fragile).toBe(2)
         yield* sleep(120)
         // half-open: one trial reaches the handler again
-        yield* attempt(server.call(api.fragile, undefined as never))
+        yield* attempt(server.call(svc, 'fragile'))
         expect(counters.fragile).toBe(3)
 
         const results = yield* all([
-          attempt(server.call(api.narrow, { ms: 60 })),
-          attempt(server.call(api.narrow, { ms: 60 })),
-          attempt(server.call(api.narrow, { ms: 60 })),
+          attempt(server.call(svc, 'narrow', { ms: 60 })),
+          attempt(server.call(svc, 'narrow', { ms: 60 })),
+          attempt(server.call(svc, 'narrow', { ms: 60 })),
         ])
         const tags = results.map(result => ((result as AnyType).error ?? 'ok') as string)
         expect(tags.filter(tag => tag === 'ok')).toHaveLength(2)
         expect(tags).toContain(ServerErrors.Unavailable)
 
         const deduped = yield* all([
-          server.call(api.dedup, { k: 'a' }),
-          server.call(api.dedup, { k: 'a' }),
-          server.call(api.dedup, { k: 'b' }),
+          server.call(svc, 'dedup', { k: 'a' }),
+          server.call(svc, 'dedup', { k: 'a' }),
+          server.call(svc, 'dedup', { k: 'b' }),
         ])
         expect(counters.dedup).toBe(2)
         expect(deduped[0]).toBe(deduped[1])
 
-        expect(yield* server.call(api.limited, undefined as never)).toBe('ok')
-        expect(yield* server.call(api.limited, undefined as never)).toBe('ok')
-        const limited = yield* attempt(server.call(api.limited, undefined as never))
+        expect(yield* server.call(svc, 'limited')).toBe('ok')
+        expect(yield* server.call(svc, 'limited')).toBe('ok')
+        const limited = yield* attempt(server.call(svc, 'limited'))
         expect((limited as AnyType).error).toBe(ServerErrors.RateLimited)
 
-        expect(yield* server.call(api.soft, undefined as never)).toBe('fallback:r.nope')
+        expect(yield* server.call(svc, 'soft')).toBe('fallback:r.nope')
       }),
     )
   })

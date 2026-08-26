@@ -32,20 +32,20 @@ describe('kernel — services, dispatch, hooks', () => {
         const server = yield* createServer({ services: [todos] })
         expect(server.api.todos.create).toEqual({ service: 'todos', action: 'create' })
 
-        const created = yield* server.call(server.api.todos.create, { title: 'write tests' })
+        const created = yield* server.call(todos, 'create', { title: 'write tests' })
         expect(created).toMatchObject({ title: 'write tests', done: false })
-        const listed = yield* server.call(server.api.todos.list, {})
+        const listed = yield* server.call(todos, 'list', {})
         expect(listed).toHaveLength(1)
 
         // input validation: one server.validation with the field path in the causes
-        const bad = yield* attempt(server.call(server.api.todos.create, { title: '' } as AnyType))
+        const bad = yield* attempt(server.call(todos, 'create', { title: '' }))
         expect((bad as AnyType).error).toBe(ServerErrors.Validation)
         expect((bad as AnyType).causes.some((cause: string) => cause.startsWith('title:'))).toBe(
           true,
         )
 
         // a handler failure keeps its tag and gains the action breadcrumb
-        const boom = yield* attempt(server.call(server.api.todos.explode, { code: 'todo.custom' }))
+        const boom = yield* attempt(server.call(todos, 'explode', { code: 'todo.custom' }))
         expect((boom as AnyType).error).toBe('todo.custom')
         expect(
           (boom as AnyType).causes.some((cause: string) =>
@@ -54,14 +54,12 @@ describe('kernel — services, dispatch, hooks', () => {
         ).toBe(true)
 
         // unknown action
-        const none = yield* attempt(
-          server.call({ service: 'todos', action: 'nope' } as AnyType, {}),
-        )
+        const none = yield* attempt(server.call(todos as AnyType, 'nope', {}))
         expect((none as AnyType).error).toBe(ServerErrors.NotFound)
 
         // nested call + emit from inside a handler
         const events = yield* server.events('todo.created')
-        const nested = yield* server.call(server.api.todos.nested, { title: 'nested' })
+        const nested = yield* server.call(todos, 'nested', { title: 'nested' })
         expect(nested.title).toBe('nested')
         const event = yield* events.next()
         expect((event.value as AnyType).payload.title).toBe('nested')
@@ -116,7 +114,7 @@ describe('kernel — services, dispatch, hooks', () => {
           services: [whoami],
           plugins: [Auth, Timing.use({ label: 'timing' })],
         })
-        expect(yield* server.call(server.api.who.am, undefined as never)).toBe('ada')
+        expect(yield* server.call(whoami, 'am')).toBe('ada')
         expect(seen).toEqual(['auth:am', 'timing:in ada', 'timing:out'])
       }),
     )
@@ -141,11 +139,9 @@ describe('kernel — services, dispatch, hooks', () => {
       await run(function* () {
         yield* storage()
         const server = yield* createServer({ services: [todos], timeoutMs: 100 })
-        const late = yield* attempt(server.call(server.api.todos.slowCancel, { ms: 300 }))
+        const late = yield* attempt(server.call(todos, 'slowCancel', { ms: 300 }))
         expect((late as AnyType).error).toBe(ServerErrors.TimeoutPending)
-        const detached = yield* attempt(
-          server.call(server.api.todos.slow, { ms: 200 }, { timeoutMs: 50 }),
-        )
+        const detached = yield* attempt(server.call(todos, 'slow', { ms: 200 }, { timeoutMs: 50 }))
         expect((detached as AnyType).error).toBe(ServerErrors.TimeoutPending)
         // the detached handler finished on its own and left an outcome behind
         yield* sleep(250)
@@ -176,7 +172,7 @@ describe('kernel — services, dispatch, hooks', () => {
           },
         }).build()
         const server = yield* createServer({ services: [todos], plugins: [Spy] })
-        const out = yield* server.call(server.api.todos.count, { n: 3 })
+        const out = yield* server.call(todos, 'count', { n: 3 })
         expect(out instanceof ReadableStream).toBe(true)
         const values: number[] = []
         const flow = yield* stream.flow(out as AnyType)
@@ -189,8 +185,8 @@ describe('kernel — services, dispatch, hooks', () => {
         }
         expect(values).toEqual([0, 1, 2])
 
-        yield* server.call(server.api.todos.create, { title: 'logged' })
-        yield* attempt(server.call(server.api.todos.explode, { code: 'x.y' }))
+        yield* server.call(todos, 'create', { title: 'logged' })
+        yield* attempt(server.call(todos, 'explode', { code: 'x.y' }))
         const spans = reported.filter(event => event.t === 'span')
         expect(spans.map(event => (event as AnyType).row.name)).toEqual([
           'todos.count',
