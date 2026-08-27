@@ -6,7 +6,7 @@
  */
 import type { ServerDef } from 'server:core'
 import { createServer, Edge } from 'server:core'
-import { crud, Resource } from 'server:plugins'
+import { crud } from 'server:plugins'
 import { run, sleep, until } from 'std:effect'
 import { definePlugin } from 'std:plugin'
 import { fail, unwrap } from 'std:result'
@@ -60,7 +60,7 @@ describe('edge — returned failures are reported', () => {
         const server = yield* createServer({
           services: [todos.service],
           edge: BunEdge,
-          plugins: [Resource.use({ resources: [todos] }), Spy.use()],
+          plugins: [Spy.use()],
         })
         yield* Edge.actions.socket({
           path: '/guarded',

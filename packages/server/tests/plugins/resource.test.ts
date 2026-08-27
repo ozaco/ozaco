@@ -29,6 +29,8 @@ describe('resource', () => {
         const server = yield* createServer({
           services: [todos.service],
           edge: BunEdge,
+          // the deprecated Resource plugin is a NO-OP — installed here on purpose to prove
+          // existing `Resource.use` calls keep booting (the socket comes from the service)
           plugins: [Resource.use({ resources: [todos] })],
         })
         yield* server.listen()

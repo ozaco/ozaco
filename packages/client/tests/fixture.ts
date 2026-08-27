@@ -2,7 +2,7 @@
 import { column, DbClient, table } from 'db:core'
 import type { ServerDef } from 'server:core'
 import { action, createServer, service, stream } from 'server:core'
-import { crud, Docs, Resource } from 'server:plugins'
+import { crud, Docs } from 'server:plugins'
 import type { Operation } from 'std:effect'
 import { sleep, until } from 'std:effect'
 import { fail } from 'std:result'
@@ -220,24 +220,25 @@ export const probe = service(
 
 export const notes = crud(notesTable, { maxLimit: 50 })
 
+/** A custom service carrying the notes delta-watch under its OWN key — no `_realtime`
+ * convention anywhere, so the client can only find `/wall/feed` through the manifest. */
+export const wall = service('wall', { feed: crud.realtime(notesTable) })
+
 export type Api = ServerDef.Handle<[typeof demo, typeof probe, typeof notes.service]>['api']
 
 /** Boot the fixture server on a random port; resolves its url. */
 export function* boot(options?: { docsPath?: string }): Operation<{
   url: string
-  server: ServerDef.Handle<[typeof demo, typeof probe, typeof notes.service]>
+  server: ServerDef.Handle<[typeof demo, typeof probe, typeof notes.service, typeof wall]>
 }> {
   yield* MemoryAdapter.use()
   yield* BunIO.use()
   yield* DbClient.use({ tables: [notesTable] })
   yield* MemoryKv.use()
   const server = yield* createServer({
-    services: [demo, probe, notes.service],
+    services: [demo, probe, notes.service, wall],
     edge: BunEdge,
-    plugins: [
-      Docs.use({ path: options?.docsPath ?? '/docs' }),
-      Resource.use({ resources: [notes] }),
-    ],
+    plugins: [Docs.use({ path: options?.docsPath ?? '/docs' })],
     name: 'client-fixture',
     version: '1.0.0',
   })

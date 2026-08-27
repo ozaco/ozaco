@@ -98,6 +98,10 @@ export namespace ClientDef {
 
     /** resume from a token (the last frame's) — a reconnect does this by itself. */
     readonly since?: string | undefined
+
+    /** the socket's route when it is not where the manifest (or `/<resource>/_realtime`)
+     * says — e.g. a `crud.realtime` entry mounted under another key. */
+    readonly path?: string | undefined
   }
 
   /** The materialized rows of a watch, kept current from the frames. */
@@ -209,12 +213,15 @@ export namespace ClientDef {
   >
   export type OutputOf<R> = R extends Generated<AnyType, infer O> ? O : HandlerOutput<ActionOf<R>>
 
-  /** The input argument is optional when the action takes none (`undefined` / `unknown`). */
+  /** The input argument is optional when the action takes none (`undefined` / `unknown`) —
+   * or when every field of it is optional (`{}` satisfies it). */
   export type CallArgs<I> = undefined extends I
     ? [input?: I, options?: CallOptions]
     : unknown extends I
       ? [input?: I, options?: CallOptions]
-      : [input: I, options?: CallOptions]
+      : Record<never, never> extends I
+        ? [input?: I, options?: CallOptions]
+        : [input: I, options?: CallOptions]
 
   /** Every call is a {@link Future}: `yield*` it (inline, the caller's task) OR `await` it
    * (a detached job of the client's scope; resolves a `Result` success, rejects with the

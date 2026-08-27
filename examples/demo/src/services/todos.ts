@@ -17,6 +17,7 @@
  *   error   failure shaping  every failure gains a `todos:<op>` cause before it leaves
  * Hooks wrap the BUILT-INS only — `extend` authors own their whole handler.
  */
+import { eq } from '@ozaco/db'
 import { action, report, Server, ServerErrors } from '@ozaco/server'
 import { crud } from '@ozaco/server/plugins'
 import { appendCauses, fail } from '@ozaco/std/result'
@@ -55,14 +56,35 @@ export const todos = crud(todosTable, {
         return out
       },
     ),
+
+    // the RUNNABLE ops: the built-in list pipeline as one `yield*` inside a custom action —
+    // the author owns the route, the envelope (`total` survives, it is THIS schema) and the
+    // errors; `scope` AND-s a trusted filter under whatever the client sends
+    open: action.query(
+      {
+        input: crud.schemas.listInput,
+        output: crud.schemas.page(todosTable).extend({ total: z.number() }),
+        errors: crud.errors,
+        description: 'Open todos only, with the set total (`crud.list` in a custom action)',
+      },
+      function* ({ input }) {
+        return yield* crud.list(todosTable, {
+          input,
+          scope: eq('done', false),
+          total: true,
+        })
+      },
+    ),
   },
 
   // runs ONCE while `crud()` derives the schemas (definition time, never per request):
-  // the create input demands a real title beyond what the column kind gives it
-  *schema(s, of) {
-    if (of === 'create') {
-      return s.extend({ title: z.string().min(3) })
-    }
+  // the create INPUT demands a real title beyond what the column kind gives it
+  schema: {
+    *input(s, of) {
+      if (of === 'create') {
+        return s.extend({ title: z.string().min(3) })
+      }
+    },
   },
 
   *before({ op, input }) {

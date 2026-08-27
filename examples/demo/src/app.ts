@@ -30,7 +30,7 @@ import type { AppDef } from '@ozaco/server/app'
 import { createApp } from '@ozaco/server/app'
 import { NetworkCarrier } from '@ozaco/server/carrier/network'
 import { BunEdge } from '@ozaco/server/edge/bun'
-import { Auth, Cache, Cors, Docs, ObservePlugin, Resilience, Resource } from '@ozaco/server/plugins'
+import { Auth, Cache, Cors, Docs, ObservePlugin, Resilience } from '@ozaco/server/plugins'
 import { OpenObserveExporter } from '@ozaco/server/plugins/observe/openobserve'
 import { OtlpExporter } from '@ozaco/server/plugins/observe/otlp'
 import type { Operation } from '@ozaco/std/effect'
@@ -137,7 +137,6 @@ export function* createDemo(options: DemoOptions = {}): Operation<AppDef.Handle<
     Cache,
     Resilience,
     Docs.use({ path: '/docs', title: 'ozaco demo' }),
-    Resource.use({ resources: [todos] }),
   ]
 
   // `user:pass` → basic, anything else → bearer

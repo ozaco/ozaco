@@ -136,6 +136,14 @@ export function* walk(url: string, report: (step: Step) => void = () => {}): Ope
   const short = yield* attempt(client.todos.create({ title: 'no' }))
   note('crud schema', { rejected: isFailure(short) ? short.error : 'accepted?!' })
 
+  // --- crud ops: the runnable `crud.list` inside a custom action (scope + total) ---------
+  const open = yield* client.todos.open()
+
+  note('crud ops', {
+    open: open.data.map(row => row.title),
+    total: open.total,
+  })
+
   // --- streams: ndjson / sse / text / bytes ----------------------------------------------
   const ticks = yield* drain(yield* client.feed.ticks({ n: 3, everyMs: 5 }))
   const events = yield* drain(yield* client.feed.events({ n: 2, everyMs: 5 }))

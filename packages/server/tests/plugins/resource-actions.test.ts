@@ -1,5 +1,5 @@
 import { action, createServer, Edge } from 'server:core'
-import { crud, Resource } from 'server:plugins'
+import { crud } from 'server:plugins'
 import { run, until } from 'std:effect'
 import { unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
@@ -51,7 +51,6 @@ describe('resource actions + extend', () => {
         const server = yield* createServer({
           services: [todos.service],
           edge: BunEdge,
-          plugins: [Resource.use({ resources: [todos] })],
         })
         yield* server.listen()
 
@@ -109,7 +108,6 @@ describe('resource actions + extend', () => {
         const server = yield* createServer({
           services: [everything.service],
           edge: BunEdge,
-          plugins: [Resource.use({ resources: [everything] })],
         })
         const info = yield* server.listen({ port: 0 })
 

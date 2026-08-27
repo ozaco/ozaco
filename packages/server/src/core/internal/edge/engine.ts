@@ -144,6 +144,7 @@ export const mountActions = (state: EdgeState): number => {
       service: socket.service,
       protocol: socket.protocol ?? undefined,
       description: socket.description ?? undefined,
+      defaults: socket.defaults ?? undefined,
     })
     count += 1
   }

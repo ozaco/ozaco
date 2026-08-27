@@ -5,7 +5,7 @@
  * subscriber only. Every frame carries the page token (uniform version tracking).
  */
 import { createServer } from 'server:core'
-import { crud, Docs, Resource } from 'server:plugins'
+import { crud, Docs } from 'server:plugins'
 import { run, until } from 'std:effect'
 import { unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
@@ -48,7 +48,7 @@ describe('resource — windowed realtime', () => {
         const server = yield* createServer({
           services: [todos.service],
           edge: BunEdge,
-          plugins: [Resource.use({ resources: [todos] }), Docs.use({ path: '/docs' })],
+          plugins: [Docs.use({ path: '/docs' })],
         })
         const info = yield* server.listen({ port: 0 })
         const base = info.url!

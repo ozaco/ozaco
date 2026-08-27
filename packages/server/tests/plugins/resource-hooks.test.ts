@@ -1,5 +1,5 @@
 import { createServer, Edge, ServerErrors } from 'server:core'
-import { crud, Resource } from 'server:plugins'
+import { crud } from 'server:plugins'
 import { run, until } from 'std:effect'
 import { appendCauses, fail, unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
@@ -98,7 +98,6 @@ describe('resource hooks', () => {
         const server = yield* createServer({
           services: [todos.service],
           edge: BunEdge,
-          plugins: [Resource.use({ resources: [todos] })],
         })
         yield* server.listen()
 
@@ -183,7 +182,6 @@ describe('resource hooks', () => {
         const server = yield* createServer({
           services: [todos.service],
           edge: BunEdge,
-          plugins: [Resource.use({ resources: [todos] })],
         })
         const info = yield* server.listen({ port: 0 })
         const ws = new WebSocket(`${info.url!.replace('http', 'ws')}/todos/_realtime`)

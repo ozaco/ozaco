@@ -7,7 +7,7 @@
 import { column, DbClient, table } from 'db:core'
 import { createApp } from 'server:app'
 import { action, Edge, service } from 'server:core'
-import { Cache, Cors, crud, Docs, ObservePlugin, Resource } from 'server:plugins'
+import { Cache, Cors, crud, Docs, ObservePlugin } from 'server:plugins'
 import { run, until } from 'std:effect'
 import { unwrap } from 'std:result'
 
@@ -40,13 +40,7 @@ const outcome = await run(function* () {
     services: [echo, resource.service],
     edge: BunEdge,
     carrier: NetworkCarrier,
-    plugins: [
-      ObservePlugin.use({ console: true, batch: { ms: 5 } }),
-      Cors,
-      Cache,
-      Docs,
-      Resource.use({ resources: [resource] }),
-    ],
+    plugins: [ObservePlugin.use({ console: true, batch: { ms: 5 } }), Cors, Cache, Docs],
     listen: { port: 0 },
   })
   const info = yield* app.start()

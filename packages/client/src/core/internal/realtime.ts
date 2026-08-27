@@ -9,13 +9,45 @@ import { DEFAULT_REALTIME_SUFFIX } from '../const'
 import { ClientErrors } from '../errors'
 import type { ClientDef } from '../types/client'
 
+import { manifestOf } from './manifest'
+
 const RECONNECT_POLL_MS = 100
 
-const socketUrl = (ctx: ClientDef.Context, resource: string): string => {
-  const url = new URL(
-    `/${resource}${ctx.options.realtimePath ?? DEFAULT_REALTIME_SUFFIX}`,
-    ctx.options.url,
-  )
+/** Where a resource's realtime socket lives: an explicit watch `path` wins, then an
+ * EXPLICITLY configured `realtimePath` option (the user knows their topology — a rewriting
+ * proxy must not lose to discovery), then the MANIFEST's socket entry for the service
+ * (`protocol: 'resource'` — custom mounts found for free), then the conventional
+ * `/<resource>/_realtime` suffix. */
+function* socketPath(
+  ctx: ClientDef.Context,
+  resource: string,
+  override: string | undefined,
+): Operation<string> {
+  if (override) {
+    return override
+  }
+
+  if (ctx.options.realtimePath !== undefined) {
+    return `/${resource}${ctx.options.realtimePath}`
+  }
+
+  const manifest = yield* attempt(() => manifestOf(ctx))
+
+  if (!isFailure(manifest)) {
+    const socket = (manifest.value.sockets ?? []).find(
+      entry => entry.service === resource && entry.protocol === 'resource',
+    )
+
+    if (socket) {
+      return socket.path
+    }
+  }
+
+  return `/${resource}${DEFAULT_REALTIME_SUFFIX}`
+}
+
+const socketUrl = (ctx: ClientDef.Context, path: string): string => {
+  const url = new URL(path, ctx.options.url)
   url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
   const token = typeof ctx.options.token === 'function' ? ctx.options.token() : ctx.options.token
 
@@ -44,8 +76,9 @@ export const watch = <TRow>(
 ): Flow<ClientDef.WatchFrame<TRow>, void> => ({
   *[Symbol.iterator]() {
     const id = yield* IO.actions.uuid()
+    const path = yield* socketPath(ctx, resource, options?.path)
     const token = typeof ctx.options.token === 'function' ? ctx.options.token() : ctx.options.token
-    const connection = yield* Ws.actions.connect(socketUrl(ctx, resource), {
+    const connection = yield* Ws.actions.connect(socketUrl(ctx, path), {
       headers: {
         ...ctx.options.headers,
         ...(token ? { authorization: `Bearer ${token}` } : {}),

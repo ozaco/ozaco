@@ -87,7 +87,7 @@ const ServerImpl = Server.implement<ServerDef.Context, [options: ServerDef.Optio
         service: socket.service,
         protocol: socket.protocol,
         description: socket.description,
-        defaults: null,
+        defaults: socket.defaults,
       })),
     }
   },

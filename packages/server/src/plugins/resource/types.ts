@@ -1,4 +1,4 @@
-import type { Schema } from 'db:core'
+import type { Schema, Spec } from 'db:core'
 import type { ServerDef, ServiceDef } from 'server:core'
 import type { Operation } from 'std:effect'
 import type { Result } from 'std:result'
@@ -9,12 +9,13 @@ import type { z } from 'zod'
 import type { listInput } from './internal'
 
 export namespace ResourceDef {
-  /** One page of `list`. */
+  /** One page of `list` (`total` only when the op asked for it — `total: true`). */
   export interface Page<TDoc> {
     readonly data: readonly TDoc[]
     readonly nextCursor: string | null
     readonly prevCursor: string | null
     readonly token: string
+    readonly total?: number | undefined
   }
 
   /** The actions of a crud service, typed from the table's doc/insert shapes. */
@@ -96,15 +97,30 @@ export namespace ResourceDef {
     readonly error?: ErrorHook | undefined
   }
 
-  /** Which derived schema a `schema` hook is looking at: the shared row shape (`doc` — every
-   * read output) or one operation's INPUT (`update`/`replace` include the `id` field). */
-  export type SchemaOf = 'doc' | 'list' | 'create' | 'update' | 'replace'
+  /** The INPUT schemas a `schema.input` hook sees: one per operation with a derived input
+   * (`update`/`replace` include the `id` field; `get`/`remove` are a bare `{ id }` and skip
+   * the hook). */
+  export type SchemaInputOf = 'list' | 'create' | 'update' | 'replace'
+
+  /** The OUTPUT schemas a `schema.output` hook sees: `doc` is the shared row shape (every read
+   * output, `page.data` included), `page` is the `list` envelope derived AFTER `doc` — extend
+   * it here (`total`, facet metadata) and the `after` hook's return passes it. */
+  export type SchemaOutputOf = 'doc' | 'page'
 
   /** Runs ONCE per derived schema while `crud()` builds the service (definition time, never per
    * request): return a replacement schema — or nothing (or `schema` itself) to keep the
    * default. It must be effect-free: raising a failure refuses the definition, suspending on
    * anything else is a configuration error. */
-  export type SchemaHook = (schema: z.ZodObject, of: SchemaOf) => Operation<AnyType>
+  export type SchemaHook<TOf extends string = string> = (
+    schema: z.ZodObject,
+    of: TOf,
+  ) => Operation<AnyType>
+
+  /** The two sides of the derived schemas (both definition-time, see {@link SchemaHook}). */
+  export interface SchemaHooks {
+    readonly input?: SchemaHook<SchemaInputOf> | undefined
+    readonly output?: SchemaHook<SchemaOutputOf> | undefined
+  }
 
   export interface CrudOptions<
     TNames extends readonly ActionName[] | true = true,
@@ -112,6 +128,9 @@ export namespace ResourceDef {
   > extends CrudHooks {
     /** the service name (and route root `/<name>`). Default: the table name. */
     readonly name?: string | undefined
+
+    /** the realtime socket's route suffix under `/<name>`. Default `/_realtime`. */
+    readonly realtimePath?: string | undefined
 
     /** which built-ins to expose (`'realtime'` is the `_realtime` socket). Omitted or `true`:
      * ALL of them. An excluded action is not defined at all — no route, no manifest entry, no
@@ -124,8 +143,8 @@ export namespace ResourceDef {
      * The crud hooks do NOT wrap these: their authors own the whole handler. */
     readonly extend?: TExtend | undefined
 
-    /** transform the derived schemas at DEFINITION time (see {@link SchemaHook}). */
-    readonly schema?: SchemaHook | undefined
+    /** transform the derived schemas at DEFINITION time (see {@link SchemaHooks}). */
+    readonly schema?: SchemaHooks | undefined
 
     /** `auth` requirements per side (the Auth plugin's option). */
     readonly auth?: { readonly read?: unknown; readonly write?: unknown } | undefined
@@ -140,7 +159,8 @@ export namespace ResourceDef {
     readonly options?: Readonly<Record<string, unknown>> | undefined
   }
 
-  /** What `crud()` returns: the service plus what the realtime route needs. The generics
+  /** What `crud()` returns: the service (its `_realtime` socket included), the resolved
+   * `shapes`, and what the realtime machinery reads. The generics
    * mirror what the call site wrote — the table, the enabled `actions`, the `extend` map — so
    * hovers stay small; the service's action map is DERIVED from them here instead of being a
    * type argument of its own. */
@@ -159,17 +179,144 @@ export namespace ResourceDef {
     readonly auth: { readonly read?: unknown; readonly write?: unknown }
     readonly hooks: CrudHooks
 
-    /** the resolved enabled set — the `Resource` plugin mounts `_realtime` only when
-     * `'realtime'` is in here. */
+    /** the RESOLVED schemas the built-ins run with (the `schema` hooks applied): the shared
+     * row shape and list envelope (outputs), the four derived inputs. `extend` actions reuse
+     * these instead of re-deriving raw shapes from the table. */
+    readonly shapes: {
+      readonly doc: z.ZodObject
+      readonly page: z.ZodObject
+      readonly list: z.ZodObject
+      readonly create: z.ZodObject
+      readonly update: z.ZodObject
+      readonly replace: z.ZodObject
+    }
+
+    /** the resolved enabled set — `'realtime'` in here means the service carries its
+     * `_realtime` socket. */
     readonly actions: readonly ActionName[]
   }
 
+  /** @deprecated `crud()` mounts its own `_realtime` socket now (an `action.socket` entry of
+   * the service) — the `Resource` plugin is a no-op kept for compatibility. Use the
+   * `realtimePath` crud option instead of the plugin's. */
   export interface PluginOptions {
-    /** the crud resources whose `_realtime` socket routes to mount. */
     readonly resources: readonly Crud[]
-
-    /** route suffix. Default `/_realtime`. */
     readonly realtimePath?: string | undefined
+  }
+
+  // --- runnable ops (`crud.list(table, …)` inside any handler) -------------------------------
+
+  /** Every runnable op reads the dispatch ctx AMBIENTLY (the handler it runs in); `ctx` is the
+   * override for the rare call outside one (a socket handler's `socket.ctx`, tests), `db`
+   * swaps the handle alone — pass a transaction's: `ctx.db.transaction(tx => crud.update(t,
+   * { …, db: tx }))`. */
+  export interface OpOptions {
+    readonly ctx?: ServerDef.Ctx | undefined
+    readonly db?: ServerDef.Ctx['db'] | undefined
+  }
+
+  /** `crud.list` — the built-in list pipeline (sanitized filter, order guard, clamped limit,
+   * keyset pagination) as one call. */
+  export interface ListOp extends OpOptions {
+    /** the wire input (`filter`/`order`/`direction`/`limit`/`cursor`) — pass the action's
+     * `input` through. */
+    readonly input?: z.infer<typeof listInput> | undefined
+
+    /** a TRUSTED server-side filter AND-ed with the client's (tenancy, fixed facets). */
+    readonly scope?: Spec.Filter | undefined
+
+    /** columns the client filter/order may reference. Default: every column + system fields. */
+    readonly filterable?: readonly string[] | undefined
+
+    /** the largest page a client may ask for. Default 100. */
+    readonly maxLimit?: number | undefined
+
+    /** also count the whole set (an extra COUNT query) — the page carries `total`. */
+    readonly total?: boolean | undefined
+  }
+
+  export interface GetOp extends OpOptions {
+    readonly id: string
+
+    /** return `null` instead of failing `server.not-found`. */
+    readonly optional?: boolean | undefined
+  }
+
+  export interface CreateOp<TInsert = AnyType> extends OpOptions {
+    readonly value: TInsert
+  }
+
+  /** `crud.createMany` — one adapter round trip, all-or-nothing validation. */
+  export interface CreateManyOp<TInsert = AnyType> extends OpOptions {
+    readonly values: readonly TInsert[]
+  }
+
+  /** `crud.count` — the size of the (scoped) set: `filter` is the CLIENT's (sanitized like
+   * `list`), `scope` the trusted server-side one. */
+  export interface CountOp extends OpOptions {
+    readonly filter?: unknown
+    readonly scope?: Spec.Filter | undefined
+    readonly filterable?: readonly string[] | undefined
+  }
+
+  /** `ifVersion` on the write ops: omitted = honor the ambient `If-Match` header (the
+   * built-ins' behaviour), a string = require that `_version`, `false` = no version check. */
+  export interface UpdateOp<TInsert = AnyType> extends OpOptions {
+    readonly id: string
+    readonly patch: Partial<TInsert>
+    readonly ifVersion?: string | false | undefined
+  }
+
+  export interface ReplaceOp<TInsert = AnyType> extends OpOptions {
+    readonly id: string
+    readonly value: TInsert
+    readonly ifVersion?: string | false | undefined
+  }
+
+  export interface RemoveOp extends OpOptions {
+    readonly id: string
+    readonly ifVersion?: string | false | undefined
+
+    /** fail `server.not-found` when nothing was removed (default: `{ removed: false }`). */
+    readonly strict?: boolean | undefined
+  }
+
+  /** A TRUSTED per-subscriber filter for the realtime watch, computed from the socket ctx
+   * (`ctx.auth` = the verified principal): AND-ed under whatever the client sends, AFTER the
+   * sanitizer — its fields need not (and should not) be in `filterable`. */
+  export type WatchScope = (ctx: ServerDef.Ctx) => Operation<Spec.Filter | undefined | null | void>
+
+  /** What the realtime machinery needs of a resource — `crud()`'s return satisfies it, and
+   * `crud.realtime(table, …)` builds one standalone. */
+  export interface RealtimeSource {
+    readonly table: Schema.Table
+    readonly filterable: readonly string[]
+    readonly maxLimit: number
+    readonly auth: { readonly read?: unknown; readonly write?: unknown }
+    readonly hooks: CrudHooks
+    readonly scope?: WatchScope | undefined
+  }
+
+  /** `crud.realtime` — the delta-watch socket as an `action.socket` entry for ANY service
+   * (mounts at `/<service>/<key>` unless `path` is given, listed under that service in the
+   * manifest). */
+  export interface RealtimeOptions {
+    /** the handshake's `read` requirement (the Auth plugin's option). Default: open. */
+    readonly auth?: unknown
+
+    readonly filterable?: readonly string[] | undefined
+    readonly maxLimit?: number | undefined
+
+    /** trusted per-subscriber filter (tenancy) — see {@link WatchScope}. */
+    readonly scope?: WatchScope | undefined
+
+    /** the watch seams (`after` = row projection, `error` = frame shaping, `before` = frame
+     * rewrites — but tenancy belongs in `scope`, a before-injected filter is client-sanitized)
+     * — `around` never applies to the long-lived watch. */
+    readonly hooks?: CrudHooks | undefined
+
+    readonly path?: string | undefined
+    readonly description?: string | undefined
   }
 
   /** The pager of a WINDOWED watch: keyset cursors + the set's total, as of `token`. */

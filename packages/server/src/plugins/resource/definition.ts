@@ -1,56 +1,24 @@
 import type { ServerDef } from 'server:core'
-import { Server, ServerErrors } from 'server:core'
 import { definePlugin } from 'std:plugin'
-import { fail } from 'std:result'
 
 import pkg from '../../../package.json'
 
-import { guardHandshake, realtime } from './internal'
 import type { ResourceDef } from './types'
 
 /**
- * Resources: mount a `/<name>/_realtime` socket route per `crud()` service (delta watches with
- * `since` token resume, sanitized filters, the resource's `read` auth on the handshake).
+ * @deprecated `crud()` now carries its own `_realtime` socket (an `action.socket` entry of the
+ * service, `realtimePath` crud option moves it) — nothing is left to mount, so installing
+ * Resource is a NO-OP kept only so existing `Resource.use({ resources })` calls keep booting.
+ * Drop it from `plugins`.
  */
 export const Resource = definePlugin<ServerDef.PluginContext, [options: ResourceDef.PluginOptions]>(
   {
     name: 'server-resource',
     version: pkg.version,
-    description: 'CRUD resources with realtime delta watches',
+    description: 'deprecated no-op — crud services mount their own realtime socket',
 
-    *setup(options) {
-      const kernel = yield* Server.context.get()
-      if (!kernel) {
-        return yield* fail(ServerErrors.Configuration, 'Resource must be installed by createServer')
-      }
-      const suffix = options.realtimePath ?? '/_realtime'
-      return {
-        hooks: {
-          name: 'resource',
-          *start() {
-            const edge = kernel.edge
-            if (!edge) {
-              return
-            }
-            for (const resource of options.resources) {
-              // `actions` without 'realtime' switches the socket off for this resource
-              if (!resource.actions.includes('realtime')) {
-                continue
-              }
-
-              yield* edge.actions.socket({
-                path: `/${resource.service.name}${suffix}`,
-                handler: realtime(resource),
-                authorize: guardHandshake(resource),
-                service: resource.service.name,
-                protocol: 'resource',
-                description: 'watch/unwatch frames in, sync/delta/error frames out',
-                defaults: { cursor: 0 },
-              })
-            }
-          },
-        },
-      }
+    *setup() {
+      return { hooks: { name: 'resource' } }
     },
   },
 ).build()

@@ -122,6 +122,7 @@ export const action = Object.assign(define('action'), {
       protocol: config.protocol ?? null,
       description: config.description ?? null,
       authorize: config.authorize ?? null,
+      defaults: config.defaults ?? null,
     },
 
     handler: handler as AnyType,

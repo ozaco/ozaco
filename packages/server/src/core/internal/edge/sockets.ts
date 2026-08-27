@@ -2,6 +2,7 @@ import type { Operation } from 'std:effect'
 import { createQueue, scoped } from 'std:effect'
 import { IO } from 'std:io'
 
+import { CtxRef } from '../../context'
 import type { EdgeDef } from '../../types/edge'
 import type { ServerDef } from '../../types/server'
 import type { TraceDef } from '../../types/trace'
@@ -94,5 +95,7 @@ export function* driveSocket(input: SocketInput): Operation<void> {
     },
   }
 
-  yield* scoped(() => route.handler(socket))
+  // the socket ctx is ambient for the handler too — runnable ops (`crud.list`) work here
+  // exactly as they do inside a dispatch
+  yield* scoped(() => CtxRef.with(input.ctx, () => route.handler(socket)))
 }

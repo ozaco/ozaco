@@ -364,6 +364,37 @@ describe('e2e — realtime', () => {
     )
   })
 
+  it('the manifest routes a watch to a custom realtime mount; `path` overrides outrank it', async () => {
+    unwrap(
+      await run(function* () {
+        const { url } = yield* boot()
+        const client = yield* createClient<Api>({ url })
+
+        yield* client.notes.create({ title: 'seen', done: false })
+
+        // 'wall' has NO `/wall/_realtime` — its socket lives at `/wall/feed`, and only the
+        // manifest (service + protocol 'resource') can say so
+        yield* scoped(function* () {
+          const frames = yield* client.$watch<{ title: string }>('wall')
+          const sync = yield* frames.next()
+
+          expect((sync.value as AnyType).t).toBe('sync')
+          expect((sync.value as AnyType).rows.map((row: AnyType) => row.title)).toEqual(['seen'])
+        })
+
+        // an explicit `path` skips every discovery — the resource name stops mattering
+        yield* scoped(function* () {
+          const frames = yield* client.$watch<{ title: string }>('anything', {
+            path: '/wall/feed',
+          })
+          const sync = yield* frames.next()
+
+          expect((sync.value as AnyType).rows.map((row: AnyType) => row.title)).toEqual(['seen'])
+        })
+      }),
+    )
+  })
+
   it('$rows keeps a live table current through creates, updates and removals', async () => {
     unwrap(
       await run(function* () {

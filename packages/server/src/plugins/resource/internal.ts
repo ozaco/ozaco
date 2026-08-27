@@ -1,8 +1,8 @@
 // oxlint-disable import/exports-last
 import type { Schema, Spec } from 'db:core'
-import { DbErrors, sanitizeFilter } from 'db:core'
+import { clampLimit, DbErrors, FIELDS, sanitizeFilter } from 'db:core'
 import type { EdgeDef, ServerDef } from 'server:core'
-import { ServerErrors } from 'server:core'
+import { CtxRef, ServerErrors } from 'server:core'
 import type { Operation } from 'std:effect'
 import { attempt, fork, scoped, sleep } from 'std:effect'
 import type { Result } from 'std:result'
@@ -92,6 +92,30 @@ export const listInput = z.object({
   cursor: z.string().optional(),
 })
 
+/** The zod shape of a `list` envelope over one row schema. */
+export type PageShape<T extends z.ZodType> = z.ZodObject<{
+  data: z.ZodReadonly<z.ZodArray<T>>
+  nextCursor: z.ZodNullable<z.ZodString>
+  prevCursor: z.ZodNullable<z.ZodString>
+  token: z.ZodString
+}>
+
+/** The `list` envelope over a row schema (what `schema.output` sees as `page`) — typed from
+ * the doc, so a custom action's `output` infers the real page shape (no cast needed). */
+export const pageSchema = <T extends z.ZodType>(doc: T): PageShape<T> =>
+  z.object({
+    data: z.array(doc).readonly(),
+    nextCursor: z.string().nullable(),
+    prevCursor: z.string().nullable(),
+    token: z.string(),
+  })
+
+/** What a client filter/order may reference unless narrowed: every column + system fields. */
+export const defaultFilterable = (table: Schema.Table): readonly string[] => [
+  ...table.columns.map(column => column.name),
+  ...Object.values(FIELDS),
+]
+
 /** Per-action http statuses for the db failures a resource raises. */
 export const ERRORS = { [DbErrors.Conflict]: 412, [DbErrors.NotFound]: 404, [DbErrors.Unique]: 409 }
 
@@ -131,14 +155,17 @@ function* parseJson(text: string): Operation<{ value: unknown }> {
 }
 
 /**
- * Run the `schema` hook ONCE, synchronously — `crud()` derives its schemas at definition time,
- * outside any scope, so the hook may not suspend: a raised failure is thrown as-is (it refuses
+ * Run the `schema` hooks ONCE, synchronously — `crud()` derives its schemas at definition time,
+ * outside any scope, so a hook may not suspend: a raised failure is thrown as-is (it refuses
  * the definition), any other yield is a configuration error. `undefined` (or the schema itself)
  * keeps the derived default.
  */
-export const shaper =
-  (hook: ResourceDef.SchemaHook | undefined) =>
-  <T extends z.ZodType>(schema: T, of: ResourceDef.SchemaOf): T => {
+export const shaper = (hooks: ResourceDef.SchemaHooks | undefined) => {
+  const drain = <T extends z.ZodType>(
+    hook: ResourceDef.SchemaHook<AnyType> | undefined,
+    schema: T,
+    of: string,
+  ): T => {
     if (!hook) {
       return schema
     }
@@ -153,12 +180,20 @@ export const shaper =
 
       throw fail(
         ServerErrors.Configuration,
-        `the schema hook runs at definition time and must be effect-free — it suspended while deriving "${of}"`,
+        `the schema hooks run at definition time and must be effect-free — one suspended while deriving "${of}"`,
       )
     }
 
     return (step.value === undefined ? schema : step.value) as T
   }
+
+  return {
+    input: <T extends z.ZodType>(schema: T, of: ResourceDef.SchemaInputOf): T =>
+      drain(hooks?.input, schema, of),
+    output: <T extends z.ZodType>(schema: T, of: ResourceDef.SchemaOutputOf): T =>
+      drain(hooks?.output, schema, of),
+  }
+}
 
 /**
  * The hook chain around one crud handler: `error( around( before → handler → after ) )` — every
@@ -233,6 +268,217 @@ export const hooked = <
   return wrapped as THandler
 }
 
+// --- runnable ops ----------------------------------------------------------------------------
+
+/** The ctx a runnable op works with: the given override, or the AMBIENT dispatch ctx (planted
+ * around every action handler and socket handler). */
+export function* opCtx(given: ServerDef.Ctx | undefined): Operation<ServerDef.Ctx> {
+  if (given) {
+    return given
+  }
+
+  const ambient = yield* CtxRef.get()
+
+  if (ambient) {
+    return ambient
+  }
+
+  return yield* fail(
+    ServerErrors.Configuration,
+    'crud ops read the dispatch ctx — call them inside a handler, or pass `ctx`',
+  )
+}
+
+/** What an op runs against: the (overridden) db handle, the request headers, and the ctx when
+ * one is reachable — a `db` override (a transaction's handle) works without a dispatch, the
+ * headers then default empty. */
+interface OpEnv {
+  readonly db: ServerDef.Ctx['db']
+  readonly headers: Readonly<Record<string, string>>
+  readonly ctx: ServerDef.Ctx | null
+}
+
+function* opEnv(options: ResourceDef.OpOptions): Operation<OpEnv> {
+  if (options.db) {
+    const ctx = options.ctx ?? (yield* CtxRef.get()) ?? null
+    return { db: options.db, headers: ctx?.headers ?? {}, ctx }
+  }
+
+  const ctx = yield* opCtx(options.ctx)
+  return { db: ctx.db, headers: ctx.headers, ctx }
+}
+
+/** Every op is its own child span when a ctx is reachable (`crud.<op> <table>`). */
+const spanned = <T>(env: OpEnv, name: string, body: () => Operation<T>): Operation<T> =>
+  env.ctx ? env.ctx.span(name, body) : body()
+
+/** The write ops' version gate: omitted = the ambient `If-Match` header, `false` = none. */
+const versionFor = (
+  headers: Readonly<Record<string, string>>,
+  ifVersion: string | false | undefined,
+): string | undefined => (ifVersion === false ? undefined : (ifVersion ?? ifMatch(headers)))
+
+/** A trusted `scope` filter AND-ed under the (sanitized) client filter. */
+export const combine = (scope: Spec.Filter | undefined | null, client: AnyType): AnyType =>
+  scope ? (client ? { op: 'and', filters: [scope, client] } : scope) : client
+
+/** The built-in list pipeline as one call: sanitized client filter AND-ed with the trusted
+ * `scope`, guarded order, clamped limit, keyset pagination — `total: true` also counts the
+ * whole set. */
+export function* listOp(
+  table: Schema.Table,
+  options: ResourceDef.ListOp = {},
+): Operation<ResourceDef.Page<AnyType>> {
+  const env = yield* opEnv(options)
+
+  return yield* spanned(env, `crud.list ${table.name}`, function* () {
+    const input = options.input ?? {}
+    const fields = options.filterable ?? defaultFilterable(table)
+    const maxLimit = options.maxLimit ?? 100
+    const client = yield* filterOf(input.filter, fields)
+    const filter = combine(options.scope, client)
+    let query = env.db.query(table.name)
+
+    if (filter) {
+      query = query.filter(filter as AnyType)
+    }
+
+    if (input.order) {
+      if (!fields.includes(input.order)) {
+        return yield* fail(ServerErrors.BadRequest, `cannot order by "${input.order}"`)
+      }
+
+      query = query.order(input.order, input.direction ?? 'asc')
+    }
+
+    const page = (yield* query.paginate({
+      limit: clampLimit(input.limit ?? maxLimit, maxLimit),
+      cursor: input.cursor,
+      ...(options.total === true ? { count: true } : {}),
+    })) as AnyType
+
+    return {
+      data: page.data,
+      nextCursor: page.pageInfo.nextCursor,
+      prevCursor: page.pageInfo.prevCursor,
+      token: page.token,
+      ...(options.total === true ? { total: page.total ?? 0 } : {}),
+    }
+  })
+}
+
+/** The size of the (scoped) set — `list`'s counting side alone. */
+export function* countOp(
+  table: Schema.Table,
+  options: ResourceDef.CountOp = {},
+): Operation<number> {
+  const env = yield* opEnv(options)
+
+  return yield* spanned(env, `crud.count ${table.name}`, function* () {
+    const fields = options.filterable ?? defaultFilterable(table)
+    const client = yield* filterOf(options.filter, fields)
+    const filter = combine(options.scope, client)
+    let query = env.db.query(table.name)
+
+    if (filter) {
+      query = query.filter(filter as AnyType)
+    }
+
+    return yield* query.count()
+  })
+}
+
+export function* getOp(table: Schema.Table, options: ResourceDef.GetOp): Operation<AnyType> {
+  const env = yield* opEnv(options)
+
+  return yield* spanned(env, `crud.get ${table.name}`, function* () {
+    const row = yield* env.db.get(table.name, options.id)
+
+    if (!row) {
+      if (options.optional === true) {
+        return null
+      }
+
+      return yield* fail(ServerErrors.NotFound, `${table.name} ${options.id} not found`)
+    }
+
+    return row
+  })
+}
+
+export function* createOp(table: Schema.Table, options: ResourceDef.CreateOp): Operation<AnyType> {
+  const env = yield* opEnv(options)
+
+  return yield* spanned(env, `crud.create ${table.name}`, () =>
+    env.db.insert(table.name, options.value as AnyType),
+  )
+}
+
+export function* createManyOp(
+  table: Schema.Table,
+  options: ResourceDef.CreateManyOp,
+): Operation<readonly AnyType[]> {
+  const env = yield* opEnv(options)
+
+  return yield* spanned(env, `crud.create-many ${table.name}`, () =>
+    env.db.insertMany(table.name, options.values as AnyType[]),
+  )
+}
+
+export function* updateOp(table: Schema.Table, options: ResourceDef.UpdateOp): Operation<AnyType> {
+  const env = yield* opEnv(options)
+
+  return yield* spanned(env, `crud.update ${table.name}`, function* () {
+    const row = yield* env.db.patch(table.name, options.id, options.patch as AnyType, {
+      ifVersion: versionFor(env.headers, options.ifVersion),
+    })
+
+    if (!row) {
+      return yield* fail(ServerErrors.NotFound, `${table.name} ${options.id} not found`)
+    }
+
+    return row
+  })
+}
+
+export function* replaceOp(
+  table: Schema.Table,
+  options: ResourceDef.ReplaceOp,
+): Operation<AnyType> {
+  const env = yield* opEnv(options)
+
+  return yield* spanned(env, `crud.replace ${table.name}`, function* () {
+    const row = yield* env.db.replace(table.name, options.id, options.value as AnyType, {
+      ifVersion: versionFor(env.headers, options.ifVersion),
+    })
+
+    if (!row) {
+      return yield* fail(ServerErrors.NotFound, `${table.name} ${options.id} not found`)
+    }
+
+    return row
+  })
+}
+
+export function* removeOp(
+  table: Schema.Table,
+  options: ResourceDef.RemoveOp,
+): Operation<{ removed: boolean }> {
+  const env = yield* opEnv(options)
+
+  return yield* spanned(env, `crud.remove ${table.name}`, function* () {
+    const removed = yield* env.db.delete(table.name, options.id, {
+      ifVersion: versionFor(env.headers, options.ifVersion),
+    })
+
+    if (!removed && options.strict === true) {
+      return yield* fail(ServerErrors.NotFound, `${table.name} ${options.id} not found`)
+    }
+
+    return { removed }
+  })
+}
+
 /**
  * The realtime handshake guard: a presented bearer (`authorization` header, or the `?token=`
  * the edge promotes) is ALWAYS verified — an expired or malformed token rejects the upgrade
@@ -240,7 +486,7 @@ export const hooked = <
  * The verified principal is RESOLVED so the edge plants it as the socket ctx's `auth` (the
  * hooks and handlers see who subscribed without verifying twice).
  */
-export const guardHandshake = (resource: ResourceDef.Crud) =>
+export const guardHandshake = (resource: ResourceDef.RealtimeSource) =>
   function* (request: Request): Operation<unknown> {
     const requirement = (resource.auth.read ?? false) as AuthDef.Requirement
     const header = request.headers.get('authorization')
@@ -273,7 +519,7 @@ export const guardHandshake = (resource: ResourceDef.Crud) =>
 /** One client watch on the realtime socket. */
 export function* watch(
   socket: EdgeDef.Socket,
-  resource: ResourceDef.Crud,
+  resource: ResourceDef.RealtimeSource,
   incoming: Extract<ResourceDef.ClientFrame, { t: 'watch' }>,
 ): Operation<void> {
   const { ctx } = socket
@@ -307,7 +553,11 @@ export function* watch(
       }
     }
 
-    const filter = yield* filterOf(frame.filter, resource.filterable)
+    const client = yield* filterOf(frame.filter, resource.filterable)
+    // the trusted per-subscriber scope (tenancy) joins AFTER the sanitizer — its fields need
+    // not be in `filterable`, so they never open up to client filtering
+    const trusted = resource.scope ? ((yield* resource.scope(ctx)) ?? undefined) : undefined
+    const filter = combine(trusted, client)
     let query = ctx.db.query(resource.table.name)
 
     if (filter) {
@@ -378,7 +628,7 @@ export function* watch(
 
 interface WindowedArgs {
   readonly ctx: ServerDef.Ctx
-  readonly resource: ResourceDef.Crud
+  readonly resource: ResourceDef.RealtimeSource
   readonly frame: Extract<ResourceDef.ClientFrame, { t: 'watch' }>
   readonly query: AnyType
 
@@ -473,7 +723,7 @@ function* windowed({ ctx, resource, frame, query, send }: WindowedArgs): Operati
 }
 
 /** The realtime socket handler of one resource: `watch`/`unwatch` frames, one task per watch. */
-export const realtime = (resource: ResourceDef.Crud): EdgeDef.SocketHandler =>
+export const realtime = (resource: ResourceDef.RealtimeSource): EdgeDef.SocketHandler =>
   function* (socket) {
     const watches = new Map<string, { halt(): Operation<void> }>()
     const messages = yield* socket.messages

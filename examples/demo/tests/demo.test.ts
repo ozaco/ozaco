@@ -36,9 +36,9 @@ describe('demo — every use case end to end', () => {
           'observe',
         ])
         expect(detail(steps, 'manifest').sockets).toEqual([
+          '/todos/_realtime',
           '/live/chat',
           '/rtc/:room',
-          '/todos/_realtime',
         ])
         expect(detail(steps, 'whoami anonymous')).toBe('server.unauthorized')
         expect(detail(steps, 'login + whoami')).toMatchObject({ roles: ['admin'], type: 'access' })
@@ -63,6 +63,7 @@ describe('demo — every use case end to end', () => {
           replaceDisabled: 'client.no-route',
         })
         expect(detail(steps, 'crud schema')).toEqual({ rejected: 'server.validation' })
+        expect(detail(steps, 'crud ops')).toEqual({ open: ['seen live'], total: 1 })
         expect(detail(steps, 'streams')).toEqual({ ndjson: 3, sse: 2, text: 'a b c ', bytes: 4096 })
         expect(detail(steps, 'uploads')).toMatchObject({
           upload: 3000,

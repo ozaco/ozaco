@@ -131,6 +131,9 @@ export namespace ServiceDef {
     /** runs before the upgrade; a failure rejects the handshake with its status; what it
      * resolves becomes the socket ctx's `auth`. */
     readonly authorize?: ((request: Request) => Operation<unknown>) | undefined
+
+    /** opening-frame defaults documented in the manifest (e.g. `{ cursor: 0 }` on realtime). */
+    readonly defaults?: Readonly<Record<string, unknown>> | undefined
   }
 
   export interface SocketSpec {
@@ -138,6 +141,7 @@ export namespace ServiceDef {
     readonly protocol: string | null
     readonly description: string | null
     readonly authorize: ((request: Request) => Operation<unknown>) | null
+    readonly defaults: Readonly<Record<string, unknown>> | null
   }
 
   export interface SocketAction {

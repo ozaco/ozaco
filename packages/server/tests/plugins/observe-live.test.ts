@@ -4,7 +4,7 @@
  * stream or the store behind it. Regression test for the panel's "live → offline" drops.
  */
 import { createServer, Observe } from 'server:core'
-import { crud, ObservePlugin, Resource } from 'server:plugins'
+import { crud, ObservePlugin } from 'server:plugins'
 import { fork, run, sleep, until } from 'std:effect'
 import { unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
@@ -46,10 +46,7 @@ describe('observe — the live feed under socket churn', () => {
         const server = yield* createServer({
           services: [todos.service],
           edge: BunEdge,
-          plugins: [
-            ObservePlugin.use({ console: true, batch: { ms: 10 } }),
-            Resource.use({ resources: [todos] }),
-          ],
+          plugins: [ObservePlugin.use({ console: true, batch: { ms: 10 } })],
         })
         const info = yield* server.listen({ port: 0 })
         const base = info.url!
