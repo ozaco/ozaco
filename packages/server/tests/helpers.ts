@@ -12,7 +12,11 @@ import { z } from 'zod'
 export const Todo = z.object({ id: z.string(), title: z.string(), done: z.boolean() })
 export type Todo = z.infer<typeof Todo>
 
-export const todosTable = table('todos', { title: column.text(), done: column.boolean() })
+export const todosTable = table('todos', {
+  title: column.text(),
+  done: column.boolean(),
+  note: column.text().optional(),
+})
 
 /** A service exercising every action shape: query, mutation, failing, slow, streaming. */
 export const todos = service('todos', {

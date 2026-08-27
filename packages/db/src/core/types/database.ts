@@ -30,11 +30,14 @@ export namespace Database {
     ? TInsert
     : unknown
 
-  /** What `patch` takes: any subset of the insert shape, and `CLEAR` to null an optional
-   * column without fighting the types. */
-  export type PatchOf<TSchema, TName extends TableName<TSchema>> = {
-    readonly [K in keyof InsertOf<TSchema, TName>]?: InsertOf<TSchema, TName>[K] | typeof CLEAR
+  /** What `patch` takes for an insert shape: any subset, and `CLEAR` to null an optional
+   * column without fighting the types. The canonical definition — anything wrapping `patch`
+   * (e.g. the server's crud ops) types its patch with this. */
+  export type Patch<TInsert> = {
+    readonly [K in keyof TInsert]?: TInsert[K] | typeof CLEAR
   }
+
+  export type PatchOf<TSchema, TName extends TableName<TSchema>> = Patch<InsertOf<TSchema, TName>>
 
   /** A lazily-built, immutable query over one table. Chain refiners, then call a terminal — or
    * `watch()` it to get a live-updating snapshot flow. */

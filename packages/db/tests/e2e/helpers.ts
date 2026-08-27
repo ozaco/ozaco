@@ -311,6 +311,27 @@ export const runAdapterSuite = (target: AdapterTarget): void => {
             query().paginate({ limit: 2, cursor: '00000000000000000000000000000000' }),
           )
           expect((missing as AnyType).error).toBe(DbErrors.Cursor)
+
+          // the boundary lookup carries the query's own filter: a bare id OUTSIDE the query's
+          // set (here: another role) answers EXACTLY like a missing one — no cross-scope
+          // existence oracle — while an in-scope bare id still positions the window
+          yield* db.insert('users', { name: 'zed', age: 6, role: 'admin' })
+          const members = () => db.query('users').where({ role: 'member' }).order('age')
+
+          const inScope = yield* members().paginate({ limit: 2, cursor: cId })
+          expect(inScope.data.map((row: AnyType) => row.name)).toEqual(['c', 'd'])
+
+          const admin = yield* db.query('users').where({ role: 'admin' }).first()
+          const foreignId = String((admin as AnyType)._id)
+          const foreign = yield* attempt(members().paginate({ limit: 2, cursor: foreignId }))
+          const absent = yield* attempt(
+            members().paginate({ limit: 2, cursor: '00000000000000000000000000000000' }),
+          )
+          expect((foreign as AnyType).error).toBe(DbErrors.Cursor)
+          expect((absent as AnyType).error).toBe(DbErrors.Cursor)
+          expect(String((foreign as AnyType).message).replace(foreignId, 'ID')).toBe(
+            String((absent as AnyType).message).replace('00000000000000000000000000000000', 'ID'),
+          )
         }),
       )
     })

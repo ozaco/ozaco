@@ -5,7 +5,7 @@
  * limits, ambient `If-Match`). `crud.realtime` is the delta-watch socket as an `action.socket`
  * entry of a custom service.
  */
-import { DbClient, DbErrors, eq, ne } from 'db:core'
+import { CLEAR, DbClient, DbErrors, eq, ne } from 'db:core'
 import { action, createServer, Edge, ServerErrors, service } from 'server:core'
 import { crud, Docs } from 'server:plugins'
 import { attempt, run, until } from 'std:effect'
@@ -328,6 +328,29 @@ describe('resource — runnable ops', () => {
 
         // reads count the same way
         expect(yield* crud.count(todosTable, { scope: eq('done', false), db })).toBe(1)
+      }),
+    )
+  })
+
+  it('crud.update takes CLEAR to null an optional column, exactly like db.patch', async () => {
+    unwrap(
+      await run(function* () {
+        yield* storage()
+        const db = (yield* DbClient.context.get()) as AnyType
+
+        const row = (yield* crud.create(todosTable, {
+          value: { title: 'noted', done: false, note: 'temporary' },
+          db,
+        })) as AnyType
+        expect(row.note).toBe('temporary')
+
+        // compiling is the point: the typed op's patch is aligned with db's `PatchOf`
+        const cleared = (yield* crud.update(todosTable, {
+          id: String(row._id),
+          patch: { note: CLEAR },
+          db,
+        })) as AnyType
+        expect(cleared.note).toBeNull()
       }),
     )
   })

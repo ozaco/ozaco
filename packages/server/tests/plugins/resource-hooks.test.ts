@@ -83,6 +83,7 @@ describe('resource hooks', () => {
             _version: 'ghost',
             title: 'ghost',
             done: false,
+            note: null,
           }
         }
         if (op === 'update') {

@@ -101,16 +101,21 @@ function* paginate(
       // no lookup needed: the boundary value IS the id (a vanished row degrades gracefully)
       cursor = { column, direction: sort, value: options.cursor, id: options.cursor }
     } else {
+      // the lookup carries the query's own predicates: a row outside this query's set (another
+      // tenant's, under a scope filter) must answer EXACTLY like a missing one — no existence oracle
       const boundary = yield* target.state.adapter.find({
         table: target.spec,
-        filter: eq(FIELDS.id, options.cursor),
+        filter: combine([...predicatesOf(query), eq(FIELDS.id, options.cursor)]),
         order: [{ field: FIELDS.id, direction: 'asc' }],
         limit: 1,
         offset: null,
       })
 
       if (boundary.length === 0) {
-        return yield* fail(DbErrors.Cursor, `cursor names no existing row: ${options.cursor}`)
+        return yield* fail(
+          DbErrors.Cursor,
+          `cursor names no row in this query's set: ${options.cursor}`,
+        )
       }
 
       cursor = {

@@ -115,7 +115,7 @@
     },
     "packages/db": {
       "name": "@ozaco/db",
-      "version": "0.4.1",
+      "version": "0.4.2",
       "devDependencies": {
         "@ozaco/std": "workspace:*",
         "@ozaco/transport": "workspace:*",
@@ -162,7 +162,7 @@
     },
     "packages/server": {
       "name": "@ozaco/server",
-      "version": "0.4.4",
+      "version": "0.4.5",
       "dependencies": {
         "@fastify/busboy": "^3.2.2",
         "jose": "^6.2.10",

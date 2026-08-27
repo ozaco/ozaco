@@ -1,4 +1,4 @@
-import type { Schema, Spec } from 'db:core'
+import type { Database, Schema, Spec } from 'db:core'
 import type { ServerDef, ServiceDef } from 'server:core'
 import type { Operation } from 'std:effect'
 import type { Result } from 'std:result'
@@ -263,7 +263,10 @@ export namespace ResourceDef {
    * built-ins' behaviour), a string = require that `_version`, `false` = no version check. */
   export interface UpdateOp<TInsert = AnyType> extends OpOptions {
     readonly id: string
-    readonly patch: Partial<TInsert>
+
+    /** aligned with db's `PatchOf`: `CLEAR` nulls an optional column, exactly as `db.patch`. */
+    readonly patch: Database.Patch<TInsert>
+
     readonly ifVersion?: string | false | undefined
   }
 
