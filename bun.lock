@@ -99,7 +99,7 @@
     },
     "packages/client": {
       "name": "@ozaco/client",
-      "version": "0.4.1",
+      "version": "0.4.2",
       "devDependencies": {
         "@ozaco/db": "workspace:*",
         "@ozaco/server": "workspace:*",
@@ -162,7 +162,7 @@
     },
     "packages/server": {
       "name": "@ozaco/server",
-      "version": "0.4.3",
+      "version": "0.4.4",
       "dependencies": {
         "@fastify/busboy": "^3.2.2",
         "jose": "^6.2.10",
