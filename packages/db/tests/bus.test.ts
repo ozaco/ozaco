@@ -136,12 +136,17 @@ describe('change bus', () => {
         yield* install(MemoryTransport, { prefix: 'app' })
         const shipped = yield* Transport.actions.subscribe<Bus.Envelope>('db.change')
         yield* install(DbBus)
-        // every publish takes 30ms on the wire
+        // the carrier is GATED rather than slow-by-clock: every publish waits for a token, so
+        // the test holds on any machine speed — nothing ships until the gate opens
+        const gate = createQueue<void>()
+        let delivered = 0
         yield* Transport.around({
           publish: ([topic, value, options]: AnyType[], next: AnyType) =>
             (function* () {
-              yield* sleep(30)
-              return yield* next(topic, value, options)
+              yield* gate.next()
+              const out = yield* next(topic, value, options)
+              delivered += 1
+              return out
             })(),
         })
         const stats = yield* scoped(function* () {
@@ -149,14 +154,19 @@ describe('change bus', () => {
             tables: [users],
             bus: { maxPending: 2, drainTimeoutMs: 500 },
           })
-          const started = Date.now()
           for (let n = 0; n < 6; n += 1) {
             yield* db.insert('users', { name: `u${n}` })
           }
-          // six writes, none waited for the wire
-          expect(Date.now() - started).toBeLessThan(30)
-          yield* sleep(5)
-          return yield* Db.actions.busStats()
+          // six writes committed while the carrier shipped NOTHING — the write path never
+          // waits for the wire
+          expect(yield* db.query('users').count()).toBe(6)
+          expect(delivered).toBe(0)
+          const collected = yield* Db.actions.busStats()
+          // open the gate before the scope closes so the ensure-drain can ship the backlog
+          for (let n = 0; n < 32; n += 1) {
+            gate.add()
+          }
+          return collected
         })
         // the outbox held at most 2: older envelopes were dropped (peers heal via the log)
         expect(stats.coalesced).toBeGreaterThan(0)
