@@ -1,5 +1,5 @@
 import { createServer, Edge } from 'server:core'
-import { crud, Resource } from 'server:plugins'
+import { crud } from 'server:plugins'
 import { run, sleep, until } from 'std:effect'
 import { unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
@@ -27,13 +27,10 @@ describe('resource', () => {
       await run(function* () {
         yield* storage()
         const server = yield* createServer({
-          services: [todos.service],
+          services: [todos],
           edge: BunEdge,
-          // the deprecated Resource plugin is a NO-OP — installed here on purpose to prove
-          // existing `Resource.use` calls keep booting (the socket comes from the service)
-          plugins: [Resource.use({ resources: [todos] })],
         })
-        yield* server.listen()
+        yield* server.start()
         const created = yield* json('/todos', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
@@ -108,11 +105,10 @@ describe('resource', () => {
         // a tiny replay window so a spaced `since` resume is provably current (silent)
         yield* storage({ replayWindowMs: 10 })
         const server = yield* createServer({
-          services: [todos.service],
+          services: [todos],
           edge: BunEdge,
-          plugins: [Resource.use({ resources: [todos] })],
         })
-        const info = yield* server.listen({ port: 0 })
+        const info = yield* server.start({ port: 0 })
         const ws = new WebSocket(`${info.url!.replace('http', 'ws')}/todos/_realtime`)
         // record EVERY frame continuously — silence assertions need eyes between reads
         const frames: AnyType[] = []
@@ -148,13 +144,13 @@ describe('resource', () => {
         const sync = yield* next(0)
         expect(sync).toMatchObject({ t: 'sync', id: 'w1', rows: [] })
         yield* sleep(30)
-        yield* server.call(todos.service, 'create', { title: 'live', done: false })
+        yield* server.call(todos, 'create', { title: 'live', done: false })
         const delta = yield* next(1)
         expect(delta.t).toBe('delta')
         expect(delta.added.map((row: AnyType) => row.title)).toEqual(['live'])
         // a row leaving the filter is a removal
         yield* sleep(30)
-        yield* server.call(todos.service, 'update', {
+        yield* server.call(todos, 'update', {
           id: delta.added[0]._id,
           done: true,
         })
@@ -174,7 +170,7 @@ describe('resource', () => {
         yield* sleep(150)
         expect(frames.filter(frame => frame.id === 'w2')).toHaveLength(0)
         // the FIRST frame after a silent resume is a live diff — a `delta`, never a `sync`
-        yield* server.call(todos.service, 'create', { title: 'after', done: false })
+        yield* server.call(todos, 'create', { title: 'after', done: false })
         const resumed = yield* next(3)
         expect(resumed.id).toBe('w2')
         expect(resumed.t).toBe('delta')

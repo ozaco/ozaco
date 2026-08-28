@@ -58,7 +58,7 @@ describe('edge — returned failures are reported', () => {
         yield* storage()
         const todos = crud(todosTable)
         const server = yield* createServer({
-          services: [todos.service],
+          services: [todos],
           edge: BunEdge,
           plugins: [Spy.use()],
         })
@@ -69,7 +69,7 @@ describe('edge — returned failures are reported', () => {
           },
           *handler() {},
         })
-        const info = yield* server.listen({ port: 0 })
+        const info = yield* server.start({ port: 0 })
         const base = info.url!
 
         // an unrouted request → failure row with the http status

@@ -85,12 +85,16 @@ export function* createEdgeState(
   return state
 }
 
-/** Request headers as a plain record; a `?token=` query param is promoted to a bearer header
- * (browsers cannot set handshake headers on sockets). */
-const headersOf = (request: Request): Record<string, string> => {
+/**
+ * Request headers as a plain record. On a SOCKET UPGRADE only, a `?token=` query param is
+ * promoted to a bearer header — browsers cannot set handshake headers on a WebSocket, so that
+ * is the one place it is needed. HTTP requests do NOT get the promotion: a token in the query
+ * string of an ordinary request lands in access logs, referrers and browser history.
+ */
+const headersOf = (request: Request, promoteToken = false): Record<string, string> => {
   const headers = Object.fromEntries(request.headers.entries())
 
-  if (!headers.authorization) {
+  if (promoteToken && !headers.authorization) {
     const token = new URL(request.url).searchParams.get('token')
 
     if (token) {
@@ -145,6 +149,7 @@ export const mountActions = (state: EdgeState): number => {
       protocol: socket.protocol ?? undefined,
       description: socket.description ?? undefined,
       defaults: socket.defaults ?? undefined,
+      receives: socket.receives ?? undefined,
     })
     count += 1
   }
@@ -528,7 +533,7 @@ export function* decideUpgrade(state: EdgeState, request: Request): Operation<Ed
   }
 
   const params = decodeParams(match.params)
-  const headers = headersOf(request)
+  const headers = headersOf(request, true)
   const socketHeaders = observing(kernel) ? capturedHeaders(headers) : null
   const trace = yield* rootTrace(kernel.serviceId, 'external', requestId)
 

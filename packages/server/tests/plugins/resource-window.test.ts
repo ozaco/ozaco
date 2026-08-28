@@ -46,11 +46,11 @@ describe('resource — windowed realtime', () => {
         yield* storage()
         const todos = crud(todosTable)
         const server = yield* createServer({
-          services: [todos.service],
+          services: [todos],
           edge: BunEdge,
           plugins: [Docs.use({ path: '/docs' })],
         })
-        const info = yield* server.listen({ port: 0 })
+        const info = yield* server.start({ port: 0 })
         const base = info.url!
 
         // the manifest documents the realtime opening defaults: cursor 0 = start of the set

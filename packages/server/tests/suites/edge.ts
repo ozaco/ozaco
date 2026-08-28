@@ -280,7 +280,7 @@ export const runEdgeSuite = (target: EdgeTarget): void => {
                 }
               },
             })
-            const info = yield* server.listen({ port: 0 })
+            const info = yield* server.start({ port: 0 })
             expect(info.url).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/u)
             const response = yield* until(fetch(`${info.url}/todos/list`))
             expect(response.status).toBe(200)

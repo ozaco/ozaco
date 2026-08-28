@@ -3,6 +3,7 @@
   "compilerOptions": {
     "paths": {
       "server:core": ["./src/core/index.ts", "./dist/index.d.ts"],
+      "server:internal": ["./src/internal.ts", "./dist/internal.d.ts"],
       "server:impl/edge/bun": ["./src/impl/edge/bun/index.ts", "./dist/edge/bun.d.ts"],
       "server:impl/edge/node": ["./src/impl/edge/node/index.ts", "./dist/edge/node.d.ts"],
       "server:impl/edge/deno": ["./src/impl/edge/deno/index.ts", "./dist/edge/deno.d.ts"],
@@ -19,7 +20,6 @@
         "./src/plugins/observe/impl/openobserve/index.ts",
         "./dist/plugins/observe/openobserve.d.ts"
       ],
-      "server:app": ["./src/app/index.ts", "./dist/app.d.ts"],
       "std:shared": ["./node_modules/@ozaco/std/dist/shared"],
       "std:result": ["./node_modules/@ozaco/std/dist/result"],
       "std:effect": ["./node_modules/@ozaco/std/dist/effect"],

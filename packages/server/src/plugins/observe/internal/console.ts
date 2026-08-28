@@ -1,4 +1,5 @@
 import type { EdgeDef } from 'server:core'
+import { OBSERVE_CONSOLE_PATH } from 'server:internal'
 import type { Operation } from 'std:effect'
 
 import { CONSOLE_HTML } from './console.gen'
@@ -11,7 +12,7 @@ import { CONSOLE_HTML } from './console.gen'
 export function* mountConsole(edge: EdgeDef.Handle): Operation<void> {
   yield* edge.actions.raw({
     method: 'GET',
-    path: '/_observe',
+    path: OBSERVE_CONSOLE_PATH,
     *handler() {
       return new Response(CONSOLE_HTML, {
         headers: { 'content-type': 'text/html; charset=utf-8' },

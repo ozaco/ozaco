@@ -145,7 +145,7 @@ describe('auth', () => {
         expect((garbage as AnyType).causes).toContain(AuthErrors.InvalidToken)
 
         // over the edge: the header travels into the dispatch
-        yield* server.listen()
+        yield* server.start()
         const http = yield* Edge.actions.handle(
           new Request('http://edge/app/me', {
             headers: { authorization: `Bearer ${tokens.accessToken}` },
@@ -213,12 +213,9 @@ describe('auth', () => {
     )
   })
 
-  it("requirements: 'authenticated' (+ deprecated 'any'), permissions and predicates", async () => {
+  it("requirements: 'authenticated', permissions and predicates", async () => {
     const gated = service('gated', {
       anyone: action.query({ output: z.string(), auth: 'authenticated' }, function* () {
-        return 'in'
-      }),
-      legacy: action.query({ output: z.string(), auth: 'any' }, function* () {
         return 'in'
       }),
       viewer: action.query(
@@ -255,7 +252,6 @@ describe('auth', () => {
 
         // 'authenticated' and its deprecated alias 'any' mean the same thing
         expect(yield* server.call(gated, 'anyone', undefined, { meta })).toBe('in')
-        expect(yield* server.call(gated, 'legacy', undefined, { meta })).toBe('in')
         const anonymous = yield* attempt(server.call(gated, 'anyone'))
         expect((anonymous as AnyType).error).toBe(ServerErrors.Unauthorized)
 

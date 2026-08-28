@@ -4,9 +4,11 @@ import { dbResolve, serverResolve, stdResolve, transportResolve } from '../devki
 
 // oxlint-disable-next-line import/no-default-export
 export default defineConfig({
-  // entries are added as the modules land (edge/*, carrier/network, plugins, app)
+  // one entry per published subpath — keep in step with package.json `exports`,
+  // tsconfig.paths.json and the devkit registries (tests/exports.test.ts checks it)
   entry: {
     index: './src/core/index.ts',
+    internal: './src/internal.ts',
     'edge/bun': './src/impl/edge/bun/index.ts',
     'edge/node': './src/impl/edge/node/index.ts',
     'edge/deno': './src/impl/edge/deno/index.ts',
@@ -14,7 +16,6 @@ export default defineConfig({
     plugins: './src/plugins/index.ts',
     'plugins/observe/otlp': './src/plugins/observe/impl/otlp/index.ts',
     'plugins/observe/openobserve': './src/plugins/observe/impl/openobserve/index.ts',
-    app: './src/app/index.ts',
   },
   format: ['esm', 'cjs'],
   dts: true,

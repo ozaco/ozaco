@@ -1,5 +1,6 @@
 import type { EdgeDef } from 'server:core'
-import { Edge, edgeActions, edgeDefaults, openEdge } from 'server:core'
+import { Edge } from 'server:core'
+import { edgeActions, edgeDefaults, openEdge } from 'server:internal'
 
 import pkg from '../../../../package.json'
 

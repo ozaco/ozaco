@@ -17,20 +17,20 @@
  *   error   failure shaping  every failure gains a `todos:<op>` cause before it leaves
  * Hooks wrap the BUILT-INS only — `extend` authors own their whole handler.
  */
-import { eq } from '@ozaco/db'
-import { action, report, Server, ServerErrors } from '@ozaco/server'
+import type { Schema } from '@ozaco/db'
+import { useDb, where } from '@ozaco/db'
+import { action, Server, ServerErrors } from '@ozaco/server'
 import { crud } from '@ozaco/server/plugins'
 import { appendCauses, fail } from '@ozaco/std/result'
-import type { AnyType } from '@ozaco/std/shared'
 import { z } from 'zod'
 
 import { todosTable } from '../tables'
 
-const WRITES = new Set(['create', 'update', 'replace'])
+type Todo = Schema.Infer<typeof todosTable>
 
 /** the read projection: high-priority rows shout. */
-const shout = (row: AnyType): AnyType =>
-  row.priority === 'high' ? { ...row, title: String(row.title).toUpperCase() } : row
+const shout = (row: Todo): Todo =>
+  row.priority === 'high' ? { ...row, title: row.title.toUpperCase() } : row
 
 export const todos = crud(todosTable, {
   maxLimit: 100,
@@ -44,8 +44,8 @@ export const todos = crud(todosTable, {
         cache: { ttlMs: 10_000, tags: ['todos'] },
         description: 'Open todos per priority (cached, invalidated by todos writes)',
       },
-      function* ({ ctx }) {
-        const rows = yield* ctx.db
+      function* () {
+        const rows = yield* (yield* useDb(todosTable))
           .query('todos')
           .filter({ op: 'eq', field: 'done', value: false })
           .collect()
@@ -70,7 +70,7 @@ export const todos = crud(todosTable, {
       function* ({ input }) {
         return yield* crud.list(todosTable, {
           input,
-          scope: eq('done', false),
+          scope: where.eq('done', false),
           total: true,
         })
       },
@@ -87,32 +87,44 @@ export const todos = crud(todosTable, {
     },
   },
 
-  *before({ op, input }) {
-    const value = input as AnyType
-    if (WRITES.has(op) && typeof value.title === 'string') {
-      return { ...value, title: value.title.trim() }
+  // `op` narrows the input: the write ops are the ones that carry a title
+  *before(call) {
+    if (call.op === 'create' || call.op === 'update' || call.op === 'replace') {
+      const { title } = call.input
+
+      if (typeof title === 'string') {
+        return { ...call.input, title: title.trim() }
+      }
     }
   },
 
-  *after({ op, output }) {
-    if (op === 'list') {
-      const page = output as AnyType
-      return { ...page, data: page.data.map(shout) }
+  *after(call) {
+    if (call.op === 'list') {
+      return { ...call.output, data: call.output.data.map(shout) }
     }
-    if (op === 'get') {
-      return shout(output)
+
+    if (call.op === 'get') {
+      return shout(call.output)
     }
-    if (op === 'watch') {
-      const frame = output as AnyType
-      return frame.t === 'sync'
-        ? { ...frame, rows: frame.rows.map(shout) }
-        : { ...frame, added: frame.added.map(shout), changed: frame.changed.map(shout) }
+
+    if (call.op === 'watch') {
+      const frame = call.output
+
+      if (frame.t === 'sync') {
+        return { ...frame, rows: frame.rows.map(shout) }
+      }
+
+      if (frame.t === 'delta') {
+        return { ...frame, added: frame.added.map(shout), changed: frame.changed.map(shout) }
+      }
     }
   },
 
-  *around({ op, input, ctx }, next) {
-    if (op === 'remove') {
-      const row = yield* ctx.db.get('todos', (input as AnyType).id)
+  *around(call, next) {
+    const { ctx, input } = call
+
+    if (call.op === 'remove') {
+      const row = yield* (yield* useDb(todosTable)).get('todos', call.input.id)
       if (row && String(row.title).includes('[keep]')) {
         return yield* fail(
           ServerErrors.Forbidden,
@@ -122,13 +134,13 @@ export const todos = crud(todosTable, {
       const out = yield* next(input)
       // a DOMAIN record: free-form audit shipped by exporters (OpenObserve `streams.domain`),
       // never stored in the observe db — `ctx.auth` says who did it (socket or http alike)
-      yield* report(yield* Server.actions.describe(), {
+      yield* Server.actions.report({
         t: 'domain',
         row: {
           stream: 'audit',
           verb: 'todo.removed',
-          id: String((input as AnyType).id),
-          actor: (ctx.auth as AnyType)?.sub ?? null,
+          id: call.input.id,
+          actor: ctx.auth?.sub ?? null,
         },
       })
       return out

@@ -25,9 +25,7 @@ import { PgAdapter } from '@ozaco/db/impl/pg'
 import { RedisKv } from '@ozaco/db/impl/redis-kv'
 import { SqliteAdapter } from '@ozaco/db/impl/sqlite'
 import type { ServerDef } from '@ozaco/server'
-import { Edge } from '@ozaco/server'
-import type { AppDef } from '@ozaco/server/app'
-import { createApp } from '@ozaco/server/app'
+import { createServer, Edge } from '@ozaco/server'
 import { NetworkCarrier } from '@ozaco/server/carrier/network'
 import { BunEdge } from '@ozaco/server/edge/bun'
 import { Auth, Cache, Cors, Docs, ObservePlugin, Resilience } from '@ozaco/server/plugins'
@@ -41,12 +39,11 @@ import { MemoryTransport } from '@ozaco/transport/impl/memory'
 import { NatsTransport } from '@ozaco/transport/impl/nats'
 import { RedisTransport } from '@ozaco/transport/impl/redis'
 
-import type { Db } from './auth'
 import { authProvider, seedUsers } from './auth'
 import { account, cluster, feed, live, media, reports, rtc, startRtcRelay, todos } from './services'
 import { tables } from './tables'
 
-export const services = [account, todos.service, feed, media, reports, live, rtc, cluster] as const
+export const services = [account, todos, feed, media, reports, live, rtc, cluster] as const
 
 export type Api = ServerDef.Handle<typeof services>['api']
 
@@ -64,7 +61,10 @@ const envOf = (overrides?: Readonly<Record<string, string | undefined>>) => (nam
 /** Install transport → change bus → storage, as the environment asks; resolves the db handle.
  * The bus rides the same transport the carrier does, so every node sees every change (cache
  * invalidation, realtime watches) when they share a database. */
-function* infrastructure(env: (name: string) => string | undefined, link?: unknown): Operation<Db> {
+function* infrastructure(
+  env: (name: string) => string | undefined,
+  link?: unknown,
+): Operation<void> {
   yield* BunIO.use()
   const prefix = env('APP_PREFIX') ?? 'demo'
 
@@ -103,22 +103,24 @@ function* infrastructure(env: (name: string) => string | undefined, link?: unkno
     }
   }
 
-  const db = yield* DbClient.use({ tables: [...tables] })
+  yield* DbClient.use({ tables: [...tables] })
   yield* (env('KV') ?? 'memory') === 'redis'
     ? RedisKv.use({ url: env('REDIS_URL') ?? 'redis://localhost:6379' })
     : MemoryKv.use()
-  yield* seedUsers(db as unknown as Db)
-
-  return db as unknown as Db
+  yield* seedUsers()
 }
 
 /** Build (not start) the demo node. */
-export function* createDemo(options: DemoOptions = {}): Operation<AppDef.Handle<typeof services>> {
+export function* createDemo(
+  options: DemoOptions = {},
+): Operation<ServerDef.Handle<typeof services>> {
   const env = envOf(options.env)
-  const db = yield* infrastructure(env, options.link)
+  yield* infrastructure(env, options.link)
   const observe = env('OBSERVE') ?? 'local'
-  const role = (env('ROLE') as AppDef.Role | undefined) ?? (env('SERVICE') ? 'service' : 'monolith')
-  const withEdge = role !== 'service' || env('PORT') !== undefined
+  const role =
+    (env('ROLE') as ServerDef.Role | undefined) ?? (env('SERVICE') ? 'service' : undefined)
+  const withEdge =
+    (role ?? (env('SERVICE') ? 'service' : 'monolith')) !== 'service' || env('PORT') !== undefined
 
   const plugins: ServerDef.PluginLike[] = [
     ObservePlugin.use({
@@ -129,7 +131,7 @@ export function* createDemo(options: DemoOptions = {}): Operation<AppDef.Handle<
     }),
     Cors.use({ origins: '*' }),
     Auth.use({
-      provider: authProvider(() => db),
+      provider: authProvider(),
       secret: env('AUTH_SECRET') ?? 'demo-secret-change-me',
       mode: 'access-refresh',
       accessTtlMs: 15 * 60 * 1000,
@@ -167,13 +169,17 @@ export function* createDemo(options: DemoOptions = {}): Operation<AppDef.Handle<
     )
   }
 
-  const app = yield* createApp({
+  // `role`/`hosted` default from `process.env.SERVICE` inside createServer; the demo resolves
+  // them through its OWN env map (tests boot several nodes in one process), so it passes both
+  const hosted = env('SERVICE')
+    ?.split(',')
+    .map(name => name.trim())
+    .filter(Boolean)
+
+  const app = yield* createServer({
     services,
-    role,
-    hosted: env('SERVICE')
-      ?.split(',')
-      .map(name => name.trim())
-      .filter(Boolean),
+    ...(role ? { role } : {}),
+    ...(hosted && hosted.length > 0 ? { hosted } : {}),
     edge: withEdge ? BunEdge : undefined,
     carrier: NetworkCarrier,
     plugins,

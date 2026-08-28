@@ -1,6 +1,13 @@
 import type { Adapter, Spec } from 'db:core'
 
-import { compileCount, compileDelete, compileFind, compileInsert, compileUpdate } from './compile'
+import {
+  compileAggregate,
+  compileCount,
+  compileDelete,
+  compileFind,
+  compileInsert,
+  compileUpdate,
+} from './compile'
 import { compileStep } from './ddl'
 import { decodeRows, encodeRawParams } from './dialects'
 import type { Sql } from './types'
@@ -18,7 +25,16 @@ export const sqlActions = ({
   exec,
 }: Sql.Runtime): Pick<
   Adapter.Actions,
-  'find' | 'count' | 'insert' | 'update' | 'remove' | 'introspect' | 'tables' | 'migrate' | 'raw'
+  | 'find'
+  | 'count'
+  | 'aggregate'
+  | 'insert'
+  | 'update'
+  | 'remove'
+  | 'introspect'
+  | 'tables'
+  | 'migrate'
+  | 'raw'
 > => {
   const decoded = function* (table: Spec.Table, statement: Sql.Statement) {
     const result = yield* exec(statement.text, statement.params)
@@ -35,6 +51,45 @@ export const sqlActions = ({
       const result = yield* exec(statement.text, statement.params)
 
       return Number(result.rows[0]?.count ?? 0)
+    },
+
+    *aggregate(spec: Spec.Aggregate) {
+      const statement = yield* compileAggregate(dialect, spec)
+      const result = yield* exec(statement.text, statement.params)
+
+      // the answer's columns are the grouped ones (their own kinds) plus the aliases: `min`/`max`
+      // carry the SOURCE column's kind so a timestamp comes back a Date, counts/sums are numbers
+      const kinds = new Map(spec.table.columns.map(column => [column.name, column]))
+
+      const columns: Spec.Column[] = [
+        ...spec.groupBy.flatMap(field => {
+          const column = kinds.get(field)
+          return column ? [column] : []
+        }),
+
+        ...spec.ops.map(op => {
+          const source = op.field === null ? undefined : kinds.get(op.field)
+
+          const kind: Spec.ColumnKind =
+            op.kind === 'count'
+              ? 'int'
+              : op.kind === 'min' || op.kind === 'max'
+                ? (source?.kind ?? 'json')
+                : 'float'
+
+          return {
+            name: op.as,
+            kind,
+            optional: true,
+            hasDefault: false,
+            enumValues: null,
+            system: false,
+            primary: false,
+          }
+        }),
+      ]
+
+      return yield* decodeRows(dialect, { ...spec.table, columns }, result.rows)
     },
 
     *insert(table: Spec.Table, rows: readonly Spec.Doc[]) {

@@ -44,11 +44,11 @@ describe('observe — the live feed under socket churn', () => {
         yield* storage()
         const todos = crud(todosTable)
         const server = yield* createServer({
-          services: [todos.service],
+          services: [todos],
           edge: BunEdge,
           plugins: [ObservePlugin.use({ console: true, batch: { ms: 10 } })],
         })
-        const info = yield* server.listen({ port: 0 })
+        const info = yield* server.start({ port: 0 })
         const base = info.url!
         const wsBase = base.replace('http', 'ws')
 

@@ -2,10 +2,15 @@
 /**
  * The Auth plugin's provider over the `users` table: credentials → user, refresh records in
  * memory (a table would do the same), seeded with two accounts so the demo logs in at once.
+ *
+ * Nothing is threaded in: every method resolves the TYPED handle itself with `useDb(usersTable)`
+ * — the rows come back as `{ email, name, password, roles }`, no casts.
  */
-import type { ServerDef } from '@ozaco/server'
+import { useDb } from '@ozaco/db'
 import type { AuthDef } from '@ozaco/server/plugins'
 import type { Operation } from '@ozaco/std/effect'
+
+import { usersTable } from './tables'
 
 export const SEED_USERS = [
   { email: 'ada@example.com', name: 'Ada', password: 'ada', roles: ['admin'] },
@@ -14,51 +19,60 @@ export const SEED_USERS = [
 
 const refreshRecords = new Map<string, AuthDef.RefreshRecord>()
 
-/** The db handle as actions see it (`ctx.db`). */
-export type Db = ServerDef.Ctx['db']
+const rolesOf = (roles: unknown): readonly string[] => (Array.isArray(roles) ? roles : [])
 
-export const authProvider = (db: () => Db): AuthDef.Provider => ({
+export const authProvider = (): AuthDef.Provider => ({
   *authenticate(credentials) {
     const email = String(credentials['email'] ?? '')
     const password = String(credentials['password'] ?? '')
-    const user = yield* db()
-      .query('users')
-      .filter({ op: 'eq', field: 'email', value: email })
-      .first()
+    const db = yield* useDb(usersTable)
+
+    const user = yield* db.query('users').filter({ op: 'eq', field: 'email', value: email }).first()
+
     if (!user || user.password !== password) {
       return undefined
     }
+
     return {
-      sub: String(user._id),
-      roles: (user.roles as string[]) ?? [],
-      claims: { email, name: String(user.name) },
+      sub: user._id,
+      roles: rolesOf(user.roles),
+      claims: { email, name: user.name },
     }
   },
+
   *loadUser(sub) {
-    const user = yield* db().get('users', sub)
+    const user = yield* (yield* useDb(usersTable)).get('users', sub)
+
     return user
       ? {
           sub,
-          roles: (user.roles as string[]) ?? [],
-          claims: { email: String(user.email), name: String(user.name) },
+          roles: rolesOf(user.roles),
+          claims: { email: user.email, name: user.name },
         }
       : undefined
   },
+
   *saveRefresh(record) {
     refreshRecords.set(record.jti, record)
   },
+
   *loadRefresh(jti) {
     return refreshRecords.get(jti)
   },
+
   *rotateRefresh(expectedJti, next) {
     const current = refreshRecords.get(expectedJti)
+
     if (!current || current.revoked) {
       return false
     }
+
     refreshRecords.set(expectedJti, { ...current, revoked: true })
     refreshRecords.set(next.jti, next)
+
     return true
   },
+
   *revokeFamily(family) {
     for (const [jti, record] of refreshRecords) {
       if (record.family === family) {
@@ -69,7 +83,8 @@ export const authProvider = (db: () => Db): AuthDef.Provider => ({
 })
 
 /** Insert the seed users when the table is empty. */
-export function* seedUsers(db: Db): Operation<void> {
+export function* seedUsers(): Operation<void> {
+  const db = yield* useDb(usersTable)
   const existing = yield* db.query('users').count()
 
   if (existing > 0) {

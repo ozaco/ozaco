@@ -1,5 +1,6 @@
-import type { ServerDef, ServiceDef } from 'server:core'
-import { isPartsDecl, isSocketAction, isStreamDecl, STATUS_OF } from 'server:core'
+import type { EdgeDef, ServerDef, ServiceDef } from 'server:core'
+import { STATUS_OF } from 'server:core'
+import { isPartsDecl, isSocketAction, isStreamDecl } from 'server:internal'
 
 import { z } from 'zod'
 
@@ -75,6 +76,17 @@ const optionsDoc = (options: Readonly<Record<string, unknown>>): Record<string, 
     JSON.stringify(options, (_key, value) => (typeof value === 'function' ? undefined : value)),
   )
 
+/** A mounted socket as the manifest publishes it: the frame schemas become JSON Schema. */
+const socketDocOf = (socket: EdgeDef.SocketInfo): DocsDef.SocketDoc => ({
+  path: socket.path,
+  service: socket.service,
+  protocol: socket.protocol,
+  description: socket.description,
+  defaults: socket.defaults,
+  receives: schemaDoc(socket.receives, 'input'),
+  sends: schemaDoc(socket.sends, 'output'),
+})
+
 /** One service as its manifest doc — also what the observe service's own manifest rides. */
 export const serviceDocOf = (
   def: ServiceDef.Service,
@@ -124,7 +136,7 @@ export const manifestOf = (
     services.push(
       serviceDocOf(
         def,
-        kernel.sockets.filter(socket => socket.service === def.name),
+        kernel.sockets.filter(socket => socket.service === def.name).map(socketDocOf),
       ),
     )
   }
@@ -136,7 +148,7 @@ export const manifestOf = (
     instance: kernel.instance,
     services,
     errors: STATUS_OF,
-    sockets: [...kernel.sockets],
+    sockets: kernel.sockets.map(socketDocOf),
     observe: { console: docs.console ? '/_observe' : null },
     docs: { path: docs.path, openapi: `${docs.path}/openapi.json` },
   }

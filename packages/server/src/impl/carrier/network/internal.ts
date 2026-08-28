@@ -1,6 +1,7 @@
 // oxlint-disable import/exports-last
 import type { CarrierDef, ServerDef, StreamDef } from 'server:core'
-import { report, ServerErrors, stream } from 'server:core'
+import { ServerErrors, stream } from 'server:core'
+import { report } from 'server:internal'
 import type { Operation } from 'std:effect'
 import { attempt, createContext, fork, sleep } from 'std:effect'
 import type { Result } from 'std:result'

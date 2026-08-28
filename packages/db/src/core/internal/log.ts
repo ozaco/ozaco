@@ -8,7 +8,7 @@ import { CHANGES_PREFIX } from '../const'
 import type { Database } from '../types/database'
 import type { Helpers } from '../types/helpers'
 import type { Spec } from '../types/spec'
-import { and, gt, gte, lt, ne } from '../utils/filter'
+import { where } from '../utils/filter'
 
 /**
  * The hidden per-table change log (`__changes_<table>`): one row per announced change, written
@@ -110,7 +110,7 @@ const toEntry = (row: Spec.Doc): Database.LogEntry => ({
 export function* readLog(state: Helpers.Logger, log: Spec.Table, options?: Database.LogOptions) {
   const rows = yield* state.adapter.find(
     find(log, {
-      filter: options?.since === undefined ? null : gt('token', options.since),
+      filter: options?.since === undefined ? null : where.gt('token', options.since),
       order: TOKEN_ORDER,
       limit: Math.max(1, Math.trunc(options?.limit ?? 500)),
     }),
@@ -138,7 +138,7 @@ export function* replayLog(state: Helpers.Logger, table: string, fromTs: number)
 
   for (;;) {
     const rows = yield* state.adapter.find(
-      find(log, { filter: gte('ts', floor), order: TS_ORDER, limit: REPLAY_PAGE }),
+      find(log, { filter: where.gte('ts', floor), order: TS_ORDER, limit: REPLAY_PAGE }),
     )
     const entries = rows.map(toEntry).filter(entry => !out.some(seen => seen.token === entry.token))
     out.push(...entries)
@@ -182,7 +182,7 @@ export function* compactLog(
     return 0
   }
 
-  const keepNewest = ne('token', String(newest.token))
+  const keepNewest = where.ne('token', String(newest.token))
   let bound: Spec.Filter
 
   if (options?.keep !== undefined) {
@@ -195,16 +195,16 @@ export function* compactLog(
       return 0
     }
 
-    bound = lt('token', String(last.token))
+    bound = where.lt('token', String(last.token))
   } else if (options?.before instanceof Date) {
-    bound = lt('ts', options.before.getTime())
+    bound = where.lt('ts', options.before.getTime())
   } else if (typeof options?.before === 'string') {
-    bound = lt('token', options.before)
+    bound = where.lt('token', options.before)
   } else {
     // no bound: everything but the newest row
     bound = keepNewest
   }
-  const removed = yield* state.adapter.remove({ table: log, filter: and(bound, keepNewest) })
+  const removed = yield* state.adapter.remove({ table: log, filter: where.and(bound, keepNewest) })
 
   return removed.length
 }
@@ -242,7 +242,7 @@ export function* resolveSince(
   const floor = decoded.value.ts - state.replayWindowMs
 
   const later = yield* state.adapter.find(
-    find(log, { filter: and(gte('ts', floor), ne('token', since)), limit: 1 }),
+    find(log, { filter: where.and(where.gte('ts', floor), where.ne('token', since)), limit: 1 }),
   )
 
   return later.length > 0 ? 'recompute' : 'skip'

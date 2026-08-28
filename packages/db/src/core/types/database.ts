@@ -39,13 +39,50 @@ export namespace Database {
 
   export type PatchOf<TSchema, TName extends TableName<TSchema>> = Patch<InsertOf<TSchema, TName>>
 
+  /** True for a handle with no declared schema (`Database.Handle` with its default `Schema.Map`):
+   * its rows are plain documents, so every field name is allowed. */
+  type Untyped<TDoc> = [keyof TDoc & string] extends [never] ? true : false
+
+  /** The field names of a document — what a filter, an order key or a projection may name. */
+  export type FieldOf<TDoc> = Untyped<TDoc> extends true ? string : keyof TDoc & string
+
+  /** A numeric column of a document — what `sum`/`avg` may name. */
+  export type NumericOf<TDoc> =
+    Untyped<TDoc> extends true
+      ? string
+      : {
+          [K in keyof TDoc & string]: TDoc[K] extends number | null | undefined ? K : never
+        }[keyof TDoc & string]
+
+  /** The value type behind a field name (an untyped handle answers `unknown`). */
+  export type ValueOf<TDoc, TField extends string> = TField extends keyof TDoc
+    ? TDoc[TField]
+    : unknown
+
+  /** The row shape a projection answers with: the picked columns plus the system fields (an
+   * untyped handle keeps its plain-document rows). */
+  export type Projected<TDoc, TFields extends string> =
+    Untyped<TDoc> extends true ? TDoc : Pick<TDoc, (TFields | Helpers.SystemField) & keyof TDoc>
+
   /** A lazily-built, immutable query over one table. Chain refiners, then call a terminal — or
    * `watch()` it to get a live-updating snapshot flow. */
 
   export interface Query<TDoc> {
     where(match: Partial<TDoc>): Query<TDoc>
-    filter(...filters: Spec.Filter[]): Query<TDoc>
-    order(field: keyof TDoc & string, direction?: 'asc' | 'desc'): Query<TDoc>
+
+    /** Refine by the portable filter algebra (`where.eq('done', false)`). The field names are
+     * checked against this table's columns: a typo does not compile. */
+    filter(...filters: readonly Spec.Filter<FieldOf<TDoc>>[]): Query<TDoc>
+
+    /** Add a sort key. Calls STACK — `order('priority', 'desc').order('title')` sorts by both,
+     * in that order, with `_id` as the final tiebreak. */
+    order(field: FieldOf<TDoc>, direction?: 'asc' | 'desc'): Query<TDoc>
+
+    /** Read only these columns. The system fields (`_id`, `_version`, timestamps) always come
+     * along, so pagination and watching keep working on a projected query. */
+    select<const TFields extends readonly FieldOf<TDoc>[]>(
+      ...fields: TFields
+    ): Query<Projected<TDoc, TFields[number]>>
 
     collect(): Operation<readonly TDoc[]>
     take(count: number): Operation<readonly TDoc[]>
@@ -57,6 +94,19 @@ export namespace Database {
     exists(): Operation<boolean>
     paginate(options: Spec.PaginateOptions): Operation<Spec.Page<TDoc>>
 
+    /** Aggregates over the matching rows — one adapter round trip, nothing pulled into memory.
+     * `avg`/`min`/`max` answer `null` when nothing matched. */
+    sum(field: NumericOf<TDoc>): Operation<number>
+    avg(field: NumericOf<TDoc>): Operation<number | null>
+    min<TField extends FieldOf<TDoc>>(field: TField): Operation<ValueOf<TDoc, TField> | null>
+    max<TField extends FieldOf<TDoc>>(field: TField): Operation<ValueOf<TDoc, TField> | null>
+
+    /** Group the matching rows by one or more columns; the terminals answer one row per group,
+     * carrying the grouped columns plus the aggregate. */
+    groupBy<const TFields extends readonly FieldOf<TDoc>[]>(
+      ...fields: TFields
+    ): Grouped<TDoc, TFields[number]>
+
     /** A never-ending live view of this query: the current result immediately (unless `since`
      * still matches), then again after every relevant committed change (local writes, bus,
      * touch). Bursts coalesce into one recompute; changes that provably cannot affect the query
@@ -66,6 +116,28 @@ export namespace Database {
     watch(options: Change.WatchOptions & { mode: 'delta' }): Flow<Change.Delta<TDoc>, never>
     watch(options?: Change.WatchOptions): Flow<Change.Snapshot<TDoc>, never>
   }
+
+  /** A grouped query: the same aggregate terminals, answered per group. */
+  export interface Grouped<TDoc, TKey extends FieldOf<TDoc>> {
+    count(): Operation<readonly (Keys<TDoc, TKey> & { readonly count: number })[]>
+    sum(field: NumericOf<TDoc>): Operation<readonly (Keys<TDoc, TKey> & { readonly sum: number })[]>
+
+    avg(
+      field: NumericOf<TDoc>,
+    ): Operation<readonly (Keys<TDoc, TKey> & { readonly avg: number | null })[]>
+
+    min<TField extends FieldOf<TDoc>>(
+      field: TField,
+    ): Operation<readonly (Keys<TDoc, TKey> & { readonly min: ValueOf<TDoc, TField> | null })[]>
+
+    max<TField extends FieldOf<TDoc>>(
+      field: TField,
+    ): Operation<readonly (Keys<TDoc, TKey> & { readonly max: ValueOf<TDoc, TField> | null })[]>
+  }
+
+  /** The grouped columns an aggregate answer carries. */
+  export type Keys<TDoc, TKey extends string> =
+    Untyped<TDoc> extends true ? Spec.Doc : Pick<TDoc, TKey & keyof TDoc>
 
   /** Options for the versioned write methods. */
   export interface WriteOptions {
@@ -140,6 +212,15 @@ export namespace Database {
       table: TName,
       values: readonly InsertOf<TSchema, TName>[],
     ): Operation<readonly DocOf<TSchema, TName>[]>
+
+    /** Insert, or patch the one row already matching `match` — atomically (the whole thing runs
+     * in a transaction, so two concurrent upserts cannot both insert). Fails
+     * `db.data-integrity` when `match` names more than one row. */
+    upsert<TName extends TableName<TSchema>>(
+      table: TName,
+      match: Partial<DocOf<TSchema, TName>>,
+      value: InsertOf<TSchema, TName>,
+    ): Operation<DocOf<TSchema, TName>>
 
     patch<TName extends TableName<TSchema>>(
       table: TName,

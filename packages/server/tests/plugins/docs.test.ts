@@ -26,7 +26,7 @@ describe('docs', () => {
             Docs.use({ path: '/docs', title: 'demo api' }),
           ],
         })
-        yield* server.listen()
+        yield* server.start()
         const response = yield* Edge.actions.handle(new Request('http://edge/docs/manifest'))
         expect(response.status).toBe(200)
         const manifest = (yield* until(response.json())) as AnyType

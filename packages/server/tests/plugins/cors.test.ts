@@ -19,7 +19,7 @@ describe('cors', () => {
           edge: BunEdge,
           plugins: [Cors.use({ origins: ['https://app.test'], credentials: true })],
         })
-        yield* server.listen()
+        yield* server.start()
         const allowed = yield* Edge.actions.handle(
           new Request('http://edge/todos/list', { headers: { origin: 'https://app.test' } }),
         )

@@ -99,6 +99,7 @@ export const edgeActions = (driver: EdgeDef.Driver): Omit<EdgeDef.Actions, 'desc
   *raw(route) {
     const state = yield* EdgeStateRef.expect()
     addRoute(state.router, route.method, route.path, { kind: 'raw', route })
+    state.kernel.routes.push({ method: route.method, path: route.path })
   },
   *socket(route) {
     const state = yield* EdgeStateRef.expect()
@@ -109,6 +110,8 @@ export const edgeActions = (driver: EdgeDef.Driver): Omit<EdgeDef.Actions, 'desc
       protocol: route.protocol ?? null,
       description: route.description ?? null,
       defaults: route.defaults ?? null,
+      receives: route.receives ?? null,
+      sends: route.sends ?? null,
     })
   },
   *decorate(decorator) {

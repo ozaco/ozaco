@@ -1,5 +1,6 @@
 import type { Adapter, Spec } from 'db:core'
-import { adapterDefaults, DbAdapter, DbErrors, matches, sortDocs } from 'db:core'
+import { DbAdapter, DbErrors } from 'db:core'
+import { adapterDefaults, matches, sortDocs } from 'db:internal'
 import type { Operation } from 'std:effect'
 import { attempt, useContext } from 'std:effect'
 import { fail, isFailure } from 'std:result'
@@ -8,11 +9,13 @@ import type { AnyType } from 'std:shared'
 import pkg from '../../../package.json'
 
 import {
+  aggregateDocs,
   applySteps,
   checkUnique,
   clone,
   filtered,
   keyOf,
+  project,
   restore,
   snapshotOf,
   StateRef,
@@ -46,12 +49,19 @@ export const MemoryAdapter = DbAdapter.implement<Adapter.Options, []>({
     const rows = sortDocs(yield* filtered(state, spec), spec.order)
     const start = spec.offset ?? 0
     const end = spec.limit === null ? undefined : start + Math.max(0, Math.trunc(spec.limit))
-    return rows.slice(start, end).map(clone)
+    const window = rows.slice(start, end)
+
+    return spec.fields ? window.map(row => project(row, spec.fields!)) : window.map(clone)
   },
 
   *count(spec: Spec.Count) {
     const state = yield* useContext(StateRef)
     return (yield* filtered(state, spec)).length
+  },
+
+  *aggregate(spec: Spec.Aggregate) {
+    const state = yield* useContext(StateRef)
+    return aggregateDocs(yield* filtered(state, spec), spec)
   },
 
   *insert(table: Spec.Table, rows: readonly Spec.Doc[]) {

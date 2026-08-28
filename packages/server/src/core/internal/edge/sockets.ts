@@ -1,12 +1,15 @@
 import type { Operation } from 'std:effect'
-import { createQueue, scoped } from 'std:effect'
+import { attempt, createQueue, scoped } from 'std:effect'
 import { IO } from 'std:io'
+import { isFailure } from 'std:result'
 
 import { CtxRef } from '../../context'
 import type { EdgeDef } from '../../types/edge'
 import type { ServerDef } from '../../types/server'
 import type { TraceDef } from '../../types/trace'
+import { tagOf } from '../../utils/failure'
 import { report } from '../../utils/trace'
+import { validate } from '../../utils/validation'
 import { observing } from '../capture'
 
 interface SocketInput {
@@ -75,13 +78,43 @@ export function* driveSocket(input: SocketInput): Operation<void> {
       *[Symbol.iterator]() {
         return {
           *next() {
-            const step = yield* inbound.next()
+            for (;;) {
+              const step = yield* inbound.next()
 
-            if (!step.done) {
+              if (step.done) {
+                return step
+              }
+
               yield* frame('socket-in', step.value)
-            }
 
-            return step
+              if (!route.receives) {
+                return step
+              }
+
+              // a malformed frame from ONE client must not kill the session: drop it, report it
+              // (it shows up in the console and the exporters), keep reading
+              const checked = yield* attempt(() =>
+                validate(route.receives!, step.value, `frame of ${route.path}`),
+              )
+
+              if (!isFailure(checked)) {
+                return { done: false as const, value: checked.value }
+              }
+
+              yield* report(kernel, {
+                t: 'failure',
+                row: {
+                  request_id: trace.request_id,
+                  span_id: trace.span_id,
+                  tag: tagOf(checked),
+                  message: checked.message,
+                  status: 400,
+                  where: `socket:${route.path}`,
+                  causes: [`frame:${id}`],
+                  ts: Date.now(),
+                },
+              })
+            }
           },
         }
       },

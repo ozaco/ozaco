@@ -32,6 +32,15 @@ const AuthImpl = definePlugin<
     if (!(yield* Server.context.get())) {
       return yield* fail(ServerErrors.Configuration, 'Auth must be installed by createServer')
     }
+
+    // `plugins: [Auth]` (the bare handle) type-checks like the plugins that take no options —
+    // say so here instead of dying on `given.provider` with a raw TypeError
+    if (!given?.provider) {
+      return yield* fail(
+        ServerErrors.Configuration,
+        'Auth needs options — plugins: [Auth.use({ provider, secret })], not [Auth]',
+      )
+    }
     const mode = given.mode ?? 'session'
     if (mode === 'access-refresh') {
       const missing = (
@@ -77,7 +86,7 @@ const AuthImpl = definePlugin<
             principal = verified
           }
           yield* authorize(principal, requirement)
-          return yield* next(call, { ...ctx, auth: principal })
+          return yield* next(call, { ...ctx, auth: principal ?? null })
         },
       },
     }

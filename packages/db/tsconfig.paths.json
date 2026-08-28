@@ -3,6 +3,7 @@
   "compilerOptions": {
     "paths": {
       "db:core": ["./src/core/index.ts", "./dist/index.d.ts"],
+      "db:internal": ["./src/internal.ts", "./dist/internal.d.ts"],
       "db:impl/memory": ["./src/impl/memory/index.ts", "./dist/impl/memory.d.ts"],
       "db:impl/sqlite": ["./src/impl/sqlite/index.ts", "./dist/impl/sqlite.d.ts"],
       "db:impl/pg": ["./src/impl/pg/index.ts", "./dist/impl/pg.d.ts"],

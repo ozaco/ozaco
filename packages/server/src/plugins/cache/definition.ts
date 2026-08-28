@@ -1,6 +1,7 @@
 import { DbClient, Kv } from 'db:core'
 import type { ServerDef } from 'server:core'
-import { childTrace, Server, ServerErrors, withSpan } from 'server:core'
+import { Server, ServerErrors } from 'server:core'
+import { childTrace, withSpan } from 'server:internal'
 import { attempt, fork } from 'std:effect'
 import { definePlugin } from 'std:plugin'
 import { fail, isFailure } from 'std:result'

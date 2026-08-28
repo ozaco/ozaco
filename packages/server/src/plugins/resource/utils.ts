@@ -60,7 +60,7 @@ const builder = <
   TExtend extends ServiceDef.ActionMap = Record<never, ServiceDef.ActionEntry>,
 >(
   table: TTable,
-  options: ResourceDef.CrudOptions<TNames, TExtend> = {},
+  options: ResourceDef.CrudOptions<TTable, TNames, TExtend> = {},
 ): ResourceDef.Crud<TTable, TNames, TExtend> => {
   const name = (options.name ?? table.name) as TTable['name']
 
@@ -201,16 +201,17 @@ const builder = <
 
   const svc = service(name, { ...picked, ...options.extend })
 
+  // the crud handle IS the service: `services: [todos]`, no `.service` hop
   return {
-    service: svc as unknown as ResourceDef.Crud<TTable, TNames, TExtend>['service'],
+    ...svc,
     table,
     filterable,
     maxLimit,
     auth,
     hooks,
     shapes,
-    actions: enabled,
-  }
+    enabled,
+  } as unknown as ResourceDef.Crud<TTable, TNames, TExtend>
 }
 
 /** `crud.list` — `total: true` also counts the set, so the page carries `total`. */

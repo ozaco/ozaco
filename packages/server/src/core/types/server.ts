@@ -1,4 +1,3 @@
-import type { Database, KvDef, Schema, Spec } from 'db:core'
 import type { Flow, Operation } from 'std:effect'
 import type { EventEmitter } from 'std:event'
 import type { Plugin } from 'std:plugin'
@@ -7,6 +6,7 @@ import type { AnyType, StandardSchemaV1 } from 'std:shared'
 import type { CarrierDef } from './carrier'
 import type { EdgeDef } from './edge'
 import type { ObserveDef } from './observe'
+import type { OptionsDef } from './options'
 import type { OutcomesDef } from './outcomes'
 import type { ServiceDef } from './service'
 import type { TraceDef } from './trace'
@@ -24,6 +24,11 @@ export namespace ServerDef {
    * the handle travelling with it) — or a bare handle when it takes no arguments.
    */
   export type PluginLike = Plugin<AnyType, AnyType[], AnyType> | Plugin.Use<AnyType, AnyType[]>
+
+  /** What this node is. `monolith`: every service + the edge in one process. `gateway`: the edge
+   * only, every call forwarded over the carrier. `service`: hosted services, no edge (unless one
+   * is given, for health). */
+  export type Role = 'monolith' | 'gateway' | 'service'
 
   export interface Options<
     TServices extends readonly ServiceDef.Service[] = readonly ServiceDef.Service[],
@@ -50,12 +55,34 @@ export namespace ServerDef {
     /** Default per-call deadline. Default 30 000. */
     readonly timeoutMs?: number | undefined
 
+    /** What this node is. Default: `process.env.SERVICE ? 'service' : 'monolith'`. */
+    readonly role?: Role | undefined
+
     /** Which of the declared services THIS node hosts (the rest are reached over the carrier).
-     * Default: all of them. A gateway node declares everything and hosts `[]`. */
+     * Default: `process.env.SERVICE` split on commas on a `service` node, `[]` on a gateway,
+     * every declared service otherwise. */
     readonly hosted?: readonly string[] | undefined
 
-    /** How long `stop()` waits for in-flight dispatches after leaving the cluster. Default:
-     * `timeoutMs`. */
+    /** Where to listen, when an edge is installed. */
+    readonly listen?: ListenOptions | undefined
+
+    /** health endpoint path on the edge. Default `/_health`; `false` disables it. */
+    readonly health?: string | false | undefined
+
+    /** Services that must have a live member before `start()` resolves (health reports
+     * `ready: false` / 503 meanwhile). Default by role: `service` nodes wait for nobody (they
+     * start at once, so a sequential rollout's first pod comes up); gateway/monolith wait for
+     * every declared service they do not host. `[]` = start at once. */
+    readonly dependsOn?: readonly string[] | undefined
+
+    /** How long `start()` waits for `dependsOn`; past it `start()` fails `server.unavailable`.
+     * Default 30 000. */
+    readonly readyTimeoutMs?: number | undefined
+
+    /** How long `stop()` lets the paused edge answer 503 before it starts draining. Default 50. */
+    readonly pauseMs?: number | undefined
+
+    /** How long `stop()` waits for in-flight dispatches after leaving the cluster. Default 5000. */
     readonly drainMs?: number | undefined
   }
 
@@ -91,8 +118,13 @@ export namespace ServerDef {
     error(msg: string, data?: Record<string, unknown>): Operation<void>
   }
 
-  /** The one argument every handler, hook and plugin sees. */
-  export interface Ctx<TAuth = unknown> {
+  /**
+   * The one argument every handler, hook and plugin sees: WHO called, under WHICH ids, and the
+   * seams that leave this action (`call`, `emit`, `span`, `log`). Resources are NOT mirrored
+   * here — reach the database with `useDb(...tables)` (typed by your tables) and the cache with
+   * `Kv.actions`, both from `@ozaco/db`.
+   */
+  export interface Ctx<TAuth = OptionsDef.Principal | null> {
     readonly requestId: string
     readonly spanId: string
     readonly trace: TraceDef.Trace
@@ -100,12 +132,7 @@ export namespace ServerDef {
     readonly action: string
     readonly meta: ServiceDef.Meta
 
-    /** the installed database handle, rows as plain documents (use `useDb(...tables)` for the
-     * fully typed handle); fails `server.configuration` on use when none is installed. */
-    readonly db: Database.Handle<Record<string, Schema.Types<Spec.Doc, Spec.Doc>>>
-
-    /** the installed `Kv` store's actions (fails `server.configuration` when none is installed). */
-    readonly cache: KvDef.Actions
+    /** the verified caller, once an `Auth` plugin ran — `null` on an open action. */
     readonly auth: TAuth
     readonly log: Log
 
@@ -125,6 +152,13 @@ export namespace ServerDef {
       action: K,
       ...args: CallArgs<S['actions'][K]>
     ): Operation<ServiceDef.OutputOf<S['actions'][K]>>
+
+    /** …or by REF (`server.api.todos.list`, `refs<typeof todos>('todos').list`) — the same
+     * typing with no runtime import of the callee. */
+    call<R extends ServiceDef.Ref>(
+      target: R,
+      ...args: CallArgs<ServiceDef.ActionOf<R>>
+    ): Operation<ServiceDef.OutputOf<ServiceDef.ActionOf<R>>>
 
     /** Broadcast an event to every node (at-most-once). */
     emit(name: string, payload: unknown): Operation<void>
@@ -208,18 +242,21 @@ export namespace ServerDef {
     edge: EdgeDef.Handle | null
     outcomes: OutcomesDef.Handle | null
 
-    /** the services this node serves (every declared one, unless `app` roles narrow it). */
-    readonly hosted: Set<string>
+    /** what this node is — every declared service still resolves, hosted ones locally. */
+    readonly role: Role
 
-    /** whether a `Kv` store answered at createServer time (cloneable protocol contexts are only
-     * readable during a dispatch, so the probe result is kept here). */
-    kv: boolean
+    /** the services this node serves (every declared one, unless the role narrows it). */
+    readonly hosted: Set<string>
 
     /** dispatches running here right now (what `stop()` drains). */
     inflight: number
 
     /** socket routes mounted on the edge (for docs / the manifest). */
     readonly sockets: EdgeDef.SocketInfo[]
+
+    /** raw routes mounted on the edge outside the action model (health, docs, the observe
+     * console) — what the manifest reports as actually being there. */
+    readonly routes: { readonly method: string; readonly path: string }[]
   }
 
   export type Events = {
@@ -241,6 +278,11 @@ export namespace ServerDef {
       action: K,
       ...args: CallArgs<S['actions'][K]>
     ): Operation<ServiceDef.OutputOf<S['actions'][K]>>
+
+    call<R extends ServiceDef.Ref>(
+      target: R,
+      ...args: CallArgs<ServiceDef.ActionOf<R>>
+    ): Operation<ServiceDef.OutputOf<ServiceDef.ActionOf<R>>>
     emit(name: string, payload: unknown): Operation<void>
 
     /** Events arriving from every node (own emits included). */
@@ -248,6 +290,11 @@ export namespace ServerDef {
 
     /** The resolved manifest: services, actions, routes, planes, errors. */
     manifest(): Operation<Manifest>
+
+    /** Report an observe event from application code — the `domain` row is the one meant for
+     * you: a free-form audit/business record every installed exporter ships (the observe store
+     * skips it). Spans, logs and failures are reported by the kernel itself. */
+    report(event: ObserveDef.Event): Operation<void>
 
     /** Open a span outside a dispatch (edge requests, background work). */
     span<T>(
@@ -292,12 +339,16 @@ export namespace ServerDef {
     readonly api: ServiceDef.Api<TServices>
     readonly name: string
     readonly serviceId: string
+    readonly role: Role
 
-    /** Start the edge (when one is installed) and every plugin's `start` hook. */
-    listen(options?: ListenOptions): Operation<ListenInfo>
+    /** Run every plugin's `start` hook, mount the health route, listen (when an edge is
+     * installed), then wait for `dependsOn`. `listen` overrides `options.listen`. */
+    start(listen?: ListenOptions): Operation<Info>
 
-    /** Leave the cluster, stop accepting, drain in-flight work, unserve, run `stop` hooks. */
+    /** Pause the edge, leave the cluster, drain in-flight work, unserve, run `stop` hooks. */
     stop(): Operation<void>
+    info(): Operation<Info>
+    health(): Operation<Health>
 
     /** Who serves a service, by the carrier's presence (this node included when it hosts it). */
     members(service: string): Operation<readonly CarrierDef.Member[]>
@@ -305,6 +356,27 @@ export namespace ServerDef {
     emit: Actions['emit']
     events: Actions['events']
     manifest: Actions['manifest']
+  }
+
+  export interface Info {
+    readonly role: Role
+    readonly hosted: readonly string[]
+    readonly url: string | null
+    readonly port: number | null
+    readonly started: boolean
+
+    /** every `dependsOn` service has a live member. */
+    readonly ready: boolean
+  }
+
+  /** What `/_health` answers. */
+  export interface Health {
+    readonly ok: boolean
+    readonly ready: boolean
+    readonly role: Role
+    readonly hosted: readonly string[]
+    readonly serviceId: string
+    readonly members: Readonly<Record<string, readonly CarrierDef.Member[]>>
   }
 
   export interface ListenOptions {

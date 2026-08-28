@@ -6,6 +6,7 @@ import { dbResolve, stdResolve, transportResolve } from '../devkit/src/resolve'
 export default defineConfig({
   entry: {
     index: './src/core/index.ts',
+    internal: './src/internal.ts',
     'impl/memory': './src/impl/memory/index.ts',
     'impl/sqlite': './src/impl/sqlite/index.ts',
     'impl/pg': './src/impl/pg/index.ts',

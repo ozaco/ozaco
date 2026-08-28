@@ -5,7 +5,7 @@
  * limits, ambient `If-Match`). `crud.realtime` is the delta-watch socket as an `action.socket`
  * entry of a custom service.
  */
-import { CLEAR, DbClient, DbErrors, eq, ne } from 'db:core'
+import { CLEAR, DbClient, DbErrors, useDb, where } from 'db:core'
 import { action, createServer, Edge, ServerErrors, service } from 'server:core'
 import { crud, Docs } from 'server:plugins'
 import { attempt, run, until } from 'std:effect'
@@ -55,7 +55,7 @@ const catalogue = service('catalogue', {
     function* ({ input }) {
       return yield* crud.list(todosTable, {
         input,
-        scope: eq('done', false),
+        scope: where.eq('done', false),
         total: true,
       })
     },
@@ -117,9 +117,9 @@ const catalogue = service('catalogue', {
       route: { method: 'POST', path: '/catalogue/bulk' },
       errors: crud.errors,
     },
-    function* ({ input, ctx }) {
+    function* ({ input }) {
       // ops inside a TRANSACTION: the `db` override alone swaps the handle
-      const rows = yield* ctx.db.transaction(tx =>
+      const rows = yield* (yield* useDb(todosTable)).transaction(tx =>
         crud.createMany(todosTable, {
           values: input.titles.map(title => ({ title, done: false })),
           db: tx,
@@ -128,7 +128,7 @@ const catalogue = service('catalogue', {
 
       return {
         created: rows.length,
-        open: yield* crud.count(todosTable, { scope: eq('done', false) }),
+        open: yield* crud.count(todosTable, { scope: where.eq('done', false) }),
       }
     },
   ),
@@ -143,7 +143,10 @@ const catalogue = service('catalogue', {
     function* ({ input }) {
       // the CLIENT's filter rides `crud.count` too: sanitized like `list`, AND-ed under scope
       return {
-        count: yield* crud.count(todosTable, { filter: input.filter, scope: eq('done', false) }),
+        count: yield* crud.count(todosTable, {
+          filter: input.filter,
+          scope: where.eq('done', false),
+        }),
       }
     },
   ),
@@ -168,7 +171,7 @@ describe('resource — runnable ops', () => {
       await run(function* () {
         yield* storage()
         const server = yield* createServer({ services: [catalogue], edge: BunEdge })
-        yield* server.listen()
+        yield* server.start()
 
         const a = yield* send('POST', '/catalogue', { body: { title: 'alpha' } })
         expect(a.status).toBe(200)
@@ -267,7 +270,7 @@ describe('resource — runnable ops', () => {
       },
     })
 
-    const entry = (shaped.service.actions as AnyType)._realtime
+    const entry = (shaped.actions as AnyType)._realtime
     expect(entry.socket.path).toBe('/todos/live')
     expect(entry.socket.protocol).toBe('resource')
     expect(entry.socket.defaults).toEqual({ cursor: 0 })
@@ -327,7 +330,7 @@ describe('resource — runnable ops', () => {
         expect(String((stale as AnyType).error)).toBe(DbErrors.Conflict)
 
         // reads count the same way
-        expect(yield* crud.count(todosTable, { scope: eq('done', false), db })).toBe(1)
+        expect(yield* crud.count(todosTable, { scope: where.eq('done', false), db })).toBe(1)
       }),
     )
   })
@@ -385,7 +388,7 @@ describe('resource — runnable ops', () => {
             // the sanitizer, so tenancy fields never open up to client filtering
             filterable: ['done'],
             *scope() {
-              return ne('title', 'hidden')
+              return where.ne('title', 'hidden')
             },
             hooks: {
               // the after hook PROJECTS outgoing rows — here down to a shouted title
@@ -411,7 +414,7 @@ describe('resource — runnable ops', () => {
           edge: BunEdge,
           plugins: [Docs.use({ path: '/docs' })],
         })
-        const info = yield* server.listen({ port: 0 })
+        const info = yield* server.start({ port: 0 })
         const base = info.url!
 
         // the socket lives under the CUSTOM service in the manifest, defaults included

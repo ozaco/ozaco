@@ -1,6 +1,6 @@
 // oxlint-disable import/exports-last
-import type { Schema, Spec } from 'db:core'
-import { clampLimit, DbErrors, FIELDS, sanitizeFilter } from 'db:core'
+import type { Database, Schema, Spec } from 'db:core'
+import { clampLimit, DbErrors, FIELDS, sanitizeFilter, useDb } from 'db:core'
 import type { EdgeDef, ServerDef } from 'server:core'
 import { CtxRef, ServerErrors } from 'server:core'
 import type { Operation } from 'std:effect'
@@ -289,11 +289,16 @@ export function* opCtx(given: ServerDef.Ctx | undefined): Operation<ServerDef.Ct
   )
 }
 
+/** The installed handle with its tables ERASED: the ops address tables by name (a resource is
+ * generic over its own table), so they take the loose shape `useDb()` is narrowed from. */
+type LooseDb = Database.Handle<Record<string, Schema.Types<Spec.Doc, Spec.Doc>>>
+const looseDb = (): Operation<LooseDb> => useDb() as Operation<LooseDb>
+
 /** What an op runs against: the (overridden) db handle, the request headers, and the ctx when
  * one is reachable — a `db` override (a transaction's handle) works without a dispatch, the
  * headers then default empty. */
 interface OpEnv {
-  readonly db: ServerDef.Ctx['db']
+  readonly db: LooseDb
   readonly headers: Readonly<Record<string, string>>
   readonly ctx: ServerDef.Ctx | null
 }
@@ -305,7 +310,7 @@ function* opEnv(options: ResourceDef.OpOptions): Operation<OpEnv> {
   }
 
   const ctx = yield* opCtx(options.ctx)
-  return { db: ctx.db, headers: ctx.headers, ctx }
+  return { db: yield* looseDb(), headers: ctx.headers, ctx }
 }
 
 /** Every op is its own child span when a ctx is reachable (`crud.<op> <table>`). */
@@ -558,7 +563,7 @@ export function* watch(
     // not be in `filterable`, so they never open up to client filtering
     const trusted = resource.scope ? ((yield* resource.scope(ctx)) ?? undefined) : undefined
     const filter = combine(trusted, client)
-    let query = ctx.db.query(resource.table.name)
+    let query = (yield* looseDb()).query(resource.table.name)
 
     if (filter) {
       query = query.filter(filter)
@@ -644,7 +649,7 @@ interface WindowedArgs {
  * subscribers track versions uniformly. A new `watch` on the same id (another cursor) replaces
  * the window for THIS subscriber only.
  */
-function* windowed({ ctx, resource, frame, query, send }: WindowedArgs): Operation<void> {
+function* windowed({ resource, frame, query, send }: WindowedArgs): Operation<void> {
   const limit = Math.max(1, Math.min(frame.limit ?? 1, resource.maxLimit))
   const cursor = cursorOf(frame.cursor)
 
@@ -672,7 +677,7 @@ function* windowed({ ctx, resource, frame, query, send }: WindowedArgs): Operati
 
   yield* send({ t: 'sync', id: frame.id, rows: page.data, token: page.token, page: info })
 
-  const changes = yield* ctx.db.changes(resource.table.name)
+  const changes = yield* (yield* looseDb()).changes(resource.table.name)
 
   for (;;) {
     const event = yield* changes.next()

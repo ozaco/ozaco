@@ -1,4 +1,5 @@
-import { DbAdapter, DbClient, DbErrors, tableSpecOf } from 'db:core'
+import { DbAdapter, DbClient, DbErrors } from 'db:core'
+import { tableSpecOf } from 'db:internal'
 import { attempt, run, scoped } from 'std:effect'
 import { install } from 'std:plugin'
 import { isFailure, unwrap } from 'std:result'

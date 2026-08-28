@@ -44,7 +44,7 @@ describe('observe/otlp', () => {
             }),
           ],
         })
-        yield* server.listen()
+        yield* server.start()
         yield* server.call(todos, 'create', { title: 'traced' })
         yield* attempt(server.call(todos, 'explode', { code: 'x.y' }))
         yield* sleep(80)

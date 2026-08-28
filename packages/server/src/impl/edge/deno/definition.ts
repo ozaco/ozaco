@@ -1,5 +1,6 @@
 import type { EdgeDef } from 'server:core'
-import { Edge, edgeActions, edgeDefaults, openEdge, ServerErrors } from 'server:core'
+import { Edge, ServerErrors } from 'server:core'
+import { edgeActions, edgeDefaults, openEdge } from 'server:internal'
 import { fail } from 'std:result'
 
 import pkg from '../../../../package.json'

@@ -1,5 +1,5 @@
 import type { ObserveDef, ServerDef } from 'server:core'
-import { action, createServer, Server, ServerErrors, service, stream } from 'server:core'
+import { action, createServer, refs, Server, ServerErrors, service, stream } from 'server:core'
 import { attempt, run, sleep } from 'std:effect'
 import { definePlugin } from 'std:plugin'
 import { unwrap } from 'std:result'
@@ -78,7 +78,7 @@ describe('kernel — services, dispatch, hooks', () => {
             name: 'auth',
             *dispatch(call, ctx, next) {
               seen.push(`auth:${call.action}`)
-              return yield* next(call, { ...ctx, auth: { user: 'ada' } })
+              return yield* next(call, { ...ctx, auth: { user: 'ada' } as AnyType })
             },
           },
           options: { auth: z.enum(['user', 'none']) },
@@ -126,7 +126,12 @@ describe('kernel — services, dispatch, hooks', () => {
       return yield* createServer({ services: [orphan], plugins: [Auth] })
     })
     expect((outcome as AnyType).error).toBe(ServerErrors.Configuration)
-    const invalid = service('i', { x: action.query({ auth: 'admin' }, function* () {}) })
+    // `auth: 'admin'` is a COMPILE error now (the requirement is a role ARRAY) — the
+    // runtime validator is the second line of defence, and this proves it still holds
+    const invalid = service('i', {
+      // @ts-expect-error a bare role string is not a Requirement — `['admin']` is
+      x: action.query({ auth: 'admin' }, function* () {}),
+    })
     const outcome2 = await run(function* () {
       yield* storage()
       return yield* createServer({ services: [invalid], plugins: [Auth] })
@@ -218,15 +223,38 @@ describe('kernel — services, dispatch, hooks', () => {
         }
         expect(values).toEqual([0, 1, 2])
 
+        // the plainest stream answer: a handler returning an ARRAY is normalized to a flow
+        const letters = yield* server.call(todos, 'letters')
+        const lettersFlow = yield* stream.flow(letters as AnyType)
+        const seen: string[] = []
+
+        for (;;) {
+          const step = yield* lettersFlow.next()
+
+          if (step.done) {
+            break
+          }
+
+          seen.push(step.value as string)
+        }
+
+        expect(seen).toEqual(['a', 'b', 'c'])
+
         yield* server.call(todos, 'create', { title: 'logged' })
         yield* attempt(server.call(todos, 'explode', { code: 'x.y' }))
         const spans = reported.filter(event => event.t === 'span')
         expect(spans.map(event => (event as AnyType).row.name)).toEqual([
           'todos.count',
+          'todos.letters',
           'todos.create',
           'todos.explode',
         ])
-        expect(spans.map(event => (event as AnyType).row.status)).toEqual(['ok', 'ok', 'failed'])
+        expect(spans.map(event => (event as AnyType).row.status)).toEqual([
+          'ok',
+          'ok',
+          'ok',
+          'failed',
+        ])
         const log = reported.find(event => event.t === 'log') as AnyType
         expect(log.row).toMatchObject({
           level: 'info',
@@ -257,6 +285,36 @@ describe('kernel — services, dispatch, hooks', () => {
           outputPlane: 'stream',
           outputBrand: 'ndjson',
         })
+      }),
+    )
+  })
+})
+
+describe('kernel — calling by ref', () => {
+  it('a typed ref calls the same action as the definition, with no runtime import of it', async () => {
+    unwrap(
+      await run(function* () {
+        yield* storage()
+        const server = yield* createServer({ services: [todos] })
+
+        // built from the service TYPE alone — `refs` only ever sees the name string
+        const api = refs<typeof todos>('todos')
+
+        const created = yield* server.call(api.create, { title: 'by ref' })
+        expect(created.title).toBe('by ref')
+
+        // the handle's own api map carries the same refs
+        const listed = yield* server.call(server.api.todos.list, {})
+        expect(listed.map(row => row.title)).toEqual(['by ref'])
+
+        // and the definition form still works, unchanged
+        expect((yield* server.call(todos, 'list', {})).length).toBe(1)
+
+        // a garbage target is a configuration failure, not a crash
+        const bad = yield* attempt(() => server.call({} as AnyType, 'list', {}))
+        expect((bad as AnyType).error).toBe(ServerErrors.Configuration)
+
+        yield* server.stop()
       }),
     )
   })

@@ -1,4 +1,4 @@
-import { and, gte, oneOf } from 'db:core'
+import { where } from 'db:core'
 import type { ObserveDef, ServerDef } from 'server:core'
 import { Observe, Server, ServerErrors } from 'server:core'
 import { attempt, createQueue, ensure, fork, sleep, useContext } from 'std:effect'
@@ -145,7 +145,12 @@ export const ObservePlugin: ObserveDef.Handle = Observe.implement<
     const rows = yield* exec(state, db =>
       db
         .query(spans.name)
-        .filter(and(gte('started_at', since), oneOf('kind', ['edge', 'dispatch', 'carrier'])))
+        .filter(
+          where.and(
+            where.gte('started_at', since),
+            where.oneOf('kind', ['edge', 'dispatch', 'carrier']),
+          ),
+        )
         .collect(),
     )
     return {

@@ -1,4 +1,5 @@
-import { column, Db, DbClient, DbErrors, isDestructive, table } from 'db:core'
+import { column, Db, DbClient, DbErrors, table } from 'db:core'
+import { isDestructive } from 'db:internal'
 import { attempt, run } from 'std:effect'
 import { install } from 'std:plugin'
 import { isFailure, unwrap } from 'std:result'

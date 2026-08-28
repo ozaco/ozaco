@@ -1,7 +1,9 @@
+import type { OptionsDef } from 'server:core'
 import type { Operation } from 'std:effect'
 
 export namespace AuthDef {
-  export type TokenType = 'access' | 'refresh' | 'session' | 'service'
+  /** re-exported from core: the option shapes live next to the action config that carries them. */
+  export type TokenType = OptionsDef.TokenType
 
   /** What a provider resolves a caller to — `claims` travel into the principal and the token. */
   export interface User {
@@ -60,31 +62,10 @@ export namespace AuthDef {
     readonly serviceTtlMs?: number | undefined
   }
 
-  /** The `auth` action option: who may call. `'authenticated'` = any verified principal
-   * (`'any'` is its deprecated alias — same meaning); an array = required ROLES; the object
-   * form requires roles AND/OR permissions; a predicate sees the full principal and decides
-   * itself (`auth: (p) => p.permissions.includes('agents:view')`). */
-  export type Requirement =
-    | 'user'
-    | 'service'
-    | 'authenticated'
-    | 'any'
-    | readonly string[]
-    | {
-        readonly roles?: readonly string[] | undefined
-        readonly permissions?: readonly string[] | undefined
-      }
-    | ((principal: Principal) => boolean)
-    | false
+  /** The `auth` action option: who may call — see {@link OptionsDef.Requirement}. */
+  export type Requirement = OptionsDef.Requirement
 
-  export interface Principal {
-    readonly sub: string
-    readonly type: TokenType
-    readonly roles: readonly string[]
-    readonly permissions: readonly string[]
-    readonly claims: Record<string, unknown>
-    readonly jti: string
-  }
+  export type Principal = OptionsDef.Principal
 
   /** A verified token's principal plus what rotation needs. */
   export interface Verified extends Principal {

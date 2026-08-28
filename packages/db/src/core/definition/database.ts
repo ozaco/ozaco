@@ -28,7 +28,7 @@ import type { Change } from '../types/change'
 import type { Database } from '../types/database'
 import type { Helpers } from '../types/helpers'
 import type { Spec } from '../types/spec'
-import { eq } from '../utils/filter'
+import { where } from '../utils/filter'
 import { tableSpecOf } from '../utils/schema'
 
 import { Db, DbAdapter } from './protocol'
@@ -209,7 +209,7 @@ export const DbClient: Database.Client = DbImpl.build({
       if (stamp && emit.op !== 'delete') {
         yield* state.adapter.update({
           table: spec,
-          filter: eq(FIELDS.id, String(id)),
+          filter: where.eq(FIELDS.id, String(id)),
           set: { [FIELDS.version]: write.token, [FIELDS.updated]: Date.now() },
         })
       }

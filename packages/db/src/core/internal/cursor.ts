@@ -17,11 +17,15 @@ function* malformed() {
   return yield* fail(DbErrors.Cursor, 'malformed pagination cursor')
 }
 
-/** Encode a keyset cursor as an opaque base64 token. `Date` boundary values survive the round
- * trip via a `$date` marker. */
+/** Encode a keyset cursor as an opaque base64 token — one entry per sort key. `Date` boundary
+ * values survive the round trip via a `$date` marker. */
 export function* encodeCursor(cursor: Spec.Cursor) {
-  const value = cursor.value instanceof Date ? { $date: cursor.value.toISOString() } : cursor.value
-  const json = yield* JsonCodec.actions.stringify({ ...cursor, value })
+  const keys = cursor.keys.map(key => ({
+    field: key.field,
+    direction: key.direction,
+    value: key.value instanceof Date ? { $date: key.value.toISOString() } : key.value,
+  }))
+  const json = yield* JsonCodec.actions.stringify({ keys })
 
   return btoa(encodeURIComponent(json))
 }
@@ -46,11 +50,25 @@ export function* decodeCursor(token: string) {
 
   const parsed = decoded.value
 
-  if (typeof parsed?.column !== 'string' || typeof parsed.id !== 'string') {
+  if (!Array.isArray(parsed?.keys) || parsed.keys.length === 0) {
     return yield* malformed()
   }
 
-  const value = isWireDate(parsed.value) ? new Date(parsed.value.$date) : parsed.value
+  const keys = parsed.keys.map(key => {
+    if (typeof key?.field !== 'string' || (key.direction !== 'asc' && key.direction !== 'desc')) {
+      return null
+    }
 
-  return { ...parsed, value } as Spec.Cursor
+    return {
+      field: key.field,
+      direction: key.direction,
+      value: isWireDate(key.value) ? new Date(key.value.$date) : key.value,
+    }
+  })
+
+  if (keys.some(key => key === null)) {
+    return yield* malformed()
+  }
+
+  return { keys } as Spec.Cursor
 }

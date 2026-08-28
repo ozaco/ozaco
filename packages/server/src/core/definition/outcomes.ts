@@ -1,4 +1,4 @@
-import { DbClient, eq, lt } from 'db:core'
+import { DbClient, where } from 'db:core'
 import { useContext } from 'std:effect'
 import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
@@ -84,7 +84,10 @@ export const DbOutcomes: OutcomesDef.Handle = Outcomes.implement<
   ...outcomesDefaults(),
   *put(outcome) {
     const db = (yield* DbClient.context.expect()) as AnyType
-    const existing = yield* db.query(outcomesTable.name).filter(eq('cid', outcome.cid)).first()
+    const existing = yield* db
+      .query(outcomesTable.name)
+      .filter(where.eq('cid', outcome.cid))
+      .first()
     if (existing) {
       yield* db.patch(outcomesTable.name, String(existing._id), {
         state: outcome.state,
@@ -105,7 +108,7 @@ export const DbOutcomes: OutcomesDef.Handle = Outcomes.implement<
   *get(cid) {
     const db = (yield* DbClient.context.expect()) as AnyType
     const state = yield* useContext(OutcomesDbRef)
-    const row = yield* db.query(outcomesTable.name).filter(eq('cid', cid)).first()
+    const row = yield* db.query(outcomesTable.name).filter(where.eq('cid', cid)).first()
     if (!row || Date.now() - Number(row.ts) > state.ttlMs) {
       return null
     }
@@ -123,7 +126,7 @@ export const DbOutcomes: OutcomesDef.Handle = Outcomes.implement<
     const state = yield* useContext(OutcomesDbRef)
     const stale = yield* db
       .query(outcomesTable.name)
-      .filter(lt('ts', Date.now() - state.ttlMs))
+      .filter(where.lt('ts', Date.now() - state.ttlMs))
       .collect()
     for (const row of stale) {
       yield* db.delete(outcomesTable.name, String(row._id))

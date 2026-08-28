@@ -72,11 +72,11 @@ function* boot(sessionTtlMs: number) {
   })
   const open = crud(openTable)
   const server = yield* createServer({
-    services: [guarded.service, open.service],
+    services: [guarded, open],
     edge: BunEdge,
     plugins: [Auth.use({ provider: provider(), secret: 'test-secret', sessionTtlMs })],
   })
-  const info = yield* server.listen({ port: 0 })
+  const info = yield* server.start({ port: 0 })
   return { server, ws: info.url!.replace('http', 'ws'), subs }
 }
 

@@ -1,3 +1,4 @@
+import { useDb } from 'db:core'
 import { createServer, Edge, ServerErrors } from 'server:core'
 import { crud } from 'server:plugins'
 import { run, sleep, until } from 'std:effect'
@@ -58,9 +59,12 @@ describe('resource schema hooks', () => {
         },
       },
 
-      *after({ op, output, ctx }) {
+      *after({ op, output }) {
         if (op === 'list') {
-          return { ...(output as AnyType), total: yield* ctx.db.query('todos').count() }
+          return {
+            ...(output as AnyType),
+            total: yield* (yield* useDb(todosTable)).query('todos').count(),
+          }
         }
       },
     })
@@ -73,10 +77,10 @@ describe('resource schema hooks', () => {
       await run(function* () {
         yield* storage()
         const server = yield* createServer({
-          services: [todos.service],
+          services: [todos],
           edge: BunEdge,
         })
-        yield* server.listen()
+        yield* server.start()
 
         // the tightened create input rejects what the default schema would accept
         const short = yield* post('/todos', { title: 'ab', done: false })

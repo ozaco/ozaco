@@ -37,6 +37,7 @@ const STD_MODULES: Record<string, ModuleEntry> = {
 
 const SERVER_MODULES: Record<string, ModuleEntry> = {
   'server:core': { subpath: '', source: 'core/index.ts' },
+  'server:internal': { subpath: 'internal', source: 'internal.ts' },
   'server:impl/edge/bun': { subpath: 'edge/bun', source: 'impl/edge/bun/index.ts' },
   'server:impl/edge/node': { subpath: 'edge/node', source: 'impl/edge/node/index.ts' },
   'server:impl/edge/deno': { subpath: 'edge/deno', source: 'impl/edge/deno/index.ts' },
@@ -49,15 +50,15 @@ const SERVER_MODULES: Record<string, ModuleEntry> = {
     subpath: 'plugins/observe/otlp',
     source: 'plugins/observe/impl/otlp/index.ts',
   },
-  'server:plugins/metrics/starrocks': {
-    subpath: 'plugins/metrics/starrocks',
-    source: 'plugins/metrics/impl/starrocks/index.ts',
+  'server:plugins/observe/openobserve': {
+    subpath: 'plugins/observe/openobserve',
+    source: 'plugins/observe/impl/openobserve/index.ts',
   },
-  'server:app': { subpath: 'app', source: 'app/index.ts' },
 }
 
 const DB_MODULES: Record<string, ModuleEntry> = {
   'db:core': { subpath: '', source: 'core/index.ts' },
+  'db:internal': { subpath: 'internal', source: 'internal.ts' },
   'db:impl/memory': { subpath: 'impl/memory', source: 'impl/memory/index.ts' },
   'db:impl/sqlite': { subpath: 'impl/sqlite', source: 'impl/sqlite/index.ts' },
   'db:impl/pg': { subpath: 'impl/pg', source: 'impl/pg/index.ts' },

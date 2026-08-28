@@ -5,11 +5,18 @@
  */
 import type { EdgeDef } from '@ozaco/server'
 import { action, Server, service, stream } from '@ozaco/server'
-import type { Flow } from '@ozaco/std/effect'
+import { flowOf } from '@ozaco/std/effect'
 import { z } from 'zod'
 
+const ChatIn = z.object({ text: z.string() })
+
+const ChatOut = z.union([
+  z.object({ t: z.literal('hello'), id: z.string(), peers: z.number() }),
+  z.object({ t: z.literal('message'), from: z.string(), text: z.string(), at: z.number() }),
+])
+
 /** everyone connected to this node's chat. */
-const peers = new Set<EdgeDef.Socket>()
+const peers = new Set<EdgeDef.Socket<z.infer<typeof ChatIn>, z.infer<typeof ChatOut>>>()
 
 const Event = z.object({ name: z.string(), payload: z.unknown(), origin: z.string() })
 
@@ -36,37 +43,32 @@ export const live = service(
         output: stream.sse(Event),
         description: 'Relay events (all, or one name) as server-sent events until `max`',
       },
+      // ONE generator, no hand-rolled subscription object: `emit` sends the next event, a
+      // plain return ends the stream (std's `flowOf`)
       function* ({ input }) {
-        const events: Flow<z.infer<typeof Event>, void> = {
-          *[Symbol.iterator]() {
-            const source = yield* Server.actions.events(input.name)
-            let seen = 0
-            return {
-              *next() {
-                if (seen >= input.max) {
-                  return { done: true as const, value: undefined }
-                }
-                const step = yield* source.next()
-                seen += 1
-                return {
-                  done: false as const,
-                  value: {
-                    name: step.value.name,
-                    payload: step.value.payload,
-                    origin: step.value.origin,
-                  },
-                }
-              },
-            }
-          },
-        }
-        return events
+        return flowOf<z.infer<typeof Event>>(function* (emit) {
+          const source = yield* Server.actions.events(input.name)
+
+          for (let seen = 0; seen < input.max; seen += 1) {
+            const step = yield* source.next()
+            yield* emit({
+              name: step.value.name,
+              payload: step.value.payload,
+              origin: step.value.origin,
+            })
+          }
+        })
       },
     ),
     chat: action.socket(
       {
         protocol: 'chat',
         description: 'send { text } — receive { from, text, at } from everyone on this node',
+
+        // the frames are DECLARED: inbound is validated (a malformed one is dropped and
+        // reported, never delivered), both sides type the handler and land in the manifest
+        receives: ChatIn,
+        sends: ChatOut,
       },
       function* (socket) {
         peers.add(socket)
@@ -83,10 +85,13 @@ export const live = service(
               return
             }
 
-            const text = String((step.value as { text?: unknown })?.text ?? '')
-
             for (const peer of peers) {
-              yield* peer.send({ t: 'message', from: name, text, at: Date.now() })
+              yield* peer.send({
+                t: 'message',
+                from: name,
+                text: step.value.text,
+                at: Date.now(),
+              })
             }
           }
         } finally {

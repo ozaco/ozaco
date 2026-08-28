@@ -46,16 +46,21 @@ export namespace Spec {
   /**
    * The portable filter algebra. Core compiles query refinements into this; adapters translate it
    * to their native predicate form (SQL `WHERE`, in-memory evaluation, …).
+   *
+   * `TField` carries the field names the filter references, so a typo is caught where the filter
+   * MEETS its query: `where.eq('dnoe', false)` builds a `Filter<'dnoe'>`, and
+   * `db.query('todos').filter(...)` wants a `Filter<keyof Todo>`. A filter that arrives from the
+   * wire is a plain `Filter` (fields unknown until `sanitizeFilter` checks them).
    */
-  export type Filter =
+  export type Filter<TField extends string = string> =
     | {
         readonly op: 'eq' | 'ne' | 'gt' | 'gte' | 'lt' | 'lte'
-        readonly field: string
+        readonly field: TField
         readonly value: FilterValue
       }
     | {
         readonly op: 'in' | 'not-in'
-        readonly field: string
+        readonly field: TField
 
         /** `value` everywhere: array ops take an array value (the wire also accepts a legacy
          * `values` key — `sanitizeFilter` normalizes it). */
@@ -63,13 +68,13 @@ export namespace Spec {
       }
     | {
         readonly op: 'like'
-        readonly field: string
+        readonly field: TField
         readonly pattern: string
         readonly insensitive?: boolean | undefined
       }
-    | { readonly op: 'is-null' | 'not-null'; readonly field: string }
-    | { readonly op: 'and' | 'or'; readonly filters: readonly Filter[] }
-    | { readonly op: 'not'; readonly filter: Filter }
+    | { readonly op: 'is-null' | 'not-null'; readonly field: TField }
+    | { readonly op: 'and' | 'or'; readonly filters: readonly Filter<TField>[] }
+    | { readonly op: 'not'; readonly filter: Filter<TField> }
 
   export type FilterOp = Filter['op']
 
@@ -78,11 +83,15 @@ export namespace Spec {
     readonly direction: 'asc' | 'desc'
   }
 
-  /** A portable read: filter + order + window over one table. */
+  /** A portable read: filter + order + projection + window over one table. */
   export interface Find {
     readonly table: Table
     readonly filter: Filter | null
     readonly order: readonly OrderBy[]
+
+    /** the columns to read; omitted (or `null`) reads every one. Core always folds the system
+     * fields in, so a projected row still paginates, versions and watches. */
+    readonly fields?: readonly string[] | null | undefined
     readonly limit: number | null
     readonly offset: number | null
   }
@@ -90,6 +99,24 @@ export namespace Spec {
   export interface Count {
     readonly table: Table
     readonly filter: Filter | null
+  }
+
+  /** One aggregate to compute, under the name it answers by. `field` is `null` only for
+   * `count`, which counts rows. */
+  export interface AggregateOp {
+    readonly kind: 'count' | 'sum' | 'avg' | 'min' | 'max'
+    readonly field: string | null
+    readonly as: string
+  }
+
+  /** A portable aggregate read: the ops over the matching rows, one answer row per group (or a
+   * single row when `groupBy` is empty). Every answer row carries the grouped columns plus each
+   * op under its `as` name. */
+  export interface Aggregate {
+    readonly table: Table
+    readonly filter: Filter | null
+    readonly groupBy: readonly string[]
+    readonly ops: readonly AggregateOp[]
   }
 
   /** A portable update: assignments over the matching rows. */
@@ -162,11 +189,13 @@ export namespace Spec {
     readonly count?: boolean | undefined
   }
 
-  /** The decoded form of an opaque keyset cursor. */
+  /** The decoded form of an opaque keyset cursor: the boundary row's value for every sort key,
+   * in sort order, closed by `_id`. */
   export interface Cursor {
-    readonly column: string
-    readonly direction: 'asc' | 'desc'
-    readonly value: unknown
-    readonly id: string
+    readonly keys: readonly {
+      readonly field: string
+      readonly direction: 'asc' | 'desc'
+      readonly value: unknown
+    }[]
   }
 }

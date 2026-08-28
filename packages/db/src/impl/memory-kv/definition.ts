@@ -1,5 +1,6 @@
 import type { KvDef } from 'db:core'
-import { DEFAULT_KV_PREFIX, isValidKvPrefix, Kv, kvActions, kvDefaults, KvErrors } from 'db:core'
+import { Kv, KvErrors } from 'db:core'
+import { DEFAULT_KV_PREFIX, isValidKvPrefix, kvActions, kvDefaults } from 'db:internal'
 import { hasCodec } from 'std:codec'
 import { install } from 'std:plugin'
 import { fail } from 'std:result'

@@ -21,7 +21,20 @@ Pre-commit hook runs `moon run :check --affected`.
 
 ## Architecture
 
-This is a TypeScript monorepo for building CLI tools and a standard library (`@ozaco/std`).
+This is a TypeScript monorepo of layered runtime packages, all built on the same plugin/effect
+foundation. Layers, bottom up:
+
+- **`@ozaco/std`** – the standard library (effect, plugin, io, codec, logger, fetch, ws, webrtc…)
+- **`@ozaco/transport`** – the messaging plane (`memory` / `nats` / `redis` / `worker` impls)
+- **`@ozaco/db`** – the reactive, adapter-agnostic database + `Kv` (`memory` / `sqlite` / `pg` /
+  `bun-sql`, `memory-kv` / `redis-kv`)
+- **`@ozaco/server`** – the service/action kernel: `service()` / `action.*` / `createServer`, with
+  edges (bun/node/deno), carriers, and plugins (auth, cache, cors, docs, observe, resilience,
+  `crud`). See `packages/server/README.md`.
+- **`@ozaco/client`** – the manifest-driven typed client for a `@ozaco/server` node
+- **`@ozaco/ai`**, **`@ozaco/cli`** – AI providers and the CLI toolkit
+- `apps/panel` (docs try-it UI) and `apps/observe` (dev console) are embedded into the server's
+  `Docs` / `ObservePlugin`; `examples/demo` is the end-to-end reference app.
 
 **Workspaces:** `packages/`, `plugins/`, `apps/`, `tools/`
 

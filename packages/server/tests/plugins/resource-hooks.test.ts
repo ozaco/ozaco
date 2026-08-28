@@ -1,3 +1,4 @@
+import { useDb } from 'db:core'
 import { createServer, Edge, ServerErrors } from 'server:core'
 import { crud } from 'server:plugins'
 import { run, until } from 'std:effect'
@@ -51,7 +52,7 @@ describe('resource hooks', () => {
 
       // full control: scope list to done=false via next(...), wrap get's (after-transformed)
       // output, and guard remove with a db read — a protected row never reaches the handler
-      *around({ op, input, ctx }, next) {
+      *around({ op, input }, next) {
         if (op === 'list') {
           return yield* next({
             ...(input as AnyType),
@@ -63,7 +64,7 @@ describe('resource hooks', () => {
           return { ...out, title: `${out.title}:wrapped` }
         }
         if (op === 'remove') {
-          const row = yield* ctx.db.get('todos', (input as AnyType).id)
+          const row = yield* (yield* useDb(todosTable)).get('todos', (input as AnyType).id)
           if (row && String(row.title).includes('keep')) {
             return yield* fail(ServerErrors.Forbidden, 'protected row')
           }
@@ -97,10 +98,10 @@ describe('resource hooks', () => {
       await run(function* () {
         yield* storage()
         const server = yield* createServer({
-          services: [todos.service],
+          services: [todos],
           edge: BunEdge,
         })
-        yield* server.listen()
+        yield* server.start()
 
         // before: input was rewritten before the insert
         const open = yield* post('/todos', { title: 'a', done: false })
@@ -181,10 +182,10 @@ describe('resource hooks', () => {
       await run(function* () {
         yield* storage()
         const server = yield* createServer({
-          services: [todos.service],
+          services: [todos],
           edge: BunEdge,
         })
-        const info = yield* server.listen({ port: 0 })
+        const info = yield* server.start({ port: 0 })
         const ws = new WebSocket(`${info.url!.replace('http', 'ws')}/todos/_realtime`)
         const frames: AnyType[] = []
         ws.addEventListener('message', event => frames.push(JSON.parse(String(event.data))))
@@ -209,8 +210,8 @@ describe('resource hooks', () => {
             ws.addEventListener('open', () => resolve())
           }),
         )
-        yield* server.call(todos.service, 'create', { title: 'open', done: false })
-        yield* server.call(todos.service, 'create', { title: 'closed', done: true })
+        yield* server.call(todos, 'create', { title: 'open', done: false })
+        yield* server.call(todos, 'create', { title: 'closed', done: true })
 
         // the client watches EVERYTHING — before scopes it to done=false, after projects titles
         ws.send(JSON.stringify({ t: 'watch', id: 'w1' }))
@@ -218,7 +219,7 @@ describe('resource hooks', () => {
         expect(sync.t).toBe('sync')
         expect(sync.rows.map((row: AnyType) => row.title)).toEqual(['live:open'])
 
-        yield* server.call(todos.service, 'create', { title: 'fresh', done: false })
+        yield* server.call(todos, 'create', { title: 'fresh', done: false })
         const delta = yield* next(1)
         expect(delta.t).toBe('delta')
         expect(delta.added.map((row: AnyType) => row.title)).toEqual(['live:fresh'])

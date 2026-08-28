@@ -1,6 +1,6 @@
 // oxlint-disable import/exports-last
 import type { CarrierDef, ObserveDef, ServerDef, TraceDef, WireDef } from 'server:core'
-import { rootTrace, toWire } from 'server:core'
+import { rootTrace, toWire } from 'server:internal'
 import type { Operation } from 'std:effect'
 import { attempt, fork, sleep } from 'std:effect'
 import { isFailure } from 'std:result'

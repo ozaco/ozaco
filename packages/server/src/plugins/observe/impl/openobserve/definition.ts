@@ -1,5 +1,6 @@
 import type { ServerDef, Sink } from 'server:core'
-import { createSink, Server, ServerErrors } from 'server:core'
+import { Server, ServerErrors } from 'server:core'
+import { createSink } from 'server:internal'
 import { definePlugin } from 'std:plugin'
 import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'

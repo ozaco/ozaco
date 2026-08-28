@@ -224,24 +224,24 @@ export const notes = crud(notesTable, { maxLimit: 50 })
  * convention anywhere, so the client can only find `/wall/feed` through the manifest. */
 export const wall = service('wall', { feed: crud.realtime(notesTable) })
 
-export type Api = ServerDef.Handle<[typeof demo, typeof probe, typeof notes.service]>['api']
+export type Api = ServerDef.Handle<[typeof demo, typeof probe, typeof notes]>['api']
 
 /** Boot the fixture server on a random port; resolves its url. */
 export function* boot(options?: { docsPath?: string }): Operation<{
   url: string
-  server: ServerDef.Handle<[typeof demo, typeof probe, typeof notes.service, typeof wall]>
+  server: ServerDef.Handle<[typeof demo, typeof probe, typeof notes, typeof wall]>
 }> {
   yield* MemoryAdapter.use()
   yield* BunIO.use()
   yield* DbClient.use({ tables: [notesTable] })
   yield* MemoryKv.use()
   const server = yield* createServer({
-    services: [demo, probe, notes.service, wall],
+    services: [demo, probe, notes, wall],
     edge: BunEdge,
     plugins: [Docs.use({ path: options?.docsPath ?? '/docs' })],
     name: 'client-fixture',
     version: '1.0.0',
   })
-  const info = yield* server.listen({ port: 0 })
+  const info = yield* server.start({ port: 0 })
   return { url: info.url ?? `http://127.0.0.1:${info.port}`, server }
 }

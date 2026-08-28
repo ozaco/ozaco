@@ -45,7 +45,7 @@ describe('edge — query strings by the declared schema', () => {
       await run(function* () {
         yield* storage()
         const server = yield* createServer({ services: [q], edge: BunEdge })
-        yield* server.listen()
+        yield* server.start()
 
         // one pass into a DECLARED array field is that array's one element
         expect((yield* get('/q/find?tags=a')).body).toEqual({ tags: ['a'] })

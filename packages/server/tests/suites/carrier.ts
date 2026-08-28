@@ -307,7 +307,7 @@ export const runCarrierSuite = (target: CarrierTarget): void => {
               carrier: NetworkCarrier,
               name: 'app',
               instance: 'gw',
-              hosted: [],
+              role: 'gateway',
             })
             yield* sleep(100)
             expect(yield* gateway.call(math, 'add', { a: 1, b: 1 })).toBe(2)

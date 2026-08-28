@@ -109,11 +109,21 @@ export const action = Object.assign(define('action'), {
   action: define('action'),
   stream: define('stream'),
 
-  /** A socket INSIDE the service: `chat: action.socket({ protocol: 'chat' }, function* (socket)
-   * {…})` mounts a WS route (default `/<service>/<action>`), listed under the service. */
-  socket: (
-    config: ServiceDef.SocketConfig,
-    handler: (socket: EdgeDef.Socket) => Operation<void>,
+  /**
+   * A socket INSIDE the service: `chat: action.socket({ protocol: 'chat' }, function* (socket)
+   * {…})` mounts a WS route (default `/<service>/<action>`), listed under the service.
+   *
+   * Declare `receives` / `sends` and the handler is typed by them — inbound frames are validated
+   * against `receives` before they reach `socket.messages`.
+   */
+  socket: <
+    TReceives extends ServiceDef.Schema | undefined = undefined,
+    TSends extends ServiceDef.Schema | undefined = undefined,
+  >(
+    config: ServiceDef.SocketConfig<TReceives, TSends>,
+    handler: (
+      socket: EdgeDef.Socket<ServiceDef.Frames<TReceives>, ServiceDef.Frames<TSends>>,
+    ) => Operation<void>,
   ): ServiceDef.SocketAction => ({
     _t: ACTION,
 
@@ -123,6 +133,8 @@ export const action = Object.assign(define('action'), {
       description: config.description ?? null,
       authorize: config.authorize ?? null,
       defaults: config.defaults ?? null,
+      receives: config.receives ?? null,
+      sends: config.sends ?? null,
     },
 
     handler: handler as AnyType,
@@ -169,6 +181,21 @@ export const ref = <A extends ServiceDef.Action>(
   serviceName: string,
   actionName: string,
 ): ServiceDef.Ref<A> => ({ service: serviceName, action: actionName })
+
+/**
+ * Every callable action of a service, as typed refs — from a TYPE-ONLY import:
+ *
+ *   import type { todos } from './todos'          // no runtime edge, no import cycle
+ *   const api = refs<typeof todos>('todos')       // the name is checked against the type
+ *
+ *   yield* ctx.call(api.list, {}, { inherit: true })
+ *
+ * `server.api.<service>.<action>` carries the same refs for callers outside a handler.
+ */
+export const refs = <S extends ServiceDef.Service>(name: S['name']): ServiceDef.Refs<S> =>
+  new Proxy({} as ServiceDef.Refs<S>, {
+    get: (_target, key) => (typeof key === 'string' ? { service: name, action: key } : undefined),
+  })
 
 export const isSchema = (value: unknown): value is StandardSchemaV1 =>
   typeof value === 'object' && value !== null && '~standard' in value

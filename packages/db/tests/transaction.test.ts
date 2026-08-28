@@ -1,5 +1,6 @@
 import type { Adapter } from 'db:core'
-import { adapterDefaults, DbAdapter, DbClient, DbErrors } from 'db:core'
+import { DbAdapter, DbClient, DbErrors } from 'db:core'
+import { adapterDefaults } from 'db:internal'
 import type { Operation } from 'std:effect'
 import { attempt, operation, run } from 'std:effect'
 import { install } from 'std:plugin'
@@ -95,6 +96,9 @@ describe('transactions — capability gating and retry', () => {
     },
     *count() {
       return 0
+    },
+    *aggregate() {
+      return []
     },
     *insert(_table: AnyType, rows: AnyType) {
       return rows

@@ -1,4 +1,5 @@
-import { createServer, report, Server } from 'server:core'
+import { createServer, Server } from 'server:core'
+import { report } from 'server:internal'
 import { attempt, run, sleep, until } from 'std:effect'
 import { unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
@@ -42,7 +43,7 @@ describe('observe/openobserve', () => {
             }),
           ],
         })
-        yield* server.listen()
+        yield* server.start()
         yield* server.call(todos, 'create', { title: 'observed' })
         yield* attempt(server.call(todos, 'explode', { code: 'x.y' }))
         yield* sleep(80)
@@ -119,7 +120,7 @@ describe('observe/openobserve', () => {
             }),
           ],
         })
-        const info = yield* server.listen({ port: 0 })
+        const info = yield* server.start({ port: 0 })
         yield* until(
           fetch(`${info.url!}/todos/create`, {
             method: 'POST',
@@ -162,7 +163,7 @@ describe('observe/openobserve', () => {
             }),
           ],
         })
-        yield* server.listen()
+        yield* server.start()
         yield* server.call(todos, 'create', { title: 'renamed' })
         yield* sleep(80)
 
@@ -199,7 +200,7 @@ describe('observe/openobserve', () => {
             }),
           ],
         })
-        yield* server.listen()
+        yield* server.start()
         const kernel = yield* Server.actions.describe()
         yield* report(kernel, {
           t: 'domain',

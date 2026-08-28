@@ -1,5 +1,6 @@
 import type { CarrierDef, WireDef } from 'server:core'
-import { Carrier, carrierDefaults, Server, ServerErrors } from 'server:core'
+import { Carrier, Server, ServerErrors } from 'server:core'
+import { carrierDefaults } from 'server:internal'
 import type { Operation } from 'std:effect'
 import { attempt, createQueue, ensure, fork, useContext } from 'std:effect'
 import { fail, isFailure } from 'std:result'

@@ -158,8 +158,7 @@ export function* authorize(
     return yield* fail(ServerErrors.Unauthorized, 'authentication required', 'auth:missing')
   }
 
-  // 'any' is the deprecated alias of 'authenticated' — both mean "a verified principal"
-  if (requirement === 'authenticated' || requirement === 'any') {
+  if (requirement === 'authenticated') {
     return
   }
 
@@ -230,7 +229,6 @@ export const options = {
     z.literal('user'),
     z.literal('service'),
     z.literal('authenticated'),
-    z.literal('any'),
     z.literal(false),
     z.array(z.string()),
     z.strictObject({

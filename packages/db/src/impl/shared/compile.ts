@@ -129,9 +129,43 @@ export function* compileFind(dialect: Sql.Dialect, spec: Spec.Find) {
   const where = yield* whereSql(builder, spec.filter)
   const limit = spec.limit === null ? '' : ` LIMIT ${Math.trunc(spec.limit)}`
   const offset = spec.offset ? ` OFFSET ${Math.trunc(spec.offset)}` : ''
+  const columns =
+    spec.fields && spec.fields.length > 0 ? spec.fields.map(quoteIdent).join(', ') : '*'
 
   return statement(
-    `SELECT * FROM ${quoteIdent(spec.table.name)}${where}${orderSql(spec.order)}${limit}${offset}`,
+    `SELECT ${columns} FROM ${quoteIdent(spec.table.name)}${where}${orderSql(spec.order)}${limit}${offset}`,
+    builder,
+  )
+}
+
+const AGGREGATE: Readonly<Record<Spec.AggregateOp['kind'], string>> = {
+  count: 'COUNT',
+  sum: 'SUM',
+  avg: 'AVG',
+  min: 'MIN',
+  max: 'MAX',
+}
+
+/** `SELECT <group cols>, SUM(x) AS "sum" … GROUP BY <group cols>` — the aggregate plane. */
+export function* compileAggregate(dialect: Sql.Dialect, spec: Spec.Aggregate) {
+  const builder = builderOf(dialect, spec.table)
+  const where = yield* whereSql(builder, spec.filter)
+
+  const selected = [
+    ...spec.groupBy.map(field => quoteIdent(field)),
+
+    ...spec.ops.map(op =>
+      op.kind === 'count' && op.field === null
+        ? `COUNT(*) AS ${quoteIdent(op.as)}`
+        : `${AGGREGATE[op.kind]}(${quoteIdent(op.field!)}) AS ${quoteIdent(op.as)}`,
+    ),
+  ]
+
+  const group =
+    spec.groupBy.length === 0 ? '' : ` GROUP BY ${spec.groupBy.map(quoteIdent).join(', ')}`
+
+  return statement(
+    `SELECT ${selected.join(', ')} FROM ${quoteIdent(spec.table.name)}${where}${group}`,
     builder,
   )
 }

@@ -48,6 +48,10 @@ export namespace DocsDef {
 
     /** opening-frame defaults (e.g. `{ cursor: 0 }` on realtime — start of the set). */
     readonly defaults?: Readonly<Record<string, unknown>> | null | undefined
+
+    /** the declared frame schemas: what a client may send, what the server sends back. */
+    readonly receives?: SchemaDoc | null | undefined
+    readonly sends?: SchemaDoc | null | undefined
   }
 
   export interface ServiceDoc {

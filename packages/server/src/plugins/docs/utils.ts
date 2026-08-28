@@ -44,6 +44,10 @@ export const manifestSchema = z.object({
 
         /** opening-frame defaults (realtime documents `{ cursor: 0 }` — the start of the set). */
         defaults: z.record(z.string(), z.unknown()).nullable().optional(),
+
+        /** the declared frame schemas, when the action gave them. */
+        receives: z.record(z.string(), z.unknown()).nullable().optional(),
+        sends: z.record(z.string(), z.unknown()).nullable().optional(),
       }),
     )
     .optional(),

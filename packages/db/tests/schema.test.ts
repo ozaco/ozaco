@@ -1,4 +1,4 @@
-import { isTable, tableSpecOf } from 'db:core'
+import { isTable, tableSpecOf } from 'db:internal'
 
 import { describe, expect, it } from 'bun:test'
 

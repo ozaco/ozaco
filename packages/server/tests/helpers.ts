@@ -1,7 +1,7 @@
-import { column, DbClient, table } from 'db:core'
+import { column, DbClient, table, useDb } from 'db:core'
 import { action, service, stream } from 'server:core'
 import type { Operation } from 'std:effect'
-import { sleep } from 'std:effect'
+import { flowOf, sleep } from 'std:effect'
 import { fail } from 'std:result'
 
 import { MemoryAdapter } from 'db:impl/memory'
@@ -22,19 +22,21 @@ export const todosTable = table('todos', {
 export const todos = service('todos', {
   list: action.query(
     { input: z.object({ done: z.boolean().optional() }), output: z.array(Todo) },
-    function* ({ input, ctx }) {
-      const rows = yield* ctx.db.query('todos').collect()
+    function* ({ input }) {
+      const db = yield* useDb(todosTable)
+      const rows = yield* db.query('todos').collect()
       return rows
         .filter(row => input.done === undefined || row.done === input.done)
-        .map(row => ({ id: String(row._id), title: String(row.title), done: Boolean(row.done) }))
+        .map(row => ({ id: row._id, title: row.title, done: row.done }))
     },
   ),
   create: action.mutation(
     { input: z.object({ title: z.string().min(1) }), output: Todo },
     function* ({ input, ctx }) {
       yield* ctx.log.info('creating', { title: input.title })
-      const row = yield* ctx.db.insert('todos', { title: input.title, done: false })
-      return { id: String(row._id), title: input.title, done: false }
+      const db = yield* useDb(todosTable)
+      const row = yield* db.insert('todos', { title: input.title, done: false })
+      return { id: row._id, title: input.title, done: false }
     },
   ),
   explode: action.query({ input: z.object({ code: z.string() }) }, function* ({ input }) {
@@ -54,24 +56,22 @@ export const todos = service('todos', {
       return ctx.signal.aborted ? 'aborted' : 'late'
     },
   ),
+  // a stream answered as ONE generator (`flowOf`) — no hand-rolled subscription object
   count: action.stream(
     { input: z.object({ n: z.number() }), output: stream.ndjson(z.number()) },
     function* ({ input }) {
-      return {
-        *[Symbol.iterator]() {
-          let at = 0
-          return {
-            *next() {
-              if (at >= input.n) {
-                return { done: true as const, value: undefined }
-              }
-              return { done: false as const, value: at++ }
-            },
-          }
-        },
-      }
+      return flowOf<number>(function* (emit) {
+        for (let at = 0; at < input.n; at += 1) {
+          yield* emit(at)
+        }
+      })
     },
   ),
+
+  /** the plainest stream answer there is: an array. */
+  letters: action.stream({ output: stream.ndjson(z.string()) }, function* () {
+    return ['a', 'b', 'c']
+  }),
   nested: action.query(
     { input: z.object({ title: z.string() }), output: Todo },
     // a SELF-call: the service definition is its own typed reference. The return annotation

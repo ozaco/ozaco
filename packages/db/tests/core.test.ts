@@ -6,12 +6,12 @@ import {
   DbAdapter,
   DbClient,
   DbErrors,
-  gt,
-  matches,
   sanitizeFilter,
   table,
   useDb,
+  where,
 } from 'db:core'
+import { matches } from 'db:internal'
 import { attempt, run } from 'std:effect'
 import { install } from 'std:plugin'
 import { isFailure, unwrap } from 'std:result'
@@ -183,7 +183,7 @@ describe('adapter middleware', () => {
             })(),
         })
         yield* db.insert('users', { name: 'ada' })
-        const rows = yield* db.query('users').filter(gt('age', -1)).collect()
+        const rows = yield* db.query('users').filter(where.gt('age', -1)).collect()
         expect(rows).toHaveLength(0)
         expect(seen).toEqual(['find:users'])
       }),

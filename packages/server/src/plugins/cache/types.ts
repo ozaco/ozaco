@@ -1,18 +1,8 @@
-import type { ServerDef } from 'server:core'
+import type { OptionsDef, ServerDef } from 'server:core'
 
 export namespace CacheDef {
-  /** The `cache` action option. */
-  export interface Options {
-    readonly ttlMs: number
-
-    /** what the key varies on besides the whole input: dotted paths into `input` / `auth` /
-     * `headers` (e.g. `'auth.id'`, `'headers.accept-language'`). Default: the whole input. */
-    readonly vary?: readonly string[] | undefined
-
-    /** tags the entry carries (`invalidate` drops them; a db table name is invalidated
-     * automatically when that table changes). */
-    readonly tags?: readonly string[] | undefined
-  }
+  /** The `cache` action option — see {@link OptionsDef.Cache}. */
+  export type Options = OptionsDef.Cache
 
   /** What the cache key is built from. */
   export interface KeyInput {

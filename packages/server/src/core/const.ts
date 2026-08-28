@@ -37,6 +37,9 @@ export const DEFAULT_OUTCOME_TTL_MS = 10 * 60 * 1000
 /** Observe tables live under this prefix (`__` is the db's own, so one underscore). */
 export const OBSERVE_PREFIX = '_ob_'
 
+/** where the observe dev console mounts (the docs manifest links it when it is there). */
+export const OBSERVE_CONSOLE_PATH = '/_observe'
+
 /** The service id format: `name@version#instance`. */
 export const serviceIdOf = (name: string, version: string, instance: string): string =>
   `${name}@${version}#${instance}`

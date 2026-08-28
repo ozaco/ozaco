@@ -2,11 +2,18 @@
  * Accounts: login / refresh / whoami on top of the Auth plugin (access + refresh rotation),
  * role-gated actions (`auth: 'user'`, `auth: ['admin']`) and a public one (`auth: false`).
  */
-import { action, service } from '@ozaco/server'
+import { useDb } from '@ozaco/db'
+import { action, service, serviceErrors } from '@ozaco/server'
 import type { AuthDef } from '@ozaco/server/plugins'
 import { Auth } from '@ozaco/server/plugins'
-import { fail } from '@ozaco/std/result'
 import { z } from 'zod'
+
+import { usersTable } from '../tables'
+
+/** the tag, its status and the failer in one place — `errors: accountErrors.statuses` on the
+ * action publishes it, `accountErrors.unknownUser(...)` raises it (this used to be a bare
+ * `fail('account.unknown-user')` with no `errors` entry: a 404 condition answering 500) */
+const accountErrors = serviceErrors('account', { 'unknown-user': 404 })
 
 const Tokens = z.object({
   accessToken: z.string(),
@@ -60,18 +67,24 @@ export const account = service(
         input: z.object({ email: z.string() }),
         output: z.object({ ok: z.boolean() }),
         auth: ['admin'],
+        errors: accountErrors.statuses,
         description: 'Admins only: grant the admin role',
       },
-      function* ({ input, ctx }) {
-        const user = yield* ctx.db
+      function* ({ input }) {
+        const db = yield* useDb(usersTable)
+
+        const user = yield* db
           .query('users')
           .filter({ op: 'eq', field: 'email', value: input.email })
           .first()
+
         if (!user) {
-          return yield* fail('account.unknown-user', `no user ${input.email}`)
+          return yield* accountErrors.unknownUser(`no user ${input.email}`)
         }
-        const roles = new Set([...((user.roles as string[]) ?? []), 'admin'])
-        yield* ctx.db.patch('users', String(user._id), { roles: [...roles] })
+
+        const roles = new Set([...(Array.isArray(user.roles) ? user.roles : []), 'admin'])
+        yield* db.patch('users', user._id, { roles: [...roles] })
+
         return { ok: true }
       },
     ),

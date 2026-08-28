@@ -62,6 +62,10 @@ export namespace Adapter {
     find(spec: Spec.Find): Operation<readonly Spec.Doc[]>
     count(spec: Spec.Count): Operation<number>
 
+    /** Compute aggregates in the backend — one row per group, each carrying the grouped columns
+     * plus every op under its `as` name. */
+    aggregate(spec: Spec.Aggregate): Operation<readonly Spec.Doc[]>
+
     /** Insert fully-stamped rows and return the stored documents (in input order). */
     insert(table: Spec.Table, rows: readonly Spec.Doc[]): Operation<readonly Spec.Doc[]>
 

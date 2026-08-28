@@ -1,5 +1,6 @@
 import type { ServerDef } from 'server:core'
 import { Server, ServerErrors } from 'server:core'
+import { OBSERVE_CONSOLE_PATH } from 'server:internal'
 import { definePlugin } from 'std:plugin'
 import { fail } from 'std:result'
 
@@ -32,7 +33,13 @@ export const Docs = definePlugin<
     const path = (options?.path ?? '/docs').replace(/\/$/u, '')
     const title = options?.title ?? 'docs'
     const manifest = () =>
-      manifestOf(kernel, { path, console: kernel.hooks.some(hooks => hooks.name === 'observe') })
+      manifestOf(kernel, {
+        path,
+
+        // what is actually MOUNTED, not what is merely installed: `Observe({ console: false })`
+        // used to advertise a dead `/_observe` link in the panel
+        console: kernel.routes.some(route => route.path === OBSERVE_CONSOLE_PATH),
+      })
     return {
       manifest,
       hooks: {

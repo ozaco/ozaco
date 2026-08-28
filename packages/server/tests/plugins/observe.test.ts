@@ -24,7 +24,7 @@ describe('observe — what happened is a db row', () => {
           edge: BunEdge,
           plugins: [ObservePlugin.use({ batch: { ms: 10 } })],
         })
-        yield* server.listen()
+        yield* server.start()
 
         const created = yield* Edge.actions.handle(
           new Request('http://edge/todos/create', {

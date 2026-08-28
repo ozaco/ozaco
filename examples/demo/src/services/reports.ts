@@ -3,14 +3,24 @@
  * invalidation from a mutation, retry with a flaky dependency, a circuit breaker, a bulkhead,
  * singleflight, a rate limit, a per-action timeout with a fallback, and a nested `ctx.call`.
  */
-import { action, service } from '@ozaco/server'
+import { useDb } from '@ozaco/db'
+import { action, refs, service } from '@ozaco/server'
 import type { Operation } from '@ozaco/std/effect'
 import { sleep } from '@ozaco/std/effect'
 import { fail } from '@ozaco/std/result'
 import { z } from 'zod'
 
-import { media } from './media'
-import { todos } from './todos'
+import { todosTable } from '../tables'
+
+// TYPE-only: `reports` calls these services without importing them at runtime, so the module
+// graph stays a tree (no cycle waiting to happen)
+import type { media } from './media'
+import type { todos } from './todos'
+
+const api = {
+  todos: refs<typeof todos>('todos'),
+  media: refs<typeof media>('media'),
+}
 
 let flakyCalls = 0
 let computed = 0
@@ -30,9 +40,9 @@ export const reports = service(
         cache: { ttlMs: 5000, tags: ['todos'] },
         description: 'Cached 5s and tagged `todos`: any todos write invalidates it cluster-wide',
       },
-      function* ({ input, ctx }) {
+      function* ({ input }) {
         computed += 1
-        let query = ctx.db.query('todos')
+        let query = (yield* useDb(todosTable)).query('todos')
         if (input.done !== undefined) {
           query = query.filter({ op: 'eq', field: 'done', value: input.done })
         }
@@ -134,8 +144,8 @@ export const reports = service(
       // typed end to end from the definitions. `inherit: true` carries THIS caller's bearer
       // into the guarded todos.list — without it the nested call would be anonymous and 401
       function* ({ ctx }): Operation<{ todos: number; uploads: number }> {
-        const page = yield* ctx.call(todos.service, 'list', {}, { inherit: true })
-        const uploads = yield* ctx.call(media, 'list')
+        const page = yield* ctx.call(api.todos.list, {}, { inherit: true })
+        const uploads = yield* ctx.call(api.media.list)
         return { todos: page.data.length, uploads: uploads.length }
       },
     ),

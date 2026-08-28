@@ -37,7 +37,7 @@ describe('observe — cluster', () => {
               name: 'app',
               instance: 'svc',
             })
-            yield* svc.listen()
+            yield* svc.start()
             ready.add(undefined)
             yield* sleep(60_000)
           }),
@@ -59,9 +59,9 @@ describe('observe — cluster', () => {
             ],
             name: 'app',
             instance: 'gw',
-            hosted: [],
+            role: 'gateway',
           })
-          yield* gateway.listen()
+          yield* gateway.start()
           // let presence + the collector heartbeat settle on both sides
           yield* sleep(250)
           const created = yield* gateway.call(todos, 'create', { title: 'across' })
@@ -106,7 +106,7 @@ describe('observe — cluster', () => {
           name: 'app',
           instance: 'alone',
         })
-        yield* server.listen()
+        yield* server.start()
         yield* server.call(todos, 'create', { title: 'kept' })
         yield* sleep(50)
         const page = yield* Observe.actions.query({ action: 'create' })
@@ -126,7 +126,7 @@ describe('observe — cluster', () => {
           name: 'app',
           instance: 'alone',
         })
-        yield* server.listen()
+        yield* server.start()
         yield* server.call(todos, 'create', { title: 'dropped' })
         yield* sleep(50)
         expect((yield* Observe.actions.query({ action: 'create' })).requests).toHaveLength(0)

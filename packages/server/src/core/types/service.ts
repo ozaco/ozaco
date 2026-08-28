@@ -4,6 +4,7 @@ import type { AnyType, StandardSchemaV1 } from 'std:shared'
 
 import type { ACTION, SERVICE } from '../const'
 
+import type { OptionsDef } from './options'
 import type { StreamDef } from './stream'
 
 /**
@@ -33,15 +34,16 @@ export namespace ServiceDef {
   export type DisconnectMode = 'cancel' | 'detach'
 
   /**
-   * An action's configuration. Plugins extend it with their own top-level keys (`cache`,
-   * `timeoutMs`, `auth`, …) — typed through their `options()` helpers, validated at
-   * `createServer` time against the schemas the plugins declare. Unknown keys are a
-   * configuration failure: an option nobody handles is a typo, not a feature.
+   * An action's configuration: what it takes, what it answers, where it lives — plus the plugin
+   * options ({@link OptionsDef.ActionOptions}: `auth`, `cache`, `timeoutMs`, `retry`, …), typed
+   * fields rather than an open bag. An unknown key is a compile error here and a configuration
+   * failure at `createServer`: an option nobody handles is a typo, not a feature.
    */
   export interface Config<
     TInput extends Declaration | undefined = Declaration | undefined,
     TOutput extends Declaration | undefined = Declaration | undefined,
-  > {
+  >
+    extends OptionsDef.ActionOptions {
     readonly title?: string | undefined
     readonly description?: string | undefined
     readonly input?: TInput
@@ -55,9 +57,6 @@ export namespace ServiceDef {
     /** Failure tag → HTTP status overrides; also feeds the docs error catalog. */
     readonly errors?: Readonly<Record<string, number>> | undefined
     readonly tags?: readonly string[] | undefined
-
-    /** plugin options — see the plugin's `options()` helper for the typed shape. */
-    readonly [option: string]: unknown
   }
 
   /** The handler's `params` type: the value plane of the input. */
@@ -71,13 +70,19 @@ export namespace ServiceDef {
           ? StreamDef.Parts<TFields, TStreams>
           : unknown
 
-  /** The handler's return type: the value plane of the output, or a branded stream. */
+  /** A declared array output also accepts a READONLY one — `db.query(...).collect()` and every
+   * other read answers `readonly Row[]`, and the kernel only validates and serializes it. */
+  export type Loose<T> = T extends readonly (infer Element)[] ? readonly Element[] | T : T
+
+  /** The handler's return type: the value plane of the output, or — for a stream output — any
+   * of the four shapes the kernel normalizes: an already-branded stream, a Flow (`flowOf`), an
+   * array, or an async iterable. */
   export type Returns<D> = D extends undefined
     ? void
     : D extends StandardSchemaV1
-      ? StandardSchemaV1.InferOutput<D>
+      ? Loose<StandardSchemaV1.InferOutput<D>>
       : D extends StreamDef.Decl<infer B, infer T>
-        ? StreamDef.Branded<B, AnyType> | StreamDef.Source<T>
+        ? StreamDef.Branded<B, AnyType> | StreamDef.Source<T> | readonly T[] | AsyncIterable<T>
         : unknown
 
   /** Everything resolved about an action: what the kernel/edge/carriers/plugins/docs read. */
@@ -120,7 +125,19 @@ export namespace ServiceDef {
 
   /** A socket declared INSIDE a service (`action.socket`): mounted as a WS route at the edge,
    * listed under the service in the manifest — not callable, not carried. */
-  export interface SocketConfig {
+  export interface SocketConfig<
+    TReceives extends Schema | undefined = undefined,
+    TSends extends Schema | undefined = undefined,
+  > {
+    /** what a CLIENT may send. Every inbound frame is validated against it: a malformed one is
+     * dropped and reported (one bad frame never kills the session), so `socket.messages` is
+     * typed by it. */
+    readonly receives?: TReceives
+
+    /** what the SERVER sends — it types `socket.send` and is published in the manifest. Outbound
+     * frames are not re-validated on the wire. */
+    readonly sends?: TSends
+
     /** the WS path. Default `/<service>/<action>`. */
     readonly path?: string | undefined
 
@@ -142,6 +159,8 @@ export namespace ServiceDef {
     readonly description: string | null
     readonly authorize: ((request: Request) => Operation<unknown>) | null
     readonly defaults: Readonly<Record<string, unknown>> | null
+    readonly receives: Schema | null
+    readonly sends: Schema | null
   }
 
   export interface SocketAction {
@@ -149,6 +168,11 @@ export namespace ServiceDef {
     readonly socket: SocketSpec
     readonly handler: (socket: AnyType) => Operation<void>
   }
+
+  /** What a socket handler receives / may send, from its declarations. */
+  export type Frames<D extends Schema | undefined> = D extends Schema
+    ? StandardSchemaV1.InferOutput<D>
+    : unknown
 
   /** A registered socket, service attached — what the registry hands the edge. */
   export interface ServiceSocket extends SocketSpec {
@@ -187,12 +211,22 @@ export namespace ServiceDef {
   export type InputOf<A> = A extends Action<infer I, AnyType> ? Params<I> : never
   export type OutputOf<A> = A extends Action<AnyType, infer O> ? Returns<O> : never
 
-  /** A typed pointer to one action of one service (what the CLIENT api map carries). */
+  /** A typed pointer to one action of one service (what the CLIENT api map carries, and what
+   * `ctx.call` accepts next to a service definition). */
   export interface Ref<A extends Action = Action> {
     readonly service: string
     readonly action: string
     readonly [ACTION_REF]?: A
   }
+
+  /** Every callable action of a service, as refs — what `refs<typeof todos>('todos')` builds
+   * from a TYPE-ONLY import, so calling a service never creates a runtime import edge. */
+  export type Refs<S extends Service> = {
+    readonly [K in CallableKey<S>]: Ref<Extract<S['actions'][K], Action<AnyType, AnyType>>>
+  }
+
+  /** The action a ref points at. */
+  export type ActionOf<R> = R extends Ref<infer A> ? A : never
 
   export type Api<TServices extends readonly Service[]> = {
     readonly [S in TServices[number] as S['name']]: {

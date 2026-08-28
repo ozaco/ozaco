@@ -1,4 +1,4 @@
-import { Kv } from 'db:core'
+import { Kv, useDb } from 'db:core'
 import { action, createServer, Observe, service } from 'server:core'
 import { Cache, ObservePlugin } from 'server:plugins'
 import { run, sleep } from 'std:effect'
@@ -9,7 +9,7 @@ import { describe, expect, it } from 'bun:test'
 
 import { z } from 'zod'
 
-import { storage } from '../helpers'
+import { storage, todosTable } from '../helpers'
 
 describe('cache', () => {
   it('caches query results by input/vary, invalidates by tags, mutations and db changes', async () => {
@@ -34,12 +34,10 @@ describe('cache', () => {
         },
       ),
       bump: action.mutation({ invalidate: ['todos'] }, function* () {}),
-      write: action.mutation(
-        { input: z.object({ title: z.string() }) },
-        function* ({ input, ctx }) {
-          yield* ctx.db.insert('todos', { title: input.title, done: false })
-        },
-      ),
+      write: action.mutation({ input: z.object({ title: z.string() }) }, function* ({ input }) {
+        const db = yield* useDb(todosTable)
+        yield* db.insert('todos', { title: input.title, done: false })
+      }),
     })
     unwrap(
       await run(function* () {
@@ -48,7 +46,7 @@ describe('cache', () => {
           services: [svc],
           plugins: [ObservePlugin.use({ batch: { ms: 5 } }), Cache],
         })
-        yield* server.listen()
+        yield* server.start()
         expect(yield* server.call(svc, 'get', { id: 'a' })).toEqual({ id: 'a', n: 1 })
         expect(yield* server.call(svc, 'get', { id: 'a' })).toEqual({ id: 'a', n: 1 })
         expect(yield* server.call(svc, 'get', { id: 'b' })).toEqual({ id: 'b', n: 2 })

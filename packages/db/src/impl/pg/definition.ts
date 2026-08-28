@@ -1,5 +1,6 @@
 import type { Adapter, Spec } from 'db:core'
-import { adapterDefaults, DbAdapter } from 'db:core'
+import { DbAdapter } from 'db:core'
+import { adapterDefaults } from 'db:internal'
 import type { Operation } from 'std:effect'
 import { attempt, ensure, until } from 'std:effect'
 

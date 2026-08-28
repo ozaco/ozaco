@@ -24,6 +24,17 @@
       },
       "source": "./src/core/index.ts"
     },
+    "./internal": {
+      "import": {
+        "types": "./dist/internal.d.ts",
+        "default": "./dist/internal.js"
+      },
+      "require": {
+        "types": "./dist/internal.d.cts",
+        "default": "./dist/internal.cjs"
+      },
+      "source": "./src/internal.ts"
+    },
     "./edge/bun": {
       "import": {
         "types": "./dist/edge/bun.d.ts",
@@ -100,17 +111,6 @@
         "default": "./dist/plugins/observe/openobserve.cjs"
       },
       "source": "./src/plugins/observe/impl/openobserve/index.ts"
-    },
-    "./app": {
-      "import": {
-        "types": "./dist/app.d.ts",
-        "default": "./dist/app.js"
-      },
-      "require": {
-        "types": "./dist/app.d.cts",
-        "default": "./dist/app.cjs"
-      },
-      "source": "./src/app/index.ts"
     }
   },
   "publishConfig": {

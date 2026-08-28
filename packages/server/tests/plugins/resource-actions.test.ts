@@ -1,3 +1,4 @@
+import { useDb } from 'db:core'
 import { action, createServer, Edge } from 'server:core'
 import { crud } from 'server:plugins'
 import { run, until } from 'std:effect'
@@ -27,8 +28,9 @@ describe('resource actions + extend', () => {
       actions: ['list', 'create'],
 
       extend: {
-        stats: action.query({ output: z.object({ open: z.number() }) }, function* ({ ctx }) {
-          const rows = yield* ctx.db.query('todos').collect()
+        stats: action.query({ output: z.object({ open: z.number() }) }, function* () {
+          const db = yield* useDb(todosTable)
+          const rows = yield* db.query('todos').collect()
           return { open: rows.filter(row => row.done === false).length }
         }),
       },
@@ -43,16 +45,16 @@ describe('resource actions + extend', () => {
       },
     })
 
-    expect(todos.actions).toEqual(['list', 'create'])
+    expect(todos.enabled).toEqual(['list', 'create'])
 
     unwrap(
       await run(function* () {
         yield* storage()
         const server = yield* createServer({
-          services: [todos.service],
+          services: [todos],
           edge: BunEdge,
         })
-        yield* server.listen()
+        yield* server.start()
 
         // the enabled built-ins answer
         const created = yield* json('/todos', {
@@ -91,7 +93,7 @@ describe('resource actions + extend', () => {
   it('omitted actions (or true) enables everything, and the resolved set is carried', async () => {
     const everything = crud(todosTable)
     const explicit = crud(todosTable, { name: 'todos2', actions: true })
-    expect(everything.actions).toEqual([
+    expect(everything.enabled).toEqual([
       'list',
       'get',
       'create',
@@ -100,16 +102,16 @@ describe('resource actions + extend', () => {
       'remove',
       'realtime',
     ])
-    expect(explicit.actions).toEqual(everything.actions)
+    expect(explicit.enabled).toEqual(everything.enabled)
 
     unwrap(
       await run(function* () {
         yield* storage()
         const server = yield* createServer({
-          services: [everything.service],
+          services: [everything],
           edge: BunEdge,
         })
-        const info = yield* server.listen({ port: 0 })
+        const info = yield* server.start({ port: 0 })
 
         // the realtime socket IS mounted by default
         const ws = new WebSocket(`${info.url!.replace('http', 'ws')}/todos/_realtime`)

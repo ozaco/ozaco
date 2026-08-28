@@ -77,11 +77,22 @@ export namespace Helpers {
     readonly spec: Spec.Table
   }
 
+  /** The system fields every stored document carries — a projection always keeps them. */
+  export type SystemField = '_id' | '_created_at' | '_updated_at' | '_version'
+
   /** The immutable refinement state a query handle carries. */
   export interface QueryState {
     readonly match: Readonly<Record<string, Spec.FilterValue>>
     readonly filters: readonly Spec.Filter[]
-    readonly order: Spec.OrderBy | null
+
+    /** sort keys in declaration order; `_id` is appended as the tiebreak when the query runs. */
+    readonly order: readonly Spec.OrderBy[]
+
+    /** the projection, or `null` for whole rows. */
+    readonly fields: readonly string[] | null
+
+    /** the `groupBy` keys of a grouped terminal. */
+    readonly groupBy: readonly string[] | null
   }
 
   /** Inputs of a single-document watch. */

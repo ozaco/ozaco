@@ -1,6 +1,6 @@
 import type { Flow, Operation } from 'std:effect'
 import type { Plugin } from 'std:plugin'
-import type { AnyType } from 'std:shared'
+import type { AnyType, StandardSchemaV1 } from 'std:shared'
 
 import type { ServerDef } from './server'
 import type { ServiceDef } from './service'
@@ -28,7 +28,7 @@ export namespace EdgeDef {
 
   /** What a socket route handler receives. `ctx.auth` carries what the route's `authorize`
    * resolved on the handshake — a handler never verifies the token a second time. */
-  export interface Socket {
+  export interface Socket<TIn = unknown, TOut = unknown> {
     readonly id: string
     readonly params: Readonly<Record<string, string>>
     readonly headers: Readonly<Record<string, string>>
@@ -37,13 +37,16 @@ export namespace EdgeDef {
     readonly url: URL
     readonly ctx: ServerDef.Ctx
 
-    /** inbound messages (codec values). */
-    readonly messages: Flow<unknown, void>
-    send(value: unknown): Operation<void>
+    /** inbound messages (codec values). With a `receives` schema on the action, every frame is
+     * validated before it lands here — a malformed one is dropped and reported, never delivered. */
+    readonly messages: Flow<TIn, void>
+    send(value: TOut): Operation<void>
     close(code?: number, reason?: string): Operation<void>
   }
 
-  export type SocketHandler = (socket: Socket) => Operation<void>
+  export type SocketHandler<TIn = unknown, TOut = unknown> = (
+    socket: Socket<TIn, TOut>,
+  ) => Operation<void>
 
   /** A response decorator: runs on every response (errors included). */
   export type Decorator = (request: Request, response: Response) => Operation<Response>
@@ -54,6 +57,12 @@ export namespace EdgeDef {
   export interface SocketRoute {
     readonly path: string
     readonly handler: SocketHandler
+
+    /** validates every inbound frame when the action declared one. */
+    readonly receives?: StandardSchemaV1 | undefined
+
+    /** documented in the manifest; not re-validated on the wire. */
+    readonly sends?: StandardSchemaV1 | undefined
 
     /** runs before the upgrade; a failure rejects the handshake with its status. What it
      * RESOLVES (the verified principal) becomes the socket ctx's `auth` — verified once, on
@@ -80,6 +89,10 @@ export namespace EdgeDef {
 
     /** opening-frame defaults documented in the manifest (e.g. `{ cursor: 0 }` on realtime). */
     readonly defaults: Readonly<Record<string, unknown>> | null
+
+    /** the declared frame schemas, for the manifest (`receives` also validates the wire). */
+    readonly receives: StandardSchemaV1 | null
+    readonly sends: StandardSchemaV1 | null
   }
 
   /** A raw route served outside the action model (static files, dev consoles). */

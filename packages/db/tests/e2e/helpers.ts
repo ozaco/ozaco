@@ -1,26 +1,5 @@
-import {
-  and,
-  column,
-  Db,
-  DbAdapter,
-  DbClient,
-  DbErrors,
-  eq,
-  gt,
-  gte,
-  ilike,
-  isDestructive,
-  isNull,
-  like,
-  lte,
-  ne,
-  not,
-  notNull,
-  notOneOf,
-  oneOf,
-  or,
-  table,
-} from 'db:core'
+import { column, Db, DbAdapter, DbClient, DbErrors, table, where } from 'db:core'
+import { isDestructive } from 'db:internal'
 import type { Operation } from 'std:effect'
 import { attempt, race, run, scoped, sleep } from 'std:effect'
 import { install } from 'std:plugin'
@@ -184,53 +163,53 @@ export const runAdapterSuite = (target: AdapterTarget): void => {
 
           const seniors = yield* db
             .query('users')
-            .filter(gt('age', 30))
+            .filter(where.gt('age', 30))
             .order('age', 'desc')
             .collect()
           expect(seniors.map((row: AnyType) => row.name)).toEqual(['grace', 'ada'])
 
-          const g = yield* db.query('users').filter(like('name', 'g%')).collect()
+          const g = yield* db.query('users').filter(where.like('name', 'g%')).collect()
           expect(g.map((row: AnyType) => row.name)).toEqual(['grace'])
 
-          const caseless = yield* db.query('users').filter(ilike('name', 'ADA')).collect()
+          const caseless = yield* db.query('users').filter(where.ilike('name', 'ADA')).collect()
           expect(caseless.map((row: AnyType) => row.name)).toEqual(['ada'])
 
           const pair = yield* db
             .query('users')
-            .filter(oneOf('name', ['ada', 'linus']))
+            .filter(where.oneOf('name', ['ada', 'linus']))
             .order('name')
             .collect()
           expect(pair.map((row: AnyType) => row.name)).toEqual(['ada', 'linus'])
 
           const mixed = yield* db
             .query('users')
-            .filter(or(like('name', 'mar%'), gt('age', 40)))
+            .filter(where.or(where.like('name', 'mar%'), where.gt('age', 40)))
             .order('name')
             .collect()
           expect(mixed.map((row: AnyType) => row.name)).toEqual(['grace', 'margaret'])
 
-          expect(yield* db.query('users').filter(notNull('age')).count()).toBe(3)
+          expect(yield* db.query('users').filter(where.notNull('age')).count()).toBe(3)
           // the rest of the algebra: ne / gte / lte / notOneOf / isNull / not / and
-          expect(yield* db.query('users').filter(ne('name', 'ada')).count()).toBe(3)
-          expect(yield* db.query('users').filter(gte('age', 36)).count()).toBe(2)
-          expect(yield* db.query('users').filter(lte('age', 36)).count()).toBe(2)
+          expect(yield* db.query('users').filter(where.ne('name', 'ada')).count()).toBe(3)
+          expect(yield* db.query('users').filter(where.gte('age', 36)).count()).toBe(2)
+          expect(yield* db.query('users').filter(where.lte('age', 36)).count()).toBe(2)
           expect(
             (yield* db
               .query('users')
-              .filter(notOneOf('name', ['ada', 'linus']))
+              .filter(where.notOneOf('name', ['ada', 'linus']))
               .collect()).map((row: AnyType) => row.name),
           ).toEqual(['grace', 'margaret'])
-          expect(yield* db.query('users').filter(isNull('age')).count()).toBe(1)
+          expect(yield* db.query('users').filter(where.isNull('age')).count()).toBe(1)
           expect(
             yield* db
               .query('users')
-              .filter(not(like('name', 'g%')))
+              .filter(where.not(where.like('name', 'g%')))
               .count(),
           ).toBe(3)
           expect(
             yield* db
               .query('users')
-              .filter(and(gt('age', 30), not(eq('name', 'grace'))))
+              .filter(where.and(where.gt('age', 30), where.not(where.eq('name', 'grace'))))
               .count(),
           ).toBe(1)
           expect((yield* db.query('users').order('name').take(2)).length).toBe(2)
@@ -245,6 +224,132 @@ export const runAdapterSuite = (target: AdapterTarget): void => {
 
           const unknown = yield* attempt(db.query('users').where({ ghost: 1 }).collect())
           expect((unknown as AnyType).error).toBe(DbErrors.Validation)
+        }),
+      )
+    })
+
+    it('multi-key order: sort keys stack, and pagination walks all of them', async () => {
+      unwrap(
+        await run(function* () {
+          const db = yield* bootstrap()
+
+          // two roles x three ages, deliberately inserted out of order
+          for (const [name, role, age] of [
+            ['e', 'member', 1],
+            ['c', 'admin', 3],
+            ['a', 'admin', 1],
+            ['d', 'member', 2],
+            ['b', 'admin', 2],
+            ['f', 'member', 3],
+          ] as const) {
+            yield* db.insert('users', { name, role, age })
+          }
+
+          const sorted = yield* db.query('users').order('role').order('age', 'desc').collect()
+
+          expect(sorted.map((row: AnyType) => row.name)).toEqual(['c', 'b', 'a', 'f', 'd', 'e'])
+
+          // the same order, paginated: the cursor must carry BOTH keys or the window drifts
+          const query = () => db.query('users').order('role').order('age', 'desc')
+          const one = yield* query().paginate({ limit: 2 })
+          expect(one.data.map((row: AnyType) => row.name)).toEqual(['c', 'b'])
+
+          const two = yield* query().paginate({ limit: 2, cursor: one.pageInfo.nextCursor })
+          expect(two.data.map((row: AnyType) => row.name)).toEqual(['a', 'f'])
+
+          const three = yield* query().paginate({ limit: 2, cursor: two.pageInfo.nextCursor })
+          expect(three.data.map((row: AnyType) => row.name)).toEqual(['d', 'e'])
+          expect(three.pageInfo.hasNext).toBe(false)
+
+          // and back again
+          const back = yield* query().paginate({
+            limit: 2,
+            cursor: three.pageInfo.prevCursor,
+            direction: 'backward',
+          })
+          expect(back.data.map((row: AnyType) => row.name)).toEqual(['a', 'f'])
+        }),
+      )
+    })
+
+    it('select projects columns; the system fields ride along', async () => {
+      unwrap(
+        await run(function* () {
+          const db = yield* bootstrap()
+          yield* db.insert('users', { name: 'ada', age: 36, role: 'admin' })
+
+          const rows = yield* db.query('users').select('name', 'age').collect()
+          const row = rows[0] as AnyType
+
+          expect(row.name).toBe('ada')
+          expect(row.age).toBe(36)
+          expect('role' in row).toBe(false)
+
+          // pagination and versioning still work on a projected query
+          expect(typeof row._id).toBe('string')
+          expect(row._version).toMatch(TOKEN)
+
+          const page = yield* db.query('users').select('name').order('name').paginate({ limit: 1 })
+          expect((page.data[0] as AnyType).name).toBe('ada')
+          expect('age' in (page.data[0] as AnyType)).toBe(false)
+        }),
+      )
+    })
+
+    it('aggregates: sum/avg/min/max in the backend, and grouped answers', async () => {
+      unwrap(
+        await run(function* () {
+          const db = yield* bootstrap()
+          yield* db.insert('users', { name: 'ada', age: 36, role: 'admin' })
+          yield* db.insert('users', { name: 'grace', age: 44, role: 'admin' })
+          yield* db.insert('users', { name: 'linus', age: 25, role: 'member' })
+          yield* db.insert('users', { name: 'nobody', role: 'member' })
+
+          const all = db.query('users')
+          expect(yield* all.sum('age')).toBe(105)
+          expect(yield* all.min('age')).toBe(25)
+          expect(yield* all.max('age')).toBe(44)
+          expect(yield* all.avg('age')).toBe(35)
+
+          // the filter applies to the aggregate too
+          expect(yield* db.query('users').where({ role: 'admin' }).sum('age')).toBe(80)
+
+          // nothing matched: sum is 0, the rest are null
+          const none = db.query('users').filter(where.gt('age', 1000))
+          expect(yield* none.sum('age')).toBe(0)
+          expect(yield* none.avg('age')).toBe(null)
+          expect(yield* none.max('age')).toBe(null)
+
+          const byRole = yield* db.query('users').groupBy('role').count()
+          const counts = Object.fromEntries(
+            byRole.map((row: AnyType) => [row.role, Number(row.count)]),
+          )
+          expect(counts).toEqual({ admin: 2, member: 2 })
+
+          const sums = yield* db.query('users').groupBy('role').sum('age')
+          expect(
+            Object.fromEntries(sums.map((row: AnyType) => [row.role, Number(row.sum)])),
+          ).toEqual({ admin: 80, member: 25 })
+
+          // an unknown column is a validation failure, not a silent empty answer
+          const bad = yield* attempt(() => db.query('users').sum('nope' as AnyType))
+          expect(isFailure(bad) && bad.error).toBe(DbErrors.Validation)
+        }),
+      )
+    })
+
+    it('upsert inserts once, then patches the same row', async () => {
+      unwrap(
+        await run(function* () {
+          const db = yield* bootstrap()
+
+          const created = yield* db.upsert('users', { name: 'ada' }, { name: 'ada', age: 36 })
+          expect(created.age).toBe(36)
+
+          const updated = yield* db.upsert('users', { name: 'ada' }, { name: 'ada', age: 37 })
+          expect(updated._id).toBe(created._id)
+          expect(updated.age).toBe(37)
+          expect(yield* db.query('users').count()).toBe(1)
         }),
       )
     })

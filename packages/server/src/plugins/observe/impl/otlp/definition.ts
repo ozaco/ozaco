@@ -1,5 +1,6 @@
 import type { ServerDef, Sink } from 'server:core'
-import { createSink, Server, ServerErrors } from 'server:core'
+import { Server, ServerErrors } from 'server:core'
+import { createSink } from 'server:internal'
 import { attempt, fork, sleep } from 'std:effect'
 import { definePlugin } from 'std:plugin'
 import { fail, isFailure } from 'std:result'

@@ -66,6 +66,9 @@ declare module 'std:webrtc' {
 declare module 'server:core' {
   export * from '@ozaco/server';
 }
+declare module 'server:internal' {
+  export * from '@ozaco/server/internal';
+}
 declare module 'server:impl/edge/bun' {
   export * from '@ozaco/server/edge/bun';
 }
@@ -84,17 +87,17 @@ declare module 'server:plugins' {
 declare module 'server:plugins/observe/otlp' {
   export * from '@ozaco/server/plugins/observe/otlp';
 }
-declare module 'server:plugins/metrics/starrocks' {
-  export * from '@ozaco/server/plugins/metrics/starrocks';
-}
-declare module 'server:app' {
-  export * from '@ozaco/server/app';
+declare module 'server:plugins/observe/openobserve' {
+  export * from '@ozaco/server/plugins/observe/openobserve';
 }
 
 // --------- DB ---------
 
 declare module 'db:core' {
   export * from '@ozaco/db';
+}
+declare module 'db:internal' {
+  export * from '@ozaco/db/internal';
 }
 declare module 'db:impl/memory' {
   export * from '@ozaco/db/impl/memory';

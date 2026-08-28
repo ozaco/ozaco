@@ -1,5 +1,4 @@
-import { createApp } from 'server:app'
-import { action, ServerErrors, service } from 'server:core'
+import { action, createServer, ServerErrors, service } from 'server:core'
 import { attempt, createQueue, fork, run, scoped, sleep, until } from 'std:effect'
 import { install } from 'std:plugin'
 import { unwrap } from 'std:result'
@@ -13,7 +12,7 @@ import { createLink, MemoryTransport } from 'transport:impl/memory'
 
 import { storage, todos } from '../helpers'
 
-describe('app — roles', () => {
+describe('server — roles', () => {
   it('a gateway node serves the edge; a service node does the work; health tells who is who', async () => {
     const link = createLink()
     unwrap(
@@ -23,7 +22,7 @@ describe('app — roles', () => {
           scoped(function* () {
             yield* storage()
             yield* install(MemoryTransport, { prefix: 'app', link })
-            const app = yield* createApp({
+            const app = yield* createServer({
               services: [todos],
               carrier: NetworkCarrier,
               role: 'service',
@@ -40,7 +39,7 @@ describe('app — roles', () => {
         yield* scoped(function* () {
           yield* storage()
           yield* install(MemoryTransport, { prefix: 'app', link })
-          const gateway = yield* createApp({
+          const gateway = yield* createServer({
             services: [todos],
             edge: BunEdge,
             carrier: NetworkCarrier,
@@ -82,7 +81,7 @@ describe('app — roles', () => {
         yield* scoped(function* () {
           yield* storage()
           yield* install(MemoryTransport, { prefix: 'ready', link })
-          const lonely = yield* createApp({
+          const lonely = yield* createServer({
             services: [todos],
             edge: BunEdge,
             carrier: NetworkCarrier.use({ presence }),
@@ -107,7 +106,7 @@ describe('app — roles', () => {
             yield* sleep(200)
             yield* storage()
             yield* install(MemoryTransport, { prefix: 'ready', link })
-            const app = yield* createApp({
+            const app = yield* createServer({
               services: [todos],
               carrier: NetworkCarrier.use({ presence }),
               role: 'service',
@@ -122,7 +121,7 @@ describe('app — roles', () => {
         yield* scoped(function* () {
           yield* storage()
           yield* install(MemoryTransport, { prefix: 'ready', link })
-          const gateway = yield* createApp({
+          const gateway = yield* createServer({
             services: [todos],
             edge: BunEdge,
             carrier: NetworkCarrier.use({ presence }),
@@ -155,7 +154,7 @@ describe('app — roles', () => {
           yield* storage()
           yield* install(MemoryTransport, { prefix: 'trap', link })
           const outcome = yield* attempt(
-            createApp({
+            createServer({
               services: [todos],
               carrier: NetworkCarrier,
               role: 'monolith',
@@ -174,7 +173,7 @@ describe('app — roles', () => {
         yield* scoped(function* () {
           yield* storage()
           yield* install(MemoryTransport, { prefix: 'trap', link })
-          const app = yield* createApp({
+          const app = yield* createServer({
             services: [todos, other],
             carrier: NetworkCarrier,
             role: 'service',

@@ -1,5 +1,5 @@
 import type { Database, Schema, Spec } from 'db:core'
-import type { ServerDef, ServiceDef } from 'server:core'
+import type { OptionsDef, ServerDef, ServiceDef } from 'server:core'
 import type { Operation } from 'std:effect'
 import type { Result } from 'std:result'
 import type { AnyType } from 'std:shared'
@@ -55,46 +55,89 @@ export namespace ResourceDef {
   /** The operations a hook observes: the six actions plus the realtime `watch` subscribe. */
   export type Op = 'list' | 'get' | 'create' | 'update' | 'replace' | 'remove' | 'watch'
 
-  /** What every hook sees: which operation ran, its CURRENT (validated) input and the full
-   * dispatch ctx — db, auth, headers, `call`, `log`, spans. On `watch`, `input` is the client's
-   * watch frame and `ctx` is the socket's handshake ctx. */
-  export interface HookCall {
-    readonly op: Op
-    readonly input: unknown
-    readonly ctx: ServerDef.Ctx
+  /** What each operation takes and answers, derived from the table. A `schema` hook that
+   * RESHAPES an op (adds a field to the page, tightens an input) changes what the hooks see at
+   * runtime; the derived shape is what the types show. */
+  export interface OpShapes<TTable extends Schema.Table> {
+    readonly list: { input: z.infer<typeof listInput>; output: Page<Schema.Infer<TTable>> }
+    readonly get: { input: { id: string }; output: Schema.Infer<TTable> }
+    readonly create: { input: Schema.InferInsert<TTable>; output: Schema.Infer<TTable> }
+
+    readonly update: {
+      input: { id: string } & Database.Patch<Schema.InferInsert<TTable>>
+      output: Schema.Infer<TTable>
+    }
+
+    readonly replace: {
+      input: { id: string } & Schema.InferInsert<TTable>
+      output: Schema.Infer<TTable>
+    }
+
+    readonly remove: { input: { id: string }; output: { readonly removed: boolean } }
+    readonly watch: { input: ClientFrame; output: ServerFrame<Schema.Infer<TTable>> }
   }
+
+  /**
+   * What every hook sees: which operation ran, its CURRENT (validated) input and the full
+   * dispatch ctx — auth, headers, `call`, `log`, spans. On `watch`, `input` is the client's watch
+   * frame and `ctx` is the socket's handshake ctx.
+   *
+   * It is a UNION discriminated by `op`, so narrowing types the input:
+   * `if (op === 'remove') { input.id }`, `if (op === 'create') { input.title }`.
+   */
+  export type HookCall<TTable extends Schema.Table = Schema.Table> = {
+    [K in Op]: {
+      readonly op: K
+      readonly input: OpShapes<TTable>[K]['input']
+      readonly ctx: ServerDef.Ctx
+    }
+  }[Op]
+
+  /** {@link HookCall} plus the operation's answer — narrowing types both sides. */
+  export type HookResult<TTable extends Schema.Table = Schema.Table> = {
+    [K in Op]: {
+      readonly op: K
+      readonly input: OpShapes<TTable>[K]['input']
+      readonly output: OpShapes<TTable>[K]['output']
+      readonly ctx: ServerDef.Ctx
+    }
+  }[Op]
 
   /** Runs before the handler — a returned value REPLACES the input (`undefined` keeps it).
    * On `watch`, the returned frame's `t`/`id` are pinned back to the client's. */
-  export type BeforeHook = (call: HookCall) => Operation<unknown>
+  export type BeforeHook<TTable extends Schema.Table = Schema.Table> = (
+    call: HookCall<TTable>,
+  ) => Operation<unknown>
 
   /** Runs after the handler — a returned value REPLACES the output (`undefined` keeps it; it
-   * still passes the action's output schema). On `watch`, `output` is each outgoing
-   * `sync`/`delta` frame (project `rows`/`added`/`changed` here). */
-  export type AfterHook = (call: HookCall & { readonly output: unknown }) => Operation<unknown>
+   * still passes the action's output schema, so it may WIDEN the shape). On `watch`, `output` is
+   * each outgoing `sync`/`delta` frame (project `rows`/`added`/`changed` here). */
+  export type AfterHook<TTable extends Schema.Table = Schema.Table> = (
+    call: HookResult<TTable>,
+  ) => Operation<unknown>
 
   /** Wraps `before → handler → after` of the six actions (not the long-lived watch): transform
    * the input via `next(...)`, the output via the return value, or short-circuit by not calling
    * `next` at all. */
-  export type AroundHook = (
-    call: HookCall,
+  export type AroundHook<TTable extends Schema.Table = Schema.Table> = (
+    call: HookCall<TTable>,
     next: (input: unknown) => Operation<unknown>,
   ) => Operation<unknown>
 
   /** Sees every failure of the chain: return `undefined` to keep it, a failure (or raise one)
    * to replace it, anything else to RECOVER with that value — actions only; a failed watch
    * always ends in an `error` frame (built from the replaced failure). */
-  export type ErrorHook = (
-    call: HookCall & { readonly failure: Result.Failure<unknown> },
+  export type ErrorHook<TTable extends Schema.Table = Schema.Table> = (
+    call: HookCall<TTable> & { readonly failure: Result.Failure<unknown> },
   ) => Operation<unknown>
 
   /** The seams of a resource: tenancy scoping (`before`), projections (`after`), guards and
    * instrumentation (`around`), failure shaping (`error`). */
-  export interface CrudHooks {
-    readonly before?: BeforeHook | undefined
-    readonly after?: AfterHook | undefined
-    readonly around?: AroundHook | undefined
-    readonly error?: ErrorHook | undefined
+  export interface CrudHooks<TTable extends Schema.Table = Schema.Table> {
+    readonly before?: BeforeHook<TTable> | undefined
+    readonly after?: AfterHook<TTable> | undefined
+    readonly around?: AroundHook<TTable> | undefined
+    readonly error?: ErrorHook<TTable> | undefined
   }
 
   /** The INPUT schemas a `schema.input` hook sees: one per operation with a derived input
@@ -123,9 +166,10 @@ export namespace ResourceDef {
   }
 
   export interface CrudOptions<
+    TTable extends Schema.Table = Schema.Table,
     TNames extends readonly ActionName[] | true = true,
     TExtend extends ServiceDef.ActionMap = ServiceDef.ActionMap,
-  > extends CrudHooks {
+  > extends CrudHooks<TTable> {
     /** the service name (and route root `/<name>`). Default: the table name. */
     readonly name?: string | undefined
 
@@ -147,7 +191,9 @@ export namespace ResourceDef {
     readonly schema?: SchemaHooks | undefined
 
     /** `auth` requirements per side (the Auth plugin's option). */
-    readonly auth?: { readonly read?: unknown; readonly write?: unknown } | undefined
+    readonly auth?:
+      | { readonly read?: OptionsDef.Requirement; readonly write?: OptionsDef.Requirement }
+      | undefined
 
     /** columns a client filter may reference. Default: every declared column + `_id`. */
     readonly filterable?: readonly string[] | undefined
@@ -159,24 +205,26 @@ export namespace ResourceDef {
     readonly options?: Readonly<Record<string, unknown>> | undefined
   }
 
-  /** What `crud()` returns: the service (its `_realtime` socket included), the resolved
-   * `shapes`, and what the realtime machinery reads. The generics
-   * mirror what the call site wrote — the table, the enabled `actions`, the `extend` map — so
-   * hovers stay small; the service's action map is DERIVED from them here instead of being a
-   * type argument of its own. */
+  /** What `crud()` returns: a SERVICE (its `_realtime` socket included) that goes straight into
+   * `createServer({ services })`, carrying the resolved `shapes` and what the realtime machinery
+   * reads. The generics mirror what the call site wrote — the table, the enabled actions, the
+   * `extend` map — so hovers stay small; the action map is DERIVED from them here instead of
+   * being a type argument of its own. */
   export interface Crud<
     TTable extends Schema.Table = Schema.Table,
     TNames extends readonly ActionName[] | true = true,
     TExtend extends ServiceDef.ActionMap = ServiceDef.ActionMap,
+  > extends ServiceDef.Service<
+    TTable['name'],
+    CrudMap<Schema.Infer<TTable>, Schema.InferInsert<TTable>, TNames, TExtend>
   > {
-    readonly service: ServiceDef.Service<
-      TTable['name'],
-      CrudMap<Schema.Infer<TTable>, Schema.InferInsert<TTable>, TNames, TExtend>
-    >
     readonly table: TTable
     readonly filterable: readonly string[]
     readonly maxLimit: number
-    readonly auth: { readonly read?: unknown; readonly write?: unknown }
+    readonly auth: {
+      readonly read?: OptionsDef.Requirement
+      readonly write?: OptionsDef.Requirement
+    }
     readonly hooks: CrudHooks
 
     /** the RESOLVED schemas the built-ins run with (the `schema` hooks applied): the shared
@@ -191,28 +239,20 @@ export namespace ResourceDef {
       readonly replace: z.ZodObject
     }
 
-    /** the resolved enabled set — `'realtime'` in here means the service carries its
+    /** the resolved built-in set — `'realtime'` in here means the service carries its
      * `_realtime` socket. */
-    readonly actions: readonly ActionName[]
-  }
-
-  /** @deprecated `crud()` mounts its own `_realtime` socket now (an `action.socket` entry of
-   * the service) — the `Resource` plugin is a no-op kept for compatibility. Use the
-   * `realtimePath` crud option instead of the plugin's. */
-  export interface PluginOptions {
-    readonly resources: readonly Crud[]
-    readonly realtimePath?: string | undefined
+    readonly enabled: readonly ActionName[]
   }
 
   // --- runnable ops (`crud.list(table, …)` inside any handler) -------------------------------
 
   /** Every runnable op reads the dispatch ctx AMBIENTLY (the handler it runs in); `ctx` is the
    * override for the rare call outside one (a socket handler's `socket.ctx`, tests), `db`
-   * swaps the handle alone — pass a transaction's: `ctx.db.transaction(tx => crud.update(t,
+   * swaps the handle alone — pass a transaction's: `db.transaction(tx => crud.update(t,
    * { …, db: tx }))`. */
   export interface OpOptions {
     readonly ctx?: ServerDef.Ctx | undefined
-    readonly db?: ServerDef.Ctx['db'] | undefined
+    readonly db?: Database.Handle<Record<string, Schema.Types<Spec.Doc, Spec.Doc>>> | undefined
   }
 
   /** `crud.list` — the built-in list pipeline (sanitized filter, order guard, clamped limit,
@@ -295,7 +335,10 @@ export namespace ResourceDef {
     readonly table: Schema.Table
     readonly filterable: readonly string[]
     readonly maxLimit: number
-    readonly auth: { readonly read?: unknown; readonly write?: unknown }
+    readonly auth: {
+      readonly read?: OptionsDef.Requirement
+      readonly write?: OptionsDef.Requirement
+    }
     readonly hooks: CrudHooks
     readonly scope?: WatchScope | undefined
   }
@@ -305,7 +348,7 @@ export namespace ResourceDef {
    * manifest). */
   export interface RealtimeOptions {
     /** the handshake's `read` requirement (the Auth plugin's option). Default: open. */
-    readonly auth?: unknown
+    readonly auth?: OptionsDef.Requirement | undefined
 
     readonly filterable?: readonly string[] | undefined
     readonly maxLimit?: number | undefined
@@ -354,19 +397,19 @@ export namespace ResourceDef {
   /** Server → client frames. Windowed watches carry `page`; `notify` says the SET changed
    * around an untouched window (another client's write moved the range/total) — same token
    * space as every other frame, so ordering and resume tracking stay uniform. */
-  export type ServerFrame =
+  export type ServerFrame<TDoc = unknown> =
     | {
         readonly t: 'sync'
         readonly id: string
-        readonly rows: readonly unknown[]
+        readonly rows: readonly TDoc[]
         readonly token: string
         readonly page?: WindowInfo | undefined
       }
     | {
         readonly t: 'delta'
         readonly id: string
-        readonly added: readonly unknown[]
-        readonly changed: readonly unknown[]
+        readonly added: readonly TDoc[]
+        readonly changed: readonly TDoc[]
         readonly removed: readonly string[]
         readonly token: string
         readonly page?: WindowInfo | undefined

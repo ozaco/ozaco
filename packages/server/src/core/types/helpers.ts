@@ -33,6 +33,17 @@ export namespace Helpers {
 
   export type Thunk<T> = () => Operation<T>
 
+  /** The node's own lifecycle state: what `start()`/`stop()` move and `info()`/`health()` read. */
+  export interface NodeState {
+    readonly role: ServerDef.Role
+    readonly hosted: readonly string[]
+    readonly options: ServerDef.Options
+    url: string | null
+    port: number | null
+    started: boolean
+    ready: boolean
+  }
+
   /** The memory outcome store's state. */
   export interface OutcomesMemoryState {
     readonly rows: Map<string, TraceDef.Outcome>

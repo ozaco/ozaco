@@ -8,17 +8,17 @@ import type { Change } from '../types/change'
 import type { Database } from '../types/database'
 import type { Helpers } from '../types/helpers'
 import type { Spec } from '../types/spec'
-import { and, eq } from '../utils/filter'
+import { where } from '../utils/filter'
 
 import { createQuery } from './query'
 import { prepareInsert, preparePatch } from './validate'
 import { watchDoc } from './watch'
 
-const byId = (id: string): Spec.Filter => eq(FIELDS.id, id)
-
 /** The write predicate: the id, plus the expected `_version` under optimistic concurrency. */
 const writeGuard = (id: string, options?: Database.WriteOptions): Spec.Filter =>
-  options?.ifVersion === undefined ? byId(id) : and(byId(id), eq(FIELDS.version, options.ifVersion))
+  options?.ifVersion === undefined
+    ? where.eq(FIELDS.id, id)
+    : where.and(where.eq(FIELDS.id, id), where.eq(FIELDS.version, options.ifVersion))
 
 /**
  * Build the typed {@link Database.Handle} over an install's state: validated writes with
@@ -43,7 +43,7 @@ export const createHandle = (state: Database.State): Database.Handle => {
   const loadOne = function* (spec: Spec.Table, id: string) {
     const rows = yield* adapter.find({
       table: spec,
-      filter: byId(id),
+      filter: where.eq(FIELDS.id, id),
       order: [],
       limit: 1,
       offset: null,
@@ -247,10 +247,34 @@ export const createHandle = (state: Database.State): Database.Handle => {
     }
   }
 
+  /** Insert-or-update in ONE transaction: the read and the write cannot interleave with another
+   * upsert of the same key, so the "both inserted" race is closed. */
+  const upsert = function* (table: string, match: Record<string, unknown>, value: unknown) {
+    return yield* transaction(function* (tx) {
+      const existing = yield* tx
+        .query(table)
+        .where(match as never)
+        .unique()
+
+      if (!existing) {
+        return yield* tx.insert(table, { ...match, ...(value as object) } as never)
+      }
+
+      const updated = yield* tx.patch(
+        table,
+        String((existing as Spec.Doc)[FIELDS.id]),
+        value as never,
+      )
+
+      return updated ?? existing
+    })
+  }
+
   const handle: Database.Handle = {
     get,
     insert,
     insertMany,
+    upsert,
     patch,
     replace,
     delete: remove,

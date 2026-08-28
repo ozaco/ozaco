@@ -1,5 +1,5 @@
 import { column, table } from 'db:core'
-import { OBSERVE_PREFIX } from 'server:core'
+import { OBSERVE_PREFIX } from 'server:internal'
 
 /** The observe tables: plain rows, no change log (history of history is noise). */
 export const requests = table(

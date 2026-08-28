@@ -1,6 +1,6 @@
 // oxlint-disable import/exports-last
 import type { Database, Schema, Spec } from 'db:core'
-import { and, DbClient, eq, gt, gte, isNull, lt, notNull } from 'db:core'
+import { DbClient, where } from 'db:core'
 import type { ObserveDef, ServerDef } from 'server:core'
 import type { Operation } from 'std:effect'
 import { attempt, fork, scoped, withResolvers } from 'std:effect'
@@ -133,7 +133,10 @@ export function* writeBatch(db: Db, batch: readonly ObserveDef.Event[]): Operati
   // a streamed body finished after its row: patch in the final size + duration
   for (const update of updates) {
     yield* attempt(function* () {
-      const row = yield* db.query(requests.name).filter(eq('request_id', update.request_id)).first()
+      const row = yield* db
+        .query(requests.name)
+        .filter(where.eq('request_id', update.request_id))
+        .first()
 
       if (row) {
         yield* db.patch(requests.name, String((row as AnyType)._id), clean(update.patch) as AnyType)
@@ -143,14 +146,14 @@ export function* writeBatch(db: Db, batch: readonly ObserveDef.Event[]): Operati
 }
 
 export function* requestView(db: Db, requestId: string): Operation<ObserveDef.RequestView | null> {
-  const request = yield* db.query(requests.name).filter(eq('request_id', requestId)).first()
+  const request = yield* db.query(requests.name).filter(where.eq('request_id', requestId)).first()
 
   if (!request) {
     return null
   }
 
   const by = (table: string, order: string) =>
-    db.query(table).filter(eq('request_id', requestId)).order(order, 'asc').collect()
+    db.query(table).filter(where.eq('request_id', requestId)).order(order, 'asc').collect()
 
   // start order; same millisecond → parents before children (depth in the span tree)
   const raw = (yield* by(spans.name, 'started_at')) as AnyType[]
@@ -187,31 +190,31 @@ const filtersOf = (query: ObserveDef.Query) => {
   const filters = []
 
   if (query.service !== undefined) {
-    filters.push(eq('service', query.service))
+    filters.push(where.eq('service', query.service))
   }
 
   if (query.action !== undefined) {
-    filters.push(eq('action', query.action))
+    filters.push(where.eq('action', query.action))
   }
 
   if (query.status === 'ok') {
-    filters.push(isNull('error'))
+    filters.push(where.isNull('error'))
   }
 
   if (query.status === 'failed') {
-    filters.push(notNull('error'))
+    filters.push(where.notNull('error'))
   }
 
   if (query.tag !== undefined) {
-    filters.push(eq('error', query.tag))
+    filters.push(where.eq('error', query.tag))
   }
 
   if (query.slowerThan !== undefined) {
-    filters.push(gt('duration_ms', query.slowerThan))
+    filters.push(where.gt('duration_ms', query.slowerThan))
   }
 
   if (query.since !== undefined) {
-    filters.push(gte('started_at', query.since))
+    filters.push(where.gte('started_at', query.since))
   }
 
   return filters
@@ -220,7 +223,7 @@ const filtersOf = (query: ObserveDef.Query) => {
 export function* queryRequests(db: Db, query: ObserveDef.Query): Operation<ObserveDef.Page> {
   const filters = filtersOf(query)
   const base = db.query(requests.name)
-  const page = yield* (filters.length > 0 ? base.filter(and(...filters)) : base)
+  const page = yield* (filters.length > 0 ? base.filter(where.and(...filters)) : base)
     .order('started_at', 'desc')
     .paginate({ limit: Math.max(1, Math.min(500, query.limit ?? 50)), cursor: query.cursor })
 
@@ -251,7 +254,7 @@ export function* pruneBefore(
   let removed = 0
 
   for (const [table, column, floor] of plan) {
-    const stale = yield* db.query(table).filter(lt(column, floor)).collect()
+    const stale = yield* db.query(table).filter(where.lt(column, floor)).collect()
 
     for (const row of stale) {
       if (yield* db.delete(table, String((row as AnyType)._id))) {

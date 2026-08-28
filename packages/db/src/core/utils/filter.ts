@@ -1,89 +1,113 @@
 import type { Spec } from '../types/spec'
 
-/** `field = value` (`null` behaves as IS NULL). */
-export const eq = (field: string, value: Spec.FilterValue): Spec.Filter => ({
-  op: 'eq',
+/**
+ * The filter algebra as ONE namespace — `where.eq(...)`, `where.and(...)` — so nothing generic
+ * (`eq`, `or`, `not`, `like`…) lands in your import scope.
+ *
+ * Every builder remembers the field it names in the type it returns, so
+ * `db.query('todos').filter(where.eq('dnoe', false))` is a COMPILE error: a `Filter<'dnoe'>`
+ * does not fit a query whose fields are `'title' | 'done' | …`.
+ */
+const eq = <const TField extends string>(
+  field: TField,
+  value: Spec.FilterValue,
+): Spec.Filter<TField> => ({ op: 'eq', field, value })
+
+const ne = <const TField extends string>(
+  field: TField,
+  value: Spec.FilterValue,
+): Spec.Filter<TField> => ({ op: 'ne', field, value })
+
+const gt = <const TField extends string>(
+  field: TField,
+  value: Spec.FilterValue,
+): Spec.Filter<TField> => ({ op: 'gt', field, value })
+
+const gte = <const TField extends string>(
+  field: TField,
+  value: Spec.FilterValue,
+): Spec.Filter<TField> => ({ op: 'gte', field, value })
+
+const lt = <const TField extends string>(
+  field: TField,
+  value: Spec.FilterValue,
+): Spec.Filter<TField> => ({ op: 'lt', field, value })
+
+const lte = <const TField extends string>(
+  field: TField,
+  value: Spec.FilterValue,
+): Spec.Filter<TField> => ({ op: 'lte', field, value })
+
+const oneOf = <const TField extends string>(
+  field: TField,
+  values: readonly Spec.FilterValue[],
+): Spec.Filter<TField> => ({ op: 'in', field, value: values })
+
+const notOneOf = <const TField extends string>(
+  field: TField,
+  values: readonly Spec.FilterValue[],
+): Spec.Filter<TField> => ({ op: 'not-in', field, value: values })
+
+const like = <const TField extends string>(
+  field: TField,
+  pattern: string,
+): Spec.Filter<TField> => ({ op: 'like', field, pattern })
+
+const ilike = <const TField extends string>(
+  field: TField,
+  pattern: string,
+): Spec.Filter<TField> => ({ op: 'like', field, pattern, insensitive: true })
+
+const isNull = <const TField extends string>(field: TField): Spec.Filter<TField> => ({
+  op: 'is-null',
   field,
-  value,
 })
 
-/** `field != value` (`null` behaves as IS NOT NULL). */
-export const ne = (field: string, value: Spec.FilterValue): Spec.Filter => ({
-  op: 'ne',
+const notNull = <const TField extends string>(field: TField): Spec.Filter<TField> => ({
+  op: 'not-null',
   field,
-  value,
 })
 
-/** `field > value` */
-export const gt = (field: string, value: Spec.FilterValue): Spec.Filter => ({
-  op: 'gt',
-  field,
-  value,
+const and = <TField extends string>(
+  ...filters: readonly Spec.Filter<TField>[]
+): Spec.Filter<TField> => ({ op: 'and', filters })
+
+const or = <TField extends string>(
+  ...filters: readonly Spec.Filter<TField>[]
+): Spec.Filter<TField> => ({ op: 'or', filters })
+
+const not = <TField extends string>(filter: Spec.Filter<TField>): Spec.Filter<TField> => ({
+  op: 'not',
+  filter,
 })
 
-/** `field >= value` */
-export const gte = (field: string, value: Spec.FilterValue): Spec.Filter => ({
-  op: 'gte',
-  field,
-  value,
-})
-
-/** `field < value` */
-export const lt = (field: string, value: Spec.FilterValue): Spec.Filter => ({
-  op: 'lt',
-  field,
-  value,
-})
-
-/** `field <= value` */
-export const lte = (field: string, value: Spec.FilterValue): Spec.Filter => ({
-  op: 'lte',
-  field,
-  value,
-})
-
-/** `field` is one of `values`. */
-export const oneOf = (field: string, values: readonly Spec.FilterValue[]): Spec.Filter => ({
-  op: 'in',
-  field,
-  value: values,
-})
-
-/** `field` is none of `values`. */
-export const notOneOf = (field: string, values: readonly Spec.FilterValue[]): Spec.Filter => ({
-  op: 'not-in',
-  field,
-  value: values,
-})
-
-/** SQL-style pattern match (`%`/`_` wildcards), case-sensitive. */
-export const like = (field: string, pattern: string): Spec.Filter => ({
-  op: 'like',
-  field,
-  pattern,
-})
-
-/** SQL-style pattern match, case-insensitive. */
-export const ilike = (field: string, pattern: string): Spec.Filter => ({
-  op: 'like',
-  field,
-  pattern,
-  insensitive: true,
-})
-
-export const isNull = (field: string): Spec.Filter => ({ op: 'is-null', field })
-export const notNull = (field: string): Spec.Filter => ({ op: 'not-null', field })
-
-export const and = (...filters: readonly Spec.Filter[]): Spec.Filter => ({ op: 'and', filters })
-export const or = (...filters: readonly Spec.Filter[]): Spec.Filter => ({ op: 'or', filters })
-export const not = (filter: Spec.Filter): Spec.Filter => ({ op: 'not', filter })
+/** The portable filter algebra: `where.eq('done', false)`, `where.and(a, b)`, … */
+export const where = {
+  eq,
+  ne,
+  gt,
+  gte,
+  lt,
+  lte,
+  oneOf,
+  notOneOf,
+  like,
+  ilike,
+  isNull,
+  notNull,
+  and,
+  or,
+  not,
+}
 
 /** Every field name a filter references (for validation against a table's columns). */
-export const filterFields = (filter: Spec.Filter): readonly string[] => {
+export const filterFields = <TField extends string>(
+  filter: Spec.Filter<TField>,
+): readonly TField[] => {
   switch (filter.op) {
     case 'and':
     case 'or': {
-      return filter.filters.flatMap(filterFields)
+      return filter.filters.flatMap(inner => filterFields(inner))
     }
 
     case 'not': {

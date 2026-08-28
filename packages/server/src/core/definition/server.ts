@@ -8,6 +8,7 @@ import pkg from '../../../package.json'
 import { DEFAULT_TIMEOUT_MS, SERVICE, serviceIdOf } from '../const'
 import { TraceRef } from '../context'
 import { ServerErrors } from '../errors'
+import { roleOf } from '../internal/app'
 import { callLocal, runDispatch } from '../internal/dispatch'
 import { actionsOf, asRequest, callRemote, carrierOf, traceFor } from '../internal/kernel'
 import { buildRegistry, manifestOf } from '../internal/registry'
@@ -78,9 +79,11 @@ const ServerImpl = Server.implement<ServerDef.Context, [options: ServerDef.Optio
       carrier: null,
       edge: null,
       outcomes: null,
+      role: roleOf(options),
       hosted: new Set(options.hosted ?? registry.services.keys()),
-      kv: false,
       inflight: 0,
+
+      routes: [],
 
       sockets: registry.sockets.map(socket => ({
         path: socket.path,
@@ -88,6 +91,8 @@ const ServerImpl = Server.implement<ServerDef.Context, [options: ServerDef.Optio
         protocol: socket.protocol,
         description: socket.description,
         defaults: socket.defaults,
+        receives: socket.receives,
+        sends: socket.sends,
       })),
     }
   },
@@ -118,14 +123,29 @@ export const ServerClient: ServerDef.Client = ServerImpl.build({
   },
 
   *call(service: ServiceDef.Service, action: string, ...rest: [unknown?, ServerDef.CallOptions?]) {
-    if (!service || (service as AnyType)._t !== SERVICE) {
+    // two spellings, one path: the service DEFINITION plus an action name, or a typed REF
+    // (`server.api.todos.list`, `refs<typeof todos>('todos').list`) with the args shifted along
+    const asRef = service as unknown as ServiceDef.Ref
+
+    const target =
+      service && (service as AnyType)._t === SERVICE
+        ? { service: service.name, action }
+        : asRef && typeof asRef.service === 'string' && typeof asRef.action === 'string'
+          ? { service: asRef.service, action: asRef.action }
+          : null
+
+    if (!target) {
       return yield* fail(
         ServerErrors.Configuration,
-        `call takes the service DEFINITION plus the action name — ctx.call(reports, 'summary', input)`,
+        `call takes a service DEFINITION plus an action name (ctx.call(reports, 'summary', input)) or a ref (ctx.call(api.reports.summary, input))`,
       )
     }
+
+    if ((service as AnyType)?._t !== SERVICE) {
+      rest = [action as unknown, ...rest].slice(0, 2) as [unknown?, ServerDef.CallOptions?]
+    }
+
     const kernel = yield* Server.context.expect()
-    const target = { service: service.name, action }
     const isRoot = (yield* TraceRef.get()) === undefined
     if (isRoot) {
       // a call from outside any dispatch is a request of its own (origin: internal)
@@ -186,6 +206,10 @@ export const ServerClient: ServerDef.Client = ServerImpl.build({
 
   *manifest() {
     return manifestOf(yield* Server.context.expect())
+  },
+
+  *report(event) {
+    yield* report(yield* Server.context.expect(), event)
   },
 
   *span(name, body, options) {

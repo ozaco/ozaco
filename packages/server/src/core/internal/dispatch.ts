@@ -1,11 +1,11 @@
 // oxlint-disable import/exports-last
-import { DbClient, Kv } from 'db:core'
-import type { Operation } from 'std:effect'
-import { attempt, ensure, fork, race, sleep, withResolvers } from 'std:effect'
+import type { Flow, Operation } from 'std:effect'
+import { attempt, ensure, flowOf, fork, race, sleep, until, withResolvers } from 'std:effect'
 import type { Result } from 'std:result'
 import { appendCauses, fail, isFailure, isResult } from 'std:result'
 import type { AnyType } from 'std:shared'
 
+import { SERVICE } from '../const'
 import { CtxRef } from '../context'
 import { ServerErrors } from '../errors'
 import type { Helpers } from '../types/helpers'
@@ -19,15 +19,39 @@ import { validate } from '../utils/validation'
 
 import { actionKey } from './registry'
 
-/** A database/cache handle that fails `server.configuration` on first use when nothing is
- * installed — so `ctx.db` exists on every dispatch and the error names the fix. */
-const missing = <T extends object>(what: string, hint: string): T =>
-  new Proxy({} as T, {
-    get: (_target, key) =>
-      typeof key === 'symbol'
-        ? undefined
-        : () => fail(ServerErrors.Configuration, `${what} is not installed — ${hint}`),
-  })
+/** Everything a stream handler may answer with, as ONE Flow: a Flow passes through, an array
+ * and an async iterable are pulled into one. Anything else is not a stream. */
+const flowFrom = (value: unknown): Flow<unknown, unknown> | null => {
+  if (Array.isArray(value)) {
+    return flowOf(function* (emit) {
+      for (const item of value) {
+        yield* emit(item)
+      }
+    })
+  }
+
+  if (!value || typeof value !== 'object') {
+    return null
+  }
+
+  if (Symbol.asyncIterator in value) {
+    return flowOf(function* (emit) {
+      const iterator = (value as AsyncIterable<unknown>)[Symbol.asyncIterator]()
+
+      for (;;) {
+        const step = yield* until(iterator.next())
+
+        if (step.done) {
+          return
+        }
+
+        yield* emit(step.value)
+      }
+    })
+  }
+
+  return Symbol.iterator in value ? (value as Flow<unknown, unknown>) : null
+}
 
 /** Build the handler context for one dispatch. */
 interface ContextInput {
@@ -41,12 +65,6 @@ interface ContextInput {
 }
 
 function* contextOf({ kernel, call, meta, actions, auth }: ContextInput): Operation<ServerDef.Ctx> {
-  const db =
-    (yield* DbClient.context.get()) ??
-    missing('the database', 'install DbClient before createServer (or pass it as a plugin)')
-  const cache = kernel.kv
-    ? Kv.actions
-    : missing<AnyType>('the Kv store', 'install Memoryredis-kvKv before createServer')
   const { trace } = call
 
   const log = (level: 'debug' | 'info' | 'warn' | 'error') =>
@@ -71,27 +89,31 @@ function* contextOf({ kernel, call, meta, actions, auth }: ContextInput): Operat
     service: call.service,
     action: call.action,
     meta,
-    db: db as AnyType,
-    cache: cache as AnyType,
-    auth,
+    auth: auth as ServerDef.Ctx['auth'],
     log: { debug: log('debug'), info: log('info'), warn: log('warn'), error: log('error') },
     signal: call.signal,
     headers: call.headers,
 
     // `inherit: true` carries THIS dispatch's authorization into the nested call — the intent
-    // stays visible at the call site; an explicit `meta.authorization` still wins
-    call: ((service: AnyType, name: AnyType, ...rest: [AnyType?, ServerDef.CallOptions?]) => {
-      const [input, options] = rest
+    // stays visible at the call site; an explicit `meta.authorization` still wins.
+    // Both spellings arrive here: (service, action, input?, options?) and (ref, input?, options?)
+    call: ((target: AnyType, ...rest: AnyType[]) => {
+      const byDefinition = target?._t === SERVICE
+      const head = byDefinition ? rest.slice(0, 1) : []
+      const [input, options] = (byDefinition ? rest.slice(1) : rest) as [
+        AnyType?,
+        ServerDef.CallOptions?,
+      ]
       const authorization = call.headers['authorization']
 
+      const forward = (given: ServerDef.CallOptions | undefined) =>
+        (actions.call as AnyType)(target, ...head, input, given)
+
       if (options?.inherit !== true || !authorization) {
-        return actions.call(service, name, input, options)
+        return forward(options)
       }
 
-      return actions.call(service, name, input, {
-        ...options,
-        meta: { authorization, ...options.meta },
-      })
+      return forward({ ...options, meta: { authorization, ...options.meta } })
     }) as ServerDef.Ctx['call'],
     emit: actions.emit,
     *span(name, body, attrs) {
@@ -113,8 +135,8 @@ export function* materialize(value: unknown): Operation<unknown> {
   return isDeferred(value) ? yield* stream.of(value.flow, value.brand) : value
 }
 
-/** A handler context outside a dispatch (socket routes, raw routes): same db/cache/log/call
- * surface, bound to the given trace. */
+/** A handler context outside a dispatch (socket routes, raw routes): same log/call/span surface,
+ * bound to the given trace. */
 export function* contextFor(
   kernel: ServerDef.Context,
   call: Pick<ServerDef.Call, 'trace' | 'headers' | 'signal'> & {
@@ -227,8 +249,10 @@ const invoke = (kernel: ServerDef.Context, def: ServiceDef.Action) =>
     }
 
     if (meta.output && isStreamDecl(meta.output)) {
-      // a handler may return a Flow or an already-branded stream: the edge and the carriers
-      // need the brand, so normalize here
+      // a handler may answer a stream output four ways — an already-branded stream, a platform
+      // ReadableStream, a Flow (`flowOf(emit => …)`), or the plain shapes people reach for
+      // first: an array and an async iterable. The edge and the carriers need the brand, so
+      // everything is normalized here.
       if (isBranded(result)) {
         return result
       }
@@ -237,11 +261,13 @@ const invoke = (kernel: ServerDef.Context, def: ServiceDef.Action) =>
         return brandStream(result, meta.output.brand)
       }
 
-      if (result && typeof result === 'object' && Symbol.iterator in result) {
+      const flow = flowFrom(result)
+
+      if (flow) {
         // materialized by whoever consumes it (see `materialize`): the dispatch task ends here
         const deferred: Helpers.DeferredStream = {
           _t: 'deferred-stream',
-          flow: result as AnyType,
+          flow,
           brand: meta.output.brand,
         }
 
@@ -250,7 +276,8 @@ const invoke = (kernel: ServerDef.Context, def: ServiceDef.Action) =>
 
       return yield* fail(
         ServerErrors.Internal,
-        `${call.service}.${call.action} declared a stream output but returned a plain value`,
+        `${call.service}.${call.action} declared a stream output but returned a plain value — ` +
+          `answer with an array, an async iterable, a Flow (flowOf), or a branded stream`,
       )
     }
 
