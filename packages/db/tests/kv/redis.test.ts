@@ -1,6 +1,6 @@
 import { install } from 'std:plugin'
 
-import { RedisKv } from 'db:impl/kv/redis'
+import { RedisKv } from 'db:impl/redis-kv'
 
 import { runKvSuite } from './suite'
 

@@ -45,8 +45,8 @@
       "db:impl/sqlite": ["./node_modules/@ozaco/db/dist/impl/sqlite"],
       "db:impl/pg": ["./node_modules/@ozaco/db/dist/impl/pg"],
       "db:impl/bun-sql": ["./node_modules/@ozaco/db/dist/impl/bun-sql"],
-      "db:impl/kv/memory": ["./node_modules/@ozaco/db/dist/impl/kv/memory"],
-      "db:impl/kv/redis": ["./node_modules/@ozaco/db/dist/impl/kv/redis"]
+      "db:impl/memory-kv": ["./node_modules/@ozaco/db/dist/impl/memory-kv"],
+      "db:impl/redis-kv": ["./node_modules/@ozaco/db/dist/impl/redis-kv"]
     }
   }
 }

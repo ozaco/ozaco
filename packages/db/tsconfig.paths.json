@@ -7,8 +7,8 @@
       "db:impl/sqlite": ["./src/impl/sqlite/index.ts", "./dist/impl/sqlite.d.ts"],
       "db:impl/pg": ["./src/impl/pg/index.ts", "./dist/impl/pg.d.ts"],
       "db:impl/bun-sql": ["./src/impl/bun-sql/index.ts", "./dist/impl/bun-sql.d.ts"],
-      "db:impl/kv/memory": ["./src/impl/kv/memory/index.ts", "./dist/impl/kv/memory.d.ts"],
-      "db:impl/kv/redis": ["./src/impl/kv/redis/index.ts", "./dist/impl/kv/redis.d.ts"],
+      "db:impl/memory-kv": ["./src/impl/memory-kv/index.ts", "./dist/impl/memory-kv.d.ts"],
+      "db:impl/redis-kv": ["./src/impl/redis-kv/index.ts", "./dist/impl/redis-kv.d.ts"],
 
       "transport:core": ["./node_modules/@ozaco/transport/dist/index"],
       "transport:impl/memory": ["./node_modules/@ozaco/transport/dist/impl/memory"],

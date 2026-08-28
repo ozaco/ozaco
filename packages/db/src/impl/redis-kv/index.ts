@@ -1,4 +1,4 @@
 export * from './definition'
-export * from './utils/context'
+export * from './utils'
 
 export type * from './types'

@@ -6,7 +6,7 @@ import { fail } from 'std:result'
 
 import { JsonCodec } from 'std:codec/impl/json'
 
-import pkg from '../../../../package.json'
+import pkg from '../../../package.json'
 
 import { createLink, driver, StateRef } from './internal'
 import type { MemoryKvDef } from './types'

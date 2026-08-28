@@ -57,27 +57,27 @@
       },
       "source": "./src/impl/pg/index.ts"
     },
-    "./impl/kv/memory": {
+    "./impl/memory-kv": {
       "import": {
-        "types": "./dist/impl/kv/memory.d.ts",
-        "default": "./dist/impl/kv/memory.js"
+        "types": "./dist/impl/memory-kv.d.ts",
+        "default": "./dist/impl/memory-kv.js"
       },
       "require": {
-        "types": "./dist/impl/kv/memory.d.cts",
-        "default": "./dist/impl/kv/memory.cjs"
+        "types": "./dist/impl/memory-kv.d.cts",
+        "default": "./dist/impl/memory-kv.cjs"
       },
-      "source": "./src/impl/kv/memory/index.ts"
+      "source": "./src/impl/memory-kv/index.ts"
     },
-    "./impl/kv/redis": {
+    "./impl/redis-kv": {
       "import": {
-        "types": "./dist/impl/kv/redis.d.ts",
-        "default": "./dist/impl/kv/redis.js"
+        "types": "./dist/impl/redis-kv.d.ts",
+        "default": "./dist/impl/redis-kv.js"
       },
       "require": {
-        "types": "./dist/impl/kv/redis.d.cts",
-        "default": "./dist/impl/kv/redis.cjs"
+        "types": "./dist/impl/redis-kv.d.cts",
+        "default": "./dist/impl/redis-kv.cjs"
       },
-      "source": "./src/impl/kv/redis/index.ts"
+      "source": "./src/impl/redis/index.ts"
     },
     "./impl/bun-sql": {
       "import": {

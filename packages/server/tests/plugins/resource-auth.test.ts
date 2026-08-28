@@ -13,8 +13,8 @@ import { unwrap } from 'std:result'
 
 import { describe, expect, it } from 'bun:test'
 
-import { MemoryKv } from 'db:impl/kv/memory'
 import { MemoryAdapter } from 'db:impl/memory'
+import { MemoryKv } from 'db:impl/memory-kv'
 import { BunEdge } from 'server:impl/edge/bun'
 import { BunIO } from 'std:io/impl/bun'
 

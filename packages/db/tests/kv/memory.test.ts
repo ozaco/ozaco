@@ -1,6 +1,6 @@
 import { install } from 'std:plugin'
 
-import { createMemoryKv, MemoryKv } from 'db:impl/kv/memory'
+import { createMemoryKv, MemoryKv } from 'db:impl/memory-kv'
 
 import { runKvSuite } from './suite'
 

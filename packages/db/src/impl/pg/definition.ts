@@ -10,13 +10,8 @@ import { sqlActions } from '../shared/actions'
 import { postgresDialect } from '../shared/dialects'
 import { runSqlTransaction } from '../shared/transaction'
 
-import { exec, StateRef, transactional } from './internal'
+import { exec, MIGRATE_LOCK, StateRef, transactional } from './internal'
 import type { Pg } from './types'
-
-/** The advisory-lock key every ozaco migrate takes. Advisory locks are scoped to the CONNECTED
- * database, so a constant serializes concurrent boots against one database without coupling
- * unrelated ones. */
-const MIGRATE_LOCK = 727_270_001
 
 const sql = sqlActions({ dialect: postgresDialect, exec })
 

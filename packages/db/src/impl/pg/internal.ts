@@ -8,6 +8,11 @@ import type { Sql } from '../shared/types'
 
 import type { Pg } from './types'
 
+/** The advisory-lock key every ozaco migrate takes. Advisory locks are scoped to the CONNECTED
+ * database, so a constant serializes concurrent boots against one database without coupling
+ * unrelated ones. */
+export const MIGRATE_LOCK = 727_270_001
+
 export const StateRef = createContext<Pg.State>('db:impl/pg')
 
 /** The pinned client while inside a transaction — statements must ride the same connection. */

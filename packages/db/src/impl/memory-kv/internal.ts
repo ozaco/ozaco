@@ -4,7 +4,7 @@ import { createContext, useContext } from 'std:effect'
 
 import type { MemoryKvDef } from './types'
 
-export const StateRef = createContext<MemoryKvDef.State>('db:impl/kv/memory')
+export const StateRef = createContext<MemoryKvDef.State>('db:impl/memory-kv')
 
 /** A fresh store: `install(MemoryKv, { link })` in every scope that should share it. */
 export const createLink = (): MemoryKvDef.Link => ({ entries: new Map(), tags: new Map() })

@@ -62,8 +62,8 @@ const DB_MODULES: Record<string, ModuleEntry> = {
   'db:impl/sqlite': { subpath: 'impl/sqlite', source: 'impl/sqlite/index.ts' },
   'db:impl/pg': { subpath: 'impl/pg', source: 'impl/pg/index.ts' },
   'db:impl/bun-sql': { subpath: 'impl/bun-sql', source: 'impl/bun-sql/index.ts' },
-  'db:impl/kv/memory': { subpath: 'impl/kv/memory', source: 'impl/kv/memory/index.ts' },
-  'db:impl/kv/redis': { subpath: 'impl/kv/redis', source: 'impl/kv/redis/index.ts' },
+  'db:impl/memory-kv': { subpath: 'impl/memory-kv', source: 'impl/memory-kv/index.ts' },
+  'db:impl/redis-kv': { subpath: 'impl/redis-kv', source: 'impl/redis-kv/index.ts' },
 }
 
 const TRANSPORT_MODULES: Record<string, ModuleEntry> = {

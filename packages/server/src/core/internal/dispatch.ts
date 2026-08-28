@@ -46,7 +46,7 @@ function* contextOf({ kernel, call, meta, actions, auth }: ContextInput): Operat
     missing('the database', 'install DbClient before createServer (or pass it as a plugin)')
   const cache = kernel.kv
     ? Kv.actions
-    : missing<AnyType>('the Kv store', 'install MemoryKv/RedisKv before createServer')
+    : missing<AnyType>('the Kv store', 'install Memoryredis-kvKv before createServer')
   const { trace } = call
 
   const log = (level: 'debug' | 'info' | 'warn' | 'error') =>

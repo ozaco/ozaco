@@ -11,7 +11,7 @@ import { Cache, Cors, crud, Docs, ObservePlugin } from 'server:plugins'
 import { run, until } from 'std:effect'
 import { unwrap } from 'std:result'
 
-import { MemoryKv } from 'db:impl/kv/memory'
+import { MemoryKv } from 'db:impl/memory-kv'
 import { SqliteAdapter } from 'db:impl/sqlite'
 import { NetworkCarrier } from 'server:impl/carrier/network'
 import { BunEdge } from 'server:impl/edge/bun'

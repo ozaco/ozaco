@@ -7,7 +7,7 @@ import type { AnyType } from 'std:shared'
 
 import type { RedisKvDef } from './types'
 
-export const StateRef = createContext<RedisKvDef.State>('db:impl/kv/redis')
+export const StateRef = createContext<RedisKvDef.State>('db:impl/redis-kv')
 
 const encoder = new TextEncoder()
 

@@ -9,11 +9,11 @@ import type { AnyType } from 'std:shared'
 import { RESP_TYPES } from 'redis'
 import { JsonCodec } from 'std:codec/impl/json'
 
-import pkg from '../../../../package.json'
+import pkg from '../../../package.json'
 
 import { driver, StateRef } from './internal'
 import type { RedisKvDef } from './types'
-import { redisKvImpl } from './utils/context'
+import { redisKvImpl } from './utils'
 
 /**
  * The Redis Kv store over the official `redis` client (v6) — `install(RedisKv, { prefix,

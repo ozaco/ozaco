@@ -7,7 +7,7 @@ import { fail, isFailure } from 'std:result'
 import { JsonCodec } from 'std:codec/impl/json'
 
 import pkg from '../../../package.json'
-import { CHANGES_PREFIX, DEFAULT_REPLAY_WINDOW_MS, FIELDS } from '../const'
+import { CHANGES_PREFIX, COLUMN_NAME, DEFAULT_REPLAY_WINDOW_MS, FIELDS, TABLE_NAME } from '../const'
 import { DbErrors } from '../errors'
 import { bridgeTransports, createBus, logOf, publishWrites, specOf } from '../internal/client'
 import { StateRef } from '../internal/context'
@@ -166,12 +166,6 @@ const DbImpl = Db.implement<Database.Context, [options: Database.Options]>({
     return createHandle(state)
   },
 })
-
-/** Declared TABLE names: snake_case, one optional leading underscore (framework tables). */
-const TABLE_NAME = /^_?[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/u
-
-/** Declared COLUMN names: snake_case, no underscore prefix (that namespace is the system's). */
-const COLUMN_NAME = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/u
 
 export const DbClient: Database.Client = DbImpl.build({
   *migrate() {

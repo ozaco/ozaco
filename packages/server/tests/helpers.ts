@@ -4,8 +4,8 @@ import type { Operation } from 'std:effect'
 import { sleep } from 'std:effect'
 import { fail } from 'std:result'
 
-import { MemoryKv } from 'db:impl/kv/memory'
 import { MemoryAdapter } from 'db:impl/memory'
+import { MemoryKv } from 'db:impl/memory-kv'
 import { BunIO } from 'std:io/impl/bun'
 import { z } from 'zod'
 

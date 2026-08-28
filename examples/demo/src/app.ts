@@ -20,9 +20,9 @@
  *   AUTH_SECRET=…                  HS256 secret (default: a demo value)
  */
 import { DbBus, DbClient } from '@ozaco/db'
-import { MemoryKv } from '@ozaco/db/impl/kv/memory'
-import { RedisKv } from '@ozaco/db/impl/kv/redis'
+import { MemoryKv } from '@ozaco/db/impl/memory-kv'
 import { PgAdapter } from '@ozaco/db/impl/pg'
+import { RedisKv } from '@ozaco/db/impl/redis-kv'
 import { SqliteAdapter } from '@ozaco/db/impl/sqlite'
 import type { ServerDef } from '@ozaco/server'
 import { Edge } from '@ozaco/server'

@@ -48,3 +48,9 @@ export const DEFAULT_REPLAY_WINDOW_MS = 5000
 /** Outbox defaults. */
 export const DEFAULT_MAX_PENDING = 4096
 export const DEFAULT_DRAIN_TIMEOUT_MS = 1000
+
+/** Declared TABLE names: snake_case, one optional leading underscore (framework tables). */
+export const TABLE_NAME = /^_?[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/u
+
+/** Declared COLUMN names: snake_case, no underscore prefix (that namespace is the system's). */
+export const COLUMN_NAME = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/u
