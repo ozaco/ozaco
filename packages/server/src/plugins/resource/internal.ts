@@ -1,5 +1,5 @@
 // oxlint-disable import/exports-last
-import type { Database, Schema, Spec } from 'db:core'
+import type { Schema, Spec } from 'db:core'
 import { clampLimit, DbErrors, FIELDS, sanitizeFilter, useDb } from 'db:core'
 import type { EdgeDef, ServerDef } from 'server:core'
 import { CtxRef, ServerErrors } from 'server:core'
@@ -14,7 +14,8 @@ import { z } from 'zod'
 import type { AuthDef } from '../auth'
 import { Auth } from '../auth'
 
-import type { ResourceDef } from './types'
+import type { Helpers } from './types/helpers'
+import type { ResourceDef } from './types/resource'
 
 /** A zod schema mirroring a column kind (docs + request validation; the db validates again). */
 const columnSchema = (column: Spec.Column): z.ZodType => {
@@ -92,17 +93,9 @@ export const listInput = z.object({
   cursor: z.string().optional(),
 })
 
-/** The zod shape of a `list` envelope over one row schema. */
-export type PageShape<T extends z.ZodType> = z.ZodObject<{
-  data: z.ZodReadonly<z.ZodArray<T>>
-  nextCursor: z.ZodNullable<z.ZodString>
-  prevCursor: z.ZodNullable<z.ZodString>
-  token: z.ZodString
-}>
-
 /** The `list` envelope over a row schema (what `schema.output` sees as `page`) — typed from
  * the doc, so a custom action's `output` infers the real page shape (no cast needed). */
-export const pageSchema = <T extends z.ZodType>(doc: T): PageShape<T> =>
+export const pageSchema = <T extends z.ZodType>(doc: T): Helpers.PageShape<T> =>
   z.object({
     data: z.array(doc).readonly(),
     nextCursor: z.string().nullable(),
@@ -289,21 +282,9 @@ export function* opCtx(given: ServerDef.Ctx | undefined): Operation<ServerDef.Ct
   )
 }
 
-/** The installed handle with its tables ERASED: the ops address tables by name (a resource is
- * generic over its own table), so they take the loose shape `useDb()` is narrowed from. */
-type LooseDb = Database.Handle<Record<string, Schema.Types<Spec.Doc, Spec.Doc>>>
-const looseDb = (): Operation<LooseDb> => useDb() as Operation<LooseDb>
+const looseDb = (): Operation<Helpers.LooseDb> => useDb() as Operation<Helpers.LooseDb>
 
-/** What an op runs against: the (overridden) db handle, the request headers, and the ctx when
- * one is reachable — a `db` override (a transaction's handle) works without a dispatch, the
- * headers then default empty. */
-interface OpEnv {
-  readonly db: LooseDb
-  readonly headers: Readonly<Record<string, string>>
-  readonly ctx: ServerDef.Ctx | null
-}
-
-function* opEnv(options: ResourceDef.OpOptions): Operation<OpEnv> {
+function* opEnv(options: ResourceDef.OpOptions): Operation<Helpers.OpEnv> {
   if (options.db) {
     const ctx = options.ctx ?? (yield* CtxRef.get()) ?? null
     return { db: options.db, headers: ctx?.headers ?? {}, ctx }
@@ -314,7 +295,7 @@ function* opEnv(options: ResourceDef.OpOptions): Operation<OpEnv> {
 }
 
 /** Every op is its own child span when a ctx is reachable (`crud.<op> <table>`). */
-const spanned = <T>(env: OpEnv, name: string, body: () => Operation<T>): Operation<T> =>
+const spanned = <T>(env: Helpers.OpEnv, name: string, body: () => Operation<T>): Operation<T> =>
   env.ctx ? env.ctx.span(name, body) : body()
 
 /** The write ops' version gate: omitted = the ambient `If-Match` header, `false` = none. */
@@ -631,16 +612,6 @@ export function* watch(
   }
 }
 
-interface WindowedArgs {
-  readonly ctx: ServerDef.Ctx
-  readonly resource: ResourceDef.RealtimeSource
-  readonly frame: Extract<ResourceDef.ClientFrame, { t: 'watch' }>
-  readonly query: AnyType
-
-  /** the watch's (hook-aware) frame sender. */
-  readonly send: (out: ResourceDef.ServerFrame) => Operation<void>
-}
-
 /**
  * A WINDOWED watch: the subscription owns one keyset page. Table changes recompute the page
  * (a `limit`-sized read, never the whole set): rows entering/leaving/changing IN the window go
@@ -649,7 +620,7 @@ interface WindowedArgs {
  * subscribers track versions uniformly. A new `watch` on the same id (another cursor) replaces
  * the window for THIS subscriber only.
  */
-function* windowed({ resource, frame, query, send }: WindowedArgs): Operation<void> {
+function* windowed({ resource, frame, query, send }: Helpers.WindowedArgs): Operation<void> {
   const limit = Math.max(1, Math.min(frame.limit ?? 1, resource.maxLimit))
   const cursor = cursorOf(frame.cursor)
 

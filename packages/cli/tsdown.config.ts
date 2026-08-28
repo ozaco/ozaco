@@ -11,6 +11,8 @@ export default defineConfig({
     spinner: './src/spinner/index.ts',
     table: './src/table/index.ts',
     command: './src/command/index.ts',
+    'impl/memory': './src/impl/memory/index.ts',
+    'impl/node': './src/impl/node/index.ts',
   },
   format: ['esm', 'cjs'],
   dts: true,

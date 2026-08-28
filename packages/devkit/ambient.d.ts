@@ -167,6 +167,12 @@ declare module 'cli:spinner' {
 declare module 'cli:command' {
   export * from '@ozaco/cli/command';
 }
+declare module 'cli:impl/memory' {
+  export * from '@ozaco/cli/impl/memory';
+}
+declare module 'cli:impl/node' {
+  export * from '@ozaco/cli/impl/node';
+}
 
 declare module 'cli:table' {
   export * from '@ozaco/cli/table';

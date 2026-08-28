@@ -6,7 +6,7 @@ import type { AnyType } from 'std:shared'
 
 import type { z } from 'zod'
 
-import type { listInput } from './internal'
+import type { listInput } from '../internal'
 
 export namespace ResourceDef {
   /** One page of `list` (`total` only when the op asked for it — `total: true`). */

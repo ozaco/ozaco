@@ -16,6 +16,7 @@ tasks:
     inputs:
       - src/**/*
       - tsdown.config.ts
+      - /packages/devkit/src/resolve.ts
     outputs:
       - dist/**/*
     options:
@@ -26,6 +27,7 @@ tasks:
     inputs:
       - src/**/*
       - tsdown.config.ts
+      - /packages/devkit/src/resolve.ts
     outputs:
       - dist/**/*
   types:
@@ -38,6 +40,7 @@ tasks:
       - src/**/*
       - tests/**/*
       - tsdown.config.ts
+      - /packages/devkit/src/resolve.ts
   test:
     command: bun test --pass-with-no-tests
     deps:

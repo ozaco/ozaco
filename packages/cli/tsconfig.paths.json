@@ -8,6 +8,8 @@
       "cli:spinner": ["./src/spinner/index.ts", "./dist/spinner.d.ts"],
       "cli:table": ["./src/table/index.ts", "./dist/table.d.ts"],
       "cli:command": ["./src/command/index.ts", "./dist/command.d.ts"],
+      "cli:impl/memory": ["./src/impl/memory/index.ts", "./dist/impl/memory.d.ts"],
+      "cli:impl/node": ["./src/impl/node/index.ts", "./dist/impl/node.d.ts"],
 
       "std:shared": ["./node_modules/@ozaco/std/dist/shared"],
       "std:result": ["./node_modules/@ozaco/std/dist/result"],

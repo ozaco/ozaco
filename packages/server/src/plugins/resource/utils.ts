@@ -6,7 +6,6 @@ import type { AnyType } from 'std:shared'
 
 import { z } from 'zod'
 
-import type { PageShape } from './internal'
 import {
   countOp,
   createManyOp,
@@ -28,7 +27,8 @@ import {
   shaper,
   updateOp,
 } from './internal'
-import type { ResourceDef } from './types'
+import type { Helpers } from './types/helpers'
+import type { ResourceDef } from './types/resource'
 
 const ALL_ACTIONS: readonly ResourceDef.ActionName[] = [
   'list',
@@ -214,42 +214,10 @@ const builder = <
   } as unknown as ResourceDef.Crud<TTable, TNames, TExtend>
 }
 
-/** `crud.list` — `total: true` also counts the set, so the page carries `total`. */
-interface ListFn {
-  <TTable extends Schema.Table>(
-    table: TTable,
-    options: ResourceDef.ListOp & { readonly total: true },
-  ): Operation<ResourceDef.Page<Schema.Infer<TTable>> & { readonly total: number }>
-  <TTable extends Schema.Table>(
-    table: TTable,
-    options?: ResourceDef.ListOp,
-  ): Operation<ResourceDef.Page<Schema.Infer<TTable>>>
-}
-
-/** `crud.get` — `optional: true` returns `null` instead of failing `server.not-found`. */
-interface GetFn {
-  <TTable extends Schema.Table>(
-    table: TTable,
-    options: ResourceDef.GetOp & { readonly optional: true },
-  ): Operation<Schema.Infer<TTable> | null>
-  <TTable extends Schema.Table>(
-    table: TTable,
-    options: ResourceDef.GetOp,
-  ): Operation<Schema.Infer<TTable>>
-}
-
-/** The `list` envelope schema over a table (its derived doc) or an already-reshaped row
- * schema — `.extend` it (`total`, facet metadata) for a custom list's `output`; the page
- * shape infers from the doc, so the handler's `crud.list` return needs no cast. */
-interface PageFn {
-  <T extends z.ZodType>(doc: T): PageShape<T>
-  (table: Schema.Table): PageShape<z.ZodObject>
-}
-
-const pageFor: PageFn = ((source: Schema.Table | z.ZodType) =>
+const pageFor: Helpers.PageFn = ((source: Schema.Table | z.ZodType) =>
   pageSchema(
     'columns' in source ? docSchema(source as Schema.Table) : (source as z.ZodType),
-  )) as PageFn
+  )) as Helpers.PageFn
 
 /** The realtime socket entry over a resolved source (shared by `crud()` and
  * `crud.realtime`). */
@@ -297,8 +265,8 @@ const realtimeAction = (
  * `page`) for the custom action's own declarations.
  */
 export const crud = Object.assign(builder, {
-  list: listOp as ListFn,
-  get: getOp as GetFn,
+  list: listOp as Helpers.ListFn,
+  get: getOp as Helpers.GetFn,
 
   create: createOp as <TTable extends Schema.Table>(
     table: TTable,

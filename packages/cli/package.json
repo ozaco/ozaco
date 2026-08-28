@@ -78,6 +78,28 @@
         "default": "./dist/command.cjs"
       },
       "source": "./src/command/index.ts"
+    },
+    "./impl/memory": {
+      "import": {
+        "types": "./dist/impl/memory.d.ts",
+        "default": "./dist/impl/memory.js"
+      },
+      "require": {
+        "types": "./dist/impl/memory.d.cts",
+        "default": "./dist/impl/memory.cjs"
+      },
+      "source": "./src/impl/memory/index.ts"
+    },
+    "./impl/node": {
+      "import": {
+        "types": "./dist/impl/node.d.ts",
+        "default": "./dist/impl/node.js"
+      },
+      "require": {
+        "types": "./dist/impl/node.d.cts",
+        "default": "./dist/impl/node.cjs"
+      },
+      "source": "./src/impl/node/index.ts"
     }
   },
   "publishConfig": {
