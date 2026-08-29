@@ -1,7 +1,7 @@
 import { column, Db, DbAdapter, DbClient, DbErrors, table, where } from 'db:core'
 import { isDestructive } from 'db:internal'
 import type { Operation } from 'std:effect'
-import { attempt, race, run, scoped, sleep } from 'std:effect'
+import { attempt, race, run, scoped, sleep, useContext } from 'std:effect'
 import { install } from 'std:plugin'
 import { fail, isFailure, unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
@@ -48,7 +48,7 @@ export const runAdapterSuite = (target: AdapterTarget): void => {
       unwrap(
         await run(function* () {
           yield* bootstrap()
-          const info = yield* DbAdapter.actions.describe()
+          const info = yield* useContext(DbAdapter)
           expect(info.adapter).toBe(target.label)
           expect(info.capabilities.transactions).toBe(true)
           expect(info.capabilities.raw).toBe(target.raw)
@@ -1033,7 +1033,7 @@ export const runAdapterSuite = (target: AdapterTarget): void => {
           // the same storage, re-declared: a child scope installs the new schema over it
           yield* scoped(function* () {
             const db = yield* install(DbClient, { tables: [v2], migrations: 'manual' })
-            const { capabilities } = yield* DbAdapter.actions.describe()
+            const { capabilities } = yield* useContext(DbAdapter)
             const drift = (yield* Db.actions.planMigration()).steps.find(
               (step: AnyType) => step.kind === 'alter-column',
             ) as AnyType

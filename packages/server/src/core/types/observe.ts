@@ -6,6 +6,10 @@ import type { CarrierDef } from './carrier'
 import type { ServerDef } from './server'
 import type { TraceDef } from './trace'
 
+/** A built observe-store plugin (`ObservePlugin`) — install options are the impl's own, so the
+ * argument list stays open. */
+export type ObserveDef = Plugin<ObserveDef.Context, AnyType[], ObserveDef.Actions>
+
 /**
  * What the kernel reports and what the observe store answers. The store is a db: every event
  * becomes a row in `_ob_*` tables, queryable and watchable with the db's own tools.
@@ -149,6 +153,9 @@ export namespace ObserveDef {
     readonly store: string
   }
 
+  /** What the install resolves is exactly {@link Options} here. */
+  export type Context = Options
+
   /** One node as the store has seen it lately: its edge/dispatch/carrier spans in the window. */
   export interface InstanceStats {
     readonly instance: string
@@ -169,7 +176,6 @@ export namespace ObserveDef {
   }
 
   export interface Actions {
-    describe(): Operation<Options>
     record(event: Event): Operation<void>
 
     /** Presence members + per-instance stats over the last `windowMs` (default 15 min). */
@@ -187,6 +193,4 @@ export namespace ObserveDef {
     /** Flush whatever the collector still holds. */
     flush(): Operation<void>
   }
-
-  export type Handle = Plugin<Options, AnyType[], Actions>
 }

@@ -31,7 +31,7 @@ import { requests, spans } from './utils/tables'
  * one), written in batches off the request path. `Observe.actions.request/query/watch` read it
  * back; `console: true` serves the dev console at `/_observe`; `mirror: true` echoes to stdout.
  */
-export const ObservePlugin: ObserveDef.Handle = Observe.implement<
+export const ObservePlugin = Observe.implement<
   ObserveDef.Options,
   [options?: ObservePluginDef.Options]
 >({
@@ -131,9 +131,6 @@ export const ObservePlugin: ObserveDef.Handle = Observe.implement<
     return { store: 'db', hooks }
   },
 }).build({
-  *describe() {
-    return yield* Observe.context.expect()
-  },
   *record(event) {
     enqueue(yield* useContext(StateRef), event)
   },

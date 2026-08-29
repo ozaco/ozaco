@@ -8,13 +8,12 @@ import { DEFAULT_OUTCOME_TTL_MS } from '../const'
 import { ServerErrors } from '../errors'
 import { OutcomesDbRef, OutcomesMemoryRef } from '../internal/context'
 import type { OutcomesDef } from '../types/outcomes'
-import { outcomesDefaults } from '../utils/defaults'
 import { outcomesTable } from '../utils/outcomes'
 
 import { Outcomes } from './protocol'
 
 /** The in-process outcome store (the default `createServer` installs). */
-export const MemoryOutcomes: OutcomesDef.Handle = Outcomes.implement<
+export const MemoryOutcomes = Outcomes.implement<
   OutcomesDef.Options,
   [options?: { readonly ttlMs?: number | undefined }]
 >({
@@ -28,7 +27,6 @@ export const MemoryOutcomes: OutcomesDef.Handle = Outcomes.implement<
     return { store: 'memory', ttlMs }
   },
 }).build({
-  ...outcomesDefaults(),
   *put(outcome) {
     ;(yield* useContext(OutcomesMemoryRef)).rows.set(outcome.cid, outcome)
   },
@@ -60,7 +58,7 @@ export const MemoryOutcomes: OutcomesDef.Handle = Outcomes.implement<
 
 /** Outcome records in the installed database (`_ob_outcomes`): what a restarted caller can
  * reconcile against. Install `DbClient` with {@link outcomesTable} declared before this. */
-export const DbOutcomes: OutcomesDef.Handle = Outcomes.implement<
+export const DbOutcomes = Outcomes.implement<
   OutcomesDef.Options,
   [options?: { readonly ttlMs?: number | undefined }]
 >({
@@ -81,7 +79,6 @@ export const DbOutcomes: OutcomesDef.Handle = Outcomes.implement<
     return { store: 'db', ttlMs }
   },
 }).build({
-  ...outcomesDefaults(),
   *put(outcome) {
     const db = (yield* DbClient.context.expect()) as AnyType
     const existing = yield* db

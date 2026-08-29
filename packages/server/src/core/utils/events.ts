@@ -1,5 +1,5 @@
 import type { Flow, Operation } from 'std:effect'
-import { attempt } from 'std:effect'
+import { attempt, useContext } from 'std:effect'
 import { isFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
 
@@ -39,7 +39,7 @@ export const defineEvents = <const TMap extends EventsDef.Map>(
 
   on: ((name: string) => ({
     *[Symbol.iterator]() {
-      const kernel = yield* Server.actions.describe()
+      const kernel = yield* useContext(Server)
       const source = yield* Server.actions.events(name)
 
       return {

@@ -2,7 +2,7 @@ import { DbClient, Kv } from 'db:core'
 import type { ServerDef } from 'server:core'
 import { Server, ServerErrors } from 'server:core'
 import { childTrace, withSpan } from 'server:internal'
-import { attempt, fork } from 'std:effect'
+import { attempt, fork, useContext } from 'std:effect'
 import { definePlugin } from 'std:plugin'
 import { fail, isFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
@@ -29,7 +29,7 @@ export const Cache = definePlugin<ServerDef.PluginContext, [options?: CacheDef.P
     if (!kernel) {
       return yield* fail(ServerErrors.Configuration, 'Cache must be installed by createServer')
     }
-    if (isFailure(yield* attempt(() => Kv.actions.describe()))) {
+    if (isFailure(yield* attempt(() => useContext(Kv)))) {
       return yield* fail(
         ServerErrors.Configuration,
         'Cache needs a Kv store installed before createServer (MemoryKv / RedisKv)',

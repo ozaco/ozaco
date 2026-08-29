@@ -170,11 +170,11 @@ describe('protocol handlers + defaults', () => {
   }
 
   it('handlers run without an impl; defaults fill impl gaps', async () => {
-    const Math_ = defineProtocol<unknown, MathActions, { describe(): Operation<string> }>({
+    const Math_ = defineProtocol<unknown, MathActions, { label(): Operation<string> }>({
       name: `math-${Math.random().toString(36).slice(2)}`,
       version: '1.0.0',
       handlers: {
-        *describe() {
+        *label() {
           return 'math protocol'
         },
       },
@@ -187,7 +187,7 @@ describe('protocol handlers + defaults', () => {
 
     const outcome = await run(function* () {
       // handler works without any install
-      const described = yield* Math_.actions.describe()
+      const described = yield* Math_.actions.label()
 
       // defaults require a dispatched entry? no — with no installs the default still runs
       const tripled = yield* Math_.actions.triple(7)

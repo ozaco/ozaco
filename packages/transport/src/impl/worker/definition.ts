@@ -5,13 +5,7 @@ import { fail } from 'std:result'
 
 import { JsonCodec } from 'std:codec/impl/json'
 import type { TransportDef } from 'transport:core'
-import {
-  isValidPrefix,
-  Transport,
-  transportActions,
-  transportDefaults,
-  TransportErrors,
-} from 'transport:core'
+import { isValidPrefix, Transport, transportActions, TransportErrors } from 'transport:core'
 
 import pkg from '../../../package.json'
 
@@ -26,51 +20,47 @@ import type { Worker } from './types'
  * is core's emulation, so a missing responder surfaces as `transport.timeout`). `JsonCodec` is
  * installed unless the scope has a codec.
  */
-export const WorkerTransport: TransportDef.Handle = Transport.implement<
-  TransportDef.Options,
-  [options: Worker.Options]
->({
-  name: 'transport-worker',
-  version: pkg.version,
-  description: 'Worker-thread transport over postMessage',
+export const WorkerTransport = Transport.implement<TransportDef.Options, [options: Worker.Options]>(
+  {
+    name: 'transport-worker',
+    version: pkg.version,
+    description: 'Worker-thread transport over postMessage',
 
-  *setup(options) {
-    if (!(yield* hasCodec())) {
-      yield* install(JsonCodec)
-    }
-    if (!isValidPrefix(options.prefix)) {
-      return yield* fail(TransportErrors.Configuration, `invalid prefix "${options.prefix}"`)
-    }
-
-    const state: Worker.State = {
-      port: options.port,
-      prefix: options.prefix,
-      subscribers: new Set(),
-      status: 'connected',
-    }
-
-    const onMessage = (event: { data: unknown }) => {
-      if (isFrame(event.data)) {
-        deliver(state, event.data)
+    *setup(options) {
+      if (!(yield* hasCodec())) {
+        yield* install(JsonCodec)
       }
-    }
+      if (!isValidPrefix(options.prefix)) {
+        return yield* fail(TransportErrors.Configuration, `invalid prefix "${options.prefix}"`)
+      }
 
-    options.port.addEventListener('message', onMessage)
+      const state: Worker.State = {
+        port: options.port,
+        prefix: options.prefix,
+        subscribers: new Set(),
+        status: 'connected',
+      }
 
-    const peers = attached.get(options.port) ?? new Set<Worker.State>()
-    peers.add(state)
-    attached.set(options.port, peers)
+      const onMessage = (event: { data: unknown }) => {
+        if (isFrame(event.data)) {
+          deliver(state, event.data)
+        }
+      }
 
-    yield* ensure(() => {
-      options.port.removeEventListener('message', onMessage)
-      peers.delete(state)
-      state.status = 'closed'
-    })
+      options.port.addEventListener('message', onMessage)
 
-    yield* StateRef.set(state)
-    return { transport: 'worker', prefix: options.prefix, capabilities: driver.capabilities }
+      const peers = attached.get(options.port) ?? new Set<Worker.State>()
+      peers.add(state)
+      attached.set(options.port, peers)
+
+      yield* ensure(() => {
+        options.port.removeEventListener('message', onMessage)
+        peers.delete(state)
+        state.status = 'closed'
+      })
+
+      yield* StateRef.set(state)
+      return { transport: 'worker', prefix: options.prefix, capabilities: driver.capabilities }
+    },
   },
-}).build({
-  ...transportDefaults(),
-  ...transportActions(driver),
-})
+).build(transportActions(driver))

@@ -71,10 +71,10 @@ const serveHandlers = (state: Helpers.EdgeState): EdgeDef.ServeHandlers => ({
 
 /**
  * Assemble the edge actions over a runtime driver:
- * `Edge.implement({...}).build({ ...edgeDefaults(), ...edgeActions(driver) })`. The engine is
+ * `Edge.implement({...}).build(edgeActions(driver))`. The engine is
  * core's; the driver only listens.
  */
-export const edgeActions = (driver: EdgeDef.Driver): Omit<EdgeDef.Actions, 'describe'> => ({
+export const edgeActions = (driver: EdgeDef.Driver): EdgeDef.Actions => ({
   *listen(options) {
     const state = yield* EdgeStateRef.expect()
     mountActions(state)

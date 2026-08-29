@@ -17,7 +17,7 @@ export namespace NetworkCarrierDef {
 
   export interface Options {
     /** The transport plugin to ride (pinned). Default: the most recently installed transport. */
-    readonly transport?: TransportDef.Handle | undefined
+    readonly transport?: TransportDef | undefined
 
     /** How long an output/input lane waits for its other end. Default 5000. */
     readonly laneTimeoutMs?: number | undefined

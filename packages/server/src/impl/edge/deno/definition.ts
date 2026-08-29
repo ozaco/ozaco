@@ -1,6 +1,6 @@
 import type { EdgeDef } from 'server:core'
 import { Edge, ServerErrors } from 'server:core'
-import { edgeActions, edgeDefaults, openEdge } from 'server:internal'
+import { edgeActions, openEdge } from 'server:internal'
 import { fail } from 'std:result'
 
 import pkg from '../../../../package.json'
@@ -10,7 +10,7 @@ import { denoImpl } from './utils/context'
 
 /** The Deno edge: `Deno.serve` + `Deno.upgradeWebSocket` behind the core engine (runtime
  * injectable through `denoImpl`). */
-export const DenoEdge: EdgeDef.Handle = Edge.implement<EdgeDef.Options, []>({
+export const DenoEdge = Edge.implement<EdgeDef.Options, []>({
   name: 'server-edge-deno',
   version: pkg.version,
   description: 'HTTP + WebSocket edge on Deno.serve',
@@ -27,7 +27,4 @@ export const DenoEdge: EdgeDef.Handle = Edge.implement<EdgeDef.Options, []>({
     yield* openEdge()
     return { runtime: 'deno' }
   },
-}).build({
-  ...edgeDefaults(),
-  ...edgeActions(driver),
-})
+}).build(edgeActions(driver))

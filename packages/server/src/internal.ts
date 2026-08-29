@@ -28,7 +28,6 @@ export {
 export { LocalCarrier } from './core/definition/local'
 export { MemoryOutcomes } from './core/definition/outcomes'
 export { ServerClient } from './core/definition/server'
-export { carrierDefaults, edgeDefaults, outcomesDefaults } from './core/utils/defaults'
 export { edgeActions, openEdge } from './core/utils/edge'
 export { breadcrumb } from './core/utils/failure'
 export { isSchema, isSocketAction } from './core/utils/service'

@@ -238,9 +238,9 @@ export namespace ServerDef {
     readonly timeoutMs: number
 
     /** the pinned carrier/edge/outcomes handles — set by `createServer` as it installs them. */
-    carrier: CarrierDef.Handle | null
-    edge: EdgeDef.Handle | null
-    outcomes: OutcomesDef.Handle | null
+    carrier: CarrierDef | null
+    edge: EdgeDef | null
+    outcomes: OutcomesDef | null
 
     /** what this node is — every declared service still resolves, hosted ones locally. */
     readonly role: Role
@@ -265,8 +265,6 @@ export namespace ServerDef {
   }
 
   export interface Actions {
-    describe(): Operation<Context>
-
     /** Dispatch one action here (the carrier's inbound path and the edge's path). The result
      * travels as a Result; the plugin runtime unwraps it, so callers `attempt()` it. */
     dispatch(call: Call): Operation<unknown>

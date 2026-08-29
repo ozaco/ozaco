@@ -1,7 +1,7 @@
 import type { Bus } from 'db:core'
 import { Db, DbBus, DbClient } from 'db:core'
 import type { Operation } from 'std:effect'
-import { run, sleep } from 'std:effect'
+import { run, sleep, useContext } from 'std:effect'
 import { IO } from 'std:io'
 import { install } from 'std:plugin'
 import { unwrap } from 'std:result'
@@ -133,7 +133,7 @@ describe('reactivity — cross-node bus', () => {
         // a bus installed AFTER the client is picked up by an explicit bridge (idempotent)
         expect(yield* Db.actions.bridge()).toBe(1)
         expect(yield* Db.actions.bridge()).toBe(0)
-        expect((yield* DbBus.actions.describe()).transport).toBe('memory')
+        expect((yield* useContext(DbBus)).transportName).toBe('memory')
 
         const ada = yield* db.insert('users', { name: 'ada' })
         yield* db.patch('users', ada._id, { age: 40 })

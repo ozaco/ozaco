@@ -1,6 +1,6 @@
 import { Db, DbBus, DbClient } from 'db:core'
 import type { Operation } from 'std:effect'
-import { createQueue, fork, race, run, scoped, sleep } from 'std:effect'
+import { createQueue, fork, race, run, scoped, sleep, useContext } from 'std:effect'
 import { install } from 'std:plugin'
 import { unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
@@ -90,7 +90,7 @@ for (const network of networks) {
             yield* ready.next()
             yield* scoped(function* () {
               const db = yield* nodeOf('NDEA0001')
-              expect((yield* DbBus.actions.describe()).transport).toBe(network.label)
+              expect((yield* useContext(DbBus)).transportName).toBe(network.label)
               yield* db.insert('users', { name: `over-${network.label}` })
               // let the outbox ship before this node's transport closes with the scope
               yield* sleep(200)
@@ -114,7 +114,7 @@ describe.skipIf(!(nats && redis))('bus pinned to one of two installed transports
         yield* install(NatsTransport, { prefix, servers: nats!, storage: 'memory' })
         // routed calls now hit NATS (most recent) — the bus is told to use Redis instead
         yield* install(DbBus, { transport: RedisTransport })
-        expect((yield* DbBus.actions.describe()).transport).toBe('redis')
+        expect((yield* useContext(DbBus)).transportName).toBe('redis')
         const onRedis = yield* RedisTransport.actions.subscribe<AnyType>('db.change')
         const onNats = yield* NatsTransport.actions.subscribe<AnyType>('db.change')
         yield* sleep(50)

@@ -1,7 +1,7 @@
 import type { Bus } from 'db:core'
 import { column, Db, DbAdapter, DbBus, DbClient, DbErrors, table, withBusMeta } from 'db:core'
 import type { Operation } from 'std:effect'
-import { attempt, createQueue, fork, race, run, scoped, sleep } from 'std:effect'
+import { attempt, createQueue, fork, race, run, scoped, sleep, useContext } from 'std:effect'
 import { useBufferedEvent } from 'std:event'
 import { IO } from 'std:io'
 import { install } from 'std:plugin'
@@ -28,8 +28,8 @@ describe('change bus', () => {
         const link = createLink()
         yield* install(MemoryTransport, { prefix: 'app', link })
         yield* install(DbBus)
-        const bus = yield* DbBus.actions.describe()
-        expect(bus).toMatchObject({ transport: 'memory', topic: 'db.change' })
+        const bus = yield* useContext(DbBus)
+        expect(bus).toMatchObject({ transportName: 'memory', topic: 'db.change' })
         const feed = yield* useBufferedEvent(bus.events, 'change')
         yield* DbBus.actions.publish({
           origin: 'NDEA0001',

@@ -3,7 +3,7 @@ import { Kv } from 'db:core'
 import type { ServerDef } from 'server:core'
 import { ServerErrors } from 'server:core'
 import type { Operation } from 'std:effect'
-import { attempt, race, sleep, withResolvers } from 'std:effect'
+import { attempt, race, sleep, useContext, withResolvers } from 'std:effect'
 import type { Result } from 'std:result'
 import { fail, isFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
@@ -207,7 +207,7 @@ export function* withRateLimit(
   const key = `rl:${keyOf(call)}:${subject}:${window}`
   let count: number
 
-  if (isFailure(yield* attempt(() => Kv.actions.describe()))) {
+  if (isFailure(yield* attempt(() => useContext(Kv)))) {
     const local = state.counters.get(key) ?? { count: 0, window }
     local.count += 1
     state.counters.set(key, local)

@@ -1,6 +1,6 @@
 import type { KvDef } from 'db:core'
 import { Kv, KvErrors } from 'db:core'
-import { DEFAULT_KV_PREFIX, isValidKvPrefix, kvActions, kvDefaults } from 'db:internal'
+import { DEFAULT_KV_PREFIX, isValidKvPrefix, kvActions } from 'db:internal'
 import { hasCodec } from 'std:codec'
 import { attempt, ensure, until } from 'std:effect'
 import { install } from 'std:plugin'
@@ -22,7 +22,7 @@ import { redisKvImpl } from './utils'
  * written in the same `MULTI` as the value, counters are `INCRBY`, scans are `SCAN MATCH`. The
  * connection closes with the scope. `JsonCodec` is installed unless the scope has a codec.
  */
-export const RedisKv: KvDef.Handle = Kv.implement<KvDef.Options, [options: RedisKvDef.Options]>({
+export const RedisKv = Kv.implement<KvDef.Options, [options: RedisKvDef.Options]>({
   name: 'kv-redis',
   version: pkg.version,
   description: 'Redis key/value store',
@@ -58,7 +58,4 @@ export const RedisKv: KvDef.Handle = Kv.implement<KvDef.Options, [options: Redis
     })
     return { store: 'redis', prefix, capabilities: driver.capabilities }
   },
-}).build({
-  ...kvDefaults(),
-  ...kvActions(driver),
-})
+}).build(kvActions(driver))

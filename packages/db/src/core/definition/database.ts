@@ -51,8 +51,8 @@ const DbImpl = Db.implement<Database.Context, [options: Database.Options]>({
       yield* install(JsonCodec)
     }
 
-    const adapter = (options.adapter ?? DbAdapter).actions
-    const described = yield* attempt(() => adapter.describe())
+    const adapter = options.adapter ?? DbAdapter
+    const described = yield* attempt(() => useContext(adapter))
     if (isFailure(described)) {
       return yield* fail(
         DbErrors.Configuration,
@@ -122,7 +122,7 @@ const DbImpl = Db.implement<Database.Context, [options: Database.Options]>({
         options.tables.filter(def => def.log).map(def => [def.name, logSpecOf(def.name)]),
       ),
       safe: options.safe ?? false,
-      adapter,
+      adapter: adapter.actions,
       info: described.value,
       origin,
       replayWindowMs: options.replayWindowMs ?? DEFAULT_REPLAY_WINDOW_MS,

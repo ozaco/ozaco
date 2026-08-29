@@ -11,7 +11,6 @@ export * from './errors'
 export * from './definition'
 
 export * from './utils/actions'
-export * from './utils/defaults'
 export * from './utils/topic'
 
 export type * from './types/helpers'

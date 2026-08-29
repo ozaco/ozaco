@@ -13,14 +13,6 @@ import type { KvDef } from '../types/kv'
 const DEFAULT_KEYS_LIMIT = 100
 const TAG_SEGMENT = '$tag'
 
-/** Typed fallbacks for the `Kv` contract members a store never writes itself:
- * `Kv.implement({...}).build({ ...kvDefaults(), ...kvActions(driver) })`. */
-export const kvDefaults = (): KvDef.Defaults => ({
-  *describe() {
-    return yield* Kv.context.expect()
-  },
-})
-
 /** A prefix follows the same rules as a topic segment: non-empty, no `:` (the separator). */
 export const isValidKvPrefix = (prefix: string): boolean =>
   prefix.length > 0 && !prefix.includes(':')
@@ -58,7 +50,7 @@ function* decode<T>(key: string, data: Uint8Array) {
  * scope-bound state, so one factory call per impl module serves every install of it. The install
  * prefix is read from the dispatched impl's context on every call.
  */
-export const kvActions = (driver: KvDef.Driver): Omit<KvDef.Actions, 'describe'> => {
+export const kvActions = (driver: KvDef.Driver): KvDef.Actions => {
   /** in-process singleflight: one computation per (prefix, key) at a time. */
   const inflight = new Map<string, Operation<Result<unknown>>>()
 

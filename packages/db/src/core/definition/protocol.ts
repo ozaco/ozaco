@@ -1,5 +1,3 @@
-import type { Operation } from 'std:effect'
-import type { Protocol } from 'std:plugin'
 import { defineProtocol } from 'std:plugin'
 import { fail } from 'std:result'
 
@@ -42,12 +40,8 @@ export const DbAdapter = defineProtocol<Adapter.Options, Adapter.Actions>({
   cloneable: true,
   subtype: DATABASE_ADAPTER,
 
-  // capability-gated actions fail cleanly for adapters that omit them; `describe` reads the
-  // dispatched impl's context, so no adapter ever implements it
+  // capability-gated actions fail cleanly for adapters that omit them
   defaults: {
-    *describe(): Operation<Adapter.Options> {
-      return yield* (DbAdapter as Protocol<Adapter.Options>).context.expect()
-    },
     *transaction() {
       return yield* fail(
         DbErrors.Unsupported,
@@ -78,10 +72,4 @@ export const Kv = defineProtocol<KvDef.Options, KvDef.Actions>({
 
   cloneable: true,
   subtype: KV_STORE,
-
-  defaults: {
-    *describe(): Operation<KvDef.Options> {
-      return yield* (Kv as Protocol<KvDef.Options>).context.expect()
-    },
-  },
 })

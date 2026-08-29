@@ -3,6 +3,7 @@
  * that answers with the instance that served it (watch it round-robin over replicas).
  */
 import { action, Server, service } from '@ozaco/server'
+import { useContext } from '@ozaco/std/effect'
 import { z } from 'zod'
 
 const Member = z.object({
@@ -22,7 +23,7 @@ export const cluster = service(
         description: 'Answered by whichever node hosts `cluster`',
       },
       function* () {
-        const kernel = yield* Server.actions.describe()
+        const kernel = yield* useContext(Server)
         return { instance: kernel.instance, serviceId: kernel.serviceId, at: Date.now() }
       },
     ),
@@ -32,7 +33,7 @@ export const cluster = service(
         description: 'Presence: who hosts which service right now',
       },
       function* () {
-        const kernel = yield* Server.actions.describe()
+        const kernel = yield* useContext(Server)
         const out: Record<string, z.infer<typeof Member>[]> = {}
         for (const name of kernel.registry.services.keys()) {
           out[name] = [...(yield* kernel.carrier!.actions.members(name))]

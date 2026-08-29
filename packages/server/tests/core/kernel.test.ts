@@ -1,6 +1,6 @@
 import type { ObserveDef, ServerDef } from 'server:core'
 import { action, createServer, refs, Server, ServerErrors, service, stream } from 'server:core'
-import { attempt, run, sleep } from 'std:effect'
+import { attempt, run, sleep, useContext } from 'std:effect'
 import { definePlugin } from 'std:plugin'
 import { unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
@@ -183,7 +183,7 @@ describe('kernel — services, dispatch, hooks', () => {
         expect((detached as AnyType).error).toBe(ServerErrors.TimeoutPending)
         // the detached handler finished on its own and left an outcome behind
         yield* sleep(250)
-        const kernel = yield* Server.actions.describe()
+        const kernel = yield* useContext(Server)
         const pruned = yield* kernel.outcomes!.actions.prune()
         expect(pruned).toBe(0)
       }),

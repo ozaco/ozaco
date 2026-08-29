@@ -1,6 +1,6 @@
 import type { EdgeDef } from 'server:core'
 import { Edge, ServerErrors } from 'server:core'
-import { edgeActions, edgeDefaults, openEdge } from 'server:internal'
+import { edgeActions, openEdge } from 'server:internal'
 import { fail } from 'std:result'
 
 import { createServer as createHttpServer } from 'node:http'
@@ -10,7 +10,7 @@ import pkg from '../../../../package.json'
 import { driver, StateRef } from './internal'
 
 /** The Node edge: `node:http` (+ the optional `ws` peer for socket routes) behind the core engine. */
-export const NodeEdge: EdgeDef.Handle = Edge.implement<EdgeDef.Options, []>({
+export const NodeEdge = Edge.implement<EdgeDef.Options, []>({
   name: 'server-edge-node',
   version: pkg.version,
   description: 'HTTP + WebSocket edge on node:http',
@@ -23,7 +23,4 @@ export const NodeEdge: EdgeDef.Handle = Edge.implement<EdgeDef.Options, []>({
     yield* openEdge()
     return { runtime: 'node' }
   },
-}).build({
-  ...edgeDefaults(),
-  ...edgeActions(driver),
-})
+}).build(edgeActions(driver))

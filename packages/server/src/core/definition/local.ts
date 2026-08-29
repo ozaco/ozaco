@@ -8,7 +8,6 @@ import { ServerErrors } from '../errors'
 import { LocalCarrierRef } from '../internal/context'
 import type { CarrierDef } from '../types/carrier'
 import type { WireDef } from '../types/wire'
-import { carrierDefaults } from '../utils/defaults'
 
 import { Carrier, Server } from './protocol'
 
@@ -17,7 +16,7 @@ import { Carrier, Server } from './protocol'
  * else fails `server.unavailable` — the honest answer without a network. Events fan out on the
  * kernel's own event stream. `createServer` installs it when no carrier is given.
  */
-export const LocalCarrier: CarrierDef.Handle = Carrier.implement<CarrierDef.Options, []>({
+export const LocalCarrier = Carrier.implement<CarrierDef.Options, []>({
   name: 'server-carrier-local',
   version: pkg.version,
   description: 'In-process carrier',
@@ -27,8 +26,6 @@ export const LocalCarrier: CarrierDef.Handle = Carrier.implement<CarrierDef.Opti
     return { carrier: 'local', transport: 'local' }
   },
 }).build({
-  ...carrierDefaults(),
-
   *hosts(service) {
     return (yield* useContext(LocalCarrierRef)).served.has(service)
   },

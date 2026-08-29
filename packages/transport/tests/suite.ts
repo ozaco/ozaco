@@ -1,6 +1,17 @@
 // oxlint-disable import/exports-last
 import type { Flow, Operation } from 'std:effect'
-import { attempt, createQueue, ensure, fork, race, run, scoped, sleep, until } from 'std:effect'
+import {
+  attempt,
+  createQueue,
+  ensure,
+  fork,
+  race,
+  run,
+  scoped,
+  sleep,
+  until,
+  useContext,
+} from 'std:effect'
 import { install } from 'std:plugin'
 import { fail, isFailure, unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
@@ -77,7 +88,7 @@ export const runTransportSuite = (target: TransportTarget): void => {
         await run(function* () {
           yield* installIo()
           yield* target.install()
-          const info = yield* Transport.actions.describe()
+          const info = yield* useContext(Transport)
           expect(info.transport).toBe(target.label)
           expect(info.capabilities.receipts).toBe(target.expect.receipts)
           expect(info.capabilities.requestReply).toBe(target.expect.requestReply)
@@ -791,7 +802,7 @@ export const runTransportSuite = (target: TransportTarget): void => {
         await run(function* () {
           yield* installIo()
           yield* target.install()
-          const info = yield* Transport.actions.describe()
+          const info = yield* useContext(Transport)
           const limit = info.capabilities.maxPayloadBytes
           if (limit === null) {
             return

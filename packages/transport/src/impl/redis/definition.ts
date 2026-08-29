@@ -6,13 +6,7 @@ import type { AnyType } from 'std:shared'
 
 import { JsonCodec } from 'std:codec/impl/json'
 import type { TransportDef } from 'transport:core'
-import {
-  isValidPrefix,
-  Transport,
-  transportActions,
-  transportDefaults,
-  TransportErrors,
-} from 'transport:core'
+import { isValidPrefix, Transport, transportActions, TransportErrors } from 'transport:core'
 
 import pkg from '../../../package.json'
 
@@ -28,10 +22,7 @@ import { redisImpl } from './utils'
  * what dead members left pending), `PUBLISH` receipts give instant `no-responders`. Two
  * connections: commands + a subscriber. `JsonCodec` is installed unless the scope has a codec.
  */
-export const RedisTransport: TransportDef.Handle = Transport.implement<
-  TransportDef.Options,
-  [options: Redis.Options]
->({
+export const RedisTransport = Transport.implement<TransportDef.Options, [options: Redis.Options]>({
   name: 'transport-redis',
   version: pkg.version,
   description: 'Redis transport over pub/sub + Streams',
@@ -81,7 +72,4 @@ export const RedisTransport: TransportDef.Handle = Transport.implement<
 
     return { transport: 'redis', prefix: options.prefix, capabilities: driver.capabilities }
   },
-}).build({
-  ...transportDefaults(),
-  ...transportActions(driver),
-})
+}).build(transportActions(driver))

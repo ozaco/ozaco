@@ -1,6 +1,6 @@
 import { createServer, Server } from 'server:core'
 import { report } from 'server:internal'
-import { attempt, run, sleep, until } from 'std:effect'
+import { attempt, run, sleep, until, useContext } from 'std:effect'
 import { unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
 
@@ -201,7 +201,7 @@ describe('observe/openobserve', () => {
           ],
         })
         yield* server.start()
-        const kernel = yield* Server.actions.describe()
+        const kernel = yield* useContext(Server)
         yield* report(kernel, {
           t: 'domain',
           row: { stream: 'audit', actor: 'u-ada', verb: 'document.signed', document: 'd-1' },

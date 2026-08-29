@@ -273,7 +273,7 @@ export namespace Database {
 
     /** Pin this client to one adapter plugin (`install(DbClient, { adapter: PgAdapter, … })`).
      * Default: the routed `DbAdapter` dispatch — the most recently installed adapter. */
-    readonly adapter?: Adapter.Handle | undefined
+    readonly adapter?: Adapter | undefined
 
     /** `'auto'` (default) reconciles the schema at install; `'manual'` defers to
      * `Db.actions.migrate()`. */

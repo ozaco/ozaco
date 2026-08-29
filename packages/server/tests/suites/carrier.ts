@@ -1,7 +1,7 @@
 // oxlint-disable import/exports-last
 import { action, createServer, Server, ServerErrors, service, stream } from 'server:core'
 import type { Operation } from 'std:effect'
-import { attempt, createQueue, ensure, fork, run, scoped, sleep } from 'std:effect'
+import { attempt, createQueue, ensure, fork, run, scoped, sleep, useContext } from 'std:effect'
 import { fail, unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
 
@@ -191,7 +191,7 @@ export const runCarrierSuite = (target: CarrierTarget): void => {
             expect(seen).toEqual(['started', 'ended'])
 
             // observability: the remote hop is a carrier span under the local request
-            const kernel = yield* Server.actions.describe()
+            const kernel = yield* useContext(Server)
             expect(kernel.carrier).not.toBeNull()
           })
           yield* remote.halt()

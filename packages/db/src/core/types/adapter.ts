@@ -4,6 +4,11 @@ import type { AnyType } from 'std:shared'
 
 import type { Spec } from './spec'
 
+/** A built adapter plugin (`MemoryAdapter`, `PgAdapter`, …) — pass one as
+ * `Database.Options.adapter` to pin a `DbClient` to it when several adapters share a scope.
+ * Install options are the impl's own, so the argument list stays open. */
+export type Adapter = Plugin<Adapter.Context, AnyType[], Adapter.Actions>
+
 /**
  * The `DbAdapter` protocol surface: what a database+driver binding (`db:impl/*`) implements.
  * Specs are portable data; values crossing this boundary are app-level (`Date` for `timestamp`,
@@ -31,6 +36,9 @@ export namespace Adapter {
     readonly capabilities: Capabilities
   }
 
+  /** What the install resolves is exactly {@link Options} here. */
+  export type Context = Options
+
   /** The live storage shape of one table (introspection), or `null` when the table is absent. */
   /** One live column: its backend-native type (lowercase; `null` when the backend does not
    * say) and, for a declared column, the native type its declared kind compiles to on this
@@ -51,14 +59,11 @@ export namespace Adapter {
     readonly rowCount: number
   }
 
-  /** The adapter contract. `describe` resolves the impl's {@link Info} (a protocol default —
-   * adapters never implement it); `transaction`/`raw` are capability-gated with failing protocol
+  /** The adapter contract. `transaction`/`raw` are capability-gated with failing protocol
    * defaults, so an adapter only implements what its backend supports. Reactivity is NOT an
    * adapter concern: every backend is plain write-through storage, the core owns change tracking. */
 
   export interface Actions {
-    /** The installed impl's identity + capabilities. */
-    describe(): Operation<Options>
     find(spec: Spec.Find): Operation<readonly Spec.Doc[]>
     count(spec: Spec.Count): Operation<number>
 
@@ -92,9 +97,5 @@ export namespace Adapter {
   }
 
   /** The actions every adapter gets for free from {@link Actions} (`adapterDefaults`). */
-  export type Defaults = Pick<Actions, 'describe' | 'transaction' | 'raw'>
-
-  /** A built adapter plugin (`MemoryAdapter`, `PgAdapter`, …) — pass one as `Database.Options.adapter`
-   * to pin a `DbClient` to it when several adapters share a scope. */
-  export type Handle = Plugin<Options, AnyType[], Actions>
+  export type Defaults = Pick<Actions, 'transaction' | 'raw'>
 }

@@ -1,4 +1,3 @@
-import type { Operation } from 'std:effect'
 import type { Protocol } from 'std:plugin'
 import { defineProtocol } from 'std:plugin'
 import { fail } from 'std:result'
@@ -40,12 +39,6 @@ export const Edge: Protocol<EdgeDef.Options, EdgeDef.Actions> = defineProtocol<
 
   cloneable: true,
   subtype: SERVER_EDGE,
-
-  defaults: {
-    *describe(): Operation<EdgeDef.Options> {
-      return yield* (Edge as Protocol<EdgeDef.Options>).context.expect()
-    },
-  },
 })
 
 /**
@@ -63,12 +56,6 @@ export const Carrier: Protocol<CarrierDef.Options, CarrierDef.Actions> = defineP
 
   cloneable: true,
   subtype: SERVER_CARRIER,
-
-  defaults: {
-    *describe(): Operation<CarrierDef.Options> {
-      return yield* (Carrier as Protocol<CarrierDef.Options>).context.expect()
-    },
-  },
 })
 
 /** The owner-side outcome store (`MemoryOutcomes` in core, `DbOutcomes` over the db). */
@@ -82,12 +69,6 @@ export const Outcomes: Protocol<OutcomesDef.Options, OutcomesDef.Actions> = defi
 
   cloneable: true,
   subtype: SERVER_OUTCOMES,
-
-  defaults: {
-    *describe(): Operation<OutcomesDef.Options> {
-      return yield* (Outcomes as Protocol<OutcomesDef.Options>).context.expect()
-    },
-  },
 })
 
 /**
@@ -106,9 +87,6 @@ export const Observe: Protocol<ObserveDef.Options, ObserveDef.Actions> = defineP
   subtype: SERVER_OBSERVE,
 
   defaults: {
-    *describe(): Operation<ObserveDef.Options> {
-      return yield* (Observe as Protocol<ObserveDef.Options>).context.expect()
-    },
     *record() {},
     *request() {
       return yield* fail(ServerErrors.Unsupported, 'no observe store is installed')

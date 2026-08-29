@@ -1,4 +1,3 @@
-// oxlint-disable import/exports-last
 import type { Operation } from 'std:effect'
 import type { Result } from 'std:result'
 

@@ -1,6 +1,5 @@
 import type { Operation } from 'std:effect'
 import type { EventEmitter } from 'std:event'
-import type { Plugin } from 'std:plugin'
 
 import type { TransportDef } from 'transport:core'
 
@@ -16,7 +15,7 @@ export namespace Bus {
     /** The transport plugin to carry envelopes (pinned: `transport.actions.*`). Default: the
      * most recently installed transport (routed `Transport.actions.*`). Install it BEFORE the
      * bus. */
-    readonly transport?: TransportDef.Handle | undefined
+    readonly transport?: TransportDef | undefined
 
     /** The transport topic envelopes travel on (under the transport's application prefix).
      * Default `'db.change'`. */
@@ -27,12 +26,13 @@ export namespace Bus {
    * arrive on (`events.emit('change', envelope)` for every message from a peer). */
 
   export interface Context {
-    readonly transport: string
+    /** the carrier's name (`'nats'`, `'memory'`, …) as its install resolved it. */
+    readonly transportName: string
     readonly topic: string
     readonly events: EventEmitter<Events>
 
-    /** the carrier's data plane, bound at install (pinned or routed). */
-    readonly carrier: Pick<TransportDef.Actions, 'publish'>
+    /** the carrier itself, bound at install (pinned or routed). */
+    readonly transport: TransportDef
   }
 
   /** One shipment between nodes: a node's committed writes under a monotonic per-origin `seq`
@@ -102,11 +102,5 @@ export namespace Bus {
   export interface Actions {
     /** Ship one envelope to the peers through the carrier. */
     publish(envelope: Envelope): Operation<void>
-
-    /** The bus's carrier, topic and inbound emitter. */
-    describe(): Operation<Context>
   }
-
-  /** The built bus plugin. */
-  export type Handle = Plugin<Context, [options?: Options], Actions>
 }

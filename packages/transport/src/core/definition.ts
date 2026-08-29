@@ -1,4 +1,3 @@
-import type { Operation } from 'std:effect'
 import { defineProtocol } from 'std:plugin'
 
 import pkg from '../../package.json'
@@ -21,10 +20,4 @@ export const Transport = defineProtocol<TransportDef.Options, TransportDef.Actio
 
   cloneable: true,
   subtype: TRANSPORT,
-
-  defaults: {
-    *describe(): Operation<TransportDef.Options> {
-      return yield* Transport.context.expect()
-    },
-  },
 })

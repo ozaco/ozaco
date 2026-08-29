@@ -5,6 +5,10 @@ import type { AnyType } from 'std:shared'
 import type { StreamDef } from './stream'
 import type { WireDef } from './wire'
 
+/** A built carrier plugin (`LocalCarrier`, `NetworkCarrier`) — install options are the impl's
+ * own, so the argument list stays open. */
+export type CarrierDef = Plugin<CarrierDef.Context, AnyType[], CarrierDef.Actions>
+
 /**
  * The carrier protocol: how a dispatch reaches a service hosted on another node (and how a
  * node serves its own). `LocalCarrier` (core) answers only in-process; `NetworkCarrier`
@@ -17,6 +21,9 @@ export namespace CarrierDef {
     /** the transport name behind it (`memory`, `nats`, …) or `local`. */
     readonly transport: string
   }
+
+  /** What the install resolves is exactly {@link Options} here. */
+  export type Context = Options
 
   /** An input stream the caller pipes alongside the dispatch. */
   export interface InputLane {
@@ -68,8 +75,6 @@ export namespace CarrierDef {
   }
 
   export interface Actions {
-    describe(): Operation<Options>
-
     /** Whether a service is reachable through this carrier (somewhere) — a live member exists. */
     hosts(service: string): Operation<boolean>
 
@@ -93,8 +98,4 @@ export namespace CarrierDef {
     cancel(cid: string): Operation<void>
     status(): Flow<'connected' | 'reconnecting' | 'closed', void>
   }
-
-  export type Defaults = Pick<Actions, 'describe'>
-
-  export type Handle = Plugin<Options, AnyType[], Actions>
 }

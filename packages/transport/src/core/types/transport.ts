@@ -4,6 +4,10 @@ import type { Plugin } from 'std:plugin'
 import type { Result } from 'std:result'
 import type { AnyType } from 'std:shared'
 
+/** A built transport plugin (`MemoryTransport`, `NatsTransport`, …) — install options are the
+ * impl's own, so the argument list stays open. */
+export type TransportDef = Plugin<TransportDef.Context, AnyType[], TransportDef.Actions>
+
 /**
  * The `Transport` protocol surface: one topic-addressed messaging contract with five carrying
  * shapes (data, event, flow, stream, package) over any backend. Impls are thin drivers
@@ -41,6 +45,9 @@ export namespace TransportDef {
     readonly prefix: string
     readonly capabilities: Capabilities
   }
+
+  /** What the install resolves is exactly {@link Options} here. */
+  export type Context = Options
 
   /** The install options every backend shares. */
   export interface CommonOptions {
@@ -125,9 +132,6 @@ export namespace TransportDef {
 
   /** The five planes + lifecycle. */
   export interface Actions {
-    /** The installed impl's identity + capabilities. */
-    describe(): Operation<Options>
-
     // --- data ---------------------------------------------------------------------------------
     /** Publish one codec-encoded value (a `Uint8Array` goes raw). */
     publish<T>(topic: Topic, value: T, options?: PublishOptions): Operation<void>
@@ -187,12 +191,6 @@ export namespace TransportDef {
   export type Events<T> = {
     message: [message: Message<T>]
   }
-
-  /** The actions every impl gets for free (`transportDefaults`): only `describe`. */
-  export type Defaults = Pick<Actions, 'describe'>
-
-  /** A built transport plugin. */
-  export type Handle = Plugin<Options, AnyType[], Actions>
 
   // --- driver ---------------------------------------------------------------------------------
 

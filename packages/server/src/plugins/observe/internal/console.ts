@@ -9,7 +9,7 @@ import { CONSOLE_HTML } from './console.gen'
  * step at runtime). Its data rides the REAL `observe` service (`/_observe/api/*`), mounted with
  * every other action — this route only serves the page.
  */
-export function* mountConsole(edge: EdgeDef.Handle): Operation<void> {
+export function* mountConsole(edge: EdgeDef): Operation<void> {
   yield* edge.actions.raw({
     method: 'GET',
     path: OBSERVE_CONSOLE_PATH,

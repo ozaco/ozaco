@@ -20,9 +20,7 @@ import { namespaced } from './topic'
  * `driver` functions read the impl's own scope-bound state, so one factory call per impl module
  * serves every install of it.
  */
-export const transportActions = (
-  backend: TransportDef.Driver,
-): Omit<TransportDef.Actions, 'describe'> => {
+export const transportActions = (backend: TransportDef.Driver): TransportDef.Actions => {
   const driver = chunkedDriver(backend)
   const runtime: Helpers.Runtime = { driver }
 
@@ -135,5 +133,5 @@ export const transportActions = (
     *drain() {
       yield* driver.drain()
     },
-  } as Omit<TransportDef.Actions, 'describe'>
+  } as TransportDef.Actions
 }

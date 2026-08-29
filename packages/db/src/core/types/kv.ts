@@ -1,6 +1,4 @@
 import type { Operation } from 'std:effect'
-import type { Plugin } from 'std:plugin'
-import type { AnyType } from 'std:shared'
 
 /**
  * The `Kv` protocol surface: a namespaced key/value store with TTLs, tags and atomic counters
@@ -71,9 +69,6 @@ export namespace KvDef {
   }
 
   export interface Actions {
-    /** The installed impl's identity, prefix and capabilities. */
-    describe(): Operation<Options>
-
     get<T>(key: string): Operation<T | undefined>
     set<T>(key: string, value: T, options?: SetOptions): Operation<void>
 
@@ -110,12 +105,6 @@ export namespace KvDef {
     /** Remove every key of this install's namespace; resolves how many were removed. */
     clear(): Operation<number>
   }
-
-  /** The actions every impl gets for free (`kvDefaults`): only `describe`. */
-  export type Defaults = Pick<Actions, 'describe'>
-
-  /** A built Kv store plugin. */
-  export type Handle = Plugin<Options, AnyType[], Actions>
 
   // --- driver ---------------------------------------------------------------------------------
 

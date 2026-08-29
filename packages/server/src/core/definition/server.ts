@@ -99,10 +99,6 @@ const ServerImpl = Server.implement<ServerDef.Context, [options: ServerDef.Optio
 })
 
 export const ServerClient: ServerDef.Client = ServerImpl.build({
-  *describe() {
-    return yield* Server.context.expect()
-  },
-
   *dispatch(call) {
     const kernel = yield* Server.context.expect()
     if (!kernel.hosted.has(call.service) && kernel.registry.services.has(call.service)) {

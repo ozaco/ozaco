@@ -1,6 +1,5 @@
 import { fail } from 'std:result'
 
-import { DbAdapter } from '../definition/protocol'
 import { DbErrors } from '../errors'
 import type { Adapter } from '../types/adapter'
 
@@ -10,9 +9,6 @@ import type { Adapter } from '../types/adapter'
  * `DbAdapter.implement({...}).build({ ...adapterDefaults('x'), find, … })`.
  */
 export const adapterDefaults = (adapter: string): Adapter.Defaults => ({
-  *describe() {
-    return yield* DbAdapter.context.expect()
-  },
   *transaction() {
     return yield* fail(
       DbErrors.Unsupported,

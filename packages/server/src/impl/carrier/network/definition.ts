@@ -1,12 +1,9 @@
 import type { CarrierDef, WireDef } from 'server:core'
 import { Carrier, Server, ServerErrors } from 'server:core'
-import { carrierDefaults } from 'server:internal'
 import type { Operation } from 'std:effect'
 import { attempt, createQueue, ensure, fork, useContext } from 'std:effect'
 import { fail, isFailure } from 'std:result'
-import type { AnyType } from 'std:shared'
 
-import type { TransportDef } from 'transport:core'
 import { Transport } from 'transport:core'
 
 import pkg from '../../../../package.json'
@@ -31,7 +28,7 @@ import type { NetworkCarrierDef } from './types'
  * the transport's own request-halt propagation. Failures keep their tags; transport failures
  * become `server.unavailable` / `server.timeout-pending`.
  */
-export const NetworkCarrier: CarrierDef.Handle = Carrier.implement<
+export const NetworkCarrier = Carrier.implement<
   CarrierDef.Options,
   [options?: NetworkCarrierDef.Options]
 >({
@@ -40,9 +37,8 @@ export const NetworkCarrier: CarrierDef.Handle = Carrier.implement<
   description: 'Cross-node carrier over @ozaco/transport',
 
   *setup(options) {
-    const actions: TransportDef.Actions = (options?.transport?.actions ??
-      Transport.actions) as AnyType
-    const described = yield* attempt(() => actions.describe())
+    const transport = options?.transport ?? Transport
+    const described = yield* attempt(() => useContext(transport))
     if (isFailure(described)) {
       return yield* fail(
         ServerErrors.Configuration,
@@ -53,7 +49,7 @@ export const NetworkCarrier: CarrierDef.Handle = Carrier.implement<
     const kernel = yield* Server.context.get()
     const heartbeatMs = options?.presence === false ? 0 : (options?.presence?.heartbeatMs ?? 5000)
     const state: NetworkCarrierDef.State = {
-      actions,
+      actions: transport.actions,
       transport: described.value.transport,
       laneTimeoutMs: options?.laneTimeoutMs ?? 5000,
       jobs: createQueue(),
@@ -90,8 +86,6 @@ export const NetworkCarrier: CarrierDef.Handle = Carrier.implement<
     return { carrier: 'network', transport: state.transport }
   },
 }).build({
-  ...carrierDefaults(),
-
   *hosts(service) {
     const state = yield* useContext(StateRef)
     if (!state.presence) {

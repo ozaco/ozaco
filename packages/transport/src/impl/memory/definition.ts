@@ -5,13 +5,7 @@ import { fail } from 'std:result'
 
 import { JsonCodec } from 'std:codec/impl/json'
 import type { TransportDef } from 'transport:core'
-import {
-  isValidPrefix,
-  Transport,
-  transportActions,
-  transportDefaults,
-  TransportErrors,
-} from 'transport:core'
+import { isValidPrefix, Transport, transportActions, TransportErrors } from 'transport:core'
 
 import pkg from '../../../package.json'
 
@@ -26,42 +20,38 @@ import { createLink } from './utils'
  * until acked). No native request/reply (core emulates it). `JsonCodec` is installed unless the
  * scope has a codec.
  */
-export const MemoryTransport: TransportDef.Handle = Transport.implement<
-  TransportDef.Options,
-  [options: Memory.Options]
->({
-  name: 'transport-memory',
-  version: pkg.version,
-  description: 'In-process transport over a shared link',
+export const MemoryTransport = Transport.implement<TransportDef.Options, [options: Memory.Options]>(
+  {
+    name: 'transport-memory',
+    version: pkg.version,
+    description: 'In-process transport over a shared link',
 
-  *setup(options) {
-    if (!(yield* hasCodec())) {
-      yield* install(JsonCodec)
-    }
+    *setup(options) {
+      if (!(yield* hasCodec())) {
+        yield* install(JsonCodec)
+      }
 
-    if (!isValidPrefix(options.prefix)) {
-      return yield* fail(TransportErrors.Configuration, `invalid prefix "${options.prefix}"`)
-    }
+      if (!isValidPrefix(options.prefix)) {
+        return yield* fail(TransportErrors.Configuration, `invalid prefix "${options.prefix}"`)
+      }
 
-    const link = options.link ?? createLink()
-    const state: Memory.State = {
-      link,
-      prefix: options.prefix,
-      maxPayloadBytes: options.maxPayloadBytes ?? null,
-      status: 'connected',
-      outbox: [],
-      watchers: new Set(),
-    }
+      const link = options.link ?? createLink()
+      const state: Memory.State = {
+        link,
+        prefix: options.prefix,
+        maxPayloadBytes: options.maxPayloadBytes ?? null,
+        status: 'connected',
+        outbox: [],
+        watchers: new Set(),
+      }
 
-    link.states.add(state)
-    yield* ensure(() => {
-      link.states.delete(state)
-    })
-    yield* StateRef.set(state)
+      link.states.add(state)
+      yield* ensure(() => {
+        link.states.delete(state)
+      })
+      yield* StateRef.set(state)
 
-    return { transport: 'memory', prefix: options.prefix, capabilities: driver.capabilities }
+      return { transport: 'memory', prefix: options.prefix, capabilities: driver.capabilities }
+    },
   },
-}).build({
-  ...transportDefaults(),
-  ...transportActions(driver),
-})
+).build(transportActions(driver))

@@ -5,6 +5,10 @@ import type { AnyType, StandardSchemaV1 } from 'std:shared'
 import type { ServerDef } from './server'
 import type { ServiceDef } from './service'
 
+/** A built edge plugin (`BunEdge`, `NodeEdge`, …) — install options are the impl's own, so the
+ * argument list stays open. */
+export type EdgeDef = Plugin<EdgeDef.Context, AnyType[], EdgeDef.Actions>
+
 /**
  * The edge protocol: the HTTP/WebSocket face of a server. The ENGINE (routing, body parsing,
  * branded stream bodies, SSE, sockets, request ids, decorators) lives in core over the web
@@ -14,6 +18,9 @@ export namespace EdgeDef {
   export interface Options {
     readonly runtime: string
   }
+
+  /** What the install resolves is exactly {@link Options} here. */
+  export type Context = Options
 
   export interface ListenOptions {
     readonly port?: number | undefined
@@ -107,7 +114,6 @@ export namespace EdgeDef {
   }
 
   export interface Actions {
-    describe(): Operation<Options>
     listen(options?: ListenOptions): Operation<ListenInfo>
     stop(): Operation<void>
 
@@ -127,10 +133,6 @@ export namespace EdgeDef {
     handle(request: Request): Operation<Response>
     info(): Operation<ListenInfo | null>
   }
-
-  export type Defaults = Pick<Actions, 'describe'>
-
-  export type Handle = Plugin<Options, AnyType[], Actions>
 
   // --- driver ---------------------------------------------------------------------------------
 

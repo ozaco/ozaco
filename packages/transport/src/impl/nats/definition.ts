@@ -7,13 +7,7 @@ import type { AnyType } from 'std:shared'
 import { jetstream, jetstreamManager } from '@nats-io/jetstream'
 import { JsonCodec } from 'std:codec/impl/json'
 import type { TransportDef } from 'transport:core'
-import {
-  isValidPrefix,
-  Transport,
-  transportActions,
-  transportDefaults,
-  TransportErrors,
-} from 'transport:core'
+import { isValidPrefix, Transport, transportActions, TransportErrors } from 'transport:core'
 
 import pkg from '../../../package.json'
 
@@ -30,10 +24,7 @@ import { natsImpl } from './utils'
  * native `nc.request`, queue groups, `no-responders` from the server. The connection closes
  * with the scope; `drain()` flushes first. `JsonCodec` is installed unless the scope has a codec.
  */
-export const NatsTransport: TransportDef.Handle = Transport.implement<
-  TransportDef.Options,
-  [options: Nats.Options]
->({
+export const NatsTransport = Transport.implement<TransportDef.Options, [options: Nats.Options]>({
   name: 'transport-nats',
   version: pkg.version,
   description: 'NATS transport over @nats-io JetStream (one stream per application prefix)',
@@ -111,7 +102,4 @@ export const NatsTransport: TransportDef.Handle = Transport.implement<
       capabilities: { ...driver.capabilities, maxPayloadBytes: state.nc.info?.max_payload ?? null },
     }
   },
-}).build({
-  ...transportDefaults(),
-  ...transportActions(driver),
-})
+}).build(transportActions(driver))

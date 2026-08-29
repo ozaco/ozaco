@@ -2,7 +2,7 @@
 import type { KvDef } from 'db:core'
 import { Kv, KvErrors } from 'db:core'
 import type { Operation } from 'std:effect'
-import { all, attempt, createQueue, fork, run, scoped, sleep } from 'std:effect'
+import { all, attempt, createQueue, fork, run, scoped, sleep, useContext } from 'std:effect'
 import { fail, isFailure, unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
 
@@ -36,7 +36,7 @@ export const runKvSuite = (target: KvTarget): void => {
       unwrap(
         await run(function* () {
           yield* target.install()
-          const info = yield* Kv.actions.describe()
+          const info = yield* useContext(Kv)
           expect(info.store).toBe(target.label)
           expect(info.prefix).toBe('suite')
           expect(info.capabilities.persistent).toBe(target.expect.persistent)

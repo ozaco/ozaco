@@ -54,7 +54,7 @@ export function* createServer<const TServices extends readonly ServiceDef.Servic
   // the carrier first: plugins may lean on it at setup (observe forward/collect, presence)
   if (options.carrier) {
     yield* installEntry(options.carrier)
-    kernel.carrier = pluginOf(options.carrier) as CarrierDef.Handle
+    kernel.carrier = pluginOf(options.carrier) as CarrierDef
   } else {
     yield* install(LocalCarrier)
     kernel.carrier = LocalCarrier

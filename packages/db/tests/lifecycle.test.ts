@@ -1,6 +1,6 @@
 import { DbAdapter, DbClient, DbErrors } from 'db:core'
 import { tableSpecOf } from 'db:internal'
-import { attempt, run, scoped } from 'std:effect'
+import { attempt, run, scoped, useContext } from 'std:effect'
 import { install } from 'std:plugin'
 import { isFailure, unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
@@ -34,13 +34,13 @@ describe('plugin lifecycle', () => {
         yield* install(MemoryAdapter)
         yield* install(SqliteAdapter)
         // the routed protocol dispatch resolves the most recently installed adapter
-        expect((yield* DbAdapter.actions.describe()).adapter).toBe('sqlite')
+        expect((yield* useContext(DbAdapter)).adapter).toBe('sqlite')
         // a pinned handle always targets its own impl, whatever was installed after it
-        expect((yield* MemoryAdapter.actions.describe()).adapter).toBe('memory')
+        expect((yield* useContext(MemoryAdapter)).adapter).toBe('memory')
 
         yield* install(BunIO)
         const routed = yield* install(DbClient, { tables: [users] })
-        const routedInfo = yield* DbAdapter.actions.describe()
+        const routedInfo = yield* useContext(DbAdapter)
         expect(routedInfo.capabilities.raw).toBe(true)
         yield* routed.insert('users', { name: 'ada' })
         expect(yield* routed.query('users').count()).toBe(1)

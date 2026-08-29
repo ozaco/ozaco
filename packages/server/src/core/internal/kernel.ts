@@ -1,8 +1,8 @@
 // oxlint-disable import/exports-last
 import type { Operation } from 'std:effect'
-import { attempt, ensure } from 'std:effect'
-import { install, isUse } from 'std:plugin'
+import { attempt, ensure, useContext } from 'std:effect'
 import type { Plugin } from 'std:plugin'
+import { install, isUse } from 'std:plugin'
 import { fail, isFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
 
@@ -54,7 +54,7 @@ export function* callRemote(
       kind: 'carrier',
       name: `${remote.service}.${remote.action}`,
       actionId: `${remote.service}.${remote.action}`,
-      transport: (yield* carrier.actions.describe()).transport,
+      transport: (yield* useContext(carrier)).transport,
     },
     function* () {
       const sent = yield* carrier.actions.send(dispatch, inputs)
@@ -67,7 +67,7 @@ export function* callRemote(
   )
 }
 
-export function* carrierOf(kernel: ServerDef.Context): Operation<CarrierDef.Handle> {
+export function* carrierOf(kernel: ServerDef.Context): Operation<CarrierDef> {
   if (!kernel.carrier) {
     return yield* fail(ServerErrors.Configuration, 'the server has no carrier yet (createServer)')
   }
@@ -212,9 +212,7 @@ export const serverFor = (
       input = { fields: dispatch.args, streams }
     }
     const controller = new AbortController()
-    const carrierName = kernel.carrier
-      ? (yield* kernel.carrier.actions.describe()).transport
-      : 'local'
+    const carrierName = kernel.carrier ? (yield* useContext(kernel.carrier)).transport : 'local'
 
     const call: ServerDef.Call = {
       cid: dispatch.cid,
