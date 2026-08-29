@@ -8,8 +8,7 @@
     "url": "git+https://github.com/ozaco/ozaco.git"
   },
   "files": [
-    "dist",
-    "src"
+    "dist"
   ],
   "type": "module",
   "exports": {

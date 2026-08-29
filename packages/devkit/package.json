@@ -9,7 +9,6 @@
   },
   "files": [
     "dist",
-    "src",
     "ambient.d.ts"
   ],
   "type": "module",

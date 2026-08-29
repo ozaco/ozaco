@@ -7,7 +7,7 @@
     /* Moonrepo */
     "composite": true,
     "declaration": true,
-    "declarationMap": true,
+    "declarationMap": false,
     "emitDeclarationOnly": true,
     "emitDecoratorMetadata": true,
 
