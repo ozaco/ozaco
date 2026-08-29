@@ -18,13 +18,21 @@ const db = dbResolve.rolldown()
 const resolved = (plugin: typeof std, source: string): unknown =>
   (plugin.resolveId as (id: string) => unknown)(source)
 
-const rendered = (plugin: typeof std, code: string, fileName: string): string | null => {
+interface Rendered {
+  readonly code: string
+  readonly map?: { readonly version: number; readonly mappings: string } | undefined
+}
+
+const render = (plugin: typeof std, code: string, fileName: string): Rendered | null => {
   const out = (plugin.renderChunk as (c: string, chunk: { fileName: string }) => unknown)(code, {
     fileName,
   })
 
-  return out === null || out === undefined ? null : (out as { code: string }).code
+  return out === null || out === undefined ? null : (out as Rendered)
 }
+
+const rendered = (plugin: typeof std, code: string, fileName: string): string | null =>
+  render(plugin, code, fileName)?.code ?? null
 
 describe('devkit — resolve', () => {
   it('accepts the alias AND the package specifier, and answers the package form', () => {
@@ -73,5 +81,22 @@ describe('devkit — resolve', () => {
     expect(rendered(inlined, `import("std:shared")`, 'index.d.ts')).toBeNull()
     expect(resolved(inlined, 'std:shared')).toBe('./src/shared/index.ts')
     expect(resolved(inlined, '@ozaco/std/shared')).toBe('./src/shared/index.ts')
+  })
+
+  it('ships a line-identity sourcemap with the rewrite', () => {
+    // a transform that returns no map makes the bundler warn (SOURCEMAP_BROKEN) and drops the
+    // declaration map for that chunk — the rewrite never moves a line, so it can say exactly that
+    const dts = ['declare const a: import("std:shared").Tags;', 'declare const b: number;'].join(
+      '\n',
+    )
+
+    const out = render(std, dts, 'index.d.ts')!
+
+    expect(out.code).toContain('@ozaco/std/shared')
+    expect(out.map?.version).toBe(3)
+
+    // one mapping entry per line, and no line-count drift
+    expect(out.map?.mappings.split(';')).toHaveLength(dts.split('\n').length)
+    expect(out.code.split('\n')).toHaveLength(dts.split('\n').length)
   })
 })

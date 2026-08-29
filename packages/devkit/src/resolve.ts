@@ -143,6 +143,26 @@ const escapeRe = (value: string): string =>
 const quoted = (specifier: string): RegExp =>
   new RegExp(`(["'])${escapeRe(specifier)}${String.raw`\1`}`, 'gu')
 
+/**
+ * The rewrite only ever makes a specifier longer INSIDE its line — it never adds or removes one —
+ * so a line-identity map keeps every declaration pointing at the line it came from, which is what
+ * a `.d.ts.map` is read for. Emitting it is also what stops the bundler warning that a transform
+ * ran without one.
+ */
+const lineIdentityMap = (code: string, fileName: string) => ({
+  version: 3 as const,
+  file: fileName,
+  sources: [fileName],
+  sourcesContent: [code],
+  names: [],
+
+  // `AAAA` = column 0 → source 0, line +0, column 0; `AACA` repeats it one line further down
+  mappings: code
+    .split('\n')
+    .map((_line, at) => (at === 0 ? 'AAAA' : 'AACA'))
+    .join(';'),
+})
+
 const isDeclaration = (fileName: string): boolean =>
   fileName.endsWith('.d.ts') || fileName.endsWith('.d.cts') || fileName.endsWith('.d.mts')
 
@@ -199,7 +219,7 @@ const resolveFactory = (name: string) => (bindings: readonly Binding[], external
         out = out.replaceAll(pattern, `$1${to}$1`)
       }
 
-      return out === code ? null : { code: out }
+      return out === code ? null : { code: out, map: lineIdentityMap(code, chunk.fileName) }
     },
   }
 }
