@@ -17,7 +17,7 @@
     },
     "apps/observe": {
       "name": "@ozaco/observe",
-      "version": "0.4.2",
+      "version": "0.4.3",
       "devDependencies": {
         "@ozaco/client": "workspace:*",
         "@ozaco/devkit": "workspace:*",
@@ -36,7 +36,7 @@
     },
     "apps/panel": {
       "name": "@ozaco/panel",
-      "version": "0.4.2",
+      "version": "0.4.3",
       "devDependencies": {
         "@ozaco/client": "workspace:*",
         "@ozaco/devkit": "workspace:*",
@@ -73,7 +73,7 @@
     },
     "packages/ai": {
       "name": "@ozaco/ai",
-      "version": "0.3.1",
+      "version": "0.3.2",
       "devDependencies": {
         "@ozaco/std": "workspace:*",
         "tsdown": "catalog:build",
@@ -85,7 +85,7 @@
     },
     "packages/cli": {
       "name": "@ozaco/cli",
-      "version": "0.4.1",
+      "version": "0.4.2",
       "devDependencies": {
         "@ozaco/std": "workspace:*",
         "tsdown": "catalog:build",
@@ -102,7 +102,7 @@
     },
     "packages/client": {
       "name": "@ozaco/client",
-      "version": "0.4.3",
+      "version": "0.4.4",
       "devDependencies": {
         "@ozaco/db": "workspace:*",
         "@ozaco/server": "workspace:*",
@@ -118,7 +118,7 @@
     },
     "packages/db": {
       "name": "@ozaco/db",
-      "version": "0.4.3",
+      "version": "0.4.4",
       "devDependencies": {
         "@ozaco/std": "workspace:*",
         "@ozaco/transport": "workspace:*",
@@ -142,7 +142,7 @@
     },
     "packages/devkit": {
       "name": "@ozaco/devkit",
-      "version": "0.3.1",
+      "version": "0.3.2",
       "devDependencies": {
         "@ozaco/ai": "workspace:*",
         "@ozaco/cli": "workspace:*",
@@ -167,7 +167,7 @@
     },
     "packages/server": {
       "name": "@ozaco/server",
-      "version": "0.4.6",
+      "version": "0.4.7",
       "dependencies": {
         "@fastify/busboy": "^3.2.2",
         "jose": "^6.2.10",
@@ -195,7 +195,7 @@
     },
     "packages/std": {
       "name": "@ozaco/std",
-      "version": "0.4.1",
+      "version": "0.4.2",
       "dependencies": {
         "@streamparser/json": "0.0.26",
       },
@@ -216,7 +216,7 @@
     },
     "packages/transport": {
       "name": "@ozaco/transport",
-      "version": "0.2.2",
+      "version": "0.2.3",
       "devDependencies": {
         "@nats-io/jetstream": "^3.4.0",
         "@nats-io/nats-core": "^3.4.0",
