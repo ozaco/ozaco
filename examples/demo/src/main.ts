@@ -1,6 +1,6 @@
 /** `bun run src/main.ts` — one node, shaped by the environment (see app.ts). `main` wires
  * SIGINT/SIGTERM into a graceful shutdown; `ensure` stops the app on the way out. */
-import { ensure, main, suspend } from '@ozaco/std/effect'
+import { ensure, main, suspend } from 'std:effect'
 
 import { createDemo } from './app'
 

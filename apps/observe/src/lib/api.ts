@@ -4,10 +4,10 @@
  * bootstraps from the service's OWN manifest (`GET /_observe/api/manifest`), so the console
  * works with or without the docs plugin — and there is no schema to keep in sync here.
  */
-import type { ClientDef } from '@ozaco/client'
-import { connectClient } from '@ozaco/client'
-import type { FutureFlow } from '@ozaco/std/effect'
-import { unwrap } from '@ozaco/std/result'
+import type { ClientDef } from 'client:core'
+import { connectClient } from 'client:core'
+import type { FutureFlow } from 'std:effect'
+import { unwrap } from 'std:result'
 
 declare global {
   interface Window {
@@ -15,7 +15,7 @@ declare global {
   }
 }
 
-export { wireFailureOf as failureOf } from '@ozaco/client'
+export { wireFailureOf as failureOf } from 'client:core'
 
 // --- the rows as the store writes them ---------------------------------------------------------
 

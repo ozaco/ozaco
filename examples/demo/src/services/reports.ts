@@ -3,11 +3,12 @@
  * invalidation from a mutation, retry with a flaky dependency, a circuit breaker, a bulkhead,
  * singleflight, a rate limit, a per-action timeout with a fallback, and a nested `ctx.call`.
  */
-import { useDb } from '@ozaco/db'
-import { action, refs, service } from '@ozaco/server'
-import type { Operation } from '@ozaco/std/effect'
-import { sleep } from '@ozaco/std/effect'
-import { fail } from '@ozaco/std/result'
+import { useDb } from 'db:core'
+import { action, refs, service } from 'server:core'
+import type { Operation } from 'std:effect'
+import { sleep } from 'std:effect'
+import { fail } from 'std:result'
+
 import { z } from 'zod'
 
 import { todosTable } from '../tables'

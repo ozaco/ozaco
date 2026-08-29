@@ -3,9 +3,10 @@
  * the carrier), `listen` relays events as SSE, and `chat` is a socket DECLARED IN THE SERVICE
  * (`action.socket`, mounted at `/live/chat`) that fans messages out to every client on this node.
  */
-import type { EdgeDef } from '@ozaco/server'
-import { action, Server, service, stream } from '@ozaco/server'
-import { flowOf } from '@ozaco/std/effect'
+import type { EdgeDef } from 'server:core'
+import { action, Server, service, stream } from 'server:core'
+import { flowOf } from 'std:effect'
+
 import { z } from 'zod'
 
 const ChatIn = z.object({ text: z.string() })

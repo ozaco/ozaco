@@ -1,5 +1,6 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "extends": ["./packages/devkit/oxlintrc.json"],
   "categories": {
     "correctness": "error",
     "perf": "error",
@@ -153,6 +154,10 @@
                   "../../app/*"
                 ],
                 "message": "server core must not import impl, plugins or app (layers: core ← impl ← plugins ← app)"
+              },
+              {
+                "group": ["@ozaco/**", "!@ozaco/devkit", "!@ozaco/devkit/**"],
+                "message": "in-repo sources import through the aliases (std:*, transport:*, db:*, server:*, client:*, ai:*, cli:*) — @ozaco/* is the devkit-less form, for examples/apps only"
               }
             ]
           }
@@ -177,6 +182,10 @@
                   "../../../app/*"
                 ],
                 "message": "server impl may import only core"
+              },
+              {
+                "group": ["@ozaco/**", "!@ozaco/devkit", "!@ozaco/devkit/**"],
+                "message": "in-repo sources import through the aliases (std:*, transport:*, db:*, server:*, client:*, ai:*, cli:*) — @ozaco/* is the devkit-less form, for examples/apps only"
               }
             ]
           }
@@ -203,6 +212,10 @@
                   "../../app/*"
                 ],
                 "message": "a server plugin may import only core/impl — never another plugin or the app"
+              },
+              {
+                "group": ["@ozaco/**", "!@ozaco/devkit", "!@ozaco/devkit/**"],
+                "message": "in-repo sources import through the aliases (std:*, transport:*, db:*, server:*, client:*, ai:*, cli:*) — @ozaco/* is the devkit-less form, for examples/apps only"
               }
             ]
           }
@@ -219,6 +232,10 @@
               {
                 "group": ["db:impl/*", "transport:impl/*", "../impl/*", "../../impl/*"],
                 "message": "core must not import impl"
+              },
+              {
+                "group": ["@ozaco/**", "!@ozaco/devkit", "!@ozaco/devkit/**"],
+                "message": "in-repo sources import through the aliases (std:*, transport:*, db:*, server:*, client:*, ai:*, cli:*) — @ozaco/* is the devkit-less form, for examples/apps only"
               }
             ]
           }

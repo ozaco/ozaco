@@ -10,11 +10,12 @@ import { dirname, resolve } from 'node:path'
  *
  * Then point the demo at it:  DB_PATH=local/demo.sqlite moon run demo:start
  */
-import { DbClient } from '@ozaco/db'
-import { SqliteAdapter } from '@ozaco/db/impl/sqlite'
-import { run } from '@ozaco/std/effect'
-import { BunIO } from '@ozaco/std/io/impl/bun'
-import { unwrap } from '@ozaco/std/result'
+import { DbClient } from 'db:core'
+import { run } from 'std:effect'
+import { unwrap } from 'std:result'
+
+import { SqliteAdapter } from 'db:impl/sqlite'
+import { BunIO } from 'std:io/impl/bun'
 
 import { tables } from '../src/tables'
 

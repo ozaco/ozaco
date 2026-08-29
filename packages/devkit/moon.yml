@@ -47,3 +47,6 @@ tasks:
     inputs:
       - src/**/*
       - tests/**/*
+      - ambient.d.ts
+      - oxlintrc.json
+      - package.json

@@ -6,9 +6,9 @@
  * Nothing is threaded in: every method resolves the TYPED handle itself with `useDb(usersTable)`
  * — the rows come back as `{ email, name, password, roles }`, no casts.
  */
-import { useDb } from '@ozaco/db'
-import type { AuthDef } from '@ozaco/server/plugins'
-import type { Operation } from '@ozaco/std/effect'
+import { useDb } from 'db:core'
+import type { AuthDef } from 'server:plugins'
+import type { Operation } from 'std:effect'
 
 import { usersTable } from './tables'
 

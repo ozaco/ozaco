@@ -284,6 +284,77 @@ const cliResolve: UnpluginInstance<ResolveOptions | undefined, false> = createUn
     ),
 )
 
+/** Every family, keyed by the package each one publishes under. */
+const KIT_MODULES: readonly (readonly [Record<string, ModuleEntry>, string])[] = [
+  [STD_MODULES, '@ozaco/std'],
+  [TRANSPORT_MODULES, '@ozaco/transport'],
+  [DB_MODULES, '@ozaco/db'],
+  [SERVER_MODULES, '@ozaco/server'],
+  [CLIENT_MODULES, '@ozaco/client'],
+  [AI_MODULES, '@ozaco/ai'],
+  [CLI_MODULES, '@ozaco/cli'],
+]
+
+/** What a bundler hands back for a specifier it resolved (rollup/rolldown/vite context). */
+interface ResolverContext {
+  resolve?: (
+    source: string,
+    importer?: string,
+    options?: { skipSelf?: boolean },
+  ) => Promise<{ id: string } | null>
+}
+
+interface KitResolveOptions {
+  /** Keep the packages out of the bundle, the way a library build does. Default `false`: an app
+   * bundles its dependencies, so the rewritten specifier goes back into normal resolution. */
+  readonly external?: boolean | undefined
+}
+
+/**
+ * All seven families in ONE plugin — what an application installs. The app writes `db:core` and
+ * the bundler is handed `@ozaco/db`, which it then resolves like any other dependency (the
+ * per-package plugins above are for building the packages THEMSELVES, where the target is that
+ * package's own source).
+ */
+const kitResolve: UnpluginInstance<KitResolveOptions | undefined, false> = createUnplugin(
+  (options?: KitResolveOptions) => {
+    const targets = new Map<string, string>()
+
+    for (const [modules, pkg] of KIT_MODULES) {
+      for (const binding of buildBindings(modules, pkg, undefined)) {
+        targets.set(binding.alias, binding.packageSpecifier)
+      }
+    }
+
+    const external = options?.external ?? false
+
+    return {
+      name: '@ozaco/devkit:resolve:kit',
+      enforce: 'pre' as const,
+
+      async resolveId(source: string, importer?: string) {
+        const target = targets.get(source)
+
+        if (target === undefined) {
+          return
+        }
+
+        if (external) {
+          return { id: target, external: true }
+        }
+
+        // hand the package specifier back to the bundler's own resolution — returning it as-is
+        // would end resolution here, and nothing can load a bare specifier. Where there is no
+        // context to delegate to (webpack, esbuild, a bare unit call) the specifier IS the answer.
+        const context = this as unknown as ResolverContext | undefined
+        const resolved = await context?.resolve?.(target, importer, { skipSelf: true })
+
+        return resolved?.id ?? target
+      },
+    }
+  },
+)
+
 const clientResolve: UnpluginInstance<ResolveOptions | undefined, false> = createUnplugin(
   (options?: ResolveOptions) =>
     resolveFactory('@ozaco/devkit:resolve:client')(
@@ -297,9 +368,10 @@ export {
   clientResolve,
   cliResolve,
   dbResolve,
+  kitResolve,
   resolveAlias,
   serverResolve,
   stdResolve,
   transportResolve,
 }
-export type { ResolveAliasOptions, ResolveOptions }
+export type { KitResolveOptions, ResolveAliasOptions, ResolveOptions }

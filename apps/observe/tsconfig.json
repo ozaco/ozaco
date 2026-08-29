@@ -3,8 +3,17 @@
   "compilerOptions": {
     "jsx": "react-jsx",
     "lib": ["ES2022", "DOM", "DOM.Iterable", "DOM.AsyncIterable"],
-    "types": ["bun", "vite/client"],
-    "noEmit": true
+    "types": ["bun", "vite/client", "@ozaco/devkit"],
+    "noEmit": true,
+
+    // vite gets the aliases from `kitResolve`; these are for `bun test`, which resolves them
+    // through the tsconfig the way any Bun program does
+    "paths": {
+      "std:*": ["./node_modules/@ozaco/std/dist/*"],
+
+      "client:core": ["./node_modules/@ozaco/client/dist/index"],
+      "client:*": ["./node_modules/@ozaco/client/dist/*"]
+    }
   },
   "include": ["src", "tests", "scripts", "vite.config.ts"]
 }

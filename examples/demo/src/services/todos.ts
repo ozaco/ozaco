@@ -17,11 +17,12 @@
  *   error   failure shaping  every failure gains a `todos:<op>` cause before it leaves
  * Hooks wrap the BUILT-INS only — `extend` authors own their whole handler.
  */
-import type { Schema } from '@ozaco/db'
-import { useDb, where } from '@ozaco/db'
-import { action, Server, ServerErrors } from '@ozaco/server'
-import { crud } from '@ozaco/server/plugins'
-import { appendCauses, fail } from '@ozaco/std/result'
+import type { Schema } from 'db:core'
+import { useDb, where } from 'db:core'
+import { action, Server, ServerErrors } from 'server:core'
+import { crud } from 'server:plugins'
+import { appendCauses, fail } from 'std:result'
+
 import { z } from 'zod'
 
 import { todosTable } from '../tables'

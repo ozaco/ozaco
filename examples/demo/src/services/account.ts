@@ -2,10 +2,11 @@
  * Accounts: login / refresh / whoami on top of the Auth plugin (access + refresh rotation),
  * role-gated actions (`auth: 'user'`, `auth: ['admin']`) and a public one (`auth: false`).
  */
-import { useDb } from '@ozaco/db'
-import { action, service, serviceErrors } from '@ozaco/server'
-import type { AuthDef } from '@ozaco/server/plugins'
-import { Auth } from '@ozaco/server/plugins'
+import { useDb } from 'db:core'
+import { action, service, serviceErrors } from 'server:core'
+import type { AuthDef } from 'server:plugins'
+import { Auth } from 'server:plugins'
+
 import { z } from 'zod'
 
 import { usersTable } from '../tables'

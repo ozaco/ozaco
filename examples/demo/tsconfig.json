@@ -1,8 +1,29 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "types": ["bun"],
-    "noEmit": true
+    "types": ["bun", "@ozaco/devkit"],
+    "noEmit": true,
+
+    // devkit's ambient declarations are types only — Bun resolves the aliases at RUNTIME through
+    // these, so `bun run src/main.ts` (and `bun test`) find the same packages the editor does.
+    // A bundled app does not need them: `kitResolve` from `@ozaco/devkit/resolve` does the job.
+    "paths": {
+      "std:*": ["./node_modules/@ozaco/std/dist/*"],
+
+      "transport:core": ["./node_modules/@ozaco/transport/dist/index"],
+      "transport:*": ["./node_modules/@ozaco/transport/dist/*"],
+
+      "db:core": ["./node_modules/@ozaco/db/dist/index"],
+      "db:*": ["./node_modules/@ozaco/db/dist/*"],
+
+      "server:core": ["./node_modules/@ozaco/server/dist/index"],
+      "server:impl/edge/*": ["./node_modules/@ozaco/server/dist/edge/*"],
+      "server:impl/carrier/*": ["./node_modules/@ozaco/server/dist/carrier/*"],
+      "server:*": ["./node_modules/@ozaco/server/dist/*"],
+
+      "client:core": ["./node_modules/@ozaco/client/dist/index"],
+      "client:*": ["./node_modules/@ozaco/client/dist/*"]
+    }
   },
   "include": ["src", "tests", "scripts"]
 }

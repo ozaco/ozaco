@@ -34,12 +34,13 @@
  * one span per timeline entry, one `rtc.metrics` event row — and therefore in the console at
  * `/_ozaco` and in whatever OTLP / OpenObserve exporter is installed.
  */
-import type { EdgeDef } from '@ozaco/server'
-import { action, Server, service, stream } from '@ozaco/server'
-import type { Flow, Operation } from '@ozaco/std/effect'
-import { attempt, flowOf, until } from '@ozaco/std/effect'
-import { fail } from '@ozaco/std/result'
-import type { AnyType } from '@ozaco/std/shared'
+import type { EdgeDef } from 'server:core'
+import { action, Server, service, stream } from 'server:core'
+import type { Flow, Operation } from 'std:effect'
+import { attempt, flowOf, until } from 'std:effect'
+import { fail } from 'std:result'
+import type { AnyType } from 'std:shared'
+
 import { z } from 'zod'
 
 /** This process — a node ignores the echo of its own broadcasts (`events()` includes them). */

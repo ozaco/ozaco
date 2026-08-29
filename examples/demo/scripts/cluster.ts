@@ -22,8 +22,9 @@ import { join } from 'node:path'
  *                open `http://127.0.0.1:3000/rtc#room` in one tab and `:3001/rtc#room` in the
  *                other to exercise it.
  */
-import { createQueue, ensure, fork, main, scoped, suspend } from '@ozaco/std/effect'
-import { createLink } from '@ozaco/transport/impl/memory'
+import { createQueue, ensure, fork, main, scoped, suspend } from 'std:effect'
+
+import { createLink } from 'transport:impl/memory'
 
 import { createDemo } from '../src/app'
 

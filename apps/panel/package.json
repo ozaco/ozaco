@@ -5,6 +5,7 @@
   "type": "module",
   "devDependencies": {
     "@ozaco/client": "workspace:*",
+    "@ozaco/devkit": "workspace:*",
     "@ozaco/std": "workspace:*",
     "@tailwindcss/vite": "^4.0.0",
     "@types/react": "^19.0.0",

@@ -12,6 +12,7 @@
   "dependencies": {
     "@ozaco/client": "workspace:*",
     "@ozaco/db": "workspace:*",
+    "@ozaco/devkit": "workspace:*",
     "@ozaco/server": "workspace:*",
     "@ozaco/std": "workspace:*",
     "@ozaco/transport": "workspace:*",

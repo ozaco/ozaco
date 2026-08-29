@@ -9,7 +9,9 @@
   },
   "files": [
     "dist",
-    "ambient.d.ts"
+    "ambient.d.ts",
+    "oxlintrc.json",
+    "README.md"
   ],
   "type": "module",
   "types": "./ambient.d.ts",
@@ -17,6 +19,7 @@
     ".": {
       "types": "./ambient.d.ts"
     },
+    "./oxlintrc.json": "./oxlintrc.json",
     "./resolve": {
       "import": {
         "types": "./dist/resolve.d.ts",
@@ -41,6 +44,7 @@
     "@ozaco/db": "workspace:*",
     "@ozaco/server": "workspace:*",
     "@ozaco/std": "workspace:*",
+    "@ozaco/transport": "workspace:*",
     "tsdown": "catalog:build",
     "unplugin": "3.3.0"
   },
@@ -51,6 +55,7 @@
     "@ozaco/db": "*",
     "@ozaco/server": "*",
     "@ozaco/std": "*",
+    "@ozaco/transport": "*",
     "unplugin": "^3.0.0"
   }
 }

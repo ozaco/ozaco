@@ -20,6 +20,7 @@
       "version": "0.4.2",
       "devDependencies": {
         "@ozaco/client": "workspace:*",
+        "@ozaco/devkit": "workspace:*",
         "@ozaco/std": "workspace:*",
         "@tailwindcss/vite": "^4.0.0",
         "@types/react": "^19.0.0",
@@ -38,6 +39,7 @@
       "version": "0.4.2",
       "devDependencies": {
         "@ozaco/client": "workspace:*",
+        "@ozaco/devkit": "workspace:*",
         "@ozaco/std": "workspace:*",
         "@tailwindcss/vite": "^4.0.0",
         "@types/react": "^19.0.0",
@@ -58,6 +60,7 @@
       "dependencies": {
         "@ozaco/client": "workspace:*",
         "@ozaco/db": "workspace:*",
+        "@ozaco/devkit": "workspace:*",
         "@ozaco/server": "workspace:*",
         "@ozaco/std": "workspace:*",
         "@ozaco/transport": "workspace:*",
@@ -147,6 +150,7 @@
         "@ozaco/db": "workspace:*",
         "@ozaco/server": "workspace:*",
         "@ozaco/std": "workspace:*",
+        "@ozaco/transport": "workspace:*",
         "tsdown": "catalog:build",
         "unplugin": "3.3.0",
       },
@@ -157,6 +161,7 @@
         "@ozaco/db": "*",
         "@ozaco/server": "*",
         "@ozaco/std": "*",
+        "@ozaco/transport": "*",
         "unplugin": "^3.0.0",
       },
     },
@@ -408,6 +413,8 @@
     "@nats-io/nuid": ["@nats-io/nuid@3.0.0", "", {}, "sha512-QbXZDrxmYlrn5AD06gYcUTmEHwxn96HBQMIk7XTjDlEcx6FPzVBBPjp4AMRh1lEv6B4iJ6Xb/Uz61JugPXFRQg=="],
 
     "@nats-io/transport-node": ["@nats-io/transport-node@3.4.0", "", { "dependencies": { "@nats-io/nats-core": "3.4.0", "@nats-io/nkeys": "2.0.3", "@nats-io/nuid": "3.0.0" } }, "sha512-hH7u7ejIBTFEJIZ8rIcMrHJI6wl+HhpO5sVFs1+ppmXa8RuB2+Lh1+UwTzZ5xTNNm1TKcRkYy+2qCV56qp8RxA=="],
+
+    "@node-datachannel/android-arm64": ["@node-datachannel/android-arm64@0.33.2", "", { "os": "android", "cpu": "arm64" }, "sha512-I71a0jICUNYgh4ZI5AcINEMuRtQSVyrpp4FV3kJZMcx31xS0vKKtf06tpsUAtW5uS+uRXbZR+vlMEqS1h710wQ=="],
 
     "@node-datachannel/darwin-arm64": ["@node-datachannel/darwin-arm64@0.33.1", "", { "os": "darwin", "cpu": "arm64" }, "sha512-6reyGKzuYNzuJypm4KrpJVTpION39rZmLoqDNMiehTVuSZzV1yoYyLHCzJ9XNVpOViGdaUvAWXJTlHcoQOZtrw=="],
 
@@ -1173,7 +1180,7 @@
 
     "yuku-parser": ["yuku-parser@0.8.7", "", { "dependencies": { "@yuku-toolchain/types": "^0.8.7", "yuku-ast": "^0.8.7" }, "optionalDependencies": { "@yuku-parser/binding-android-arm64": "0.8.7", "@yuku-parser/binding-darwin-arm64": "0.8.7", "@yuku-parser/binding-darwin-x64": "0.8.7", "@yuku-parser/binding-freebsd-x64": "0.8.7", "@yuku-parser/binding-linux-arm-gnu": "0.8.7", "@yuku-parser/binding-linux-arm-musl": "0.8.7", "@yuku-parser/binding-linux-arm64-gnu": "0.8.7", "@yuku-parser/binding-linux-arm64-musl": "0.8.7", "@yuku-parser/binding-linux-x64-gnu": "0.8.7", "@yuku-parser/binding-linux-x64-musl": "0.8.7", "@yuku-parser/binding-win32-arm64": "0.8.7", "@yuku-parser/binding-win32-x64": "0.8.7" } }, "sha512-vRD9nwt4L3aYpxNqeSC4WqLv58xrXef0Ong1Mc45CTXTIpvLafx7JO05sczmQZwdLEZvywrLOGdNC5+Rp5N1BQ=="],
 
-    "zod": ["zod@4.4.3", "", {}, "sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ=="],
+    "zod": ["zod@4.5.4", "", {}, "sha512-sC95tT5iHHH9gtpj6A81kh+NEaRAUFN+qlUPDUbRfOMvNf5QCBqsb3WgvnpVtK5Y+4UfA6KqufotuTvMGiTlsA=="],
 
     "@commitlint/is-ignored/semver": ["semver@7.8.5", "", { "bin": { "semver": "bin/semver.js" } }, "sha512-Y7/KDsb8LjooZpwaqGyulO6DQlksgCncchHGk+sZIY4SBvUocMBEFH5Ur1fI4dV+Jvl0w6cjvucaIi40puRioA=="],
 

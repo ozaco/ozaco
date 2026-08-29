@@ -1,12 +1,13 @@
+import { createQueue, fork, run, scoped, sleep, until } from 'std:effect'
+import { unwrap } from 'std:result'
+import type { AnyType } from 'std:shared'
+
 import { describe, expect, it } from 'bun:test'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { createQueue, fork, run, scoped, sleep, until } from '@ozaco/std/effect'
-import { unwrap } from '@ozaco/std/result'
-import type { AnyType } from '@ozaco/std/shared'
-import { createLink } from '@ozaco/transport/impl/memory'
+import { createLink } from 'transport:impl/memory'
 
 import { createDemo } from '../src/app'
 import type { Step } from '../src/client'

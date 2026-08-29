@@ -1,15 +1,16 @@
+import { createQueue, fork, run, scoped, sleep, until } from 'std:effect'
+import { install } from 'std:plugin'
+import { unwrap } from 'std:result'
+import type { AnyType } from 'std:shared'
+import type { RtcDef } from 'std:webrtc'
+import { Rtc } from 'std:webrtc'
+import type { WsDef } from 'std:ws'
+import { Ws } from 'std:ws'
+
 import { afterAll, describe, expect, it } from 'bun:test'
 
-import { JsonCodec } from '@ozaco/std/codec/impl/json'
-import { createQueue, fork, run, scoped, sleep, until } from '@ozaco/std/effect'
-import { install } from '@ozaco/std/plugin'
-import { unwrap } from '@ozaco/std/result'
-import type { AnyType } from '@ozaco/std/shared'
-import type { RtcDef } from '@ozaco/std/webrtc'
-import { Rtc } from '@ozaco/std/webrtc'
-import type { WsDef } from '@ozaco/std/ws'
-import { Ws } from '@ozaco/std/ws'
-import { createLink } from '@ozaco/transport/impl/memory'
+import { JsonCodec } from 'std:codec/impl/json'
+import { createLink } from 'transport:impl/memory'
 
 import { createDemo } from '../src/app'
 

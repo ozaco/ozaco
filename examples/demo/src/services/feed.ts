@@ -3,9 +3,10 @@
  * `text` (a text stream) and `bytes` (a raw download) — plus a slow action that honours
  * cancellation and a deadline.
  */
-import { action, service, stream } from '@ozaco/server'
-import type { Flow } from '@ozaco/std/effect'
-import { flowOf, sleep } from '@ozaco/std/effect'
+import { action, service, stream } from 'server:core'
+import type { Flow } from 'std:effect'
+import { flowOf, sleep } from 'std:effect'
+
 import { z } from 'zod'
 
 const Tick = z.object({ n: z.number(), at: z.number() })

@@ -9,6 +9,7 @@ tasks:
     deps:
       - client:build
       - std:build
+      - devkit:build
     inputs:
       - index.html
       - src/**/*
@@ -31,6 +32,7 @@ tasks:
     deps:
       - client:build
       - std:build
+      - devkit:build
     inputs:
       - index.html
       - src/**/*
@@ -42,6 +44,7 @@ tasks:
     deps:
       - client:build
       - std:build
+      - devkit:build
     inputs:
       - src/**/*
       - tests/**/*

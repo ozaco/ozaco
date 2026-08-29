@@ -3,11 +3,11 @@
  * The typed client walk-through: `bun run src/client.ts [http://127.0.0.1:3000]` against a
  * running demo. Every step prints what it did; `walk()` is what the e2e test runs too.
  */
-import { createClient } from '@ozaco/client'
-import type { ClientDef } from '@ozaco/client'
-import type { Flow, Operation } from '@ozaco/std/effect'
-import { attempt, run, scoped, sleep, until } from '@ozaco/std/effect'
-import { isFailure, unwrap } from '@ozaco/std/result'
+import { createClient } from 'client:core'
+import type { ClientDef } from 'client:core'
+import type { Flow, Operation } from 'std:effect'
+import { attempt, run, scoped, sleep, until } from 'std:effect'
+import { isFailure, unwrap } from 'std:result'
 
 import type { Api } from './app'
 

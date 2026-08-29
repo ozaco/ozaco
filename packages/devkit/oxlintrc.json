@@ -1,0 +1,15 @@
+{
+  "rules": {
+    "eslint/no-restricted-imports": [
+      "error",
+      {
+        "patterns": [
+          {
+            "group": ["@ozaco/**", "!@ozaco/devkit", "!@ozaco/devkit/**"],
+            "message": "devkit mode: import through the aliases (std:*, transport:*, db:*, server:*, client:*, ai:*, cli:*) — the @ozaco/* specifiers belong to the devkit-less mode"
+          }
+        ]
+      }
+    ]
+  }
+}

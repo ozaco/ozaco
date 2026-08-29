@@ -2,8 +2,9 @@
  * Cluster: what this node knows — its identity, presence members of every service, and a ping
  * that answers with the instance that served it (watch it round-robin over replicas).
  */
-import { action, Server, service } from '@ozaco/server'
-import { useContext } from '@ozaco/std/effect'
+import { action, Server, service } from 'server:core'
+import { useContext } from 'std:effect'
+
 import { z } from 'zod'
 
 const Member = z.object({

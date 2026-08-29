@@ -1,4 +1,4 @@
-import { column, table } from '@ozaco/db'
+import { column, table } from 'db:core'
 
 /** The demo's tables: a crud resource (todos), users for auth, a log of uploads. */
 export const todosTable = table('todos', {

@@ -5,8 +5,8 @@
  * failure shaping) is the client's shared inspector API, re-exported here as the one-stop
  * import for the views.
  */
-import type { ClientDef, Helpers, ManifestDef } from '@ozaco/client'
-import { connectClient } from '@ozaco/client'
+import type { ClientDef, Helpers, ManifestDef } from 'client:core'
+import { connectClient } from 'client:core'
 
 import type { Connection } from './config'
 
@@ -23,7 +23,7 @@ export {
   send,
   watch,
   wireFailureOf as failureOf,
-} from '@ozaco/client'
+} from 'client:core'
 export type Chunk = Helpers.Chunk
 export type Entry = Helpers.Entry
 export type Field = Helpers.Field

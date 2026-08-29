@@ -14,15 +14,16 @@
  * browser-to-browser call is visible in the server console at `/_ozaco` and in any OTLP /
  * OpenObserve exporter that is installed.
  */
-import { JsonCodec } from '@ozaco/std/codec/impl/json'
-import type { Queue, Task } from '@ozaco/std/effect'
-import { attempt, createQueue, fork, race, run, sleep, until } from '@ozaco/std/effect'
-import { install } from '@ozaco/std/plugin'
-import { isFailure } from '@ozaco/std/result'
-import type { AnyType } from '@ozaco/std/shared'
-import type { RtcDef } from '@ozaco/std/webrtc'
-import { Rtc } from '@ozaco/std/webrtc'
-import { Ws } from '@ozaco/std/ws'
+import type { Queue, Task } from 'std:effect'
+import { attempt, createQueue, fork, race, run, sleep, until } from 'std:effect'
+import { install } from 'std:plugin'
+import { isFailure } from 'std:result'
+import type { AnyType } from 'std:shared'
+import type { RtcDef } from 'std:webrtc'
+import { Rtc } from 'std:webrtc'
+import { Ws } from 'std:ws'
+
+import { JsonCodec } from 'std:codec/impl/json'
 
 const pick = (selector: string) => document.querySelector(selector) as AnyType
 
