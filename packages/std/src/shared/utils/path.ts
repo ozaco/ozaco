@@ -1,14 +1,9 @@
 import type { AnyType } from '../types/common'
+import type { Helpers } from '../types/helpers'
 
 import { isObject } from './is'
 
 const segments = (path: string): string[] => path.split('.').filter(Boolean)
-
-/** A flattened leaf: its dotted key path and the value found there. */
-export interface FlatEntry {
-  key: string
-  value: unknown
-}
 
 /** Read a dotted key (`a.b.c`) from a nested object; `undefined` if any segment is missing. */
 export const getPath = <T = unknown>(obj: Record<string, AnyType>, path: string): T | undefined => {
@@ -72,8 +67,8 @@ export const unsetPath = <T extends Record<string, AnyType>>(obj: T, path: strin
 }
 
 /** Flatten a nested object to leaf `{ key, value }` entries; arrays are treated as leaf values. */
-export const flattenEntries = (obj: Record<string, AnyType>, prefix = ''): FlatEntry[] => {
-  const entries: FlatEntry[] = []
+export const flattenEntries = (obj: Record<string, AnyType>, prefix = ''): Helpers.FlatEntry[] => {
+  const entries: Helpers.FlatEntry[] = []
 
   for (const key of Object.keys(obj)) {
     const full = prefix ? `${prefix}.${key}` : key

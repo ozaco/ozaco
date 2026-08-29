@@ -3,7 +3,7 @@ import { attempt, operation } from 'std:effect'
 import { IO } from 'std:io'
 import { isSuccess } from 'std:result'
 
-import type { PathState } from '../../types/internal'
+import type { Helpers } from '../../types/helpers'
 import type { PromptDef, PromptSpec } from '../../types/prompt'
 import { runPrompt } from '../../utils'
 import { cancelledLine, inlineFrame, submittedLine } from '../chrome'
@@ -43,16 +43,7 @@ const longestCommonPrefix = (items: readonly string[]): string => {
   return prefix
 }
 
-interface Split {
-  /** The directory to list. */
-  dir: string
-  /** The typed leaf being completed. */
-  prefix: string
-  /** The input text up to (excluding) the leaf. */
-  base: string
-}
-
-const splitValue = (value: string, root: string): Split => {
+const splitValue = (value: string, root: string): Helpers.Split => {
   const trailing = value === '' || value.endsWith('/')
   const absolute = value.startsWith('/') ? value : `${root.replace(/\/$/u, '')}/${value}`
   const dir = trailing ? absolute : absolute.slice(0, absolute.lastIndexOf('/') + 1)
@@ -65,14 +56,14 @@ export const path = operation(function* (options: PromptDef.PathOptions) {
   const root = options.root ?? '.'
   const scan = options.scan ?? defaultScan
 
-  const matchesOf = (state: PathState): PromptDef.PathEntry[] => {
+  const matchesOf = (state: Helpers.PathState): PromptDef.PathEntry[] => {
     const { prefix } = splitValue(state.input.value, root)
     return state.entries
       .filter(entry => entry.name.startsWith(prefix))
       .filter(entry => !options.directory || entry.isDir)
   }
 
-  const complete = (state: PathState): string => {
+  const complete = (state: Helpers.PathState): string => {
     const value = state.input.value
     const matches = matchesOf(state)
     if (matches.length === 0) {
@@ -87,7 +78,7 @@ export const path = operation(function* (options: PromptDef.PathOptions) {
     return completed
   }
 
-  const spec: PromptSpec<PathState, string> = {
+  const spec: PromptSpec<Helpers.PathState, string> = {
     description: options.description,
     initial: { input: createInput(options.initial ?? ''), scanned: '\u0000', entries: [] },
     // lazy: rescan only when the input value actually changed since the last scan

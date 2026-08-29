@@ -6,7 +6,7 @@ import { until } from 'std:effect'
 import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 
-import type { OtlpDef } from './types'
+import type { Helpers, OtlpDef } from './types'
 
 /** OTLP ids are hex: a UUID request id (32 hex) is the trace id; anything else is hashed. */
 const HEX = /^[0-9a-f]+$/u
@@ -183,33 +183,16 @@ export const DEFAULT_BUCKETS: readonly number[] = [
   1, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10_000,
 ]
 
-interface Counter {
-  readonly attributes: OtlpDef.KeyValue[]
-  count: number
-}
+export const createOtlpMetrics = (buckets: readonly number[]): Helpers.OtlpMetrics => {
+  const requests = new Map<string, Helpers.Counter>()
+  const durations = new Map<string, Helpers.Histogram>()
+  const failures = new Map<string, Helpers.Counter>()
 
-interface Histogram {
-  readonly attributes: OtlpDef.KeyValue[]
-  readonly bucketCounts: number[]
-  count: number
-  sum: number
-}
-
-/** CUMULATIVE metric state derived from what the kernel observes: entry spans (edge/dispatch)
- * count into `ozaco.requests` and the `ozaco.request.duration` histogram, failure rows into
- * `ozaco.failures`. `snapshot()` renders the OTLP `metrics` array of the current totals. */
-export interface OtlpMetrics {
-  record(span: TraceDef.Span): void
-  failure(row: ObserveDef.FailureRow): void
-  snapshot(startNano: string, nowNano: string): Record<string, unknown>[]
-}
-
-export const createOtlpMetrics = (buckets: readonly number[]): OtlpMetrics => {
-  const requests = new Map<string, Counter>()
-  const durations = new Map<string, Histogram>()
-  const failures = new Map<string, Counter>()
-
-  const counter = (map: Map<string, Counter>, key: string, attrs: Record<string, unknown>) => {
+  const counter = (
+    map: Map<string, Helpers.Counter>,
+    key: string,
+    attrs: Record<string, unknown>,
+  ) => {
     const existing = map.get(key)
 
     if (existing) {
@@ -220,7 +203,7 @@ export const createOtlpMetrics = (buckets: readonly number[]): OtlpMetrics => {
     map.set(key, { attributes: attributesOf(attrs), count: 1 })
   }
 
-  const sums = (map: Map<string, Counter>, startNano: string, nowNano: string) =>
+  const sums = (map: Map<string, Helpers.Counter>, startNano: string, nowNano: string) =>
     [...map.values()].map(entry => ({
       attributes: entry.attributes,
       startTimeUnixNano: startNano,

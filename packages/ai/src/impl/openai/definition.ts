@@ -26,7 +26,7 @@ import {
   speechBody,
   transcribeForm,
 } from './internal/wire'
-import type { OpenAIProviderOptions } from './types'
+import type { OpenAIProviderOptions } from './types/openai'
 
 const CAPABILITIES: ProviderDef.Capabilities = {
   chat: true,

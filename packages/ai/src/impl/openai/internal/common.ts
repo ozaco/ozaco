@@ -10,18 +10,12 @@ import type { AnyType } from 'std:shared'
 import { JsonCodec } from 'std:codec/impl/json'
 
 import { DEFAULT_BASE_URL } from '../const'
-import type { OpenAIProviderOptions } from '../types'
+import type { Helpers as Own } from '../types/helpers'
+import type { OpenAIProviderOptions } from '../types/openai'
 
-export interface OpenAIState {
-  readonly base: string
-  /** Lower-cased user headers with the auth header computed OVER them. */
-  readonly headers: Record<string, string>
-  readonly timeoutMs: number | undefined
-}
+export const StateRef: Context<Own.OpenAIState> = createContext<Own.OpenAIState>('ai:openai')
 
-export const StateRef: Context<OpenAIState> = createContext<OpenAIState>('ai:openai')
-
-export const createState = (options: OpenAIProviderOptions): OpenAIState => {
+export const createState = (options: OpenAIProviderOptions): Own.OpenAIState => {
   const headers: Record<string, string> = {}
   for (const [name, value] of Object.entries(options.headers ?? {})) {
     headers[name.toLowerCase()] = value
@@ -42,7 +36,7 @@ export const createState = (options: OpenAIProviderOptions): OpenAIState => {
 /** Init for a JSON request: state headers with `content-type` pinned, the body encoded through
  * the installed `JsonCodec`, deadline. */
 export function* jsonInit(
-  state: OpenAIState,
+  state: Own.OpenAIState,
   body: Record<string, unknown>,
 ): Operation<FetchDef.MethodInit> {
   return {
@@ -53,7 +47,7 @@ export function* jsonInit(
 }
 
 /** Init for a multipart request: `content-type` stays unset so the platform writes the boundary. */
-export const formInit = (state: OpenAIState, form: FormData): FetchDef.MethodInit => {
+export const formInit = (state: Own.OpenAIState, form: FormData): FetchDef.MethodInit => {
   const headers = { ...state.headers }
   Reflect.deleteProperty(headers, 'content-type')
   return {
@@ -63,17 +57,10 @@ export const formInit = (state: OpenAIState, form: FormData): FetchDef.MethodIni
   }
 }
 
-/** The OpenAI structured error envelope. */
-interface ProviderError {
-  readonly message?: string | undefined
-  readonly type?: string | undefined
-  readonly code?: string | undefined
-}
-
 /** Classify a response into an `ai.*` tag: the structured `error.code`/`type` refines where it
  * disambiguates (quota'd 429s stay rate-limited, key/permission codes map to auth), then the
  * status decides. Also classifies mid-stream error frames (pass `status: 0`). */
-export const classifyError = (status: number, error?: ProviderError | undefined): string => {
+export const classifyError = (status: number, error?: Own.ProviderError | undefined): string => {
   const hint = `${error?.code ?? ''} ${error?.type ?? ''}`
   if (hint.includes('api_key') || hint.includes('authentication') || hint.includes('permission')) {
     return AiErrors.Auth
@@ -111,13 +98,13 @@ const retryAfterSeconds = (header: string | null): number | undefined => {
 
 /** Best-effort decode of the provider's error envelope — any parse failure degrades to
  * `undefined` so classification falls back to the status and raw body. */
-function* decodeErrorBody(body: string): Operation<ProviderError | undefined> {
+function* decodeErrorBody(body: string): Operation<Own.ProviderError | undefined> {
   const outcome = yield* attempt(JsonCodec.actions.parse<AnyType>(body))
   if (isFailure(outcome)) {
     return undefined
   }
   const error = outcome.value?.error
-  return error && typeof error === 'object' ? (error as ProviderError) : undefined
+  return error && typeof error === 'object' ? (error as Own.ProviderError) : undefined
 }
 
 /** Read a non-2xx response and raise the matching `ai.*` failure. Rate limits carry the provider's
@@ -144,7 +131,7 @@ function* failResponse(response: FetchDef.Response): Operation<never> {
  * statuses classify via {@link failResponse}.
  */
 export function* send(
-  state: OpenAIState,
+  state: Own.OpenAIState,
   path: string,
   init: FetchDef.MethodInit,
 ): Operation<FetchDef.Response> {

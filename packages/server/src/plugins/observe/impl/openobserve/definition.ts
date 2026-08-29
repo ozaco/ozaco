@@ -1,4 +1,4 @@
-import type { ServerDef, Sink } from 'server:core'
+import type { Helpers, ServerDef } from 'server:core'
 import { Server, ServerErrors } from 'server:core'
 import { createSink } from 'server:internal'
 import { definePlugin } from 'std:plugin'
@@ -78,7 +78,7 @@ export const OpenObserveExporter = definePlugin<
       ...options.resource,
     }
 
-    const sinks = new Map<OpenObserveDef.StreamKey, Sink<Record<string, unknown>>>()
+    const sinks = new Map<OpenObserveDef.StreamKey, Helpers.Sink<Record<string, unknown>>>()
     const bodies = options.bodies === true
 
     for (const kind of KINDS) {

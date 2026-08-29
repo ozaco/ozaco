@@ -6,15 +6,10 @@ import { createContext, createQueue } from 'std:effect'
 import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 
-import type { MockCalls, MockChatResult, MockResponder, MockScript, MockStream } from './types'
+import type { Helpers as Own } from './types/helpers'
+import type { MockChatResult, MockStream } from './types/mock'
 
-export interface MockState {
-  readonly script: MockScript
-  readonly cursors: Map<string, number>
-  readonly calls: MockCalls
-}
-
-export const StateRef: Context<MockState> = createContext<MockState>('ai:mock')
+export const StateRef: Context<Own.MockState> = createContext<Own.MockState>('ai:mock')
 
 /** `Operation` detection for function-responder results — none of the mock's VALUE shapes
  * (results, streams, vector arrays, bytes, strings) is a non-array iterable object, and a
@@ -33,17 +28,9 @@ const isQueue = (value: AnyType): value is { readonly queue: readonly AnyType[] 
   !(value instanceof Uint8Array) &&
   Object.hasOwn(value, 'queue')
 
-interface ResolveInput<TSpec, TValue> {
-  readonly state: MockState
-  readonly key: keyof MockScript & string
-  readonly spec: TSpec
-  readonly responder: MockResponder<TSpec, TValue> | undefined
-  readonly fallback: TValue
-}
-
 /** Resolve one scripted response for a call (advancing the queue cursor where applicable). */
 export function* resolveResponder<TSpec, TValue>(
-  input: ResolveInput<TSpec, TValue>,
+  input: Own.ResolveInput<TSpec, TValue>,
 ): Operation<TValue> {
   const { responder } = input
   if (responder === undefined) {

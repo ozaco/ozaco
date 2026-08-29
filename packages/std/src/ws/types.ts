@@ -134,3 +134,14 @@ export namespace WsDef {
     connect(url: string | URL, options?: Options): Operation<Connection>
   }
 }
+
+/** The shapes this module passes around inside itself. */
+export namespace Helpers {
+  /** Fully-resolved reconnect settings (absent entirely when reconnect is disabled). */
+  export interface ReconnectBudget {
+    retries: number
+    delayMs: number
+    backoff: number
+    maxDelayMs: number
+  }
+}

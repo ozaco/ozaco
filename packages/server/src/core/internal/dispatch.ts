@@ -53,18 +53,13 @@ const flowFrom = (value: unknown): Flow<unknown, unknown> | null => {
   return Symbol.iterator in value ? (value as Flow<unknown, unknown>) : null
 }
 
-/** Build the handler context for one dispatch. */
-interface ContextInput {
-  readonly kernel: ServerDef.Context
-  readonly call: ServerDef.Call
-  readonly meta: ServiceDef.Meta
-  readonly actions: Pick<ServerDef.Actions, 'call' | 'emit'>
-
-  /** a principal decided BEFORE the dispatch (socket handshakes) — lands as `ctx.auth`. */
-  readonly auth?: unknown
-}
-
-function* contextOf({ kernel, call, meta, actions, auth }: ContextInput): Operation<ServerDef.Ctx> {
+function* contextOf({
+  kernel,
+  call,
+  meta,
+  actions,
+  auth,
+}: Helpers.ContextInput): Operation<ServerDef.Ctx> {
   const { trace } = call
 
   const log = (level: 'debug' | 'info' | 'warn' | 'error') =>

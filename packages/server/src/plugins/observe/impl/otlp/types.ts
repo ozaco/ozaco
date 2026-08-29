@@ -1,4 +1,4 @@
-import type { ServerDef } from 'server:core'
+import type { ObserveDef, ServerDef, TraceDef } from 'server:core'
 
 export namespace OtlpDef {
   export interface Options {
@@ -57,5 +57,29 @@ export namespace OtlpDef {
     readonly url: string
     readonly headers: Record<string, string>
     readonly fetch: typeof fetch
+  }
+}
+
+/** The shapes this impl passes around inside itself. */
+export namespace Helpers {
+  export interface Counter {
+    readonly attributes: OtlpDef.KeyValue[]
+    count: number
+  }
+
+  export interface Histogram {
+    readonly attributes: OtlpDef.KeyValue[]
+    readonly bucketCounts: number[]
+    count: number
+    sum: number
+  }
+
+  /** CUMULATIVE metric state derived from what the kernel observes: entry spans (edge/dispatch)
+   * count into `ozaco.requests` and the `ozaco.request.duration` histogram, failure rows into
+   * `ozaco.failures`. `snapshot()` renders the OTLP `metrics` array of the current totals. */
+  export interface OtlpMetrics {
+    record(span: TraceDef.Span): void
+    failure(row: ObserveDef.FailureRow): void
+    snapshot(startNano: string, nowNano: string): Record<string, unknown>[]
   }
 }

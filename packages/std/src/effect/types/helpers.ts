@@ -135,4 +135,22 @@ export namespace Helpers {
     context: Context<ApiState<A>>
     core: A
   }
+
+  export interface Rendezvous<T> {
+    readonly next: () => Promise<IteratorResult<T, undefined>>
+    readonly close: () => void
+    readonly wait: () => Promise<boolean>
+    readonly settle: (step: IteratorResult<T, undefined>) => void
+    readonly reject: (error: unknown) => void
+  }
+
+  export interface ToFutureOptions<T> {
+    /** Abort the AWAITED task (settles `fail('halted')`); a `yield*`ed operation needs no
+     * signal — it is cancelled with the caller's task. */
+    readonly signal?: AbortSignal | undefined
+
+    /** Keep the awaited task alive until this settles — for a value whose resources must outlive
+     * the call itself (a stream reply that is consumed later). */
+    readonly hold?: ((value: T) => Operation<void> | null) | undefined
+  }
 }

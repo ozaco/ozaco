@@ -1,6 +1,6 @@
 import { operation } from 'std:effect'
 
-import type { FieldState } from '../../types/internal'
+import type { Helpers } from '../../types/helpers'
 import type { PromptDef, PromptSpec } from '../../types/prompt'
 import { runPrompt } from '../../utils'
 import { cancelledLine, inlineFrame, submittedLine } from '../chrome'
@@ -8,7 +8,7 @@ import { createInput, editLine, renderInput } from '../edit'
 import { isEnter } from '../keys'
 
 export const text = operation(function* (options: PromptDef.TextOptions) {
-  const spec: PromptSpec<FieldState, string> = {
+  const spec: PromptSpec<Helpers.FieldState, string> = {
     description: options.description,
     initial: { input: createInput(options.initial ?? '') },
     render: (state, ctx) =>

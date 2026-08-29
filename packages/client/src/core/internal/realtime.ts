@@ -8,6 +8,7 @@ import { Ws } from 'std:ws'
 import { DEFAULT_REALTIME_SUFFIX } from '../const'
 import { ClientErrors } from '../errors'
 import type { ClientDef } from '../types/client'
+import type { Helpers } from '../types/helpers'
 
 import { manifestOf } from './manifest'
 
@@ -58,10 +59,6 @@ const socketUrl = (ctx: ClientDef.Context, path: string): string => {
   return url.toString()
 }
 
-type Frame =
-  | ClientDef.WatchFrame
-  | { readonly t: 'error'; readonly tag: string; readonly message: string }
-
 /**
  * A resource watch as a Flow of `sync` / `delta` frames over the realtime socket. The socket
  * reconnects by itself; after every reopen the watch is re-sent with `since: <last token>` so the
@@ -72,7 +69,7 @@ export const watch = <TRow>(
   ctx: ClientDef.Context,
   resource: string,
   options: ClientDef.WatchOptions | undefined,
-  hooks?: WatchHooks,
+  hooks?: Helpers.WatchHooks,
 ): Flow<ClientDef.WatchFrame<TRow>, void> => ({
   *[Symbol.iterator]() {
     const id = yield* IO.actions.uuid()
@@ -121,7 +118,7 @@ export const watch = <TRow>(
       hooks.register((next, backward) => turns.add({ cursor: next, back: backward === true }))
     }
 
-    const frames = createQueue<Frame, AnyType>()
+    const frames = createQueue<Helpers.Frame, AnyType>()
     // pump: every frame of this watch into the queue
     yield* fork(function* () {
       const messages = yield* attempt(connection.messages)
@@ -179,19 +176,13 @@ export const watch = <TRow>(
   },
 })
 
-/** The hooks a pager wires into a watch: page turns in, pager info out. */
-export interface WatchHooks {
-  readonly register?: ((turn: (cursor: string | null, back?: boolean) => void) => void) | undefined
-  readonly onPage?: ((page: ClientDef.WindowInfo | null) => void) | undefined
-}
-
 /** `watch` folded into the current rows (`_id`-keyed) plus the last token and pager info. */
 // oxlint-disable-next-line max-params -- ctx · resource · options · pager hooks
 export const rows = <TRow>(
   ctx: ClientDef.Context,
   resource: string,
   options: ClientDef.WatchOptions | undefined,
-  hooks?: WatchHooks,
+  hooks?: Helpers.WatchHooks,
 ): Flow<ClientDef.Materialized<TRow>, void> => ({
   *[Symbol.iterator]() {
     const source = yield* watch<TRow>(ctx, resource, options, hooks)

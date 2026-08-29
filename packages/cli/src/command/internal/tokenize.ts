@@ -6,7 +6,7 @@ import { serializeError } from 'std:shared'
 import { parseArgs } from 'node:util'
 
 import type { CommandDef } from '../types/command'
-import type { OptionSpec, RawParse } from '../types/internal'
+import type { Helpers } from '../types/helpers'
 
 const stringify = (value: string | boolean): string =>
   typeof value === 'boolean' ? String(value) : value
@@ -24,14 +24,14 @@ export function* tokenize(
   args: string[],
   infos: readonly CommandDef.OptionInfo[],
   short: Record<string, string>,
-): Operation<RawParse> {
+): Operation<Helpers.RawParse> {
   const separator = args.indexOf('--')
   const head = separator === -1 ? args : args.slice(0, separator)
   const rest = separator === -1 ? [] : args.slice(separator + 1)
 
-  const options: Record<string, OptionSpec> = {}
+  const options: Record<string, Helpers.OptionSpec> = {}
   for (const info of infos) {
-    const spec: OptionSpec = {
+    const spec: Helpers.OptionSpec = {
       type: info.type === 'boolean' && !info.array ? 'boolean' : 'string',
       multiple: info.array,
     }

@@ -10,7 +10,7 @@ import { validateSync } from 'std:shared'
 
 import { HELP_FLAGS, VERSION_FLAGS } from '../const'
 import type { CommandDef } from '../types/command'
-import type { ActionHelp, RuntimeNode } from '../types/internal'
+import type { Helpers } from '../types/helpers'
 
 import { processArgv } from './argv'
 import { build } from './build'
@@ -33,7 +33,7 @@ const formatIssues = (issues: readonly StandardSchemaV1.Issue[]): string =>
     })
     .join('\n')
 
-function* descend(node: RuntimeNode, rest: string[], path: string[]): Operation<void> {
+function* descend(node: Helpers.RuntimeNode, rest: string[], path: string[]): Operation<void> {
   const token = rest[0]
 
   if (token !== undefined && !token.startsWith('-') && node.children[token] !== undefined) {
@@ -53,7 +53,7 @@ function* descend(node: RuntimeNode, rest: string[], path: string[]): Operation<
   return yield* dispatch(node, rest, path)
 }
 
-function* dispatch(node: RuntimeNode, rest: string[], path: string[]): Operation<void> {
+function* dispatch(node: Helpers.RuntimeNode, rest: string[], path: string[]): Operation<void> {
   const palette = yield* usePalette()
   const command = node.plugin
 
@@ -84,7 +84,7 @@ function* dispatch(node: RuntimeNode, rest: string[], path: string[]): Operation
   const infos = yield* optionsFromAction(meta)
   const short = meta.short ?? {}
   const argsOrder = meta.args ?? []
-  const actionHelp: ActionHelp = {
+  const actionHelp: Helpers.ActionHelp = {
     path: actionPath,
     description: meta.description,
     infos,
@@ -136,7 +136,7 @@ function* dispatch(node: RuntimeNode, rest: string[], path: string[]): Operation
  * `setup` is NOT run there — it runs here, lazily, so registering many top-level commands never
  * collides.
  */
-export function* runCommand(root: RuntimeNode, argv?: string[]): Operation<void> {
+export function* runCommand(root: Helpers.RuntimeNode, argv?: string[]): Operation<void> {
   const args = (argv ?? processArgv()).slice()
   // Install the root command in its OWN scope (running its setup) here, not at register — the
   // top-level analog of how `descend` enters a child. Only the invoked command's setup ever runs,

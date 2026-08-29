@@ -1,22 +1,15 @@
 import { isFailure } from 'std:result'
 
 import { createFuture } from '../base/future'
+import type { Helpers } from '../types/helpers'
 import type { Flow, FutureFlow, Scope, Task } from '../types/operation'
 
 import { allSettled } from './all-settled'
 import { run } from './run'
 import { until } from './until'
 
-interface Rendezvous<T> {
-  readonly next: () => Promise<IteratorResult<T, undefined>>
-  readonly close: () => void
-  readonly wait: () => Promise<boolean>
-  readonly settle: (step: IteratorResult<T, undefined>) => void
-  readonly reject: (error: unknown) => void
-}
-
 /** The rendezvous between one async iterator and its effect pump: strictly demand-pulled. */
-const rendezvous = <T>(): Rendezvous<T> => {
+const rendezvous = <T>(): Helpers.Rendezvous<T> => {
   type Step = IteratorResult<T, undefined>
   type Waiter = { resolve: (step: Step) => void; reject: (error: unknown) => void }
   let waiting: Waiter | null = null

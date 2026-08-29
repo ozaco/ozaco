@@ -35,16 +35,9 @@ const missingModel = (modality: keyof AiDef.Models) =>
     `no ${modality} model configured — pass options.model or install AiClient with models.${modality}`,
   )
 
-interface ChatInput {
-  readonly state: AiDef.Context
-  readonly messages: Helpers.MessagesInit
-  readonly options: AiDef.ChatStreamOptions
-  readonly streaming: boolean
-}
-
 /** Resolve a chat call into a {@link Helpers.ChatSpec}: capability gates, per-modality model,
  * sampling merge, message normalization. */
-export function* resolveChatSpec(input: ChatInput): Operation<Helpers.ChatSpec> {
+export function* resolveChatSpec(input: Helpers.ChatInput): Operation<Helpers.ChatSpec> {
   const { state, options } = input
   const { capabilities } = state.provider
   if (input.streaming ? !capabilities.chatStream : !capabilities.chat) {
@@ -82,13 +75,7 @@ export function* resolveChatSpec(input: ChatInput): Operation<Helpers.ChatSpec> 
   }
 }
 
-interface EmbedInput {
-  readonly state: AiDef.Context
-  readonly input: string | readonly string[]
-  readonly options: AiDef.EmbedOptions
-}
-
-export function* resolveEmbedSpec(input: EmbedInput): Operation<Helpers.EmbedSpec> {
+export function* resolveEmbedSpec(input: Helpers.EmbedInput): Operation<Helpers.EmbedSpec> {
   const { state, options } = input
   if (!state.provider.capabilities.embed) {
     return yield* fail(
@@ -108,13 +95,7 @@ export function* resolveEmbedSpec(input: EmbedInput): Operation<Helpers.EmbedSpe
   }
 }
 
-interface SpeechInput {
-  readonly state: AiDef.Context
-  readonly text: string
-  readonly options: AiDef.SpeechOptions
-}
-
-export function* resolveSpeechSpec(input: SpeechInput): Operation<Helpers.SpeechSpec> {
+export function* resolveSpeechSpec(input: Helpers.SpeechInput): Operation<Helpers.SpeechSpec> {
   const { state, options } = input
   if (!state.provider.capabilities.tts) {
     return yield* fail(
@@ -143,13 +124,9 @@ export function* resolveSpeechSpec(input: SpeechInput): Operation<Helpers.Speech
   }
 }
 
-interface TranscribeInput {
-  readonly state: AiDef.Context
-  readonly audio: Uint8Array | Blob
-  readonly options: AiDef.TranscribeOptions
-}
-
-export function* resolveTranscribeSpec(input: TranscribeInput): Operation<Helpers.TranscribeSpec> {
+export function* resolveTranscribeSpec(
+  input: Helpers.TranscribeInput,
+): Operation<Helpers.TranscribeSpec> {
   const { state, options } = input
   if (!state.provider.capabilities.stt) {
     return yield* fail(

@@ -65,19 +65,12 @@ function* invokeTool(
   return yield* runner(args)
 }
 
-export interface ToolLoopInput {
-  readonly spec: Helpers.ChatSpec
-  readonly run: Readonly<Record<string, AiDef.ToolRunner>>
-  readonly maxRounds: number
-  readonly retries: number
-}
-
 /**
  * The core tool loop `Ai.actions.chat(messages, { run })` executes: dispatch the spec, invoke a
  * handler for every requested tool call, append the assistant message and the tool results, and
  * re-ask — until a round returns no tool calls or the round budget is exhausted (`ai.request`).
  */
-export function* runToolLoop(input: ToolLoopInput): Operation<Helpers.ChatResult> {
+export function* runToolLoop(input: Helpers.ToolLoopInput): Operation<Helpers.ChatResult> {
   const messages = [...input.spec.messages]
 
   for (let round = 0; round < input.maxRounds; round += 1) {

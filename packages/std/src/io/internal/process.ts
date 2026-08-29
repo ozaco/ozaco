@@ -1,4 +1,5 @@
 import type { ExecOptions, ProcessStatus } from '../types/common'
+import type { Helpers } from '../types/helpers'
 import { toPath } from '../utils/to-path'
 
 const encoder = new TextEncoder()
@@ -55,15 +56,9 @@ export const concatBytes = (chunks: readonly Uint8Array[]): Uint8Array => {
   return out
 }
 
-export interface SpawnConfig {
-  cwd?: string
-  env?: Record<string, string>
-  timeout?: number
-}
-
 /** Reduce the public process options into a platform-agnostic, defined-keys-only config. */
-export const normalizeSpawn = (options?: ExecOptions): SpawnConfig => {
-  const config: SpawnConfig = {}
+export const normalizeSpawn = (options?: ExecOptions): Helpers.SpawnConfig => {
+  const config: Helpers.SpawnConfig = {}
   if (options?.cwd !== undefined) {
     config.cwd = toPath(options.cwd)
   }

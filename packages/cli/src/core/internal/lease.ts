@@ -3,35 +3,23 @@ import { withResolvers } from 'std:effect'
 import { fail } from 'std:result'
 
 import { CliErrors } from '../errors'
+import type { Helpers } from '../types/helpers'
 
-interface Waiter {
-  granted: boolean
-  abandoned: boolean
-  grant(): void
-  gate: Operation<void>
-}
-
-const states = new WeakMap<object, LeaseState>()
-
-/** The arbitration state of ONE terminal's live region: a mutex plus a FIFO wait queue. */
-export interface LeaseState {
-  busy: boolean
-  waiters: Waiter[]
-}
+const states = new WeakMap<object, Helpers.LeaseState>()
 
 /** The lease state for an installed terminal, keyed by its context object (lazy, one per install). */
-export const leaseStateOf = (info: object): LeaseState => {
+export const leaseStateOf = (info: object): Helpers.LeaseState => {
   const found = states.get(info)
   if (found) {
     return found
   }
-  const created: LeaseState = { busy: false, waiters: [] }
+  const created: Helpers.LeaseState = { busy: false, waiters: [] }
   states.set(info, created)
   return created
 }
 
 /** Release the region and hand it to the next living waiter (FIFO). */
-export const releaseLease = (state: LeaseState): void => {
+export const releaseLease = (state: Helpers.LeaseState): void => {
   state.busy = false
   while (state.waiters.length > 0) {
     const next = state.waiters.shift()!
@@ -50,7 +38,7 @@ export const releaseLease = (state: LeaseState): void => {
  * Take the region, or fail `cli.busy` — with `wait` queue FIFO instead. A waiter halted while
  * queued is skipped at grant time; one halted AFTER being granted passes the region on.
  */
-export function* acquireLease(state: LeaseState, wait: boolean): Operation<void> {
+export function* acquireLease(state: Helpers.LeaseState, wait: boolean): Operation<void> {
   if (!state.busy) {
     state.busy = true
     return
@@ -64,7 +52,7 @@ export function* acquireLease(state: LeaseState, wait: boolean): Operation<void>
   }
 
   const gate = withResolvers<void>('cli renderer lease')
-  const waiter: Waiter = {
+  const waiter: Helpers.Waiter = {
     granted: false,
     abandoned: false,
     grant: () => gate.resolve(),

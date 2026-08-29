@@ -1,6 +1,6 @@
 import { operation } from 'std:effect'
 
-import type { MultiSelectState } from '../../types/internal'
+import type { Helpers } from '../../types/helpers'
 import type { PromptDef, PromptSpec } from '../../types/prompt'
 import { runPrompt } from '../../utils'
 import { firstEnabled, indicesToValues, labelOf, resolveSelected } from '../choice'
@@ -26,7 +26,7 @@ export const multiselect = operation(function* <T>(options: PromptDef.MultiSelec
     return undefined
   }
 
-  const spec: PromptSpec<MultiSelectState, T[]> = {
+  const spec: PromptSpec<Helpers.MultiSelectState, T[]> = {
     description: options.description,
     initial: {
       cursor: firstEnabled(choices),

@@ -1,8 +1,8 @@
 import type { PaletteDef } from 'cli:palette'
 
-import type { TreeNode } from '../types/internal'
+import type { Helpers } from '../types/helpers'
 
-const glyph = (node: TreeNode, palette: PaletteDef.Context, frame: number): string => {
+const glyph = (node: Helpers.TreeNode, palette: PaletteDef.Context, frame: number): string => {
   const { colors, symbols } = palette
 
   if (node.status === 'success') {
@@ -22,7 +22,7 @@ const glyph = (node: TreeNode, palette: PaletteDef.Context, frame: number): stri
   return colors.primary(frames[frame % frames.length] ?? '')
 }
 
-const bar = (node: TreeNode, palette: PaletteDef.Context): string => {
+const bar = (node: Helpers.TreeNode, palette: PaletteDef.Context): string => {
   const { colors, symbols } = palette
   const total = node.total > 0 ? node.total : 1
   const ratio = clamp(node.value / total, 1)
@@ -35,15 +35,15 @@ const bar = (node: TreeNode, palette: PaletteDef.Context): string => {
   return `${cells} ${colors.muted(`${Math.round(ratio * 100)}%`)}`
 }
 
-const line = (node: TreeNode, palette: PaletteDef.Context, frame: number): string => {
+const line = (node: Helpers.TreeNode, palette: PaletteDef.Context, frame: number): string => {
   const head = `${glyph(node, palette, frame)} ${node.message}`
   return node.type === 'bar' ? `${head} ${bar(node, palette)}` : head
 }
 
-export const clamp = (node: TreeNode | number, max: number): number =>
+export const clamp = (node: Helpers.TreeNode | number, max: number): number =>
   Math.max(0, Math.min(max, typeof node === 'number' ? node : node.total))
 
-export const spinnerNode = (message: string): TreeNode => ({
+export const spinnerNode = (message: string): Helpers.TreeNode => ({
   type: 'spinner',
   message,
   status: 'pending',
@@ -56,7 +56,7 @@ export const spinnerNode = (message: string): TreeNode => ({
 export const barNode = (
   message: string,
   options: { total?: number | undefined; width?: number | undefined } = {},
-): TreeNode => ({
+): Helpers.TreeNode => ({
   type: 'bar',
   message,
   status: 'pending',
@@ -67,11 +67,11 @@ export const barNode = (
 })
 
 export const renderTree = (
-  nodes: readonly TreeNode[],
+  nodes: readonly Helpers.TreeNode[],
   palette: PaletteDef.Context,
   frame: number,
 ): string => {
-  const walk = (items: readonly TreeNode[], depth: number, indent: string): string[] => {
+  const walk = (items: readonly Helpers.TreeNode[], depth: number, indent: string): string[] => {
     const out: string[] = []
 
     for (const [index, node] of items.entries()) {

@@ -77,4 +77,10 @@ export namespace Helpers {
   export type Reply<T> =
     | { readonly ok: true; readonly value: T }
     | { readonly ok: false; readonly failure: Result.Failure<unknown> }
+
+  export interface WriteCommand {
+    readonly chunk: Uint8Array | null
+    readonly failure: Result.Failure<unknown> | null
+    readonly settle: (outcome: Result.Failure<unknown> | null) => void
+  }
 }

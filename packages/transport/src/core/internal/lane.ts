@@ -333,12 +333,6 @@ export function* readableLane(
   })
 }
 
-interface WriteCommand {
-  readonly chunk: Uint8Array | null
-  readonly failure: Result.Failure<unknown> | null
-  readonly settle: (outcome: Result.Failure<unknown> | null) => void
-}
-
 /** `writable`: a platform sink over a byte lane — each `write` resolves once its chunk is on
  * the wire (credit-paced), `close` sends the end frame, `abort` a fail frame. */
 export function* writableLane(
@@ -347,7 +341,7 @@ export function* writableLane(
   given?: TransportDef.LaneOptions,
 ): Operation<WritableStream<Uint8Array>> {
   const producer = yield* openProducer(runtime, topic, given)
-  const commands = createQueue<WriteCommand, void>()
+  const commands = createQueue<Helpers.WriteCommand, void>()
 
   yield* fork(function* () {
     for (;;) {

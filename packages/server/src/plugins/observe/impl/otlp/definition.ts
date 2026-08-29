@@ -1,4 +1,4 @@
-import type { ServerDef, Sink } from 'server:core'
+import type { Helpers, ServerDef } from 'server:core'
 import { Server, ServerErrors } from 'server:core'
 import { createSink } from 'server:internal'
 import { attempt, fork, sleep } from 'std:effect'
@@ -60,7 +60,7 @@ export const OtlpExporter = definePlugin<OtlpDef.Context, [options: OtlpDef.Opti
         `[otlp] ${target} delivery failing: ${String((failure as AnyType)?.message ?? failure)}`,
       )
 
-    const spans: Sink<Record<string, unknown>> = createSink({
+    const spans: Helpers.Sink<Record<string, unknown>> = createSink({
       ...options.batch,
       onError: complain('trace'),
       *send(rows) {
@@ -70,7 +70,7 @@ export const OtlpExporter = definePlugin<OtlpDef.Context, [options: OtlpDef.Opti
         )
       },
     })
-    const logs: Sink<Record<string, unknown>> = createSink({
+    const logs: Helpers.Sink<Record<string, unknown>> = createSink({
       ...options.batch,
       onError: complain('log'),
       *send(rows) {

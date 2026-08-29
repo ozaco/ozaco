@@ -47,3 +47,5 @@ export interface MockCalls {
 export interface MockInfo extends ProviderDef.Info {
   readonly calls: MockCalls
 }
+
+/** The shapes this module passes around inside itself. */

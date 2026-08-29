@@ -17,11 +17,11 @@ import {
   mountActions,
   trackBody,
 } from '../internal/edge/engine'
-import type { EdgeState } from '../internal/edge/engine'
 import type { EdgeDef } from '../types/edge'
+import type { Helpers } from '../types/helpers'
 
 /** What an Edge impl's `setup()` calls: bind the engine to the installed kernel. */
-export function* openEdge(): Operation<EdgeState> {
+export function* openEdge(): Operation<Helpers.EdgeState> {
   const kernel = yield* Server.context.get()
 
   if (!kernel) {
@@ -40,7 +40,7 @@ export function* openEdge(): Operation<EdgeState> {
 
 /** The promise-land handlers a driver wires its runtime to — each request runs as a task of the
  * edge's scope that lives until the response body is done. */
-const serveHandlers = (state: EdgeState): EdgeDef.ServeHandlers => ({
+const serveHandlers = (state: Helpers.EdgeState): EdgeDef.ServeHandlers => ({
   fetch: request =>
     new Promise<Response>(resolve => {
       void state.scope.run(function* () {

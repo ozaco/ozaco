@@ -1,5 +1,7 @@
 import type { Result } from 'std:result'
 
+import type { AiDef } from './ai'
+
 export namespace Helpers {
   /** The conversation roles the portable message shape carries. */
   export type Role = 'system' | 'user' | 'assistant' | 'tool'
@@ -188,4 +190,36 @@ export namespace Helpers {
   /** The close value every ai stream settles with: `true` on a clean end, or the Failure that
    * truncated it mid-flight (mid-stream provider error frames close this way). */
   export type StreamClose = true | Result.Failure<unknown>
+
+  export interface ToolLoopInput {
+    readonly spec: Helpers.ChatSpec
+    readonly run: Readonly<Record<string, AiDef.ToolRunner>>
+    readonly maxRounds: number
+    readonly retries: number
+  }
+
+  export interface ChatInput {
+    readonly state: AiDef.Context
+    readonly messages: Helpers.MessagesInit
+    readonly options: AiDef.ChatStreamOptions
+    readonly streaming: boolean
+  }
+
+  export interface EmbedInput {
+    readonly state: AiDef.Context
+    readonly input: string | readonly string[]
+    readonly options: AiDef.EmbedOptions
+  }
+
+  export interface SpeechInput {
+    readonly state: AiDef.Context
+    readonly text: string
+    readonly options: AiDef.SpeechOptions
+  }
+
+  export interface TranscribeInput {
+    readonly state: AiDef.Context
+    readonly audio: Uint8Array | Blob
+    readonly options: AiDef.TranscribeOptions
+  }
 }

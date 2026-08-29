@@ -2,15 +2,11 @@ import { operation, useContext } from 'std:effect'
 
 import type { LogLevel } from '../const'
 import { Logger, LoggerTransport } from '../definitions'
+import type { Helpers } from '../types/helpers'
 import type { LoggerDef } from '../types/logger'
 
 import { LoggerBindingsContext } from './context'
 import { normalizePayload } from './normalize'
-
-interface BuildEntrySource {
-  ctx: LoggerDef.Context
-  bindings: Record<string, unknown>
-}
 
 export const logAt = (level: LogLevel) =>
   operation(function* (...args: LoggerDef.Payload[]) {
@@ -30,7 +26,7 @@ export const dispatch = operation(function* (entry: LoggerDef.Entry) {
 })
 
 export const buildEntry = (
-  source: BuildEntrySource,
+  source: Helpers.BuildEntrySource,
   level: LogLevel,
   args: readonly LoggerDef.Payload[],
 ): LoggerDef.Entry => {

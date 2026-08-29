@@ -4,21 +4,10 @@
  * groups of openable entries (actions + their sockets), free sockets, lookup by id, `:param`
  * names, text filtering. Pure data helpers over `ManifestDef`.
  */
+import type { Helpers } from '../types/helpers'
 import type { ManifestDef } from '../types/manifest'
 
-/** One openable thing in the sidebar. */
-export type Entry =
-  | { readonly kind: 'action'; readonly id: string; readonly action: ManifestDef.Action }
-  | { readonly kind: 'socket'; readonly id: string; readonly socket: ManifestDef.Socket }
-
-export interface ServiceGroup {
-  readonly name: string
-  readonly version: string
-  readonly description: string | undefined
-  readonly entries: readonly Entry[]
-}
-
-export const groupsOf = (manifest: ManifestDef.Manifest): readonly ServiceGroup[] =>
+export const groupsOf = (manifest: ManifestDef.Manifest): readonly Helpers.ServiceGroup[] =>
   manifest.services.map(service => ({
     name: service.name,
     version: service.version,
@@ -37,7 +26,7 @@ export const groupsOf = (manifest: ManifestDef.Manifest): readonly ServiceGroup[
 export const orphanSockets = (manifest: ManifestDef.Manifest): readonly ManifestDef.Socket[] =>
   (manifest.sockets ?? []).filter(socket => socket.service === null)
 
-export const findEntry = (manifest: ManifestDef.Manifest, id: string): Entry | null => {
+export const findEntry = (manifest: ManifestDef.Manifest, id: string): Helpers.Entry | null => {
   for (const group of groupsOf(manifest)) {
     const entry = group.entries.find(candidate => candidate.id === id)
 
@@ -55,7 +44,7 @@ export const findEntry = (manifest: ManifestDef.Manifest, id: string): Entry | n
 export const pathParams = (path: string): readonly string[] =>
   [...path.matchAll(/:([A-Za-z_]\w*)/gu)].map(match => match[1]!)
 
-export const matches = (entry: Entry, query: string): boolean => {
+export const matches = (entry: Helpers.Entry, query: string): boolean => {
   const needle = query.trim().toLowerCase()
 
   if (needle.length === 0) {

@@ -1,6 +1,6 @@
 import { operation } from 'std:effect'
 
-import type { AutocompleteState } from '../../types/internal'
+import type { Helpers } from '../../types/helpers'
 import type { PromptDef, PromptSpec } from '../../types/prompt'
 import { runPrompt } from '../../utils'
 import { labelOf } from '../choice'
@@ -23,7 +23,7 @@ export const autocomplete = operation(function* <T>(options: PromptDef.Autocompl
   const suggest = options.suggest ?? defaultSuggest
   const match = (value: string): readonly PromptDef.Choice<T>[] => suggest(value, options.choices)
 
-  const spec: PromptSpec<AutocompleteState, T> = {
+  const spec: PromptSpec<Helpers.AutocompleteState, T> = {
     description: options.description,
     initial: { input: createInput(), active: 0 },
     render: (state, ctx) => {

@@ -1,6 +1,7 @@
 export * from './const'
 export * from './errors'
 export * from './types/client'
+export * from './types/helpers'
 export * from './types/manifest'
 export * from './definition/client'
 export * from './utils/client'

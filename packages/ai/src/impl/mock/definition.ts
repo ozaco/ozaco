@@ -4,9 +4,9 @@ import { useContext } from 'std:effect'
 
 import pkg from '../../../package.json'
 
-import type { MockState } from './internal'
 import { completeChatResult, resolveResponder, scriptedFlow, StateRef } from './internal'
-import type { MockInfo, MockScript } from './types'
+import type { Helpers as Own } from './types/helpers'
+import type { MockInfo, MockScript } from './types/mock'
 
 const FULL: ProviderDef.Capabilities = {
   chat: true,
@@ -36,7 +36,7 @@ export const MockProvider = AiProvider.implement<MockInfo, [script?: MockScript]
   version: pkg.version,
   description: 'Scripted in-memory AI provider for tests and development',
   *setup(script) {
-    const state: MockState = {
+    const state: Own.MockState = {
       script: script ?? {},
       cursors: new Map(),
       calls: { chat: [], chatStream: [], embed: [], tts: [], ttsStream: [], stt: [] },

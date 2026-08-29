@@ -1,4 +1,4 @@
-import type { Flow, Operation, Queue } from 'std:effect'
+import type { Flow, Operation } from 'std:effect'
 import { createQueue, fork, toReadable, until, withResolvers } from 'std:effect'
 import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
@@ -6,6 +6,7 @@ import type { AnyType } from 'std:shared'
 import { Busboy } from '@fastify/busboy'
 
 import { ServerErrors } from '../../errors'
+import type { Helpers } from '../../types/helpers'
 import type { StreamDef } from '../../types/stream'
 import { brandStream } from '../../utils/stream'
 
@@ -14,12 +15,6 @@ import { coerce } from './body'
 /** Busboy's file stream is paused beyond HIGH buffered chunks and resumed below LOW. */
 const HIGH_WATER = 64
 const LOW_WATER = 16
-
-interface Lane {
-  readonly queue: Queue<Uint8Array, void>
-  fed: boolean
-  resume?: (() => void) | undefined
-}
 
 /**
  * A multipart body as a `parts` input: the fields that arrive BEFORE the first file resolve the
@@ -47,7 +42,7 @@ export function* parseParts(
 
   const fields: Record<string, unknown> = {}
 
-  const lanes = new Map<string, Lane>(
+  const lanes = new Map<string, Helpers.Lane>(
     Object.keys(decl.streams).map(name => [
       name,
       { queue: createQueue<Uint8Array, void>(), fed: false },

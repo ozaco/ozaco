@@ -1,16 +1,16 @@
 // oxlint-disable import/exports-last
-import type { Operation, Scope } from 'std:effect'
+import type { Operation } from 'std:effect'
 import { attempt, createContext, until, useScope } from 'std:effect'
 import { IO } from 'std:io'
 import { fail, isFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import { addRoute, createRouter, findRoute } from 'rou3'
-import type { RouterContext } from 'rou3'
 
 import { HEADERS, laneOf } from '../../const'
 import { ServerErrors } from '../../errors'
 import type { EdgeDef } from '../../types/edge'
+import type { Helpers } from '../../types/helpers'
 import type { ServerDef } from '../../types/server'
 import type { ServiceDef } from '../../types/service'
 import type { TraceDef } from '../../types/trace'
@@ -24,7 +24,6 @@ import {
   stream,
 } from '../../utils/stream'
 import { childTrace, report, rootTrace, withSpan } from '../../utils/trace'
-import type { Captured } from '../capture'
 import { capturedHeaders, capturedValue, countingStream, emptyCapture, observing } from '../capture'
 import { contextFor, materialize } from '../dispatch'
 
@@ -33,45 +32,16 @@ import { parseParts } from './multipart'
 import { failureResponse, responseOf } from './respond'
 import { driveSocket } from './sockets'
 
-/** One mounted action route. */
-interface ActionRoute {
-  readonly kind: 'action'
-  readonly service: string
-  readonly action: string
-  readonly meta: ServiceDef.Meta
-}
-
-interface RawRouteEntry {
-  readonly kind: 'raw'
-  readonly route: EdgeDef.RawRoute
-}
-
-type Entry = ActionRoute | RawRouteEntry
-
-/** Per-install engine state (the Edge impl's context holds it). */
-export interface EdgeState {
-  readonly kernel: ServerDef.Context
-  readonly actions: Pick<ServerDef.Actions, 'call' | 'emit' | 'dispatch'>
-  readonly router: RouterContext<Entry>
-  readonly sockets: RouterContext<EdgeDef.SocketRoute>
-  readonly decorators: EdgeDef.Decorator[]
-  readonly scope: Scope
-  preflight: EdgeDef.Preflight | null
-  paused: boolean
-  mounted: boolean
-  info: EdgeDef.ListenInfo | null
-}
-
-export const EdgeStateRef = createContext<EdgeState>('server:edge/state')
+export const EdgeStateRef = createContext<Helpers.EdgeState>('server:edge/state')
 
 export function* createEdgeState(
   kernel: ServerDef.Context,
-  actions: EdgeState['actions'],
-): Operation<EdgeState> {
-  const state: EdgeState = {
+  actions: Helpers.EdgeState['actions'],
+): Operation<Helpers.EdgeState> {
+  const state: Helpers.EdgeState = {
     kernel,
     actions,
-    router: createRouter<Entry>(),
+    router: createRouter<Helpers.Entry>(),
     sockets: createRouter<EdgeDef.SocketRoute>(),
     decorators: [],
     scope: yield* useScope(),
@@ -118,7 +88,7 @@ const decodeParams = (params: Record<string, string> | undefined): Record<string
   )
 
 /** Mount every action of the kernel's registry (idempotent). */
-export const mountActions = (state: EdgeState): number => {
+export const mountActions = (state: Helpers.EdgeState): number => {
   if (state.mounted) {
     return 0
   }
@@ -182,17 +152,6 @@ function* inputOf(
   return yield* valueBody(request, params, meta.input)
 }
 
-interface ActionCall {
-  readonly state: EdgeState
-  readonly request: Request
-  readonly entry: ActionRoute
-  readonly params: Readonly<Record<string, string>>
-  readonly trace: TraceDef.Trace
-
-  /** filled while the action runs (only when an observer is installed). */
-  readonly captured: Captured
-}
-
 /** Run one action route: build the call, dispatch through the kernel, render the response. */
 function* runAction({
   state,
@@ -201,7 +160,7 @@ function* runAction({
   params,
   trace,
   captured,
-}: ActionCall): Operation<Response> {
+}: Helpers.ActionCall): Operation<Response> {
   const watched = observing(state.kernel)
 
   if (watched) {
@@ -311,15 +270,8 @@ function* runAction({
   return response
 }
 
-interface Finish {
-  readonly state: EdgeState
-  readonly request: Request
-  readonly response: Response
-  readonly requestId: string
-}
-
 /** Decorate and stamp the request id on every response (errors included). */
-function* finish({ state, request, response, requestId }: Finish): Operation<Response> {
+function* finish({ state, request, response, requestId }: Helpers.Finish): Operation<Response> {
   let out = response
 
   for (const decorator of state.decorators) {
@@ -338,7 +290,7 @@ function* finish({ state, request, response, requestId }: Finish): Operation<Res
  * unrouted 404s, rejected upgrades and validation errors land in the observe store and every
  * exporter (the dispatch path is NOT routed through this: `withSpan` already reports it). */
 function* reportedFailure(
-  state: EdgeState,
+  state: Helpers.EdgeState,
   input: {
     readonly requestId: string
     readonly spanId?: string | undefined
@@ -369,13 +321,13 @@ function* reportedFailure(
  * `edge` span + a request row, raw routes, action routes (input by plane → kernel dispatch →
  * response by brand), preflight for unrouted OPTIONS, 404 otherwise, 503 while paused.
  */
-export function* handleRequest(state: EdgeState, request: Request): Operation<Response> {
+export function* handleRequest(state: Helpers.EdgeState, request: Request): Operation<Response> {
   const { kernel } = state
   const url = new URL(request.url)
   const requestId = request.headers.get(HEADERS.requestId) ?? (yield* IO.actions.uuid())
   const trace = yield* rootTrace(kernel.serviceId, 'external', requestId)
   const startedAt = Date.now()
-  let routed: ActionRoute | null = null
+  let routed: Helpers.ActionRoute | null = null
   const captured = emptyCapture()
 
   const response: Response = yield* withSpan(
@@ -429,7 +381,7 @@ export function* handleRequest(state: EdgeState, request: Request): Operation<Re
   )
   const decorated = yield* finish({ state, request, response, requestId })
   const endedAt = Date.now()
-  const entry = routed as ActionRoute | null
+  const entry = routed as Helpers.ActionRoute | null
 
   yield* report(kernel, {
     t: 'request',
@@ -490,7 +442,10 @@ export function* handleRequest(state: EdgeState, request: Request): Operation<Re
 }
 
 /** Decide an upgrade: a socket route, its `authorize`, then a handler scope per socket. */
-export function* decideUpgrade(state: EdgeState, request: Request): Operation<EdgeDef.Upgrade> {
+export function* decideUpgrade(
+  state: Helpers.EdgeState,
+  request: Request,
+): Operation<EdgeDef.Upgrade> {
   const { kernel } = state
   const url = new URL(request.url)
   const requestId = request.headers.get(HEADERS.requestId) ?? (yield* IO.actions.uuid())
@@ -586,7 +541,7 @@ export function* decideUpgrade(state: EdgeState, request: Request): Operation<Ed
   }
 }
 
-export const isSocketRequest = (state: EdgeState, request: Request): boolean =>
+export const isSocketRequest = (state: Helpers.EdgeState, request: Request): boolean =>
   request.headers.get('upgrade')?.toLowerCase() === 'websocket' &&
   findRoute(state.sockets, 'WS', new URL(request.url).pathname) !== undefined
 

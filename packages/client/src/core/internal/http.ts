@@ -8,7 +8,7 @@ import type { AnyType } from 'std:shared'
 import { DEFAULT_TIMEOUT_MS, HEADERS } from '../const'
 import { ClientErrors } from '../errors'
 import type { ClientDef } from '../types/client'
-import type { ManifestDef } from '../types/manifest'
+import type { Helpers } from '../types/helpers'
 
 import { decodeBody, failureOf } from './decode'
 
@@ -129,23 +129,10 @@ const formOf = (parts: { fields?: unknown; streams?: Record<string, unknown> }):
   return form
 }
 
-interface Prepared {
-  readonly url: string
-  readonly init: RequestInit
-}
-
-/** One call's ingredients. */
-export interface CallInput {
-  readonly ctx: ClientDef.Context
-  readonly action: ManifestDef.Action
-  readonly input: unknown
-  readonly options?: ClientDef.CallOptions | undefined
-}
-
 function* prepare(
-  { ctx, action, input, options }: CallInput,
+  { ctx, action, input, options }: Helpers.CallInput,
   requestId: string,
-): Operation<Prepared> {
+): Operation<Helpers.Prepared> {
   const { path, rest, failure } = resolvePath(action.route.path, input)
 
   if (failure) {
@@ -221,7 +208,7 @@ function* prepare(
 /** One HTTP call: prepared by the manifest's route, deadline + scope cancellation, decoded by
  * brand, failures rebuilt from the wire. */
 export function* request(
-  call: CallInput,
+  call: Helpers.CallInput,
 ): Operation<{ readonly value: unknown; readonly meta: ClientDef.Meta }> {
   const { ctx, action, options } = call
   const requestId = options?.requestId ?? (yield* IO.actions.uuid())

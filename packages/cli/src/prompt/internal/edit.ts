@@ -1,11 +1,11 @@
 import type { Key } from 'cli:core'
 import type { PaletteDef } from 'cli:palette'
 
-import type { InputState, RenderInputOptions } from '../types/internal'
+import type { Helpers } from '../types/helpers'
 
 const DEL = String.fromCodePoint(127)
 
-export const createInput = (initial = ''): InputState => ({
+export const createInput = (initial = ''): Helpers.InputState => ({
   value: initial,
   cursor: initial.length,
 })
@@ -13,7 +13,7 @@ export const createInput = (initial = ''): InputState => ({
 export const isPrintable = (key: Key): boolean =>
   !key.ctrl && !key.meta && key.sequence.length === 1 && key.sequence >= ' ' && key.sequence !== DEL
 
-export const editLine = (state: InputState, key: Key): InputState | undefined => {
+export const editLine = (state: Helpers.InputState, key: Key): Helpers.InputState | undefined => {
   const { value, cursor } = state
 
   if (key.name === 'backspace') {
@@ -50,9 +50,9 @@ export const editLine = (state: InputState, key: Key): InputState | undefined =>
 }
 
 export const renderInput = (
-  state: InputState,
+  state: Helpers.InputState,
   palette: PaletteDef.Context,
-  options: RenderInputOptions = {},
+  options: Helpers.RenderInputOptions = {},
 ): string => {
   if (state.value.length === 0 && options.placeholder) {
     const head = options.placeholder.slice(0, 1)

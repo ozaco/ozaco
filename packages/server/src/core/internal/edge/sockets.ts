@@ -5,23 +5,11 @@ import { isFailure } from 'std:result'
 
 import { CtxRef } from '../../context'
 import type { EdgeDef } from '../../types/edge'
-import type { ServerDef } from '../../types/server'
-import type { TraceDef } from '../../types/trace'
+import type { Helpers } from '../../types/helpers'
 import { tagOf } from '../../utils/failure'
 import { report } from '../../utils/trace'
 import { validate } from '../../utils/validation'
 import { observing } from '../capture'
-
-interface SocketInput {
-  readonly kernel: ServerDef.Context
-  readonly route: EdgeDef.SocketRoute
-  readonly raw: EdgeDef.RawSocket
-  readonly params: Readonly<Record<string, string>>
-  readonly headers: Readonly<Record<string, string>>
-  readonly url: URL
-  readonly ctx: ServerDef.Ctx
-  readonly trace: TraceDef.Trace
-}
 
 const decoder = new TextDecoder()
 
@@ -30,7 +18,7 @@ const decoder = new TextDecoder()
  * Flow; `send` encodes values as JSON text; the handler runs in its own scope that ends with the
  * socket (a close from either side halts it). Every frame is an observe event.
  */
-export function* driveSocket(input: SocketInput): Operation<void> {
+export function* driveSocket(input: Helpers.SocketInput): Operation<void> {
   const { kernel, route, raw, trace } = input
   const id = (yield* IO.actions.uuid()).slice(0, 8)
   const inbound = createQueue<unknown, void>()

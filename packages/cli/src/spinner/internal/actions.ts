@@ -5,7 +5,7 @@ import type { PaletteDef } from 'cli:palette'
 import type { Operation, Task } from 'std:effect'
 import { ensure, operation, sleep, spawn } from 'std:effect'
 
-import type { TreeNode } from '../types/internal'
+import type { Helpers } from '../types/helpers'
 import type { SpinnerDef } from '../types/spinner'
 
 import { barNode, clamp, renderTree, spinnerNode } from './tree'
@@ -29,7 +29,7 @@ const setupTree = operation(function* (intervalMs: number) {
   const interactive = info.capabilities.interactive
 
   const lease: TerminalDef.Renderer = yield* Terminal.actions.renderer()
-  const state = { roots: [] as TreeNode[], frame: 0, stopped: false }
+  const state = { roots: [] as Helpers.TreeNode[], frame: 0, stopped: false }
 
   let task: Task<void> | undefined
 
@@ -64,7 +64,10 @@ const setupTree = operation(function* (intervalMs: number) {
   return { state, palette, finish }
 })
 
-const makeBarHandle = (node: TreeNode, finish?: () => Operation<void>): SpinnerDef.BarHandle => ({
+const makeBarHandle = (
+  node: Helpers.TreeNode,
+  finish?: () => Operation<void>,
+): SpinnerDef.BarHandle => ({
   update: operation(function* (value: number) {
     node.value = clamp(node, value)
   }),
@@ -97,7 +100,7 @@ const makeBarHandle = (node: TreeNode, finish?: () => Operation<void>): SpinnerD
   }),
 })
 
-const makeTaskHandle = (node: TreeNode): SpinnerDef.TaskHandle => ({
+const makeTaskHandle = (node: Helpers.TreeNode): SpinnerDef.TaskHandle => ({
   update: operation(function* (message: string) {
     node.message = message
   }),

@@ -1,6 +1,6 @@
 import { operation } from 'std:effect'
 
-import type { SelectState } from '../../types/internal'
+import type { Helpers } from '../../types/helpers'
 import type { PromptDef, PromptSpec } from '../../types/prompt'
 import { runPrompt } from '../../utils'
 import { labelOf, resolveIndex } from '../choice'
@@ -13,7 +13,7 @@ export const select = operation(function* <T>(options: PromptDef.SelectOptions<T
   const disabled = (index: number): boolean => Boolean(choices[index]?.disabled)
   const initial = resolveIndex(options.initial, choices)
 
-  const spec: PromptSpec<SelectState, T> = {
+  const spec: PromptSpec<Helpers.SelectState, T> = {
     description: options.description,
     initial: { active: initial },
     render: (state, ctx) => {

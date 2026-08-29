@@ -7,7 +7,7 @@ import type { AnyType } from 'std:shared'
 import { VERSION_FLAGS } from '../const'
 import { Registry } from '../registry'
 import type { CommandDef } from '../types/command'
-import type { RuntimeNode } from '../types/internal'
+import type { Helpers } from '../types/helpers'
 import type { RegistryDef } from '../types/registry'
 
 import { processArgv } from './argv'
@@ -44,7 +44,7 @@ export const run = operation(function* (argv?: string[]) {
   const head = args[0]
 
   if (head !== undefined && !head.startsWith('-')) {
-    const node = ctx.commands.get(head) as AnyType as RuntimeNode | undefined
+    const node = ctx.commands.get(head) as AnyType as Helpers.RuntimeNode | undefined
     if (node !== undefined) {
       return yield* runCommand(node, args.slice(1))
     }

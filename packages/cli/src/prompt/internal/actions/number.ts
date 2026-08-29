@@ -1,6 +1,6 @@
 import { operation } from 'std:effect'
 
-import type { FieldState, NumberParsed } from '../../types/internal'
+import type { Helpers } from '../../types/helpers'
 import type { PromptDef, PromptSpec } from '../../types/prompt'
 import { runPrompt } from '../../utils'
 import { cancelledLine, inlineFrame, submittedLine } from '../chrome'
@@ -10,7 +10,7 @@ import { isEnter } from '../keys'
 export const number = operation(function* (options: PromptDef.NumberOptions) {
   const allowed = options.float ? /[-0-9.]/u : /[-0-9]/u
 
-  const parse = (raw: string): NumberParsed => {
+  const parse = (raw: string): Helpers.NumberParsed => {
     const trimmed = raw.trim()
     if (trimmed === '') {
       return { error: 'Please enter a number' }
@@ -34,7 +34,7 @@ export const number = operation(function* (options: PromptDef.NumberOptions) {
     return custom === undefined ? { value } : { error: custom }
   }
 
-  const spec: PromptSpec<FieldState, number> = {
+  const spec: PromptSpec<Helpers.FieldState, number> = {
     description: options.description,
     initial: {
       input: createInput(options.initial === undefined ? '' : String(options.initial)),

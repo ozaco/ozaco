@@ -2,7 +2,7 @@ import { Terminal, useTerminal } from 'cli:core'
 import { usePalette } from 'cli:palette'
 import { ensure, operation } from 'std:effect'
 
-import type { MutableRow } from '../types/internal'
+import type { Helpers } from '../types/helpers'
 import type { TableDef } from '../types/table'
 
 import {
@@ -20,12 +20,16 @@ import {
 /** Reserve rows for the `+N more` note and one line of breathing room below the live table. */
 const RESERVED_ROWS = 2
 
-const clone = (row: TableDef.Row): MutableRow =>
+const clone = (row: TableDef.Row): Helpers.MutableRow =>
   Array.isArray(row)
     ? [...(row as readonly TableDef.Cell[])]
     : { ...(row as Record<string, TableDef.Cell>) }
 
-const setCell = (cells: MutableRow, column: string | number, value: TableDef.Cell): void => {
+const setCell = (
+  cells: Helpers.MutableRow,
+  column: string | number,
+  value: TableDef.Cell,
+): void => {
   if (Array.isArray(cells)) {
     cells[Number(column)] = value
   } else {
@@ -39,7 +43,7 @@ export const table = operation(function* (options: TableDef.Options) {
   const size = yield* Terminal.actions.size()
 
   const opts = normalize(options)
-  const state = { rows: [] as MutableRow[], ended: false }
+  const state = { rows: [] as Helpers.MutableRow[], ended: false }
 
   // Interactive: keep every row, auto-fit columns, and re-render the table in place through the
   // render lease — so any row stays editable until `end()`. When the table outgrows the viewport

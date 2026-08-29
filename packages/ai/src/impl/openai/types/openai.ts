@@ -15,3 +15,5 @@ export interface OpenAIProviderOptions {
   /** Auth transport. Default `{ kind: 'bearer' }`. */
   readonly auth?: OpenAIAuth | undefined
 }
+
+/** The shapes this module passes around inside itself. */

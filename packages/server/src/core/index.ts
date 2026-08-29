@@ -25,8 +25,6 @@ export { createServer } from './utils/server'
 export { action, ref, refs, service } from './utils/service'
 export { stream } from './utils/stream'
 
-export type { Sink } from './utils/sink'
-
 export type * from './types/carrier'
 export type * from './types/edge'
 export type * from './types/errors'

@@ -1,5 +1,5 @@
 import type { CommandDef } from '../types/command'
-import type { RawParse } from '../types/internal'
+import type { Helpers } from '../types/helpers'
 
 // Bad numbers are left as their original string so the schema reports a clear validation error.
 const convert = (type: 'string' | 'number' | 'boolean', value: string): unknown => {
@@ -20,7 +20,7 @@ const convert = (type: 'string' | 'number' | 'boolean', value: string): unknown 
  */
 export const build = (
   infos: readonly CommandDef.OptionInfo[],
-  raw: RawParse,
+  raw: Helpers.RawParse,
   args: readonly string[],
 ): Record<string, unknown> => {
   const byName = new Map(infos.map(info => [info.name, info]))

@@ -1,6 +1,6 @@
 import { operation } from 'std:effect'
 
-import type { FieldState } from '../../types/internal'
+import type { Helpers } from '../../types/helpers'
 import type { PromptDef, PromptSpec } from '../../types/prompt'
 import { runPrompt } from '../../utils'
 import { cancelledLine, inlineFrame, submittedLine } from '../chrome'
@@ -11,7 +11,7 @@ export const password = operation(function* (options: PromptDef.PasswordOptions)
   const mask = options.mask ?? '•'
   const echo = (value: string): string => (mask === '' ? '' : mask.repeat(value.length))
 
-  const spec: PromptSpec<FieldState, string> = {
+  const spec: PromptSpec<Helpers.FieldState, string> = {
     description: options.description,
     initial: { input: createInput() },
     render: (state, ctx) =>

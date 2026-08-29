@@ -1,4 +1,4 @@
-import type { Database } from 'db:core'
+import type { Database, Schema, Spec } from 'db:core'
 import type { ObserveDef, ServerDef } from 'server:core'
 import type { Queue, Task } from 'std:effect'
 import type { AnyType } from 'std:shared'
@@ -95,4 +95,10 @@ export namespace ObservePluginDef {
     flusher: Task<void> | null
     wake: (() => void) | null
   }
+}
+
+/** The shapes this plugin passes around inside itself. */
+export namespace Helpers {
+  /** rows as plain documents: the handle is untyped on purpose (five tables, one helper). */
+  export type Db = Database.Handle<Record<string, Schema.Types<Spec.Doc, Spec.Doc>>>
 }

@@ -5,7 +5,7 @@ import { isSuccess } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import type { CommandDef } from '../types/command'
-import type { JsonSchema } from '../types/internal'
+import type { Helpers } from '../types/helpers'
 
 const baseType = (type: string | string[] | undefined): 'string' | 'number' | 'boolean' => {
   const resolved = Array.isArray(type) ? type.find(entry => entry !== 'null') : type
@@ -28,7 +28,7 @@ const fromDecls = (decls: readonly CommandDef.OptionDecl[]): CommandDef.OptionIn
     hasDefault: false,
   }))
 
-const walk = (json: JsonSchema): CommandDef.OptionInfo[] => {
+const walk = (json: Helpers.JsonSchema): CommandDef.OptionInfo[] => {
   const required = new Set(json.required)
   const infos: CommandDef.OptionInfo[] = []
 
@@ -80,7 +80,7 @@ export function* optionsFromAction(
         (zod.value.z as AnyType).toJSONSchema(input, {
           unrepresentable: 'any',
           io: 'input',
-        }) as JsonSchema,
+        }) as Helpers.JsonSchema,
     ),
   )
 

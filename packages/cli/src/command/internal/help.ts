@@ -1,7 +1,7 @@
 import type { PaletteDef } from 'cli:palette'
 
 import type { CommandDef } from '../types/command'
-import type { ActionHelp, RuntimeNode } from '../types/internal'
+import type { Helpers } from '../types/helpers'
 import type { RegistryDef } from '../types/registry'
 
 // Pad the left column on its plain width, then paint it (keeps ANSI from breaking alignment).
@@ -23,7 +23,10 @@ const flagsFor = (info: CommandDef.OptionInfo, short: Record<string, string>): s
 }
 
 /** Usage + options for a single action (subcommand). */
-export const renderActionHelp = (action: ActionHelp, palette: PaletteDef.Context): string => {
+export const renderActionHelp = (
+  action: Helpers.ActionHelp,
+  palette: PaletteDef.Context,
+): string => {
   const { colors } = palette
   const out: string[] = []
 
@@ -60,7 +63,7 @@ export const renderActionHelp = (action: ActionHelp, palette: PaletteDef.Context
 
 /** Usage + the list of subcommands/actions for a group command. */
 export const renderCommandHelp = (
-  node: RuntimeNode,
+  node: Helpers.RuntimeNode,
   path: string[],
   palette: PaletteDef.Context,
 ): string => {

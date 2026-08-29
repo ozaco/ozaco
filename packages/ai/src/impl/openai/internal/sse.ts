@@ -1,8 +1,10 @@
 // oxlint-disable import/exports-last
 import type { Helpers } from 'ai:core'
-import type { Flow, Operation, Queue, Subscription } from 'std:effect'
+import type { Flow, Operation, Queue } from 'std:effect'
 import { createQueue, fork } from 'std:effect'
 import { asFailure } from 'std:result'
+
+import type { Helpers as Own } from '../types/helpers'
 
 /** The OpenAI SSE sentinel that ends a token stream. */
 export const SSE_DONE = '[DONE]'
@@ -30,16 +32,10 @@ const asFlow = <T>(queue: Queue<T, Helpers.StreamClose>): Flow<T, Helpers.Stream
     },
   }) as Flow<T, Helpers.StreamClose>
 
-interface PumpInput<T> {
-  readonly subscription: Subscription<Uint8Array, void>
-  readonly queue: Queue<T, Helpers.StreamClose>
-  readonly parse: (data: string) => Operation<T | undefined>
-}
-
 /** Drain the raw byte subscription, parse each complete SSE event, and feed the queue. A raised
  * failure (mid-stream `{"error":…}` frame, unparseable chunk, transport fault) closes the queue
  * with that Failure instead of a clean `true`. */
-function* pump<T>(input: PumpInput<T>): Operation<void> {
+function* pump<T>(input: Own.PumpInput<T>): Operation<void> {
   const decoder = new TextDecoder()
   let buffer = ''
   let close: Helpers.StreamClose = true
@@ -101,12 +97,7 @@ export function* sseFlow<T>(
   return asFlow(queue)
 }
 
-interface CopyInput {
-  readonly subscription: Subscription<Uint8Array, void>
-  readonly queue: Queue<Uint8Array, Helpers.StreamClose>
-}
-
-function* copy(input: CopyInput): Operation<void> {
+function* copy(input: Own.CopyInput): Operation<void> {
   let close: Helpers.StreamClose = true
   try {
     for (;;) {

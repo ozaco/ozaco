@@ -5,20 +5,12 @@ import type { Result } from 'std:result'
 import { fail, isSuccess } from 'std:result'
 import type { AnyType } from 'std:shared'
 
-import type { WsDef } from '../types'
+import type { Helpers, WsDef } from '../types'
 
 const CONNECTING = 0
 const OPEN = 1
 
-/** Fully-resolved reconnect settings (absent entirely when reconnect is disabled). */
-interface ReconnectBudget {
-  retries: number
-  delayMs: number
-  backoff: number
-  maxDelayMs: number
-}
-
-const budgetOf = (options?: WsDef.ReconnectOptions): ReconnectBudget | undefined =>
+const budgetOf = (options?: WsDef.ReconnectOptions): Helpers.ReconnectBudget | undefined =>
   options
     ? {
         retries: options.retries ?? 5,
@@ -186,7 +178,7 @@ export const createConnection = (
     // successful reopen, so only consecutive failed redials exhaust it. Exhaustion ends the
     // connection with a 'ws/reconnect-exhausted' failure close. Never raises: dial failures are
     // attempted, everything else is synchronous bookkeeping.
-    const supervise = operation(function* (budget: ReconnectBudget) {
+    const supervise = operation(function* (budget: Helpers.ReconnectBudget) {
       while (true) {
         const outage = yield* outages.next()
         if (outage.done) {

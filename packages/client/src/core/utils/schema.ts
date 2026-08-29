@@ -1,11 +1,5 @@
+import type { Helpers } from '../types/helpers'
 // oxlint-disable import/exports-last
-/**
- * JSON Schema (what the manifest carries per plane) → an example value, a flat field list and
- * text coercion — what any tool that builds a call or a form from the manifest needs (the docs
- * panel's Params form, a CLI try-it, tests). Small on purpose: objects, arrays, primitives,
- * enums, unions, defaults.
- */
-export type Schema = Record<string, unknown> | null | undefined
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -33,7 +27,7 @@ const typeOf = (schema: Record<string, unknown>): string | null => {
 }
 
 /** A plausible value for a schema: defaults and enums first, then the shape. */
-export const exampleOf = (schema: Schema, depth = 0): unknown => {
+export const exampleOf = (schema: Helpers.Schema, depth = 0): unknown => {
   if (!isRecord(schema) || depth > 6) {
     return null
   }
@@ -54,7 +48,7 @@ export const exampleOf = (schema: Schema, depth = 0): unknown => {
     const variants = schema[key]
 
     if (Array.isArray(variants) && variants.length > 0) {
-      return exampleOf(variants[0] as Schema, depth + 1)
+      return exampleOf(variants[0] as Helpers.Schema, depth + 1)
     }
   }
 
@@ -69,7 +63,7 @@ export const exampleOf = (schema: Schema, depth = 0): unknown => {
         isRecord(schema['properties']) ? schema['properties'] : {},
       )) {
         if (required.has(name) || depth === 0) {
-          out[name] = exampleOf(property as Schema, depth + 1)
+          out[name] = exampleOf(property as Helpers.Schema, depth + 1)
         }
       }
 
@@ -103,16 +97,8 @@ export const exampleOf = (schema: Schema, depth = 0): unknown => {
   }
 }
 
-export interface Field {
-  readonly name: string
-  readonly type: string
-  readonly required: boolean
-  readonly description: string | undefined
-  readonly options: readonly unknown[] | null
-}
-
 /** The top-level fields of an object schema (what the Params form shows). */
-export const fieldsOf = (schema: Schema): readonly Field[] => {
+export const fieldsOf = (schema: Helpers.Schema): readonly Helpers.Field[] => {
   if (!isRecord(schema) || typeOf(schema) !== 'object' || !isRecord(schema['properties'])) {
     return []
   }

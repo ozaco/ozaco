@@ -4,6 +4,7 @@ import type { AnyType } from 'std:shared'
 import { createHash, createHmac } from 'node:crypto'
 
 import type { S3ListOptions, S3Options, S3PresignOptions } from '../types/common'
+import type { Helpers } from '../types/helpers'
 
 // A dependency-free, SigV4-signed S3 client over `fetch` (Node / any runtime without Bun's native
 // `S3Client`). It mirrors the slice of Bun's `S3Client` shape that `createS3` consumes, so the same
@@ -12,16 +13,7 @@ import type { S3ListOptions, S3Options, S3PresignOptions } from '../types/common
 
 const env = (key: string): string | undefined => (globalThis as AnyType).process?.env?.[key]
 
-interface Config {
-  readonly accessKeyId: string
-  readonly secretAccessKey: string
-  readonly sessionToken: string | undefined
-  readonly region: string
-  readonly bucket: string
-  readonly endpoint: string | undefined
-}
-
-const resolveConfig = (options: S3Options): Config => ({
+const resolveConfig = (options: S3Options): Helpers.Config => ({
   accessKeyId: options.accessKeyId ?? env('S3_ACCESS_KEY_ID') ?? env('AWS_ACCESS_KEY_ID') ?? '',
   secretAccessKey:
     options.secretAccessKey ?? env('S3_SECRET_ACCESS_KEY') ?? env('AWS_SECRET_ACCESS_KEY') ?? '',
@@ -43,7 +35,7 @@ const sha256 = (data: string | Uint8Array): string =>
 const hmac = (key: string | Uint8Array, data: string): Uint8Array =>
   createHmac('sha256', key).update(data).digest()
 
-const signingKey = (config: Config, dateStamp: string): Uint8Array =>
+const signingKey = (config: Helpers.Config, dateStamp: string): Uint8Array =>
   hmac(
     hmac(hmac(hmac(`AWS4${config.secretAccessKey}`, dateStamp), config.region), 's3'),
     'aws4_request',
@@ -63,7 +55,7 @@ const canonicalQuery = (url: URL): string =>
 
 /** SigV4-sign a request into the headers to send (authorization + x-amz-*). */
 const signHeaders = (
-  config: Config,
+  config: Helpers.Config,
   request: { method: string; url: URL; payloadHash: string },
 ): Record<string, string> => {
   const { method, url, payloadHash } = request

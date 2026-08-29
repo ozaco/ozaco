@@ -1,5 +1,5 @@
 // oxlint-disable import/exports-last
-import type { Database, Schema, Spec } from 'db:core'
+
 import { DbClient, where } from 'db:core'
 import type { ObserveDef, ServerDef } from 'server:core'
 import type { Operation } from 'std:effect'
@@ -8,11 +8,8 @@ import { install, isUse } from 'std:plugin'
 import { isFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
 
-import type { ObservePluginDef } from '../types'
+import type { Helpers, ObservePluginDef } from '../types'
 import { events, failures, logs, observeTables, requests, spans } from '../utils/tables'
-
-/** rows as plain documents: the handle is untyped on purpose (five tables, one helper). */
-type Db = Database.Handle<Record<string, Schema.Types<Spec.Doc, Spec.Doc>>>
 
 /**
  * The store lives in ITS OWN scope: a private `DbClient` over the app's adapter (or the given
@@ -45,7 +42,7 @@ export function* openStore(
         if (job.done) {
           return
         }
-        const outcome = yield* attempt(() => job.value.body(opened.value as Db))
+        const outcome = yield* attempt(() => job.value.body(opened.value as Helpers.Db))
         if (isFailure(outcome)) {
           job.value.reject(outcome)
         } else {
@@ -60,7 +57,7 @@ export function* openStore(
 /** Run one job in the store scope. */
 export function* exec<T>(
   state: ObservePluginDef.State,
-  body: (db: Db) => Operation<T>,
+  body: (db: Helpers.Db) => Operation<T>,
 ): Operation<T> {
   const settled = withResolvers<T>('observe job')
 
@@ -104,7 +101,7 @@ const clean = (row: Record<string, unknown>): Record<string, unknown> =>
   Object.fromEntries(Object.entries(row).map(([key, value]) => [key, value ?? undefined]))
 
 /** Write a batch of events grouped per table in one insert each; updates patch after. */
-export function* writeBatch(db: Db, batch: readonly ObserveDef.Event[]): Operation<void> {
+export function* writeBatch(db: Helpers.Db, batch: readonly ObserveDef.Event[]): Operation<void> {
   const grouped = new Map<string, Record<string, unknown>[]>()
   const updates: ObserveDef.RequestUpdate[] = []
 
@@ -145,7 +142,10 @@ export function* writeBatch(db: Db, batch: readonly ObserveDef.Event[]): Operati
   }
 }
 
-export function* requestView(db: Db, requestId: string): Operation<ObserveDef.RequestView | null> {
+export function* requestView(
+  db: Helpers.Db,
+  requestId: string,
+): Operation<ObserveDef.RequestView | null> {
   const request = yield* db.query(requests.name).filter(where.eq('request_id', requestId)).first()
 
   if (!request) {
@@ -220,7 +220,10 @@ const filtersOf = (query: ObserveDef.Query) => {
   return filters
 }
 
-export function* queryRequests(db: Db, query: ObserveDef.Query): Operation<ObserveDef.Page> {
+export function* queryRequests(
+  db: Helpers.Db,
+  query: ObserveDef.Query,
+): Operation<ObserveDef.Page> {
   const filters = filtersOf(query)
   const base = db.query(requests.name)
   const page = yield* (filters.length > 0 ? base.filter(where.and(...filters)) : base)
@@ -241,7 +244,7 @@ export const matchesQuery = (row: ObserveDef.RequestRow, query: ObserveDef.Query
 
 /** Delete rows older than a floor across the tables; resolves how many went. */
 export function* pruneBefore(
-  db: Db,
+  db: Helpers.Db,
   floors: { requests: number; logs: number },
 ): Operation<number> {
   const plan: readonly [string, string, number][] = [

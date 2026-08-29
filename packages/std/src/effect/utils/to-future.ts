@@ -3,19 +3,10 @@ import { fail, isFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import { createFuture } from '../base/future'
+import type { Helpers } from '../types/helpers'
 import type { Future, Operation, Scope } from '../types/operation'
 
 import { attempt } from './attempt'
-
-export interface ToFutureOptions<T> {
-  /** Abort the AWAITED task (settles `fail('halted')`); a `yield*`ed operation needs no
-   * signal — it is cancelled with the caller's task. */
-  readonly signal?: AbortSignal | undefined
-
-  /** Keep the awaited task alive until this settles — for a value whose resources must outlive
-   * the call itself (a stream reply that is consumed later). */
-  readonly hold?: ((value: T) => Operation<void> | null) | undefined
-}
 
 /**
  * An operation as a hybrid {@link Future}: the value IS the operation — `yield*` composes it
@@ -28,7 +19,7 @@ export interface ToFutureOptions<T> {
 export const toFuture = <T>(
   scope: Scope,
   op: () => Operation<T>,
-  options?: ToFutureOptions<T>,
+  options?: Helpers.ToFutureOptions<T>,
 ): Future<T> => {
   const operation = {
     [Symbol.iterator]: () => op()[Symbol.iterator](),

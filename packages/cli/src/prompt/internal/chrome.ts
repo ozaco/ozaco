@@ -1,4 +1,4 @@
-import type { InlineParts } from '../types/internal'
+import type { Helpers } from '../types/helpers'
 import type { PromptDef, PromptContext } from '../types/prompt'
 
 export const activeLine = (ctx: PromptContext, message: string): string => {
@@ -16,7 +16,11 @@ export const cancelledLine = (ctx: PromptContext, message: string): string => {
   return `${colors.error(symbols.error)} ${colors.bold(message)} ${colors.muted(symbols.separator)} ${colors.muted('cancelled')}`
 }
 
-export const inlineFrame = (ctx: PromptContext, message: string, parts: InlineParts): string => {
+export const inlineFrame = (
+  ctx: PromptContext,
+  message: string,
+  parts: Helpers.InlineParts,
+): string => {
   const { colors, symbols } = ctx.palette
   const head = `${activeLine(ctx, message)} ${colors.primary(symbols.separator)} ${parts.body}`
   return parts.error === undefined ? head : `${head}\n${colors.error(parts.error)}`

@@ -3,7 +3,7 @@ import type { AnyType } from 'std:shared'
 
 import { COMMAND } from '../const'
 import type { CommandDef } from '../types/command'
-import type { RuntimeNode } from '../types/internal'
+import type { Helpers } from '../types/helpers'
 
 /**
  * Compile a spec into a plugin whose identity is its full tree path (e.g. `kube.local.setup`).
@@ -31,8 +31,8 @@ const compile = (spec: CommandDef.Spec, path: string): CommandDef.Built =>
  * Eagerly build the whole command subtree (pure — no `setup` runs here; that happens at install).
  * Each node's plugin is identified by its path from the registered root, so identity is positional.
  */
-export const buildNode = (spec: CommandDef.Spec, path: string): RuntimeNode => {
-  const children: Record<string, RuntimeNode> = {}
+export const buildNode = (spec: CommandDef.Spec, path: string): Helpers.RuntimeNode => {
+  const children: Record<string, Helpers.RuntimeNode> = {}
   for (const [key, child] of Object.entries(spec.subs)) {
     children[key] = buildNode(child, `${path}.${key}`)
   }

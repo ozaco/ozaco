@@ -2,6 +2,7 @@
 import { fail } from 'std:result'
 
 import type { Hlc, HlcOptions, ObserveHlcOptions } from '../types/common'
+import type { Helpers } from '../types/helpers'
 
 // Crockford's base32 (no I/L/O/U) — lexicographic order matches numeric order.
 const ENCODING = '0123456789ABCDEFGHJKMNPQRSTVWXYZ'
@@ -63,16 +64,11 @@ const normalizeOrigin = (origin: string): string | null => {
  * (`0-9 A-H J K M N P-T V-Z`; I/L/O/U are rejected, not aliased). */
 export const originOf = (origin: string): string | null => normalizeOrigin(origin)
 
-interface Clock {
-  ts: number
-  counter: number
-}
-
 // per-origin send state: one process may host several nodes (tests, pinned installs) and their
 // counters must not interleave. `floor` is shared: a remote timestamp observed by any origin
 // pulls every origin's notion of "now" forward (the HLC receive rule).
-const clocks = new Map<string, Clock>()
-const floor: Clock = { ts: 0, counter: -1 }
+const clocks = new Map<string, Helpers.Clock>()
+const floor: Helpers.Clock = { ts: 0, counter: -1 }
 
 /** Mint a token: `ts = max(now, floor, last.ts)`, same-ms sends bump the counter, a counter
  * overflow spills into the next millisecond. */

@@ -1,7 +1,7 @@
 import { displayWidth, stripAnsi } from 'cli:core'
 import type { PaletteDef } from 'cli:palette'
 
-import type { BoxChars, Layout, Normalized } from '../types/internal'
+import type { Helpers } from '../types/helpers'
 import type { TableDef } from '../types/table'
 
 const MIN_WIDTH = 1
@@ -41,7 +41,7 @@ const pad = (text: string, width: number, align: TableDef.Align): string => {
   return `${text}${' '.repeat(gap)}`
 }
 
-const boxChars = (unicode: boolean): BoxChars =>
+const boxChars = (unicode: boolean): Helpers.BoxChars =>
   unicode
     ? {
         h: '─',
@@ -115,7 +115,7 @@ const shrinkToFit = (widths: number[], budget: number): void => {
 }
 
 const styledCells = (
-  layout: Layout,
+  layout: Helpers.Layout,
   cells: string[],
   styles: (PaletteDef.Style | undefined)[],
 ): string[] =>
@@ -126,7 +126,7 @@ const styledCells = (
     return style ? style(shown) : shown
   })
 
-const joinCells = (layout: Layout, parts: string[]): string => {
+const joinCells = (layout: Helpers.Layout, parts: string[]): string => {
   if (layout.border === 'full') {
     const v = layout.muted(layout.chars.v)
     return `${v} ${parts.join(` ${v} `)} ${v}`
@@ -134,13 +134,13 @@ const joinCells = (layout: Layout, parts: string[]): string => {
   return parts.join(' '.repeat(layout.gutter))
 }
 
-const fullRule = (layout: Layout, ends: [string, string, string]): string => {
+const fullRule = (layout: Helpers.Layout, ends: [string, string, string]): string => {
   const [left, mid, right] = ends
   const segments = layout.widths.map(width => layout.chars.h.repeat(width + 2))
   return layout.muted(`${left}${segments.join(mid)}${right}`)
 }
 
-export const normalize = (options: TableDef.Options): Normalized => ({
+export const normalize = (options: TableDef.Options): Helpers.Normalized => ({
   columns: options.columns,
   border: options.border ?? 'full',
   gutter: options.gutter ?? 2,
@@ -149,11 +149,11 @@ export const normalize = (options: TableDef.Options): Normalized => ({
 })
 
 export const makeLayout = (spec: {
-  options: Normalized
+  options: Helpers.Normalized
   rows: readonly TableDef.Row[]
   palette: PaletteDef.Context
   termColumns: number
-}): Layout => {
+}): Helpers.Layout => {
   const { options, rows, palette, termColumns } = spec
   const { columns } = options
   const headers = columns.map(headerLabel)
@@ -204,14 +204,14 @@ export const chromeRows = (border: TableDef.Border, head: boolean): number => {
   return rows
 }
 
-export const topBorder = (layout: Layout): string =>
+export const topBorder = (layout: Helpers.Layout): string =>
   fullRule(layout, [layout.chars.tl, layout.chars.tm, layout.chars.tr])
 
-export const bottomBorder = (layout: Layout): string =>
+export const bottomBorder = (layout: Helpers.Layout): string =>
   fullRule(layout, [layout.chars.bl, layout.chars.bm, layout.chars.br])
 
 /** The line under the header: a box mid-rule for `full`, an underline for `header`. */
-export const separator = (layout: Layout): string => {
+export const separator = (layout: Helpers.Layout): string => {
   if (layout.border === 'full') {
     return fullRule(layout, [layout.chars.ml, layout.chars.mm, layout.chars.mr])
   }
@@ -220,7 +220,7 @@ export const separator = (layout: Layout): string => {
   )
 }
 
-export const headerRow = (layout: Layout): string =>
+export const headerRow = (layout: Helpers.Layout): string =>
   joinCells(
     layout,
     styledCells(
@@ -230,17 +230,17 @@ export const headerRow = (layout: Layout): string =>
     ),
   )
 
-export const bodyRow = (layout: Layout, row: TableDef.Row): string => {
+export const bodyRow = (layout: Helpers.Layout, row: TableDef.Row): string => {
   const cells = layout.columns.map((column, index) => cellText(column, row, index))
   return joinCells(layout, styledCells(layout, cells, layout.colors))
 }
 
-export const moreNote = (layout: Layout, hidden: number): string =>
+export const moreNote = (layout: Helpers.Layout, hidden: number): string =>
   layout.muted(`  ${layout.ellipsis} +${hidden} more row${hidden === 1 ? '' : 's'}`)
 
 /** Assemble a full frame; with `maxBody` set, only the last rows are shown plus a `+N more` note. */
 export const frame = (spec: {
-  layout: Layout
+  layout: Helpers.Layout
   rows: readonly TableDef.Row[]
   maxBody?: number | undefined
 }): { text: string; hidden: number } => {

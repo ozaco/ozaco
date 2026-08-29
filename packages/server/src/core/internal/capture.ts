@@ -1,6 +1,7 @@
 // oxlint-disable import/exports-last
 import type { ReadableStreamReadResult } from 'node:stream/web'
 
+import type { Helpers } from '../types/helpers'
 import type { ServerDef } from '../types/server'
 import { brandOf, isBranded } from '../utils/stream'
 
@@ -145,17 +146,7 @@ export const countingStream = (
   })
 }
 
-/** The per-request capture slot the edge fills while it runs the action. */
-export interface Captured {
-  headers: Record<string, string> | null
-  input: Record<string, unknown> | null
-  output: Record<string, unknown> | null
-
-  /** one entry per armed byte counter — settled when that body finished streaming. */
-  readonly pending: Promise<void>[]
-}
-
-export const emptyCapture = (): Captured => ({
+export const emptyCapture = (): Helpers.Captured => ({
   headers: null,
   input: null,
   output: null,
