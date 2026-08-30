@@ -62,7 +62,13 @@ export namespace Protocol {
     build(actions: TActions): Plugin<TContext, TArgs, TActions>
     build<TExtra extends EmptyType = EmptyType>(
       actions: TActions & TExtra,
-    ): Plugin<TContext, TArgs, TActions & Hooks.Extras<TExtra, TActions>>
+    ): Plugin<
+      TContext,
+      TArgs,
+      TExtra extends TActions
+        ? TExtra & Hooks.Extras<TExtra, TActions>
+        : TActions & Hooks.Extras<TExtra, TActions>
+    >
   }
 
   /** One installed implementation, as stored in the scope-local install registry. */

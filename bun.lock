@@ -195,7 +195,7 @@
     },
     "packages/std": {
       "name": "@ozaco/std",
-      "version": "0.4.2",
+      "version": "0.4.3",
       "dependencies": {
         "@streamparser/json": "0.0.26",
       },
