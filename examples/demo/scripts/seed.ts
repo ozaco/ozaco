@@ -17,7 +17,7 @@ import { unwrap } from 'std:result'
 import { SqliteAdapter } from 'db:impl/sqlite'
 import { BunIO } from 'std:io/impl/bun'
 
-import { tables } from '../src/tables'
+import { schema } from '../src/tables'
 
 const count = Number(process.argv[2] ?? 1_000_000)
 const path = resolve(import.meta.dir, '..', process.argv[3] ?? 'local/demo.sqlite')
@@ -52,7 +52,7 @@ unwrap(
   await run(function* () {
     yield* BunIO.use()
     yield* SqliteAdapter.use({ path })
-    const db = yield* DbClient.use({ tables: [...tables] })
+    const db = yield* DbClient.use({ schema })
 
     for (let at = 0; at < count; at += BATCH) {
       const size = Math.min(BATCH, count - at)

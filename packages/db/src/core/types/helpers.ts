@@ -19,6 +19,9 @@ export namespace Helpers {
     readonly mintToken: () => Operation<string>
     readonly persist: (writes: readonly Tokened[], tx: string | null) => Operation<void>
 
+    /** delete ONE just-persisted log row again (a guarded write that missed). */
+    readonly retract: (write: Tokened) => Operation<void>
+
     /** read a table's change log from a `ts` floor (replay / polling). */
     readonly replay: (table: string, fromTs: number) => Operation<readonly Database.LogEntry[]>
 
@@ -48,6 +51,12 @@ export namespace Helpers {
 
     /** Append a transaction's buffered writes to the logs (called right before COMMIT). */
     persist(writes: readonly Tokened[], tx: string): Operation<void>
+
+    /** Take a recorded write's log row back — a guarded write that matched nothing never
+     * happened, and its log-first row would otherwise linger as a phantom (spurious
+     * `recompute`s, log growth on every denied write). No-op inside a transaction, where
+     * `record` never persisted. */
+    retract(write: Tokened): Operation<void>
 
     /** Emit a committed transaction's writes as ONE envelope. */
     flush(writes: readonly Change.Write[], tx: string): Operation<void>

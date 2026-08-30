@@ -5,6 +5,7 @@
  * wire, dropping a malformed frame instead of killing the session.
  */
 import { action, createServer, service } from 'server:core'
+import type { DocsDef } from 'server:plugins'
 import { Docs } from 'server:plugins'
 import { run, until } from 'std:effect'
 import { unwrap } from 'std:result'
@@ -93,8 +94,11 @@ describe('action.socket', () => {
         expect(JSON.parse(frames[0]!)).toEqual({ t: 'hello', who: 'ada' })
         expect(JSON.parse(frames[1]!)).toEqual({ t: 'echo', text: 'SELAM' })
 
-        // the manifest publishes what the socket speaks
-        const socketDoc = (yield* Docs.actions.manifest()).sockets?.[0]
+        // the manifest publishes what the socket speaks — a UNIFIED service entry in v2
+        const published = yield* Docs.actions.manifest()
+        const socketDoc = published.services
+          .flatMap(svc => svc.actions)
+          .find((entry): entry is DocsDef.SocketDoc => entry.kind === 'socket')
         expect(socketDoc).toMatchObject({ path: '/echo/room', protocol: 'chat' })
         expect((socketDoc?.receives as AnyType)?.properties?.text?.type).toBe('string')
         expect(socketDoc?.sends).not.toBe(null)

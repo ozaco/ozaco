@@ -10,7 +10,7 @@ import { describe, expect, it } from 'bun:test'
 import { BunEdge } from 'server:impl/edge/bun'
 import { z } from 'zod'
 
-import { storage, todosTable } from '../helpers'
+import { storage, todosTable, testSchema } from '../helpers'
 
 const json = function* (path: string, init?: RequestInit) {
   const response = yield* Edge.actions.handle(new Request(`http://edge${path}`, init))
@@ -29,7 +29,7 @@ describe('resource actions + extend', () => {
 
       extend: {
         stats: action.query({ output: z.object({ open: z.number() }) }, function* () {
-          const db = yield* useDb(todosTable)
+          const db = yield* useDb(testSchema)
           const rows = yield* db.query('todos').collect()
           return { open: rows.filter(row => row.done === false).length }
         }),

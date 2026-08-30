@@ -24,7 +24,7 @@ const PEER_MAX = 10_000
  * tokens interleave.
  */
 export const createHub = (options: Helpers.HubOptions): Helpers.Hub => {
-  const { bus, mintToken, persist, replay, observe, replayWindowMs } = options
+  const { bus, mintToken, persist, replay, retract, observe, replayWindowMs } = options
   const emitter = createEvent<Change.HubEvents>()
   const latest = new Map<string, string>()
   const arrivals = new Map<string, number>()
@@ -240,6 +240,12 @@ export const createHub = (options: Helpers.HubOptions): Helpers.Hub => {
     announce,
     *persist(writes, tx) {
       yield* persist(writes, tx)
+    },
+    *retract(write) {
+      // inside a transaction `record` buffered without persisting — nothing to take back
+      if (!(yield* TxBuffer.get())) {
+        yield* retract(write)
+      }
     },
     isolate: <T>(buffer: Change.Write[], body: () => Operation<T>) => TxBuffer.with(buffer, body),
     flush,

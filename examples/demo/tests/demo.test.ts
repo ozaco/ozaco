@@ -56,7 +56,7 @@ describe('demo — every use case end to end', () => {
         expect(detail(steps, 'crud hooks')).toEqual({
           trimmed: 'hooked',
           shouted: 'HOOKED',
-          removeDenied: 'server.forbidden',
+          removeDenied: 'todos.protected',
           errorTagged: true,
         })
         expect(detail(steps, 'crud extend')).toEqual({

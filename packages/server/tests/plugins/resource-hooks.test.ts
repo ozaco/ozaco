@@ -9,7 +9,7 @@ import { describe, expect, it } from 'bun:test'
 
 import { BunEdge } from 'server:impl/edge/bun'
 
-import { storage, todosTable } from '../helpers'
+import { storage, todosTable, testSchema } from '../helpers'
 
 const json = function* (path: string, init?: RequestInit) {
   const response = yield* Edge.actions.handle(new Request(`http://edge${path}`, init))
@@ -64,7 +64,7 @@ describe('resource hooks', () => {
           return { ...out, title: `${out.title}:wrapped` }
         }
         if (op === 'remove') {
-          const row = yield* (yield* useDb(todosTable)).get('todos', (input as AnyType).id)
+          const row = yield* (yield* useDb(testSchema)).get('todos', (input as AnyType).id)
           if (row && String(row.title).includes('keep')) {
             return yield* fail(ServerErrors.Forbidden, 'protected row')
           }
@@ -240,6 +240,52 @@ describe('resource hooks', () => {
           message: 'hook: no boom',
         })
         ws.close()
+        yield* server.stop()
+      }),
+    )
+  })
+
+  it('declares the tags a hook raises — `errors` merges OVER the db statuses', async () => {
+    const declared = crud(todosTable, {
+      name: 'declared',
+      errors: { 'todos.locked': 423 },
+      *before({ op }) {
+        if (op === 'remove') {
+          return yield* fail('todos.locked', 'this list is frozen')
+        }
+      },
+    })
+
+    // the same hook on a resource that declares nothing: an unknown tag is a 500
+    const bare = crud(todosTable, {
+      name: 'bare',
+      *before({ op }) {
+        if (op === 'remove') {
+          return yield* fail('todos.locked', 'this list is frozen')
+        }
+      },
+    })
+
+    unwrap(
+      await run(function* () {
+        yield* storage()
+        const server = yield* createServer({ services: [declared, bare], edge: BunEdge })
+        yield* server.start()
+
+        const row = yield* post('/declared', { title: 'a', done: false })
+        const locked = yield* json(`/declared/${row.body._id}`, { method: 'DELETE' })
+        expect(locked.status).toBe(423)
+        expect(locked.body.error.error).toBe('todos.locked')
+
+        expect((yield* json(`/bare/${row.body._id}`, { method: 'DELETE' })).status).toBe(500)
+
+        // the db statuses `crud.errors` declares survive the merge (db.conflict → 412)
+        const stale = yield* json(`/declared/${row.body._id}`, {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json', 'if-match': 'v:stale' },
+          body: JSON.stringify({ title: 'x' }),
+        })
+        expect(stale.status).toBe(412)
         yield* server.stop()
       }),
     )

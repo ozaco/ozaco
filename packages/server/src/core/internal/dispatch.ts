@@ -5,7 +5,6 @@ import type { Result } from 'std:result'
 import { appendCauses, fail, isFailure, isResult } from 'std:result'
 import type { AnyType } from 'std:shared'
 
-import { SERVICE } from '../const'
 import { CtxRef } from '../context'
 import { ServerErrors } from '../errors'
 import type { Helpers } from '../types/helpers'
@@ -17,6 +16,7 @@ import { brandStream, isBranded, isStreamDecl, stream } from '../utils/stream'
 import { childTrace, report, withSpan } from '../utils/trace'
 import { validate } from '../utils/validation'
 
+import { parseCall } from './call'
 import { actionKey } from './registry'
 
 /** Everything a stream handler may answer with, as ONE Flow: a Flow passes through, an array
@@ -90,25 +90,26 @@ function* contextOf({
     headers: call.headers,
 
     // `inherit: true` carries THIS dispatch's authorization into the nested call — the intent
-    // stays visible at the call site; an explicit `meta.authorization` still wins.
-    // Both spellings arrive here: (service, action, input?, options?) and (ref, input?, options?)
+    // stays visible at the call site; an explicit `meta.authorization` still wins. Both call
+    // spellings go through the ONE parser (`parseCall`) and forward ref-style.
     call: ((target: AnyType, ...rest: AnyType[]) => {
-      const byDefinition = target?._t === SERVICE
-      const head = byDefinition ? rest.slice(0, 1) : []
-      const [input, options] = (byDefinition ? rest.slice(1) : rest) as [
-        AnyType?,
-        ServerDef.CallOptions?,
-      ]
-      const authorization = call.headers['authorization']
+      const parsed = parseCall(target, rest)
 
-      const forward = (given: ServerDef.CallOptions | undefined) =>
-        (actions.call as AnyType)(target, ...head, input, given)
-
-      if (options?.inherit !== true || !authorization) {
-        return forward(options)
+      if (!parsed) {
+        return (actions.call as AnyType)(target, ...rest)
       }
 
-      return forward({ ...options, meta: { authorization, ...options.meta } })
+      const authorization = call.headers['authorization']
+      const options =
+        parsed.options?.inherit === true && authorization
+          ? { ...parsed.options, meta: { authorization, ...parsed.options.meta } }
+          : parsed.options
+
+      return (actions.call as AnyType)(
+        { service: parsed.service, action: parsed.action },
+        parsed.input,
+        options,
+      )
     }) as ServerDef.Ctx['call'],
     emit: actions.emit,
     *span(name, body, attrs) {
@@ -155,6 +156,7 @@ export function* contextFor(
     outcome: false,
     errors: {},
     tags: [],
+    docs: null,
     options: {},
   }
 

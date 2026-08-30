@@ -17,7 +17,7 @@ over the carrier, and in-process through `ctx.call(service, 'action', input)` �
 ## The smallest server
 
 ```ts
-import { column, DbClient, table, useDb } from '@ozaco/db'
+import { column, DbClient, defineSchema, table, useDb } from '@ozaco/db'
 import { MemoryAdapter } from '@ozaco/db/impl/memory'
 import { action, createServer, service } from '@ozaco/server'
 import { BunEdge } from '@ozaco/server/edge/bun'
@@ -30,17 +30,19 @@ const todosTable = table('todos', {
   done: column.boolean().default(() => false),
 })
 
+const schema = defineSchema({ todosTable })
+
 const Todo = z.object({ title: z.string(), done: z.boolean() })
 
 const todos = service('todos', {
   list: action.query({ output: z.array(Todo) }, function* () {
-    return yield* (yield* useDb(todosTable)).query('todos').collect()
+    return yield* (yield* useDb(schema)).query('todos').collect()
   }),
 
   add: action.mutation(
     { input: z.object({ title: z.string().min(1) }), output: Todo },
     function* ({ input }) {
-      return yield* (yield* useDb(todosTable)).insert('todos', { title: input.title })
+      return yield* (yield* useDb(schema)).insert('todos', { title: input.title })
     },
   ),
 })
@@ -48,7 +50,7 @@ const todos = service('todos', {
 await main(function* () {
   yield* BunIO.use()
   yield* MemoryAdapter.use()
-  yield* DbClient.use({ tables: [todosTable] })
+  yield* DbClient.use({ schema })
 
   const server = yield* createServer({ services: [todos], edge: BunEdge, listen: { port: 3000 } })
   const info = yield* server.start()
@@ -63,14 +65,14 @@ await main(function* () {
 
 ## Defining
 
-|                                                          |                                                                                                                                                |
-| -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `service(name, actions, options?)`                       | a named group of actions; routes default to `/<service>/<action>`                                                                              |
-| `action.query` / `.mutation` / `.action` / `.stream`     | the kind fixes the default HTTP method (GET / POST / POST / GET), the manifest entry and how a client decodes it                               |
-| `action.socket(config, handler)`                         | a WebSocket route declared inside the service                                                                                                  |
-| `crud(table, options?)`                                  | a whole REST resource **as a service** — list/get/create/update/replace/remove plus a delta-watch socket. Goes straight into `services: [...]` |
-| `serviceErrors(prefix, statuses)`                        | the failure taxonomy in one place: `errors: media.statuses` on the action, `yield* media.notFound(...)` in the handler                         |
-| `stream.ndjson` / `.sse` / `.text` / `.bytes` / `.parts` | branded input/output planes; a stream handler may answer with an array, an async iterable, a `flowOf(...)` Flow or a branded stream            |
+|                                                          |                                                                                                                                                                                                                                                                                                                                          |
+| -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `service(name, actions, options?)`                       | a named group of actions; routes default to `/<service>/<action>`                                                                                                                                                                                                                                                                        |
+| `action.query` / `.mutation` / `.action` / `.stream`     | the kind fixes the default HTTP method (GET / POST / POST / GET), the manifest entry and how a client decodes it                                                                                                                                                                                                                         |
+| `action.socket(config, handler)`                         | a WebSocket route declared inside the service                                                                                                                                                                                                                                                                                            |
+| `crud(table, options?)`                                  | a whole REST resource **as a service** — list/get/create/update/replace/remove plus a delta-watch socket. Goes straight into `services: [...]`. `schema` transforms reshape the derived schemas **in the types too**; `scope` is the trusted per-caller filter (tenancy, optionally `{ read, write }`); `ops` sets per-op options/errors |
+| `serviceErrors(prefix, statuses)`                        | the failure taxonomy in one place: `errors: media.statuses` on the action, `yield* media.notFound(...)` in the handler                                                                                                                                                                                                                   |
+| `stream.ndjson` / `.sse` / `.text` / `.bytes` / `.parts` | branded input/output planes; a stream handler may answer with an array, an async iterable, a `flowOf(...)` Flow or a branded stream                                                                                                                                                                                                      |
 
 An action's config carries the plugin options as **typed fields** — `auth`, `cache`, `invalidate`,
 `timeoutMs`, `retry`, `breaker`, `bulkhead`, `singleflight`, `rateLimit`, `fallback`. An unknown key

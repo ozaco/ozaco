@@ -97,6 +97,15 @@ export function* appendLog(
   }
 }
 
+/** Delete ONE log row by token — the retract of a guarded write that missed. */
+export function* removeLogRow(state: Helpers.Logger, table: string, token: string) {
+  const log = state.logs.get(table)
+
+  if (log) {
+    yield* state.adapter.remove({ table: log, filter: where.eq('token', token) })
+  }
+}
+
 const toEntry = (row: Spec.Doc): Database.LogEntry => ({
   token: String(row.token),
   id: String(row.id),

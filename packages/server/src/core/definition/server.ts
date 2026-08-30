@@ -5,10 +5,11 @@ import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import pkg from '../../../package.json'
-import { DEFAULT_TIMEOUT_MS, SERVICE, serviceIdOf } from '../const'
+import { DEFAULT_TIMEOUT_MS, serviceIdOf } from '../const'
 import { TraceRef } from '../context'
 import { ServerErrors } from '../errors'
 import { roleOf } from '../internal/app'
+import { parseCall } from '../internal/call'
 import { callLocal, runDispatch } from '../internal/dispatch'
 import { actionsOf, asRequest, callRemote, carrierOf, traceFor } from '../internal/kernel'
 import { buildRegistry, manifestOf } from '../internal/registry'
@@ -90,6 +91,7 @@ const ServerImpl = Server.implement<ServerDef.Context, [options: ServerDef.Optio
         service: socket.service,
         protocol: socket.protocol,
         description: socket.description,
+        authorizeMode: socket.authorizeMode,
         defaults: socket.defaults,
         receives: socket.receives,
         sends: socket.sends,
@@ -119,28 +121,19 @@ export const ServerClient: ServerDef.Client = ServerImpl.build({
   },
 
   *call(service: ServiceDef.Service, action: string, ...rest: [unknown?, ServerDef.CallOptions?]) {
-    // two spellings, one path: the service DEFINITION plus an action name, or a typed REF
-    // (`server.api.todos.list`, `refs<typeof todos>('todos').list`) with the args shifted along
-    const asRef = service as unknown as ServiceDef.Ref
+    // two spellings, one parser (`parseCall`): the service DEFINITION plus an action name, or a
+    // typed REF (`server.api.todos.list`, `refs<typeof todos>('todos').list`)
+    const parsed = parseCall(service, [action, ...rest])
 
-    const target =
-      service && (service as AnyType)._t === SERVICE
-        ? { service: service.name, action }
-        : asRef && typeof asRef.service === 'string' && typeof asRef.action === 'string'
-          ? { service: asRef.service, action: asRef.action }
-          : null
-
-    if (!target) {
+    if (!parsed) {
       return yield* fail(
         ServerErrors.Configuration,
         `call takes a service DEFINITION plus an action name (ctx.call(reports, 'summary', input)) or a ref (ctx.call(api.reports.summary, input))`,
       )
     }
 
-    if ((service as AnyType)?._t !== SERVICE) {
-      rest = [action as unknown, ...rest].slice(0, 2) as [unknown?, ServerDef.CallOptions?]
-    }
-
+    const target = { service: parsed.service, action: parsed.action }
+    const tail = [parsed.input, parsed.options] as [unknown?, ServerDef.CallOptions?]
     const kernel = yield* Server.context.expect()
     const isRoot = (yield* TraceRef.get()) === undefined
     if (isRoot) {
@@ -150,10 +143,10 @@ export const ServerClient: ServerDef.Client = ServerImpl.build({
         kernel,
         trace,
         target,
-        body: () => performCall(kernel, target, rest),
+        body: () => performCall(kernel, target, tail),
       })) as AnyType
     }
-    return (yield* performCall(kernel, target, rest)) as AnyType
+    return (yield* performCall(kernel, target, tail)) as AnyType
   },
 
   *emit(name, payload) {

@@ -114,6 +114,7 @@ export const kvActions = (driver: KvDef.Driver): KvDef.Actions => {
         out.push(yield* get(key))
       }
 
+      // `mget<T>`'s T lives on the interface method — caller-asserted, like every Kv generic
       return out as AnyType
     },
     *mset(entries, options) {

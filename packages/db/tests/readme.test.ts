@@ -2,7 +2,7 @@
  * The README's "smallest use", verbatim except for the `main` frame: if this stops compiling or
  * answering, the first thing anyone reads about this package is wrong.
  */
-import { column, DbClient, table, useDb, where } from 'db:core'
+import { column, DbClient, defineSchema, table, useDb, where } from 'db:core'
 import { run } from 'std:effect'
 import { unwrap } from 'std:result'
 
@@ -17,15 +17,17 @@ const todos = table('todos', {
   priority: column.enumOf('low', 'normal', 'high').default(() => 'normal'),
 })
 
+const schema = defineSchema({ todos })
+
 describe('README — the smallest use', () => {
   it('declares, writes and reads back with typed rows', async () => {
     unwrap(
       await run(function* () {
         yield* BunIO.use()
         yield* MemoryAdapter.use()
-        yield* DbClient.use({ tables: [todos] })
+        yield* DbClient.use({ schema })
 
-        const db = yield* useDb(todos)
+        const db = yield* useDb(schema)
 
         yield* db.insert('todos', { title: 'write the README' })
 

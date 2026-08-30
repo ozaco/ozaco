@@ -47,3 +47,7 @@ export const serviceIdOf = (name: string, version: string, instance: string): st
 /** `gw>todos>ai` — the hops of a request tree, rendered. */
 export const laneOf = (hops: readonly { readonly service: string }[]): string =>
   hops.map(hop => hop.service).join('>')
+
+/** How long an accepted socket may wait for its first `{ t: 'auth' }` frame before the
+ * missing authorization closes it (browsers cannot set WS headers — tokens arrive in-band). */
+export const SOCKET_AUTH_GRACE_MS = 2000

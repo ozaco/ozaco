@@ -10,7 +10,7 @@ import { ServerClient } from '../definition/server'
 import { ServerErrors } from '../errors'
 import { awaitDependencies, healthOf, hostedOf, infoOf, roleOf } from '../internal/app'
 import { apiOf, installEntry, pluginOf, serverFor } from '../internal/kernel'
-import { validateOptions } from '../internal/registry'
+import { registerService, validateOptions } from '../internal/registry'
 import type { CarrierDef } from '../types/carrier'
 import type { Helpers } from '../types/helpers'
 import type { ServerDef } from '../types/server'
@@ -65,6 +65,12 @@ export function* createServer<const TServices extends readonly ServiceDef.Servic
 
     if (context?.hooks) {
       kernel.hooks.push(context.hooks)
+    }
+
+    // a plugin's own services (`PluginContext.services`) register like the app's — the one
+    // sanctioned door into the registry
+    for (const def of context?.services ?? []) {
+      yield* registerService(kernel, def)
     }
 
     for (const [key, schema] of Object.entries(context?.options ?? {})) {

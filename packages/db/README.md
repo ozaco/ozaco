@@ -19,7 +19,7 @@ Importing `@ozaco/db` never pulls in a database driver — the bindings live beh
 ## The smallest use
 
 ```ts
-import { column, DbClient, table, useDb, where } from '@ozaco/db'
+import { column, DbClient, defineSchema, table, useDb, where } from '@ozaco/db'
 import { MemoryAdapter } from '@ozaco/db/impl/memory'
 import { main } from '@ozaco/std/effect'
 import { BunIO } from '@ozaco/std/io/impl/bun'
@@ -30,12 +30,14 @@ const todos = table('todos', {
   priority: column.enumOf('low', 'normal', 'high').default(() => 'normal'),
 })
 
+const schema = defineSchema({ todos })
+
 await main(function* () {
   yield* BunIO.use()
   yield* MemoryAdapter.use()
-  yield* DbClient.use({ tables: [todos] })
+  yield* DbClient.use({ schema })
 
-  const db = yield* useDb(todos)
+  const db = yield* useDb(schema)
 
   yield* db.insert('todos', { title: 'write the README' })
 
@@ -44,8 +46,9 @@ await main(function* () {
 })
 ```
 
-`useDb(...tables)` resolves the installed handle typed by the tables you name — the argument is
-type-only, nothing is read from it at runtime.
+`defineSchema({ ... })` is the ONE declaration: the install takes it and `useDb(schema)` resolves
+the typed handle anywhere — no call site re-lists the tables (the argument is type-only; nothing
+is read from it at runtime).
 
 ## Declaring
 
@@ -82,12 +85,22 @@ at install (`migrations: 'auto'`); `safe: true` skips the destructive steps.
 
 ## Writing
 
-`insert` · `insertMany` · `upsert(table, match, value)` · `patch` · `replace` · `delete` ·
-`transaction(db => …)`.
+`insert` · `insertMany` · `upsert(table, match, value, options?)` · `patch` · `replace` ·
+`delete` · `transaction(db => …)`.
 
 Writes are validated against the declared columns, stamp the system fields and announce a change.
-`patch`/`replace`/`delete` take `{ ifVersion }` for optimistic concurrency (`db.conflict` when the
-row moved on), and `CLEAR` nulls an optional column: `db.patch('users', id, { age: CLEAR })`.
+`patch`/`replace`/`delete`/`upsert` take `{ ifVersion }` for optimistic concurrency
+(`db.conflict` when the row moved on), and `CLEAR` nulls an optional column:
+`db.patch('users', id, { age: CLEAR })`.
+
+## Scoping (tenancy)
+
+`db.scoped(where.eq('tenant', id))` derives a handle whose EVERY operation runs under that
+trusted predicate: reads and watches see only matching rows, guarded writes MISS (never
+conflict) outside it, and inserts are STAMPED with the values the filter pins — a scoped handle
+cannot write outside its own scope. Calls chain (`AND`), transactions inherit the scope, and the
+per-call form (`{ scope }` on `get`/`patch`/`replace`/`delete`/`upsert`/`watch`) composes with
+it.
 
 ## Reacting
 

@@ -30,7 +30,11 @@ foundation. Layers, bottom up:
   `bun-sql`, `memory-kv` / `redis-kv`)
 - **`@ozaco/server`** – the service/action kernel: `service()` / `action.*` / `createServer`, with
   edges (bun/node/deno), carriers, and plugins (auth, cache, cors, docs, observe, resilience,
-  `crud`). See `packages/server/README.md`.
+  `crud`). `crud(table, …)` is typed end to end: `schema` transforms reshape the derived zod
+  schemas in the TYPES too, `scope` is the trusted per-caller filter (tenancy, optionally
+  `{ read, write }`), `ops` sets per-op options/errors; the manifest is `ozaco/2` (unified
+  action+socket entries) and realtime sockets authorize with a first `{ t: 'auth' }` frame
+  (tokens never ride the URL). See `packages/server/README.md`.
 - **`@ozaco/client`** – the manifest-driven typed client for a `@ozaco/server` node
 - **`@ozaco/ai`**, **`@ozaco/cli`** – AI providers and the CLI toolkit
 - `apps/panel` (docs try-it UI) and `apps/observe` (dev console) are embedded into the server's

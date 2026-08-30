@@ -12,7 +12,7 @@ import { Buffer } from 'node:buffer'
 
 import { z } from 'zod'
 
-import { uploadChunksTable, uploadsTable } from '../tables'
+import { schema } from '../tables'
 
 /** declared once: the status the action publishes AND the failure the handler raises */
 const mediaErrors = serviceErrors('media', { 'not-found': 404 })
@@ -67,7 +67,7 @@ export const media = service(
           'multipart/form-data: `name`, `mime` fields then a `file` part — content lands in the db',
       },
       function* ({ input, ctx }) {
-        const db = yield* useDb(uploadsTable, uploadChunksTable)
+        const db = yield* useDb(schema)
 
         const row = yield* db.insert('uploads', {
           name: input.fields.name,
@@ -122,7 +122,7 @@ export const media = service(
         description: 'The stored content, streamed back from the db one chunk page at a time',
       },
       function* ({ input }) {
-        const upload = yield* (yield* useDb(uploadsTable)).get('uploads', input.id)
+        const upload = yield* (yield* useDb(schema)).get('uploads', input.id)
 
         if (!upload) {
           return yield* mediaErrors.notFound(`no upload ${input.id}`)
@@ -147,7 +147,7 @@ export const media = service(
                     return { done: true as const, value: undefined }
                   }
 
-                  const page = yield* (yield* useDb(uploadChunksTable))
+                  const page = yield* (yield* useDb(schema))
                     .query('upload_chunks')
                     .filter({ op: 'eq', field: 'upload_id', value: input.id })
                     .order('seq', 'asc')
@@ -183,7 +183,7 @@ export const media = service(
         description: 'Uploads so far (cached; the uploads table change feed invalidates it)',
       },
       function* () {
-        const db = yield* useDb(uploadsTable)
+        const db = yield* useDb(schema)
         const rows = yield* db.query('uploads').order('_created_at', 'desc').collect()
 
         return rows.map(row => ({

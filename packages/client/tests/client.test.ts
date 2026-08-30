@@ -97,26 +97,25 @@ describe('client', () => {
       await run(function* () {
         const { url } = yield* boot()
         const client = yield* createClient<Api>({ url })
-        const created = (yield* client.notes.create({
-          title: 'one',
-          done: false,
-        } as AnyType)) as AnyType
+        // v0.5: crud calls are TYPED end to end — the manifest-declared schemas carry the real
+        // input types, so no cast is needed (this block compiling IS the regression test)
+        const created = yield* client.notes.create({ title: 'one', done: false })
         expect(created.title).toBe('one')
-        const listed = (yield* client.notes.list({ limit: 10 } as AnyType)) as AnyType
-        expect(listed.rows ?? listed.items ?? listed).toBeTruthy()
-        const fetched = (yield* client.notes.get({ id: created._id } as AnyType)) as AnyType
+        const listed = yield* client.notes.list({ limit: 10 })
+        expect(listed.data).toBeTruthy()
+        const fetched = yield* client.notes.get({ id: created._id })
         expect(fetched._id).toBe(created._id)
 
         const rows = yield* client.$rows<{ _id: string; title: string }>('notes')
         const first = yield* rows.next()
         expect((first.value as AnyType).rows.map((row: AnyType) => row.title)).toEqual(['one'])
-        yield* client.notes.create({ title: 'two', done: true } as AnyType)
+        yield* client.notes.create({ title: 'two', done: true })
         const second = yield* rows.next()
         expect((second.value as AnyType).rows.map((row: AnyType) => row.title).toSorted()).toEqual([
           'one',
           'two',
         ])
-        yield* client.notes.remove({ id: created._id } as AnyType)
+        yield* client.notes.remove({ id: created._id })
         const third = yield* rows.next()
         expect((third.value as AnyType).rows.map((row: AnyType) => row.title)).toEqual(['two'])
         yield* sleep(10)

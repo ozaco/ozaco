@@ -7,7 +7,7 @@
  * The probes are never called: a generator body is type-checked all the same.
  */
 import type { Database, Schema } from 'db:core'
-import { column, table, where } from 'db:core'
+import { column, defineSchema, table, useDb, where } from 'db:core'
 import type { Operation } from 'std:effect'
 
 import { describe, expect, it } from 'bun:test'
@@ -18,7 +18,16 @@ const todos = table('todos', {
   priority: column.enumOf('low', 'high'),
   size: column.int(),
   note: column.text().optional(),
+  meta: column.json<{ tags: string[] }>().optional(),
+  due: column.timestamp().optional(),
 })
+
+const tags = table('tags', {
+  todo: column.id('todos'),
+  label: column.text(),
+})
+
+const schema = defineSchema({ todos, tags })
 
 type Db = Database.Handle<Schema.From<[typeof todos]>>
 
@@ -76,14 +85,58 @@ const accepts = (): void => {
 
   db.upsert('todos', { title: 'x' }, { title: 'x', done: false, priority: 'low', size: 1 })
 
-  // @ts-expect-error `done` is required by the insert shape
-  db.upsert('todos', { title: 'x' }, { title: 'x' })
+  // `value` may omit what `match` pins (the insert branch writes `{ ...match, ...value }`)
+  db.upsert('todos', { title: 'x' }, { done: false })
+
+  // @ts-expect-error a value field still has to fit its column
+  db.upsert('todos', { title: 'x' }, { done: 'yes' })
 
   // @ts-expect-error 'urgent' is not a member of the enum
   db.insert('todos', { title: 'x', done: false, priority: 'urgent', size: 1 })
 }
 
 void accepts
+
+/** The v0.5 seams: one schema declaration, id annotation, match narrowing, scope typing. */
+function* seams(): Operation<void> {
+  // useDb(schema) resolves the SAME typed handle the tables would — one declaration
+  const fromSchema = yield* useDb(schema)
+  const row = (yield* fromSchema.query('todos').first())!
+  const title: string = row.title
+  void title
+
+  // @ts-expect-error a table the schema does not declare is a compile error
+  fromSchema.query('nope')
+
+  // `_id` is annotated with its table; an id column takes it — and a plain string too
+  const tag = yield* fromSchema.insert('tags', { todo: row._id, label: 'x' })
+  yield* fromSchema.insert('tags', { todo: 'plain-string-id', label: 'y' })
+  const backref: Schema.Id<'todos'> = tag.todo
+  void backref
+
+  // `where(match)` narrows to comparable columns — json/Date columns do not fit an equality
+  fromSchema.query('todos').where({ title: 'x', done: false })
+
+  // @ts-expect-error a json column is not an equality match — use `filter(...)` deliberately
+  fromSchema.query('todos').where({ meta: { tags: [] } })
+
+  // a timestamp IS comparable — Date is a filter value
+  fromSchema.query('todos').where({ due: new Date() })
+
+  // per-call scope filters are checked against the row's columns
+  yield* fromSchema.get('todos', 'id', { scope: where.eq('done', false) })
+
+  // @ts-expect-error a scope naming an unknown column does not compile
+  yield* fromSchema.get('todos', 'id', { scope: where.eq('tenant', 'a') })
+
+  // a scoped handle keeps the schema's typing
+  const scoped = fromSchema.scoped(where.eq('done', false))
+  const scopedRow = (yield* scoped.query('todos').first())!
+  const scopedTitle: string = scopedRow.title
+  void scopedTitle
+}
+
+void seams
 
 /** What the terminals INFER, asserted by annotation. */
 function* probe(): Operation<void> {

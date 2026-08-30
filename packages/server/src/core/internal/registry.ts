@@ -13,6 +13,43 @@ import { validate } from '../utils/validation'
 /** `service.action` — the registry key and the manifest id of one action. */
 export const actionKey = (service: string, action: string): string => `${service}.${action}`
 
+/**
+ * Register a PLUGIN's service into a built registry (`PluginContext.services`) — the one
+ * sanctioned mutation of the registry maps, so a plugin never reaches into them itself. The
+ * service is hosted locally (never served over the carrier).
+ */
+export function* registerService(
+  kernel: ServerDef.Context,
+  def: ServiceDef.Service,
+): Operation<void> {
+  if (kernel.registry.services.has(def.name)) {
+    return yield* fail(
+      ServerErrors.Configuration,
+      `a service named "${def.name}" is already declared`,
+    )
+  }
+
+  ;(kernel.registry.services as Map<string, ServiceDef.Service>).set(def.name, def)
+
+  for (const [name, entry] of Object.entries(def.actions)) {
+    if (isSocketAction(entry)) {
+      ;(kernel.registry.sockets as ServiceDef.ServiceSocket[]).push({
+        ...entry.socket,
+        service: def.name,
+        handler: entry.handler,
+      })
+      continue
+    }
+
+    ;(kernel.registry.actions as Map<string, ServiceDef.Action>).set(
+      actionKey(def.name, name),
+      entry,
+    )
+  }
+
+  kernel.hosted.add(def.name)
+}
+
 /** Build the registry from the declared services; duplicate names are a configuration failure. */
 export function* buildRegistry(
   services: readonly ServiceDef.Service[],

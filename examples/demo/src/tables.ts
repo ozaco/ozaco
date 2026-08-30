@@ -1,4 +1,4 @@
-import { column, table } from 'db:core'
+import { column, defineSchema, table } from 'db:core'
 
 /** The demo's tables: a crud resource (todos), users for auth, a log of uploads. */
 export const todosTable = table('todos', {
@@ -27,4 +27,6 @@ export const uploadChunksTable = table('upload_chunks', {
   data: column.text(),
 })
 
-export const tables = [todosTable, usersTable, uploadsTable, uploadChunksTable]
+/** The ONE schema declaration: the install takes it, `useDb(schema)` resolves the typed
+ * handle anywhere — no call site re-lists the tables. */
+export const schema = defineSchema({ todosTable, usersTable, uploadsTable, uploadChunksTable })

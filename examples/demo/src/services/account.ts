@@ -9,7 +9,7 @@ import { Auth } from 'server:plugins'
 
 import { z } from 'zod'
 
-import { usersTable } from '../tables'
+import { schema } from '../tables'
 
 /** the tag, its status and the failer in one place — `errors: accountErrors.statuses` on the
  * action publishes it, `accountErrors.unknownUser(...)` raises it (this used to be a bare
@@ -72,7 +72,7 @@ export const account = service(
         description: 'Admins only: grant the admin role',
       },
       function* ({ input }) {
-        const db = yield* useDb(usersTable)
+        const db = yield* useDb(schema)
 
         const user = yield* db
           .query('users')

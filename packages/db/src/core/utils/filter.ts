@@ -100,6 +100,44 @@ export const where = {
   not,
 }
 
+/**
+ * The exact values a filter PINS — what a row must carry to satisfy it: `eq` pins its value,
+ * `isNull` pins `null`, and nested `and`s flatten. Returns `null` when any part pins nothing
+ * exact (`or`, `not`, `ne`, ranges, `in`…): such a filter can narrow reads but cannot shape a
+ * write. This is what turns a trusted read scope into the fields a scoped insert must carry.
+ */
+export const filterValues = (filter: Spec.Filter): Record<string, Spec.FilterValue> | null => {
+  switch (filter.op) {
+    case 'and': {
+      const out: Record<string, Spec.FilterValue> = {}
+
+      for (const inner of filter.filters) {
+        const values = filterValues(inner)
+
+        if (values === null) {
+          return null
+        }
+
+        Object.assign(out, values)
+      }
+
+      return out
+    }
+
+    case 'eq': {
+      return { [filter.field]: filter.value }
+    }
+
+    case 'is-null': {
+      return { [filter.field]: null }
+    }
+
+    default: {
+      return null
+    }
+  }
+}
+
 /** Every field name a filter references (for validation against a table's columns). */
 export const filterFields = <TField extends string>(
   filter: Spec.Filter<TField>,

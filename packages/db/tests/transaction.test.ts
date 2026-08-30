@@ -1,7 +1,6 @@
 import type { Adapter } from 'db:core'
-import { DbAdapter, DbClient, DbErrors } from 'db:core'
+import { DbAdapter, DbClient, DbErrors, useDb } from 'db:core'
 import { adapterDefaults } from 'db:internal'
-import type { Operation } from 'std:effect'
 import { attempt, operation, run } from 'std:effect'
 import { install } from 'std:plugin'
 import { fail, isFailure, unwrap } from 'std:result'
@@ -12,12 +11,13 @@ import { describe, expect, it } from 'bun:test'
 import { MemoryAdapter } from 'db:impl/memory'
 import { BunIO } from 'std:io/impl/bun'
 
-import { posts, users } from './helpers'
+import { schema, users } from './helpers'
 
-const bootstrap = function* (): Operation<AnyType> {
+const bootstrap = function* () {
   yield* install(MemoryAdapter)
   yield* install(BunIO)
-  return yield* install(DbClient, { tables: [users, posts] })
+  yield* install(DbClient, { schema })
+  return yield* useDb(schema)
 }
 
 describe('transactions — memory adapter', () => {
@@ -27,7 +27,7 @@ describe('transactions — memory adapter', () => {
         const db = yield* bootstrap()
         const feed = yield* db.changes('users')
 
-        const created = yield* db.transaction(function* (tx: AnyType) {
+        const created = yield* db.transaction(function* (tx) {
           const ada = yield* tx.insert('users', { name: 'ada' })
           yield* tx.insert('users', { name: 'grace' })
           return ada
@@ -51,7 +51,7 @@ describe('transactions — memory adapter', () => {
         const feed = yield* db.changes('users')
 
         const outcome = yield* attempt(
-          db.transaction(function* (tx: AnyType) {
+          db.transaction(function* (tx) {
             yield* tx.insert('users', { name: 'doomed' })
             return yield* fail(DbErrors.Query, 'boom')
           }),
@@ -72,10 +72,10 @@ describe('transactions — memory adapter', () => {
     unwrap(
       await run(function* () {
         const db = yield* bootstrap()
-        yield* db.transaction(function* (tx: AnyType) {
+        yield* db.transaction(function* (tx) {
           yield* tx.insert('users', { name: 'outer' })
           const inner = yield* attempt(
-            tx.transaction(function* (nested: AnyType) {
+            tx.transaction(function* (nested) {
               yield* nested.insert('users', { name: 'inner' })
               return yield* fail(DbErrors.Query, 'inner boom')
             }),
@@ -84,6 +84,53 @@ describe('transactions — memory adapter', () => {
         })
         const names = yield* db.query('users').collect()
         expect(names.map((row: AnyType) => row.name)).toEqual(['outer'])
+      }),
+    )
+  })
+
+  it('commits a nested transaction — the OUTER one owns the single change-log write', async () => {
+    unwrap(
+      await run(function* () {
+        const db = yield* bootstrap()
+        const feed = yield* db.changes('users')
+
+        yield* db.transaction(function* (tx) {
+          yield* tx.insert('users', { name: 'outer' })
+          yield* tx.transaction(function* (nested) {
+            yield* nested.insert('users', { name: 'inner' })
+          })
+        })
+
+        const rows = yield* db.query('users').collect()
+        expect(rows.map((row: AnyType) => row.name).toSorted()).toEqual(['inner', 'outer'])
+
+        // one event per write — a nested transaction that logged its own buffer too would have
+        // inserted the same tokens twice (`db.unique` on `__changes_users`)
+        const first = yield* feed.next()
+        const second = yield* feed.next()
+        expect((first.value as AnyType).op).toBe('insert')
+        expect((second.value as AnyType).op).toBe('insert')
+        expect((first.value as AnyType).token).not.toBe((second.value as AnyType).token)
+      }),
+    )
+  })
+
+  it('upserts inside a transaction — both branches', async () => {
+    unwrap(
+      await run(function* () {
+        const db = yield* bootstrap()
+
+        const created = yield* db.transaction(function* (tx) {
+          return yield* tx.upsert('users', { name: 'ada' }, { age: 30 })
+        })
+        expect(created.age).toBe(30)
+
+        const updated = yield* db.transaction(function* (tx) {
+          return yield* tx.upsert('users', { name: 'ada' }, { age: 31 })
+        })
+        expect(updated._id).toBe(created._id)
+        expect(updated.age).toBe(31)
+        expect(yield* db.query('users').count()).toBe(1)
       }),
     )
   })

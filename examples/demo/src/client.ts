@@ -56,7 +56,11 @@ export function* walk(url: string, report: (step: Step) => void = () => {}): Ope
 
   note('manifest', {
     services: manifest.services.map(service => service.name),
-    sockets: manifest.sockets?.map(socket => socket.path),
+
+    sockets: manifest.services
+      .flatMap(service => service.actions)
+      .filter(entry => entry.kind === 'socket')
+      .map(entry => entry.path),
   })
 
   // --- auth: login → whoami → refresh → role gate ----------------------------------------

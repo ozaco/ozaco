@@ -34,8 +34,8 @@ export function* manifestOf(ctx: ClientDef.Context): Operation<ManifestDef.Manif
 
   const manifest = (yield* until(response.json())) as ManifestDef.Manifest
 
-  if (manifest?.manifest !== 'ozaco/1') {
-    return yield* fail(ClientErrors.Decode, 'not an ozaco/1 manifest')
+  if (manifest?.manifest !== 'ozaco/2') {
+    return yield* fail(ClientErrors.Decode, 'not an ozaco/2 manifest')
   }
 
   ctx.manifest = manifest
@@ -51,9 +51,9 @@ export function* actionOf(
   const manifest = yield* manifestOf(ctx)
   const found = manifest.services
     .find(entry => entry.name === service)
-    ?.actions.find(entry => entry.action === action)
+    ?.actions.find(entry => entry.kind !== 'socket' && entry.action === action)
 
-  if (!found) {
+  if (!found || found.kind === 'socket') {
     return yield* fail(ClientErrors.NoRoute, `${service}.${action} is not in the manifest`)
   }
 

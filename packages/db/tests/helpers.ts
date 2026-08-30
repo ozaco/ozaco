@@ -1,4 +1,4 @@
-import { column, table } from 'db:core'
+import { column, defineSchema, table } from 'db:core'
 
 /** The shared fixture tables the suites install. */
 export const users = table('users', {
@@ -15,3 +15,6 @@ export const posts = table('posts', {
   author: column.id('users'),
   views: column.int().default(0),
 }).index('by_author', ['author'])
+
+/** The ONE schema declaration the typed suites resolve their handles from. */
+export const schema = defineSchema({ users, posts })

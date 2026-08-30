@@ -57,7 +57,9 @@ describe('resource — windowed realtime', () => {
         const manifest = (yield* until(
           (yield* until(fetch(`${base}/docs/manifest`))).json(),
         )) as AnyType
-        const socketDoc = manifest.sockets.find((entry: AnyType) => entry.protocol === 'resource')
+        const socketDoc = manifest.services
+          .flatMap((svc: AnyType) => svc.actions)
+          .find((entry: AnyType) => entry.kind === 'socket' && entry.protocol === 'resource')
         expect(socketDoc).toMatchObject({ path: '/todos/_realtime', defaults: { cursor: 0 } })
 
         const create = (title: string) =>

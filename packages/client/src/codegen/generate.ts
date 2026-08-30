@@ -1,6 +1,7 @@
 import type { Operation } from 'std:effect'
 import { until } from 'std:effect'
 import { fail } from 'std:result'
+import type { AnyType } from 'std:shared'
 
 import { ClientErrors } from '../core/errors'
 import type { ManifestDef } from '../core/types/manifest'
@@ -64,13 +65,19 @@ const actionType = (action: ManifestDef.Action, depth: number, uses: { flow: boo
   return `{\n${lines.join('\n')}\n${INDENT.repeat(depth)}}`
 }
 
+const callableOf = (service: ManifestDef.Service): readonly ManifestDef.Action[] =>
+  service.actions.filter((entry): entry is ManifestDef.Action => entry.kind !== 'socket')
+
+const socketsOf = (service: ManifestDef.Service): readonly ManifestDef.Socket[] =>
+  service.actions.filter((entry): entry is ManifestDef.Socket => entry.kind === 'socket')
+
 const serviceType = (
   service: ManifestDef.Service,
   depth: number,
   uses: { flow: boolean },
 ): string => {
   const inner = INDENT.repeat(depth + 1)
-  const lines = [...service.actions]
+  const lines = [...callableOf(service)]
     .toSorted((left, right) => left.action.localeCompare(right.action))
     .map(
       action =>
@@ -78,6 +85,26 @@ const serviceType = (
     )
 
   return `{\n${lines.join('\n')}\n${INDENT.repeat(depth)}}`
+}
+
+/** The ROW type of a resource socket, from its published `sends` schema (the `sync` frame's
+ * `rows` element) — what types `$watch`/`$rows`/`$window` for codegen consumers. */
+const socketRowType = (socket: ManifestDef.Socket): string | null => {
+  const sends = socket.sends
+
+  if (!sends || socket.protocol !== 'resource') {
+    return null
+  }
+
+  const variants = (sends['anyOf'] ?? sends['oneOf']) as readonly Record<string, AnyType>[] | null
+
+  const sync = variants?.find(variant => {
+    const properties = variant['properties'] as Record<string, AnyType> | undefined
+    return properties?.['t']?.const === 'sync'
+  })
+  const rows = (sync?.['properties'] as Record<string, AnyType> | undefined)?.['rows']
+
+  return rows?.items ? schemaToType(rows.items as Record<string, unknown>, 2) : null
 }
 
 const routeText = (action: ManifestDef.Action): string =>
@@ -93,10 +120,10 @@ const routeText = (action: ManifestDef.Action): string =>
 export function* generate(manifest: unknown, options?: GenerateOptions): Operation<string> {
   if (
     !isRecord(manifest) ||
-    manifest['manifest'] !== 'ozaco/1' ||
+    manifest['manifest'] !== 'ozaco/2' ||
     !Array.isArray(manifest['services'])
   ) {
-    return yield* fail(ClientErrors.Decode, 'input is not an OZACO MANIFEST v1 document')
+    return yield* fail(ClientErrors.Decode, 'input is not an OZACO MANIFEST v2 document')
   }
   const document = manifest as unknown as ManifestDef.Manifest
   const services = [...document.services].toSorted((left, right) =>
@@ -105,12 +132,23 @@ export function* generate(manifest: unknown, options?: GenerateOptions): Operati
   const uses = { flow: false }
   const apiLines: string[] = []
   const routeLines: string[] = []
+  const rowLines: string[] = []
+
   for (const service of services) {
     apiLines.push(`${INDENT}readonly ${keyText(service.name)}: ${serviceType(service, 1, uses)}`)
-    const routes = [...service.actions]
+    const routes = [...callableOf(service)]
       .toSorted((left, right) => left.action.localeCompare(right.action))
       .map(action => `${INDENT}${INDENT}${keyText(action.action)}: ${routeText(action)},`)
     routeLines.push(`${INDENT}${keyText(service.name)}: {`, ...routes, `${INDENT}},`)
+
+    // resource sockets: the ROW type behind `$watch`/`$rows`/`$window`, keyed by service
+    for (const socket of socketsOf(service)) {
+      const row = socketRowType(socket)
+
+      if (row) {
+        rowLines.push(`${INDENT}readonly ${keyText(service.name)}: ${row}`)
+      }
+    }
   }
   return [
     options?.banner ?? DEFAULT_BANNER,
@@ -126,6 +164,15 @@ export function* generate(manifest: unknown, options?: GenerateOptions): Operati
     ...routeLines,
     '} as const',
     '',
+    ...(rowLines.length > 0
+      ? [
+          '/** Realtime resources: the row type each `$watch`/`$rows` feed carries. */',
+          'export interface ApiRows {',
+          ...rowLines,
+          '}',
+          '',
+        ]
+      : []),
   ].join('\n')
 }
 

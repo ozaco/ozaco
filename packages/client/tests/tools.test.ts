@@ -15,19 +15,31 @@ import { describe, expect, it } from 'bun:test'
 type Manifest = ManifestDef.Manifest
 
 const manifest: Manifest = {
-  manifest: 'ozaco/1',
+  manifest: 'ozaco/2',
   name: 'demo',
   version: '1.0.0',
   instance: 'x',
   errors: {},
-  sockets: [
-    { path: '/todos/_realtime', service: 'todos', protocol: 'resource', description: null },
-    { path: '/live/chat', service: null, protocol: 'chat', description: 'chat' },
-  ],
+
+  edge: {
+    sockets: [
+      {
+        id: '/live/chat',
+        service: null,
+        action: null,
+        kind: 'socket',
+        path: '/live/chat',
+        protocol: 'chat',
+        description: 'chat',
+        authorize: 'upgrade',
+      },
+    ],
+  },
   services: [
     {
       name: 'todos',
       version: '1.0.0',
+      errors: {},
       actions: [
         {
           id: 'todos.get',
@@ -46,9 +58,16 @@ const manifest: Manifest = {
           tags: ['crud'],
           options: {},
         },
-      ],
-      sockets: [
-        { path: '/todos/_realtime', service: 'todos', protocol: 'resource', description: null },
+        {
+          id: 'todos._realtime',
+          service: 'todos',
+          action: '_realtime',
+          kind: 'socket',
+          path: '/todos/_realtime',
+          protocol: 'resource',
+          description: null,
+          authorize: 'first-frame',
+        },
       ],
     },
   ],

@@ -163,6 +163,11 @@ export const openapiOf = (manifest: DocsDef.Manifest): Record<string, unknown> =
 
   for (const service of manifest.services) {
     for (const action of service.actions) {
+      // socket entries live in the manifest's unified list but have no OpenAPI shape
+      if (action.kind === 'socket') {
+        continue
+      }
+
       const path = action.route.path.replaceAll(/:([A-Za-z_]\w*)/gu, '{$1}')
       paths[path] ??= {}
       paths[path][action.route.method.toLowerCase()] = operationOf(action)

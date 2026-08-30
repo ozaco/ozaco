@@ -1,8 +1,8 @@
 /**
- * The realtime handshake is GUARDED: the resource's `read` requirement gates the upgrade, and a
- * presented bearer — `?token=` included — is ALWAYS verified: an EXPIRED or malformed token
- * rejects the handshake even on an open resource. Regression for "expired tokens could still
- * connect to realtime".
+ * The realtime handshake is GUARDED: the resource's `read` requirement gates the session, and a
+ * presented bearer — the FIRST `{ t: 'auth' }` frame included (tokens never travel in the
+ * URL) — is ALWAYS verified: an EXPIRED or malformed token closes the socket even on an open
+ * resource. Regression for "expired tokens could still connect to realtime".
  */
 import { column, DbClient, table } from 'db:core'
 import { createServer } from 'server:core'
@@ -32,12 +32,17 @@ const provider = (): AuthDef.Provider => ({
 
 const openTable = table('open_items', { title: column.text() })
 
-/** Resolves 'open' when the socket answers a watch, 'rejected' when the handshake fails. */
-const probe = (url: string): Promise<'open' | 'rejected'> =>
+/** Resolves 'open' when the socket answers a watch, 'rejected' when auth closes the session.
+ * A browser cannot set WS headers: the token (when given) goes in-band as the FIRST frame. */
+const probe = (url: string, token?: string): Promise<'open' | 'rejected'> =>
   new Promise(resolve => {
     const ws = new WebSocket(url)
 
     ws.addEventListener('open', () => {
+      if (token !== undefined) {
+        ws.send(JSON.stringify({ t: 'auth', token }))
+      }
+
       ws.send(JSON.stringify({ t: 'watch', id: 'p' }))
     })
 
@@ -87,19 +92,17 @@ describe('resource — realtime handshake auth', () => {
         const { server, ws, subs } = yield* boot(60_000)
         const tokens = yield* Auth.actions.login({ user: 'ada' })
 
-        // guarded: no token / garbage → rejected; a valid token → open
+        // guarded: no token / garbage → the session closes; a valid token → open
         expect(yield* until(probe(`${ws}/todos/_realtime`))).toBe('rejected')
-        expect(yield* until(probe(`${ws}/todos/_realtime?token=garbage`))).toBe('rejected')
-        expect(yield* until(probe(`${ws}/todos/_realtime?token=${tokens.accessToken}`))).toBe(
-          'open',
-        )
+        expect(yield* until(probe(`${ws}/todos/_realtime`, 'garbage'))).toBe('rejected')
+        expect(yield* until(probe(`${ws}/todos/_realtime`, tokens.accessToken))).toBe('open')
 
-        // the watch hook saw the handshake's principal on the socket ctx
+        // the watch hook saw the in-band auth frame's principal on the socket ctx
         expect(subs).toContain('u-ada')
 
         // open resource: anonymous is fine — but PRESENTED credentials must be valid
         expect(yield* until(probe(`${ws}/open_items/_realtime`))).toBe('open')
-        expect(yield* until(probe(`${ws}/open_items/_realtime?token=garbage`))).toBe('rejected')
+        expect(yield* until(probe(`${ws}/open_items/_realtime`, 'garbage'))).toBe('rejected')
 
         yield* server.stop()
       }),
@@ -115,10 +118,8 @@ describe('resource — realtime handshake auth', () => {
         // jwt `exp` has second granularity: outlive it
         yield* sleep(1100)
 
-        expect(yield* until(probe(`${ws}/todos/_realtime?token=${tokens.accessToken}`))).toBe(
-          'rejected',
-        )
-        expect(yield* until(probe(`${ws}/open_items/_realtime?token=${tokens.accessToken}`))).toBe(
+        expect(yield* until(probe(`${ws}/todos/_realtime`, tokens.accessToken))).toBe('rejected')
+        expect(yield* until(probe(`${ws}/open_items/_realtime`, tokens.accessToken))).toBe(
           'rejected',
         )
 

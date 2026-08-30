@@ -1,7 +1,7 @@
 import { useDb } from 'db:core'
 import { createServer, Edge, ServerErrors } from 'server:core'
 import { crud } from 'server:plugins'
-import { run, sleep, until } from 'std:effect'
+import { run, until } from 'std:effect'
 import { fail, unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
 
@@ -10,7 +10,7 @@ import { describe, expect, it } from 'bun:test'
 import { BunEdge } from 'server:impl/edge/bun'
 import { z } from 'zod'
 
-import { storage, todosTable } from '../helpers'
+import { storage, todosTable, testSchema } from '../helpers'
 
 const json = function* (path: string, init?: RequestInit) {
   const response = yield* Edge.actions.handle(new Request(`http://edge${path}`, init))
@@ -36,26 +36,21 @@ describe('resource schema hooks', () => {
 
     const todos = crud(todosTable, {
       schema: {
-        *input(s, of) {
-          inputs.push(of)
-          if (of === 'create') {
-            // tighten the create input beyond what the column kinds derive
-            return s.extend({ title: z.string().min(3) })
-          }
-          return s
+        create: s => {
+          inputs.push('create')
+          // tighten the create input beyond what the column kinds derive
+          return s.extend({ title: z.string().min(3) })
         },
-        *output(s, of) {
-          outputs.push(of)
-          if (of === 'doc') {
-            // reshape every read output: titles come back SHOUTED (validation parses through)
-            return s.extend({ title: z.string().transform(title => title.toUpperCase()) })
-          }
-          if (of === 'page') {
-            // widen the list ENVELOPE — the `after` hook's return passes this schema, so the
-            // extra field survives output validation instead of being stripped
-            return s.extend({ total: z.number() })
-          }
-          return s
+        doc: s => {
+          outputs.push('doc')
+          // reshape every read output: titles come back SHOUTED (validation parses through)
+          return s.extend({ title: z.string().transform(title => title.toUpperCase()) })
+        },
+        page: s => {
+          outputs.push('page')
+          // widen the list ENVELOPE — the `after` hook's return passes this schema, so the
+          // extra field survives output validation instead of being stripped
+          return s.extend({ total: z.number() })
         },
       },
 
@@ -63,14 +58,14 @@ describe('resource schema hooks', () => {
         if (op === 'list') {
           return {
             ...(output as AnyType),
-            total: yield* (yield* useDb(todosTable)).query('todos').count(),
+            total: yield* (yield* useDb(testSchema)).query('todos').count(),
           }
         }
       },
     })
 
-    // the hooks ran while `crud()` built the service — once per derived schema, never again
-    expect(inputs.toSorted()).toEqual(['create', 'list', 'replace', 'update'])
+    // the transforms ran while `crud()` built the service — once per given key, never again
+    expect(inputs).toEqual(['create'])
     expect(outputs).toEqual(['doc', 'page'])
 
     unwrap(
@@ -102,31 +97,13 @@ describe('resource schema hooks', () => {
     )
   })
 
-  it('the hooks are definition-time only: suspending or failing refuses the crud()', () => {
-    let suspended: AnyType
-    try {
-      crud(todosTable, {
-        schema: {
-          *input(s) {
-            yield* sleep(1)
-            return s
-          },
-        },
-      })
-    } catch (error) {
-      suspended = error
-    }
-    expect(suspended?.error).toBe(ServerErrors.Configuration)
-
+  it('the transforms are definition-time plain functions: a throw refuses the crud()', () => {
     let refused: AnyType
     try {
       crud(todosTable, {
         schema: {
-          *output(s, of) {
-            if (of === 'doc') {
-              return yield* fail('todo.bad-schema', 'this table cannot be a resource')
-            }
-            return s
+          doc: () => {
+            throw fail('todo.bad-schema', 'this table cannot be a resource')
           },
         },
       })

@@ -14,7 +14,7 @@ import type { Helpers } from '../../types/helpers'
 import type { ServerDef } from '../../types/server'
 import type { ServiceDef } from '../../types/service'
 import type { TraceDef } from '../../types/trace'
-import { statusOf, tagOf } from '../../utils/failure'
+import { statusOf } from '../../utils/failure'
 import {
   brandOf,
   brandStream,
@@ -23,9 +23,9 @@ import {
   isStreamDecl,
   stream,
 } from '../../utils/stream'
-import { childTrace, report, rootTrace, withSpan } from '../../utils/trace'
+import { childTrace, report, reportFailureRow, rootTrace, withSpan } from '../../utils/trace'
 import { capturedHeaders, capturedValue, countingStream, emptyCapture, observing } from '../capture'
-import { contextFor, materialize } from '../dispatch'
+import { materialize } from '../dispatch'
 
 import { valueBody } from './body'
 import { parseParts } from './multipart'
@@ -55,22 +55,15 @@ export function* createEdgeState(
   return state
 }
 
-/**
- * Request headers as a plain record. On a SOCKET UPGRADE only, a `?token=` query param is
- * promoted to a bearer header — browsers cannot set handshake headers on a WebSocket, so that
- * is the one place it is needed. HTTP requests do NOT get the promotion: a token in the query
- * string of an ordinary request lands in access logs, referrers and browser history.
- */
-const headersOf = (request: Request, promoteToken = false): Record<string, string> => {
-  const headers = Object.fromEntries(request.headers.entries())
+/** Request headers as a plain record. Tokens NEVER travel in the URL: a browser socket
+ * authorizes with its first `{ t: 'auth' }` frame instead (see `driveSocket`). */
+const headersOf = (request: Request): Record<string, string> => {
+  const headers: Record<string, string> = {}
 
-  if (promoteToken && !headers.authorization) {
-    const token = new URL(request.url).searchParams.get('token')
-
-    if (token) {
-      headers.authorization = `Bearer ${token}`
-    }
-  }
+  // oxlint-disable-next-line unicorn/no-array-for-each
+  request.headers.forEach((value, key) => {
+    headers[key.toLowerCase()] = value
+  })
 
   return headers
 }
@@ -115,6 +108,7 @@ export const mountActions = (state: Helpers.EdgeState): number => {
       path: socket.path,
       handler: socket.handler,
       authorize: socket.authorize ?? undefined,
+      authorizeMode: socket.authorizeMode,
       service: socket.service,
       protocol: socket.protocol ?? undefined,
       description: socket.description ?? undefined,
@@ -299,18 +293,12 @@ function* reportedFailure(
     readonly meta?: Pick<ServiceDef.Meta, 'errors'> | undefined
   },
 ): Operation<Response> {
-  yield* report(state.kernel, {
-    t: 'failure',
-    row: {
-      request_id: input.requestId,
-      span_id: input.spanId ?? null,
-      tag: tagOf(input.failure),
-      message: String(input.failure.message ?? ''),
-      causes: [...(input.failure.causes ?? [])].map(String),
-      status: statusOf(input.failure, input.meta),
-      where: input.where,
-      ts: Date.now(),
-    },
+  yield* reportFailureRow(state.kernel, {
+    requestId: input.requestId,
+    spanId: input.spanId,
+    failure: input.failure,
+    where: input.where,
+    status: statusOf(input.failure, input.meta),
   })
 
   return failureResponse(input.failure, input.requestId, input.meta)
@@ -466,29 +454,35 @@ export function* decideUpgrade(
   const route = match.data
 
   // the handshake's verdict IS the socket's principal: what `authorize` resolves rides into
-  // the socket ctx as `auth` — handlers never verify the token a second time
-  let principal: unknown
+  // the socket ctx as `auth` — handlers never verify the token a second time. Without an
+  // authorization header the verdict is DEFERRED to the first `{ t: 'auth' }` frame (browsers
+  // cannot set WS headers; tokens never travel in the URL).
+  let auth: Helpers.SocketInput['auth'] = { kind: 'settled', principal: undefined }
 
   if (route.authorize) {
-    const allowed = yield* attempt(() => route.authorize!(request))
+    if (route.authorizeMode === 'first-frame' && request.headers.get('authorization') === null) {
+      auth = { kind: 'deferred' }
+    } else {
+      const allowed = yield* attempt(() => route.authorize!(request))
 
-    if (isFailure(allowed)) {
-      return {
-        kind: 'reject',
+      if (isFailure(allowed)) {
+        return {
+          kind: 'reject',
 
-        response: yield* reportedFailure(state, {
-          requestId,
-          failure: allowed,
-          where: `edge:socket ${url.pathname}`,
-        }),
+          response: yield* reportedFailure(state, {
+            requestId,
+            failure: allowed,
+            where: `edge:socket ${url.pathname}`,
+          }),
+        }
       }
-    }
 
-    principal = allowed.value ?? undefined
+      auth = { kind: 'settled', principal: allowed.value ?? undefined }
+    }
   }
 
   const params = decodeParams(match.params)
-  const headers = headersOf(request, true)
+  const headers = headersOf(request)
   const socketHeaders = observing(kernel) ? capturedHeaders(headers) : null
   const trace = yield* rootTrace(kernel.serviceId, 'external', requestId)
 
@@ -500,13 +494,20 @@ export function* decideUpgrade(
         const startedAt = Date.now()
         const controller = new AbortController()
         const outcome = yield* attempt(function* () {
-          const ctx = yield* contextFor(
-            kernel,
-            { trace, headers, signal: controller.signal, name: route.path, auth: principal },
-            state.actions,
-          )
           yield* withSpan({ kernel, trace, kind: 'edge', name: `WS ${route.path}` }, () =>
-            driveSocket({ kernel, route, raw, params, headers, url, ctx, trace }),
+            driveSocket({
+              kernel,
+              route,
+              raw,
+              params,
+              headers,
+              url,
+              trace,
+              signal: controller.signal,
+              actions: state.actions,
+              request,
+              auth,
+            }),
           )
         })
         controller.abort('closed')

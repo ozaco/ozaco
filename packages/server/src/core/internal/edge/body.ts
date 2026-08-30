@@ -4,29 +4,47 @@ import { attempt, until } from 'std:effect'
 import { fail, isFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
 
+import { z } from 'zod'
+
 import { ServerErrors } from '../../errors'
 
 const NONE: ReadonlySet<string> = new Set()
 
-/** The fields the DECLARED input types as arrays (zod object shapes, `optional`/`default`
- * wrappers unwrapped) — so a single query-string pass `?v=a` can be read as `['a']`. */
-export const arrayFields = (schema: unknown): ReadonlySet<string> => {
-  const def = (schema as AnyType)?._zod?.def
+/** Whether a JSON-schema property (or any branch of its unions/wrappers) is an array. */
+const isArrayProperty = (property: AnyType): boolean => {
+  if (!property || typeof property !== 'object') {
+    return false
+  }
 
-  if (!def || def.type !== 'object') {
+  if (property.type === 'array') {
+    return true
+  }
+
+  const branches = [...(property.anyOf ?? []), ...(property.oneOf ?? []), ...(property.allOf ?? [])]
+
+  return branches.some(branch => isArrayProperty(branch))
+}
+
+/** The fields the DECLARED input types as arrays — so a single query-string pass `?v=a` can be
+ * read as `['a']`. Read through zod's PUBLIC `z.toJSONSchema` (not private internals): a
+ * non-zod Standard Schema, or one it cannot render, simply answers no array fields. */
+export const arrayFields = (schema: unknown): ReadonlySet<string> => {
+  let json: AnyType
+
+  try {
+    json = z.toJSONSchema(schema as AnyType, { unrepresentable: 'any', io: 'input' })
+  } catch {
+    return NONE
+  }
+
+  if (json?.type !== 'object' || !json.properties) {
     return NONE
   }
 
   const out = new Set<string>()
 
-  for (const [key, field] of Object.entries(def.shape ?? {})) {
-    let inner = (field as AnyType)?._zod?.def
-
-    while (inner?.innerType) {
-      inner = inner.innerType._zod?.def
-    }
-
-    if (inner?.type === 'array') {
+  for (const [key, property] of Object.entries(json.properties)) {
+    if (isArrayProperty(property)) {
       out.add(key)
     }
   }

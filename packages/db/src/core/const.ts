@@ -17,6 +17,7 @@ export const DEFAULT_BUS_TOPIC = 'db.change'
 /** Marker symbols for the schema DSL's runtime objects. */
 export const COLUMN = Symbol.for('db:column')
 export const TABLE = Symbol.for('db:table')
+export const SCHEMA = Symbol.for('db:schema')
 
 /** The system fields stamped on every stored document (never declared by the schema). */
 export enum FIELDS {

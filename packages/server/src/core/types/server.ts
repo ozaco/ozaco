@@ -200,6 +200,10 @@ export namespace ServerDef {
 
     /** action-option keys this plugin owns, with their validators. */
     readonly options?: Readonly<Record<string, StandardSchemaV1>> | undefined
+
+    /** services this plugin brings (the observe console's API, …): `createServer` registers
+     * them like the app's own — routed, mounted, documented — and hosts them locally. */
+    readonly services?: readonly ServiceDef.Service[] | undefined
   }
 
   export interface Hooks {

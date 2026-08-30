@@ -4,7 +4,9 @@ import type { AnyType, StandardSchemaV1 } from 'std:shared'
 
 import type { ACTION, SERVICE } from '../const'
 
+import type { EdgeDef } from './edge'
 import type { OptionsDef } from './options'
+import type { ServerDef } from './server'
 import type { StreamDef } from './stream'
 
 /**
@@ -57,6 +59,10 @@ export namespace ServiceDef {
     /** Failure tag → HTTP status overrides; also feeds the docs error catalog. */
     readonly errors?: Readonly<Record<string, number>> | undefined
     readonly tags?: readonly string[] | undefined
+
+    /** Free-form documentation the manifest publishes VERBATIM on this action's entry (a
+     * resource's filter surface, examples, vendor extensions…) — JSON-safe values only. */
+    readonly docs?: Readonly<Record<string, unknown>> | undefined
   }
 
   /** The handler's `params` type: the value plane of the input. */
@@ -64,8 +70,8 @@ export namespace ServiceDef {
     ? undefined
     : D extends StandardSchemaV1
       ? StandardSchemaV1.InferOutput<D>
-      : D extends StreamDef.Decl<string, infer T>
-        ? StreamDef.Branded<string, T>
+      : D extends StreamDef.Decl<infer B, infer T>
+        ? StreamDef.Branded<B, T>
         : D extends StreamDef.PartsDecl<infer TFields, infer TStreams>
           ? StreamDef.Parts<TFields, TStreams>
           : unknown
@@ -82,7 +88,7 @@ export namespace ServiceDef {
     : D extends StandardSchemaV1
       ? Loose<StandardSchemaV1.InferOutput<D>>
       : D extends StreamDef.Decl<infer B, infer T>
-        ? StreamDef.Branded<B, AnyType> | StreamDef.Source<T> | readonly T[] | AsyncIterable<T>
+        ? StreamDef.Branded<B, T> | StreamDef.Source<T> | readonly T[] | AsyncIterable<T>
         : unknown
 
   /** Everything resolved about an action: what the kernel/edge/carriers/plugins/docs read. */
@@ -102,6 +108,9 @@ export namespace ServiceDef {
     readonly errors: Readonly<Record<string, number>>
     readonly tags: readonly string[]
 
+    /** free-form docs block, published verbatim in the manifest (`null` when none). */
+    readonly docs: Readonly<Record<string, unknown>> | null
+
     /** plugin options as given (validated at createServer). */
     readonly options: Readonly<Record<string, unknown>>
   }
@@ -112,13 +121,21 @@ export namespace ServiceDef {
     readonly ctx: TCtx
   }) => Operation<TResult>
 
+  /** What `ctx.auth` is INSIDE a handler, decided by its `auth:` option: any truthy
+   * requirement guarantees a verified principal before the handler runs, so the null check
+   * disappears from the body; no `auth` (or `auth: false`) keeps the nullable form. */
+  export type AuthOf<R> = R extends undefined | false
+    ? OptionsDef.Principal | null
+    : OptionsDef.Principal
+
   export interface Action<
     TInput extends Declaration | undefined = Declaration | undefined,
     TOutput extends Declaration | undefined = Declaration | undefined,
+    TAuth extends OptionsDef.Principal | null = OptionsDef.Principal | null,
   > {
     readonly _t: typeof ACTION
     readonly meta: Meta
-    readonly handler: Handler<Params<TInput>, Returns<TOutput>, AnyType>
+    readonly handler: Handler<Params<TInput>, Returns<TOutput>, ServerDef.Ctx<TAuth>>
     readonly [INPUT]?: TInput
     readonly [OUTPUT]?: TOutput
   }
@@ -145,9 +162,19 @@ export namespace ServiceDef {
     readonly protocol?: string | undefined
     readonly description?: string | undefined
 
-    /** runs before the upgrade; a failure rejects the handshake with its status; what it
-     * resolves becomes the socket ctx's `auth`. */
-    readonly authorize?: ((request: Request) => Operation<unknown>) | undefined
+    /** the socket's auth seam. With an `authorization` header (non-browser clients) it runs
+     * BEFORE the upgrade — a failure rejects the handshake with its status. Without one the
+     * upgrade is accepted and the seam runs on the FIRST frame (`{ t: 'auth', token }` within
+     * a short grace, or no token at all): a failure then closes the socket. What it resolves
+     * becomes the socket ctx's `auth`. Tokens never travel in the URL. */
+    readonly authorize?: ((request: Request, token?: string) => Operation<unknown>) | undefined
+
+    /** WHEN `authorize` runs. `'upgrade'` (default): before the upgrade — a failure rejects the
+     * handshake. `'first-frame'`: without an authorization header the upgrade is accepted and
+     * the seam runs on the first frame (`{ t: 'auth', token }` within a short grace, or
+     * token-less) — for browser-facing sockets, where tokens cannot ride a header and must
+     * never ride the URL. */
+    readonly authorizeMode?: 'upgrade' | 'first-frame' | undefined
 
     /** opening-frame defaults documented in the manifest (e.g. `{ cursor: 0 }` on realtime). */
     readonly defaults?: Readonly<Record<string, unknown>> | undefined
@@ -157,16 +184,11 @@ export namespace ServiceDef {
     readonly path: string
     readonly protocol: string | null
     readonly description: string | null
-    readonly authorize: ((request: Request) => Operation<unknown>) | null
+    readonly authorize: ((request: Request, token?: string) => Operation<unknown>) | null
+    readonly authorizeMode: 'upgrade' | 'first-frame'
     readonly defaults: Readonly<Record<string, unknown>> | null
     readonly receives: Schema | null
     readonly sends: Schema | null
-  }
-
-  export interface SocketAction {
-    readonly _t: typeof ACTION
-    readonly socket: SocketSpec
-    readonly handler: (socket: AnyType) => Operation<void>
   }
 
   /** What a socket handler receives / may send, from its declarations. */
@@ -174,13 +196,32 @@ export namespace ServiceDef {
     ? StandardSchemaV1.InferOutput<D>
     : unknown
 
+  /** A socket entry, its frame declarations carried in the TYPE — `typeof svc` keeps them, so
+   * the manifest and a generated client can speak this socket's frames. */
+  export interface SocketAction<
+    TReceives extends Schema | undefined = Schema | undefined,
+    TSends extends Schema | undefined = Schema | undefined,
+  > {
+    readonly _t: typeof ACTION
+    readonly socket: SocketSpec
+    readonly handler: (socket: EdgeDef.Socket<Frames<TReceives>, Frames<TSends>>) => Operation<void>
+    readonly [RECEIVES]?: TReceives
+    readonly [SENDS]?: TSends
+  }
+
+  /** The inbound frame type of a socket entry. */
+  export type ReceivesOf<A> = A extends SocketAction<infer R, AnyType> ? Frames<R> : never
+
+  /** The outbound frame type of a socket entry. */
+  export type SendsOf<A> = A extends SocketAction<AnyType, infer T> ? Frames<T> : never
+
   /** A registered socket, service attached — what the registry hands the edge. */
   export interface ServiceSocket extends SocketSpec {
     readonly service: string
     readonly handler: (socket: AnyType) => Operation<void>
   }
 
-  export type ActionEntry = Action<AnyType, AnyType> | SocketAction
+  export type ActionEntry = Action<AnyType, AnyType, AnyType> | SocketAction<AnyType, AnyType>
 
   export type ActionMap = Record<string, ActionEntry>
 
@@ -204,12 +245,12 @@ export namespace ServiceDef {
   /** The CALLABLE action keys of a service (sockets are not callable) — what `ctx.call` takes
    * next to the service definition. */
   export type CallableKey<S extends Service> = {
-    [K in keyof S['actions']]: S['actions'][K] extends SocketAction ? never : K
+    [K in keyof S['actions']]: S['actions'][K] extends SocketAction<AnyType, AnyType> ? never : K
   }[keyof S['actions']] &
     string
 
-  export type InputOf<A> = A extends Action<infer I, AnyType> ? Params<I> : never
-  export type OutputOf<A> = A extends Action<AnyType, infer O> ? Returns<O> : never
+  export type InputOf<A> = A extends Action<infer I, AnyType, AnyType> ? Params<I> : never
+  export type OutputOf<A> = A extends Action<AnyType, infer O, AnyType> ? Returns<O> : never
 
   /** A typed pointer to one action of one service (what the CLIENT api map carries, and what
    * `ctx.call` accepts next to a service definition). */
@@ -222,7 +263,7 @@ export namespace ServiceDef {
   /** Every callable action of a service, as refs — what `refs<typeof todos>('todos')` builds
    * from a TYPE-ONLY import, so calling a service never creates a runtime import edge. */
   export type Refs<S extends Service> = {
-    readonly [K in CallableKey<S>]: Ref<Extract<S['actions'][K], Action<AnyType, AnyType>>>
+    readonly [K in CallableKey<S>]: Ref<Extract<S['actions'][K], Action<AnyType, AnyType, AnyType>>>
   }
 
   /** The action a ref points at. */
@@ -230,9 +271,11 @@ export namespace ServiceDef {
 
   export type Api<TServices extends readonly Service[]> = {
     readonly [S in TServices[number] as S['name']]: {
-      readonly [K in keyof S['actions'] as S['actions'][K] extends SocketAction ? never : K]: Ref<
-        Extract<S['actions'][K], Action<AnyType, AnyType>>
-      >
+      readonly [
+        K in keyof S['actions'] as S['actions'][K] extends SocketAction<AnyType, AnyType>
+          ? never
+          : K
+      ]: Ref<Extract<S['actions'][K], Action<AnyType, AnyType, AnyType>>>
     }
   }
 }
@@ -240,3 +283,5 @@ export namespace ServiceDef {
 declare const INPUT: unique symbol
 declare const OUTPUT: unique symbol
 declare const ACTION_REF: unique symbol
+declare const RECEIVES: unique symbol
+declare const SENDS: unique symbol

@@ -74,7 +74,10 @@ export namespace EdgeDef {
     /** runs before the upgrade; a failure rejects the handshake with its status. What it
      * RESOLVES (the verified principal) becomes the socket ctx's `auth` — verified once, on
      * the handshake. */
-    readonly authorize?: ((request: Request) => Operation<unknown>) | undefined
+    readonly authorize?: ((request: Request, token?: string) => Operation<unknown>) | undefined
+
+    /** `'first-frame'` defers a header-less handshake to the first `{ t: 'auth' }` frame. */
+    readonly authorizeMode?: 'upgrade' | 'first-frame' | undefined
 
     /** the service this socket belongs to (docs list it under the service). */
     readonly service?: string | undefined
@@ -93,6 +96,9 @@ export namespace EdgeDef {
     readonly service: string | null
     readonly protocol: string | null
     readonly description: string | null
+
+    /** how the socket authorizes (`'first-frame'` = in-band `{ t: 'auth' }`). */
+    readonly authorizeMode?: 'upgrade' | 'first-frame' | undefined
 
     /** opening-frame defaults documented in the manifest (e.g. `{ cursor: 0 }` on realtime). */
     readonly defaults: Readonly<Record<string, unknown>> | null

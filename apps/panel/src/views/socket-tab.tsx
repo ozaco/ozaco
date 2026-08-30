@@ -22,9 +22,7 @@ const resourceOf = (socket: Socket): string => socket.service ?? socket.path.spl
 const socketUrl = (connection: Connection, path: string): string => {
   const url = new URL(path, connection.base)
   url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
-  if (connection.token) {
-    url.searchParams.set('token', connection.token)
-  }
+  // tokens never ride the URL — first-frame sockets authorize in-band after open
   return url.toString()
 }
 
@@ -160,7 +158,15 @@ export const SocketTab = ({ socket, connection }: Props) => {
     const ws = new WebSocket(socketUrl(connection, socket.path))
     raw.current = ws
     log('out', `connect ${socket.path}`)
-    ws.addEventListener('open', () => log('info', 'open'))
+    ws.addEventListener('open', () => {
+      log('info', 'open')
+
+      // in-band auth: a first-frame socket takes `{ t: 'auth', token }` before anything else
+      if (socket.authorize === 'first-frame' && connection.token) {
+        ws.send(JSON.stringify({ t: 'auth', token: connection.token }))
+        log('out', 'auth (token redacted)')
+      }
+    })
     ws.addEventListener('message', event => log('in', String(event.data)))
     ws.addEventListener('close', event => {
       log('info', `close ${event.code} ${event.reason}`)

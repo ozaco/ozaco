@@ -12,19 +12,16 @@ export const groupsOf = (manifest: ManifestDef.Manifest): readonly Helpers.Servi
     name: service.name,
     version: service.version,
     description: service.description,
-    entries: [
-      ...service.actions.map(action => ({ kind: 'action' as const, id: action.id, action })),
-      ...(service.sockets ?? []).map(socket => ({
-        kind: 'socket' as const,
-        id: `ws:${socket.path}`,
-        socket,
-      })),
-    ],
+    entries: service.actions.map(entry =>
+      entry.kind === 'socket'
+        ? { kind: 'socket' as const, id: `ws:${entry.path}`, socket: entry }
+        : { kind: 'action' as const, id: entry.id, action: entry },
+    ),
   }))
 
 /** Socket routes that belong to no service (custom sockets mounted by the app). */
 export const orphanSockets = (manifest: ManifestDef.Manifest): readonly ManifestDef.Socket[] =>
-  (manifest.sockets ?? []).filter(socket => socket.service === null)
+  manifest.edge?.sockets ?? []
 
 export const findEntry = (manifest: ManifestDef.Manifest, id: string): Helpers.Entry | null => {
   for (const group of groupsOf(manifest)) {

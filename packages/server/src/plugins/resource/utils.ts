@@ -7,12 +7,13 @@ import type { AnyType } from 'std:shared'
 import { z } from 'zod'
 
 import {
+  clientFrameSchema,
   countOp,
   createManyOp,
   createOp,
-  defaultFilterable,
   docSchema,
   ERRORS,
+  filterableOf,
   getOp,
   guardHandshake,
   hooked,
@@ -24,7 +25,10 @@ import {
   realtime,
   removeOp,
   replaceOp,
-  shaper,
+  resolveSchemas,
+  scopeOf,
+  scopeSides,
+  serverFrameSchema,
   updateOp,
 } from './internal'
 import type { Helpers } from './types/helpers'
@@ -43,65 +47,105 @@ const ALL_ACTIONS: readonly ResourceDef.ActionName[] = [
 /**
  * A CRUD service for a table: `list` (filter/order/limit/cursor), `get`, `create`, `update`
  * (`If-Match` = `_version` → 412 on conflict), `replace`, `remove` — REST routes under
- * `/<name>`, typed from the column kinds, filters sanitized to the allowed columns. The
- * `actions` option picks which built-ins exist (`'realtime'` is the socket; omitted or `true`
- * = all), `extend` merges custom actions into the SAME service (no side-service needed), the
- * `schema` hooks reshape the derived schemas once at definition time (`input`: list / create /
- * update / replace, `output`: doc / page). The
- * `before`/`after`/`around`/`error` hooks are the resource's seams: they see every built-in
- * operation (the realtime watch included) with the full ctx and may transform the input, the
- * output or the failure (see `ResourceDef.CrudHooks`). The `_realtime` socket is an
- * `action.socket` entry of the service itself (`realtimePath` moves it) — no plugin mounts
- * it. Returns the service plus the resolved `shapes` for `extend` actions to reuse.
+ * `path` (default `/<name>`), typed from the column kinds, filters sanitized to the allowed
+ * columns. The `actions` option picks which built-ins exist (`'realtime'` is the socket;
+ * omitted or `true` = all), `extend` merges custom actions into the SAME service, the `schema`
+ * transforms reshape the derived schemas once at definition time AND in the types, `scope` is
+ * the trusted per-caller filter (tenancy — optionally split `{ read, write }`), `ops` carries
+ * per-op options/errors, and the `before`/`after`/`around`/`error` hooks are the seams (see
+ * `ResourceDef`). The `_realtime` socket is an `action.socket` entry of the service itself
+ * with declared `receives`/`sends` frames. Returns the service plus the resolved typed
+ * `shapes` for `extend` actions to reuse.
  */
 const builder = <
   TTable extends Schema.Table,
+  const TName extends string = TTable['name'],
   const TNames extends readonly ResourceDef.ActionName[] | true = true,
   TExtend extends ServiceDef.ActionMap = Record<never, ServiceDef.ActionEntry>,
+  TDoc extends z.ZodType = never,
+  TPage extends z.ZodType = never,
+  TList extends z.ZodType = never,
+  TCreate extends z.ZodType = never,
+  TUpdate extends z.ZodType = never,
+  TReplace extends z.ZodType = never,
 >(
   table: TTable,
-  options: ResourceDef.CrudOptions<TTable, TNames, TExtend> = {},
-): ResourceDef.Crud<TTable, TNames, TExtend> => {
-  const name = (options.name ?? table.name) as TTable['name']
-
-  const filterable = options.filterable ?? defaultFilterable(table)
+  // NoInfer: the table is the ONLY inference site for `TTable` — a hook annotated with the
+  // default shapes would otherwise widen it back to the base `Schema.Table`
+  options: ResourceDef.CrudOptions<
+    NoInfer<TTable>,
+    TName,
+    TNames,
+    TExtend,
+    TDoc,
+    TPage,
+    TList,
+    TCreate,
+    TUpdate,
+    TReplace
+  > = {} as never,
+): ResourceDef.Crud<
+  TTable,
+  TName,
+  TNames,
+  TExtend,
+  ResourceDef.Resolved<TTable, TDoc, TPage, TList, TCreate, TUpdate, TReplace>
+> => {
+  const name = (options.name ?? table.name) as TName
+  const root = options.path ?? `/${name}`
+  const filterable = filterableOf(options.filterable, table)
   const maxLimit = options.maxLimit ?? 100
   const auth = options.auth ?? {}
-  const extra = options.options ?? {}
+  const scope = scopeSides(options.scope)
+  const shared = options.options ?? {}
+  const perOp = options.ops ?? {}
 
-  const hooks: ResourceDef.CrudHooks = {
-    before: options.before,
-    after: options.after,
-    around: options.around,
-    error: options.error,
+  const hooks: ResourceDef.CrudHooks<AnyType> = {
+    before: options.before as AnyType,
+    after: options.after as AnyType,
+    around: options.around as AnyType,
+    error: options.error as AnyType,
   }
-  const read = auth.read === undefined ? {} : { auth: auth.read }
-  const write = auth.write === undefined ? {} : { auth: auth.write }
-  // the `schema` hooks reshape what the table derives — once, right here at definition time
-  const shape = shaper(options.schema)
-  const id = z.object({ id: z.string() })
 
-  const doc = shape.output(docSchema(table), 'doc')
+  // the RESOLVED schemas (returned as `shapes` so `extend` actions reuse them) — the `schema`
+  // transforms applied once, right here at definition time
+  const shapes = resolveSchemas(table, options.schema)
+  const idSchema = z.object({ id: z.string() })
 
-  // the RESOLVED schemas (returned as `shapes` so `extend` actions reuse them)
-  const shapes: ResourceDef.Crud['shapes'] = {
-    doc,
-    page: shape.output(pageSchema(doc), 'page'),
-    list: shape.input(listInput, 'list'),
-    create: shape.input(insertSchema(table), 'create'),
-    update: shape.input(id.extend(patchSchema(table).shape), 'update'),
-    replace: shape.input(id.extend(insertSchema(table).shape), 'replace'),
+  // the manifest publishes the resource's FILTER SURFACE on the list entry (`docs.filters`):
+  // which fields a client may filter/order by, their column kinds and allowed operators
+  const filtersDoc = filterable.map(entry => ({
+    field: entry.field,
+    kind: table.columns.find(column => column.name === entry.field)?.kind ?? 'text',
+    ops: entry.ops ?? null,
+  }))
+
+  /** One built-in's full config: the shared options, the op's own (winning), the side's auth
+   * and the three-layer errors merge (db baseline ← resource ← op). */
+  const configFor = (
+    op: Exclude<ResourceDef.ActionName, 'realtime'>,
+    side: 'read' | 'write',
+  ): Record<string, unknown> => {
+    const own = perOp[op] ?? {}
+    const { errors: ownErrors, ...ownOptions } = own
+    const requirement = own.auth ?? auth[side]
+
+    return {
+      ...shared,
+      ...ownOptions,
+      ...(requirement === undefined ? {} : { auth: requirement }),
+      errors: { ...ERRORS, ...options.errors, ...ownErrors },
+    }
   }
 
   const builtins: Record<string, ServiceDef.ActionEntry> = {
     list: action.query(
       {
-        ...extra,
-        ...read,
+        ...configFor('list', 'read'),
         input: shapes.list,
         output: shapes.page,
-        route: { method: 'GET', path: `/${name}` },
-        errors: ERRORS,
+        route: { method: 'GET', path: root },
+        docs: { filters: filtersDoc },
       },
       hooked('list', hooks, function* ({ input, ctx }) {
         return (yield* listOp(table, {
@@ -109,74 +153,87 @@ const builder = <
           input: input as AnyType,
           filterable,
           maxLimit,
+          scope: yield* scopeOf(scope.read, ctx),
         })) as AnyType
       }),
     ),
     get: action.query(
       {
-        ...extra,
-        ...read,
-        input: id,
-        output: doc,
-        route: { method: 'GET', path: `/${name}/:id` },
-        errors: ERRORS,
+        ...configFor('get', 'read'),
+        input: idSchema,
+        output: shapes.doc,
+        route: { method: 'GET', path: `${root}/:id` },
       },
       hooked('get', hooks, function* ({ input, ctx }) {
-        return yield* getOp(table, { ctx, id: input.id })
+        return yield* getOp(table, {
+          ctx,
+          id: (input as AnyType).id,
+          scope: yield* scopeOf(scope.read, ctx),
+        })
       }),
     ),
     create: action.mutation(
       {
-        ...extra,
-        ...write,
+        ...configFor('create', 'write'),
         input: shapes.create,
-        output: doc,
-        route: { method: 'POST', path: `/${name}` },
-        errors: ERRORS,
+        output: shapes.doc,
+        route: { method: 'POST', path: root },
       },
       hooked('create', hooks, function* ({ input, ctx }) {
-        return yield* createOp(table, { ctx, value: input as AnyType })
+        return yield* createOp(table, {
+          ctx,
+          value: input as AnyType,
+          scope: yield* scopeOf(scope.write, ctx),
+        })
       }),
     ),
     update: action.mutation(
       {
-        ...extra,
-        ...write,
+        ...configFor('update', 'write'),
         input: shapes.update,
-        output: doc,
-        route: { method: 'PATCH', path: `/${name}/:id` },
-        errors: ERRORS,
+        output: shapes.doc,
+        route: { method: 'PATCH', path: `${root}/:id` },
       },
       hooked('update', hooks, function* ({ input, ctx }) {
         const { id: rowId, ...patch } = input as AnyType
-        return yield* updateOp(table, { ctx, id: rowId, patch })
+        return yield* updateOp(table, {
+          ctx,
+          id: rowId,
+          patch,
+          scope: yield* scopeOf(scope.write, ctx),
+        })
       }),
     ),
     replace: action.mutation(
       {
-        ...extra,
-        ...write,
+        ...configFor('replace', 'write'),
         input: shapes.replace,
-        output: doc,
-        route: { method: 'PUT', path: `/${name}/:id` },
-        errors: ERRORS,
+        output: shapes.doc,
+        route: { method: 'PUT', path: `${root}/:id` },
       },
       hooked('replace', hooks, function* ({ input, ctx }) {
         const { id: rowId, ...value } = input as AnyType
-        return yield* replaceOp(table, { ctx, id: rowId, value })
+        return yield* replaceOp(table, {
+          ctx,
+          id: rowId,
+          value,
+          scope: yield* scopeOf(scope.write, ctx),
+        })
       }),
     ),
     remove: action.mutation(
       {
-        ...extra,
-        ...write,
-        input: id,
+        ...configFor('remove', 'write'),
+        input: idSchema,
         output: z.object({ removed: z.boolean() }),
-        route: { method: 'DELETE', path: `/${name}/:id` },
-        errors: ERRORS,
+        route: { method: 'DELETE', path: `${root}/:id` },
       },
       hooked('remove', hooks, function* ({ input, ctx }) {
-        return yield* removeOp(table, { ctx, id: input.id })
+        return yield* removeOp(table, {
+          ctx,
+          id: (input as AnyType).id,
+          scope: yield* scopeOf(scope.write, ctx),
+        })
       }),
     ),
   }
@@ -194,24 +251,34 @@ const builder = <
   // mounts it; a same-named `extend` entry still replaces it
   if (enabled.includes('realtime')) {
     picked['_realtime'] = realtimeSocket(
-      { table, filterable, maxLimit, auth, hooks },
-      options.realtimePath === undefined ? {} : { path: `/${name}${options.realtimePath}` },
+      { table, filterable, maxLimit, auth, hooks, scope: scope.read },
+      shapes.doc,
+      { path: `${root}${options.realtimePath ?? '/_realtime'}` },
     )
   }
 
   const svc = service(name, { ...picked, ...options.extend })
 
-  // the crud handle IS the service: `services: [todos]`, no `.service` hop
+  // the crud handle IS the service: `services: [todos]`, no `.service` hop.
+  // THE one runtime→type boundary of the plugin: the generics mirror what the call site wrote
   return {
     ...svc,
     table,
+    path: root,
     filterable,
     maxLimit,
     auth,
     hooks,
+    scope,
     shapes,
     enabled,
-  } as unknown as ResourceDef.Crud<TTable, TNames, TExtend>
+  } as unknown as ResourceDef.Crud<
+    TTable,
+    TName,
+    TNames,
+    TExtend,
+    ResourceDef.Resolved<TTable, TDoc, TPage, TList, TCreate, TUpdate, TReplace>
+  >
 }
 
 const pageFor: Helpers.PageFn = ((source: Schema.Table | z.ZodType) =>
@@ -220,38 +287,44 @@ const pageFor: Helpers.PageFn = ((source: Schema.Table | z.ZodType) =>
   )) as Helpers.PageFn
 
 /** The realtime socket entry over a resolved source (shared by `crud()` and
- * `crud.realtime`). */
+ * `crud.realtime`) — its frames are DECLARED (`receives`/`sends`), so the manifest and a
+ * generated client speak them. */
 const realtimeSocket = (
   source: ResourceDef.RealtimeSource,
+  doc: z.ZodType,
   config: { readonly path?: string | undefined; readonly description?: string | undefined },
-): ServiceDef.SocketAction =>
+): ServiceDef.SocketAction<AnyType, AnyType> =>
   action.socket(
     {
       path: config.path,
       protocol: 'resource',
       description: config.description ?? 'watch/unwatch frames in, sync/delta/error frames out',
       authorize: guardHandshake(source),
+      authorizeMode: 'first-frame',
       defaults: { cursor: 0 },
+      receives: clientFrameSchema,
+      sends: serverFrameSchema(doc),
     },
-    realtime(source),
+    realtime(source) as AnyType,
   )
 
 /** The delta-watch socket as an `action.socket` entry for ANY service: mounts at
  * `/<service>/<key>` (or `path`), listed under that service in the manifest with the
- * realtime opening-frame defaults. */
+ * realtime opening-frame defaults and its declared frames. */
 const realtimeAction = (
   table: Schema.Table,
   options: ResourceDef.RealtimeOptions = {},
-): ServiceDef.SocketAction =>
+): ServiceDef.SocketAction<AnyType, AnyType> =>
   realtimeSocket(
     {
       table,
-      filterable: options.filterable ?? defaultFilterable(table),
+      filterable: filterableOf(options.filterable, table),
       maxLimit: options.maxLimit ?? 100,
       auth: options.auth === undefined ? {} : { read: options.auth },
       hooks: options.hooks ?? {},
       scope: options.scope,
     },
+    docSchema(table),
     { path: options.path, description: options.description },
   )
 

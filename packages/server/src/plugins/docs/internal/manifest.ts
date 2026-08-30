@@ -76,23 +76,74 @@ const optionsDoc = (options: Readonly<Record<string, unknown>>): Record<string, 
     JSON.stringify(options, (_key, value) => (typeof value === 'function' ? undefined : value)),
   )
 
-/** A mounted socket as the manifest publishes it: the frame schemas become JSON Schema. */
-const socketDocOf = (socket: EdgeDef.SocketInfo): DocsDef.SocketDoc => ({
-  path: socket.path,
+/** The caller-facing summary of an `auth` requirement: WHAT is required, never a secret. */
+const authDoc = (requirement: unknown): DocsDef.AuthDoc => {
+  if (requirement === undefined || requirement === false) {
+    return { kind: 'open' }
+  }
+
+  if (requirement === 'authenticated' || requirement === 'user' || requirement === 'service') {
+    return { kind: requirement }
+  }
+
+  if (Array.isArray(requirement)) {
+    return { kind: 'roles', roles: requirement as string[] }
+  }
+
+  if (typeof requirement === 'function') {
+    return { kind: 'predicate' }
+  }
+
+  if (typeof requirement === 'object' && requirement !== null) {
+    const shaped = requirement as { roles?: readonly string[]; permissions?: readonly string[] }
+
+    return {
+      kind: 'requirements',
+      ...(shaped.roles ? { roles: shaped.roles } : {}),
+      ...(shaped.permissions ? { permissions: shaped.permissions } : {}),
+    }
+  }
+
+  return { kind: 'open' }
+}
+
+/** A mounted socket as its UNIFIED manifest entry (`kind: 'socket'`). */
+const socketDocOf = (socket: EdgeDef.SocketInfo, action: string | null): DocsDef.SocketDoc => ({
+  id: socket.service ? `${socket.service}.${action ?? socket.path}` : socket.path,
   service: socket.service,
+  action,
+  kind: 'socket',
+  path: socket.path,
   protocol: socket.protocol,
   description: socket.description,
+  authorize: socket.authorizeMode ?? 'upgrade',
   defaults: socket.defaults,
   receives: schemaDoc(socket.receives, 'input'),
   sends: schemaDoc(socket.sends, 'output'),
 })
+
+/** The action-map key of a registered socket (its manifest `action`), found by path. */
+const socketKeyOf = (def: ServiceDef.Service | undefined, path: string): string | null => {
+  if (!def) {
+    return null
+  }
+
+  for (const [name, entry] of Object.entries(def.actions)) {
+    if (isSocketAction(entry) && entry.socket.path === path) {
+      return name
+    }
+  }
+
+  return null
+}
 
 /** One service as its manifest doc — also what the observe service's own manifest rides. */
 export const serviceDocOf = (
   def: ServiceDef.Service,
   sockets: readonly DocsDef.SocketDoc[],
 ): DocsDef.ServiceDoc => {
-  const actions: DocsDef.ActionDoc[] = []
+  const actions: DocsDef.EntryDoc[] = []
+  const errors: Record<string, number> = {}
 
   for (const [name, actionDef] of Object.entries(def.actions)) {
     if (isSocketAction(actionDef)) {
@@ -100,6 +151,8 @@ export const serviceDocOf = (
     }
 
     const { meta } = actionDef
+
+    Object.assign(errors, meta.errors)
 
     actions.push({
       id: `${def.name}.${name}`,
@@ -113,6 +166,8 @@ export const serviceDocOf = (
       output: planeDoc(meta.output, meta.outputPlane, 'output'),
       errors: meta.errors,
       tags: meta.tags,
+      auth: authDoc(meta.options['auth']),
+      docs: meta.docs,
       options: optionsDoc(meta.options),
     })
   }
@@ -121,8 +176,8 @@ export const serviceDocOf = (
     name: def.name,
     version: def.version,
     description: def.description,
-    actions,
-    sockets,
+    actions: [...actions, ...sockets],
+    errors,
   }
 }
 
@@ -136,19 +191,26 @@ export const manifestOf = (
     services.push(
       serviceDocOf(
         def,
-        kernel.sockets.filter(socket => socket.service === def.name).map(socketDocOf),
+        kernel.sockets
+          .filter(socket => socket.service === def.name)
+          .map(socket => socketDocOf(socket, socketKeyOf(def, socket.path))),
       ),
     )
   }
 
   return {
-    manifest: 'ozaco/1',
+    manifest: 'ozaco/2',
     name: kernel.name,
     version: kernel.version,
     instance: kernel.instance,
     services,
     errors: STATUS_OF,
-    sockets: kernel.sockets.map(socketDocOf),
+
+    edge: {
+      sockets: kernel.sockets
+        .filter(socket => socket.service === null)
+        .map(socket => socketDocOf(socket, null)),
+    },
     observe: { console: docs.console ? '/_observe' : null },
     docs: { path: docs.path, openapi: `${docs.path}/openapi.json` },
   }

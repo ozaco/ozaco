@@ -1,7 +1,7 @@
 // oxlint-disable import/exports-last
 import type { AnyType } from 'std:shared'
 
-import { COLUMN, FIELDS, TABLE } from '../const'
+import { COLUMN, FIELDS, SCHEMA, TABLE } from '../const'
 import type { Schema } from '../types/schema'
 import type { Spec } from '../types/spec'
 
@@ -82,10 +82,10 @@ export const table = <TName extends string, TShape extends Schema.Shape>(
   name: TName,
   shape: TShape,
   options?: Schema.TableOptions,
-): Schema.Builder<TName, Schema.DocFor<TShape>, Schema.InsertFor<TShape>> => {
+): Schema.Builder<TName, Schema.DocFor<TShape, TName>, Schema.InsertFor<TShape>> => {
   const entries = Object.entries(shape)
 
-  return builderOf<TName, Schema.DocFor<TShape>, Schema.InsertFor<TShape>>({
+  return builderOf<TName, Schema.DocFor<TShape, TName>, Schema.InsertFor<TShape>>({
     _t: TABLE,
     name,
     columns: entries.map(([columnName, def]) => columnSpecOf(columnName, def)),
@@ -99,6 +99,19 @@ export const table = <TName extends string, TShape extends Schema.Shape>(
     log: options?.log ?? true,
   })
 }
+
+/**
+ * Declare the application's schema ONCE: `export const schema = defineSchema({ users, posts })`.
+ * The result feeds both sides — `DbClient.use({ schema })` installs it and `useDb(schema)`
+ * resolves the typed handle anywhere, so no call site ever re-lists the tables. The object keys
+ * are only for your own reading; a table is keyed by its own declared name.
+ */
+export const defineSchema = <const TShape extends Record<string, Schema.Table>>(
+  shape: TShape,
+): Schema.Def<Schema.FromShape<TShape>> => ({
+  _t: SCHEMA,
+  tables: Object.values(shape),
+})
 
 const systemColumn = (name: string, kind: Spec.ColumnKind, primary: boolean): Spec.Column => ({
   name,

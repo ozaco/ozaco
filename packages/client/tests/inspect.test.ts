@@ -26,7 +26,7 @@ describe('the shared inspector API', () => {
             const client = connectClient<Api>({ url })
 
             const manifest = await loadManifest(client)
-            expect(manifest.manifest).toBe('ozaco/1')
+            expect(manifest.manifest).toBe('ozaco/2')
             expect(manifest.services.some(service => service.name === 'demo')).toBe(true)
 
             // a value call: status, request id, elapsed, the value

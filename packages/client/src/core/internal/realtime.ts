@@ -35,11 +35,11 @@ function* socketPath(
   const manifest = yield* attempt(() => manifestOf(ctx))
 
   if (!isFailure(manifest)) {
-    const socket = (manifest.value.sockets ?? []).find(
-      entry => entry.service === resource && entry.protocol === 'resource',
-    )
+    const socket = manifest.value.services
+      .find(entry => entry.name === resource)
+      ?.actions.find(entry => entry.kind === 'socket' && entry.protocol === 'resource')
 
-    if (socket) {
+    if (socket && socket.kind === 'socket') {
       return socket.path
     }
   }
@@ -50,12 +50,9 @@ function* socketPath(
 const socketUrl = (ctx: ClientDef.Context, path: string): string => {
   const url = new URL(path, ctx.options.url)
   url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
-  const token = typeof ctx.options.token === 'function' ? ctx.options.token() : ctx.options.token
 
-  if (token) {
-    url.searchParams.set('token', token)
-  }
-
+  // tokens never ride the URL: browsers authorize with a first `{ t: 'auth' }` frame,
+  // everything else with the authorization header
   return url.toString()
 }
 
@@ -85,8 +82,17 @@ export const watch = <TRow>(
     let since = options?.since
     let cursor = options?.cursor
     let back = options?.back === true
-    const subscribe = (): Operation<void> =>
-      connection.send({
+
+    const subscribe = function* (): Operation<void> {
+      // in-band auth FIRST on every (re)connect — the server settles it before the watch
+      const bearer =
+        typeof ctx.options.token === 'function' ? ctx.options.token() : ctx.options.token
+
+      if (bearer) {
+        yield* connection.send({ t: 'auth', token: bearer })
+      }
+
+      yield* connection.send({
         t: 'watch',
         id,
         filter: options?.filter,
@@ -94,6 +100,7 @@ export const watch = <TRow>(
         ...(options?.limit === undefined ? {} : { limit: options.limit, cursor, back }),
         since,
       })
+    }
     yield* subscribe()
 
     // page turns arrive from promise land: a fresh watch on the SAME id replaces the window

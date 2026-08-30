@@ -570,6 +570,82 @@ export const runAdapterSuite = (target: AdapterTarget): void => {
 
           // rolled-back writes never reached the feed: the next event is the outer insert
           expect(((yield* feed.next()).value as AnyType).id).toBe(outerId)
+
+          // a nested transaction that COMMITS: the OUTER one owns the single change-log write
+          // (logging its own buffer too would insert the same tokens twice → db.unique)
+          const joined = yield* db.transaction(function* (tx: AnyType) {
+            const outer = yield* tx.insert('users', { name: 'joined-outer' })
+            const inner = yield* tx.transaction(function* (nested: AnyType) {
+              return yield* nested.insert('users', { name: 'joined-inner' })
+            })
+            return [outer._id, inner._id]
+          })
+          expect(((yield* feed.next()).value as AnyType).id).toBe(joined[0])
+          expect(((yield* feed.next()).value as AnyType).id).toBe(joined[1])
+
+          // `upsert` IS a transaction — nested inside one it must still commit
+          const upserted = yield* db.transaction(function* (tx: AnyType) {
+            yield* tx.upsert('users', { name: 'ada' }, { age: 30 })
+            return yield* tx.upsert('users', { name: 'ada' }, { age: 31 })
+          })
+          expect(upserted.age).toBe(31)
+        }),
+      )
+    })
+
+    it('scoped handle: narrowed reads, guarded writes, stamped inserts, retracted misses', async () => {
+      unwrap(
+        await run(function* () {
+          const db = yield* bootstrap()
+          const a = (db as AnyType).scoped(where.eq('role', 'member'))
+
+          // stamp: the scope pins `role` onto the insert, overriding the value
+          const member = yield* a.insert('users', { name: 'scoped-member', role: 'admin' })
+          expect(member.role).toBe('member')
+          const admin = yield* db.insert('users', { name: 'scoped-admin', role: 'admin' })
+
+          // reads narrowed; foreign row absent
+          expect(yield* a.get('users', admin._id)).toBeNull()
+          expect((yield* a.query('users').collect()).map((row: AnyType) => row.name)).toEqual([
+            'scoped-member',
+          ])
+
+          // guarded writes: miss (not conflict) outside the scope, even with a stale version
+          const before = yield* Db.actions.logStats('users')
+          expect(yield* a.patch('users', admin._id, { age: 9 })).toBeNull()
+          const hidden = yield* attempt(
+            a.patch('users', admin._id, { age: 9 }, { ifVersion: 'v:stale' }),
+          )
+          expect(isFailure(hidden)).toBe(false)
+          expect(yield* a.delete('users', admin._id)).toBe(false)
+
+          // ...and none of those misses left a phantom change-log row
+          const after = yield* Db.actions.logStats('users')
+          expect(after.rows).toBe(before.rows)
+
+          // upsert under a per-call scope: both branches
+          const up = yield* db.upsert(
+            'users',
+            { name: 'scoped-up' },
+            { role: 'member' },
+            { scope: where.eq('role', 'member') },
+          )
+          expect(up.role).toBe('member')
+          const again = yield* db.upsert(
+            'users',
+            { name: 'scoped-up' },
+            { age: 7 },
+            { scope: where.eq('role', 'member') },
+          )
+          expect(again._id).toBe(up._id)
+          expect(again.age).toBe(7)
+
+          // an insert under a scope that pins nothing exact refuses
+          const denied = yield* attempt(
+            (db as AnyType).scoped(where.gt('age', 3)).insert('users', { name: 'scoped-denied' }),
+          )
+          expect(isFailure(denied)).toBe(true)
+          expect((denied as AnyType).error).toBe(DbErrors.Validation)
         }),
       )
     })

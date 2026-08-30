@@ -20,6 +20,20 @@ export namespace DocsDef {
     readonly streams?: Readonly<Record<string, string>> | undefined
   }
 
+  /** The caller-facing summary of an `auth` requirement — WHAT is required, never a secret. */
+  export interface AuthDoc {
+    readonly kind:
+      | 'open'
+      | 'authenticated'
+      | 'user'
+      | 'service'
+      | 'roles'
+      | 'requirements'
+      | 'predicate'
+    readonly roles?: readonly string[] | undefined
+    readonly permissions?: readonly string[] | undefined
+  }
+
   export interface ActionDoc {
     readonly id: string
     readonly service: string
@@ -33,18 +47,32 @@ export namespace DocsDef {
     readonly errors: Readonly<Record<string, number>>
     readonly tags: readonly string[]
 
+    /** the `auth` requirement, summarized for the panel/clients. */
+    readonly auth: AuthDoc
+
+    /** the action's free-form `docs` block, verbatim (a resource's `filters` surface lives
+     * here). */
+    readonly docs: Readonly<Record<string, unknown>> | null
+
     /** plugin options as declared (functions dropped) — `auth`, `cache`, `rateLimit`, … */
     readonly options: Readonly<Record<string, unknown>>
   }
 
-  /** A socket route (a resource's realtime feed, a custom socket). */
+  /** A socket as a UNIFIED service entry (`kind: 'socket'`) — v2 has no separate socket list. */
   export interface SocketDoc {
-    readonly path: string
+    readonly id: string
     readonly service: string | null
+    readonly action: string | null
+    readonly kind: 'socket'
+    readonly path: string
 
     /** `resource` = watch/unwatch ↔ sync/delta/error frames; anything else is custom. */
     readonly protocol: string | null
     readonly description: string | null
+
+    /** `'first-frame'`: authorize with the FIRST `{ t: 'auth', token }` frame (browsers);
+     * `'upgrade'`: an authorization header at the handshake. */
+    readonly authorize: 'upgrade' | 'first-frame'
 
     /** opening-frame defaults (e.g. `{ cursor: 0 }` on realtime — start of the set). */
     readonly defaults?: Readonly<Record<string, unknown>> | null | undefined
@@ -54,27 +82,34 @@ export namespace DocsDef {
     readonly sends?: SchemaDoc | null | undefined
   }
 
+  /** One entry of a service's unified `actions` list. */
+  export type EntryDoc = ActionDoc | SocketDoc
+
   export interface ServiceDoc {
     readonly name: string
     readonly version: string
     readonly description: string | undefined
-    readonly actions: readonly ActionDoc[]
 
-    /** socket routes under this service (e.g. a crud resource's `/<name>/_realtime`). */
-    readonly sockets: readonly SocketDoc[]
+    /** the UNIFIED entry list: callable actions AND this service's sockets (`kind: 'socket'`). */
+    readonly actions: readonly EntryDoc[]
+
+    /** this service's failure catalog: the union of its actions' `errors`. */
+    readonly errors: Readonly<Record<string, number>>
   }
 
-  /** The Ozaco Manifest v1. */
+  /** The Ozaco Manifest v2. */
   export interface Manifest {
-    readonly manifest: 'ozaco/1'
+    readonly manifest: 'ozaco/2'
     readonly name: string
     readonly version: string
     readonly instance: string
     readonly services: readonly ServiceDoc[]
+
+    /** the CORE failure catalog (service-specific tags live on `services[].errors`). */
     readonly errors: Readonly<Record<string, number>>
 
-    /** every socket route, those without a service included. */
-    readonly sockets: readonly SocketDoc[]
+    /** socket routes mounted OUTSIDE any service (`Edge.actions.socket`). */
+    readonly edge: { readonly sockets: readonly SocketDoc[] }
     readonly observe: { readonly console: string | null }
     readonly docs: { readonly path: string; readonly openapi: string }
   }

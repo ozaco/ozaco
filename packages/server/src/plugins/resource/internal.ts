@@ -1,6 +1,14 @@
 // oxlint-disable import/exports-last
 import type { Schema, Spec } from 'db:core'
-import { clampLimit, DbErrors, FIELDS, sanitizeFilter, useDb } from 'db:core'
+import {
+  clampLimit,
+  DbErrors,
+  FIELDS,
+  filterFields,
+  filterValues,
+  sanitizeFilter,
+  useDb,
+} from 'db:core'
 import type { EdgeDef, ServerDef } from 'server:core'
 import { CtxRef, ServerErrors } from 'server:core'
 import type { Operation } from 'std:effect'
@@ -93,8 +101,8 @@ export const listInput = z.object({
   cursor: z.string().optional(),
 })
 
-/** The `list` envelope over a row schema (what `schema.output` sees as `page`) — typed from
- * the doc, so a custom action's `output` infers the real page shape (no cast needed). */
+/** The `list` envelope over a row schema — typed from the doc, so a custom action's `output`
+ * infers the real page shape (no cast needed). */
 export const pageSchema = <T extends z.ZodType>(doc: T): Helpers.PageShape<T> =>
   z.object({
     data: z.array(doc).readonly(),
@@ -103,11 +111,71 @@ export const pageSchema = <T extends z.ZodType>(doc: T): Helpers.PageShape<T> =>
     token: z.string(),
   })
 
-/** What a client filter/order may reference unless narrowed: every column + system fields. */
-export const defaultFilterable = (table: Schema.Table): readonly string[] => [
-  ...table.columns.map(column => column.name),
-  ...Object.values(FIELDS),
+/** The realtime socket's inbound frame schema (published in the manifest as `receives`). */
+export const clientFrameSchema: z.ZodType = z.union([
+  z.object({ t: z.literal('auth'), token: z.string() }),
+  z.object({
+    t: z.literal('watch'),
+    id: z.string(),
+    filter: z.unknown().optional(),
+    order: z
+      .object({ field: z.string(), direction: z.enum(['asc', 'desc']).optional() })
+      .optional(),
+    limit: z.number().int().positive().optional(),
+    cursor: z.union([z.string(), z.number()]).optional(),
+    back: z.boolean().optional(),
+    since: z.string().optional(),
+  }),
+  z.object({ t: z.literal('unwatch'), id: z.string() }),
+])
+
+/** The realtime socket's outbound frame schema over a row schema (`sends` in the manifest). */
+export const serverFrameSchema = (doc: z.ZodType): z.ZodType => {
+  const page = z.object({
+    next: z.string().nullable(),
+    prev: z.string().nullable(),
+    total: z.number(),
+  })
+
+  return z.union([
+    z.object({
+      t: z.literal('sync'),
+      id: z.string(),
+      rows: z.array(doc).readonly(),
+      token: z.string(),
+      page: page.optional(),
+    }),
+    z.object({
+      t: z.literal('delta'),
+      id: z.string(),
+      added: z.array(doc).readonly(),
+      changed: z.array(doc).readonly(),
+      removed: z.array(z.string()).readonly(),
+      token: z.string(),
+      page: page.optional(),
+    }),
+    z.object({ t: z.literal('notify'), id: z.string(), token: z.string(), page }),
+    z.object({ t: z.literal('error'), id: z.string(), tag: z.string(), message: z.string() }),
+  ])
+}
+
+/** Every column + system fields, in the rich `filterable` form. */
+export const defaultFilterable = (table: Schema.Table): readonly ResourceDef.FilterableField[] => [
+  ...table.columns.map(column => ({ field: column.name })),
+  ...Object.values(FIELDS).map(field => ({ field })),
 ]
+
+/** Normalize a `filterable` option (names or rich entries) to the rich form. */
+export const filterableOf = (
+  filterable: ResourceDef.Filterable | undefined,
+  table: Schema.Table,
+): readonly ResourceDef.FilterableField[] => {
+  if (filterable === undefined) {
+    return defaultFilterable(table)
+  }
+
+  return filterable.map(entry => (typeof entry === 'string' ? { field: entry } : entry))
+}
 
 /** Per-action http statuses for the db failures a resource raises. */
 export const ERRORS = { [DbErrors.Conflict]: 412, [DbErrors.NotFound]: 404, [DbErrors.Unique]: 409 }
@@ -124,8 +192,53 @@ export const ifMatch = (headers: Readonly<Record<string, string>>): string | und
   return header ? header.replaceAll('"', '') : undefined
 }
 
-/** A client filter (object, or a JSON string from a query param) through the sanitizer. */
-export function* filterOf(input: unknown, fields: readonly string[]): Operation<AnyType> {
+/** Which operators a filter node may use per field (the rich `filterable` form). */
+function* guardFilterOps(
+  filter: Spec.Filter,
+  fields: readonly ResourceDef.FilterableField[],
+): Operation<void> {
+  const allowed = new Map(fields.filter(entry => entry.ops).map(entry => [entry.field, entry.ops!]))
+
+  if (allowed.size === 0) {
+    return
+  }
+
+  const walk = function* (node: Spec.Filter): Operation<void> {
+    switch (node.op) {
+      case 'and':
+      case 'or': {
+        for (const inner of node.filters) {
+          yield* walk(inner)
+        }
+        return
+      }
+
+      case 'not': {
+        return yield* walk(node.filter)
+      }
+
+      default: {
+        const ops = allowed.get(node.field)
+
+        if (ops && !ops.includes(node.op)) {
+          return yield* fail(
+            ServerErrors.BadRequest,
+            `operator "${node.op}" is not allowed on "${node.field}"`,
+          )
+        }
+      }
+    }
+  }
+
+  yield* walk(filter)
+}
+
+/** A client filter (object, or a JSON string from a query param) through the sanitizer, then
+ * the per-field operator guard. */
+export function* filterOf(
+  input: unknown,
+  fields: readonly ResourceDef.FilterableField[],
+): Operation<AnyType> {
   if (input === undefined || input === null || input === '') {
     return null
   }
@@ -136,7 +249,13 @@ export function* filterOf(input: unknown, fields: readonly string[]): Operation<
     return yield* fail(ServerErrors.BadRequest, 'filter is not valid JSON')
   }
 
-  return yield* sanitizeFilter((raw as AnyType).value, { fields })
+  const sanitized = yield* sanitizeFilter((raw as AnyType).value, {
+    fields: fields.map(entry => entry.field),
+  })
+
+  yield* guardFilterOps(sanitized, fields)
+
+  return sanitized
 }
 
 function* parseJson(text: string): Operation<{ value: unknown }> {
@@ -148,43 +267,36 @@ function* parseJson(text: string): Operation<{ value: unknown }> {
 }
 
 /**
- * Run the `schema` hooks ONCE, synchronously — `crud()` derives its schemas at definition time,
- * outside any scope, so a hook may not suspend: a raised failure is thrown as-is (it refuses
- * the definition), any other yield is a configuration error. `undefined` (or the schema itself)
- * keeps the derived default.
+ * Apply the `schema` transforms ONCE, at definition time. Each transform is a PLAIN function;
+ * returning `undefined` (or the schema itself) keeps the derived default. The resolution order
+ * is `doc` first, `page` derived from the resolved doc, then the four inputs.
  */
-export const shaper = (hooks: ResourceDef.SchemaHooks | undefined) => {
-  const drain = <T extends z.ZodType>(
-    hook: ResourceDef.SchemaHook<AnyType> | undefined,
-    schema: T,
-    of: string,
-  ): T => {
-    if (!hook) {
-      return schema
-    }
+export const resolveSchemas = (
+  table: Schema.Table,
+  transforms: ResourceDef.SchemaTransforms | undefined,
+): {
+  readonly doc: z.ZodObject
+  readonly page: z.ZodObject
+  readonly list: z.ZodObject
+  readonly create: z.ZodObject
+  readonly update: z.ZodObject
+  readonly replace: z.ZodObject
+} => {
+  const apply = (
+    transform: ((schema: AnyType) => z.ZodType) | undefined,
+    schema: z.ZodObject,
+  ): z.ZodObject => (transform?.(schema) ?? schema) as z.ZodObject
 
-    const steps = hook(schema as AnyType, of)[Symbol.iterator]()
-    const step = steps.next()
-
-    if (!step.done) {
-      if (isFailure(step.value as AnyType)) {
-        throw step.value
-      }
-
-      throw fail(
-        ServerErrors.Configuration,
-        `the schema hooks run at definition time and must be effect-free — one suspended while deriving "${of}"`,
-      )
-    }
-
-    return (step.value === undefined ? schema : step.value) as T
-  }
+  const id = z.object({ id: z.string() })
+  const doc = apply(transforms?.doc, docSchema(table))
 
   return {
-    input: <T extends z.ZodType>(schema: T, of: ResourceDef.SchemaInputOf): T =>
-      drain(hooks?.input, schema, of),
-    output: <T extends z.ZodType>(schema: T, of: ResourceDef.SchemaOutputOf): T =>
-      drain(hooks?.output, schema, of),
+    doc,
+    page: apply(transforms?.page, pageSchema(doc)),
+    list: apply(transforms?.list, listInput),
+    create: apply(transforms?.create, insertSchema(table)),
+    update: apply(transforms?.update, id.extend(patchSchema(table).shape)),
+    replace: apply(transforms?.replace, id.extend(insertSchema(table).shape)),
   }
 }
 
@@ -198,7 +310,7 @@ export const hooked = <
   THandler extends (call: { input: AnyType; ctx: ServerDef.Ctx }) => Operation<AnyType>,
 >(
   op: ResourceDef.Op,
-  hooks: ResourceDef.CrudHooks,
+  hooks: ResourceDef.CrudHooks<AnyType>,
   handler: THandler,
 ): THandler => {
   if (!hooks.before && !hooks.after && !hooks.around && !hooks.error) {
@@ -209,14 +321,14 @@ export const hooked = <
     let current = input
 
     if (hooks.before) {
-      const replaced = yield* hooks.before({ op, input: current, ctx })
+      const replaced = yield* hooks.before({ op, input: current, ctx } as AnyType)
       current = replaced === undefined ? current : replaced
     }
 
     let output = yield* handler({ input: current, ctx })
 
     if (hooks.after) {
-      const replaced = yield* hooks.after({ op, input: current, ctx, output })
+      const replaced = yield* hooks.after({ op, input: current, ctx, output } as AnyType)
       output = replaced === undefined ? output : replaced
     }
 
@@ -232,7 +344,7 @@ export const hooked = <
   }): Operation<AnyType> {
     const { around, error } = hooks
     const invoke = around
-      ? () => around({ op, input, ctx }, value => chain(value, ctx))
+      ? () => around({ op, input, ctx } as AnyType, value => chain(value, ctx))
       : () => chain(input, ctx)
 
     if (!error) {
@@ -245,7 +357,7 @@ export const hooked = <
       return outcome.value
     }
 
-    const replaced = yield* error({ op, input, ctx, failure: outcome })
+    const replaced = yield* error({ op, input, ctx, failure: outcome } as AnyType)
 
     if (replaced === undefined) {
       return yield* outcome
@@ -259,6 +371,60 @@ export const hooked = <
   }
 
   return wrapped as THandler
+}
+
+// --- scope -----------------------------------------------------------------------------------
+
+/** Normalize a `scope` option to its `{ read, write }` sides (one function covers both). */
+export const scopeSides = (
+  option: ResourceDef.ScopeOption | undefined,
+): {
+  readonly read?: ResourceDef.Scope | undefined
+  readonly write?: ResourceDef.Scope | undefined
+} => {
+  if (option === undefined) {
+    return {}
+  }
+
+  if (typeof option === 'function') {
+    return { read: option, write: option }
+  }
+
+  return option
+}
+
+/** Resolve one scope side for THIS call — run inside the handler, under every hook, so no
+ * `before`/`around` can widen it. */
+export function* scopeOf(
+  scope: ResourceDef.Scope | undefined,
+  ctx: ServerDef.Ctx,
+): Operation<Spec.Filter | undefined> {
+  if (!scope) {
+    return undefined
+  }
+
+  return ((yield* scope(ctx)) as Spec.Filter | null | undefined) ?? undefined
+}
+
+/** The values a scope PINS onto a written row (nested `and`s flattened, `eq` → value, `isNull`
+ * → `null`) — a scope that pins nothing exact cannot shape a create/replace. */
+export function* stampOf(
+  scope: Spec.Filter | undefined,
+): Operation<Readonly<Record<string, unknown>>> {
+  if (scope === undefined) {
+    return {}
+  }
+
+  const values = filterValues(scope)
+
+  if (values === null) {
+    return yield* fail(
+      ServerErrors.Configuration,
+      'this scope pins no exact values (`or`/`not`/ranges) — it cannot shape a create/replace; make it eq-shaped or disable those actions',
+    )
+  }
+
+  return values
 }
 
 // --- runnable ops ----------------------------------------------------------------------------
@@ -308,6 +474,20 @@ const versionFor = (
 export const combine = (scope: Spec.Filter | undefined | null, client: AnyType): AnyType =>
   scope ? (client ? { op: 'and', filters: [scope, client] } : scope) : client
 
+/** Write options carrying both gates: the version and the trusted scope. */
+const guard = (
+  headers: Readonly<Record<string, string>>,
+  options: {
+    readonly ifVersion?: string | false | undefined
+    readonly scope?: Spec.Filter | undefined
+  },
+) => ({ ifVersion: versionFor(headers, options.ifVersion), scope: options.scope })
+
+const richFields = (
+  filterable: ResourceDef.Filterable | undefined,
+  table: Schema.Table,
+): readonly ResourceDef.FilterableField[] => filterableOf(filterable, table)
+
 /** The built-in list pipeline as one call: sanitized client filter AND-ed with the trusted
  * `scope`, guarded order, clamped limit, keyset pagination — `total: true` also counts the
  * whole set. */
@@ -319,7 +499,7 @@ export function* listOp(
 
   return yield* spanned(env, `crud.list ${table.name}`, function* () {
     const input = options.input ?? {}
-    const fields = options.filterable ?? defaultFilterable(table)
+    const fields = richFields(options.filterable, table)
     const maxLimit = options.maxLimit ?? 100
     const client = yield* filterOf(input.filter, fields)
     const filter = combine(options.scope, client)
@@ -330,7 +510,7 @@ export function* listOp(
     }
 
     if (input.order) {
-      if (!fields.includes(input.order)) {
+      if (!fields.some(entry => entry.field === input.order)) {
         return yield* fail(ServerErrors.BadRequest, `cannot order by "${input.order}"`)
       }
 
@@ -361,7 +541,7 @@ export function* countOp(
   const env = yield* opEnv(options)
 
   return yield* spanned(env, `crud.count ${table.name}`, function* () {
-    const fields = options.filterable ?? defaultFilterable(table)
+    const fields = richFields(options.filterable, table)
     const client = yield* filterOf(options.filter, fields)
     const filter = combine(options.scope, client)
     let query = env.db.query(table.name)
@@ -378,7 +558,7 @@ export function* getOp(table: Schema.Table, options: ResourceDef.GetOp): Operati
   const env = yield* opEnv(options)
 
   return yield* spanned(env, `crud.get ${table.name}`, function* () {
-    const row = yield* env.db.get(table.name, options.id)
+    const row = yield* env.db.get(table.name, options.id, { scope: options.scope })
 
     if (!row) {
       if (options.optional === true) {
@@ -395,9 +575,10 @@ export function* getOp(table: Schema.Table, options: ResourceDef.GetOp): Operati
 export function* createOp(table: Schema.Table, options: ResourceDef.CreateOp): Operation<AnyType> {
   const env = yield* opEnv(options)
 
-  return yield* spanned(env, `crud.create ${table.name}`, () =>
-    env.db.insert(table.name, options.value as AnyType),
-  )
+  return yield* spanned(env, `crud.create ${table.name}`, function* () {
+    const pins = yield* stampOf(options.scope)
+    return yield* env.db.insert(table.name, { ...(options.value as object), ...pins } as AnyType)
+  })
 }
 
 export function* createManyOp(
@@ -406,18 +587,37 @@ export function* createManyOp(
 ): Operation<readonly AnyType[]> {
   const env = yield* opEnv(options)
 
-  return yield* spanned(env, `crud.create-many ${table.name}`, () =>
-    env.db.insertMany(table.name, options.values as AnyType[]),
-  )
+  return yield* spanned(env, `crud.create-many ${table.name}`, function* () {
+    const pins = yield* stampOf(options.scope)
+
+    return yield* env.db.insertMany(
+      table.name,
+      options.values.map(value => ({ ...(value as object), ...pins })) as AnyType[],
+    )
+  })
 }
 
 export function* updateOp(table: Schema.Table, options: ResourceDef.UpdateOp): Operation<AnyType> {
   const env = yield* opEnv(options)
 
   return yield* spanned(env, `crud.update ${table.name}`, function* () {
-    const row = yield* env.db.patch(table.name, options.id, options.patch as AnyType, {
-      ifVersion: versionFor(env.headers, options.ifVersion),
-    })
+    // EVERY field the scope references is the scope's, never the caller's — dropped from the
+    // patch, so a patch cannot move the row out of scope (ranges included, not just `eq`s)
+    const owned = options.scope === undefined ? [] : filterFields(options.scope)
+    const patch =
+      owned.length === 0
+        ? options.patch
+        : Object.fromEntries(
+            Object.entries(options.patch as Record<string, unknown>).filter(
+              ([key]) => !owned.includes(key),
+            ),
+          )
+    const row = yield* env.db.patch(
+      table.name,
+      options.id,
+      patch as AnyType,
+      guard(env.headers, options),
+    )
 
     if (!row) {
       return yield* fail(ServerErrors.NotFound, `${table.name} ${options.id} not found`)
@@ -434,9 +634,13 @@ export function* replaceOp(
   const env = yield* opEnv(options)
 
   return yield* spanned(env, `crud.replace ${table.name}`, function* () {
-    const row = yield* env.db.replace(table.name, options.id, options.value as AnyType, {
-      ifVersion: versionFor(env.headers, options.ifVersion),
-    })
+    const pins = yield* stampOf(options.scope)
+    const row = yield* env.db.replace(
+      table.name,
+      options.id,
+      { ...(options.value as object), ...pins } as AnyType,
+      guard(env.headers, options),
+    )
 
     if (!row) {
       return yield* fail(ServerErrors.NotFound, `${table.name} ${options.id} not found`)
@@ -453,9 +657,7 @@ export function* removeOp(
   const env = yield* opEnv(options)
 
   return yield* spanned(env, `crud.remove ${table.name}`, function* () {
-    const removed = yield* env.db.delete(table.name, options.id, {
-      ifVersion: versionFor(env.headers, options.ifVersion),
-    })
+    const removed = yield* env.db.delete(table.name, options.id, guard(env.headers, options))
 
     if (!removed && options.strict === true) {
       return yield* fail(ServerErrors.NotFound, `${table.name} ${options.id} not found`)
@@ -465,24 +667,25 @@ export function* removeOp(
   })
 }
 
+// --- realtime --------------------------------------------------------------------------------
+
 /**
- * The realtime handshake guard: a presented bearer (`authorization` header, or the `?token=`
- * the edge promotes) is ALWAYS verified — an expired or malformed token rejects the upgrade
- * even on an open resource — and the resource's `read` requirement gates who may subscribe.
- * The verified principal is RESOLVED so the edge plants it as the socket ctx's `auth` (the
- * hooks and handlers see who subscribed without verifying twice).
+ * The realtime handshake guard: a presented bearer — the `authorization` header, or the token
+ * of a first `{ t: 'auth' }` frame (browsers cannot set WS headers; tokens never travel in the
+ * URL) — is ALWAYS verified: an expired or malformed token rejects even on an open resource.
+ * The resource's `read` requirement gates who may subscribe; the verified principal is
+ * RESOLVED so the edge plants it as the socket ctx's `auth`.
  */
 export const guardHandshake = (resource: ResourceDef.RealtimeSource) =>
-  function* (request: Request): Operation<unknown> {
+  function* (request: Request, token?: string): Operation<unknown> {
     const requirement = (resource.auth.read ?? false) as AuthDef.Requirement
     const header = request.headers.get('authorization')
-    const queryToken = new URL(request.url).searchParams.get('token')
     const headers: Record<string, string> = {}
 
     if (header !== null) {
       headers['authorization'] = header
-    } else if (queryToken !== null) {
-      headers['authorization'] = `Bearer ${queryToken}`
+    } else if (token !== undefined) {
+      headers['authorization'] = `Bearer ${token}`
     }
 
     const auth = yield* Auth.context.get()
@@ -504,7 +707,7 @@ export const guardHandshake = (resource: ResourceDef.RealtimeSource) =>
 
 /** One client watch on the realtime socket. */
 export function* watch(
-  socket: EdgeDef.Socket,
+  socket: EdgeDef.Socket<AnyType, AnyType>,
   resource: ResourceDef.RealtimeSource,
   incoming: Extract<ResourceDef.ClientFrame, { t: 'watch' }>,
 ): Operation<void> {
@@ -517,7 +720,12 @@ export function* watch(
     let frame = out
 
     if (hooks.after && (out.t === 'sync' || out.t === 'delta')) {
-      const replaced = yield* hooks.after({ op: 'watch', input: incoming, ctx, output: out })
+      const replaced = yield* hooks.after({
+        op: 'watch',
+        input: incoming,
+        ctx,
+        output: out,
+      } as AnyType)
 
       if (replaced !== undefined) {
         frame = { ...(replaced as AnyType), t: out.t, id: out.id } as ResourceDef.ServerFrame
@@ -532,7 +740,7 @@ export function* watch(
     let frame = incoming
 
     if (hooks.before) {
-      const replaced = yield* hooks.before({ op: 'watch', input: incoming, ctx })
+      const replaced = yield* hooks.before({ op: 'watch', input: incoming, ctx } as AnyType)
 
       if (replaced !== undefined) {
         frame = { ...(replaced as AnyType), t: 'watch', id: incoming.id }
@@ -542,7 +750,7 @@ export function* watch(
     const client = yield* filterOf(frame.filter, resource.filterable)
     // the trusted per-subscriber scope (tenancy) joins AFTER the sanitizer — its fields need
     // not be in `filterable`, so they never open up to client filtering
-    const trusted = resource.scope ? ((yield* resource.scope(ctx)) ?? undefined) : undefined
+    const trusted = yield* scopeOf(resource.scope, ctx)
     const filter = combine(trusted, client)
     let query = (yield* looseDb()).query(resource.table.name)
 
@@ -550,7 +758,7 @@ export function* watch(
       query = query.filter(filter)
     }
 
-    if (frame.order && resource.filterable.includes(frame.order.field)) {
+    if (frame.order && resource.filterable.some(entry => entry.field === frame.order!.field)) {
       query = query.order(frame.order.field, frame.order.direction ?? 'asc')
     }
 
@@ -563,6 +771,12 @@ export function* watch(
 
     for (;;) {
       const step = yield* deltas.next()
+
+      // the db's watch flow never ends on its own; a closing subscription ends this watch
+      if (step.done) {
+        return
+      }
+
       const delta = step.value as AnyType
 
       // the db stamps its primed baseline — after a silent `since` resume there is none, and
@@ -591,7 +805,7 @@ export function* watch(
     if (hooks.error) {
       const error = hooks.error
       const replaced = yield* attempt(() =>
-        error({ op: 'watch', input: incoming, ctx, failure: outcome }),
+        error({ op: 'watch', input: incoming, ctx, failure: outcome } as AnyType),
       )
 
       if (isFailure(replaced)) {
@@ -652,6 +866,11 @@ function* windowed({ resource, frame, query, send }: Helpers.WindowedArgs): Oper
 
   for (;;) {
     const event = yield* changes.next()
+
+    if (event.done) {
+      return
+    }
+
     const token = String((event.value as AnyType)?.token ?? '')
 
     // the page already reflects this change (a burst lands as ONE recompute)
@@ -698,7 +917,9 @@ function* windowed({ resource, frame, query, send }: Helpers.WindowedArgs): Oper
   }
 }
 
-/** The realtime socket handler of one resource: `watch`/`unwatch` frames, one task per watch. */
+/** The realtime socket handler of one resource: `watch`/`unwatch` frames, one task per watch.
+ * The edge validates frames against `receives` and settles auth (a header, or the first
+ * `auth` frame) before the handler sees anything — an `auth` frame reaching here is ignored. */
 export const realtime = (resource: ResourceDef.RealtimeSource): EdgeDef.SocketHandler =>
   function* (socket) {
     const watches = new Map<string, { halt(): Operation<void> }>()
@@ -712,6 +933,12 @@ export const realtime = (resource: ResourceDef.RealtimeSource): EdgeDef.SocketHa
       }
 
       const frame = step.value as ResourceDef.ClientFrame
+
+      // only watch/unwatch address a subscription — and only they may replace one
+      if (frame.t !== 'watch' && frame.t !== 'unwatch') {
+        continue
+      }
+
       const running = watches.get(frame.id)
 
       if (running) {

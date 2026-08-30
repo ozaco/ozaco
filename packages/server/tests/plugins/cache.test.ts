@@ -9,7 +9,7 @@ import { describe, expect, it } from 'bun:test'
 
 import { z } from 'zod'
 
-import { storage, todosTable } from '../helpers'
+import { storage, testSchema } from '../helpers'
 
 describe('cache', () => {
   it('caches query results by input/vary, invalidates by tags, mutations and db changes', async () => {
@@ -35,7 +35,7 @@ describe('cache', () => {
       ),
       bump: action.mutation({ invalidate: ['todos'] }, function* () {}),
       write: action.mutation({ input: z.object({ title: z.string() }) }, function* ({ input }) {
-        const db = yield* useDb(todosTable)
+        const db = yield* useDb(testSchema)
         yield* db.insert('todos', { title: input.title, done: false })
       }),
     })

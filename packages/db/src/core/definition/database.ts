@@ -20,6 +20,7 @@ import {
   logSpecOf,
   logStats,
   readLog,
+  removeLogRow,
   replayLog,
 } from '../internal/log'
 import { applyPlan, planMigration } from '../internal/migrate'
@@ -49,6 +50,15 @@ const DbImpl = Db.implement<Database.Context, [options: Database.Options]>({
   *setup(options) {
     if (!(yield* hasCodec())) {
       yield* install(JsonCodec)
+    }
+
+    const tables = options.schema?.tables ?? options.tables
+
+    if (!tables) {
+      return yield* fail(
+        DbErrors.Configuration,
+        'DbClient needs its tables — pass `schema: defineSchema({ ... })` (or `tables: [...]`)',
+      )
     }
 
     const adapter = options.adapter ?? DbAdapter
@@ -89,7 +99,7 @@ const DbImpl = Db.implement<Database.Context, [options: Database.Options]>({
       )
     }
 
-    const reserved = options.tables.find(def => isLogName(def.name))
+    const reserved = tables.find(def => isLogName(def.name))
     if (reserved) {
       return yield* fail(
         DbErrors.Configuration,
@@ -99,7 +109,7 @@ const DbImpl = Db.implement<Database.Context, [options: Database.Options]>({
 
     // snake_case is the law of the schema: declared table and column names (system fields are
     // the framework's own and already conform)
-    for (const def of options.tables) {
+    for (const def of tables) {
       if (!TABLE_NAME.test(def.name)) {
         return yield* fail(
           DbErrors.Configuration,
@@ -116,11 +126,9 @@ const DbImpl = Db.implement<Database.Context, [options: Database.Options]>({
       }
     }
     const base = {
-      tables: new Map(options.tables.map(def => [def.name, def])),
-      specs: new Map(options.tables.map(def => [def.name, tableSpecOf(def)])),
-      logs: new Map(
-        options.tables.filter(def => def.log).map(def => [def.name, logSpecOf(def.name)]),
-      ),
+      tables: new Map(tables.map(def => [def.name, def])),
+      specs: new Map(tables.map(def => [def.name, tableSpecOf(def)])),
+      logs: new Map(tables.filter(def => def.log).map(def => [def.name, logSpecOf(def.name)])),
       safe: options.safe ?? false,
       adapter: adapter.actions,
       info: described.value,
@@ -138,6 +146,7 @@ const DbImpl = Db.implement<Database.Context, [options: Database.Options]>({
       bus: outbox.bus,
       mintToken,
       persist: (writes, tx) => appendLog(base, writes, tx),
+      retract: write => removeLogRow(base, write.table, write.token),
       replay: (table, fromTs) => replayLog(base, table, fromTs),
       observe: token => IO.actions.observeHlc(token),
       replayWindowMs: base.replayWindowMs,

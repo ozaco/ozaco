@@ -3,6 +3,7 @@ import type { AnyType } from 'std:shared'
 
 import { DEFAULT_ORDER, FIELDS } from '../const'
 import { DbErrors } from '../errors'
+import type { Change } from '../types/change'
 import type { Database } from '../types/database'
 import type { Helpers } from '../types/helpers'
 import type { Spec } from '../types/spec'
@@ -299,90 +300,91 @@ function* resolveSinceOf(target: Helpers.QueryTarget, since: string) {
 }
 
 /** Build the immutable, lazily-compiled {@link Database.Query} over one table. An unknown table
- * still yields a handle (its terminals fail `db.validation`). */
+ * still yields a handle (its terminals fail `db.validation`). The members are written loose
+ * (`field: string`) and cross the runtime→type boundary in ONE cast at the return — the same
+ * pattern as `createHandle`. */
 export const createQuery = (
   target: Helpers.QueryTarget,
   query: Helpers.QueryState = EMPTY,
-): Database.Query<AnyType> => ({
-  where: match =>
-    createQuery(target, {
-      ...query,
-      match: { ...query.match, ...(match as Record<string, Spec.FilterValue>) },
-    }),
-  filter: (...filters) =>
-    createQuery(target, { ...query, filters: [...query.filters, ...filters] }),
+): Database.Query<AnyType> => {
+  const built = {
+    where: (match: Record<string, Spec.FilterValue>) =>
+      createQuery(target, { ...query, match: { ...query.match, ...match } }),
+    filter: (...filters: readonly Spec.Filter[]) =>
+      createQuery(target, { ...query, filters: [...query.filters, ...filters] }),
 
-  // sort keys STACK: `.order('priority', 'desc').order('title')` sorts by both, in that order
-  order: (field, direction = 'asc') =>
-    createQuery(target, { ...query, order: [...query.order, { field, direction }] }),
-  select: ((...fields: readonly string[]) =>
-    createQuery(target, {
-      ...query,
-      fields: [...(query.fields ?? []), ...fields],
-    })) as Database.Query<AnyType>['select'],
-  groupBy: ((...fields: readonly string[]) => {
-    const next = { ...query, groupBy: [...(query.groupBy ?? []), ...fields] }
+    // sort keys STACK: `.order('priority', 'desc').order('title')` sorts by both, in that order
+    order: (field: string, direction: 'asc' | 'desc' = 'asc') =>
+      createQuery(target, { ...query, order: [...query.order, { field, direction }] }),
+    select: (...fields: readonly string[]) =>
+      createQuery(target, { ...query, fields: [...(query.fields ?? []), ...fields] }),
+    groupBy: (...fields: readonly string[]) => {
+      const next = { ...query, groupBy: [...(query.groupBy ?? []), ...fields] }
 
-    return {
-      count: grouped(target, next, opOf('count', null)),
-      sum: (field: string) => grouped(target, next, opOf('sum', field))(),
-      avg: (field: string) => grouped(target, next, opOf('avg', field))(),
-      min: (field: string) => grouped(target, next, opOf('min', field))(),
-      max: (field: string) => grouped(target, next, opOf('max', field))(),
-    }
-  }) as Database.Query<AnyType>['groupBy'],
+      return {
+        count: grouped(target, next, opOf('count', null)),
+        sum: (field: string) => grouped(target, next, opOf('sum', field))(),
+        avg: (field: string) => grouped(target, next, opOf('avg', field))(),
+        min: (field: string) => grouped(target, next, opOf('min', field))(),
+        max: (field: string) => grouped(target, next, opOf('max', field))(),
+      }
+    },
 
-  *collect() {
-    return yield* find(target, query, null)
-  },
-  *take(limit: number) {
-    return yield* find(target, query, Math.max(0, Math.trunc(limit)))
-  },
-  *first() {
-    const rows = yield* find(target, query, 1)
-    return rows[0] ?? null
-  },
-  *unique() {
-    const rows = yield* find(target, query, 2)
-    if (rows.length > 1) {
-      return yield* fail(
-        DbErrors.DataIntegrity,
-        `query on "${target.spec.name}" matched multiple rows`,
-      )
-    }
-    return rows[0] ?? null
-  },
-  *count() {
-    return yield* count(target, query)
-  },
-  *exists() {
-    const rows = yield* find(target, query, 1)
-    return rows.length > 0
-  },
-  *sum(field: string) {
-    return ((yield* scalar(target, query, opOf('sum', field))()) as number | null) ?? 0
-  },
-  avg: ((field: string) => scalar(target, query, opOf('avg', field))()) as AnyType,
-  min: ((field: string) => scalar(target, query, opOf('min', field))()) as AnyType,
-  max: ((field: string) => scalar(target, query, opOf('max', field))()) as AnyType,
+    *collect() {
+      return yield* find(target, query, null)
+    },
+    *take(limit: number) {
+      return yield* find(target, query, Math.max(0, Math.trunc(limit)))
+    },
+    *first() {
+      const rows = yield* find(target, query, 1)
+      return rows[0] ?? null
+    },
+    *unique() {
+      const rows = yield* find(target, query, 2)
+      if (rows.length > 1) {
+        return yield* fail(
+          DbErrors.DataIntegrity,
+          `query on "${target.spec.name}" matched multiple rows`,
+        )
+      }
+      return rows[0] ?? null
+    },
+    *count() {
+      return yield* count(target, query)
+    },
+    *exists() {
+      const rows = yield* find(target, query, 1)
+      return rows.length > 0
+    },
+    *sum(field: string) {
+      return ((yield* scalar(target, query, opOf('sum', field))()) as number | null) ?? 0
+    },
+    avg: (field: string) => scalar(target, query, opOf('avg', field))(),
+    min: (field: string) => scalar(target, query, opOf('min', field))(),
+    max: (field: string) => scalar(target, query, opOf('max', field))(),
 
-  *paginate(options: Spec.PaginateOptions) {
-    return yield* paginate(target, query, options)
-  },
-  watch: (options => {
-    const filter = combine(predicatesOf(query))
-    return watchQuery({
-      hub: target.state.hub,
-      table: target.spec.name,
-      filter,
-      // the fields a change must touch to possibly move a row into/out of this result
-      fields: new Set([
-        ...predicatesOf(query).flatMap(entry => filterFields(entry)),
-        ...query.order.map(entry => entry.field),
-      ]),
-      load: () => find(target, query, null),
-      resolve: since => resolveSinceOf(target, since),
-      options,
-    })
-  }) as Database.Query<AnyType>['watch'],
-})
+    *paginate(options: Spec.PaginateOptions) {
+      return yield* paginate(target, query, options)
+    },
+    watch: (options?: Change.WatchOptions) => {
+      const filter = combine(predicatesOf(query))
+      return watchQuery({
+        hub: target.state.hub,
+        table: target.spec.name,
+        filter,
+        // the fields a change must touch to possibly move a row into/out of this result
+        fields: new Set([
+          ...predicatesOf(query).flatMap(entry => filterFields(entry)),
+          ...query.order.map(entry => entry.field),
+        ]),
+        load: () => find(target, query, null),
+        resolve: since => resolveSinceOf(target, since),
+        options,
+      })
+    },
+    // the one runtime→type boundary of the query builder (see `createHandle`)
+  } as unknown as Database.Query<AnyType>
+
+  return built
+}

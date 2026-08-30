@@ -11,7 +11,7 @@ import { fail } from 'std:result'
 
 import { z } from 'zod'
 
-import { todosTable } from '../tables'
+import { schema } from '../tables'
 
 // TYPE-only: `reports` calls these services without importing them at runtime, so the module
 // graph stays a tree (no cycle waiting to happen)
@@ -43,7 +43,7 @@ export const reports = service(
       },
       function* ({ input }) {
         computed += 1
-        let query = (yield* useDb(todosTable)).query('todos')
+        let query = (yield* useDb(schema)).query('todos')
         if (input.done !== undefined) {
           query = query.filter({ op: 'eq', field: 'done', value: input.done })
         }

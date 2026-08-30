@@ -3,14 +3,14 @@
  * The Auth plugin's provider over the `users` table: credentials → user, refresh records in
  * memory (a table would do the same), seeded with two accounts so the demo logs in at once.
  *
- * Nothing is threaded in: every method resolves the TYPED handle itself with `useDb(usersTable)`
+ * Nothing is threaded in: every method resolves the TYPED handle itself with `useDb(schema)`
  * — the rows come back as `{ email, name, password, roles }`, no casts.
  */
 import { useDb } from 'db:core'
 import type { AuthDef } from 'server:plugins'
 import type { Operation } from 'std:effect'
 
-import { usersTable } from './tables'
+import { schema } from './tables'
 
 export const SEED_USERS = [
   { email: 'ada@example.com', name: 'Ada', password: 'ada', roles: ['admin'] },
@@ -25,7 +25,7 @@ export const authProvider = (): AuthDef.Provider => ({
   *authenticate(credentials) {
     const email = String(credentials['email'] ?? '')
     const password = String(credentials['password'] ?? '')
-    const db = yield* useDb(usersTable)
+    const db = yield* useDb(schema)
 
     const user = yield* db.query('users').filter({ op: 'eq', field: 'email', value: email }).first()
 
@@ -41,7 +41,7 @@ export const authProvider = (): AuthDef.Provider => ({
   },
 
   *loadUser(sub) {
-    const user = yield* (yield* useDb(usersTable)).get('users', sub)
+    const user = yield* (yield* useDb(schema)).get('users', sub)
 
     return user
       ? {
@@ -84,7 +84,7 @@ export const authProvider = (): AuthDef.Provider => ({
 
 /** Insert the seed users when the table is empty. */
 export function* seedUsers(): Operation<void> {
-  const db = yield* useDb(usersTable)
+  const db = yield* useDb(schema)
   const existing = yield* db.query('users').count()
 
   if (existing > 0) {

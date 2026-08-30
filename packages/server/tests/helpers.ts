@@ -1,4 +1,4 @@
-import { column, DbClient, table, useDb } from 'db:core'
+import { column, DbClient, defineSchema, table, useDb } from 'db:core'
 import { action, service, stream } from 'server:core'
 import type { Operation } from 'std:effect'
 import { flowOf, sleep } from 'std:effect'
@@ -18,12 +18,15 @@ export const todosTable = table('todos', {
   note: column.text().optional(),
 })
 
+/** The ONE schema declaration of the kernel tests. */
+export const testSchema = defineSchema({ todosTable })
+
 /** A service exercising every action shape: query, mutation, failing, slow, streaming. */
 export const todos = service('todos', {
   list: action.query(
     { input: z.object({ done: z.boolean().optional() }), output: z.array(Todo) },
     function* ({ input }) {
-      const db = yield* useDb(todosTable)
+      const db = yield* useDb(testSchema)
       const rows = yield* db.query('todos').collect()
       return rows
         .filter(row => input.done === undefined || row.done === input.done)
@@ -34,7 +37,7 @@ export const todos = service('todos', {
     { input: z.object({ title: z.string().min(1) }), output: Todo },
     function* ({ input, ctx }) {
       yield* ctx.log.info('creating', { title: input.title })
-      const db = yield* useDb(todosTable)
+      const db = yield* useDb(testSchema)
       const row = yield* db.insert('todos', { title: input.title, done: false })
       return { id: row._id, title: input.title, done: false }
     },
@@ -88,6 +91,6 @@ export const todos = service('todos', {
 export function* storage(db?: { replayWindowMs?: number }): Operation<void> {
   yield* MemoryAdapter.use()
   yield* BunIO.use()
-  yield* DbClient.use({ tables: [todosTable], ...db })
+  yield* DbClient.use({ schema: testSchema, ...db })
   yield* MemoryKv.use()
 }

@@ -109,6 +109,7 @@ export const edgeActions = (driver: EdgeDef.Driver): EdgeDef.Actions => ({
       service: route.service ?? null,
       protocol: route.protocol ?? null,
       description: route.description ?? null,
+      authorizeMode: route.authorizeMode ?? 'upgrade',
       defaults: route.defaults ?? null,
       receives: route.receives ?? null,
       sends: route.sends ?? null,

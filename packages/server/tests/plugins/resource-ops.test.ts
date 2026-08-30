@@ -17,7 +17,7 @@ import { describe, expect, it } from 'bun:test'
 import { BunEdge } from 'server:impl/edge/bun'
 import { z } from 'zod'
 
-import { storage, todosTable } from '../helpers'
+import { storage, todosTable, testSchema } from '../helpers'
 
 const json = function* (path: string, init?: RequestInit) {
   const response = yield* Edge.actions.handle(new Request(`http://edge${path}`, init))
@@ -119,7 +119,7 @@ const catalogue = service('catalogue', {
     },
     function* ({ input }) {
       // ops inside a TRANSACTION: the `db` override alone swaps the handle
-      const rows = yield* (yield* useDb(todosTable)).transaction(tx =>
+      const rows = yield* (yield* useDb(testSchema)).transaction(tx =>
         crud.createMany(todosTable, {
           values: input.titles.map(title => ({ title, done: false })),
           db: tx,
@@ -260,14 +260,7 @@ describe('resource — runnable ops', () => {
   it('realtimePath moves the socket route; shapes expose the RESOLVED schemas', () => {
     const shaped = crud(todosTable, {
       realtimePath: '/live',
-      schema: {
-        *output(s, of) {
-          if (of === 'page') {
-            return s.extend({ total: z.number() })
-          }
-          return s
-        },
-      },
+      schema: { page: s => s.extend({ total: z.number() }) },
     })
 
     const entry = (shaped.actions as AnyType)._realtime
@@ -278,8 +271,8 @@ describe('resource — runnable ops', () => {
     // `shapes` carries what the schema hooks produced — extend actions reuse THESE instead
     // of re-deriving raw table shapes
     expect(Object.keys(shaped.shapes.page.shape)).toContain('total')
-    expect(Object.keys(shaped.shapes.doc.shape)).toContain('title')
-    expect(Object.keys(shaped.shapes.update.shape)).toContain('id')
+    expect(Object.keys((shaped.shapes.doc as AnyType).shape)).toContain('title')
+    expect(Object.keys((shaped.shapes.update as AnyType).shape)).toContain('id')
   })
 
   it('read the dispatch ctx ambiently — outside one they name the fix', async () => {
@@ -421,7 +414,9 @@ describe('resource — runnable ops', () => {
         const manifest = (yield* until(
           (yield* until(fetch(`${base}/docs/manifest`))).json(),
         )) as AnyType
-        const socketDoc = manifest.sockets.find((entry: AnyType) => entry.path === '/feed/board')
+        const socketDoc = manifest.services
+          .flatMap((svc: AnyType) => svc.actions)
+          .find((entry: AnyType) => entry.kind === 'socket' && entry.path === '/feed/board')
         expect(socketDoc).toMatchObject({
           service: 'feed',
           protocol: 'resource',

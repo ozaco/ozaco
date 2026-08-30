@@ -23,6 +23,7 @@ import { brandOf, brandStream, isBranded } from '../utils/stream'
 import { childTrace, continueTrace, report, rootTrace, toWire, withSpan } from '../utils/trace'
 
 import { isDeferred, materialize, runDispatch } from './dispatch'
+import { actionKey } from './registry'
 
 /** Send a call over the carrier (a `carrier` span): input lanes from the input's shape, the
  * reply's value — or its first output lane attached in THIS scope. */
@@ -31,7 +32,8 @@ export function* callRemote(
   remote: Helpers.RemoteCall,
 ): Operation<unknown> {
   const carrier = yield* carrierOf(kernel)
-  const { args, inputs } = lanesOf(remote.input)
+  const meta = kernel.registry.actions.get(actionKey(remote.service, remote.action))?.meta
+  const { args, inputs } = lanesOf(remote.input, meta?.inputPlane)
   const cid = remote.trace.span_id
 
   const dispatch: WireDef.Dispatch = {
@@ -95,9 +97,17 @@ export function* traceFor(
   return { ...base, lane: [...base.lane, hop] }
 }
 
-/** Input streams a caller hands over: the value plane travels in `args`, streams as lanes. The
- * shape of the value decides (a caller need not know the remote action's declaration). */
-const lanesOf = (input: unknown): { args: unknown; inputs: CarrierDef.InputLane[] } => {
+/** Input streams a caller hands over: the value plane travels in `args`, streams as lanes.
+ * When the callee's DECLARED plane is known (the registry has its meta), the declaration
+ * decides; otherwise the value's shape does (a caller need not know a foreign declaration). */
+const lanesOf = (
+  input: unknown,
+  plane?: ServiceDef.Meta['inputPlane'],
+): { args: unknown; inputs: CarrierDef.InputLane[] } => {
+  if (plane === 'none' || plane === 'value') {
+    return { args: input, inputs: [] }
+  }
+
   if (isBranded(input)) {
     return { args: undefined, inputs: [{ name: 'body', brand: brandOf(input), source: input }] }
   }

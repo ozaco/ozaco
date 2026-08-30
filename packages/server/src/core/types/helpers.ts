@@ -154,8 +154,16 @@ export namespace Helpers {
     readonly params: Readonly<Record<string, string>>
     readonly headers: Readonly<Record<string, string>>
     readonly url: URL
-    readonly ctx: ServerDef.Ctx
     readonly trace: TraceDef.Trace
+    readonly signal: AbortSignal
+    readonly actions: Pick<ServerDef.Actions, 'call' | 'emit'>
+    readonly request: Request
+
+    /** header-authorized (or open) → the settled principal; deferred → the socket waits for
+     * the first `{ t: 'auth' }` frame and authorizes then. */
+    readonly auth:
+      | { readonly kind: 'settled'; readonly principal: unknown }
+      | { readonly kind: 'deferred' }
   }
 
   /** A batching sink: rows collect in memory and leave in batches (by size or age). */

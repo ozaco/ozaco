@@ -62,13 +62,27 @@ export namespace Database {
   /** The row shape a projection answers with: the picked columns plus the system fields (an
    * untyped handle keeps its plain-document rows). */
   export type Projected<TDoc, TFields extends string> =
-    Untyped<TDoc> extends true ? TDoc : Pick<TDoc, (TFields | Helpers.SystemField) & keyof TDoc>
+    Untyped<TDoc> extends true
+      ? TDoc
+      : Pick<TDoc, (TFields | keyof Schema.SystemFields) & keyof TDoc>
+
+  /** What `query.where(...)` accepts: an equality match per column, restricted to the column
+   * types a filter can actually compare (`string | number | boolean | Date | null`). A `json`
+   * column does not fit an equality match — use `filter(...)` forms deliberately. */
+  export type MatchOf<TDoc> =
+    Untyped<TDoc> extends true
+      ? Readonly<Record<string, Spec.FilterValue>>
+      : {
+          readonly [
+            K in keyof TDoc as TDoc[K] extends Spec.FilterValue | undefined ? K : never
+          ]?: TDoc[K] & Spec.FilterValue
+        }
 
   /** A lazily-built, immutable query over one table. Chain refiners, then call a terminal — or
    * `watch()` it to get a live-updating snapshot flow. */
 
   export interface Query<TDoc> {
-    where(match: Partial<TDoc>): Query<TDoc>
+    where(match: MatchOf<TDoc>): Query<TDoc>
 
     /** Refine by the portable filter algebra (`where.eq('done', false)`). The field names are
      * checked against this table's columns: a typo does not compile. */
@@ -117,7 +131,9 @@ export namespace Database {
     watch(options?: Change.WatchOptions): Flow<Change.Snapshot<TDoc>, never>
   }
 
-  /** A grouped query: the same aggregate terminals, answered per group. */
+  /** A grouped query: the same aggregate terminals, answered per group. DELIBERATELY narrow —
+   * no paginate/watch/having; a grouped read is a reporting primitive, not a second query
+   * language. */
   export interface Grouped<TDoc, TKey extends FieldOf<TDoc>> {
     count(): Operation<readonly (Keys<TDoc, TKey> & { readonly count: number })[]>
     sum(field: NumericOf<TDoc>): Operation<readonly (Keys<TDoc, TKey> & { readonly sum: number })[]>
@@ -139,8 +155,15 @@ export namespace Database {
   export type Keys<TDoc, TKey extends string> =
     Untyped<TDoc> extends true ? Spec.Doc : Pick<TDoc, TKey & keyof TDoc>
 
+  /** Options for the reads that address ONE document by id. */
+  export interface ReadOptions<TDoc = Spec.Doc> {
+    /** A trusted predicate the document must ALSO satisfy (tenancy): a row outside it reads as
+     * absent — `null`, never a leak that it exists. Field names are checked against the row. */
+    readonly scope?: Spec.Filter<FieldOf<TDoc>> | undefined
+  }
+
   /** Options for the versioned write methods. */
-  export interface WriteOptions {
+  export interface WriteOptions<TDoc = Spec.Doc> extends ReadOptions<TDoc> {
     /** Optimistic concurrency: apply only while the stored `_version` token still equals this;
      * fails `db.conflict` when the document exists at a different version. */
     readonly ifVersion?: string | undefined
@@ -200,6 +223,7 @@ export namespace Database {
     get<TName extends TableName<TSchema>>(
       table: TName,
       id: string,
+      options?: ReadOptions<DocOf<TSchema, TName>>,
     ): Operation<DocOf<TSchema, TName> | null>
 
     insert<TName extends TableName<TSchema>>(
@@ -215,41 +239,47 @@ export namespace Database {
 
     /** Insert, or patch the one row already matching `match` — atomically (the whole thing runs
      * in a transaction, so two concurrent upserts cannot both insert). Fails
-     * `db.data-integrity` when `match` names more than one row. */
+     * `db.data-integrity` when `match` names more than one row. `value` may omit what `match`
+     * already pins (the insert branch writes `{ ...match, ...value }`); any other missing
+     * required column fails `db.validation` there. Under a `scope` the lookup is narrowed, the
+     * patch branch is guarded, and the insert branch is stamped with the scope's pinned
+     * values — a scope that pins no exact values fails `db.validation` on insert. */
     upsert<TName extends TableName<TSchema>>(
       table: TName,
-      match: Partial<DocOf<TSchema, TName>>,
-      value: InsertOf<TSchema, TName>,
+      match: MatchOf<DocOf<TSchema, TName>>,
+      value: Partial<InsertOf<TSchema, TName>>,
+      options?: WriteOptions<DocOf<TSchema, TName>>,
     ): Operation<DocOf<TSchema, TName>>
 
     patch<TName extends TableName<TSchema>>(
       table: TName,
       id: string,
       value: PatchOf<TSchema, TName>,
-      options?: WriteOptions,
+      options?: WriteOptions<DocOf<TSchema, TName>>,
     ): Operation<DocOf<TSchema, TName> | null>
 
     replace<TName extends TableName<TSchema>>(
       table: TName,
       id: string,
       value: InsertOf<TSchema, TName>,
-      options?: WriteOptions,
+      options?: WriteOptions<DocOf<TSchema, TName>>,
     ): Operation<DocOf<TSchema, TName> | null>
 
     delete<TName extends TableName<TSchema>>(
       table: TName,
       id: string,
-      options?: WriteOptions,
+      options?: WriteOptions<DocOf<TSchema, TName>>,
     ): Operation<boolean>
 
     query<TName extends TableName<TSchema>>(table: TName): Query<DocOf<TSchema, TName>>
 
     /** Watch one document: its current value immediately, then again after every change to it
-     * (`null` once deleted). */
+     * (`null` once deleted; a row outside the `scope` reads as absent). */
 
     watch<TName extends TableName<TSchema>>(
       table: TName,
       id: string,
+      options?: ReadOptions<DocOf<TSchema, TName>>,
     ): Flow<DocOf<TSchema, TName> | null, never>
 
     /** The raw change feed, optionally filtered to one table. */
@@ -266,10 +296,26 @@ export namespace Database {
     /** The token of the last change applied to a table (`VERSION_ZERO` before any) — the
      * `since` seed for a fresh watcher. */
     version(table: TableName<TSchema>): string
+
+    /**
+     * A derived handle whose EVERY operation runs under this trusted predicate (tenancy):
+     * reads/watches see only matching rows, guarded writes miss (never conflict) outside it,
+     * and `insert`/`insertMany`/`upsert` are STAMPED with the scope's pinned values — a scope
+     * that pins no exact values (`or`, ranges…) refuses inserts with `db.validation`. Calls
+     * chain: `db.scoped(a).scoped(b)` ANDs. `transaction` bodies inherit the scope. The filter
+     * spans any table of the schema, so field names are not statically checked here — the
+     * per-call `options.scope` forms are, and both compose (AND).
+     */
+    scoped(scope: Spec.Filter): Handle<TSchema>
   }
 
   export interface Options {
-    readonly tables: readonly Schema.Table[]
+    /** The ONE schema declaration (`defineSchema({ users, posts })`) — the preferred form. */
+    readonly schema?: Schema.Def | undefined
+
+    /** The declared tables — the older form; `schema` supersedes it (exactly one of the two
+     * must be given). */
+    readonly tables?: readonly Schema.Table[] | undefined
 
     /** Pin this client to one adapter plugin (`install(DbClient, { adapter: PgAdapter, … })`).
      * Default: the routed `DbAdapter` dispatch — the most recently installed adapter. */
@@ -309,7 +355,9 @@ export namespace Database {
    * `useDb(...)` both resolve it). */
   export type Context = Handle
 
-  /** The management plane: migrations, imperative DDL, bus wiring, the `raw` escape hatch. */
+  /** The management plane: migrations, imperative DDL, bus wiring, the `raw` escape hatch.
+   * DELIBERATELY untyped (`table: string`): operations here address storage, not rows, and are
+   * routinely written against tables the calling module never declared. */
   export interface Actions {
     /** Run the schema reconcile now (the `migrations: 'manual'` entry point). Respects `safe`. */
     migrate(): Operation<void>

@@ -30,6 +30,7 @@ export namespace Helpers {
     readonly ctx: ServerDef.Ctx | null
   }
 
+  /** What one windowed watch runs with (see `windowed` in `internal.ts`). */
   export interface WindowedArgs {
     readonly ctx: ServerDef.Ctx
     readonly resource: ResourceDef.RealtimeSource
@@ -39,14 +40,6 @@ export namespace Helpers {
     /** the watch's (hook-aware) frame sender. */
     readonly send: (out: ResourceDef.ServerFrame) => Operation<void>
   }
-
-  /**
-   * A WINDOWED watch: the subscription owns one keyset page. Table changes recompute the page
-   * (a `limit`-sized read, never the whole set): rows entering/leaving/changing IN the window go
-   * out as `delta`; a set that changed AROUND an untouched window (another client's write moved
-   * the range or the total) goes out as `notify` — every frame stamped with the page's token, so
-   * subscribers track versions uniformly. A new `watch` on the same id (another cursor) replaces
-   * the window for THIS subscriber only.
 
   /** `crud.list` — `total: true` also counts the set, so the page carries `total`. */
   export interface ListFn {

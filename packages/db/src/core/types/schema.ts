@@ -1,10 +1,11 @@
 import type { StandardSchemaV1 } from 'std:shared'
 
-import type { COLUMN, TABLE } from '../const'
+import type { COLUMN, SCHEMA, TABLE } from '../const'
 
 import type { Spec } from './spec'
 
 declare const ID_BRAND: unique symbol
+declare const SCHEMA_MAP: unique symbol
 declare const VALUE: unique symbol
 declare const DOC: unique symbol
 declare const INSERT: unique symbol
@@ -15,8 +16,11 @@ declare const INSERT: unique symbol
  * runtime counterpart is `Spec` (what adapters consume).
  */
 export namespace Schema {
-  /** An opaque record id branded by the table it points at. The runtime value is a plain string. */
-  export type Id<TTable extends string = string> = string & { readonly [ID_BRAND]: TTable }
+  /** A record id annotated with the table it points at. The runtime value is a plain string and
+   * the brand is OPTIONAL, so a plain string still assigns (no friction) — the brand exists for
+   * hovers and self-documentation: `posts.author` shows `Id<'users'>`, and `user._id` slots
+   * into it naturally. */
+  export type Id<TTable extends string = string> = string & { readonly [ID_BRAND]?: TTable }
 
   /** The fields stamped on every stored document, regardless of backend. */
   export interface SystemFields {
@@ -29,6 +33,11 @@ export namespace Schema {
     /** The HLC token of the last write that produced this row (`VERSION_ZERO` for rows written
      * outside the handle). Time-sortable; `ifVersion` compares it by equality. */
     readonly _version: string
+  }
+
+  /** {@link SystemFields} with `_id` annotated by the table's own name. */
+  export interface SystemFieldsOf<TName extends string> extends SystemFields {
+    readonly _id: Id<TName>
   }
 
   /** Flatten a type into a single plain object so TS materializes (and displays) it eagerly. */
@@ -86,9 +95,10 @@ export namespace Schema {
       : never
   }[keyof TShape]
 
-  /** The resolved stored-row type for a column shape (system fields included). */
-  export type DocFor<TShape extends Shape> = Simplify<
-    { readonly [K in keyof TShape]: ValueOf<TShape[K]> } & SystemFields
+  /** The resolved stored-row type for a column shape (system fields included; `_id` is
+   * annotated with the table's name). */
+  export type DocFor<TShape extends Shape, TName extends string = string> = Simplify<
+    { readonly [K in keyof TShape]: ValueOf<TShape[K]> } & SystemFieldsOf<TName>
   >
 
   /** The accepted insert type for a column shape: optional/defaulted columns may be omitted. */
@@ -173,4 +183,33 @@ export namespace Schema {
   /** The accepted insert type of one declared table. */
   export type InferInsert<TTable extends Table> =
     TTable extends Table<string, unknown, infer TInsert> ? TInsert : never
+
+  /** Build a {@link Map} from a `defineSchema` shape (the values are the declared tables —
+   * the object keys are ignored; a table is keyed by its own declared name). */
+  export type FromShape<TShape extends Record<string, Table>> = {
+    readonly [Entry in TShape[keyof TShape] as Entry['name']]: Entry extends Table<
+      string,
+      infer TDoc,
+      infer TInsert
+    >
+      ? { readonly doc: TDoc; readonly insert: TInsert }
+      : never
+  }
+
+  /**
+   * The ONE declaration of an application's schema, from `defineSchema({ users, posts })`:
+   * carries the declared tables for the install (`DbClient.use({ schema })`) AND the resolved
+   * type map for every consumer (`useDb(schema)`). Declaring the schema once here replaces
+   * listing the same tables at every `useDb` call site.
+   */
+  export interface Def<TMap extends Map = Map> {
+    readonly _t: typeof SCHEMA
+    readonly tables: readonly Table[]
+
+    /** phantom carrier of the resolved type map — never present at runtime. */
+    readonly [SCHEMA_MAP]?: TMap
+  }
+
+  /** The resolved type map of a schema definition. */
+  export type Of<TDef extends Def> = TDef extends Def<infer TMap> ? TMap : never
 }

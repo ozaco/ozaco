@@ -42,7 +42,7 @@ import { RedisTransport } from 'transport:impl/redis'
 
 import { authProvider, seedUsers } from './auth'
 import { account, cluster, feed, live, media, reports, rtc, startRtcRelay, todos } from './services'
-import { tables } from './tables'
+import { schema } from './tables'
 
 export const services = [account, todos, feed, media, reports, live, rtc, cluster] as const
 
@@ -104,7 +104,7 @@ function* infrastructure(
     }
   }
 
-  yield* DbClient.use({ tables: [...tables] })
+  yield* DbClient.use({ schema })
   yield* (env('KV') ?? 'memory') === 'redis'
     ? RedisKv.use({ url: env('REDIS_URL') ?? 'redis://localhost:6379' })
     : MemoryKv.use()

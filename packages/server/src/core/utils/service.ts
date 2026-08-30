@@ -4,12 +4,17 @@ import type { AnyType, StandardSchemaV1 } from 'std:shared'
 
 import { ACTION, SERVICE } from '../const'
 import type { EdgeDef } from '../types/edge'
+import type { OptionsDef } from '../types/options'
 import type { ServerDef } from '../types/server'
 import type { ServiceDef } from '../types/service'
 
 import { isPartsDecl, isStreamDecl } from './stream'
 
-const RESERVED = new Set([
+/** The STRUCTURAL config keys — everything else on a config is a plugin option. This tuple is
+ * the single source: `metaOf` reads it at runtime, and the two compile-time checks below pin it
+ * to `ServiceDef.Config` in BOTH directions, so a new structural field cannot silently leak
+ * into `meta.options`. */
+const STRUCTURAL = [
   'title',
   'description',
   'input',
@@ -19,7 +24,19 @@ const RESERVED = new Set([
   'outcome',
   'errors',
   'tags',
-])
+  'docs',
+] as const
+
+type StructuralKey = Exclude<keyof ServiceDef.Config, keyof OptionsDef.ActionOptions>
+type MissingStructural = Exclude<StructuralKey, (typeof STRUCTURAL)[number]>
+
+// every tuple member is a real structural key…
+const _onlyStructural: readonly StructuralKey[] = STRUCTURAL
+// …and every structural key is in the tuple
+const _allStructural: [MissingStructural] extends [never] ? true : MissingStructural = true
+void [_onlyStructural, _allStructural]
+
+const RESERVED: ReadonlySet<string> = new Set(STRUCTURAL)
 
 const METHOD_OF: Readonly<Record<ServiceDef.Kind, ServiceDef.HttpMethod>> = {
   query: 'GET',
@@ -72,12 +89,15 @@ const metaOf = (kind: ServiceDef.Kind, config: ServiceDef.Config): ServiceDef.Me
     outcome: config.outcome ?? false,
     errors: config.errors ?? {},
     tags: config.tags ?? [],
+    docs: config.docs ?? null,
     options,
   }
 }
 
 /** A socket entry in an action map (`action.socket`). */
-export const isSocketAction = (value: unknown): value is ServiceDef.SocketAction =>
+export const isSocketAction = (
+  value: unknown,
+): value is ServiceDef.SocketAction<AnyType, AnyType> =>
   typeof value === 'object' && value !== null && 'socket' in value
 
 const define =
@@ -85,17 +105,20 @@ const define =
   <
     TInput extends ServiceDef.Declaration | undefined = undefined,
     TOutput extends ServiceDef.Declaration | undefined = undefined,
+    const TAuth extends OptionsDef.Requirement | undefined = undefined,
   >(
-    config: ServiceDef.Config<TInput, TOutput>,
+    // `auth` is captured so the handler's `ctx.auth` narrows: any truthy requirement means the
+    // Auth plugin has verified a principal before the handler runs
+    config: ServiceDef.Config<TInput, TOutput> & { readonly auth?: TAuth },
     handler: ServiceDef.Handler<
       ServiceDef.Params<TInput>,
       ServiceDef.Returns<TOutput>,
-      ServerDef.Ctx
+      ServerDef.Ctx<ServiceDef.AuthOf<TAuth>>
     >,
-  ): ServiceDef.Action<TInput, TOutput> => ({
+  ): ServiceDef.Action<TInput, TOutput, ServiceDef.AuthOf<TAuth>> => ({
     _t: ACTION,
     meta: metaOf(kind, config as ServiceDef.Config),
-    handler: handler as AnyType,
+    handler,
   })
 
 /**
@@ -124,7 +147,7 @@ export const action = Object.assign(define('action'), {
     handler: (
       socket: EdgeDef.Socket<ServiceDef.Frames<TReceives>, ServiceDef.Frames<TSends>>,
     ) => Operation<void>,
-  ): ServiceDef.SocketAction => ({
+  ): ServiceDef.SocketAction<TReceives, TSends> => ({
     _t: ACTION,
 
     socket: {
@@ -132,12 +155,13 @@ export const action = Object.assign(define('action'), {
       protocol: config.protocol ?? null,
       description: config.description ?? null,
       authorize: config.authorize ?? null,
+      authorizeMode: config.authorizeMode ?? 'upgrade',
       defaults: config.defaults ?? null,
       receives: config.receives ?? null,
       sends: config.sends ?? null,
     },
 
-    handler: handler as AnyType,
+    handler,
   }),
 })
 

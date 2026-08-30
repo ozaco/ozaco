@@ -19,19 +19,22 @@
  */
 import type { Schema } from 'db:core'
 import { useDb, where } from 'db:core'
-import { action, Server, ServerErrors } from 'server:core'
+import { action, Server, serviceErrors } from 'server:core'
 import { crud } from 'server:plugins'
-import { appendCauses, fail } from 'std:result'
+import { appendCauses } from 'std:result'
 
 import { z } from 'zod'
 
-import { todosTable } from '../tables'
+import { todosTable, schema } from '../tables'
 
 type Todo = Schema.Infer<typeof todosTable>
 
 /** the read projection: high-priority rows shout. */
 const shout = (row: Todo): Todo =>
   row.priority === 'high' ? { ...row, title: row.title.toUpperCase() } : row
+
+/** The resource's OWN failure taxonomy: declared once, wired per-op via `ops` below. */
+const guard = serviceErrors('todos', { protected: 423 })
 
 export const todos = crud(todosTable, {
   maxLimit: 100,
@@ -46,7 +49,7 @@ export const todos = crud(todosTable, {
         description: 'Open todos per priority (cached, invalidated by todos writes)',
       },
       function* () {
-        const rows = yield* (yield* useDb(todosTable))
+        const rows = yield* (yield* useDb(schema))
           .query('todos')
           .filter({ op: 'eq', field: 'done', value: false })
           .collect()
@@ -78,14 +81,15 @@ export const todos = crud(todosTable, {
     ),
   },
 
-  // runs ONCE while `crud()` derives the schemas (definition time, never per request):
-  // the create INPUT demands a real title beyond what the column kind gives it
+  // per-op options: the tag the `around` guard raises answers 423 on REMOVE alone — no other
+  // built-in advertises (or maps) it
+  ops: { remove: { errors: guard.statuses } },
+
+  // runs ONCE while `crud()` builds the service (definition time, never per request): the
+  // create INPUT demands a real title beyond what the column kind gives it — and the reshape
+  // lands in the TYPES, so the typed client demands it too
   schema: {
-    *input(s, of) {
-      if (of === 'create') {
-        return s.extend({ title: z.string().min(3) })
-      }
-    },
+    create: s => s.extend({ title: z.string().min(3) }),
   },
 
   // `op` narrows the input: the write ops are the ones that carry a title
@@ -125,12 +129,9 @@ export const todos = crud(todosTable, {
     const { ctx, input } = call
 
     if (call.op === 'remove') {
-      const row = yield* (yield* useDb(todosTable)).get('todos', call.input.id)
+      const row = yield* (yield* useDb(schema)).get('todos', call.input.id)
       if (row && String(row.title).includes('[keep]')) {
-        return yield* fail(
-          ServerErrors.Forbidden,
-          'protected todo — remove [keep] from the title first',
-        )
+        return yield* guard.protected('protected todo — remove [keep] from the title first')
       }
       const out = yield* next(input)
       // a DOMAIN record: free-form audit shipped by exporters (OpenObserve `streams.domain`),

@@ -1,8 +1,8 @@
 import type { Operation } from 'std:effect'
 import { attempt } from 'std:effect'
 import { IO } from 'std:io'
+import type { Result } from 'std:result'
 import { isFailure } from 'std:result'
-import type { AnyType } from 'std:shared'
 
 import { TraceRef } from '../context'
 import type { Helpers } from '../types/helpers'
@@ -81,6 +81,33 @@ export function* report(kernel: ServerDef.Context, event: ObserveDef.Event): Ope
   }
 }
 
+/** The one place a failure becomes an observe row — the span path (`withSpan`) and the edge's
+ * pre-dispatch paths (`reportedFailure`) both speak through this. */
+export function* reportFailureRow(
+  kernel: ServerDef.Context,
+  input: {
+    readonly requestId: string
+    readonly spanId?: string | undefined
+    readonly failure: Result.Failure<unknown>
+    readonly where: string
+    readonly status?: number | null | undefined
+  },
+): Operation<void> {
+  yield* report(kernel, {
+    t: 'failure',
+    row: {
+      request_id: input.requestId,
+      span_id: input.spanId ?? null,
+      tag: String(input.failure.error),
+      message: String(input.failure.message ?? ''),
+      causes: [...(input.failure.causes ?? [])].map(String),
+      status: input.status ?? null,
+      where: input.where,
+      ts: Date.now(),
+    },
+  })
+}
+
 /**
  * Run `body` as one span: `TraceRef` is set to the span's trace for its extent; the span row is
  * reported when it ends — `ok`, `failed` (with a failure row) or `cancelled` (a halt).
@@ -89,7 +116,7 @@ export function* withSpan<T>(input: Helpers.SpanInput, body: () => Operation<T>)
   const { kernel, trace } = input
   const startedAt = Date.now()
   let status: TraceDef.SpanStatus = 'cancelled'
-  let failure: unknown = null
+  let failure: Result.Failure<unknown> | null = null
 
   try {
     const outcome = yield* TraceRef.with(trace, () => attempt(body))
@@ -109,10 +136,7 @@ export function* withSpan<T>(input: Helpers.SpanInput, body: () => Operation<T>)
 
     // a failed span carries WHAT failed — exporters surface it as the span's error content
     const failedAttrs = failure
-      ? {
-          error: String((failure as AnyType).error),
-          'error.message': String((failure as AnyType).message ?? ''),
-        }
+      ? { error: String(failure.error), 'error.message': String(failure.message ?? '') }
       : null
 
     yield* report(kernel, {
@@ -135,20 +159,11 @@ export function* withSpan<T>(input: Helpers.SpanInput, body: () => Operation<T>)
     })
 
     if (failure) {
-      const failed = failure as AnyType
-
-      yield* report(kernel, {
-        t: 'failure',
-        row: {
-          request_id: trace.request_id,
-          span_id: trace.span_id,
-          tag: String(failed.error),
-          message: String(failed.message ?? ''),
-          causes: [...(failed.causes ?? [])],
-          status: null,
-          where: `${input.kind}:${input.name}`,
-          ts: endedAt,
-        },
+      yield* reportFailureRow(kernel, {
+        requestId: trace.request_id,
+        spanId: trace.span_id,
+        failure,
+        where: `${input.kind}:${input.name}`,
       })
     }
   }

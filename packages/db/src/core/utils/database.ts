@@ -7,15 +7,20 @@ import type { Database } from '../types/database'
 import type { Schema } from '../types/schema'
 
 /**
- * Resolve the installed {@link Database.Handle}, typed by the tables you pass:
- * `const db = yield* useDb(users, posts)`. The tables are a TYPE-ONLY argument — they drive the
- * `Schema.From<TTables>` inference and are never read at runtime (the handle is the install's;
- * passing a table the install does not declare only changes the static type, and its terminals
- * still fail `db.validation`). Hence the `_` prefix: the parameter exists for inference alone.
+ * Resolve the installed {@link Database.Handle}, typed by the schema you pass:
+ * `const db = yield* useDb(schema)` (from `defineSchema({ users, posts })` — the ONE place the
+ * tables are listed). The argument is TYPE-ONLY — it drives inference and is never read at
+ * runtime: the handle is the install's, and a table the install does not declare still fails
+ * `db.validation` at its terminals. `useDb()` with no argument answers the untyped handle.
  */
-export const useDb = <TTables extends readonly Schema.Table[]>(
-  ..._tables: TTables
-): Operation<Database.Handle<Schema.From<TTables>>> => DbClient.context.expect() as AnyType
+export function useDb(): Operation<Database.Handle>
+export function useDb<TDef extends Schema.Def>(
+  schema: TDef,
+): Operation<Database.Handle<Schema.Of<TDef>>>
+
+export function useDb(_schema?: unknown): Operation<Database.Handle> {
+  return DbClient.context.expect() as AnyType
+}
 
 /** Run `body` with correlation data attached to every bus envelope its writes ship
  * (`Bus.Envelope.meta`) — e.g. `withBusMeta({ requestId }, () => db.insert(...))`. Nested calls

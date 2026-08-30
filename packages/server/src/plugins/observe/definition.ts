@@ -7,7 +7,6 @@ import type { AnyType } from 'std:shared'
 
 import pkg from '../../../package.json'
 
-import { ObserveErrors } from './errors'
 import { instanceStats, membersView, runCluster } from './internal/cluster'
 import { enqueue, flush, startFlusher } from './internal/collector'
 import { mountConsole } from './internal/console'
@@ -77,16 +76,6 @@ export const ObservePlugin = Observe.implement<
         'Observe forward/collect need a carrier (createServer installs it before plugins)',
       )
     }
-    // the observe API is a REAL service (typed calls, docs, the console): registered here so
-    // the edge mounts it with everything else; local only — never served over the carrier
-    if (kernel.registry.services.has(observeService.name)) {
-      return yield* fail(ObserveErrors.Taken, 'a service named "observe" is already declared')
-    }
-    ;(kernel.registry.services as Map<string, AnyType>).set(observeService.name, observeService)
-    for (const [name, def] of Object.entries(observeService.actions)) {
-      ;(kernel.registry.actions as Map<string, AnyType>).set(`${observeService.name}.${name}`, def)
-    }
-    kernel.hosted.add(observeService.name)
     yield* StateRef.set(state)
     yield* openStore(state.jobs, options?.db)
     yield* ensure(() => {
@@ -128,7 +117,10 @@ export const ObservePlugin = Observe.implement<
         yield* flush(state)
       },
     }
-    return { store: 'db', hooks }
+    // the observe API is a REAL service (typed calls, docs, the console): `createServer`
+    // registers it through the PluginContext seam — mounted with everything else, hosted
+    // locally, never served over the carrier
+    return { store: 'db', hooks, services: [observeService] }
   },
 }).build({
   *record(event) {
