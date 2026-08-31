@@ -17,7 +17,7 @@ import { unwrap } from 'std:result'
 import { SqliteAdapter } from 'db:impl/sqlite'
 import { BunIO } from 'std:io/impl/bun'
 
-import { schema } from '../src/tables'
+import { schema } from '../src'
 
 const count = Number(process.argv[2] ?? 1_000_000)
 const path = resolve(import.meta.dir, '..', process.argv[3] ?? 'local/demo.sqlite')

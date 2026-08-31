@@ -63,6 +63,8 @@ export function* driveSocket(input: Helpers.SocketInput): Operation<void> {
       t: 'event',
       row: {
         request_id: trace.request_id,
+        // the socket SESSION span is the frame's parent in the trace
+        span_id: trace.span_id,
         kind,
         name: route.path,
         size: text === null || text === undefined ? null : text.length,

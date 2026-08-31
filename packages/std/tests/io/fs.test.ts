@@ -30,7 +30,7 @@ describe('files', () => {
         yield* install(BunIO)
 
         const file = join(dir, 'notes.txt')
-        yield* IO.actions.write(file, 'merhaba dünya')
+        yield* IO.actions.write(file, 'hello world — café')
 
         const bytes = yield* IO.actions.read(file)
         const text = yield* IO.actions.readText(file)
@@ -38,7 +38,7 @@ describe('files', () => {
 
         return {
           text,
-          bytesMatch: decoder.decode(bytes) === 'merhaba dünya',
+          bytesMatch: decoder.decode(bytes) === 'hello world — café',
           fileExists: yield* IO.actions.exists(file),
           dirExists: yield* IO.actions.exists(dir),
           missingExists: yield* IO.actions.exists(join(dir, 'nope.txt')),
@@ -49,13 +49,13 @@ describe('files', () => {
       })
 
       expect(unwrap(outcome)).toEqual({
-        text: 'merhaba dünya',
+        text: 'hello world — café',
         bytesMatch: true,
         fileExists: true,
         dirExists: true,
         missingExists: false,
         isFile: true,
-        size: encoder.encode('merhaba dünya').length,
+        size: encoder.encode('hello world — café').length,
         mtimeIsDate: true,
       })
     })
@@ -315,7 +315,7 @@ describe('paths', () => {
   it('toPath passes plain strings through and decodes file:// URLs', () => {
     expect(toPath('/plain/path')).toBe('/plain/path')
     expect(toPath('file:///tmp/some%20file.txt')).toBe('/tmp/some file.txt')
-    expect(toPath(new URL('file:///tmp/d%C3%BCnya.txt'))).toBe('/tmp/dünya.txt')
+    expect(toPath(new URL('file:///tmp/caf%C3%A9.txt'))).toBe('/tmp/café.txt')
   })
 
   it('actions accept URL paths; path helpers mirror node:path', async () => {

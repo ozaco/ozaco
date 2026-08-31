@@ -13,6 +13,7 @@ import {
   createOtlpMetrics,
   DEFAULT_BUCKETS,
   nanos,
+  otlpEventSpan,
   otlpFailure,
   otlpLog,
   otlpSpan,
@@ -81,6 +82,12 @@ export const OtlpExporter = definePlugin<OtlpDef.Context, [options: OtlpDef.Opti
       },
     })
     const withLogs = options.logs ?? true
+
+    // WS frames and `emit`s are EVENTS, not spans — projected into the trace they become the
+    // only thing that makes a live socket session readable there
+    const withEvents = options.events !== false
+    const eventData = typeof options.events === 'object' && (options.events.data ?? false)
+    let eventSeq = 0
 
     // CUMULATIVE metrics, exported on a fixed beat (counters survive between exports)
     const withMetrics = options.metrics !== false
@@ -153,6 +160,12 @@ export const OtlpExporter = definePlugin<OtlpDef.Context, [options: OtlpDef.Opti
         } else if (event.t === 'log') {
           if (withLogs) {
             logs.push(otlpLog(event.row))
+          }
+        } else if (event.t === 'event') {
+          // an event outside any request has no trace to hang on
+          if (withEvents && event.row.request_id) {
+            eventSeq += 1
+            spans.push(otlpEventSpan(event.row, eventSeq, eventData))
           }
         } else if (event.t === 'failure') {
           if (withLogs) {

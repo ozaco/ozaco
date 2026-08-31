@@ -8,8 +8,27 @@ import type { ObservePluginDef } from '../types'
 import { collectorAlive, forwardBatch } from './cluster'
 import { exec, writeBatch } from './store'
 
-/** Queue one event; drop the oldest when the buffer overflows (never block the server). */
+/** The store table each event kind lands in — `domain` rows are exporter-only and pass
+ * through untouched (the store skips them at write time anyway). */
+const STORE_KIND: Record<ObserveDef.Event['t'], keyof ObservePluginDef.ResolvedStore | null> = {
+  request: 'requests',
+  'request-update': 'requests',
+  span: 'spans',
+  log: 'logs',
+  failure: 'failures',
+  event: 'events',
+  domain: null,
+}
+
+/** Queue one event the store keeps; drop the oldest when the buffer overflows (never block
+ * the server). A kind turned off in `store` is skipped before it ever queues. */
 export const enqueue = (state: ObservePluginDef.State, event: ObserveDef.Event): void => {
+  const kind = STORE_KIND[event.t]
+
+  if (kind !== null && !state.store[kind]) {
+    return
+  }
+
   if (state.pending.length >= state.batch.maxPending) {
     state.pending.shift()
     state.stats.dropped += 1
@@ -51,7 +70,7 @@ export function* flush(state: ObservePluginDef.State): Operation<void> {
   }
 }
 
-/** The forked pump: flushes every `batch.ms` or as soon as a batch fills; drains on close. */
+/** The forked pump: flushes every `batch.waitMs` or as soon as a batch fills; drains on close. */
 export function* startFlusher(state: ObservePluginDef.State): Operation<void> {
   const gate = { closing: false, wake: withResolvers<void>('observe flush') }
 
@@ -64,7 +83,7 @@ export function* startFlusher(state: ObservePluginDef.State): Operation<void> {
   const tick = function* (): Operation<void> {
     yield* race([
       (function* () {
-        yield* sleep(state.batch.ms)
+        yield* sleep(state.batch.waitMs)
       })(),
       gate.wake.operation,
     ])

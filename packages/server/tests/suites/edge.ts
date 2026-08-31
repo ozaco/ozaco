@@ -106,7 +106,7 @@ const boot = function* (target: EdgeTarget): Operation<ServerDef.Handle<AnyType>
   return yield* createServer({
     services: [todos, media],
     edge: target.edge,
-    plugins: [ObservePlugin.use({ batch: { ms: 5 } })],
+    plugins: [ObservePlugin.use({ batch: { waitMs: 5 } })],
   })
 }
 

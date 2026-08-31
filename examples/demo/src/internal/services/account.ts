@@ -3,18 +3,14 @@
  * role-gated actions (`auth: 'user'`, `auth: ['admin']`) and a public one (`auth: false`).
  */
 import { useDb } from 'db:core'
-import { action, service, serviceErrors } from 'server:core'
+import { action, service } from 'server:core'
 import type { AuthDef } from 'server:plugins'
 import { Auth } from 'server:plugins'
 
 import { z } from 'zod'
 
-import { schema } from '../tables'
-
-/** the tag, its status and the failer in one place — `errors: accountErrors.statuses` on the
- * action publishes it, `accountErrors.unknownUser(...)` raises it (this used to be a bare
- * `fail('account.unknown-user')` with no `errors` entry: a 404 condition answering 500) */
-const accountErrors = serviceErrors('account', { 'unknown-user': 404 })
+import { accountErrors } from '../../errors'
+import { schema } from '../../utils/tables'
 
 const Tokens = z.object({
   accessToken: z.string(),

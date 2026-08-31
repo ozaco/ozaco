@@ -186,7 +186,7 @@ describe('udp', () => {
       const receiver = yield* IO.actions.udpBind()
       const messages = yield* receiver.messages
 
-      yield* sender.send('merhaba udp', receiver.port, '127.0.0.1')
+      yield* sender.send('hello udp', receiver.port, '127.0.0.1')
 
       const first = yield* messages.next()
       const datagram = first.done === true ? undefined : first.value
@@ -204,7 +204,7 @@ describe('udp', () => {
     })
 
     expect(unwrap(outcome)).toEqual({
-      text: 'merhaba udp',
+      text: 'hello udp',
       fromSender: true,
       address: '127.0.0.1',
       close: true,

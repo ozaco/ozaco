@@ -29,9 +29,8 @@ describe('observe — cluster', () => {
               carrier: NetworkCarrier.use({ presence }),
               plugins: [
                 ObservePlugin.use({
-                  batch: { ms: 10 },
-                  forward: true,
-                  collectorHeartbeatMs: 50,
+                  batch: { waitMs: 10 },
+                  cluster: { sendToCollector: true, heartbeatMs: 50 },
                 }),
               ],
               name: 'app',
@@ -52,9 +51,8 @@ describe('observe — cluster', () => {
             carrier: NetworkCarrier.use({ presence }),
             plugins: [
               ObservePlugin.use({
-                batch: { ms: 10 },
-                collect: true,
-                collectorHeartbeatMs: 50,
+                batch: { waitMs: 10 },
+                cluster: { isCollector: true, heartbeatMs: 50 },
               }),
             ],
             name: 'app',
@@ -102,7 +100,9 @@ describe('observe — cluster', () => {
         const server = yield* createServer({
           services: [todos],
           carrier: NetworkCarrier.use({ presence }),
-          plugins: [ObservePlugin.use({ batch: { ms: 10 }, forward: true })],
+          plugins: [
+            ObservePlugin.use({ batch: { waitMs: 10 }, cluster: { sendToCollector: true } }),
+          ],
           name: 'app',
           instance: 'alone',
         })
@@ -122,7 +122,12 @@ describe('observe — cluster', () => {
         const server = yield* createServer({
           services: [todos],
           carrier: NetworkCarrier.use({ presence }),
-          plugins: [ObservePlugin.use({ batch: { ms: 10 }, forward: true, fallback: 'drop' })],
+          plugins: [
+            ObservePlugin.use({
+              batch: { waitMs: 10 },
+              cluster: { sendToCollector: true, whenCollectorDown: 'drop' },
+            }),
+          ],
           name: 'app',
           instance: 'alone',
         })

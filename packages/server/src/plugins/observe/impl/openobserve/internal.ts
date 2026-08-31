@@ -103,6 +103,7 @@ export const ooEvent = (row: ObserveDef.EventRow): Record<string, unknown> =>
     name: row.name,
     size: row.size,
     request_id: row.request_id,
+    span_id: row.span_id,
     data: row.data,
   })
 

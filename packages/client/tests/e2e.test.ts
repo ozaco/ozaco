@@ -422,6 +422,27 @@ describe('e2e — realtime', () => {
   })
 })
 
+describe('e2e — observe console bootstrap', () => {
+  it('createClient speaks the observe service through its own /_observe/api manifest', async () => {
+    unwrap(
+      await run(function* () {
+        const { url } = yield* boot({ observe: true })
+
+        // exactly what the embedded console does: bootstrap from the console's OWN manifest
+        const client = yield* createClient<AnyType>({ url, docsPath: '/_observe/api' })
+        const manifest = yield* client.$manifest()
+        expect(manifest.manifest).toBe('ozaco/2')
+        expect(manifest.services.map((entry: AnyType) => entry.name)).toEqual(['observe'])
+
+        const stats = (yield* client.observe!.stats!()) as AnyType
+        expect(typeof stats.recorded).toBe('number')
+        const page = (yield* client.observe!.requests!({})) as AnyType
+        expect(Array.isArray(page.requests)).toBe(true)
+      }),
+    )
+  })
+})
+
 describe('e2e — codegen', () => {
   it('pull() fetches the live manifest and emits a compilable Api with real routes', async () => {
     unwrap(

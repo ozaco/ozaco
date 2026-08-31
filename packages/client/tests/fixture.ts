@@ -2,7 +2,7 @@
 import { column, DbClient, table } from 'db:core'
 import type { ServerDef } from 'server:core'
 import { action, createServer, service, stream } from 'server:core'
-import { crud, Docs } from 'server:plugins'
+import { crud, Docs, ObservePlugin } from 'server:plugins'
 import type { Operation } from 'std:effect'
 import { sleep, until } from 'std:effect'
 import { fail } from 'std:result'
@@ -227,7 +227,7 @@ export const wall = service('wall', { feed: crud.realtime(notesTable) })
 export type Api = ServerDef.Handle<[typeof demo, typeof probe, typeof notes]>['api']
 
 /** Boot the fixture server on a random port; resolves its url. */
-export function* boot(options?: { docsPath?: string }): Operation<{
+export function* boot(options?: { docsPath?: string; observe?: boolean }): Operation<{
   url: string
   server: ServerDef.Handle<[typeof demo, typeof probe, typeof notes, typeof wall]>
 }> {
@@ -238,7 +238,10 @@ export function* boot(options?: { docsPath?: string }): Operation<{
   const server = yield* createServer({
     services: [demo, probe, notes, wall],
     edge: BunEdge,
-    plugins: [Docs.use({ path: options?.docsPath ?? '/docs' })],
+    plugins: [
+      ...(options?.observe ? [ObservePlugin.use({ console: true, batch: { waitMs: 10 } })] : []),
+      Docs.use({ path: options?.docsPath ?? '/docs' }),
+    ],
     name: 'client-fixture',
     version: '1.0.0',
   })

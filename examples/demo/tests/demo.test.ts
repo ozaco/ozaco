@@ -9,9 +9,8 @@ import { join } from 'node:path'
 
 import { createLink } from 'transport:impl/memory'
 
-import { createDemo } from '../src/app'
-import type { Step } from '../src/client'
-import { walk } from '../src/client'
+import type { DemoOptions, Step } from '../src'
+import { createDemo, walk } from '../src'
 
 const detail = (steps: Step[], name: string): AnyType =>
   steps.find(step => step.name === name)?.detail
@@ -20,7 +19,7 @@ describe('demo — every use case end to end', () => {
   it('boots the monolith and the typed client walks through it all', async () => {
     unwrap(
       await run(function* () {
-        const app = yield* createDemo({ env: { ROLE: 'monolith', INSTANCE: 'mono', PORT: '0' } })
+        const app = yield* createDemo({ instance: 'mono' })
         const info = yield* app.start()
         expect(info.ready).toBe(true)
         const steps = yield* walk(info.url!)
@@ -125,31 +124,34 @@ describe('demo — cluster', () => {
     unwrap(
       await run(function* () {
         const ready = createQueue<void, void>()
-        const node = (env: Record<string, string>) =>
+        const node = (options: DemoOptions) =>
           fork(() =>
             scoped(function* () {
-              const app = yield* createDemo({ env: { ...env, DB_PATH: dbPath }, link })
+              const app = yield* createDemo({ ...options, dbPath, link })
               yield* app.start()
               ready.add(undefined)
               yield* sleep(60_000)
             }),
           )
         const api1 = yield* node({
-          ROLE: 'service',
-          SERVICE: 'account,todos,media',
-          INSTANCE: 'api-1',
-          OBSERVE: 'forward',
+          role: 'service',
+          hosted: ['account', 'todos', 'media'],
+          instance: 'api-1',
+          observe: 'forward',
         })
         const api2 = yield* node({
-          ROLE: 'service',
-          SERVICE: 'feed,reports,live,rtc,cluster',
-          INSTANCE: 'api-2',
-          OBSERVE: 'forward',
+          role: 'service',
+          hosted: ['feed', 'reports', 'live', 'rtc', 'cluster'],
+          instance: 'api-2',
+          observe: 'forward',
         })
         yield* ready.next()
         yield* ready.next()
         const gateway = yield* createDemo({
-          env: { ROLE: 'gateway', INSTANCE: 'gw', PORT: '0', OBSERVE: 'collect', DB_PATH: dbPath },
+          role: 'gateway',
+          instance: 'gw',
+          observe: 'collect',
+          dbPath,
           link,
         })
         const info = yield* gateway.start()

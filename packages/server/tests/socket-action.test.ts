@@ -79,7 +79,7 @@ describe('action.socket', () => {
               frames.push(String(event.data))
 
               if (frames.length === 1) {
-                ws.send(JSON.stringify({ text: 'selam' }))
+                ws.send(JSON.stringify({ text: 'hi there' }))
               }
 
               if (frames.length === 2) {
@@ -92,7 +92,7 @@ describe('action.socket', () => {
         )
 
         expect(JSON.parse(frames[0]!)).toEqual({ t: 'hello', who: 'ada' })
-        expect(JSON.parse(frames[1]!)).toEqual({ t: 'echo', text: 'SELAM' })
+        expect(JSON.parse(frames[1]!)).toEqual({ t: 'echo', text: 'HI THERE' })
 
         // the manifest publishes what the socket speaks — a UNIFIED service entry in v2
         const published = yield* Docs.actions.manifest()

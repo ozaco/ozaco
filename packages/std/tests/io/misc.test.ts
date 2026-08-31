@@ -111,29 +111,29 @@ describe('secretbox (encrypt/decrypt)', () => {
     const outcome = await run(function* () {
       yield* install(BunIO)
 
-      const sealed = yield* IO.actions.encrypt('çok gizli veri', 'parola-123')
-      const opened = yield* IO.actions.decrypt(sealed, 'parola-123')
+      const sealed = yield* IO.actions.encrypt('very secret data', 'passphrase-123')
+      const opened = yield* IO.actions.decrypt(sealed, 'passphrase-123')
 
       return {
         text: decoder.decode(opened),
-        ciphertextDiffers: decoder.decode(sealed) !== 'çok gizli veri',
+        ciphertextDiffers: decoder.decode(sealed) !== 'very secret data',
       }
     })
 
-    expect(unwrap(outcome)).toEqual({ text: 'çok gizli veri', ciphertextDiffers: true })
+    expect(unwrap(outcome)).toEqual({ text: 'very secret data', ciphertextDiffers: true })
   })
 
   it('a wrong secret or tampered ciphertext fails with decrypt-failed', async () => {
     const outcome = await run(function* () {
       yield* install(BunIO)
 
-      const sealed = yield* IO.actions.encrypt('sır', 'doğru-parola')
+      const sealed = yield* IO.actions.encrypt('secret', 'right-passphrase')
 
-      const wrongSecret = yield* attempt(() => IO.actions.decrypt(sealed, 'yanlış-parola'))
+      const wrongSecret = yield* attempt(() => IO.actions.decrypt(sealed, 'wrong-passphrase'))
 
       const tampered = Uint8Array.from(sealed)
       tampered[tampered.length - 1]! ^= 0xff
-      const corrupted = yield* attempt(() => IO.actions.decrypt(tampered, 'doğru-parola'))
+      const corrupted = yield* attempt(() => IO.actions.decrypt(tampered, 'right-passphrase'))
 
       return {
         wrongSecret: isFailure(wrongSecret) ? wrongSecret.error : 'no-failure',
@@ -154,12 +154,12 @@ describe('signatures', () => {
       yield* install(BunIO)
 
       const pair = yield* IO.actions.generateKeyPair()
-      const signature = yield* IO.actions.sign('imzalı mesaj', pair.privateKey)
+      const signature = yield* IO.actions.sign('signed message', pair.privateKey)
 
-      const valid = yield* IO.actions.verify('imzalı mesaj', signature, pair.publicKey)
-      const altered = yield* IO.actions.verify('başka mesaj', signature, pair.publicKey)
+      const valid = yield* IO.actions.verify('signed message', signature, pair.publicKey)
+      const altered = yield* IO.actions.verify('other message', signature, pair.publicKey)
 
-      const broken = yield* attempt(() => IO.actions.sign('mesaj', pair.privateKey.slice(0, 10)))
+      const broken = yield* attempt(() => IO.actions.sign('message', pair.privateKey.slice(0, 10)))
 
       return {
         signatureLength: signature.length,

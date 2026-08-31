@@ -1,11 +1,11 @@
-/** `bun run src/main.ts` — one node, shaped by the environment (see app.ts). `main` wires
- * SIGINT/SIGTERM into a graceful shutdown; `ensure` stops the app on the way out. */
+/** `bun run scripts/main.ts` — ONE monolith node on :3000. `main` wires SIGINT/SIGTERM into a
+ * graceful shutdown; `ensure` stops the app on the way out. */
 import { ensure, main, suspend } from 'std:effect'
 
-import { createDemo } from './app'
+import { createDemo } from '../src'
 
 await main(function* () {
-  const app = yield* createDemo()
+  const app = yield* createDemo({ port: 3000 })
   yield* ensure(function* () {
     console.log('[demo] stopping…')
     yield* app.stop()

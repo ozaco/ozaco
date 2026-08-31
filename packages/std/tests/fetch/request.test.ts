@@ -15,7 +15,7 @@ const server = Bun.serve({
 
     if (pathname === '/json') {
       return new Response('{"ok":true}', {
-        headers: { 'content-type': 'application/json', 'x-custom': 'merhaba' },
+        headers: { 'content-type': 'application/json', 'x-custom': 'hello' },
       })
     }
 
@@ -78,7 +78,7 @@ describe('request dispatch', () => {
       type: 'default',
       redirected: false,
       bodyUsed: false,
-      custom: 'merhaba',
+      custom: 'hello',
       nativeStatus: 200,
     })
   })

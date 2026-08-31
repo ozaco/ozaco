@@ -1,3 +1,4 @@
+// oxlint-disable import/exports-last
 /**
  * Rtc: a 1:1 WebRTC SIGNALING relay — `/rtc/:room` pairs two sockets and forwards every frame
  * between them verbatim. The relay OWNS the session lifecycle, because a client cannot guess it
@@ -32,9 +33,8 @@
  * last one. The relay hands those to the `rtc.report` ACTION, so a call that happens entirely
  * between two browsers still lands in the server's observe pipeline — one request row per report,
  * one span per timeline entry, one `rtc.metrics` event row — and therefore in the console at
- * `/_ozaco` and in whatever OTLP / OpenObserve exporter is installed.
+ * `/_observe` and in whatever OpenObserve exporter is installed.
  */
-import type { EdgeDef } from 'server:core'
 import { action, Server, service, stream } from 'server:core'
 import type { Flow, Operation } from 'std:effect'
 import { attempt, flowOf, until } from 'std:effect'
@@ -43,40 +43,14 @@ import type { AnyType } from 'std:shared'
 
 import { z } from 'zod'
 
+import type { Member, Pairing, RelayEvent, ReportInput, Room } from '../../types/internal'
+
 /** This process — a node ignores the echo of its own broadcasts (`events()` includes them). */
 const NODE =
   globalThis.crypto?.randomUUID?.().slice(0, 8) ?? Math.random().toString(36).slice(2, 10)
 
 /** The carrier event every edge node listens on (see `startRtcRelay`). */
 const RELAY = 'rtc.relay'
-
-interface Member {
-  readonly id: string
-  /** the role of the CURRENT pairing (undefined until one forms). */
-  polite?: boolean
-  /** present only on the node that holds the socket — that node does the sending. */
-  readonly socket?: EdgeDef.Socket
-}
-
-interface Room {
-  /** member id → member, at most two, LOCAL and remote alike. */
-  members: Map<string, Member>
-  /** Bumped on every pairing — the session id both members run and stamp their frames with. */
-  epoch: number
-}
-
-/** One pairing, derived from the pair alone so every node computes the same thing. */
-interface Pairing {
-  epoch: number
-  /** member id → polite. */
-  roles: Record<string, boolean>
-}
-
-type RelayEvent =
-  | { t: 'join'; node: string; room: string; member: string }
-  | { t: 'leave'; node: string; room: string; member: string }
-  | { t: 'pair'; node: string; room: string; pairing: Pairing }
-  | { t: 'frame'; node: string; room: string; from: string; frame: unknown }
 
 /** The room view of THIS node: every member of every room it takes part in. */
 const rooms = new Map<string, Room>()
@@ -227,7 +201,7 @@ const Moment = z.object({
   data: z.record(z.string(), z.union([z.number(), z.string(), z.boolean()])).optional(),
 })
 
-const Report = z.object({
+export const Report = z.object({
   room: z.string(),
   epoch: z.number().int().nonnegative(),
   role: z.enum(['polite', 'impolite']),
@@ -237,8 +211,6 @@ const Report = z.object({
   /** what happened since the previous report (bounded — the client ships deltas). */
   timeline: z.array(Moment).max(128).default([]),
 })
-
-type ReportInput = z.infer<typeof Report>
 
 /** Flat, exporter-friendly attributes for a report's span / event row. */
 const attrsOf = (input: ReportInput) => {
@@ -318,7 +290,7 @@ const PAGE = `<!doctype html>
 </body>
 </html>`
 
-/** The page bundle, built once per process from `src/rtc-page.ts` (browser target, std dist). */
+/** The page bundle, built once per process from `internal/rtc-page.ts` (browser target). */
 let pageCache: Uint8Array | undefined
 
 function* buildPage() {

@@ -37,8 +37,9 @@ describe('observe/openobserve', () => {
               url: 'http://openobserve:5080/',
               org: 'dev',
               auth: { user: 'root@local', pass: 'secret' },
+              otlp: { metrics: { intervalMs: 30 } },
               fetch: fakeFetch,
-              batch: { ms: 20 },
+              batch: { waitMs: 20 },
               resource: { environment: 'test' },
             }),
           ],
@@ -51,7 +52,9 @@ describe('observe/openobserve', () => {
         // every payload hits the org's bulk `_json` endpoint with basic auth
         const basic = `Basic ${btoa('root@local:secret')}`
         for (const entry of received) {
-          expect(entry.url).toMatch(/^http:\/\/openobserve:5080\/api\/dev\/\w+\/_json$/u)
+          expect(entry.url).toMatch(
+            /^http:\/\/openobserve:5080\/api\/dev\/(\w+\/_json|v1\/(traces|logs|metrics))$/u,
+          )
           expect(entry.auth).toBe(basic)
         }
 
@@ -84,6 +87,30 @@ describe('observe/openobserve', () => {
         const failures = streamOf('failures')
         expect(failures.find((row: AnyType) => row.tag === 'x.y')).toBeDefined()
 
+        // an event carries the span it happened under — the link a trace needs to place it
+        yield* server.call(todos, 'nested', { title: 'emitted' })
+        yield* sleep(80)
+        const emitted = streamOf('events').find((row: AnyType) => row.name === 'todo.created')
+        expect(emitted).toMatchObject({ kind: 'emit' })
+        const nested = streamOf('spans').find((row: AnyType) => row.name === 'todos.nested')
+        expect(emitted.span_id).toBe(nested.span_id)
+
+        // the embedded OtlpExporter feeds the PANELS from the same install: OTLP spans (the
+        // emit projected in), log records and the metrics beat, all under /api/dev/v1/*
+        const otlpSpans = received
+          .filter(entry => entry.url.endsWith('/v1/traces'))
+          .flatMap(entry => entry.body.resourceSpans[0].scopeSpans[0].spans)
+        const otlpCreate = otlpSpans.find((span: AnyType) => span.name === 'todos.create')
+        expect(otlpCreate.traceId).toMatch(/^[0-9a-f]{32}$/u)
+        expect(otlpSpans.some((span: AnyType) => span.name === 'emit todo.created')).toBe(true)
+        const otlpLogs = received
+          .filter(entry => entry.url.endsWith('/v1/logs'))
+          .flatMap(entry => entry.body.resourceLogs[0].scopeLogs[0].logRecords)
+        expect(otlpLogs.some((record: AnyType) => record.body.stringValue === 'creating')).toBe(
+          true,
+        )
+        expect(received.some(entry => entry.url.endsWith('/v1/metrics'))).toBe(true)
+
         // an OpenObserve outage is counted, never raised into the caller
         failing = true
         const sent = received.length
@@ -98,9 +125,13 @@ describe('observe/openobserve', () => {
 
   it('bodies: request records carry headers/input/output — success included', async () => {
     const received: AnyType[] = []
+    let sawOtlpTraces = false
     const fakeFetch = ((url: AnyType, init: AnyType) => {
       if (String(url).endsWith('/requests/_json')) {
         received.push(...JSON.parse(init.body))
+      }
+      if (String(url).endsWith('/v1/traces')) {
+        sawOtlpTraces = true
       }
       return Promise.resolve(new Response('{"status":[]}', { status: 200 }))
     }) as typeof fetch
@@ -116,7 +147,7 @@ describe('observe/openobserve', () => {
               url: 'http://oo:5080',
               bodies: true,
               fetch: fakeFetch,
-              batch: { ms: 20 },
+              batch: { waitMs: 20 },
             }),
           ],
         })
@@ -136,6 +167,8 @@ describe('observe/openobserve', () => {
         expect(row.output.kind).toBe('data')
         // secrets never leave: the authorization header ships redacted
         expect(row.headers.authorization).not.toContain('secret')
+        // no `otlp` option given — the OTLP leg is on by default
+        expect(sawOtlpTraces).toBe(true)
         yield* server.stop()
       }),
     )
@@ -157,9 +190,10 @@ describe('observe/openobserve', () => {
             OpenObserveExporter.use({
               url: 'http://openobserve:5080',
               auth: { token: 'tkn' },
+              otlp: false,
               streams: { spans: 'app_spans', logs: false, events: false },
               fetch: fakeFetch,
-              batch: { ms: 20 },
+              batch: { waitMs: 20 },
             }),
           ],
         })
@@ -173,6 +207,8 @@ describe('observe/openobserve', () => {
           true,
         )
         expect(received.some(entry => entry.url.includes('/logs/'))).toBe(false)
+        // otlp: false — nothing touches the OTLP endpoints
+        expect(received.some(entry => entry.url.includes('/v1/'))).toBe(false)
         yield* server.stop()
       }),
     )
@@ -196,7 +232,7 @@ describe('observe/openobserve', () => {
               org: 'dev',
               streams: { domain: 'clarvia_audit' },
               fetch: fakeFetch,
-              batch: { ms: 20 },
+              batch: { waitMs: 20 },
             }),
           ],
         })

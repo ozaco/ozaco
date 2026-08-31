@@ -73,6 +73,10 @@ export namespace ObserveDef {
 
   export interface EventRow {
     readonly request_id: string | null
+
+    /** the span this happened UNDER — a socket session, the dispatch that emitted. Exporters
+     * hang the event off it so it lands on the trace waterfall where it belongs. */
+    readonly span_id: string | null
     readonly kind: EventKind
     readonly name: string
     readonly size: number | null

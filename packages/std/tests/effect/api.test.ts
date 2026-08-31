@@ -97,11 +97,11 @@ describe('api (std:plugin/api)', () => {
         },
       })
 
-      yield* Word.set('merhaba')
+      yield* Word.set('hello')
       return yield* Word.expect()
     })
 
-    expect(unwrap(outcome)).toBe('merhaba')
-    expect(seen).toEqual(['merhaba'])
+    expect(unwrap(outcome)).toBe('hello')
+    expect(seen).toEqual(['hello'])
   })
 })

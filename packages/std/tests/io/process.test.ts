@@ -17,7 +17,7 @@ describe('exec', () => {
     const outcome = await run(function* () {
       yield* install(BunIO)
 
-      const result = yield* IO.actions.exec('echo', ['selam'])
+      const result = yield* IO.actions.exec('echo', ['hello'])
 
       return {
         stdout: decoder.decode(result.stdout),
@@ -29,7 +29,7 @@ describe('exec', () => {
     })
 
     expect(unwrap(outcome)).toEqual({
-      stdout: 'selam\n',
+      stdout: 'hello\n',
       stderr: '',
       code: 0,
       signal: null,

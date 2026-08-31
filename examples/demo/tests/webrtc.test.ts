@@ -12,7 +12,8 @@ import { afterAll, describe, expect, it } from 'bun:test'
 import { JsonCodec } from 'std:codec/impl/json'
 import { createLink } from 'transport:impl/memory'
 
-import { createDemo } from '../src/app'
+import type { DemoOptions } from '../src'
+import { createDemo } from '../src'
 
 // Real WebRTC through the demo's `/rtc/:room` signaling relay: two peers join the room over
 // plain websockets, take the role the relay assigns, and negotiate an actual loopback
@@ -59,7 +60,7 @@ describe.skipIf(!polyfill)('webrtc over the demo signaling relay', () => {
         yield* install(Ws)
         yield* install(Rtc)
 
-        const app = yield* createDemo({ env: { ROLE: 'monolith', INSTANCE: 'rtc', PORT: '0' } })
+        const app = yield* createDemo({ instance: 'rtc' })
         const info = yield* app.start()
         const base = (info.url as string).replace('http', 'ws')
 
@@ -105,9 +106,7 @@ describe.skipIf(!polyfill)('webrtc over the demo signaling relay', () => {
         yield* install(JsonCodec)
         yield* install(Ws)
 
-        const app = yield* createDemo({
-          env: { ROLE: 'monolith', INSTANCE: 'rtc-relay', PORT: '0' },
-        })
+        const app = yield* createDemo({ instance: 'rtc-relay' })
         const info = yield* app.start()
         const base = (info.url as string).replace('http', 'ws')
 
@@ -187,14 +186,8 @@ describe.skipIf(!polyfill)('webrtc over the demo signaling relay', () => {
         // two nodes, one carrier: a socket is driven by the edge that accepted it, so this is
         // what a real cluster does the moment the two tabs hit different nodes
         const link = createLink()
-        const first = yield* createDemo({
-          env: { ROLE: 'monolith', INSTANCE: 'edge-a', PORT: '0' },
-          link,
-        })
-        const second = yield* createDemo({
-          env: { ROLE: 'monolith', INSTANCE: 'edge-b', PORT: '0' },
-          link,
-        })
+        const first = yield* createDemo({ instance: 'edge-a', link })
+        const second = yield* createDemo({ instance: 'edge-b', link })
         const urlA = ((yield* first.start()).url as string).replace('http', 'ws')
         const urlB = ((yield* second.start()).url as string).replace('http', 'ws')
 
@@ -241,33 +234,30 @@ describe.skipIf(!polyfill)('webrtc over the demo signaling relay', () => {
 
         const link = createLink()
         const ready = createQueue<void, void>()
-        const node = (env: Record<string, string>) =>
+        const node = (options: DemoOptions) =>
           fork(() =>
             scoped(function* () {
-              const app = yield* createDemo({ env, link })
+              const app = yield* createDemo({ ...options, link })
               yield* app.start()
               ready.add(undefined)
               yield* sleep(60_000)
             }),
           )
         yield* node({
-          ROLE: 'service',
-          SERVICE: 'account,todos,media',
-          INSTANCE: 'api-1',
-          PORT: '0',
+          role: 'service',
+          hosted: ['account', 'todos', 'media'],
+          instance: 'api-1',
+          port: 0,
         })
         yield* node({
-          ROLE: 'service',
-          SERVICE: 'feed,reports,live,rtc,cluster',
-          INSTANCE: 'api-2',
-          PORT: '0',
+          role: 'service',
+          hosted: ['feed', 'reports', 'live', 'rtc', 'cluster'],
+          instance: 'api-2',
+          port: 0,
         })
         yield* ready.next()
         yield* ready.next()
-        const gateway = yield* createDemo({
-          env: { ROLE: 'gateway', INSTANCE: 'gw', PORT: '0' },
-          link,
-        })
+        const gateway = yield* createDemo({ role: 'gateway', instance: 'gw', link })
         const info = yield* gateway.start()
         const base = (info.url as string).replace('http', 'ws')
 
@@ -300,15 +290,15 @@ describe.skipIf(!polyfill)('webrtc over the demo signaling relay', () => {
   }, 30_000)
 
   it('a peer report becomes observe rows, spans and events — and ships to OpenObserve', async () => {
-    // one stand-in backend for BOTH exporters: OpenObserve bulk streams
-    // (`/api/<org>/<stream>/_json`) and an OTLP/HTTP collector (`/v1/traces`)
+    // one stand-in OpenObserve for BOTH ingestion paths of the one exporter: the bulk
+    // streams (`/api/<org>/<stream>/_json`) and its embedded OTLP leg (`/api/<org>/v1/traces`)
     const captured: { stream: string; rows: AnyType[] }[] = []
     const otlpSpans: AnyType[] = []
     const collector = Bun.serve({
       port: 0,
       async fetch(request) {
         const path = new URL(request.url).pathname
-        if (path === '/v1/traces') {
+        if (path.endsWith('/v1/traces')) {
           const body = (await request.json()) as AnyType
           for (const resource of body.resourceSpans ?? []) {
             for (const scope of resource.scopeSpans ?? []) {
@@ -336,13 +326,8 @@ describe.skipIf(!polyfill)('webrtc over the demo signaling relay', () => {
           yield* install(Ws)
 
           const app = yield* createDemo({
-            env: {
-              ROLE: 'monolith',
-              INSTANCE: 'rtc-observe',
-              PORT: '0',
-              OPENOBSERVE_URL: `http://127.0.0.1:${collector.port}`,
-              OTLP_URL: `http://127.0.0.1:${collector.port}`,
-            },
+            instance: 'rtc-observe',
+            openobserve: { url: `http://127.0.0.1:${collector.port}` },
           })
           const info = yield* app.start()
           const base = (info.url as string).replace('http', 'ws')
@@ -452,7 +437,7 @@ describe.skipIf(!polyfill)('webrtc over the demo signaling relay', () => {
     const log = rowsOf('logs').find(row => String(row.msg).startsWith('rtc session ended'))
     expect(log?.data).toEqual(expect.objectContaining(counters))
 
-    // …and the same spans leave over OTLP/HTTP, attributes intact
+    // …and the same spans leave over the embedded OTLP leg, attributes intact
     const exported = otlpSpans.find(span => span.name === 'rtc.metrics')
     expect(exported).toBeDefined()
     const attrOf = (span: AnyType, key: string) =>
@@ -468,9 +453,7 @@ describe.skipIf(!polyfill)('webrtc over the demo signaling relay', () => {
   it('GET /rtc serves the browser call page with the bundled std client', async () => {
     unwrap(
       await run(function* () {
-        const app = yield* createDemo({
-          env: { ROLE: 'monolith', INSTANCE: 'rtc-page', PORT: '0' },
-        })
+        const app = yield* createDemo({ instance: 'rtc-page' })
         const info = yield* app.start()
 
         const response = yield* until(fetch(`${info.url as string}/rtc`))

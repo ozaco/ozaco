@@ -90,6 +90,7 @@ export const events = table(
   `${OBSERVE_PREFIX}events`,
   {
     request_id: column.text().optional(),
+    span_id: column.text().optional(),
     kind: column.enumOf('emit', 'socket-in', 'socket-out', 'lane-open', 'lane-close'),
     name: column.text(),
     size: column.int().optional(),

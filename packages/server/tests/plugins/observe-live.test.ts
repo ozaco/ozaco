@@ -46,7 +46,7 @@ describe('observe — the live feed under socket churn', () => {
         const server = yield* createServer({
           services: [todos],
           edge: BunEdge,
-          plugins: [ObservePlugin.use({ console: true, batch: { ms: 10 } })],
+          plugins: [ObservePlugin.use({ console: true, batch: { waitMs: 10 } })],
         })
         const info = yield* server.start({ port: 0 })
         const base = info.url!

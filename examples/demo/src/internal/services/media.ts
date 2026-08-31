@@ -1,5 +1,5 @@
 import { useDb } from 'db:core'
-import { action, service, serviceErrors, stream } from 'server:core'
+import { action, service, stream } from 'server:core'
 import type { Flow } from 'std:effect'
 import { until } from 'std:effect'
 
@@ -12,10 +12,8 @@ import { Buffer } from 'node:buffer'
 
 import { z } from 'zod'
 
-import { schema } from '../tables'
-
-/** declared once: the status the action publishes AND the failure the handler raises */
-const mediaErrors = serviceErrors('media', { 'not-found': 404 })
+import { mediaErrors } from '../../errors'
+import { schema } from '../../utils/tables'
 
 const Upload = z.object({ id: z.string(), name: z.string(), size: z.number(), mime: z.string() })
 

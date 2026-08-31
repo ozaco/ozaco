@@ -11,7 +11,7 @@ import { fail } from 'std:result'
 
 import { z } from 'zod'
 
-import { schema } from '../tables'
+import { schema } from '../../utils/tables'
 
 // TYPE-only: `reports` calls these services without importing them at runtime, so the module
 // graph stays a tree (no cycle waiting to happen)

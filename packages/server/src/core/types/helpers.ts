@@ -183,8 +183,8 @@ export namespace Helpers {
     /** rows per batch. Default 200. */
     readonly size?: number | undefined
 
-    /** max time a row waits. Default 1000. */
-    readonly ms?: number | undefined
+    /** longest a row waits before its batch is sent. Default 1000. */
+    readonly waitMs?: number | undefined
 
     /** rows held before the oldest are dropped. Default 10 000. */
     readonly maxPending?: number | undefined

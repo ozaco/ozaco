@@ -1,11 +1,12 @@
 import type { Helpers, ServerDef } from 'server:core'
 import { Server, ServerErrors } from 'server:core'
 import { createSink } from 'server:internal'
-import { definePlugin } from 'std:plugin'
+import { definePlugin, install } from 'std:plugin'
 import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import pkg from '../../../../../package.json'
+import { OtlpExporter } from '../otlp'
 
 import {
   ooDomain,
@@ -31,11 +32,17 @@ const KINDS: readonly OpenObserveDef.StreamKey[] = [
 const ZERO = { sent: 0, dropped: 0, failed: 0 }
 
 /**
- * OpenObserve exporter of what the kernel observes: every request, span, log line, failure and
- * socket/emit event ships to its own stream via the bulk `_json` ingestion API
- * (`/api/<org>/<stream>/_json`) — flat records stamped with `_timestamp` (µs), `service_name`
- * and the node's instance, so the whole `_ob_*` spine is queryable in OpenObserve. Batched in
- * memory; delivery failures are counted (`stats()`), never raised into requests.
+ * OpenObserve exporter of what the kernel observes — BOTH ingestion paths, so one install is
+ * the whole OpenObserve story:
+ *
+ * - the raw `_json` streams (`/api/<org>/<stream>/_json`): every request, span, log line,
+ *   failure and socket/emit event as flat records stamped with `_timestamp` (µs),
+ *   `service_name` and the node's instance — the `_ob_*` spine, queryable under Logs → Streams;
+ * - an embedded `OtlpExporter` against `/api/<org>` (same auth): spans, logs and metrics via
+ *   OTLP — what lights up the Traces, Logs and Metrics PANELS. `otlp: false` turns it off when
+ *   a separate collector already ingests OTLP.
+ *
+ * Batched in memory; delivery failures are counted (`stats()`), never raised into requests.
  */
 export const OpenObserveExporter = definePlugin<
   OpenObserveDef.Context,
@@ -81,6 +88,25 @@ export const OpenObserveExporter = definePlugin<
     const sinks = new Map<OpenObserveDef.StreamKey, Helpers.Sink<Record<string, unknown>>>()
     const bodies = options.bodies === true
 
+    // the PANELS leg: the plain OtlpExporter, installed here against the same OpenObserve
+    // (its `/api/<org>` OTLP endpoints, same auth) — its hooks are relayed below since
+    // createServer only sees THIS plugin's context
+    const otlpOptions = typeof options.otlp === 'object' ? options.otlp : undefined
+    const otlp =
+      options.otlp === false
+        ? null
+        : yield* install(OtlpExporter, {
+            url: `${base}/api/${org}`,
+            headers,
+            serviceName: options.serviceName,
+            resource: options.resource,
+            logs: otlpOptions?.logs,
+            events: otlpOptions?.events,
+            metrics: otlpOptions?.metrics,
+            batch: options.batch,
+            fetch: doFetch,
+          })
+
     for (const kind of KINDS) {
       const stream = options.streams?.[kind] ?? kind
 
@@ -109,6 +135,10 @@ export const OpenObserveExporter = definePlugin<
     const hooks: ServerDef.Hooks = {
       name: 'openobserve',
       *observe(event) {
+        if (otlp?.hooks?.observe) {
+          yield* otlp.hooks.observe(event)
+        }
+
         switch (event.t) {
           case 'request': {
             sinks.get('requests')?.push(ooRequest(event.row, bodies))
@@ -154,10 +184,18 @@ export const OpenObserveExporter = definePlugin<
         for (const sink of sinks.values()) {
           yield* sink.start()
         }
+
+        if (otlp?.hooks?.start) {
+          yield* otlp.hooks.start()
+        }
       },
       *stop() {
         for (const sink of sinks.values()) {
           yield* sink.flush()
+        }
+
+        if (otlp?.hooks?.stop) {
+          yield* otlp.hooks.stop()
         }
       },
     }
@@ -166,11 +204,10 @@ export const OpenObserveExporter = definePlugin<
       url: base,
       org,
       stats: () =>
-        Object.fromEntries(
-          KINDS.map(kind => [kind, sinks.get(kind)?.stats ?? { ...ZERO }]),
-        ) as Readonly<
-          Record<OpenObserveDef.StreamKey, { sent: number; dropped: number; failed: number }>
-        >,
+        ({
+          ...Object.fromEntries(KINDS.map(kind => [kind, sinks.get(kind)?.stats ?? { ...ZERO }])),
+          otlp: otlp ? otlp.stats() : null,
+        }) as AnyType,
       hooks,
     }
   },

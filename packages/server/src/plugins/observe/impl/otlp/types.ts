@@ -15,6 +15,12 @@ export namespace OtlpDef {
     /** export logs and failures as OTLP log records too. Default true. */
     readonly logs?: boolean | undefined
 
+    /** project observed EVENTS (WS frames, `ctx.emit`) into the trace as point-in-time spans
+     * under the span they happened in — a socket session otherwise shows up as one empty span.
+     * `false` drops them (chatty sockets); `{ data: true }` carries each frame's payload as the
+     * `ozaco.data` attribute. Default true without payloads. */
+    readonly events?: boolean | { readonly data?: boolean | undefined } | undefined
+
     /** export CUMULATIVE metrics to `/v1/metrics` — `ozaco.requests` (per kind/action/status),
      * the `ozaco.request.duration` histogram and `ozaco.failures` (per tag). `false` disables;
      * `intervalMs` (default 10000) paces the export, `buckets` are the histogram bounds (ms). */
@@ -22,7 +28,9 @@ export namespace OtlpDef {
       | false
       | { readonly intervalMs?: number | undefined; readonly buckets?: readonly number[] }
       | undefined
-    readonly batch?: { readonly size?: number; readonly ms?: number; readonly maxPending?: number }
+    readonly batch?:
+      | { readonly size?: number; readonly waitMs?: number; readonly maxPending?: number }
+      | undefined
 
     /** `fetch` to use (tests). */
     readonly fetch?: typeof fetch | undefined

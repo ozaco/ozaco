@@ -17,14 +17,14 @@ describe('single-codec routing (exec with one entry)', () => {
     const outcome = await run(function* () {
       yield* install(JsonCodec)
 
-      const payload = { kind: 'greeting', text: 'merhaba dünya', n: 42 }
+      const payload = { kind: 'greeting', text: 'hello world — café', n: 42 }
       const bytes = yield* Codec.actions.encode(payload)
       const back = yield* Codec.actions.decode<typeof payload>(bytes)
 
       return back
     })
 
-    expect(unwrap(outcome)).toEqual({ kind: 'greeting', text: 'merhaba dünya', n: 42 })
+    expect(unwrap(outcome)).toEqual({ kind: 'greeting', text: 'hello world — café', n: 42 })
   })
 
   it('stringify/parse route the same way', async () => {
@@ -144,8 +144,8 @@ describe('json codec streaming', () => {
       // let the decode pipeline subscribe before feeding bytes
       yield* sleep(1)
 
-      const bytes = encoder.encode(JSON.stringify('dünya'))
-      // split INSIDE the two-byte 'ü' sequence (0xC3 0xBC)
+      const bytes = encoder.encode(JSON.stringify('café'))
+      // split INSIDE the two-byte 'é' sequence (0xC3 0xA9)
       const splitAt = bytes.indexOf(0xc3) + 1
       expect(splitAt).toBeGreaterThan(0)
 
@@ -156,7 +156,7 @@ describe('json codec streaming', () => {
       return yield* collected.operation
     })
 
-    expect(unwrap(outcome)).toEqual(['dünya'])
+    expect(unwrap(outcome)).toEqual(['café'])
   })
 
   it('encodeFlow → decodeFlow round-trips a sequence of values', async () => {

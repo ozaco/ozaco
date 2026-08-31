@@ -39,7 +39,7 @@ tasks:
     options:
       cache: false
   start:
-    command: bun run src/main.ts
+    command: bun run scripts/main.ts
     deps:
       - panel:embed
       - observe:embed
@@ -49,7 +49,17 @@ tasks:
     options:
       runDepsInParallel: false
   cluster:
-    command: DB_PATH=local/demo.sqlite bun run scripts/cluster.ts
+    command: bun run scripts/cluster.ts
+    deps:
+      - panel:embed
+      - observe:embed
+      - server:build
+      - client:build
+    preset: server
+    options:
+      runDepsInParallel: false
+  openobserve:
+    command: bun run scripts/openobserve.ts
     deps:
       - panel:embed
       - observe:embed

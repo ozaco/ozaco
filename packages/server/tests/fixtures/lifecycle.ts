@@ -39,7 +39,7 @@ const outcome = await run(function* () {
     services: [echo, resource],
     edge: BunEdge,
     carrier: NetworkCarrier,
-    plugins: [ObservePlugin.use({ console: true, batch: { ms: 5 } }), Cors, Cache, Docs],
+    plugins: [ObservePlugin.use({ console: true, batch: { waitMs: 5 } }), Cors, Cache, Docs],
     listen: { port: 0 },
   })
   const info = yield* app.start()

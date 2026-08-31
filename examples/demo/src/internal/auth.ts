@@ -10,7 +10,7 @@ import { useDb } from 'db:core'
 import type { AuthDef } from 'server:plugins'
 import type { Operation } from 'std:effect'
 
-import { schema } from './tables'
+import { schema } from '../utils/tables'
 
 export const SEED_USERS = [
   { email: 'ada@example.com', name: 'Ada', password: 'ada', roles: ['admin'] },

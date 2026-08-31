@@ -1,11 +1,13 @@
-import { createServer } from 'server:core'
-import { attempt, run, sleep } from 'std:effect'
+import { action, createServer, service } from 'server:core'
+import { attempt, run, sleep, until } from 'std:effect'
 import { unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import { describe, expect, it } from 'bun:test'
 
+import { BunEdge } from 'server:impl/edge/bun'
 import { OtlpExporter, toCamelDeep } from 'server:plugins/observe/otlp'
+import { z } from 'zod'
 
 import { storage, todos } from '../helpers'
 
@@ -38,7 +40,7 @@ describe('observe/otlp', () => {
             OtlpExporter.use({
               url: 'http://collector:4318/',
               fetch: fakeFetch,
-              batch: { ms: 20 },
+              batch: { waitMs: 20 },
               metrics: { intervalMs: 30 },
               resource: { 'deployment.environment': 'test' },
             }),
@@ -130,6 +132,203 @@ describe('observe/otlp', () => {
         expect(made.title).toBe('unsent')
         yield* sleep(80)
         expect(received.length).toBe(sent)
+        yield* server.stop()
+      }),
+    )
+  })
+})
+
+/**
+ * A socket session is ONE span that only ends when the socket closes — without the events leg
+ * everything that happened inside it (every frame) is missing from the trace.
+ */
+const chat = service('chat', {
+  room: action.socket(
+    { protocol: 'chat', receives: z.object({ text: z.string() }) },
+    function* (socket) {
+      yield* socket.send({ t: 'hello' })
+      const messages = yield* socket.messages
+
+      for (;;) {
+        const step = yield* messages.next()
+
+        if (step.done) {
+          return
+        }
+
+        yield* socket.send({ t: 'echo', text: step.value.text })
+      }
+    },
+  ),
+})
+
+/** Open the room, say one thing, wait for the echo, close. Resolves with the frames received. */
+const talk = async (url: string, said: string): Promise<string[]> => {
+  const ws = new WebSocket(`${url.replace('http', 'ws')}/chat/room`)
+  const frames: string[] = []
+
+  await new Promise<void>((resolve, reject) => {
+    ws.addEventListener('message', event => {
+      frames.push(String(event.data))
+
+      if (frames.length === 1) {
+        ws.send(JSON.stringify({ text: said }))
+      }
+
+      if (frames.length === 2) {
+        ws.close()
+        resolve()
+      }
+    })
+    ws.addEventListener('error', () => reject(new Error('socket error')))
+  })
+
+  return frames
+}
+
+/** Every `/v1/traces` span the collector saw, flattened. */
+const spansOf = (received: readonly { url: string; body: AnyType }[]): AnyType[] =>
+  received
+    .filter(entry => entry.url.endsWith('/v1/traces'))
+    .flatMap(entry => entry.body.resourceSpans[0].scopeSpans[0].spans)
+
+const attr = (span: AnyType, key: string): AnyType =>
+  span.attributes.find((entry: AnyType) => entry.key === key)?.value
+
+describe('observe/otlp — events', () => {
+  it('projects WS frames and emits into the trace under the span they happened in', async () => {
+    const received: { url: string; body: AnyType }[] = []
+    const fakeFetch = ((url: AnyType, init: AnyType) => {
+      received.push({ url: String(url), body: JSON.parse(init.body) })
+      return Promise.resolve(new Response('{}', { status: 200 }))
+    }) as typeof fetch
+
+    unwrap(
+      await run(function* () {
+        yield* storage()
+        const server = yield* createServer({
+          services: [chat, todos],
+          edge: BunEdge,
+          plugins: [
+            OtlpExporter.use({
+              url: 'http://collector:4318',
+              fetch: fakeFetch,
+              batch: { waitMs: 20 },
+              metrics: false,
+            }),
+          ],
+        })
+        const info = yield* server.start({ port: 0 })
+
+        expect((yield* until(talk(info.url!, 'hi there'))).length).toBe(2)
+        yield* sleep(120)
+
+        const spans = spansOf(received)
+        const session = spans.find((span: AnyType) => span.name === 'WS /chat/room')
+        expect(session).toBeDefined()
+
+        // the frames: one inbound, two outbound (`hello` then the echo)
+        const inbound = spans.filter((span: AnyType) => span.name === 'WS → /chat/room')
+        const outbound = spans.filter((span: AnyType) => span.name === 'WS ← /chat/room')
+        expect(inbound.length).toBe(1)
+        expect(outbound.length).toBe(2)
+
+        // …hanging off the SESSION span, in the session's trace
+        for (const frame of [...inbound, ...outbound]) {
+          expect(frame.traceId).toBe(session.traceId)
+          expect(frame.parentSpanId).toBe(session.spanId)
+          expect(frame.spanId).toMatch(/^[0-9a-f]{16}$/u)
+          // a frame is a point in time, not a duration
+          expect(frame.startTimeUnixNano).toBe(frame.endTimeUnixNano)
+          expect(attr(frame, 'ozaco.kind')).toEqual({ stringValue: 'event' })
+          expect(Number((attr(frame, 'ozaco.size') as AnyType).intValue)).toBeGreaterThan(0)
+        }
+        expect(attr(inbound[0], 'ozaco.event')).toEqual({ stringValue: 'socket-in' })
+        expect(attr(outbound[0], 'ozaco.event')).toEqual({ stringValue: 'socket-out' })
+        expect(attr(inbound[0], 'ozaco.data')).toBeUndefined()
+
+        // frames sharing a millisecond still get distinct span ids
+        expect(new Set(spans.map((span: AnyType) => span.spanId)).size).toBe(spans.length)
+
+        // an `emit` hangs off the DISPATCH that emitted, not off a socket
+        yield* server.call(todos, 'nested', { title: 'emitted' })
+        yield* sleep(120)
+        const after = spansOf(received)
+        const emitted = after.find((span: AnyType) => span.name === 'emit todo.created')
+        expect(emitted).toBeDefined()
+        expect(attr(emitted, 'ozaco.event')).toEqual({ stringValue: 'emit' })
+        const nested = after.find((span: AnyType) => span.name === 'todos.nested')
+        expect(emitted.traceId).toBe(nested.traceId)
+        expect(emitted.parentSpanId).toBe(nested.spanId)
+
+        yield* server.stop()
+      }),
+    )
+  })
+
+  it('carries frame payloads with events: { data: true } and drops them with events: false', async () => {
+    const withData: { url: string; body: AnyType }[] = []
+    const capture = (into: { url: string; body: AnyType }[]) =>
+      ((url: AnyType, init: AnyType) => {
+        into.push({ url: String(url), body: JSON.parse(init.body) })
+        return Promise.resolve(new Response('{}', { status: 200 }))
+      }) as typeof fetch
+
+    unwrap(
+      await run(function* () {
+        yield* storage()
+        const server = yield* createServer({
+          services: [chat],
+          edge: BunEdge,
+          plugins: [
+            OtlpExporter.use({
+              url: 'http://collector:4318',
+              fetch: capture(withData),
+              batch: { waitMs: 20 },
+              metrics: false,
+              events: { data: true },
+            }),
+          ],
+        })
+        const info = yield* server.start({ port: 0 })
+        yield* until(talk(info.url!, 'payload'))
+        yield* sleep(120)
+
+        const inbound = spansOf(withData).find((span: AnyType) => span.name === 'WS → /chat/room')
+        expect(attr(inbound, 'ozaco.data')).toEqual({
+          stringValue: JSON.stringify({ text: 'payload' }),
+        })
+        yield* server.stop()
+      }),
+    )
+
+    const withoutEvents: { url: string; body: AnyType }[] = []
+
+    unwrap(
+      await run(function* () {
+        yield* storage()
+        const server = yield* createServer({
+          services: [chat],
+          edge: BunEdge,
+          plugins: [
+            OtlpExporter.use({
+              url: 'http://collector:4318',
+              fetch: capture(withoutEvents),
+              batch: { waitMs: 20 },
+              metrics: false,
+              events: false,
+            }),
+          ],
+        })
+        const info = yield* server.start({ port: 0 })
+        yield* until(talk(info.url!, 'quiet'))
+        yield* sleep(120)
+
+        const spans = spansOf(withoutEvents)
+        // the session span still lands — only the frames are gone
+        expect(spans.some((span: AnyType) => span.name === 'WS /chat/room')).toBe(true)
+        expect(spans.some((span: AnyType) => span.name.startsWith('WS →'))).toBe(false)
+        expect(spans.some((span: AnyType) => span.name.startsWith('WS ←'))).toBe(false)
         yield* server.stop()
       }),
     )

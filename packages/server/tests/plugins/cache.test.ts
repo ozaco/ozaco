@@ -44,7 +44,7 @@ describe('cache', () => {
         yield* storage()
         const server = yield* createServer({
           services: [svc],
-          plugins: [ObservePlugin.use({ batch: { ms: 5 } }), Cache],
+          plugins: [ObservePlugin.use({ batch: { waitMs: 5 } }), Cache],
         })
         yield* server.start()
         expect(yield* server.call(svc, 'get', { id: 'a' })).toEqual({ id: 'a', n: 1 })

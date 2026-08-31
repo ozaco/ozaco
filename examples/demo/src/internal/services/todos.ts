@@ -17,24 +17,20 @@
  *   error   failure shaping  every failure gains a `todos:<op>` cause before it leaves
  * Hooks wrap the BUILT-INS only — `extend` authors own their whole handler.
  */
-import type { Schema } from 'db:core'
 import { useDb, where } from 'db:core'
-import { action, Server, serviceErrors } from 'server:core'
+import { action, Server } from 'server:core'
 import { crud } from 'server:plugins'
 import { appendCauses } from 'std:result'
 
 import { z } from 'zod'
 
-import { todosTable, schema } from '../tables'
-
-type Todo = Schema.Infer<typeof todosTable>
+import { todosErrors } from '../../errors'
+import type { Todo } from '../../types/internal'
+import { todosTable, schema } from '../../utils/tables'
 
 /** the read projection: high-priority rows shout. */
 const shout = (row: Todo): Todo =>
   row.priority === 'high' ? { ...row, title: row.title.toUpperCase() } : row
-
-/** The resource's OWN failure taxonomy: declared once, wired per-op via `ops` below. */
-const guard = serviceErrors('todos', { protected: 423 })
 
 export const todos = crud(todosTable, {
   maxLimit: 100,
@@ -83,7 +79,7 @@ export const todos = crud(todosTable, {
 
   // per-op options: the tag the `around` guard raises answers 423 on REMOVE alone — no other
   // built-in advertises (or maps) it
-  ops: { remove: { errors: guard.statuses } },
+  ops: { remove: { errors: todosErrors.statuses } },
 
   // runs ONCE while `crud()` builds the service (definition time, never per request): the
   // create INPUT demands a real title beyond what the column kind gives it — and the reshape
@@ -131,7 +127,7 @@ export const todos = crud(todosTable, {
     if (call.op === 'remove') {
       const row = yield* (yield* useDb(schema)).get('todos', call.input.id)
       if (row && String(row.title).includes('[keep]')) {
-        return yield* guard.protected('protected todo — remove [keep] from the title first')
+        return yield* todosErrors.protected('protected todo — remove [keep] from the title first')
       }
       const out = yield* next(input)
       // a DOMAIN record: free-form audit shipped by exporters (OpenObserve `streams.domain`),

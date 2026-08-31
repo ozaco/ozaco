@@ -1,20 +1,15 @@
 // oxlint-disable import/exports-last
 /**
- * The typed client walk-through: `bun run src/client.ts [http://127.0.0.1:3000]` against a
- * running demo. Every step prints what it did; `walk()` is what the e2e test runs too.
+ * The typed client walk-through (`walk()`): every `@ozaco/server` use case once, against a
+ * running demo. `scripts/client.ts` runs it printing each step; the e2e test asserts on it.
  */
 import { createClient } from 'client:core'
 import type { ClientDef } from 'client:core'
 import type { Flow, Operation } from 'std:effect'
-import { attempt, run, scoped, sleep, until } from 'std:effect'
-import { isFailure, unwrap } from 'std:result'
+import { attempt, scoped, sleep, until } from 'std:effect'
+import { isFailure } from 'std:result'
 
-import type { Api } from './app'
-
-export interface Step {
-  readonly name: string
-  readonly detail: unknown
-}
+import type { Api, Step } from '../types/demo'
 
 function* drain<T>(flow: Flow<T, void>, max = Infinity): Operation<T[]> {
   const out: T[] = []
@@ -259,16 +254,4 @@ export function* walk(url: string, report: (step: Step) => void = () => {}): Ope
   note('last request id', client.$lastRequestId())
 
   return steps
-}
-
-if (import.meta.main) {
-  const url = process.argv[2] ?? 'http://127.0.0.1:3000'
-
-  unwrap(
-    await run(function* () {
-      yield* walk(url, step => {
-        console.log(`• ${step.name}:`, JSON.stringify(step.detail))
-      })
-    }),
-  )
 }

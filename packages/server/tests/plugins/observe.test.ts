@@ -1,8 +1,9 @@
 import { DbAdapter } from 'db:core'
-import { createServer, Edge, Observe } from 'server:core'
+import { action, createServer, Edge, Observe, service } from 'server:core'
 import { ObservePlugin } from 'server:plugins'
 import { attempt, fork, run, sleep, until } from 'std:effect'
 import { unwrap } from 'std:result'
+import type { AnyType } from 'std:shared'
 
 import { describe, expect, it } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -11,8 +12,29 @@ import { join } from 'node:path'
 
 import { SqliteAdapter } from 'db:impl/sqlite'
 import { BunEdge } from 'server:impl/edge/bun'
+import { z } from 'zod'
 
 import { storage, todos } from '../helpers'
+
+/** A socket whose whole life is one span — the frames inside it are events hanging off it. */
+const chat = service('chat', {
+  room: action.socket(
+    { protocol: 'chat', receives: z.object({ text: z.string() }) },
+    function* (socket) {
+      const messages = yield* socket.messages
+
+      for (;;) {
+        const step = yield* messages.next()
+
+        if (step.done) {
+          return
+        }
+
+        yield* socket.send({ t: 'echo', text: step.value.text })
+      }
+    },
+  ),
+})
 
 describe('observe — what happened is a db row', () => {
   it('an edge request captures redacted headers plus the input/output bodies', async () => {
@@ -22,7 +44,7 @@ describe('observe — what happened is a db row', () => {
         const server = yield* createServer({
           services: [todos],
           edge: BunEdge,
-          plugins: [ObservePlugin.use({ batch: { ms: 10 } })],
+          plugins: [ObservePlugin.use({ batch: { waitMs: 10 } })],
         })
         yield* server.start()
 
@@ -75,7 +97,7 @@ describe('observe — what happened is a db row', () => {
         yield* storage()
         const server = yield* createServer({
           services: [todos],
-          plugins: [ObservePlugin.use({ batch: { ms: 10 } })],
+          plugins: [ObservePlugin.use({ batch: { waitMs: 10 } })],
         })
         yield* server.call(todos, 'create', { title: 'observed' })
         yield* attempt(server.call(todos, 'explode', { code: 'todo.kaput' }))
@@ -130,6 +152,8 @@ describe('observe — what happened is a db row', () => {
         expect(view3!.events.map(event => `${event.kind}:${event.name}`)).toEqual([
           'emit:todo.created',
         ])
+        // …and it hangs off the span that emitted it, so exporters can place it in the trace
+        expect(view3!.events[0]!.span_id).toBe(outer!.span_id)
         expect(nested.lane).toBe('todos')
 
         const stats = yield* Observe.actions.stats()
@@ -140,13 +164,105 @@ describe('observe — what happened is a db row', () => {
     )
   })
 
+  it('the console manifest is ozaco/2 — what @ozaco/client requires to bootstrap', async () => {
+    unwrap(
+      await run(function* () {
+        yield* storage()
+        const server = yield* createServer({
+          services: [todos],
+          edge: BunEdge,
+          plugins: [ObservePlugin.use({ console: true, batch: { waitMs: 10 } })],
+        })
+        const info = yield* server.start({ port: 0 })
+
+        const manifest = (yield* until(
+          fetch(`${info.url}/_observe/api/manifest`).then(response => response.json()),
+        )) as AnyType
+        expect(manifest.manifest).toBe('ozaco/2')
+        const observe = manifest.services.find((entry: AnyType) => entry.name === 'observe')
+        expect(observe.actions.map((entry: AnyType) => entry.action)).toContain('live')
+
+        yield* server.stop()
+      }),
+    )
+  })
+
+  it('socket frames land as events bound to the session span', async () => {
+    unwrap(
+      await run(function* () {
+        yield* storage()
+        const server = yield* createServer({
+          services: [chat],
+          edge: BunEdge,
+          plugins: [ObservePlugin.use({ batch: { waitMs: 10 } })],
+        })
+        const info = yield* server.start({ port: 0 })
+
+        yield* until(
+          new Promise<void>((resolve, reject) => {
+            const ws = new WebSocket(`${info.url!.replace('http', 'ws')}/chat/room`)
+            ws.addEventListener('open', () => ws.send(JSON.stringify({ text: 'hi there' })))
+            ws.addEventListener('message', () => {
+              ws.close()
+              resolve()
+            })
+            ws.addEventListener('error', () => reject(new Error('socket error')))
+          }),
+        )
+        yield* sleep(60)
+
+        const page = yield* Observe.actions.query({})
+        const session = page.requests.find(row => row.socket === '/chat/room')
+        expect(session).toBeDefined()
+
+        const view = yield* Observe.actions.request(session!.request_id)
+        // ONE span for the whole session — every frame is an event under it
+        const span = view!.spans.find(entry => entry.name === 'WS /chat/room')
+        expect(span).toBeDefined()
+        expect(view!.events.map(event => event.kind)).toEqual(['socket-in', 'socket-out'])
+
+        for (const event of view!.events) {
+          expect(event.span_id).toBe(span!.span_id)
+          expect(event.name).toBe('/chat/room')
+        }
+        expect(view!.events[0]!.data).toEqual({ text: 'hi there' })
+
+        yield* server.stop()
+      }),
+    )
+  })
+
+  it('store: a kind turned off never becomes a row; the rest still land', async () => {
+    unwrap(
+      await run(function* () {
+        yield* storage()
+        const server = yield* createServer({
+          services: [todos],
+          plugins: [
+            ObservePlugin.use({ batch: { waitMs: 10 }, store: { logs: false, events: false } }),
+          ],
+        })
+        // nested → create: a request, two spans, one log line ('creating'), one emit event
+        yield* server.call(todos, 'nested', { title: 'quiet' })
+
+        const page = yield* Observe.actions.query({})
+        expect(page.requests).toHaveLength(1)
+
+        const view = yield* Observe.actions.request(page.requests[0]!.request_id)
+        expect(view!.spans.map(span => span.name)).toEqual(['todos.nested', 'todos.create'])
+        expect(view!.logs).toHaveLength(0)
+        expect(view!.events).toHaveLength(0)
+      }),
+    )
+  })
+
   it('watch() streams requests as they finish; prune() forgets the old ones', async () => {
     unwrap(
       await run(function* () {
         yield* storage()
         const server = yield* createServer({
           services: [todos],
-          plugins: [ObservePlugin.use({ batch: { ms: 10 } })],
+          plugins: [ObservePlugin.use({ batch: { waitMs: 10 } })],
         })
         const live = yield* Observe.actions.watch({ status: 'failed' })
         const seen = yield* fork(function* () {
@@ -178,7 +294,7 @@ describe('observe — what happened is a db row', () => {
             plugins: [
               ObservePlugin.use({
                 db: SqliteAdapter.use({ path: join(dir, 'observe.sqlite') }),
-                batch: { ms: 10 },
+                batch: { waitMs: 10 },
               }),
             ],
           })

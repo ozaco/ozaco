@@ -106,23 +106,22 @@ export const observeService = service(
     ),
     manifest: action.query(
       {
-        output: z.looseObject({ manifest: z.literal('ozaco/1') }),
+        output: z.looseObject({ manifest: z.literal('ozaco/2') }),
         route: { method: 'GET', path: '/_observe/api/manifest' },
         description:
-          'An ozaco/1 manifest of just this service — the console bootstraps its client from it, docs plugin or not',
+          'An ozaco/2 manifest of just this service — the console bootstraps its client from it, docs plugin or not',
       },
       function* () {
         const kernel = yield* Server.context.expect()
         const def = kernel.registry.services.get('observe')
 
         return {
-          manifest: 'ozaco/1',
+          manifest: 'ozaco/2',
           name: kernel.name,
           version: kernel.version,
           instance: kernel.instance,
           services: def ? [serviceDocOf(def, [])] : [],
           errors: STATUS_OF,
-          sockets: [],
           observe: { console: '/_observe' },
           docs: { path: '/_observe/api', openapi: '/docs/openapi.json' },
         } as AnyType

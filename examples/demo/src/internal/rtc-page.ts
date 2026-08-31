@@ -11,10 +11,10 @@
  * It also REPORTS itself: `peer.metrics` + the `peer.events` collected since the last report go
  * back over the signaling socket every few seconds (and once more when a session ends), where
  * the `rtc.report` action turns them into observe rows, spans and an `rtc.metrics` event — so a
- * browser-to-browser call is visible in the server console at `/_ozaco` and in any OTLP /
+ * browser-to-browser call is visible in the server console at `/_observe` and in any
  * OpenObserve exporter that is installed.
  */
-import type { Queue, Task } from 'std:effect'
+import type { Queue } from 'std:effect'
 import { attempt, createQueue, fork, race, run, sleep, until } from 'std:effect'
 import { install } from 'std:plugin'
 import { isFailure } from 'std:result'
@@ -24,6 +24,8 @@ import { Rtc } from 'std:webrtc'
 import { Ws } from 'std:ws'
 
 import { JsonCodec } from 'std:codec/impl/json'
+
+import type { Control, Session } from '../types/internal'
 
 const pick = (selector: string) => document.querySelector(selector) as AnyType
 
@@ -41,21 +43,6 @@ const say = (from: 'you' | 'them', text: string) => {
 
 // DOM events are synchronous — they drop outgoing lines here and an effect pump sends them
 const outgoing = createQueue<string, void>()
-
-/** A frame the RELAY sends about the session itself; everything else is signaling. */
-interface Control {
-  t?: string
-  polite?: boolean
-  epoch?: number
-}
-
-/** The live peer session for ONE pairing epoch. */
-interface Session {
-  epoch: number
-  /** signaling frames of this epoch, fed by the control loop into the peer's signal */
-  inbound: Queue<unknown, void>
-  task: Task<unknown>
-}
 
 /** How often a live session reports its metrics (and samples `getStats`). */
 const REPORT_MS = 5000

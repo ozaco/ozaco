@@ -19,7 +19,7 @@ describe('messages flow', () => {
           yield* install(Ws)
 
           const connection = yield* Ws.actions.connect(`ws://localhost:${server.port}`)
-          yield* connection.send({ kind: 'greeting', text: 'merhaba', n: 42 })
+          yield* connection.send({ kind: 'greeting', text: 'hello', n: 42 })
 
           const subscription = yield* connection.messages
           const first = yield* subscription.next()
@@ -29,7 +29,7 @@ describe('messages flow', () => {
         }),
       )
 
-      expect(unwrap(outcome)).toEqual({ kind: 'greeting', text: 'merhaba', n: 42 })
+      expect(unwrap(outcome)).toEqual({ kind: 'greeting', text: 'hello', n: 42 })
     } finally {
       server.stop(true)
     }

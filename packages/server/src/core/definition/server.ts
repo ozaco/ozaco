@@ -164,6 +164,7 @@ export const ServerClient: ServerDef.Client = ServerImpl.build({
       t: 'event',
       row: {
         request_id: trace?.request_id ?? null,
+        span_id: trace?.span_id ?? null,
         kind: 'emit',
         name,
         size: null,

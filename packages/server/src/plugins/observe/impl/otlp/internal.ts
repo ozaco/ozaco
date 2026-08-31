@@ -137,6 +137,55 @@ export const otlpSpan = (raw: TraceDef.Span): Record<string, unknown> => {
   }
 }
 
+/** OTLP SpanKind for an observed event: a frame we RECEIVED is CONSUMER, one we SENT (or an
+ * emitted event) is PRODUCER, everything else INTERNAL. */
+const EVENT_KINDS: Record<string, number> = {
+  'socket-in': 5,
+  'socket-out': 4,
+  emit: 4,
+}
+
+/** The console reads inbound frames as `→ in` and outbound as `← out` — the trace says the same. */
+const eventSpanName = (row: ObserveDef.EventRow): string =>
+  row.kind === 'socket-in'
+    ? `WS → ${row.name}`
+    : row.kind === 'socket-out'
+      ? `WS ← ${row.name}`
+      : `${row.kind} ${row.name}`
+
+/**
+ * An observed event as a POINT-IN-TIME span (`ts` to `ts`) under the span it happened in — the
+ * socket SESSION span for WS frames, the emitting dispatch for `emit`. Without this a chatty
+ * socket is invisible in the trace: its frames are events, and only spans reach `v1/traces`.
+ *
+ * `seq` disambiguates events that share a millisecond (span ids must be unique per trace).
+ */
+export const otlpEventSpan = (
+  row: ObserveDef.EventRow,
+  seq: number,
+  withData: boolean,
+): Record<string, unknown> => {
+  const at = nanos(row.ts)
+
+  return {
+    traceId: traceIdOf(row.request_id ?? ''),
+    spanId: fnv(`${row.request_id}|${row.span_id}|${row.kind}|${row.ts}|${seq}`, 16),
+    ...(row.span_id ? { parentSpanId: spanIdOf(row.span_id) } : {}),
+    name: eventSpanName(row),
+    kind: EVENT_KINDS[row.kind] ?? 1,
+    startTimeUnixNano: at,
+    endTimeUnixNano: at,
+    attributes: attributesOf({
+      'ozaco.kind': 'event',
+      'ozaco.event': row.kind,
+      'ozaco.name': row.name,
+      'ozaco.size': row.size,
+      ...(withData ? { 'ozaco.data': row.data } : {}),
+    }),
+    status: { code: 1 },
+  }
+}
+
 const SEVERITY: Record<ObserveDef.Level, { number: number; text: string }> = {
   debug: { number: 5, text: 'DEBUG' },
   info: { number: 9, text: 'INFO' },

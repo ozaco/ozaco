@@ -9,8 +9,8 @@ import { JsonCodec } from 'std:codec/impl/json'
 
 const encoder = new TextEncoder()
 
-const TEXT_BODY = 'merhaba dünya — çok güzel'
-const JSON_BODY = { kind: 'greeting', text: 'merhaba', n: 42 }
+const TEXT_BODY = 'hello world — café crème'
+const JSON_BODY = { kind: 'greeting', text: 'hello', n: 42 }
 
 const server = Bun.serve({
   port: 0,

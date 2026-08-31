@@ -5,25 +5,55 @@ import type { AnyType } from 'std:shared'
 
 export namespace ObservePluginDef {
   export interface Retention {
-    /** how long request/span rows are kept. Default 7 days. */
+    /** how long request, span and failure rows are kept. Default 7 days. */
     readonly requestsMs?: number | undefined
 
-    /** how long log/event rows are kept. Default 1 day. */
+    /** how long log and event rows are kept. Default 1 day. */
     readonly logsMs?: number | undefined
 
-    /** how often the pruner runs. Default 10 minutes; 0 = never. */
-    readonly everyMs?: number | undefined
+    /** how often the pruner deletes expired rows. Default 10 minutes; 0 = never prune. */
+    readonly pruneEveryMs?: number | undefined
   }
 
   export interface Batch {
     /** rows per insert batch. Default 200. */
     readonly size?: number | undefined
 
-    /** max time a row waits in memory. Default 50. */
-    readonly ms?: number | undefined
+    /** longest a row waits in memory before its batch is written. Default 50. */
+    readonly waitMs?: number | undefined
 
     /** rows held before the oldest are dropped (`stats().dropped`). Default 10 000. */
     readonly maxPending?: number | undefined
+  }
+
+  /** Which kinds this node RECORDS — a kind set to `false` is skipped before it ever queues,
+   * so it reaches neither this store nor the cluster's collector. Exporters observe through
+   * their own hooks and still see everything. Default: every kind. */
+  export interface Store {
+    readonly requests?: boolean | undefined
+    readonly spans?: boolean | undefined
+    readonly logs?: boolean | undefined
+    readonly failures?: boolean | undefined
+    readonly events?: boolean | undefined
+  }
+
+  /** One store for the whole cluster: service nodes send their rows to a collector node over
+   * the carrier, the collector writes them all. Needs a `NetworkCarrier`. */
+  export interface Cluster {
+    /** Ship this node's rows to the cluster's collector instead of writing them here —
+     * `'and-local'` sends AND keeps a local copy. Default false. */
+    readonly sendToCollector?: boolean | 'and-local' | undefined
+
+    /** While sending and no collector is alive: `'local'` writes the rows here after all,
+     * `'drop'` discards them. Default `'local'`. */
+    readonly whenCollectorDown?: 'local' | 'drop' | undefined
+
+    /** THIS node is the collector: every peer's rows land in its store (the gateway, or a
+     * dedicated observability node). Default false. */
+    readonly isCollector?: boolean | undefined
+
+    /** collector presence beat. Default 5000 (a collector unseen for 3× is down). */
+    readonly heartbeatMs?: number | undefined
   }
 
   export interface Options {
@@ -35,25 +65,16 @@ export namespace ObservePluginDef {
     /** Serve the dev console at `/_observe` (needs an edge). Default false. */
     readonly console?: boolean | undefined
 
-    /** Mirror every request/failure/log line to stdout (dev). Default false. */
-    readonly mirror?: boolean | undefined
+    /** Print every request/failure/log line to stdout as it happens (dev). Default false. */
+    readonly stdout?: boolean | undefined
+
+    /** Which kinds this node records. Default: all of them. */
+    readonly store?: Store | undefined
     readonly retention?: Retention | undefined
     readonly batch?: Batch | undefined
 
-    /** Send every row to the cluster's collector over the carrier (`true`: forward only,
-     * `'both'`: forward AND keep a local copy). Needs a `NetworkCarrier`. Default false. */
-    readonly forward?: boolean | 'both' | undefined
-
-    /** While forwarding and no collector is alive: `local` writes here, `drop` discards.
-     * Default `local`. */
-    readonly fallback?: 'local' | 'drop' | undefined
-
-    /** Receive forwarded rows from the cluster into this store (the gateway, or a dedicated
-     * observability node). Default false. */
-    readonly collect?: boolean | undefined
-
-    /** collector heartbeat period. Default 5000 (a collector unseen for 3× is gone). */
-    readonly collectorHeartbeatMs?: number | undefined
+    /** Cluster mode: send rows to a collector node, or be that collector. */
+    readonly cluster?: Cluster | undefined
   }
 
   /** A unit of work for the store scope (the private db lives in its own scope). */
@@ -65,14 +86,22 @@ export namespace ObservePluginDef {
 
   export interface ResolvedBatch {
     readonly size: number
-    readonly ms: number
+    readonly waitMs: number
     readonly maxPending: number
   }
 
   export interface ResolvedRetention {
     readonly requestsMs: number
     readonly logsMs: number
-    readonly everyMs: number
+    readonly pruneEveryMs: number
+  }
+
+  export interface ResolvedStore {
+    readonly requests: boolean
+    readonly spans: boolean
+    readonly logs: boolean
+    readonly failures: boolean
+    readonly events: boolean
   }
 
   export interface State {
@@ -81,7 +110,8 @@ export namespace ObservePluginDef {
     readonly stats: { recorded: number; dropped: number }
     readonly batch: ResolvedBatch
     readonly retention: ResolvedRetention
-    readonly mirror: boolean
+    readonly store: ResolvedStore
+    readonly stdout: boolean
     readonly forward: false | 'forward' | 'both'
     readonly fallback: 'local' | 'drop'
     readonly collect: boolean

@@ -28,7 +28,7 @@ import { requests, spans } from './utils/tables'
  * The observe store: every request, span, log line, failure and event the kernel reports becomes
  * a row in the `_ob_*` tables of a private `DbClient` (over the app's adapter, or the given
  * one), written in batches off the request path. `Observe.actions.request/query/watch` read it
- * back; `console: true` serves the dev console at `/_observe`; `mirror: true` echoes to stdout.
+ * back; `console: true` serves the dev console at `/_observe`; `stdout: true` echoes each row.
  */
 export const ObservePlugin = Observe.implement<
   ObserveDef.Options,
@@ -52,19 +52,31 @@ export const ObservePlugin = Observe.implement<
       stats: { recorded: 0, dropped: 0 },
       batch: {
         size: options?.batch?.size ?? 200,
-        ms: options?.batch?.ms ?? 50,
+        waitMs: options?.batch?.waitMs ?? 50,
         maxPending: options?.batch?.maxPending ?? 10_000,
       },
       retention: {
         requestsMs: options?.retention?.requestsMs ?? 7 * DAY_MS,
         logsMs: options?.retention?.logsMs ?? DAY_MS,
-        everyMs: options?.retention?.everyMs ?? 10 * 60 * 1000,
+        pruneEveryMs: options?.retention?.pruneEveryMs ?? 10 * 60 * 1000,
       },
-      mirror: options?.mirror ?? false,
-      forward: options?.forward === true ? 'forward' : (options?.forward ?? false),
-      fallback: options?.fallback ?? 'local',
-      collect: options?.collect ?? false,
-      collectorHeartbeatMs: options?.collectorHeartbeatMs ?? 5000,
+      store: {
+        requests: options?.store?.requests ?? true,
+        spans: options?.store?.spans ?? true,
+        logs: options?.store?.logs ?? true,
+        failures: options?.store?.failures ?? true,
+        events: options?.store?.events ?? true,
+      },
+      stdout: options?.stdout ?? false,
+      forward:
+        options?.cluster?.sendToCollector === true
+          ? 'forward'
+          : options?.cluster?.sendToCollector === 'and-local'
+            ? 'both'
+            : false,
+      fallback: options?.cluster?.whenCollectorDown ?? 'local',
+      collect: options?.cluster?.isCollector ?? false,
+      collectorHeartbeatMs: options?.cluster?.heartbeatMs ?? 5000,
       collectorSeenAt: 0,
       cluster: { forwarded: 0, received: 0, fellBack: 0 },
       flusher: null,
@@ -73,7 +85,7 @@ export const ObservePlugin = Observe.implement<
     if ((state.forward !== false || state.collect) && !kernel.carrier) {
       return yield* fail(
         ServerErrors.Configuration,
-        'Observe forward/collect need a carrier (createServer installs it before plugins)',
+        'Observe cluster mode needs a carrier (createServer installs it before plugins)',
       )
     }
     yield* StateRef.set(state)
@@ -85,10 +97,10 @@ export const ObservePlugin = Observe.implement<
     if (state.forward !== false || state.collect) {
       yield* fork(() => runCluster(kernel, state))
     }
-    if (state.retention.everyMs > 0) {
+    if (state.retention.pruneEveryMs > 0) {
       yield* fork(function* () {
         for (;;) {
-          yield* sleep(state.retention.everyMs)
+          yield* sleep(state.retention.pruneEveryMs)
           yield* attempt(() =>
             exec(state, db =>
               pruneBefore(db, {
@@ -104,7 +116,7 @@ export const ObservePlugin = Observe.implement<
       name: 'observe',
       *observe(event) {
         enqueue(state, event)
-        if (state.mirror) {
+        if (state.stdout) {
           mirror(event)
         }
       },

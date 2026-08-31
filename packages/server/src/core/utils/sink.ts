@@ -8,7 +8,7 @@ import type { Helpers } from '../types/helpers'
 /** A batching sink for exporters: `push` rows, they leave by size or age, one batch at a time. */
 export const createSink = <T>(options: Helpers.SinkOptions<T>): Helpers.Sink<T> => {
   const size = options.size ?? 200
-  const ms = options.ms ?? 1000
+  const waitMs = options.waitMs ?? 1000
   const maxPending = options.maxPending ?? 10_000
   const pending: T[] = []
   const stats = { sent: 0, dropped: 0, failed: 0 }
@@ -58,7 +58,7 @@ export const createSink = <T>(options: Helpers.SinkOptions<T>): Helpers.Sink<T> 
     *start() {
       yield* fork(function* () {
         for (;;) {
-          yield* sleep(ms)
+          yield* sleep(waitMs)
           if (pending.length > 0) {
             yield* flush()
           }
