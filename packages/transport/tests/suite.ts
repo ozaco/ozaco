@@ -598,6 +598,72 @@ export const runTransportSuite = (target: TransportTarget): void => {
       expect(await checksum(received)).toBe(expected)
     })
 
+    it('stream: one huge write is framed to the budget, whatever the backend accepts', async () => {
+      // the caller writes 4 MB in ONE go; what travels is `frameBytes` at a time, so a source
+      // of any size (100 MB, 1 GB, 10 GB) rides the same bounded frames
+      const frameBytes = 64 * 1024
+      const payload = bytes(4 * 1024 * 1024)
+      const expected = await checksum(payload)
+      const seen = unwrap(
+        await run(function* () {
+          yield* installIo()
+          yield* target.install()
+          const topic = unique('huge')
+
+          const reader = yield* fork(function* () {
+            const readable = yield* Transport.actions.readable(topic, { credit: 8, frameBytes })
+
+            return yield* until(
+              (async () => {
+                const stream = readable.getReader()
+                const parts: Uint8Array[] = []
+                let largest = 0
+
+                for (;;) {
+                  // oxlint-disable-next-line no-await-in-loop
+                  const step = await stream.read()
+
+                  if (step.done) {
+                    break
+                  }
+
+                  largest = Math.max(largest, step.value.length)
+                  parts.push(step.value)
+                }
+
+                return { parts, largest }
+              })(),
+            )
+          })
+
+          const writable = yield* Transport.actions.writable(topic, { credit: 8, frameBytes })
+          yield* until(
+            (async () => {
+              const writer = writable.getWriter()
+              await writer.write(payload)
+              await writer.close()
+            })(),
+          )
+
+          return yield* reader
+        }),
+      )
+      const joined = new Uint8Array(seen.parts.reduce((sum, part) => sum + part.length, 0))
+      let offset = 0
+
+      for (const part of seen.parts) {
+        joined.set(part, offset)
+        offset += part.length
+      }
+
+      expect(joined.length).toBe(payload.length)
+      expect(await checksum(joined)).toBe(expected)
+      // one write, many frames — none of them the whole thing (a backend with a tighter
+      // payload limit clamps the budget further, so the count is a floor, not an equality)
+      expect(seen.largest).toBeLessThanOrEqual(frameBytes)
+      expect(seen.parts.length).toBeGreaterThanOrEqual(payload.length / frameBytes)
+    })
+
     it.skipIf(!target.expect.groups)(
       'group: the same group name under two subscription prefixes is two groups',
       async () => {

@@ -5,9 +5,11 @@ import type { Result } from 'std:result'
 import { fail, isFailure } from 'std:result'
 
 import {
+  CHUNK_HEADER_ALLOWANCE,
   CREDIT_ANNOUNCE_MS,
   CREDIT_PREFIX,
   DEFAULT_CREDIT,
+  DEFAULT_FRAME_BYTES,
   DEFAULT_TIMEOUT_MS,
   HEADERS,
   KINDS,
@@ -333,15 +335,47 @@ export function* readableLane(
   })
 }
 
+/**
+ * How many bytes one byte-lane frame may carry: the caller's `frameBytes` (or 256 KiB),
+ * clamped by what the backend accepts — a stream frame that fits the wire never needs the
+ * driver's chunk/reassemble path, which would hold the whole write in memory on both sides.
+ */
+function* frameBytesOf(
+  driver: TransportDef.Driver,
+  given?: TransportDef.LaneOptions,
+): Operation<number> {
+  const limit = driver.payloadLimit
+    ? yield* driver.payloadLimit()
+    : driver.capabilities.maxPayloadBytes
+  const ceiling = limit === null ? Infinity : Math.max(1, limit - CHUNK_HEADER_ALLOWANCE)
+
+  return Math.max(1, Math.min(given?.frameBytes ?? DEFAULT_FRAME_BYTES, ceiling))
+}
+
 /** `writable`: a platform sink over a byte lane — each `write` resolves once its chunk is on
- * the wire (credit-paced), `close` sends the end frame, `abort` a fail frame. */
+ * the wire (credit-paced), `close` sends the end frame, `abort` a fail frame. A write bigger
+ * than one frame is sliced (views, no copy) and paced frame by frame, so a source of ANY size
+ * streams through with `credit * frameBytes` in flight. */
 export function* writableLane(
   runtime: Helpers.Runtime,
   topic: string,
   given?: TransportDef.LaneOptions,
 ): Operation<WritableStream<Uint8Array>> {
+  const frameBytes = yield* frameBytesOf(runtime.driver, given)
   const producer = yield* openProducer(runtime, topic, given)
   const commands = createQueue<Helpers.WriteCommand, void>()
+
+  /** One write on the wire: whole when it fits a frame, sliced when it does not. */
+  const sendChunk = function* (chunk: Uint8Array): Operation<void> {
+    if (chunk.length <= frameBytes) {
+      yield* producer.send(chunk)
+      return
+    }
+
+    for (let offset = 0; offset < chunk.length; offset += frameBytes) {
+      yield* producer.send(chunk.subarray(offset, Math.min(offset + frameBytes, chunk.length)))
+    }
+  }
 
   yield* fork(function* () {
     for (;;) {
@@ -354,7 +388,7 @@ export function* writableLane(
         if (command.failure) {
           yield* producer.abort(command.failure)
         } else if (command.chunk) {
-          yield* producer.send(command.chunk)
+          yield* sendChunk(command.chunk)
         } else {
           yield* producer.end(undefined)
         }

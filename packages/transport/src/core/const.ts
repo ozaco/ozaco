@@ -44,5 +44,9 @@ export const CHUNK_HEADER_ALLOWANCE = 1024
 /** How long a subscriber keeps a partial chunk assembly before forgetting it. */
 export const CHUNK_TIMEOUT_MS = 30_000
 export const DEFAULT_CREDIT = 32
+/** Bytes one byte-lane frame carries at most. A `writable` slices every write down to this, so
+ * a stream of ANY size travels in bounded frames (and stays under a backend's payload limit,
+ * which further clamps it) — memory in flight is `credit * frameBytes`, not the payload. */
+export const DEFAULT_FRAME_BYTES = 256 * 1024
 /** How often a lane consumer re-announces credit until the first frame arrives. */
 export const CREDIT_ANNOUNCE_MS = 100

@@ -1,6 +1,6 @@
 {
   "name": "@ozaco/client",
-  "version": "0.4.5",
+  "version": "0.4.6",
   "homepage": "https://ozaco.com/",
   "author": "giveerr (https://github.com/giveerr)",
   "repository": {
@@ -47,7 +47,7 @@
     "@ozaco/transport": "workspace:*",
     "tsdown": "catalog:build",
     "unrun": "catalog:build",
-    "zod": "^4.4.3"
+    "zod": "^4.5.4"
   },
   "peerDependencies": {
     "@ozaco/std": "*"

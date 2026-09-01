@@ -1,8 +1,10 @@
 import type { Flow, Operation, Subscription } from 'std:effect'
-import { attempt, createQueue, fork, sleep } from 'std:effect'
+import { attempt, createQueue, fork, sleep, withResolvers } from 'std:effect'
 import { IO } from 'std:io'
+import type { Result } from 'std:result'
 import { fail, isFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
+import type { WsDef } from 'std:ws'
 import { Ws } from 'std:ws'
 
 import { DEFAULT_REALTIME_SUFFIX } from '../const'
@@ -13,6 +15,11 @@ import type { Helpers } from '../types/helpers'
 import { manifestOf } from './manifest'
 
 const RECONNECT_POLL_MS = 100
+
+/** The close code the edge REFUSES a socket with: the handshake was rejected (a missing,
+ * expired or malformed token). It is a verdict, not an outage — every other application code
+ * (4000–4999 is WHATWG's private range) stays a plain drop and reconnects as usual. */
+const REFUSED_CODE = 4401
 
 /** Where a resource's realtime socket lives: an explicit watch `path` wins, then an
  * EXPLICITLY configured `realtimePath` option (the user knows their topology — a rewriting
@@ -82,8 +89,54 @@ export const watch = <TRow>(
     let since = options?.since
     let cursor = options?.cursor
     let back = options?.back === true
+    const frames = createQueue<Helpers.Frame, AnyType>()
+
+    // --- refusals ---------------------------------------------------------------------------
+    // the socket reconnects by itself, and its retry budget resets on every successful reopen —
+    // but a REFUSED session reopens successfully every time (auth is settled after the upgrade,
+    // in-band) only to be closed again, so redialing it is an endless loop with the caller
+    // parked on `next()` forever. The live socket's close code ends the watch instead.
+    let refused: Result.Failure<unknown> | null = null
+    const refusal = withResolvers<void>('watch:refused')
+    const guarded = new WeakSet<object>()
+
+    /** Chain a refusal check onto the CURRENT socket generation (`native` is the documented
+     * escape hatch; the connection's own handler stays in place and runs first). Called from
+     * `subscribe`, so every generation is guarded before this watch says anything on it. */
+    const guardRefusal = () => {
+      const native: WsDef.SocketLike | undefined = connection.native
+
+      if (!native || guarded.has(native)) {
+        return
+      }
+
+      guarded.add(native)
+      const previous = native.onclose
+
+      // SocketLike is the handler-property shape shared by browser/Bun/Node — this one
+      // CHAINS onto `previous` instead of replacing it
+      // oxlint-disable-next-line unicorn/prefer-add-event-listener
+      native.onclose = event => {
+        previous?.(event)
+        const code = event?.code ?? 0
+
+        if (refused !== null || code !== REFUSED_CODE) {
+          return
+        }
+
+        refused = fail(
+          ClientErrors.Refused,
+          `realtime socket refused: ${code}${event?.reason ? ` ${event.reason}` : ''}`,
+          `ws:${code}`,
+        ) as Result.Failure<unknown>
+        frames.close(refused as AnyType)
+        refusal.resolve()
+      }
+    }
 
     const subscribe = function* (): Operation<void> {
+      guardRefusal()
+
       // in-band auth FIRST on every (re)connect — the server settles it before the watch
       const bearer =
         typeof ctx.options.token === 'function' ? ctx.options.token() : ctx.options.token
@@ -125,7 +178,6 @@ export const watch = <TRow>(
       hooks.register((next, backward) => turns.add({ cursor: next, back: backward === true }))
     }
 
-    const frames = createQueue<Helpers.Frame, AnyType>()
     // pump: every frame of this watch into the queue
     yield* fork(function* () {
       const messages = yield* attempt(connection.messages)
@@ -145,6 +197,12 @@ export const watch = <TRow>(
         }
       }
     })
+    // a refusal is permanent: end the connection for good, or its supervisor would keep
+    // redialing into the same verdict in the background for as long as the scope lives
+    yield* fork(function* () {
+      yield* refusal.operation
+      yield* attempt(() => connection.close())
+    })
     // re-subscribe after every reconnect, resuming from the last token
     yield* fork(function* () {
       let seen = connection.reconnects
@@ -161,6 +219,11 @@ export const watch = <TRow>(
       *next() {
         const step = yield* frames.next()
         if (step.done) {
+          // the server refused this session (4401 = the handshake was rejected): the verdict
+          // itself is the answer — retrying with the same token would only loop
+          if (refused !== null) {
+            return yield* refused
+          }
           if (step.value && isFailure(step.value)) {
             return yield* fail(
               ClientErrors.Closed,

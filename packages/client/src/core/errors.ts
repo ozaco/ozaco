@@ -12,4 +12,5 @@ export const ClientErrors = createTags(
   'decode',
   'timeout',
   'closed',
+  'refused',
 )

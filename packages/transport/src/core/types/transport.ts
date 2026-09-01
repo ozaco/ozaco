@@ -124,6 +124,12 @@ export namespace TransportDef {
     /** How long the producer waits for a consumer to attach before failing `transport.timeout`.
      * Default 5000. */
     readonly timeoutMs?: number | undefined
+    /** Bytes one BYTE-lane frame carries at most (`writable`/`readable`): every write is sliced
+     * to it, so `credit * frameBytes` bounds what a transfer of any size holds in memory.
+     * Default 256 KiB, clamped by the backend's payload limit so stream frames never need the
+     * driver's chunk/reassemble path. Value lanes (`pipe`/`flow`) are NOT re-framed — their
+     * frames are messages. */
+    readonly frameBytes?: number | undefined
   }
 
   /** The close value of a lane as the consumer sees it: the producer's close value, or the
@@ -160,9 +166,18 @@ export namespace TransportDef {
     pipe<T, TClose>(topic: Topic, source: Flow<T, TClose>, options?: LaneOptions): Operation<TClose>
 
     // --- stream -------------------------------------------------------------------------------
-    /** A platform `ReadableStream` of the raw byte chunks a peer writes to the lane. */
+    /**
+     * A platform `ReadableStream` of the raw byte chunks a peer writes to the lane — the plane
+     * for payloads of ANY size (100 MB, 1 GB, 10 GB): frames arrive one pull at a time, so
+     * stream backpressure becomes lane credit and nothing is ever materialized whole.
+     */
     readable(topic: Topic, options?: LaneOptions): Operation<ReadableStream<Uint8Array>>
-    /** A platform `WritableStream`: every chunk travels raw over the lane; `close()` ends it. */
+    /**
+     * A platform `WritableStream`: every chunk travels raw over the lane; `close()` ends it.
+     * Writes larger than `frameBytes` are sliced (no copy) into that many frames, so ONE huge
+     * write costs no more memory in flight than many small ones — a 10 GB source piped in
+     * (`source.pipeTo(writable)`) holds `credit * frameBytes` at a time on either side.
+     */
     writable(topic: Topic, options?: LaneOptions): Operation<WritableStream<Uint8Array>>
 
     // --- package ------------------------------------------------------------------------------
