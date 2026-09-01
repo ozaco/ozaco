@@ -239,6 +239,19 @@ function* subscribeTransient(state: Nats.State, topic: string, group: string | u
   return queue
 }
 
+/** Guard the server's `max_payload`: NATS answers an oversize message by killing the
+ * connection, so refuse it here and name the real problem. */
+function* fits(state: Nats.State, data: Uint8Array) {
+  const max = state.nc.info?.max_payload
+
+  if (typeof max === 'number' && data.length > max) {
+    return yield* fail(
+      TransportErrors.PayloadTooLarge,
+      `payload of ${data.length} bytes exceeds the server's max_payload of ${max}`,
+    )
+  }
+}
+
 export const driver: TransportDef.Driver = {
   capabilities: {
     durable: true,
@@ -254,13 +267,7 @@ export const driver: TransportDef.Driver = {
       return yield* fail(TransportErrors.Closed, 'nats connection drained')
     }
 
-    const max = state.nc.info?.max_payload
-    if (typeof max === 'number' && data.length > max) {
-      return yield* fail(
-        TransportErrors.PayloadTooLarge,
-        `payload of ${data.length} bytes exceeds ${max}`,
-      )
-    }
+    yield* fits(state, data)
 
     if (transient) {
       // core NATS, never stored: a reply goes to the absolute subject the server handed the
@@ -345,6 +352,10 @@ export const driver: TransportDef.Driver = {
     if (state.drained || state.nc.isClosed()) {
       return yield* fail(TransportErrors.Closed, 'nats connection drained')
     }
+
+    // the server closes the connection on an oversize message: say what actually happened
+    // instead of letting it surface as a dropped connection
+    yield* fits(state, data)
 
     const outcome = yield* attempt(
       until(

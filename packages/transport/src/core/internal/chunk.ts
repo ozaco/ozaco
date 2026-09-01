@@ -11,6 +11,10 @@ import type { TransportDef } from '../types/transport'
  * sees it. Parts of one message must reach ONE receiver — a competing-consumer group spreads
  * them over its members, so grouped/durable subscriptions cannot receive chunked messages
  * (their partial assemblies age out after `CHUNK_TIMEOUT_MS`, undelivered).
+ *
+ * This is why the package plane does NOT rely on it: requests are served by a group and native
+ * request/reply carries exactly one reply message, so an oversize request or reply takes the
+ * parcel sideband instead (`internal/parcel.ts`). Chunking is the data/event planes' answer.
  */
 
 const parseChunk = (value: string): { id: string; index: number; count: number } | null => {

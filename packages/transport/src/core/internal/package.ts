@@ -3,27 +3,111 @@ import { attempt, ensure, fork, race, scoped, sleep, withResolvers } from 'std:e
 import { IO } from 'std:io'
 import { fail, isFailure } from 'std:result'
 
-import { CANCEL_PREFIX, DEFAULT_TIMEOUT_MS, HEADERS, INBOX_PREFIX, KINDS } from '../const'
+import {
+  CANCEL_PREFIX,
+  DEFAULT_TIMEOUT_MS,
+  HEADERS,
+  INBOX_PREFIX,
+  KINDS,
+  PARCEL_IDLE_MS,
+} from '../const'
 import { TransportErrors } from '../errors'
 import type { Helpers } from '../types/helpers'
 import type { TransportDef } from '../types/transport'
 
 import { decodeFailure, decodeValue, empty, encodeFailure, encodeValue, toMessage } from './codec'
+import { parcelThreshold, parcelTopic, readParcel, sendParcel, waitOf } from './parcel'
 
 /**
  * The package plane: request/reply carrying a Result. A backend with native request/reply
  * (NATS) answers through the driver; everywhere else core emulates it with a per-request inbox
  * topic (`$inbox.<cid>`) named in the `oz-reply` header. Replies carry `oz-result: ok | fail`;
  * a `fail` reply re-raises on the caller with the responder's tag/message/causes.
+ *
+ * A payload of ANY size travels: what does not fit one backend message rides the parcel
+ * sideband (`internal/parcel.ts`) — the message itself then carries only `oz-parcel: <bytes>`
+ * and the bytes cross on a credit-paced lane addressed by the exchange's correlation id.
  */
 
-/** Parse a reply message into the caller's outcome. */
-function* parseReply<T>(raw: TransportDef.Raw): Operation<T> {
-  if (raw.headers[HEADERS.result] === 'fail') {
-    return yield* yield* decodeFailure(raw)
+/** Fold a parcelled payload back into the message that announced it. */
+function* whole(
+  runtime: Helpers.Runtime,
+  sideband: Helpers.Sideband,
+  raw: TransportDef.Raw,
+): Operation<TransportDef.Raw> {
+  const { cid, direction } = sideband
+  const announced = raw.headers[HEADERS.parcel]
+
+  if (announced === undefined) {
+    return raw
   }
 
-  return yield* decodeValue<T>(raw)
+  const size = Number(announced)
+
+  if (cid === undefined || !Number.isInteger(size) || size < 0) {
+    return yield* fail(
+      TransportErrors.Encoding,
+      `malformed parcel announcement on "${raw.topic}": ${announced}`,
+    )
+  }
+
+  const { [HEADERS.parcel]: _omit, ...headers } = raw.headers
+
+  return { ...raw, data: yield* readParcel(runtime, parcelTopic(cid, direction), size), headers }
+}
+
+/** Parse a reply message into the caller's outcome. */
+function* parseReply<T>(
+  runtime: Helpers.Runtime,
+  cid: string,
+  raw: TransportDef.Raw,
+): Operation<T> {
+  const reply = yield* whole(runtime, { cid, direction: 'out' }, raw)
+
+  if (reply.headers[HEADERS.result] === 'fail') {
+    return yield* yield* decodeFailure(reply)
+  }
+
+  return yield* decodeValue<T>(reply)
+}
+
+/** Answer one request: the payload rides the reply when it fits one message, otherwise the
+ * reply announces a parcel and the bytes follow on the sideband (the caller attaches the moment
+ * it reads the announcement). */
+function* respond(
+  runtime: Helpers.Runtime,
+  reply: Helpers.Reply,
+  answer: Helpers.Answer,
+): Operation<void> {
+  const { driver } = runtime
+  const { data, headers } = answer
+  const { topic, cid, waitMs } = reply
+
+  const publish = function* (body: Uint8Array, extra: TransportDef.Headers) {
+    yield* driver.publish({
+      topic,
+      data: body,
+      headers: { ...headers, ...extra },
+      transient: true,
+      reply: true,
+    })
+  }
+
+  const threshold = yield* parcelThreshold(driver)
+
+  if (cid === undefined || threshold === null || data.length <= threshold) {
+    yield* publish(data, {})
+    return
+  }
+
+  yield* sendParcel(runtime, {
+    topic: parcelTopic(cid, 'out'),
+    data,
+    waitMs,
+    *ready() {
+      yield* publish(empty(), { [HEADERS.parcel]: String(data.length) })
+    },
+  })
 }
 
 /**
@@ -38,7 +122,21 @@ export function* requestPackage<TResult, TArgs>(
   const { topic, args, options: given } = call
   const timeoutMs = given?.timeoutMs ?? DEFAULT_TIMEOUT_MS
   const cid = yield* IO.actions.uuid()
-  const encoded = yield* encodeValue(args, { ...given?.headers, [HEADERS.cid]: cid })
+  const encoded = yield* encodeValue(args, {
+    ...given?.headers,
+    [HEADERS.cid]: cid,
+    // the owner holds an oversize reply open for this long and no longer
+    [HEADERS.wait]: String(timeoutMs),
+  })
+  const threshold = yield* parcelThreshold(driver)
+  const parcelled = threshold !== null && encoded.data.length > threshold
+  // what the RPC message itself carries: the payload, or only the announcement of its parcel
+  const body = parcelled
+    ? {
+        data: empty(),
+        headers: { ...encoded.headers, [HEADERS.parcel]: String(encoded.data.length) },
+      }
+    : encoded
 
   return yield* scoped(function* () {
     let settled = false
@@ -57,22 +155,47 @@ export function* requestPackage<TResult, TArgs>(
     })
 
     const outcome = yield* attempt(function* () {
+      if (parcelled) {
+        // the sideband opens BEFORE the request announces it, so the owner's very first credit
+        // announcement is heard; it then feeds frames for as long as this request lives
+        const opened = withResolvers<void>('parcel opened')
+
+        yield* fork(function* () {
+          // attempt, not raise: a sideband that fails takes this request down with a timeout or
+          // the owner's report of the missing payload, never the caller's whole scope
+          yield* attempt(() =>
+            sendParcel(runtime, {
+              topic: parcelTopic(cid, 'in'),
+              data: encoded.data,
+              waitMs: PARCEL_IDLE_MS,
+              *ready() {
+                opened.resolve(undefined)
+              },
+            }),
+          )
+          // …and a lane that never opened must not park the caller here either
+          opened.resolve(undefined)
+        })
+
+        yield* opened.operation
+      }
+
       if (driver.request) {
         const raw = yield* driver.request({
           topic,
-          data: encoded.data,
-          headers: encoded.headers,
+          data: body.data,
+          headers: body.headers,
           timeoutMs,
         })
-        return yield* parseReply<TResult>(raw)
+        return yield* parseReply<TResult>(runtime, cid, raw)
       }
 
       const inbox = INBOX_PREFIX + cid
       const replies = yield* driver.subscribe(inbox, { transient: true })
       const receipts = yield* driver.publish({
         topic,
-        data: encoded.data,
-        headers: { ...encoded.headers, [HEADERS.reply]: inbox },
+        data: body.data,
+        headers: { ...body.headers, [HEADERS.reply]: inbox },
         transient: true,
       })
 
@@ -102,7 +225,7 @@ export function* requestPackage<TResult, TArgs>(
         return yield* fail(TransportErrors.Closed, `request to "${topic}": inbox closed`)
       }
 
-      return yield* parseReply<TResult>(winner.step.value)
+      return yield* parseReply<TResult>(runtime, cid, winner.step.value)
     })
     // settled either way (a timeout is an outcome too — the handler keeps running on purpose:
     // the caller stopped waiting, it did not cancel); only a HALT leaves `settled` false
@@ -131,28 +254,28 @@ export function* servePackage<TArgs, TResult>(
       return
     }
 
+    const cid = raw.headers[HEADERS.cid]
+    const reply: Helpers.Reply = { topic: replyTo, cid, waitMs: waitOf(raw.headers[HEADERS.wait]) }
+
     const outcome = yield* attempt(function* () {
-      const message = yield* toMessage<TArgs>(raw)
+      // a parcelled request is collected here, inside the answer: a failure to receive it is
+      // reported to the caller like any other, instead of leaving it waiting
+      const message = yield* toMessage<TArgs>(yield* whole(runtime, { cid, direction: 'in' }, raw))
       return yield* handler(message.value, message)
     })
+
     if (isFailure(outcome)) {
-      yield* driver.publish({
-        topic: replyTo,
+      yield* respond(runtime, reply, {
         data: yield* encodeFailure(outcome),
         headers: { [HEADERS.kind]: KINDS.value, [HEADERS.result]: 'fail' },
-        transient: true,
-        reply: true,
       })
       return
     }
 
     const encoded = yield* encodeValue(outcome.value)
-    yield* driver.publish({
-      topic: replyTo,
+    yield* respond(runtime, reply, {
       data: encoded.data,
       headers: { ...encoded.headers, [HEADERS.result]: 'ok' },
-      transient: true,
-      reply: true,
     })
   }
 
@@ -190,7 +313,10 @@ export function* servePackage<TArgs, TResult>(
       const cid = step.value.headers[HEADERS.cid]
 
       const running = yield* fork(function* () {
-        yield* answer(step.value)
+        // the answer itself may fail to LEAVE (the caller went away while its oversize reply
+        // was still crossing the sideband, the backend drained): that is this exchange's
+        // problem, never the serving loop's
+        yield* attempt(() => answer(step.value))
         if (cid !== undefined) {
           inflight.delete(cid)
         }

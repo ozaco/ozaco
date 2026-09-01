@@ -77,6 +77,24 @@ const math = service('math', {
   announce: action.mutation({ input: z.object({ what: z.string() }) }, function* ({ input, ctx }) {
     yield* ctx.emit('math.announced', input.what)
   }),
+  /** A file the caller sends as a plain VALUE (a base64 body, not a branded stream) — the shape
+   * an upload really has when it rides an action's input. */
+  upload: action.mutation(
+    {
+      input: z.object({ name: z.string(), body: z.string() }),
+      output: z.object({ name: z.string(), size: z.number(), head: z.string() }),
+    },
+    function* ({ input }) {
+      return { name: input.name, size: input.body.length, head: input.body.slice(0, 8) }
+    },
+  ),
+  /** …and the same size coming back the other way. */
+  download: action.query(
+    { input: z.object({ size: z.number() }), output: z.string() },
+    function* ({ input }) {
+      return 'd'.repeat(input.size)
+    },
+  ),
 })
 const seen: string[] = []
 
@@ -193,6 +211,57 @@ export const runCarrierSuite = (target: CarrierTarget): void => {
             // observability: the remote hop is a carrier span under the local request
             const kernel = yield* useContext(Server)
             expect(kernel.carrier).not.toBeNull()
+          })
+          yield* remote.halt()
+        }),
+      )
+    })
+
+    it('carries a dispatch VALUE far over the backend message limit, both ways', async () => {
+      // the upload case: 6 MB of input inside the action's own value, answered with 6 MB of
+      // output — over NATS that is six times the server's default 1 MB max_payload, and the
+      // rpc topic is served by a GROUP, so nothing about it can be chunked message by message
+      const size = 6 * 1024 * 1024
+      unwrap(
+        await run(function* () {
+          const ready = createQueue<void, void>()
+          const remote = yield* fork(() =>
+            scoped(function* () {
+              yield* storage()
+              yield* target.transport()
+              yield* createServer({
+                services: [math],
+                carrier: NetworkCarrier,
+                name: 'app',
+                instance: 'b',
+              })
+              ready.add(undefined)
+              yield* sleep(60_000)
+            }),
+          )
+          yield* ready.next()
+          yield* scoped(function* () {
+            yield* storage()
+            yield* target.transport()
+            const server = yield* createServer({
+              services: [front],
+              carrier: NetworkCarrier,
+              name: 'app',
+              instance: 'a',
+              timeoutMs: 60_000,
+            })
+            yield* sleep(100)
+
+            const body = `report${'x'.repeat(size)}`
+            const receipt = yield* server.call(math, 'upload', { name: 'report.pdf', body })
+            expect(receipt).toEqual({ name: 'report.pdf', size: body.length, head: 'reportxx' })
+
+            const back = yield* server.call(math, 'download', { size })
+            expect(back).toHaveLength(size)
+            expect((back as string).slice(0, 4)).toBe('dddd')
+
+            // the node keeps working afterwards: the sideband left no residue
+            expect(yield* server.call(math, 'add', { a: 1, b: 2 })).toBe(3)
           })
           yield* remote.halt()
         }),

@@ -51,7 +51,12 @@ export const MemoryTransport = Transport.implement<TransportDef.Options, [option
       })
       yield* StateRef.set(state)
 
-      return { transport: 'memory', prefix: options.prefix, capabilities: driver.capabilities }
+      return {
+        transport: 'memory',
+        prefix: options.prefix,
+        // the limit is per install, not per driver — report what this one actually enforces
+        capabilities: { ...driver.capabilities, maxPayloadBytes: state.maxPayloadBytes },
+      }
     },
   },
 ).build(transportActions(driver))

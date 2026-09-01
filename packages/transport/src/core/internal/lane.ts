@@ -57,14 +57,20 @@ function* awaitCredit(
 
 /** Open the producing side of a lane: subscribe to credit, wait for the consumer, then hand out
  * the frame publishers. Credit accounting lives in the closure. */
-function* openProducer(
+export function* openProducer(
   runtime: Helpers.Runtime,
   topic: string,
-  given?: TransportDef.LaneOptions,
+  given?: Helpers.LaneSetup,
 ): Operation<Helpers.Producer> {
   const { driver } = runtime
   const timeoutMs = given?.timeoutMs ?? DEFAULT_TIMEOUT_MS
-  const credits = yield* driver.subscribe(`${CREDIT_PREFIX}${topic}`, {})
+  const transient = given?.transient
+  const credits = yield* driver.subscribe(`${CREDIT_PREFIX}${topic}`, { transient })
+
+  // the consumer may only be summoned now: it announces credit into a subscription that exists
+  if (given?.ready) {
+    yield* given.ready()
+  }
 
   const first = yield* awaitCredit(credits, timeoutMs, () =>
     fail(TransportErrors.Timeout, `no consumer attached to lane "${topic}" within ${timeoutMs}ms`),
@@ -78,6 +84,7 @@ function* openProducer(
       topic,
       data,
       headers: { ...extra, [HEADERS.kind]: kind, [HEADERS.seq]: String(seq) },
+      transient,
     })
     seq += 1
   }
@@ -194,12 +201,13 @@ const frameOf = (raw: TransportDef.Raw): Helpers.Frame | null => {
 export const flowLane = <T, TClose>(
   runtime: Helpers.Runtime,
   topic: string,
-  given?: TransportDef.LaneOptions,
+  given?: Helpers.LaneSetup,
 ): Flow<T, TransportDef.LaneClose<TClose>> => ({
   *[Symbol.iterator]() {
     const { driver } = runtime
     const credit = Math.max(1, given?.credit ?? DEFAULT_CREDIT)
-    const subscription = yield* driver.subscribe(topic, {})
+    const transient = given?.transient
+    const subscription = yield* driver.subscribe(topic, { transient })
     const creditTopic = `${CREDIT_PREFIX}${topic}`
 
     const grant = function* (n: number, initial: boolean) {
@@ -208,6 +216,7 @@ export const flowLane = <T, TClose>(
         topic: creditTopic,
         data: encoded.data,
         headers: { ...encoded.headers, [HEADERS.kind]: KINDS.credit },
+        transient,
       })
     }
 
@@ -340,9 +349,9 @@ export function* readableLane(
  * clamped by what the backend accepts — a stream frame that fits the wire never needs the
  * driver's chunk/reassemble path, which would hold the whole write in memory on both sides.
  */
-function* frameBytesOf(
+export function* frameBytesOf(
   driver: TransportDef.Driver,
-  given?: TransportDef.LaneOptions,
+  given?: Helpers.LaneSetup,
 ): Operation<number> {
   const limit = driver.payloadLimit
     ? yield* driver.payloadLimit()

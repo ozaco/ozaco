@@ -276,6 +276,62 @@ export const runTransportSuite = (target: TransportTarget): void => {
       )
     })
 
+    it.skipIf(!target.expect.groups)(
+      'package: a request and a reply over the backend limit ride the parcel sideband',
+      async () => {
+        unwrap(
+          await run(function* () {
+            yield* installIo()
+            yield* target.install()
+            const limit = (yield* useContext(Transport)).capabilities.maxPayloadBytes
+            if (limit === null) {
+              // nothing to sideband: this backend carries a message of any size
+              return
+            }
+            const echo = unique('parcel')
+            const measure = unique('parcel.value')
+            const payload = bytes(limit * 3 + 777)
+            const expected = yield* until(checksum(payload))
+
+            // served by a GROUP on purpose — this is exactly where the driver's chunking cannot
+            // work: it would spread the parts of one message over the members and no member
+            // would ever hold the whole request
+            for (const member of ['a', 'b', 'c']) {
+              yield* Transport.actions.serve<Uint8Array, Uint8Array>(
+                echo,
+                function* (args) {
+                  expect(args.length).toBe(payload.length)
+                  expect(member).toBeDefined()
+                  // echoed back: the REPLY is over the limit too
+                  return args
+                },
+                { group: 'workers' },
+              )
+            }
+
+            const echoed = yield* Transport.actions.request<Uint8Array, Uint8Array>(echo, payload, {
+              timeoutMs: 30_000,
+            })
+            expect(echoed.length).toBe(payload.length)
+            expect(yield* until(checksum(echoed))).toBe(expected)
+
+            // codec values take the sideband too, not just raw bytes
+            yield* Transport.actions.serve<{ blob: string }, number>(measure, function* (args) {
+              return args.blob.length
+            })
+            const blob = 'p'.repeat(limit + 1024)
+            expect(
+              yield* Transport.actions.request<number, { blob: string }>(
+                measure,
+                { blob },
+                { timeoutMs: 30_000 },
+              ),
+            ).toBe(blob.length)
+          }),
+        )
+      },
+    )
+
     it('package: timeouts and no-responders are transport failures', async () => {
       unwrap(
         await run(function* () {
@@ -299,6 +355,35 @@ export const runTransportSuite = (target: TransportTarget): void => {
               ? tag === TransportErrors.NoResponders
               : tag === TransportErrors.Timeout,
           ).toBe(true)
+        }),
+      )
+    })
+
+    it('package: a caller that stops waiting for an oversize reply leaves the server serving', async () => {
+      unwrap(
+        await run(function* () {
+          yield* installIo()
+          yield* target.install()
+          const limit = (yield* useContext(Transport)).capabilities.maxPayloadBytes
+          if (limit === null) {
+            return
+          }
+          const topic = unique('orphan')
+          const big = 'o'.repeat(limit * 2)
+          yield* Transport.actions.serve<number, string>(topic, function* (ms) {
+            yield* sleep(ms)
+            return ms > 0 ? big : 'small'
+          })
+          // the caller is long gone by the time the oversize answer is ready: nobody ever
+          // attaches to its sideband, and that orphaned answer must not take the loop with it
+          const gone = yield* attempt(
+            Transport.actions.request<string, number>(topic, 300, { timeoutMs: 50 }),
+          )
+          expect((gone as AnyType).error).toBe(TransportErrors.Timeout)
+          // …and it gives up on the caller's own patience (floored at PARCEL_MIN_WAIT_MS),
+          // not on the full idle window: by now that answer has already failed on its own
+          yield* sleep(1600)
+          expect(yield* Transport.actions.request<string, number>(topic, 0)).toBe('small')
         }),
       )
     })

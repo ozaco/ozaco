@@ -6,6 +6,20 @@ import type { TransportDef } from './transport'
 /** Internal helper shapes the core passes around — collected here so no type lives outside
  * `types/`. */
 export namespace Helpers {
+  /**
+   * What the lane helpers take internally: the public options plus the wiring only core uses.
+   * Neither member is part of the `Transport` surface — they exist so the package plane can run
+   * a lane on the backend's ephemeral plane and time its announcement.
+   */
+  export interface LaneSetup extends TransportDef.LaneOptions {
+    /** Ride the backend's ephemeral plane: the parcel sideband of a request stores nothing (on
+     * JetStream it stays on core NATS instead of landing in the stream). */
+    readonly transient?: boolean | undefined
+    /** Run once the producer's credit subscription is live and BEFORE it waits for credit — the
+     * first moment the other side may be told to attach. */
+    readonly ready?: (() => Operation<void>) | undefined
+  }
+
   /** A lane frame as decoded from a raw message. */
   export type Frame =
     | { readonly kind: 'data'; readonly seq: number; readonly raw: TransportDef.Raw }
@@ -73,10 +87,35 @@ export namespace Helpers {
     readonly options?: TransportDef.LaneOptions | undefined
   }
 
-  /** The parsed outcome of a reply message. */
-  export type Reply<T> =
-    | { readonly ok: true; readonly value: T }
-    | { readonly ok: false; readonly failure: Result.Failure<unknown> }
+  /** Where one answer goes: the reply topic the backend handed out, plus the exchange's
+   * correlation id (the parcel sideband of an oversize reply is addressed by it). */
+  export interface Reply {
+    readonly topic: string
+    readonly cid: string | undefined
+    /** how long an oversize reply's sideband stays open for this caller (from its `oz-wait`). */
+    readonly waitMs: number
+  }
+
+  /** What one answer carries: the encoded payload and the headers that describe it. */
+  export interface Answer {
+    readonly data: Uint8Array
+    readonly headers: TransportDef.Headers
+  }
+
+  /** One side of an exchange's sideband: whose it is, and which way it runs. */
+  export interface Sideband {
+    readonly cid: string | undefined
+    readonly direction: 'in' | 'out'
+  }
+
+  /** One parcel leaving: the lane it takes, the bytes, how long its peer is held open, and what
+   * to run the moment the lane is live (the message that tells the peer to attach). */
+  export interface Parcel {
+    readonly topic: string
+    readonly data: Uint8Array
+    readonly waitMs: number
+    readonly ready?: (() => Operation<void>) | undefined
+  }
 
   export interface WriteCommand {
     readonly chunk: Uint8Array | null
