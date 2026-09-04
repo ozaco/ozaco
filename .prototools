@@ -1,5 +1,5 @@
 bun = "1.4.0"
-moon = "2.5.2"
+moon = "2.5.4"
 node = "25.9.0"
 
 [plugins]
