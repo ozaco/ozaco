@@ -1,4 +1,4 @@
-import { operation, useContext } from 'std:effect'
+import { useContext } from 'std:effect'
 
 import pkg from '../../../../package.json'
 import { LogLevel } from '../../const'
@@ -40,7 +40,7 @@ const ConsoleTransportImpl = LoggerTransport.implement<
 })
 
 export const ConsoleTransport = ConsoleTransportImpl.build({
-  write: operation(function* (entry: LoggerDef.Entry) {
+  *write(entry: LoggerDef.Entry) {
     const ctx = yield* useContext(ConsoleTransportImpl.context)
 
     if (entry.level < ctx.level) {
@@ -58,9 +58,8 @@ export const ConsoleTransport = ConsoleTransportImpl.build({
     } else {
       console.debug(text)
     }
-  }),
+  },
 
-  flush: operation(function* () {}),
-
-  close: operation(function* () {}),
+  *flush() {},
+  *close() {},
 })

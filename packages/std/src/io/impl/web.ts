@@ -98,7 +98,7 @@ export const WebIO = IO.implement({
 
   // The browser must not hold S3 credentials; the client is constructible but every op fails
   // `io-unsupported`.
-  s3: operation(function* () {
+  *s3() {
     return createS3(null)
-  }),
+  },
 })

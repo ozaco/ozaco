@@ -68,28 +68,28 @@ const makeBarHandle = (
   node: Helpers.TreeNode,
   finish?: () => Operation<void>,
 ): SpinnerDef.BarHandle => ({
-  update: operation(function* (value: number) {
+  *update(value: number) {
     node.value = clamp(node, value)
-  }),
-  advance: operation(function* (delta?: number) {
+  },
+  *advance(delta?: number) {
     node.value = clamp(node, node.value + (delta ?? 1))
-  }),
-  succeed: operation(function* (message?: string) {
+  },
+  *succeed(message?: string) {
     node.status = 'success'
     node.value = node.total
     node.message = message ?? node.message
     if (finish) {
       yield* finish()
     }
-  }),
-  fail: operation(function* (message?: string) {
+  },
+  *fail(message?: string) {
     node.status = 'fail'
     node.message = message ?? node.message
     if (finish) {
       yield* finish()
     }
-  }),
-  stop: operation(function* (message?: string) {
+  },
+  *stop(message?: string) {
     if (node.status === 'pending') {
       node.status = 'success'
     }
@@ -97,39 +97,39 @@ const makeBarHandle = (
     if (finish) {
       yield* finish()
     }
-  }),
+  },
 })
 
 const makeTaskHandle = (node: Helpers.TreeNode): SpinnerDef.TaskHandle => ({
-  update: operation(function* (message: string) {
+  *update(message: string) {
     node.message = message
-  }),
-  succeed: operation(function* (message?: string) {
+  },
+  *succeed(message?: string) {
     node.status = 'success'
     node.message = message ?? node.message
-  }),
-  fail: operation(function* (message?: string) {
+  },
+  *fail(message?: string) {
     node.status = 'fail'
     node.message = message ?? node.message
-  }),
-  warn: operation(function* (message?: string) {
+  },
+  *warn(message?: string) {
     node.status = 'warn'
     node.message = message ?? node.message
-  }),
-  info: operation(function* (message?: string) {
+  },
+  *info(message?: string) {
     node.status = 'info'
     node.message = message ?? node.message
-  }),
-  task: operation(function* (message: string) {
+  },
+  *task(message: string) {
     const child = spinnerNode(message)
     node.children.push(child)
     return makeTaskHandle(child)
-  }),
-  bar: operation(function* (message: string, options?: SpinnerDef.NodeBarOptions) {
+  },
+  *bar(message: string, options?: SpinnerDef.NodeBarOptions) {
     const child = barNode(message, options ?? {})
     node.children.push(child)
     return makeBarHandle(child)
-  }),
+  },
 })
 
 export const start = operation(function* (options?: string | SpinnerDef.StartOptions) {
@@ -182,9 +182,9 @@ export const start = operation(function* (options?: string | SpinnerDef.StartOpt
     stopWith(`${paint(symbol)} ${message ?? state.message}`)
 
   const handle: SpinnerDef.Handle = {
-    update: operation(function* (message: string) {
+    *update(message: string) {
       state.message = message
-    }),
+    },
     succeed: lead(palette.symbols.answered, palette.colors.success),
     fail: lead(palette.symbols.error, palette.colors.error),
     warn: lead(palette.symbols.warning, palette.colors.warning),
@@ -199,16 +199,16 @@ export const group = operation(function* (options?: SpinnerDef.GroupOptions) {
   const runner = yield* setupTree(options?.interval ?? DEFAULT_INTERVAL)
 
   const handle: SpinnerDef.GroupHandle = {
-    task: operation(function* (message: string) {
+    *task(message: string) {
       const node = spinnerNode(message)
       runner.state.roots.push(node)
       return makeTaskHandle(node)
-    }),
-    bar: operation(function* (message: string, barOptions?: SpinnerDef.NodeBarOptions) {
+    },
+    *bar(message: string, barOptions?: SpinnerDef.NodeBarOptions) {
       const node = barNode(message, barOptions ?? {})
       runner.state.roots.push(node)
       return makeBarHandle(node)
-    }),
+    },
     stop: runner.finish,
   }
 

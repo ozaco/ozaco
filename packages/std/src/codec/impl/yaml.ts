@@ -1,5 +1,5 @@
 import type { Flow } from 'std:effect'
-import { createChannel, each, ensure, fork, operation } from 'std:effect'
+import { createChannel, each, ensure, fork } from 'std:effect'
 import type { Result } from 'std:result'
 import { asFailure, fail } from 'std:result'
 import type { AnyType } from 'std:shared'
@@ -50,7 +50,7 @@ export const YamlCodec = Codec.implement({
     return context
   },
 }).build<CodecDef.Actions>({
-  encode: operation(function* (value: unknown) {
+  *encode(value: unknown) {
     try {
       const result = dump(value, encodeOptions)
 
@@ -58,17 +58,17 @@ export const YamlCodec = Codec.implement({
     } catch (error) {
       return yield* fail(CodecErrors.Encode, error instanceof Error ? error.message : String(error))
     }
-  }),
+  },
 
-  decode: operation(function* (data: Uint8Array) {
+  *decode(data: Uint8Array) {
     try {
       return load(decoder.decode(data), decodeOptions) as AnyType
     } catch (error) {
       return yield* fail(CodecErrors.Decode, error instanceof Error ? error.message : String(error))
     }
-  }),
+  },
 
-  stringify: operation(function* (value: unknown) {
+  *stringify(value: unknown) {
     try {
       return dump(value, encodeOptions)
     } catch (error) {
@@ -77,17 +77,17 @@ export const YamlCodec = Codec.implement({
         error instanceof Error ? error.message : String(error),
       )
     }
-  }),
+  },
 
-  parse: operation(function* (text: string) {
+  *parse(text: string) {
     try {
       return load(text, decodeOptions) as AnyType
     } catch (error) {
       return yield* fail(CodecErrors.Parse, error instanceof Error ? error.message : String(error))
     }
-  }),
+  },
 
-  encodeFlow: operation(function* (flow) {
+  *encodeFlow(flow) {
     const channel = createChannel<Uint8Array, true | Result.Failure<unknown>>()
 
     yield* fork(function* () {
@@ -123,9 +123,9 @@ export const YamlCodec = Codec.implement({
     })
 
     return channel
-  }),
+  },
 
-  decodeFlow: operation(function* (flow) {
+  *decodeFlow(flow) {
     const channel = createChannel<unknown, true | Result.Failure<unknown>>()
 
     yield* fork(function* () {
@@ -160,5 +160,5 @@ export const YamlCodec = Codec.implement({
     })
 
     return channel as Flow<AnyType, AnyType>
-  }),
+  },
 })

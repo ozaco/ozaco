@@ -2,7 +2,6 @@ import type { Operation } from 'std:effect'
 import { fork, operation, resource } from 'std:effect'
 import { defineProtocol } from 'std:plugin'
 import { fail } from 'std:result'
-import type { AnyType } from 'std:shared'
 
 import pkg from '../../package.json'
 
@@ -46,14 +45,14 @@ const renderer = function* (
       })
 
       const lease: TerminalDef.Renderer = {
-        render: operation(function* (frame: string) {
+        *render(frame: string) {
           if (region.closed || !interactive) {
             return
           }
           yield* draw(frame)
-        }),
+        },
 
-        clear: operation(function* () {
+        *clear() {
           if (region.closed || !interactive) {
             return
           }
@@ -63,9 +62,9 @@ const renderer = function* (
           if (codes !== '') {
             yield* Terminal.actions.write(codes)
           }
-        }),
+        },
 
-        done: operation(function* (frame?: string) {
+        *done(frame?: string) {
           if (region.closed) {
             return
           }
@@ -78,7 +77,7 @@ const renderer = function* (
             yield* Terminal.actions.write(codes + text + cursor)
           }
           releaseLease(state)
-        }),
+        },
       }
 
       if (info.capabilities.resize && interactive) {
@@ -124,12 +123,12 @@ export const Terminal = defineProtocol<TerminalDef.Info, TerminalDef.Actions, Te
     version: pkg.version,
     description: 'Platform terminal binding: streams in, capabilities + portable actions out',
     defaults: {
-      resize: operation(function* () {
+      *resize() {
         return yield* fail(
           CliErrors.Unsupported,
           'the installed terminal does not support resize events',
         )
-      }) as AnyType,
+      },
     },
     handlers: {
       renderer,
@@ -146,10 +145,10 @@ export const useTerminal = (): Operation<TerminalDef.Info> => Terminal.context.e
  * `Terminal.implement({...}).build({ ...terminalDefaults('x'), write, … })`.
  */
 export const terminalDefaults = (terminal: string): Pick<TerminalDef.Actions, 'resize'> => ({
-  resize: operation(function* () {
+  *resize() {
     return yield* fail(
       CliErrors.Unsupported,
       `the "${terminal}" terminal does not support resize events`,
     )
-  }) as AnyType,
+  },
 })

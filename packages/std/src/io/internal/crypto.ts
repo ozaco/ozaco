@@ -1,6 +1,6 @@
 import { mapError, operation, until } from 'std:effect'
-import { fail } from 'std:result'
 import type { Result } from 'std:result'
+import { fail } from 'std:result'
 
 import {
   createCipheriv,
@@ -8,10 +8,10 @@ import {
   createPrivateKey,
   createPublicKey,
   generateKeyPair as genKeyPair,
-  randomBytes,
-  scrypt,
   sign as nodeSign,
   verify as nodeVerify,
+  randomBytes,
+  scrypt,
 } from 'node:crypto'
 
 import type { KeyPair } from '../types/common'

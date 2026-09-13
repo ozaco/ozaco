@@ -1,5 +1,3 @@
-import { operation } from 'std:effect'
-
 /**
  * Pure POSIX path helpers for the web IO impl. Path manipulation is not filesystem access, so these
  * work in the browser (unlike the other web fs actions) — they just assume `/` separators.
@@ -50,20 +48,20 @@ const extname = (path: string): string => {
 
 /** Pure POSIX path actions for the web IO impl. */
 export const webPath = {
-  join: operation(function* (...segments: string[]) {
+  *join(...segments: string[]) {
     const joined = segments.filter(segment => segment.length > 0).join('/')
     return joined ? normalize(joined) : '.'
-  }),
-  dirname: operation(function* (path: string) {
+  },
+  *dirname(path: string) {
     return dirname(path)
-  }),
-  basename: operation(function* (path: string, suffix?: string) {
+  },
+  *basename(path: string, suffix?: string) {
     return basename(path, suffix)
-  }),
-  extname: operation(function* (path: string) {
+  },
+  *extname(path: string) {
     return extname(path)
-  }),
-  isAbsolute: operation(function* (path: string) {
+  },
+  *isAbsolute(path: string) {
     return path.startsWith('/')
-  }),
+  },
 }

@@ -259,7 +259,7 @@ export const createConnection = (
     const messages = {
       *[Symbol.iterator]() {
         return {
-          next: operation(function* () {
+          *next() {
             const item = yield* queue.next()
             if (item.done) {
               return item
@@ -268,7 +268,7 @@ export const createConnection = (
               done: false,
               value: yield* Codec.actions.decodeFrame(item.value, options.codec),
             }
-          }),
+          },
         }
       },
     } as Flow<unknown, WsDef.FlowClose>

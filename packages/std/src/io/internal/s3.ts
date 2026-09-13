@@ -1,3 +1,4 @@
+import type { Operation } from 'std:effect'
 import { operation, until } from 'std:effect'
 import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
@@ -52,62 +53,62 @@ export const createS3 = (native: AnyType): S3Client => {
 
   const file = (key: string): S3File => ({
     key,
-    text: operation(function* () {
+    *text() {
       return yield* until((yield* fileOf(key)).text())
-    }),
-    json: operation(function* () {
-      return yield* until((yield* fileOf(key)).json())
-    }) as S3File['json'],
-    bytes: operation(function* () {
+    },
+    *json<T = unknown>(): Operation<T> {
+      return (yield* until((yield* fileOf(key)).json())) as T
+    },
+    *bytes() {
       return yield* until((yield* fileOf(key)).bytes())
-    }),
-    arrayBuffer: operation(function* () {
+    },
+    *arrayBuffer() {
       return yield* until((yield* fileOf(key)).arrayBuffer())
-    }),
-    stream: operation(function* () {
+    },
+    *stream() {
       // Bun's `S3File.stream()` is sync (a `ReadableStream`); the fetch client's is async (`Promise`).
       // `Promise.resolve` normalizes both so `until` yields the stream either way.
       return yield* until(Promise.resolve((yield* fileOf(key)).stream()))
-    }),
-    write: operation(function* (data: Uint8Array | string | Blob) {
+    },
+    *write(data: Uint8Array | string | Blob) {
       return yield* until((yield* fileOf(key)).write(data))
-    }),
-    exists: operation(function* () {
+    },
+    *exists() {
       return yield* until((yield* fileOf(key)).exists())
-    }),
-    delete: operation(function* () {
+    },
+    *delete() {
       yield* until((yield* fileOf(key)).delete())
-    }),
-    stat: operation(function* () {
+    },
+    *stat() {
       return mapStat(yield* until((yield* fileOf(key)).stat()))
-    }),
-    presign: operation(function* (presignOptions?: S3PresignOptions) {
+    },
+    *presign(presignOptions?: S3PresignOptions) {
       return (yield* fileOf(key)).presign(presignOptions) as string
-    }),
+    },
   })
 
   return {
     file,
-    read: operation(function* (key: string) {
+    *read(key: string) {
       return yield* until((yield* useClient()).file(key).bytes())
-    }),
-    write: operation(function* (key: string, data: Uint8Array | string | Blob) {
+    },
+    *write(key: string, data: Uint8Array | string | Blob) {
       return yield* until((yield* useClient()).write(key, data))
-    }),
-    exists: operation(function* (key: string) {
+    },
+    *exists(key: string) {
       return yield* until((yield* useClient()).exists(key))
-    }),
-    delete: operation(function* (key: string) {
+    },
+    *delete(key: string) {
       yield* until((yield* useClient()).delete(key))
-    }),
-    stat: operation(function* (key: string) {
+    },
+    *stat(key: string) {
       return mapStat(yield* until((yield* useClient()).stat(key)))
-    }),
-    list: operation(function* (listOptions?: S3ListOptions) {
+    },
+    *list(listOptions?: S3ListOptions) {
       return mapList(yield* until((yield* useClient()).list(listOptions)))
-    }),
-    presign: operation(function* (key: string, presignOptions?: S3PresignOptions) {
+    },
+    *presign(key: string, presignOptions?: S3PresignOptions) {
       return (yield* useClient()).presign(key, presignOptions) as string
-    }),
+    },
   }
 }

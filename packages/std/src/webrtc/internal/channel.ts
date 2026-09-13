@@ -177,13 +177,13 @@ export const wrapChannel = (
   const messages = {
     *[Symbol.iterator]() {
       return {
-        next: operation(function* () {
+        *next() {
           const item = yield* queue.next()
           if (item.done) {
             return item
           }
           return { done: false, value: yield* Codec.actions.decodeFrame(item.value, codec) }
-        }),
+        },
       }
     },
   } as Flow<unknown, RtcDef.FlowClose>

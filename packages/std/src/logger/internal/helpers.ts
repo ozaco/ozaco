@@ -1,3 +1,4 @@
+import type { Operation } from 'std:effect'
 import { operation, useContext } from 'std:effect'
 
 import type { LogLevel } from '../const'
@@ -9,7 +10,7 @@ import { LoggerBindingsContext } from './context'
 import { normalizePayload } from './normalize'
 
 export const logAt = (level: LogLevel) =>
-  operation(function* (...args: LoggerDef.Payload[]) {
+  function* (...args: LoggerDef.Payload[]): Operation<void> {
     const ctx = yield* useContext(Logger)
     if (level < ctx.level) {
       return
@@ -17,7 +18,7 @@ export const logAt = (level: LogLevel) =>
     const bindings = (yield* LoggerBindingsContext.get()) ?? {}
     const entry = buildEntry({ ctx, bindings }, level, args)
     yield* dispatch(entry)
-  })
+  }
 
 export const dispatch = operation(function* (entry: LoggerDef.Entry) {
   // Fans out to every installed transport via the LoggerTransport protocol's `exec`. Each transport

@@ -37,17 +37,17 @@ const writeData = operation(function* (
  * instance reads the scope-installed context (`() => useContext(Config)`); `open` binds a private one.
  */
 export const makeInstance = (getCtx: () => Operation<ConfigDef.Context>): ConfigDef.Instance => ({
-  load: operation(function* (cwd?: string) {
+  *load(cwd?: string) {
     const ctx = yield* getCtx()
     yield* rediscover(ctx, cwd ?? ctx.cwd)
-  }),
+  },
 
-  refresh: operation(function* () {
+  *refresh() {
     const ctx = yield* getCtx()
     yield* rediscover(ctx, ctx.cwd)
-  }),
+  },
 
-  save: operation(function* (path?: string) {
+  *save(path?: string) {
     const ctx = yield* getCtx()
 
     // Explicit target: export the base working file's content (with its `extends`) to `path`.
@@ -63,23 +63,23 @@ export const makeInstance = (getCtx: () => Operation<ConfigDef.Context>): Config
       }
     }
     ctx.dirty.clear()
-  }),
+  },
 
-  get: operation(function* (key?: string) {
+  *get(key?: string) {
     const ctx = yield* getCtx()
     return (key === undefined ? ctx.merged : getPath(ctx.merged, key)) as AnyType
-  }),
+  },
 
-  set: operation(function* (key: string, value: unknown) {
+  *set(key: string, value: unknown) {
     const ctx = yield* getCtx()
     // Write into the file that already defines the key; new keys land in the base working file.
     const target = findOrigin(sources(ctx), key) ?? ctx.working
     target.data = setPath(target.data, key, value)
     ctx.dirty.add(target.path)
     ctx.merged = merge(ctx)
-  }),
+  },
 
-  remove: operation(function* (key: string) {
+  *remove(key: string) {
     const ctx = yield* getCtx()
     // Remove from the file that currently provides the key (a shadowed copy below may re-surface).
     const target = findOrigin(sources(ctx), key)
@@ -89,24 +89,24 @@ export const makeInstance = (getCtx: () => Operation<ConfigDef.Context>): Config
     target.data = unsetPath(target.data, key)
     ctx.dirty.add(target.path)
     ctx.merged = merge(ctx)
-  }),
+  },
 
-  clear: operation(function* () {
+  *clear() {
     const ctx = yield* getCtx()
     ctx.working.data = {}
     ctx.dirty.add(ctx.working.path)
     ctx.merged = merge(ctx)
-  }),
+  },
 
-  delete: operation(function* (path?: string) {
+  *delete(path?: string) {
     const ctx = yield* getCtx()
     const target = path ?? ctx.working.path
 
     yield* IO.actions.rm(target, { force: true })
     yield* rediscover(ctx, ctx.cwd)
-  }),
+  },
 
-  search: operation(function* (query: string) {
+  *search(query: string) {
     const ctx = yield* getCtx()
     const needle = query.toLowerCase()
 
@@ -115,37 +115,37 @@ export const makeInstance = (getCtx: () => Operation<ConfigDef.Context>): Config
         entry.key.toLowerCase().includes(needle) ||
         String(entry.value).toLowerCase().includes(needle),
     )
-  }),
+  },
 
-  tree: operation(function* () {
+  *tree() {
     const ctx = yield* getCtx()
     return ctx.chain
-  }),
+  },
 
-  has: operation(function* (key: string) {
+  *has(key: string) {
     const ctx = yield* getCtx()
     return getPath(ctx.merged, key) !== undefined
-  }),
+  },
 
-  keys: operation(function* () {
+  *keys() {
     const ctx = yield* getCtx()
     return flattenEntries(ctx.merged).map(entry => entry.key)
-  }),
+  },
 
-  origin: operation(function* (key: string) {
+  *origin(key: string) {
     const ctx = yield* getCtx()
     return explainOf(ctx, key)[0]?.path
-  }),
+  },
 
-  explain: operation(function* (key: string) {
+  *explain(key: string) {
     const ctx = yield* getCtx()
     return explainOf(ctx, key)
-  }),
+  },
 
   // Watch via `watch` (event-based, no polling): each config directory (`DIR`) recursively, and every
   // other source file (base/variant/`extends`) directly. All events feed one debounced reloader that
   // re-discovers and notifies only when the merged view actually changes.
-  watch: operation(function* (listener: ConfigDef.Watcher, options?: ConfigDef.WatchOptions) {
+  *watch(listener: ConfigDef.Watcher, options?: ConfigDef.WatchOptions) {
     const ctx = yield* getCtx()
     const { recursiveDirs, files } = yield* watchTargets(ctx)
 
@@ -187,7 +187,7 @@ export const makeInstance = (getCtx: () => Operation<ConfigDef.Context>): Config
         yield* each.next()
       }
     })
-  }),
+  },
 })
 
 /** The `open` action: a brand-new context + an instance bound to it (independent of the scope). */

@@ -85,34 +85,34 @@ export const table = operation(function* (options: TableDef.Options) {
     })
 
     return {
-      row: operation(function* (row: TableDef.Row) {
+      *row(row: TableDef.Row) {
         const index = state.rows.push(clone(row)) - 1
         yield* draw()
         return index
-      }),
-      rows: operation(function* (rows: TableDef.Row[]) {
+      },
+      *rows(rows: TableDef.Row[]) {
         const start = state.rows.length
         for (const row of rows) {
           state.rows.push(clone(row))
         }
         yield* draw()
         return Array.from(rows.keys(), offset => start + offset)
-      }),
-      update: operation(function* (index: number, row: TableDef.Row) {
+      },
+      *update(index: number, row: TableDef.Row) {
         if (state.ended || state.rows[index] === undefined) {
           return
         }
         state.rows[index] = clone(row)
         yield* draw()
-      }),
-      set: operation(function* (index: number, column: string | number, value: TableDef.Cell) {
+      },
+      *set(index: number, column: string | number, value: TableDef.Cell) {
         const cells = state.rows[index]
         if (state.ended || cells === undefined) {
           return
         }
         setCell(cells, column, value)
         yield* draw()
-      }),
+      },
       end: finish,
     } satisfies TableDef.Handle
   }
@@ -176,34 +176,34 @@ export const table = operation(function* (options: TableDef.Options) {
   })
 
   return {
-    row: operation(function* (row: TableDef.Row) {
+    *row(row: TableDef.Row) {
       const index = state.rows.push(clone(row)) - 1
       yield* flush(false)
       return index
-    }),
-    rows: operation(function* (rows: TableDef.Row[]) {
+    },
+    *rows(rows: TableDef.Row[]) {
       const start = state.rows.length
       for (const row of rows) {
         state.rows.push(clone(row))
       }
       yield* flush(false)
       return Array.from(rows.keys(), offset => start + offset)
-    }),
-    update: operation(function* (index: number, row: TableDef.Row) {
+    },
+    *update(index: number, row: TableDef.Row) {
       if (state.rows[index] === undefined) {
         return
       }
       state.rows[index] = clone(row)
       yield* reflect(index)
-    }),
-    set: operation(function* (index: number, column: string | number, value: TableDef.Cell) {
+    },
+    *set(index: number, column: string | number, value: TableDef.Cell) {
       const cells = state.rows[index]
       if (cells === undefined) {
         return
       }
       setCell(cells, column, value)
       yield* reflect(index)
-    }),
+    },
     end: finish,
   } satisfies TableDef.Handle
 })

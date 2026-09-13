@@ -1,7 +1,7 @@
 import type { CodecDef } from 'std:codec'
 import { Codec } from 'std:codec'
-import type { Flow } from 'std:effect'
-import { flow, operation, until } from 'std:effect'
+import type { Flow, Operation } from 'std:effect'
+import { flow, until } from 'std:effect'
 import { asFailure, fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 
@@ -10,78 +10,78 @@ import type { FetchDef } from './types'
 /** Wrap a platform `Response`. A `preferred` codec impl pins `body()`/`flow()` decoding to that
  * implementation instead of the routed `Codec` protocol (it must still be installed in scope). */
 export const createFetchResponse = (raw: Response, preferred?: CodecDef): FetchDef.Response => {
-  const readJson = operation(function* <T>() {
+  function* readJson<T>(): Operation<T> {
     try {
       return (yield* until(raw.json())) as T
     } catch (error) {
       return yield* asFailure(error)
     }
-  })
+  }
 
-  const readText = operation(function* () {
+  function* readText() {
     try {
       return yield* until(raw.text())
     } catch (error) {
       return yield* asFailure(error)
     }
-  })
+  }
 
-  const readArrayBuffer = operation(function* () {
+  function* readArrayBuffer() {
     try {
       return yield* until(raw.arrayBuffer())
     } catch (error) {
       return yield* asFailure(error)
     }
-  })
+  }
 
-  const readBlob = operation(function* () {
+  function* readBlob() {
     try {
       return yield* until(raw.blob())
     } catch (error) {
       return yield* asFailure(error)
     }
-  })
+  }
 
-  const readFormData = operation(function* () {
+  function* readFormData() {
     try {
       return yield* until(raw.formData())
     } catch (error) {
       return yield* asFailure(error)
     }
-  })
+  }
 
-  const readBytes = operation(function* () {
+  function* readBytes() {
     try {
       const buf = yield* until(raw.arrayBuffer())
       return new Uint8Array(buf)
     } catch (error) {
       return yield* asFailure(error)
     }
-  })
+  }
 
-  const readRaw = operation(function* () {
+  function* readRaw() {
     if (!raw.body) {
       return yield* fail('parse', 'response has no body')
     }
 
     return flow(raw.body as AnyType) as Flow<Uint8Array, void>
-  })
+  }
 
-  const readBody = operation(function* () {
+  function* readBody() {
     const bytes = yield* readBytes()
     if (bytes.length === 0) {
       return undefined
     }
     return yield* (preferred ?? Codec).actions.decode(bytes)
-  })
+  }
 
-  const readFlow = operation(function* () {
+  function* readFlow() {
     if (!raw.body) {
       return yield* fail('parse', 'response has no body')
     }
 
     return yield* (preferred ?? Codec).actions.decodeFlow(flow(raw.body as AnyType), true)
-  })
+  }
 
   const self: FetchDef.Response = {
     native: raw,
@@ -119,13 +119,13 @@ export const createFetchResponse = (raw: Response, preferred?: CodecDef): FetchD
     flow: readFlow as AnyType,
     raw: readRaw,
 
-    expect: operation(function* () {
+    *expect() {
       yield* until(Promise.resolve())
       if (!raw.ok) {
         return yield* fail('http-status', `${raw.url}: ${raw.status} ${raw.statusText}`)
       }
       return self
-    }),
+    },
   }
   return self
 }

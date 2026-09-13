@@ -1,4 +1,5 @@
-import { operation, useContext } from 'std:effect'
+import type { Operation } from 'std:effect'
+import { useContext } from 'std:effect'
 import { IO, IO_FLAGS } from 'std:io'
 
 import pkg from '../../../../package.json'
@@ -36,7 +37,7 @@ const FileTransportImpl = LoggerTransport.implement<FileDef.Context, [options: F
   },
 })
 
-const drain = operation(function* () {
+function* drain(): Operation<void> {
   const ctx = yield* useContext(FileTransportImpl.context)
 
   if (ctx.buffer.length === 0) {
@@ -46,10 +47,10 @@ const drain = operation(function* () {
   ctx.buffer.length = 0
 
   yield* IO.actions.write(ctx.options.path, encoder.encode(payload), { flags: IO_FLAGS.APPEND })
-})
+}
 
 export const FileTransport = FileTransportImpl.build({
-  write: operation(function* (entry: LoggerDef.Entry) {
+  *write(entry: LoggerDef.Entry) {
     const ctx = yield* useContext(FileTransportImpl.context)
 
     if (entry.level < ctx.level) {
@@ -60,11 +61,11 @@ export const FileTransport = FileTransportImpl.build({
     if (ctx.buffer.length >= ctx.limit) {
       yield* drain()
     }
-  }),
+  },
 
   flush: drain,
 
-  close: operation(function* () {
+  *close() {
     yield* drain()
-  }),
+  },
 })

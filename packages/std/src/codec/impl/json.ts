@@ -1,5 +1,5 @@
 import type { Flow } from 'std:effect'
-import { createChannel, each, ensure, fork, operation } from 'std:effect'
+import { createChannel, each, ensure, fork } from 'std:effect'
 import type { Result } from 'std:result'
 import { asFailure, fail } from 'std:result'
 import type { AnyType } from 'std:shared'
@@ -33,23 +33,23 @@ export const JsonCodec = Codec.implement({
     return context
   },
 }).build<CodecDef.JsonActions>({
-  encode: operation(function* (value: unknown) {
+  *encode(value: unknown) {
     try {
       return encoder.encode(JSON.stringify(value))
     } catch (error) {
       return yield* fail(CodecErrors.Encode, error instanceof Error ? error.message : String(error))
     }
-  }),
+  },
 
-  decode: operation(function* (data: Uint8Array) {
+  *decode(data: Uint8Array) {
     try {
       return JSON.parse(decoder.decode(data))
     } catch (error) {
       return yield* fail(CodecErrors.Decode, error instanceof Error ? error.message : String(error))
     }
-  }),
+  },
 
-  stringify: operation(function* (value, space = 0) {
+  *stringify(value: unknown, space?: number) {
     try {
       return JSON.stringify(value, null, space)
     } catch (error) {
@@ -58,17 +58,17 @@ export const JsonCodec = Codec.implement({
         error instanceof Error ? error.message : String(error),
       )
     }
-  }),
+  },
 
-  parse: operation(function* (text: string) {
+  *parse(text: string) {
     try {
       return JSON.parse(text)
     } catch (error) {
       return yield* fail(CodecErrors.Parse, error instanceof Error ? error.message : String(error))
     }
-  }),
+  },
 
-  encodeFlow: operation(function* (flow) {
+  *encodeFlow(flow) {
     const channel = createChannel<Uint8Array, true | Result.Failure<unknown>>()
 
     yield* fork(function* () {
@@ -104,9 +104,9 @@ export const JsonCodec = Codec.implement({
     })
 
     return channel
-  }),
+  },
 
-  decodeFlow: operation(function* (flow, json = true) {
+  *decodeFlow(flow, json = true) {
     const channel = createChannel<unknown, true | Result.Failure<unknown>>()
     let parser: JSONParser
     const pending: unknown[] = []
@@ -185,5 +185,5 @@ export const JsonCodec = Codec.implement({
     })
 
     return channel as Flow<AnyType, AnyType>
-  }),
+  },
 })

@@ -1,7 +1,7 @@
 import type { Adapter } from 'db:core'
 import { DbAdapter, DbClient, DbErrors, useDb } from 'db:core'
 import { adapterDefaults } from 'db:internal'
-import { attempt, operation, run } from 'std:effect'
+import { attempt, run } from 'std:effect'
 import { install } from 'std:plugin'
 import { fail, isFailure, unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
@@ -207,13 +207,13 @@ describe('transactions — capability gating and retry', () => {
     }).build({
       ...adapterDefaults('flaky'),
       ...minimalActions,
-      transaction: operation(function* (body: () => AnyType) {
+      *transaction(body: () => AnyType) {
         calls += 1
         if (calls === 1) {
           return yield* fail(DbErrors.Conflict, 'serialization failure')
         }
         return yield* body()
-      }),
+      },
     })
 
     unwrap(

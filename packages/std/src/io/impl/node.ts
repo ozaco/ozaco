@@ -1,6 +1,6 @@
 // oxlint-disable unicorn/text-encoding-identifier-case
 
-import { operation, until } from 'std:effect'
+import { until } from 'std:effect'
 import type { S3Options, WalkEntry } from 'std:io'
 import { IO, IO_FLAGS, toPath } from 'std:io'
 import { fail } from 'std:result'
@@ -47,9 +47,9 @@ export const NodeIO = IO.implement({
 }).build({
   env: readEnv,
 
-  randomBytes: operation(function* (length) {
+  *randomBytes(length) {
     return new Uint8Array(nodeRandomBytes(length))
-  }),
+  },
 
   ulid: ulidId,
   uuid: uuidId,
@@ -57,15 +57,15 @@ export const NodeIO = IO.implement({
   decodeHlc: hlcDecode,
   observeHlc: hlcObserve,
 
-  hmac: operation(function* (algorithm, key, data) {
+  *hmac(algorithm, key, data) {
     const mac = createHmac(toNodeHash(algorithm), key).update(data).digest()
     return new Uint8Array(mac)
-  }),
+  },
 
-  hash: operation(function* (algorithm, data) {
+  *hash(algorithm, data) {
     const digest = createHash(toNodeHash(algorithm)).update(data).digest()
     return new Uint8Array(digest)
-  }),
+  },
   encrypt: encryptSecret,
   decrypt: decryptSecret,
   generateKeyPair: generateSignKeyPair,
@@ -78,18 +78,18 @@ export const NodeIO = IO.implement({
   watch: (path, options) => watchPath(toPath(path), options),
   writeFlow: (path, source, options) => writeFileFlow(toPath(path), source, options?.flags),
 
-  read: operation(function* (path) {
+  *read(path) {
     const buf = yield* until(fs.readFile(toPath(path)))
     return new Uint8Array(buf)
-  }),
+  },
 
-  readText: operation(function* (path, encoding) {
+  *readText(path, encoding) {
     return yield* until(
       fs.readFile(toPath(path), { encoding: (encoding ?? 'utf-8') as BufferEncoding }),
     )
-  }),
+  },
 
-  write: operation(function* (path, data, options) {
+  *write(path, data, options) {
     const f = options?.flags ?? IO_FLAGS.NONE
     const flag = hasFlag(f, IO_FLAGS.APPEND)
       ? hasFlag(f, IO_FLAGS.EXCLUSIVE)
@@ -99,18 +99,18 @@ export const NodeIO = IO.implement({
         ? 'wx'
         : 'w'
     yield* until(fs.writeFile(toPath(path), data, { flag }))
-  }),
+  },
 
-  append: operation(function* (path, data) {
+  *append(path, data) {
     yield* until(fs.appendFile(toPath(path), data))
-  }),
+  },
 
-  copy: operation(function* (src, dest, options) {
+  *copy(src, dest, options) {
     const mode = hasFlag(options?.flags ?? IO_FLAGS.NONE, IO_FLAGS.EXCLUSIVE) ? 1 : 0
     yield* until(fs.copyFile(toPath(src), toPath(dest), mode))
-  }),
+  },
 
-  rename: operation(function* (src, dest, options) {
+  *rename(src, dest, options) {
     if (hasFlag(options?.flags ?? IO_FLAGS.NONE, IO_FLAGS.EXCLUSIVE)) {
       let destExists = false
       try {
@@ -124,40 +124,40 @@ export const NodeIO = IO.implement({
       }
     }
     yield* until(fs.rename(toPath(src), toPath(dest)))
-  }),
+  },
 
-  rm: operation(function* (path, options) {
+  *rm(path, options) {
     yield* until(fs.rm(toPath(path), options))
-  }),
+  },
 
-  exists: operation(function* (path) {
+  *exists(path) {
     try {
       yield* until(fs.access(toPath(path)))
       return true
     } catch {
       return false
     }
-  }),
+  },
 
-  stat: operation(function* (path) {
+  *stat(path) {
     const s = yield* until(fs.stat(toPath(path)))
     return mapStat(s)
-  }),
+  },
 
-  lstat: operation(function* (path) {
+  *lstat(path) {
     const s = yield* until(fs.lstat(toPath(path)))
     return mapStat(s)
-  }),
+  },
 
-  readdir: operation(function* (path, options) {
+  *readdir(path, options) {
     return yield* until(fs.readdir(toPath(path), options))
-  }),
+  },
 
-  ensureDir: operation(function* (path) {
+  *ensureDir(path) {
     yield* until(fs.mkdir(toPath(path), { recursive: true }))
-  }),
+  },
 
-  ensureFile: operation(function* (path) {
+  *ensureFile(path) {
     const p = toPath(path)
     const dir = dirname(p)
     yield* until(fs.mkdir(dir, { recursive: true }))
@@ -166,18 +166,18 @@ export const NodeIO = IO.implement({
     } catch {
       yield* until(fs.writeFile(p, ''))
     }
-  }),
+  },
 
-  emptyDir: operation(function* (path) {
+  *emptyDir(path) {
     const p = toPath(path)
     yield* until(fs.mkdir(p, { recursive: true }))
     const entries = yield* until(fs.readdir(p))
     for (const entry of entries) {
       yield* until(fs.rm(join(p, entry), { recursive: true, force: true }))
     }
-  }),
+  },
 
-  walk: operation(function* (root, options) {
+  *walk(root, options) {
     const p = toPath(root)
     const results: WalkEntry[] = []
     yield* walkRecursive(
@@ -192,7 +192,7 @@ export const NodeIO = IO.implement({
       results,
     )
     return results
-  }),
+  },
 
   join: nodePath.join,
   dirname: nodePath.dirname,
@@ -200,15 +200,15 @@ export const NodeIO = IO.implement({
   extname: nodePath.extname,
   isAbsolute: nodePath.isAbsolute,
 
-  chmod: operation(function* (path, mode) {
+  *chmod(path, mode) {
     yield* until(fs.chmod(toPath(path), mode))
-  }),
-  symlink: operation(function* (target, path, type) {
+  },
+  *symlink(target, path, type) {
     yield* until(fs.symlink(toPath(target), toPath(path), type))
-  }),
-  readlink: operation(function* (path) {
+  },
+  *readlink(path) {
     return yield* until(fs.readlink(toPath(path)))
-  }),
+  },
 
   exec: nodeExec,
   spawn: nodeSpawn,
@@ -220,7 +220,7 @@ export const NodeIO = IO.implement({
   tmpdir: readTmpDir,
 
   // Node has no built-in S3; use the dependency-free SigV4-over-fetch client.
-  s3: operation(function* (options?: S3Options) {
+  *s3(options?: S3Options) {
     return createS3(fetchS3Client(options ?? {}))
-  }),
+  },
 })

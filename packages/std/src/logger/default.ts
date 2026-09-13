@@ -1,5 +1,5 @@
 import type { Operation } from 'std:effect'
-import { operation, useContext } from 'std:effect'
+import { useContext } from 'std:effect'
 
 import pkg from '../../package.json'
 
@@ -27,7 +27,7 @@ export const DefaultLogger = Logger.implement({
     }
   },
 }).build({
-  log: operation(function* (level: LogLevel, ...args: LoggerDef.Payload[]) {
+  *log(level: LogLevel, ...args: LoggerDef.Payload[]) {
     const ctx = yield* useContext(Logger)
     if (level < ctx.level) {
       return
@@ -35,7 +35,7 @@ export const DefaultLogger = Logger.implement({
     const bindings = (yield* LoggerBindingsContext.get()) ?? {}
     const entry = buildEntry({ ctx, bindings }, level, args)
     yield* dispatch(entry)
-  }),
+  },
 
   trace: logAt(LogLevel.trace),
   debug: logAt(LogLevel.debug),
@@ -44,31 +44,31 @@ export const DefaultLogger = Logger.implement({
   error: logAt(LogLevel.error),
   fatal: logAt(LogLevel.fatal),
 
-  child: operation(function* <R>(bindings: Record<string, unknown>, fn: () => Operation<R>) {
+  *child<R>(bindings: Record<string, unknown>, fn: () => Operation<R>) {
     const previous = (yield* LoggerBindingsContext.get()) ?? {}
     return yield* LoggerBindingsContext.with({ ...previous, ...bindings }, () => fn())
-  }),
+  },
 
-  bind: operation(function* (bindings: Record<string, unknown>) {
+  *bind(bindings: Record<string, unknown>) {
     const previous = (yield* LoggerBindingsContext.get()) ?? {}
     yield* LoggerBindingsContext.set({ ...previous, ...bindings })
-  }),
+  },
 
-  setLevel: operation(function* (level: LogLevel) {
+  *setLevel(level: LogLevel) {
     const ctx = yield* useContext(Logger)
     ctx.level = level
-  }),
+  },
 
-  isLevelEnabled: operation(function* (level: LogLevel) {
+  *isLevelEnabled(level: LogLevel) {
     const ctx = yield* useContext(Logger)
     return level >= ctx.level
-  }),
+  },
 
-  flush: operation(function* () {
+  *flush() {
     yield* LoggerTransport.actions.flush()
-  }),
+  },
 
-  close: operation(function* () {
+  *close() {
     yield* LoggerTransport.actions.close()
-  }),
+  },
 })

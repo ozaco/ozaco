@@ -1,4 +1,4 @@
-import { operation, until } from 'std:effect'
+import { until } from 'std:effect'
 import type { S3Options, WalkEntry } from 'std:io'
 import { IO, IO_FLAGS, toPath } from 'std:io'
 import { fail } from 'std:result'
@@ -61,13 +61,13 @@ export const BunIO = IO.implement({
   watch: (path, options) => watchPath(toPath(path), options),
   writeFlow: (path, source, options) => writeFileFlow(toPath(path), source, options?.flags),
 
-  read: operation(function* (path) {
+  *read(path) {
     const p = toPath(path)
     const buf = yield* until(Bun.file(p).arrayBuffer())
     return new Uint8Array(buf)
-  }),
+  },
 
-  readText: operation(function* (path, encoding) {
+  *readText(path, encoding) {
     const p = toPath(path)
     // oxlint-disable-next-line unicorn/text-encoding-identifier-case
     if (encoding && encoding !== 'utf-8' && encoding !== 'utf8') {
@@ -76,9 +76,9 @@ export const BunIO = IO.implement({
       return decoder.decode(buf)
     }
     return yield* until(Bun.file(p).text())
-  }),
+  },
 
-  write: operation(function* (path, data, options) {
+  *write(path, data, options) {
     const flags = options?.flags
 
     if (!flags) {
@@ -93,22 +93,22 @@ export const BunIO = IO.implement({
         ? 'wx'
         : 'w'
     yield* until(fs.writeFile(toPath(path), data, { flag }))
-  }),
+  },
 
-  append: operation(function* (path, data) {
+  *append(path, data) {
     yield* until(fs.appendFile(toPath(path), data))
-  }),
+  },
 
-  copy: operation(function* (src, dest, options) {
+  *copy(src, dest, options) {
     // oxlint-disable-next-line unicorn/prefer-ternary
     if (hasFlag(options?.flags ?? IO_FLAGS.NONE, IO_FLAGS.EXCLUSIVE)) {
       yield* until(fs.copyFile(toPath(src), toPath(dest), 1))
     } else {
       yield* until(Bun.write(toPath(dest), Bun.file(toPath(src))))
     }
-  }),
+  },
 
-  rename: operation(function* (src, dest, options) {
+  *rename(src, dest, options) {
     if (hasFlag(options?.flags ?? IO_FLAGS.NONE, IO_FLAGS.EXCLUSIVE)) {
       const destExists = yield* until(Bun.file(toPath(dest)).exists())
       if (destExists) {
@@ -116,13 +116,13 @@ export const BunIO = IO.implement({
       }
     }
     yield* until(fs.rename(toPath(src), toPath(dest)))
-  }),
+  },
 
-  rm: operation(function* (path, options) {
+  *rm(path, options) {
     yield* until(fs.rm(toPath(path), options))
-  }),
+  },
 
-  exists: operation(function* (path) {
+  *exists(path) {
     // `Bun.file(dir).exists()` reports `false` for directories — use `fs.access` (matches NodeIO) so
     // `exists` answers "path exists" for files and directories alike.
     try {
@@ -131,27 +131,27 @@ export const BunIO = IO.implement({
     } catch {
       return false
     }
-  }),
+  },
 
-  stat: operation(function* (path) {
+  *stat(path) {
     const s = yield* until(fs.stat(toPath(path)))
     return mapStat(s)
-  }),
+  },
 
-  lstat: operation(function* (path) {
+  *lstat(path) {
     const s = yield* until(fs.lstat(toPath(path)))
     return mapStat(s)
-  }),
+  },
 
-  readdir: operation(function* (path, options) {
+  *readdir(path, options) {
     return yield* until(fs.readdir(toPath(path), options))
-  }),
+  },
 
-  ensureDir: operation(function* (path) {
+  *ensureDir(path) {
     yield* until(fs.mkdir(toPath(path), { recursive: true }))
-  }),
+  },
 
-  ensureFile: operation(function* (path) {
+  *ensureFile(path) {
     const p = toPath(path)
     const dir = dirname(p)
     yield* until(fs.mkdir(dir, { recursive: true }))
@@ -159,18 +159,18 @@ export const BunIO = IO.implement({
     if (!fileExists) {
       yield* until(Bun.write(p, ''))
     }
-  }),
+  },
 
-  emptyDir: operation(function* (path) {
+  *emptyDir(path) {
     const p = toPath(path)
     yield* until(fs.mkdir(p, { recursive: true }))
     const entries = yield* until(fs.readdir(p))
     for (const entry of entries) {
       yield* until(fs.rm(join(p, entry), { recursive: true, force: true }))
     }
-  }),
+  },
 
-  walk: operation(function* (root, options) {
+  *walk(root, options) {
     const p = toPath(root)
     const results: WalkEntry[] = []
     yield* walkRecursive(
@@ -185,7 +185,7 @@ export const BunIO = IO.implement({
       results,
     )
     return results
-  }),
+  },
 
   join: nodePath.join,
   dirname: nodePath.dirname,
@@ -193,15 +193,15 @@ export const BunIO = IO.implement({
   extname: nodePath.extname,
   isAbsolute: nodePath.isAbsolute,
 
-  chmod: operation(function* (path, mode) {
+  *chmod(path, mode) {
     yield* until(fs.chmod(toPath(path), mode))
-  }),
-  symlink: operation(function* (target, path, type) {
+  },
+  *symlink(target, path, type) {
     yield* until(fs.symlink(toPath(target), toPath(path), type))
-  }),
-  readlink: operation(function* (path) {
+  },
+  *readlink(path) {
     return yield* until(fs.readlink(toPath(path)))
-  }),
+  },
 
   exec: bunExec,
   spawn: bunSpawn,
@@ -212,7 +212,7 @@ export const BunIO = IO.implement({
   ip: readInterfaces,
   tmpdir: readTmpDir,
 
-  s3: operation(function* (options?: S3Options) {
+  *s3(options?: S3Options) {
     return createS3(new (Bun.S3Client as AnyType)(options ?? {}))
-  }),
+  },
 })
