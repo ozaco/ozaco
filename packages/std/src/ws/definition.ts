@@ -4,9 +4,9 @@ import { fail } from 'std:result'
 
 import pkg from '../../package.json'
 
-import { wsImpl } from './context'
 import { createConnection } from './internal/connection'
-import type { WsDef } from './types'
+import type { WsDef } from './types/ws'
+import { wsImpl } from './utils/context'
 
 const WsImpl = definePlugin<WsDef.Context, [defaults?: WsDef.Options]>({
   name: 'std/ws',
@@ -31,11 +31,11 @@ export const Ws = WsImpl.build<WsDef.Actions>({
     const { defaults } = yield* WsImpl.context.expect()
     const merged = { ...defaults, ...options }
 
-    const Ctor = yield* wsImpl.get()
-    if (!Ctor) {
+    const impl = yield* wsImpl.get()
+    if (!impl) {
       return yield* fail('ws/unsupported', 'no WebSocket implementation available (set wsImpl)')
     }
 
-    return yield* createConnection(Ctor, url, merged)
+    return yield* createConnection(impl, url, merged)
   }, 'ws-connect'),
 })

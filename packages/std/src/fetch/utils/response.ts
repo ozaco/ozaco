@@ -5,59 +5,24 @@ import { flow, until } from 'std:effect'
 import { asFailure, fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 
-import type { FetchDef } from './types'
+import type { FetchDef } from '../types'
 
-/** Wrap a platform `Response`. A `preferred` codec impl pins `body()`/`flow()` decoding to that
- * implementation instead of the routed `Codec` protocol (it must still be installed in scope). */
+/** Lift one platform body reader into an Operation; a thrown read error is reified as-is. */
+const reader = <T>(read: () => Promise<T>) =>
+  function* (): Operation<T> {
+    try {
+      return yield* until(read())
+    } catch (error) {
+      return yield* asFailure(error)
+    }
+  }
+
+/**
+ * Wrap a platform `Response`. A `preferred` codec impl pins `body()`/`flow()` decoding to that
+ * implementation instead of the routed `Codec` protocol (it must still be installed in scope).
+ */
 export const createFetchResponse = (raw: Response, preferred?: CodecDef): FetchDef.Response => {
-  function* readJson<T>(): Operation<T> {
-    try {
-      return (yield* until(raw.json())) as T
-    } catch (error) {
-      return yield* asFailure(error)
-    }
-  }
-
-  function* readText() {
-    try {
-      return yield* until(raw.text())
-    } catch (error) {
-      return yield* asFailure(error)
-    }
-  }
-
-  function* readArrayBuffer() {
-    try {
-      return yield* until(raw.arrayBuffer())
-    } catch (error) {
-      return yield* asFailure(error)
-    }
-  }
-
-  function* readBlob() {
-    try {
-      return yield* until(raw.blob())
-    } catch (error) {
-      return yield* asFailure(error)
-    }
-  }
-
-  function* readFormData() {
-    try {
-      return yield* until(raw.formData())
-    } catch (error) {
-      return yield* asFailure(error)
-    }
-  }
-
-  function* readBytes() {
-    try {
-      const buf = yield* until(raw.arrayBuffer())
-      return new Uint8Array(buf)
-    } catch (error) {
-      return yield* asFailure(error)
-    }
-  }
+  const readBytes = reader(() => raw.arrayBuffer().then(buffer => new Uint8Array(buffer)))
 
   function* readRaw() {
     if (!raw.body) {
@@ -72,6 +37,7 @@ export const createFetchResponse = (raw: Response, preferred?: CodecDef): FetchD
     if (bytes.length === 0) {
       return undefined
     }
+
     return yield* (preferred ?? Codec).actions.decode(bytes)
   }
 
@@ -85,6 +51,7 @@ export const createFetchResponse = (raw: Response, preferred?: CodecDef): FetchD
 
   const self: FetchDef.Response = {
     native: raw,
+
     get ok() {
       return raw.ok
     },
@@ -109,11 +76,12 @@ export const createFetchResponse = (raw: Response, preferred?: CodecDef): FetchD
     get type() {
       return raw.type
     },
-    json: <T = unknown>() => readJson<T>(),
-    text: readText,
-    arrayBuffer: readArrayBuffer,
-    blob: readBlob,
-    formData: readFormData,
+
+    json: <T = unknown>() => reader(() => raw.json() as Promise<T>)(),
+    text: reader(() => raw.text()),
+    arrayBuffer: reader(() => raw.arrayBuffer()),
+    blob: reader(() => raw.blob()),
+    formData: reader(() => raw.formData()),
     bytes: readBytes,
     body: readBody as AnyType,
     flow: readFlow as AnyType,
@@ -121,11 +89,14 @@ export const createFetchResponse = (raw: Response, preferred?: CodecDef): FetchD
 
     *expect() {
       yield* until(Promise.resolve())
+
       if (!raw.ok) {
         return yield* fail('http-status', `${raw.url}: ${raw.status} ${raw.statusText}`)
       }
+
       return self
     },
   }
+
   return self
 }

@@ -290,7 +290,7 @@ export class FakePeer implements RtcDef.PeerLike {
   }
 }
 
-/** A fake RTC "platform": every peer constructed from the returned Ctor shares one hub. Pass
+/** A fake RTC "platform": every peer constructed from the returned impl shares one hub. Pass
  * `media: false` to simulate an implementation without a media surface (`addTrack` absent), or
  * `stats: false` for one that reports no statistics (`getStats` absent). */
 export const createFakeRtc = (options?: { media?: boolean; stats?: boolean }) => {
@@ -353,7 +353,7 @@ export const createFakeRtc = (options?: { media?: boolean; stats?: boolean }) =>
     }
   }
 
-  const Ctor = function (this: unknown, configuration?: RtcDef.Configuration) {
+  const impl = function (this: unknown, configuration?: RtcDef.Configuration) {
     void configuration
     const peer = new FakePeer({ hub, id: (peerCounter += 1), mintSdp, tryLink, announce })
     if (options?.media === false) {
@@ -363,9 +363,9 @@ export const createFakeRtc = (options?: { media?: boolean; stats?: boolean }) =>
       ;(peer as AnyType).getStats = undefined // an implementation with no statistics surface
     }
     return peer
-  } as unknown as RtcDef.PeerCtor
+  } as unknown as RtcDef.ImplLike
 
-  return { Ctor, hub }
+  return { impl, hub }
 }
 
 /** Cut the connection: the given peers (all by default) drop to `failed` with cleared

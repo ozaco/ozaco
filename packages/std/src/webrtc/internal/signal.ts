@@ -11,22 +11,29 @@ export const frameOf = (value: unknown): RtcDef.SignalFrame | undefined => {
   if (typeof value !== 'object' || value === null) {
     return undefined
   }
+
   const frame = value as AnyType
+
   if (frame.t === 'rtc:description' && typeof frame.description?.type === 'string') {
     return frame as RtcDef.DescriptionFrame
   }
+
   if (frame.t === 'rtc:candidate' && 'candidate' in frame) {
     return frame as RtcDef.CandidateFrame
   }
+
   if (frame.t === 'rtc:bye') {
     return frame as RtcDef.ByeFrame
   }
+
   return undefined
 }
 
-/** Whether a description slot is genuinely SET. Never truthiness-test `localDescription` /
+/**
+ * Whether a description slot is genuinely SET. Never truthiness-test `localDescription` /
  * `remoteDescription` directly: the node-datachannel polyfill returns a truthy `{ sdp: '' }`
- * object for UNSET slots where the browser returns `null`. */
+ * object for UNSET slots where the browser returns `null`.
+ */
 export const hasDescription = (description: RtcDef.DescriptionLike | null): boolean =>
   Boolean(description) && typeof description?.sdp === 'string' && description.sdp.length > 0
 
@@ -43,9 +50,11 @@ export const candidateOf = (
   if (!candidate) {
     return null
   }
+
   if (typeof candidate.toJSON === 'function') {
     return candidate.toJSON() as RtcDef.CandidateLike
   }
+
   return {
     candidate: candidate.candidate,
     sdpMid: candidate.sdpMid ?? null,

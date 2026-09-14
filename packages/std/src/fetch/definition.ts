@@ -3,7 +3,7 @@ import { defineProtocol } from 'std:plugin'
 
 import pkg from '../../package.json'
 
-import { createRequestAction } from './internal'
+import { createRequestAction } from './internal/request'
 import type { FetchDef } from './types'
 
 /**
@@ -48,6 +48,7 @@ const FetchClientImpl = Fetch.implement<FetchDef.Context, [options?: FetchDef.Op
 
 export const FetchClient: FetchDef = FetchClientImpl.build({
   request: createRequestAction(FetchClientImpl.context),
+
   get: method('GET'),
   post: method('POST'),
   put: method('PUT'),

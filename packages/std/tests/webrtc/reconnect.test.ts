@@ -17,7 +17,7 @@ describe('session reconnect (redial)', () => {
     const outcome = await run(function* () {
       yield* install(JsonCodec)
       yield* install(Rtc)
-      yield* rtcImpl.set(fake.Ctor)
+      yield* rtcImpl.set(fake.impl)
 
       const [signalA, signalB] = createSignalPair()
       const budget = { retries: 4, delayMs: 10 }
@@ -95,7 +95,7 @@ describe('session reconnect (redial)', () => {
     const outcome = await run(function* () {
       yield* install(JsonCodec)
       yield* install(Rtc)
-      yield* rtcImpl.set(fake.Ctor)
+      yield* rtcImpl.set(fake.impl)
 
       const [signalA, signalB] = createSignalPair()
       const peerA = yield* Rtc.actions.connect(signalA, {
@@ -131,7 +131,7 @@ describe('session reconnect (redial)', () => {
     const outcome = await run(function* () {
       yield* install(JsonCodec)
       yield* install(Rtc)
-      yield* rtcImpl.set(fake.Ctor)
+      yield* rtcImpl.set(fake.impl)
 
       const [signalA, signalB] = createSignalPair()
       const budget = { retries: 5, delayMs: 5 }

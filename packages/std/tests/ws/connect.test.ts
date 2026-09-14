@@ -79,7 +79,7 @@ describe('Ws.actions.connect', () => {
     const outcome = await run(function* () {
       yield* install(Ws)
       // simulate a platform without a WebSocket global (`?? default` swallows undefined, so use false)
-      yield* wsImpl.set(false as unknown as WsDef.Ctor)
+      yield* wsImpl.set(false as unknown as WsDef.ImplLike)
       const result = yield* attempt(() => Ws.actions.connect('ws://localhost:1'))
 
       return isFailure(result) ? String(result.error) : 'connected'

@@ -16,7 +16,7 @@ describe('Rtc.actions.connect', () => {
     const outcome = await run(function* () {
       yield* install(JsonCodec)
       yield* install(Rtc)
-      yield* rtcImpl.set(fake.Ctor)
+      yield* rtcImpl.set(fake.impl)
 
       const [signalA, signalB] = createSignalPair()
       const peerA = yield* Rtc.actions.connect(signalA)
@@ -69,7 +69,7 @@ describe('Rtc.actions.connect', () => {
     const outcome = await run(function* () {
       yield* install(JsonCodec)
       yield* install(Rtc)
-      yield* rtcImpl.set(fake.Ctor)
+      yield* rtcImpl.set(fake.impl)
 
       const [signalA, signalB] = createSignalPair()
       const peerA = yield* Rtc.actions.connect(signalA)
@@ -97,7 +97,7 @@ describe('Rtc.actions.connect', () => {
     const outcome = await run(function* () {
       yield* install(JsonCodec)
       yield* install(Rtc)
-      yield* rtcImpl.set(fake.Ctor)
+      yield* rtcImpl.set(fake.impl)
 
       const [signalA, signalB] = createSignalPair()
       const peerA = yield* Rtc.actions.connect(signalA)
@@ -130,7 +130,7 @@ describe('Rtc.actions.connect', () => {
     const outcome = await run(function* () {
       yield* install(JsonCodec)
       yield* install(Rtc)
-      yield* rtcImpl.set(fake.Ctor)
+      yield* rtcImpl.set(fake.impl)
 
       const [signalA, signalB] = createSignalPair()
       const peerA = yield* Rtc.actions.connect(signalA)

@@ -33,14 +33,14 @@ export const Rtc = RtcImpl.build<RtcDef.Actions>({
     const { defaults } = yield* RtcImpl.context.expect()
     const merged = { ...defaults, ...options }
 
-    const Ctor = yield* resolveImpl()
-    if (!Ctor) {
+    const impl = yield* resolveImpl()
+    if (!impl) {
       return yield* fail(
         'rtc/unsupported',
         'no RTCPeerConnection implementation available (set rtcImpl or install node-datachannel)',
       )
     }
 
-    return yield* createPeer(Ctor, signal, merged)
+    return yield* createPeer(impl, signal, merged)
   }, 'rtc-connect'),
 })

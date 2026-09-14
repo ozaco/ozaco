@@ -16,7 +16,7 @@ describe('perfect negotiation', () => {
     const outcome = await run(function* () {
       yield* install(JsonCodec)
       yield* install(Rtc)
-      yield* rtcImpl.set(fake.Ctor)
+      yield* rtcImpl.set(fake.impl)
 
       const [signalA, signalB] = createSignalPair()
       const peerA = yield* Rtc.actions.connect(signalA) // impolite
@@ -58,7 +58,7 @@ describe('perfect negotiation', () => {
     const outcome = await run(function* () {
       yield* install(JsonCodec)
       yield* install(Rtc)
-      yield* rtcImpl.set(fake.Ctor)
+      yield* rtcImpl.set(fake.impl)
 
       const [signalA, signalB, queues] = createSignalPair()
       // noise the peer must skip: a keepalive string, an app frame, junk

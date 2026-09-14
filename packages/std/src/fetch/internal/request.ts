@@ -2,13 +2,15 @@ import type { Context, Operation } from 'std:effect'
 import { until, useAbortSignal } from 'std:effect'
 import { asFailure, fail } from 'std:result'
 
-import { fetchImpl } from './context'
-import type { FetchDef } from './types'
-import { createFetchResponse } from './utils'
+import type { FetchDef } from '../types'
+import { fetchImpl } from '../utils/context'
+import { createFetchResponse } from '../utils/response'
 
-/** Resolve a RELATIVE string input against the configured base URL (standard
+/**
+ * Resolve a RELATIVE string input against the configured base URL (standard
  * `new URL(input, baseUrl)` semantics — absolute strings ignore the base); `URL` instances and
- * `Request` objects pass through untouched. */
+ * `Request` objects pass through untouched.
+ */
 const resolveInput = (input: RequestInfo | URL, baseUrl: string | URL | undefined) => {
   if (baseUrl === undefined || typeof input !== 'string') {
     return input
@@ -17,9 +19,11 @@ const resolveInput = (input: RequestInfo | URL, baseUrl: string | URL | undefine
   return new URL(input, baseUrl)
 }
 
-/** Merge the installed default headers UNDER the per-request ones: a `Request` input's own headers,
+/**
+ * Merge the installed default headers UNDER the per-request ones: a `Request` input's own headers,
  * then `init.headers`, override the defaults name by name. Without defaults the per-request value
- * passes through untouched (so a bare `Request`'s headers stay in charge). */
+ * passes through untouched (so a bare `Request`'s headers stay in charge).
+ */
 const mergeHeaders = (
   defaults: HeadersInit | undefined,
   input: RequestInfo | URL,
@@ -46,13 +50,16 @@ const mergeHeaders = (
   return merged
 }
 
-/** The raw `request` action the plugin installs: resolves the install-time defaults (base URL,
+/**
+ * The raw `request` action the plugin installs: resolves the install-time defaults (base URL,
  * headers, timeout) against the per-request init, performs the fetch through `fetchImpl`, and
- * wraps the platform response. Runs INSIDE the protocol dispatch, so hooks wrap it. */
+ * wraps the platform response. Runs INSIDE the protocol dispatch, so hooks wrap it.
+ */
 export const createRequestAction = (context: Context<FetchDef.Context>) =>
   function* request(input: RequestInfo | URL, init?: FetchDef.Init): Operation<FetchDef.Response> {
     const options = yield* context.expect()
     const { timeoutMs: initTimeoutMs, headers: initHeaders, codec: initCodec, ...rest } = init ?? {}
+
     const timeoutMs = initTimeoutMs ?? options.timeoutMs
     const codec = initCodec ?? options.codec
     const target = resolveInput(input, options.baseUrl)
@@ -65,8 +72,8 @@ export const createRequestAction = (context: Context<FetchDef.Context>) =>
         timeoutMs === undefined
           ? scopeSignal
           : AbortSignal.any([scopeSignal, AbortSignal.timeout(timeoutMs)])
-      const requestInit: RequestInit = { ...rest, signal }
 
+      const requestInit: RequestInit = { ...rest, signal }
       if (headers !== undefined) {
         requestInit.headers = headers
       }

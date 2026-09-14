@@ -1,6 +1,6 @@
 import { createContext } from 'std:effect'
 
-import type { FetchDef } from './types'
+import type { FetchDef } from '../types'
 
 /**
  * The underlying fetch implementation the `Fetch` plugin's `request` dispatch runs through.

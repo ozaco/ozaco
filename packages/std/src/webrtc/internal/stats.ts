@@ -15,6 +15,7 @@ const num = (value: unknown): number | undefined =>
 
 const ms = (seconds: unknown): number | undefined => {
   const value = num(seconds)
+
   return value === undefined ? undefined : Math.round(value * 1000 * 100) / 100
 }
 
@@ -32,6 +33,33 @@ const mediaOf = (entry: AnyType, framesKey: 'framesDecoded' | 'framesSent'): Rtc
   ...put('fps', num(entry.framesPerSecond)),
   ...put('width', num(entry.frameWidth)),
   ...put('height', num(entry.frameHeight)),
+})
+
+const channelOf = (entry: AnyType): RtcDef.ChannelStats => ({
+  label: String(entry.label ?? ''),
+  ...put('state', typeof entry.state === 'string' ? entry.state : undefined),
+  ...put('messagesSent', num(entry.messagesSent)),
+  ...put('messagesReceived', num(entry.messagesReceived)),
+  ...put('bytesSent', num(entry.bytesSent)),
+  ...put('bytesReceived', num(entry.bytesReceived)),
+})
+
+/** The pair the impl marked as selected, else the nominated succeeded one, else the busiest. */
+const selectedPair = (pairs: AnyType[], transport: AnyType, byId: Map<string, AnyType>) =>
+  pairs.find(entry => entry.selected === true) ??
+  (transport?.selectedCandidatePairId
+    ? byId.get(String(transport.selectedCandidatePairId))
+    : undefined) ??
+  pairs.find(entry => entry.nominated === true && entry.state === 'succeeded') ??
+  pairs.toSorted((a, b) => (num(b.bytesSent) ?? 0) - (num(a.bytesSent) ?? 0))[0]
+
+const pairOf = (selected: AnyType, byId: Map<string, AnyType>): RtcDef.PairStats => ({
+  ...put('local', byId.get(String(selected.localCandidateId))?.candidateType),
+  ...put('remote', byId.get(String(selected.remoteCandidateId))?.candidateType),
+  ...put('rttMs', ms(selected.currentRoundTripTime)),
+  ...put('outgoingBitrate', num(selected.availableOutgoingBitrate)),
+  ...put('bytesSent', num(selected.bytesSent)),
+  ...put('bytesReceived', num(selected.bytesReceived)),
 })
 
 /**
@@ -63,7 +91,9 @@ export function* readStats(pc: RtcDef.PeerLike): Operation<RtcDef.Stats> {
     if (!entry || typeof entry !== 'object') {
       return
     }
+
     byId.set(String(entry.id ?? id ?? byId.size), entry)
+
     switch (entry.type) {
       case 'candidate-pair': {
         pairs.push(entry)
@@ -78,14 +108,7 @@ export function* readStats(pc: RtcDef.PeerLike): Operation<RtcDef.Stats> {
         break
       }
       case 'data-channel': {
-        channels.push({
-          label: String(entry.label ?? ''),
-          ...put('state', typeof entry.state === 'string' ? entry.state : undefined),
-          ...put('messagesSent', num(entry.messagesSent)),
-          ...put('messagesReceived', num(entry.messagesReceived)),
-          ...put('bytesSent', num(entry.bytesSent)),
-          ...put('bytesReceived', num(entry.bytesReceived)),
-        })
+        channels.push(channelOf(entry))
         break
       }
       case 'transport': {
@@ -98,25 +121,8 @@ export function* readStats(pc: RtcDef.PeerLike): Operation<RtcDef.Stats> {
     }
   })
 
-  // the pair the impl marked as selected, else the nominated succeeded one, else the busiest
-  const selected =
-    pairs.find(entry => entry.selected === true) ??
-    (transport?.selectedCandidatePairId
-      ? byId.get(String(transport.selectedCandidatePairId))
-      : undefined) ??
-    pairs.find(entry => entry.nominated === true && entry.state === 'succeeded') ??
-    pairs.toSorted((a, b) => (num(b.bytesSent) ?? 0) - (num(a.bytesSent) ?? 0))[0]
-
-  const pair: RtcDef.PairStats | undefined = selected
-    ? {
-        ...put('local', byId.get(String(selected.localCandidateId))?.candidateType),
-        ...put('remote', byId.get(String(selected.remoteCandidateId))?.candidateType),
-        ...put('rttMs', ms(selected.currentRoundTripTime)),
-        ...put('outgoingBitrate', num(selected.availableOutgoingBitrate)),
-        ...put('bytesSent', num(selected.bytesSent)),
-        ...put('bytesReceived', num(selected.bytesReceived)),
-      }
-    : undefined
+  const selected = selectedPair(pairs, transport, byId)
+  const pair = selected ? pairOf(selected, byId) : undefined
 
   return {
     at: Date.now(),
@@ -133,6 +139,7 @@ export function* readStats(pc: RtcDef.PeerLike): Operation<RtcDef.Stats> {
 /** The flat numbers a `stats` timeline entry carries (and a metrics sink can chart directly). */
 export const flatten = (stats: RtcDef.Stats): Record<string, number | string> => {
   const video = stats.inbound.find(entry => entry.kind === 'video')
+
   return {
     state: stats.state,
     ...put('rttMs', stats.pair?.rttMs),

@@ -17,7 +17,7 @@ describe('close semantics', () => {
     const outcome = await run(function* () {
       yield* install(JsonCodec)
       yield* install(Rtc)
-      yield* rtcImpl.set(fake.Ctor)
+      yield* rtcImpl.set(fake.impl)
 
       const [signalA, signalB] = createSignalPair()
       const peerA = yield* Rtc.actions.connect(signalA)
@@ -56,7 +56,7 @@ describe('close semantics', () => {
     const outcome = await run(function* () {
       yield* install(JsonCodec)
       yield* install(Rtc)
-      yield* rtcImpl.set(fake.Ctor)
+      yield* rtcImpl.set(fake.impl)
 
       const [signalA, signalB] = createSignalPair()
       const peerB = yield* Rtc.actions.connect(signalB, { polite: true })
@@ -83,7 +83,7 @@ describe('close semantics', () => {
     const outcome = await run(function* () {
       yield* install(JsonCodec)
       yield* install(Rtc)
-      yield* rtcImpl.set(fake.Ctor)
+      yield* rtcImpl.set(fake.impl)
 
       const [signalA, signalB] = createSignalPair()
       const peerA = yield* Rtc.actions.connect(signalA)

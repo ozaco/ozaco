@@ -23,7 +23,7 @@ describe('peer observability', () => {
     const outcome = await run(function* () {
       yield* install(JsonCodec)
       yield* install(Rtc)
-      yield* rtcImpl.set(fake.Ctor)
+      yield* rtcImpl.set(fake.impl)
 
       const [signalA, signalB] = createSignalPair()
       const peerA = yield* Rtc.actions.connect(signalA)
@@ -84,7 +84,7 @@ describe('peer observability', () => {
     const outcome = await run(function* () {
       yield* install(JsonCodec)
       yield* install(Rtc)
-      yield* rtcImpl.set(fake.Ctor)
+      yield* rtcImpl.set(fake.impl)
 
       const [signalA, signalB] = createSignalPair()
       // keep only the last 3 entries — the flow still sees every one of them
@@ -121,7 +121,7 @@ describe('peer observability', () => {
     const outcome = await run(function* () {
       yield* install(JsonCodec)
       yield* install(Rtc)
-      yield* rtcImpl.set(fake.Ctor)
+      yield* rtcImpl.set(fake.impl)
 
       const [signalA, signalB] = createSignalPair()
       const peerA = yield* Rtc.actions.connect(signalA)
@@ -176,7 +176,7 @@ describe('peer observability', () => {
     const outcome = await run(function* () {
       yield* install(JsonCodec)
       yield* install(Rtc)
-      yield* rtcImpl.set(fake.Ctor)
+      yield* rtcImpl.set(fake.impl)
 
       const [signalA, signalB] = createSignalPair()
       const peerA = yield* Rtc.actions.connect(signalA)
@@ -197,7 +197,7 @@ describe('peer observability', () => {
     const outcome = await run(function* () {
       yield* install(JsonCodec)
       yield* install(Rtc)
-      yield* rtcImpl.set(fake.Ctor)
+      yield* rtcImpl.set(fake.impl)
 
       const [signalA, signalB] = createSignalPair()
       const peerA = yield* Rtc.actions.connect(signalA, { observe: { sampleMs: 15 } })
@@ -221,7 +221,7 @@ describe('peer observability', () => {
     const outcome = await run(function* () {
       yield* install(JsonCodec)
       yield* install(Rtc)
-      yield* rtcImpl.set(fake.Ctor)
+      yield* rtcImpl.set(fake.impl)
 
       const [signalA, signalB] = createSignalPair()
       const budget = { retries: 4, delayMs: 10 } // both sides redial on the same clock
