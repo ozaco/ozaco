@@ -1,5 +1,4 @@
 import { run, sleep } from 'std:effect'
-import { install } from 'std:plugin'
 import { unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
 
@@ -19,8 +18,7 @@ channel.port1.start()
 runTransportSuite({
   label: 'worker',
   enabled: true,
-  install: (prefix = 'suite') =>
-    install(WorkerTransport, { prefix, port: channel.port1 as AnyType }),
+  use: (prefix = 'suite') => WorkerTransport.use({ prefix, port: channel.port1 as AnyType }),
   expect: { receipts: false, requestReply: false, groups: false, durable: false },
 })
 
@@ -30,8 +28,8 @@ describe('transport — worker: a real worker thread on the far end', () => {
     try {
       unwrap(
         await run(function* () {
-          yield* install(BunIO)
-          yield* install(WorkerTransport, { prefix: 'w', port: worker as AnyType })
+          yield* BunIO.use()
+          yield* WorkerTransport.use({ prefix: 'w', port: worker as AnyType })
           // the worker needs a moment to boot and subscribe
           yield* sleep(300)
           const echoed = yield* Transport.actions.request<{ n: number; from: string }>('echo', {

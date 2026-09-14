@@ -1,7 +1,6 @@
 import { attempt, run, scoped } from 'std:effect'
 import type { FetchDef } from 'std:fetch'
 import { Fetch, FetchClient } from 'std:fetch'
-import { install } from 'std:plugin'
 import { isFailure, unwrap } from 'std:result'
 
 import { afterAll, describe, expect, it } from 'bun:test'
@@ -35,9 +34,9 @@ afterAll(() => {
  * plain JSON. A request only decodes cleanly when something PINS JsonCodec.
  */
 function* bootstrap(options?: FetchDef.Options) {
-  yield* install(FetchClient, options)
-  yield* install(JsonCodec)
-  yield* install(noisy, { priority: 1500 })
+  yield* FetchClient.use(options)
+  yield* JsonCodec.use()
+  yield* noisy.use({ priority: 1500 })
 }
 
 describe('codec option', () => {

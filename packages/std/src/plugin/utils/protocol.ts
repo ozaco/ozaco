@@ -1,7 +1,7 @@
 import type { Operation } from 'std:effect'
 import type { AnyType } from 'std:shared'
 
-import { PROTOCOL } from '../const'
+import { PROTOCOL } from '../internal/const'
 import { createActionProxy } from '../internal/proxy'
 import { buildPlugin, createProtocolRuntime } from '../internal/runtime'
 import type { Impl } from '../types/impl'

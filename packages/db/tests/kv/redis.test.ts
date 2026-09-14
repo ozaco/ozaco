@@ -1,5 +1,3 @@
-import { install } from 'std:plugin'
-
 import { RedisKv } from 'db:impl/redis-kv'
 
 import { runKvSuite } from './suite'
@@ -11,6 +9,6 @@ const url = process.env.TRANSPORT_TEST_REDIS_URL
 runKvSuite({
   label: 'redis',
   enabled: Boolean(url),
-  install: (prefix = 'suite') => install(RedisKv, { prefix, url: url! }),
+  use: (prefix = 'suite') => RedisKv.use({ prefix, url: url! }),
   expect: { persistent: true, atomic: true },
 })

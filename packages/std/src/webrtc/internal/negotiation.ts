@@ -3,10 +3,11 @@ import { attempt, operation, sleep, until } from 'std:effect'
 import type { Result } from 'std:result'
 import { fail, isSuccess } from 'std:result'
 
-import { POLITE_YIELD_MS } from '../const'
+import { RtcErrors } from '../errors'
 import type { Helpers } from '../types/helpers'
 import type { RtcDef } from '../types/rtc'
 
+import { POLITE_YIELD_MS } from './const'
 import { descriptionOf, hasDescription } from './signal'
 
 const failNegotiation = (
@@ -15,11 +16,15 @@ const failNegotiation = (
   detail: string,
 ) => {
   session.counters.failures += 1
-  session.observe.record('error', detail, { error: 'rtc/negotiation' })
-  session.endGeneration(generation, fail('rtc/negotiation', detail) as Result.Failure<unknown>, {
-    state: generation.pc.connectionState,
-    reason: 'negotiation',
-  })
+  session.observe.record('error', detail, { error: RtcErrors.Negotiation })
+  session.endGeneration(
+    generation,
+    fail(RtcErrors.Negotiation, detail) as Result.Failure<unknown>,
+    {
+      state: generation.pc.connectionState,
+      reason: 'negotiation',
+    },
+  )
 }
 
 function* flushCandidates(generation: Helpers.Generation): Operation<void> {

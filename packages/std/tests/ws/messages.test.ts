@@ -1,7 +1,6 @@
 import { attempt, run, scoped, sleep } from 'std:effect'
-import { install } from 'std:plugin'
 import { isFailure, unwrap } from 'std:result'
-import { Ws } from 'std:ws'
+import { Ws, WsClient } from 'std:ws'
 
 import { describe, expect, it } from 'bun:test'
 
@@ -15,8 +14,8 @@ describe('messages flow', () => {
     try {
       const outcome = await run(() =>
         scoped(function* () {
-          yield* install(JsonCodec)
-          yield* install(Ws)
+          yield* JsonCodec.use()
+          yield* WsClient.use()
 
           const connection = yield* Ws.actions.connect(`ws://localhost:${server.port}`)
           yield* connection.send({ kind: 'greeting', text: 'hello', n: 42 })
@@ -39,8 +38,8 @@ describe('messages flow', () => {
     const server = echoServer()
     try {
       const outcome = await run(function* () {
-        yield* install(JsonCodec)
-        yield* install(Ws)
+        yield* JsonCodec.use()
+        yield* WsClient.use()
 
         const connection = yield* Ws.actions.connect(`ws://localhost:${server.port}`)
         yield* connection.send({ seq: 1 })
@@ -72,8 +71,8 @@ describe('messages flow', () => {
     )
     try {
       const outcome = await run(function* () {
-        yield* install(JsonCodec)
-        yield* install(Ws)
+        yield* JsonCodec.use()
+        yield* WsClient.use()
 
         const connection = yield* Ws.actions.connect(`ws://localhost:${server.port}`)
         // let the pushed frames land while nobody is subscribed — queue-backed, so nothing drops
@@ -100,8 +99,8 @@ describe('messages flow', () => {
     const server = pushServer('plain text', '{broken json', new Uint8Array([7, 8, 9]))
     try {
       const outcome = await run(function* () {
-        yield* install(JsonCodec)
-        yield* install(Ws)
+        yield* JsonCodec.use()
+        yield* WsClient.use()
 
         const connection = yield* Ws.actions.connect(`ws://localhost:${server.port}`)
         const subscription = yield* connection.messages
@@ -137,7 +136,7 @@ describe('codec dependency', () => {
     const server = echoServer()
     try {
       const outcome = await run(function* () {
-        yield* install(Ws)
+        yield* WsClient.use()
 
         const connection = yield* Ws.actions.connect(`ws://localhost:${server.port}`)
         const sent = yield* attempt(() => connection.send({ needs: 'codec' }))
@@ -146,7 +145,7 @@ describe('codec dependency', () => {
         return isFailure(sent) ? String(sent.error) : 'sent'
       })
 
-      expect(unwrap(outcome)).toBe('missing-action')
+      expect(unwrap(outcome)).toBe('std:plugin.missing-action')
     } finally {
       server.stop(true)
     }
@@ -157,7 +156,7 @@ describe('codec dependency', () => {
     try {
       const outcome = await run(() =>
         scoped(function* () {
-          yield* install(Ws)
+          yield* WsClient.use()
 
           const connection = yield* Ws.actions.connect(`ws://localhost:${server.port}`)
           const subscription = yield* connection.messages

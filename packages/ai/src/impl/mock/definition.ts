@@ -25,8 +25,8 @@ const FULL: ProviderDef.Capabilities = {
  * on the received specs via the returned context's `calls` log:
  *
  * ```ts
- * const mock = yield* install(MockProvider, { chat: { text: 'hi there' } })
- * yield* install(AiClient, { models: { chat: 'test-model' } })
+ * const mock = yield* MockProvider.use({ chat: { text: 'hi there' } })
+ * yield* AiClient.use({ models: { chat: 'test-model' } })
  * const result = yield* Ai.actions.chat('hello')
  * mock.calls.chat[0].model // 'test-model'
  * ```

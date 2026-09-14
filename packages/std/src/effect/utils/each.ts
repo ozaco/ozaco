@@ -3,9 +3,10 @@ import { fail, isFailure } from 'std:result'
 import { useScope } from '../base/hooks'
 import { spawn } from '../base/spawn'
 import { withResolvers } from '../base/with-resolvers'
+import { EffectErrors } from '../errors'
 import { EachStack } from '../internal/contexts'
-import type { Operation, Flow } from '../types/operation'
-import type { Utils } from '../types/utils'
+import type { Helpers } from '../types/helpers'
+import type { Flow, Operation } from '../types/operation'
 
 // oxlint-disable-next-line import/exports-last
 export function each<T>(flow: Flow<T, unknown>): Operation<Iterable<T>> {
@@ -17,7 +18,7 @@ export function each<T>(flow: Flow<T, unknown>): Operation<Iterable<T>> {
       }
 
       const done = withResolvers<void>()
-      const cxt = withResolvers<Utils.EachLoop<T>>()
+      const cxt = withResolvers<Helpers.EachLoop<T>>()
 
       yield* spawn(function* () {
         const subscription = yield* flow
@@ -25,7 +26,7 @@ export function each<T>(flow: Flow<T, unknown>): Operation<Iterable<T>> {
 
         const stack = scope.expect(EachStack)
 
-        const context: Utils.EachLoop<T> = {
+        const context: Helpers.EachLoop<T> = {
           subscription,
           current,
           finish() {
@@ -49,7 +50,7 @@ export function each<T>(flow: Flow<T, unknown>): Operation<Iterable<T>> {
           next() {
             if (context.stale) {
               throw fail(
-                'iteration-error',
+                EffectErrors.IterationError,
                 `for each loop did not use each.next() operation before continuing`,
               )
             } else {
@@ -80,12 +81,15 @@ each.next = function next(): Operation<void> {
     *[Symbol.iterator]() {
       const stack = yield* EachStack.expect()
       const context = stack[stack.length - 1]
+
       if (!context) {
-        throw fail('IterationError', `cannot call next() outside of an iteration`)
+        throw fail(EffectErrors.IterationError, `cannot call next() outside of an iteration`)
       }
+
       const current = yield* context.subscription.next()
       delete context.stale
       context.current = current
+
       if (current.done) {
         context.finish()
         // same contract as the loop head: a Failure close raises instead of ending cleanly

@@ -153,7 +153,7 @@ describe('channel + each pipelines', () => {
 
     expect(isFailure(outcome)).toBe(true)
     if (isFailure(outcome)) {
-      expect(String(outcome.error)).toContain('iteration-error')
+      expect(String(outcome.error)).toContain('std:effect.iteration-error')
     }
   })
 

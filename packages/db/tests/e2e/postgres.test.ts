@@ -1,5 +1,3 @@
-import { install } from 'std:plugin'
-
 import { BunSqlAdapter } from 'db:impl/bun-sql'
 import { PgAdapter } from 'db:impl/pg'
 
@@ -13,12 +11,12 @@ runAdapterSuite({
   label: 'pg',
   enabled: Boolean(url),
   raw: true,
-  install: () => install(PgAdapter, { url: url! }),
+  use: () => PgAdapter.use({ url: url! }),
 })
 
 runAdapterSuite({
   label: 'bun-sql',
   enabled: Boolean(url),
   raw: true,
-  install: () => install(BunSqlAdapter, { url: url! }),
+  use: () => BunSqlAdapter.use({ url: url! }),
 })

@@ -146,7 +146,7 @@ describe('throwable', () => {
   })
 
   it('captures a thrown error with the marker message and causes', () => {
-    const outcome = throwable(() => JSON.parse('{oops'), SyntaxError as AnyType, 'parsing config')
+    const outcome = throwable(() => JSON.parse('{oops'), SyntaxError, 'parsing config')
 
     expect(isFailure(outcome)).toBe(true)
     if (isFailure(outcome)) {
@@ -158,7 +158,7 @@ describe('throwable', () => {
     // a throw that is not an instance of the requested class gets wrapped into it
     const foreign = throwable(() => {
       throw new TypeError('raw reason')
-    }, RangeError as AnyType)
+    }, RangeError)
 
     expect(isFailure(foreign)).toBe(true)
     if (isFailure(foreign)) {

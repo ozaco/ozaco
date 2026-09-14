@@ -10,7 +10,7 @@ import { buildEntry, dispatch, logAt } from './internal/helpers'
 import type { LoggerDef } from './types/logger'
 
 export const DefaultLogger = Logger.implement({
-  name: 'default-logger',
+  name: 'std/default-logger',
   version: pkg.version,
   description: 'logger; reads transports from the LoggerTransport registry',
 

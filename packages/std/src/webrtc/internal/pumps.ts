@@ -2,6 +2,7 @@ import { attempt, operation, sleep } from 'std:effect'
 import type { Result } from 'std:result'
 import { fail, isSuccess } from 'std:result'
 
+import { RtcErrors } from '../errors'
 import type { Helpers } from '../types/helpers'
 
 import { wrapChannel } from './channel'
@@ -28,7 +29,7 @@ export const pumpSignal = operation(function* (session: Helpers.Session) {
       // redial — a later outage settles the session); an unestablished one can never come up
       if (session.stateOf() !== 'connected' && !session.closedByClient) {
         session.settle(
-          fail('rtc/signal', 'signal closed during negotiation') as Result.Failure<unknown>,
+          fail(RtcErrors.Signal, 'signal closed during negotiation') as Result.Failure<unknown>,
           { state: session.stateOf(), reason: 'signal' },
         )
       }

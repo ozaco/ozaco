@@ -8,7 +8,7 @@ import type { LoggerDef } from './types/logger'
 import type { LoggerTransportDef } from './types/transport'
 
 export const Logger = defineProtocol<LoggerDef.Context, LoggerDef.Actions>({
-  name: 'logger',
+  name: 'std/logger',
   version: pkg.version,
   subtype: LOGGER,
 })
@@ -17,7 +17,7 @@ export const LoggerTransport = defineProtocol<
   LoggerTransportDef.Context,
   LoggerTransportDef.Actions
 >({
-  name: 'logger-transport',
+  name: 'std/logger-transport',
   version: pkg.version,
   subtype: LOGGER_TRANSPORT,
   cloneable: true,

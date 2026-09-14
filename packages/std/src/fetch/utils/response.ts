@@ -5,6 +5,7 @@ import { flow, until } from 'std:effect'
 import { asFailure, fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 
+import { FetchErrors } from '../errors'
 import type { FetchDef } from '../types'
 
 /** Lift one platform body reader into an Operation; a thrown read error is reified as-is. */
@@ -26,7 +27,7 @@ export const createFetchResponse = (raw: Response, preferred?: CodecDef): FetchD
 
   function* readRaw() {
     if (!raw.body) {
-      return yield* fail('parse', 'response has no body')
+      return yield* fail(FetchErrors.Parse, 'response has no body')
     }
 
     return flow(raw.body as AnyType) as Flow<Uint8Array, void>
@@ -43,7 +44,7 @@ export const createFetchResponse = (raw: Response, preferred?: CodecDef): FetchD
 
   function* readFlow() {
     if (!raw.body) {
-      return yield* fail('parse', 'response has no body')
+      return yield* fail(FetchErrors.Parse, 'response has no body')
     }
 
     return yield* (preferred ?? Codec).actions.decodeFlow(flow(raw.body as AnyType), true)
@@ -91,7 +92,7 @@ export const createFetchResponse = (raw: Response, preferred?: CodecDef): FetchD
       yield* until(Promise.resolve())
 
       if (!raw.ok) {
-        return yield* fail('http-status', `${raw.url}: ${raw.status} ${raw.statusText}`)
+        return yield* fail(FetchErrors.HttpStatus, `${raw.url}: ${raw.status} ${raw.statusText}`)
       }
 
       return self

@@ -1,11 +1,10 @@
 import { createQueue, fork, run, scoped, sleep, until } from 'std:effect'
-import { install } from 'std:plugin'
 import { unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
 import type { RtcDef } from 'std:webrtc'
-import { Rtc } from 'std:webrtc'
+import { Rtc, RtcClient } from 'std:webrtc'
 import type { WsDef } from 'std:ws'
-import { Ws } from 'std:ws'
+import { Ws, WsClient } from 'std:ws'
 
 import { afterAll, describe, expect, it } from 'bun:test'
 
@@ -56,9 +55,9 @@ describe.skipIf(!polyfill)('webrtc over the demo signaling relay', () => {
   it('two peers meet in /rtc/:room and talk over a real data channel', async () => {
     unwrap(
       await run(function* () {
-        yield* install(JsonCodec)
-        yield* install(Ws)
-        yield* install(Rtc)
+        yield* JsonCodec.use()
+        yield* WsClient.use()
+        yield* RtcClient.use()
 
         const app = yield* createDemo({ instance: 'rtc' })
         const info = yield* app.start()
@@ -103,8 +102,8 @@ describe.skipIf(!polyfill)('webrtc over the demo signaling relay', () => {
   it('the relay drives the session: waiting, opposite roles, peer-left, re-pair', async () => {
     unwrap(
       await run(function* () {
-        yield* install(JsonCodec)
-        yield* install(Ws)
+        yield* JsonCodec.use()
+        yield* WsClient.use()
 
         const app = yield* createDemo({ instance: 'rtc-relay' })
         const info = yield* app.start()
@@ -180,8 +179,8 @@ describe.skipIf(!polyfill)('webrtc over the demo signaling relay', () => {
   it('pairs two peers that landed on DIFFERENT edge nodes', async () => {
     unwrap(
       await run(function* () {
-        yield* install(JsonCodec)
-        yield* install(Ws)
+        yield* JsonCodec.use()
+        yield* WsClient.use()
 
         // two nodes, one carrier: a socket is driven by the edge that accepted it, so this is
         // what a real cluster does the moment the two tabs hit different nodes
@@ -228,9 +227,9 @@ describe.skipIf(!polyfill)('webrtc over the demo signaling relay', () => {
   it('cluster: a caller waiting alone still connects when the callee joins late', async () => {
     unwrap(
       await run(function* () {
-        yield* install(JsonCodec)
-        yield* install(Ws)
-        yield* install(Rtc)
+        yield* JsonCodec.use()
+        yield* WsClient.use()
+        yield* RtcClient.use()
 
         const link = createLink()
         const ready = createQueue<void, void>()
@@ -322,8 +321,8 @@ describe.skipIf(!polyfill)('webrtc over the demo signaling relay', () => {
     try {
       unwrap(
         await run(function* () {
-          yield* install(JsonCodec)
-          yield* install(Ws)
+          yield* JsonCodec.use()
+          yield* WsClient.use()
 
           const app = yield* createDemo({
             instance: 'rtc-observe',

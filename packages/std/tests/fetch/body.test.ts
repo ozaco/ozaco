@@ -1,6 +1,5 @@
 import { run } from 'std:effect'
 import { Fetch, FetchClient } from 'std:fetch'
-import { install } from 'std:plugin'
 import { isFailure, unwrap } from 'std:result'
 
 import { afterAll, describe, expect, it } from 'bun:test'
@@ -42,7 +41,7 @@ afterAll(() => {
 describe('platform body readers', () => {
   it('json<T>() parses a JSON body', async () => {
     const outcome = await run(function* () {
-      yield* install(FetchClient)
+      yield* FetchClient.use()
 
       const response = yield* Fetch.actions.get(`${base}/json`)
       return yield* response.json<typeof JSON_BODY>()
@@ -53,7 +52,7 @@ describe('platform body readers', () => {
 
   it('text() returns the exact UTF-8 body', async () => {
     const outcome = await run(function* () {
-      yield* install(FetchClient)
+      yield* FetchClient.use()
 
       const response = yield* Fetch.actions.get(`${base}/text`)
       return yield* response.text()
@@ -64,7 +63,7 @@ describe('platform body readers', () => {
 
   it('bytes(), arrayBuffer(), and blob() expose the same raw payload', async () => {
     const outcome = await run(function* () {
-      yield* install(FetchClient)
+      yield* FetchClient.use()
 
       const bytesResponse = yield* Fetch.actions.get(`${base}/text`)
       const bytes = yield* bytesResponse.bytes()
@@ -94,8 +93,8 @@ describe('platform body readers', () => {
 describe('codec-backed body()', () => {
   it('decodes the whole payload through the installed codec', async () => {
     const outcome = await run(function* () {
-      yield* install(FetchClient)
-      yield* install(JsonCodec)
+      yield* FetchClient.use()
+      yield* JsonCodec.use()
 
       const response = yield* Fetch.actions.get(`${base}/json`)
       return yield* response.body<typeof JSON_BODY>()
@@ -106,7 +105,7 @@ describe('codec-backed body()', () => {
 
   it('without any installed codec it fails with missing-action', async () => {
     const outcome = await run(function* () {
-      yield* install(FetchClient)
+      yield* FetchClient.use()
 
       const response = yield* Fetch.actions.get(`${base}/json`)
       return yield* response.body()
@@ -114,7 +113,7 @@ describe('codec-backed body()', () => {
 
     expect(isFailure(outcome)).toBe(true)
     if (isFailure(outcome)) {
-      expect(outcome.error).toBe('missing-action')
+      expect(outcome.error).toBe('std:plugin.missing-action')
     }
   })
 })
@@ -122,8 +121,8 @@ describe('codec-backed body()', () => {
 describe('empty bodies', () => {
   it('body() resolves to undefined instead of asking the codec to decode nothing', async () => {
     const outcome = await run(function* () {
-      yield* install(FetchClient)
-      yield* install(JsonCodec)
+      yield* FetchClient.use()
+      yield* JsonCodec.use()
 
       const response = yield* Fetch.actions.get(`${base}/empty`)
 
@@ -137,7 +136,7 @@ describe('empty bodies', () => {
 
   it('json() on an empty body resolves to null under Bun', async () => {
     const outcome = await run(function* () {
-      yield* install(FetchClient)
+      yield* FetchClient.use()
 
       const response = yield* Fetch.actions.get(`${base}/empty`)
       return yield* response.json()

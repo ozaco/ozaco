@@ -1,7 +1,6 @@
 import { attempt, run, scoped, sleep, until } from 'std:effect'
-import { install } from 'std:plugin'
 import { isFailure, unwrap } from 'std:result'
-import { Ws } from 'std:ws'
+import { Ws, WsClient } from 'std:ws'
 
 import { describe, expect, it } from 'bun:test'
 
@@ -26,8 +25,8 @@ describe('client-side close', () => {
     const server = echoServer()
     try {
       const outcome = await run(function* () {
-        yield* install(JsonCodec)
-        yield* install(Ws)
+        yield* JsonCodec.use()
+        yield* WsClient.use()
 
         const connection = yield* Ws.actions.connect(`ws://localhost:${server.port}`)
         const subscription = yield* connection.messages
@@ -54,8 +53,8 @@ describe('client-side close', () => {
     const server = echoServer()
     try {
       const outcome = await run(function* () {
-        yield* install(JsonCodec)
-        yield* install(Ws)
+        yield* JsonCodec.use()
+        yield* WsClient.use()
 
         const connection = yield* Ws.actions.connect(`ws://localhost:${server.port}`)
         yield* connection.close()
@@ -77,8 +76,8 @@ describe('server-initiated close (no reconnect configured)', () => {
     const server = closingServer(4001, 'server-bye', ['last words'])
     try {
       const outcome = await run(function* () {
-        yield* install(JsonCodec)
-        yield* install(Ws)
+        yield* JsonCodec.use()
+        yield* WsClient.use()
 
         const connection = yield* Ws.actions.connect(`ws://localhost:${server.port}`)
         const subscription = yield* connection.messages
@@ -108,8 +107,8 @@ describe('server-initiated close (no reconnect configured)', () => {
     const server = closingServer(1000, 'early')
     try {
       const outcome = await run(function* () {
-        yield* install(JsonCodec)
-        yield* install(Ws)
+        yield* JsonCodec.use()
+        yield* WsClient.use()
 
         const connection = yield* Ws.actions.connect(`ws://localhost:${server.port}`)
         const info = yield* connection.closed
@@ -146,8 +145,8 @@ describe('scope teardown', () => {
     try {
       const outcome = await run(function* () {
         yield* scoped(function* () {
-          yield* install(JsonCodec)
-          yield* install(Ws)
+          yield* JsonCodec.use()
+          yield* WsClient.use()
 
           yield* Ws.actions.connect(`ws://localhost:${server.port}`)
           // NO close() here: leaving the scope must tear the connection down
@@ -182,8 +181,8 @@ describe('scope teardown', () => {
     try {
       const outcome = await run(function* () {
         yield* scoped(function* () {
-          yield* install(JsonCodec)
-          yield* install(Ws)
+          yield* JsonCodec.use()
+          yield* WsClient.use()
 
           yield* Ws.actions.connect(`ws://localhost:${server.port}`, {
             reconnect: { retries: 3, delayMs: 10 },

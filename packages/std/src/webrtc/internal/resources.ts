@@ -2,11 +2,12 @@ import type { Operation } from 'std:effect'
 import { attempt, lift, operation, race, resource, sleep, until } from 'std:effect'
 import { fail, isSuccess } from 'std:result'
 
-import { CHANNEL_DEFAULTS } from '../const'
+import { RtcErrors } from '../errors'
 import type { Helpers } from '../types/helpers'
 import type { RtcDef } from '../types/rtc'
 
 import { initOf, wrapChannel } from './channel'
+import { CHANNEL_DEFAULTS } from './const'
 
 const messageOf = (error: unknown) => (error instanceof Error ? error.message : String(error))
 
@@ -17,7 +18,7 @@ const awaitOpen = (entry: Helpers.ChannelEntry, label: string, timeoutMs: number
         entry.opened,
         operation(function* () {
           yield* sleep(timeoutMs)
-          yield* fail('rtc/timeout', `channel "${label}" did not open within ${timeoutMs}ms`)
+          yield* fail(RtcErrors.Timeout, `channel "${label}" did not open within ${timeoutMs}ms`)
         })(),
       ])
     : entry.opened
@@ -38,14 +39,14 @@ export const openChannel = (
 
     const generation = yield* session.awaitGeneration() // parks through a redial gap
     if (!generation || session.ended) {
-      return yield* fail('rtc/channel', `peer is closed: cannot open "${label}"`)
+      return yield* fail(RtcErrors.Channel, `peer is closed: cannot open "${label}"`)
     }
 
     let native: RtcDef.ChannelLike
     try {
       native = generation.pc.createDataChannel(label, initOf(merged))
     } catch (error) {
-      return yield* fail('rtc/channel', `createDataChannel failed: ${messageOf(error)}`)
+      return yield* fail(RtcErrors.Channel, `createDataChannel failed: ${messageOf(error)}`)
     }
 
     const entry = wrapChannel(native, merged, {
@@ -87,14 +88,14 @@ export const openTrack = (
 
     const generation = yield* session.awaitGeneration() // parks through a redial gap
     if (!generation || session.ended) {
-      return yield* fail('rtc/track', 'peer is closed: cannot add a track')
+      return yield* fail(RtcErrors.Track, 'peer is closed: cannot add a track')
     }
 
     const { pc } = generation
     if (typeof pc.addTrack !== 'function') {
       return yield* fail(
-        'rtc/unsupported',
-        'this implementation has no media surface (addTrack) — set a media-capable rtcImpl',
+        RtcErrors.Unsupported,
+        'this implementation has no media surface (addTrack) — pass a media-capable `impl` to RtcClient.use',
       )
     }
 
@@ -102,7 +103,7 @@ export const openTrack = (
     try {
       sender = pc.addTrack(track, ...streams)
     } catch (error) {
-      return yield* fail('rtc/track', `addTrack failed: ${messageOf(error)}`)
+      return yield* fail(RtcErrors.Track, `addTrack failed: ${messageOf(error)}`)
     }
 
     const record: Helpers.TrackRecord = { track, streams: [...streams], sender, removed: false }
@@ -154,7 +155,7 @@ export const openTrack = (
 
       replace: operation(function* (next: RtcDef.TrackLike | null) {
         if (record.removed || session.ended) {
-          return yield* fail('rtc/track', 'sender is gone')
+          return yield* fail(RtcErrors.Track, 'sender is gone')
         }
 
         record.track = next // the next redialed generation adds THIS track
@@ -165,14 +166,14 @@ export const openTrack = (
         }
 
         if (typeof active.replaceTrack !== 'function') {
-          return yield* fail('rtc/unsupported', 'this implementation has no replaceTrack')
+          return yield* fail(RtcErrors.Unsupported, 'this implementation has no replaceTrack')
         }
 
         const swapped = yield* attempt(() =>
           until(active.replaceTrack?.(next) ?? Promise.resolve()),
         )
         if (!isSuccess(swapped)) {
-          return yield* fail('rtc/track', 'replaceTrack failed')
+          return yield* fail(RtcErrors.Track, 'replaceTrack failed')
         }
       }, 'rtc-replace-track'),
 

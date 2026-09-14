@@ -2,7 +2,6 @@ import type { Operation } from 'std:effect'
 import { run, until } from 'std:effect'
 import type { LoggerDef } from 'std:logger'
 import { DefaultLogger, Logger, LogLevel } from 'std:logger'
-import { install } from 'std:plugin'
 import { fail, unwrap } from 'std:result'
 
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
@@ -30,10 +29,10 @@ describe('file transport', () => {
 
     unwrap(
       await run(function* () {
-        yield* install(JsonCodec)
-        yield* install(BunIO)
-        yield* install(DefaultLogger, { timestamp: () => 1111 })
-        yield* install(FileTransport, { path })
+        yield* JsonCodec.use()
+        yield* BunIO.use()
+        yield* DefaultLogger.use({ timestamp: () => 1111 })
+        yield* FileTransport.use({ path })
 
         yield* Logger.actions.info('hello', { a: 1 })
         yield* Logger.actions.error('request failed', fail('boom', 'why'))
@@ -49,7 +48,6 @@ describe('file transport', () => {
       msg: 'hello',
       a: 1,
     })
-    // toMatchObject: the failure-payload data leak (see records.test.ts todo) adds extra keys
     expect(JSON.parse(lines[1]!)).toMatchObject({
       level: LogLevel.error,
       time: 1111,
@@ -63,10 +61,10 @@ describe('file transport', () => {
     const countLines = (text: string) => (text === '' ? 0 : text.trimEnd().split('\n').length)
 
     const outcome = await run(function* () {
-      yield* install(JsonCodec)
-      yield* install(BunIO)
-      yield* install(DefaultLogger)
-      yield* install(FileTransport, { path, bufferSize: 3 })
+      yield* JsonCodec.use()
+      yield* BunIO.use()
+      yield* DefaultLogger.use()
+      yield* FileTransport.use({ path, bufferSize: 3 })
 
       // setup already ensured the (empty) file exists
       const afterInstall = yield* until(readFile(path, 'utf8'))
@@ -103,10 +101,10 @@ describe('file transport', () => {
 
     unwrap(
       await run(function* () {
-        yield* install(JsonCodec)
-        yield* install(BunIO)
-        yield* install(DefaultLogger)
-        yield* install(FileTransport, { path, bufferSize: 10 })
+        yield* JsonCodec.use()
+        yield* BunIO.use()
+        yield* DefaultLogger.use()
+        yield* FileTransport.use({ path, bufferSize: 10 })
 
         yield* Logger.actions.info('pending')
         yield* Logger.actions.close()
@@ -124,10 +122,10 @@ describe('file transport', () => {
 
     unwrap(
       await run(function* () {
-        yield* install(JsonCodec)
-        yield* install(BunIO)
-        yield* install(DefaultLogger)
-        yield* install(FileTransport, { path, level: LogLevel.warn })
+        yield* JsonCodec.use()
+        yield* BunIO.use()
+        yield* DefaultLogger.use()
+        yield* FileTransport.use({ path, level: LogLevel.warn })
 
         yield* Logger.actions.info('skipped by the transport')
         yield* Logger.actions.warn('written')
@@ -145,10 +143,10 @@ describe('file transport', () => {
 
     unwrap(
       await run(function* () {
-        yield* install(JsonCodec)
-        yield* install(BunIO)
-        yield* install(DefaultLogger)
-        yield* install(FileTransport, { path, msgKey: 'note', errorKey: 'problem' })
+        yield* JsonCodec.use()
+        yield* BunIO.use()
+        yield* DefaultLogger.use()
+        yield* FileTransport.use({ path, msgKey: 'note', errorKey: 'problem' })
 
         yield* Logger.actions.error('bad', fail('boom', 'why'))
       }),
@@ -169,9 +167,9 @@ describe('file transport', () => {
     unwrap(
       await run(function* () {
         // no JsonCodec on purpose — the custom format must not need it
-        yield* install(BunIO)
-        yield* install(DefaultLogger)
-        yield* install(FileTransport, { path, format: lineFormat })
+        yield* BunIO.use()
+        yield* DefaultLogger.use()
+        yield* FileTransport.use({ path, format: lineFormat })
 
         yield* Logger.actions.info('custom')
       }),

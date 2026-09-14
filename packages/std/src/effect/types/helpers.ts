@@ -145,7 +145,7 @@ export namespace Helpers {
   }
 
   export interface ToFutureOptions<T> {
-    /** Abort the AWAITED task (settles `fail('halted')`); a `yield*`ed operation needs no
+    /** Abort the AWAITED task (settles `fail(EffectErrors.Halted)`); a `yield*`ed operation needs no
      * signal — it is cancelled with the caller's task. */
     readonly signal?: AbortSignal | undefined
 

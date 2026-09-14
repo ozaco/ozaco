@@ -1,6 +1,5 @@
 import { attempt, run } from 'std:effect'
 import { IO, IO_FLAGS, toPath } from 'std:io'
-import { install } from 'std:plugin'
 import { isFailure, unwrap } from 'std:result'
 
 import { describe, expect, it } from 'bun:test'
@@ -27,7 +26,7 @@ describe('files', () => {
   it('write/read/readText/exists/stat round-trip', async () => {
     await withTempDir(async dir => {
       const outcome = await run(function* () {
-        yield* install(BunIO)
+        yield* BunIO.use()
 
         const file = join(dir, 'notes.txt')
         yield* IO.actions.write(file, 'hello world — café')
@@ -64,7 +63,7 @@ describe('files', () => {
   it('write flags: APPEND appends, EXCLUSIVE refuses an existing file', async () => {
     await withTempDir(async dir => {
       const outcome = await run(function* () {
-        yield* install(BunIO)
+        yield* BunIO.use()
 
         const file = join(dir, 'log.txt')
         yield* IO.actions.write(file, 'one')
@@ -96,7 +95,7 @@ describe('files', () => {
   it('copy and rename move content; EXCLUSIVE variants refuse existing destinations', async () => {
     await withTempDir(async dir => {
       const outcome = await run(function* () {
-        yield* install(BunIO)
+        yield* BunIO.use()
 
         const src = join(dir, 'src.txt')
         yield* IO.actions.write(src, 'payload')
@@ -129,7 +128,7 @@ describe('files', () => {
       expect(unwrap(outcome)).toEqual({
         copiedGone: false,
         renamedText: 'payload',
-        renameError: 'exists',
+        renameError: 'std:io.exists',
         copyClashFailed: true,
         blockerText: 'keep',
       })
@@ -139,7 +138,7 @@ describe('files', () => {
   it('rm removes recursively; missing paths fail unless force is set', async () => {
     await withTempDir(async dir => {
       const outcome = await run(function* () {
-        yield* install(BunIO)
+        yield* BunIO.use()
 
         const nested = join(dir, 'a', 'b')
         yield* IO.actions.ensureDir(nested)
@@ -164,7 +163,7 @@ describe('files', () => {
       const target = join(dir, 'target.txt')
 
       const outcome = await run(function* () {
-        yield* install(BunIO)
+        yield* BunIO.use()
 
         yield* IO.actions.write(target, 'data')
 
@@ -202,7 +201,7 @@ describe('files', () => {
   it('readdir lists entries (recursive too); ensureFile/emptyDir behave idempotently', async () => {
     await withTempDir(async dir => {
       const outcome = await run(function* () {
-        yield* install(BunIO)
+        yield* BunIO.use()
 
         yield* IO.actions.ensureDir(join(dir, 'sub'))
         yield* IO.actions.write(join(dir, 'a.txt'), '1')
@@ -255,7 +254,7 @@ describe('walk', () => {
   it('default flags list files and dirs; FILES narrows; maxDepth bounds recursion', async () => {
     await withTempDir(async dir => {
       const outcome = await run(function* () {
-        yield* install(BunIO)
+        yield* BunIO.use()
         yield* fixture(dir)
 
         const all = yield* IO.actions.walk(dir)
@@ -285,7 +284,7 @@ describe('walk', () => {
   it('match keeps matching paths; skip prunes entries and whole subtrees', async () => {
     await withTempDir(async dir => {
       const outcome = await run(function* () {
-        yield* install(BunIO)
+        yield* BunIO.use()
         yield* fixture(dir)
 
         const matched = yield* IO.actions.walk(dir, {
@@ -321,7 +320,7 @@ describe('paths', () => {
   it('actions accept URL paths; path helpers mirror node:path', async () => {
     await withTempDir(async dir => {
       const outcome = await run(function* () {
-        yield* install(BunIO)
+        yield* BunIO.use()
 
         const file = join(dir, 'via-url.txt')
         yield* IO.actions.write(pathToFileURL(file), 'through a URL')

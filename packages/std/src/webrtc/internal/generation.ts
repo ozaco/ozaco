@@ -2,6 +2,7 @@ import { createQueue } from 'std:effect'
 import type { Result } from 'std:result'
 import { fail } from 'std:result'
 
+import { RtcErrors } from '../errors'
 import type { Helpers } from '../types/helpers'
 import type { RtcDef } from '../types/rtc'
 
@@ -34,7 +35,7 @@ const onFailed = (session: Helpers.Session, generation: Helpers.Generation) => {
 
   session.endGeneration(
     generation,
-    fail('rtc/connection', 'peer connection failed') as Result.Failure<unknown>,
+    fail(RtcErrors.Connection, 'peer connection failed') as Result.Failure<unknown>,
     { state: 'failed', reason: 'failed' },
   )
 }
@@ -48,7 +49,10 @@ const onClosed = (session: Helpers.Session, generation: Helpers.Generation) => {
 
   session.endGeneration(
     generation,
-    fail('rtc/connection', 'the implementation closed the connection') as Result.Failure<unknown>,
+    fail(
+      RtcErrors.Connection,
+      'the implementation closed the connection',
+    ) as Result.Failure<unknown>,
     { state: 'closed', reason: 'closed' },
   )
 }

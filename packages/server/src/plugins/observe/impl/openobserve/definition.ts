@@ -1,7 +1,7 @@
 import type { Helpers, ServerDef } from 'server:core'
 import { Server, ServerErrors } from 'server:core'
 import { createSink } from 'server:internal'
-import { definePlugin, install } from 'std:plugin'
+import { definePlugin } from 'std:plugin'
 import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 
@@ -95,7 +95,7 @@ export const OpenObserveExporter = definePlugin<
     const otlp =
       options.otlp === false
         ? null
-        : yield* install(OtlpExporter, {
+        : yield* OtlpExporter.use({
             url: `${base}/api/${org}`,
             headers,
             serviceName: options.serviceName,

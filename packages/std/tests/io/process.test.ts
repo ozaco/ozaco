@@ -1,6 +1,5 @@
 import { attempt, run } from 'std:effect'
 import { IO } from 'std:io'
-import { install } from 'std:plugin'
 import { isFailure, unwrap } from 'std:result'
 
 import { describe, expect, it } from 'bun:test'
@@ -15,7 +14,7 @@ const decoder = new TextDecoder()
 describe('exec', () => {
   it('captures stdout and reports a clean exit', async () => {
     const outcome = await run(function* () {
-      yield* install(BunIO)
+      yield* BunIO.use()
 
       const result = yield* IO.actions.exec('echo', ['hello'])
 
@@ -39,7 +38,7 @@ describe('exec', () => {
 
   it('a non-zero exit is data on the result, not a Failure', async () => {
     const outcome = await run(function* () {
-      yield* install(BunIO)
+      yield* BunIO.use()
 
       const result = yield* IO.actions.exec('sh', ['-c', 'printf out; printf err >&2; exit 3'])
 
@@ -62,7 +61,7 @@ describe('exec', () => {
 
   it('stdin bytes are written to the child and closed', async () => {
     const outcome = await run(function* () {
-      yield* install(BunIO)
+      yield* BunIO.use()
 
       const result = yield* IO.actions.exec('cat', [], { stdin: 'from-stdin' })
       return decoder.decode(result.stdout)
@@ -77,7 +76,7 @@ describe('exec', () => {
 
     try {
       const outcome = await run(function* () {
-        yield* install(BunIO)
+        yield* BunIO.use()
 
         const result = yield* IO.actions.exec('sh', ['-c', 'printf "%s:" "$OZACO_IO_TEST"; pwd'], {
           cwd: dir,
@@ -95,18 +94,18 @@ describe('exec', () => {
 
   it('a nonexistent binary is a spawn Failure, not an exit status', async () => {
     const outcome = await run(function* () {
-      yield* install(BunIO)
+      yield* BunIO.use()
 
       const result = yield* attempt(() => IO.actions.exec('ozaco-definitely-not-a-binary'))
       return isFailure(result) ? result.error : 'no-failure'
     })
 
-    expect(unwrap(outcome)).toBe('exec-spawn-failed')
+    expect(unwrap(outcome)).toBe('std:io.exec-spawn-failed')
   })
 
   it('timeout kills a child that runs too long', async () => {
     const outcome = await run(function* () {
-      yield* install(BunIO)
+      yield* BunIO.use()
 
       const result = yield* IO.actions.exec('sleep', ['2'], { timeout: 50 })
       return { success: result.success, endedEarly: result.code !== 0 || result.signal !== null }
@@ -119,7 +118,7 @@ describe('exec', () => {
 describe('spawn', () => {
   it('a ProcessHandle round-trips stdin to stdout and reports a clean exit', async () => {
     const outcome = await run(function* () {
-      yield* install(BunIO)
+      yield* BunIO.use()
 
       const handle = yield* IO.actions.spawn('cat')
       const out = yield* handle.stdout
@@ -151,7 +150,7 @@ describe('spawn', () => {
 
   it('kill terminates the child and the status carries the signal', async () => {
     const outcome = await run(function* () {
-      yield* install(BunIO)
+      yield* BunIO.use()
 
       const handle = yield* IO.actions.spawn('sleep', ['5'])
       yield* handle.kill()
@@ -165,12 +164,12 @@ describe('spawn', () => {
 
   it('a nonexistent binary fails the spawn as a Result', async () => {
     const outcome = await run(function* () {
-      yield* install(BunIO)
+      yield* BunIO.use()
 
       const result = yield* attempt(() => IO.actions.spawn('ozaco-definitely-not-a-binary'))
       return isFailure(result) ? result.error : 'no-failure'
     })
 
-    expect(unwrap(outcome)).toBe('spawn-failed')
+    expect(unwrap(outcome)).toBe('std:io.spawn-failed')
   })
 })

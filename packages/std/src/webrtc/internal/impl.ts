@@ -3,7 +3,6 @@ import { isSuccess } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import type { RtcDef } from '../types/rtc'
-import { rtcImpl } from '../utils/context'
 
 /** Probe result cache — the polyfill import is attempted at most once per process. */
 let polyfilled: RtcDef.ImplLike | false | undefined
@@ -24,17 +23,27 @@ const loadPolyfill = operation(function* () {
 }, 'rtc-load-polyfill')
 
 /**
- * Resolve the peer-connection implementation: an injected/global `rtcImpl` wins; otherwise, on
- * Bun/Node, the optional `node-datachannel` polyfill is dynamically imported (once) and used.
- * Returns `undefined` when nothing is available — `connect` turns that into `rtc/unsupported`.
+ * Resolve the peer-connection implementation: an `impl` given to `RtcClient.use` wins (`false`
+ * means "none, and do not probe"); otherwise the platform global `RTCPeerConnection`; otherwise,
+ * on Bun/Node, the optional `node-datachannel` polyfill is dynamically imported (once) and used.
+ * Returns `undefined` when nothing is available — `connect` turns that into
+ * `RtcErrors.Unsupported`.
  */
-export const resolveImpl = operation(function* () {
-  const injected = yield* rtcImpl.get()
+export const resolveImpl = operation(function* (injected: RtcDef.ImplLike | false | undefined) {
   if (injected) {
     return injected
   }
 
-  if (injected === false || !onNodeOrBun()) {
+  if (injected === false) {
+    return undefined
+  }
+
+  const global = (globalThis as AnyType).RTCPeerConnection as RtcDef.ImplLike | undefined
+  if (global) {
+    return global
+  }
+
+  if (!onNodeOrBun()) {
     return undefined
   }
 

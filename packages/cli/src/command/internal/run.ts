@@ -1,11 +1,9 @@
-import { CliErrors, Terminal } from 'cli:core'
 import type { StandardSchemaV1 } from 'cli:core'
+import { CliErrors, Terminal } from 'cli:core'
 import { usePalette } from 'cli:palette'
 import type { Operation } from 'std:effect'
 import { scoped } from 'std:effect'
-import { install } from 'std:plugin'
 import { fail, isFailure } from 'std:result'
-import type { AnyType } from 'std:shared'
 import { validateSync } from 'std:shared'
 
 import { HELP_FLAGS, VERSION_FLAGS } from '../const'
@@ -45,7 +43,7 @@ function* descend(node: Helpers.RuntimeNode, rest: string[], path: string[]): Op
       // This is also what lets subcommands be compiled as independent bundles (each carrying its
       // own copy of @ozaco/*) — co-installing two separate bundles into one scope would otherwise
       // collide.
-      yield* install(next.plugin as AnyType)
+      yield* next.plugin.use()
       return yield* descend(next, rest.slice(1), [...path, token])
     })
   }
@@ -142,7 +140,7 @@ export function* runCommand(root: Helpers.RuntimeNode, argv?: string[]): Operati
   // top-level analog of how `descend` enters a child. Only the invoked command's setup ever runs,
   // so sibling top-level commands (e.g. two plugins that each install YamlCodec) never collide.
   return yield* scoped(function* () {
-    yield* install(root.plugin as AnyType)
+    yield* root.plugin.use()
     return yield* descend(root, args, [root.name])
   })
 }

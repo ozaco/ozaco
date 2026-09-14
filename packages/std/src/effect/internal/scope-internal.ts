@@ -4,6 +4,7 @@ import type { EmptyType } from 'std:shared'
 
 import { createFuture } from '../base/future'
 import { withResolvers } from '../base/with-resolvers'
+import { EffectErrors } from '../errors'
 import type { Helpers } from '../types/helpers'
 import type { Api, Around, Context, Operation, Scope, Task } from '../types/operation'
 import { api } from '../utils/api'
@@ -56,7 +57,7 @@ export function buildScopeInternal(parent?: Scope): [Helpers.ScopeInternal, () =
     expect<T>(context: Context<T>): T {
       const value = scope.get(context)
       if (value === undefined) {
-        throw fail(`MissingContextError`, context.name)
+        throw fail(EffectErrors.MissingContext, context.name)
       }
       return value
     },

@@ -3,7 +3,7 @@ import { attempt, createFutureFlow, toFuture, useScope } from 'std:effect'
 import { IO } from 'std:io'
 import { isFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
-import { Ws } from 'std:ws'
+import { Ws, WsClient } from 'std:ws'
 
 import { JsonCodec } from 'std:codec/impl/json'
 import { WebIO } from 'std:io/impl/web'
@@ -38,7 +38,7 @@ export function* createClient<TApi = Record<string, Record<string, ClientDef.Ref
   yield* attempt(() => JsonCodec.use())
 
   if (!(yield* Ws.context.get())) {
-    yield* Ws.use()
+    yield* WsClient.use()
   }
 
   // `$setToken` overrides the option; until the first set, the given value/resolver answers

@@ -3,7 +3,6 @@ import type { Helpers, ProviderDef } from 'ai:core'
 import { accumulateToolCalls, Ai, AiClient, AiErrors, AiProvider, useProvider } from 'ai:core'
 import type { Operation } from 'std:effect'
 import { attempt, run, scoped } from 'std:effect'
-import { install } from 'std:plugin'
 import { isFailure, unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
 
@@ -49,7 +48,7 @@ export interface ProviderTarget {
   /** Whether `install` honors `script.capabilities` restrictions (mock only). */
   readonly restrictable: boolean
   /** Install a FRESH provider primed with the script into the current scope. */
-  readonly install: (script?: ProviderScript) => Operation<unknown>
+  readonly use: (script?: ProviderScript) => Operation<unknown>
 }
 
 interface CapturedSpecs {
@@ -90,8 +89,8 @@ export const runProviderSuite = (target: ProviderTarget): void => {
       unwrap(
         await run(() =>
           scoped(function* () {
-            yield* target.install()
-            yield* install(AiClient, { models: { chat: 'model-chat' } })
+            yield* target.use()
+            yield* AiClient.use({ models: { chat: 'model-chat' } })
             const info = yield* useProvider()
             expect(info.provider).toBe(target.label)
             expect(info.capabilities).toEqual(target.capabilities)
@@ -104,8 +103,8 @@ export const runProviderSuite = (target: ProviderTarget): void => {
       unwrap(
         await run(() =>
           scoped(function* () {
-            yield* target.install({ chat: [{ kind: 'text', text: 'hello from the model' }] })
-            yield* install(AiClient, { models: { chat: 'model-chat' } })
+            yield* target.use({ chat: [{ kind: 'text', text: 'hello from the model' }] })
+            yield* AiClient.use({ models: { chat: 'model-chat' } })
             const specs = yield* captureSpecs()
 
             const result = yield* Ai.actions.chat('hi there')
@@ -129,14 +128,14 @@ export const runProviderSuite = (target: ProviderTarget): void => {
       unwrap(
         await run(() =>
           scoped(function* () {
-            yield* target.install({
+            yield* target.use({
               chat: [
                 { kind: 'text', text: 'one' },
                 { kind: 'text', text: 'two' },
               ],
               embed: [[0.5, 0.25]],
             })
-            yield* install(AiClient, { models: { chat: 'model-chat', embed: 'model-embed' } })
+            yield* AiClient.use({ models: { chat: 'model-chat', embed: 'model-embed' } })
             const specs = yield* captureSpecs()
 
             yield* Ai.actions.chat('x')
@@ -158,8 +157,8 @@ export const runProviderSuite = (target: ProviderTarget): void => {
       unwrap(
         await run(() =>
           scoped(function* () {
-            yield* target.install({ chat: [{ kind: 'text', text: 'ok' }] })
-            yield* install(AiClient, {
+            yield* target.use({ chat: [{ kind: 'text', text: 'ok' }] })
+            yield* AiClient.use({
               models: { chat: 'model-chat' },
               defaults: { temperature: 0.5, maxTokens: 128 },
             })
@@ -174,8 +173,8 @@ export const runProviderSuite = (target: ProviderTarget): void => {
     it('an unconfigured modality model fails ai.configuration before any dispatch', async () => {
       await run(() =>
         scoped(function* () {
-          yield* target.install()
-          yield* install(AiClient)
+          yield* target.use()
+          yield* AiClient.use()
           const chat = yield* attempt(Ai.actions.chat('hi'))
           expect((chat as AnyType).error).toBe(AiErrors.Configuration)
           const embed = yield* attempt(Ai.actions.embed('hi'))
@@ -188,7 +187,7 @@ export const runProviderSuite = (target: ProviderTarget): void => {
       unwrap(
         await run(() =>
           scoped(function* () {
-            yield* target.install({
+            yield* target.use({
               chat: [
                 {
                   kind: 'tool-calls',
@@ -197,7 +196,7 @@ export const runProviderSuite = (target: ProviderTarget): void => {
                 { kind: 'text', text: 'the sum is 5' },
               ],
             })
-            yield* install(AiClient, { models: { chat: 'model-chat' } })
+            yield* AiClient.use({ models: { chat: 'model-chat' } })
             const specs = yield* captureSpecs()
             const seen: AnyType[] = []
 
@@ -240,8 +239,8 @@ export const runProviderSuite = (target: ProviderTarget): void => {
               kind: 'tool-calls',
               calls: [{ id: 'c', name: 'noop', arguments: '{}' }],
             }
-            yield* target.install({ chat: [turn, turn] })
-            yield* install(AiClient, { models: { chat: 'model-chat' } })
+            yield* target.use({ chat: [turn, turn] })
+            yield* AiClient.use({ models: { chat: 'model-chat' } })
             const outcome = yield* attempt(
               Ai.actions.chat('loop', {
                 tools: [{ name: 'noop' }],
@@ -264,12 +263,12 @@ export const runProviderSuite = (target: ProviderTarget): void => {
       unwrap(
         await run(() =>
           scoped(function* () {
-            yield* target.install({
+            yield* target.use({
               chat: [
                 { kind: 'tool-calls', calls: [{ id: 'c', name: 'add', arguments: 'not-json' }] },
               ],
             })
-            yield* install(AiClient, { models: { chat: 'model-chat' } })
+            yield* AiClient.use({ models: { chat: 'model-chat' } })
             const outcome = yield* attempt(
               Ai.actions.chat('x', {
                 tools: [{ name: 'add' }],
@@ -291,7 +290,7 @@ export const runProviderSuite = (target: ProviderTarget): void => {
       unwrap(
         await run(() =>
           scoped(function* () {
-            yield* target.install({
+            yield* target.use({
               chatStream: [
                 {
                   chunks: [
@@ -305,7 +304,7 @@ export const runProviderSuite = (target: ProviderTarget): void => {
                 },
               ],
             })
-            yield* install(AiClient, { models: { chat: 'model-chat' } })
+            yield* AiClient.use({ models: { chat: 'model-chat' } })
 
             const flow = yield* Ai.actions.chatStream('go')
             const { values, close } = yield* drain(flow)
@@ -330,8 +329,8 @@ export const runProviderSuite = (target: ProviderTarget): void => {
       unwrap(
         await run(() =>
           scoped(function* () {
-            yield* target.install({ chat: [{ kind: 'error', error: 'auth' }] })
-            yield* install(AiClient, { models: { chat: 'model-chat' } })
+            yield* target.use({ chat: [{ kind: 'error', error: 'auth' }] })
+            yield* AiClient.use({ models: { chat: 'model-chat' } })
             const outcome = yield* attempt(Ai.actions.chat('hi'))
             expect((outcome as AnyType).error).toBe(AiErrors.Auth)
           }),
@@ -343,10 +342,10 @@ export const runProviderSuite = (target: ProviderTarget): void => {
       unwrap(
         await run(() =>
           scoped(function* () {
-            yield* target.install({
+            yield* target.use({
               chat: [{ kind: 'error', error: 'rate-limit', retryAfterSeconds: 7 }],
             })
-            yield* install(AiClient, { models: { chat: 'model-chat' } })
+            yield* AiClient.use({ models: { chat: 'model-chat' } })
             const outcome = yield* attempt(Ai.actions.chat('hi'))
             expect(isFailure(outcome)).toBe(true)
             expect((outcome as AnyType).error).toBe(AiErrors.RateLimit)
@@ -360,8 +359,8 @@ export const runProviderSuite = (target: ProviderTarget): void => {
       unwrap(
         await run(() =>
           scoped(function* () {
-            yield* target.install({ chat: [{ kind: 'error', error: 'bad-response' }] })
-            yield* install(AiClient, { models: { chat: 'model-chat' } })
+            yield* target.use({ chat: [{ kind: 'error', error: 'bad-response' }] })
+            yield* AiClient.use({ models: { chat: 'model-chat' } })
             const outcome = yield* attempt(Ai.actions.chat('hi'))
             expect((outcome as AnyType).error).toBe(AiErrors.BadResponse)
           }),
@@ -373,13 +372,13 @@ export const runProviderSuite = (target: ProviderTarget): void => {
       unwrap(
         await run(() =>
           scoped(function* () {
-            yield* target.install({
+            yield* target.use({
               chat: [
                 { kind: 'error', error: 'rate-limit', retryAfterSeconds: 0 },
                 { kind: 'text', text: 'recovered' },
               ],
             })
-            yield* install(AiClient, { models: { chat: 'model-chat' } })
+            yield* AiClient.use({ models: { chat: 'model-chat' } })
             const result = yield* Ai.actions.chat('hi', { retries: 1 })
             expect(result.text).toBe('recovered')
           }),
@@ -388,13 +387,13 @@ export const runProviderSuite = (target: ProviderTarget): void => {
       unwrap(
         await run(() =>
           scoped(function* () {
-            yield* target.install({
+            yield* target.use({
               chat: [
                 { kind: 'error', error: 'rate-limit', retryAfterSeconds: 0 },
                 { kind: 'text', text: 'never reached' },
               ],
             })
-            yield* install(AiClient, { models: { chat: 'model-chat' } })
+            yield* AiClient.use({ models: { chat: 'model-chat' } })
             const outcome = yield* attempt(Ai.actions.chat('hi'))
             expect((outcome as AnyType).error).toBe(AiErrors.RateLimit)
           }),
@@ -407,8 +406,8 @@ export const runProviderSuite = (target: ProviderTarget): void => {
         await run(() =>
           scoped(function* () {
             const clip = new Uint8Array([1, 2, 3, 4])
-            yield* target.install({ tts: clip })
-            yield* install(AiClient, {
+            yield* target.use({ tts: clip })
+            yield* AiClient.use({
               models: { tts: 'model-tts' },
               defaults: { voice: 'test-voice' },
             })
@@ -433,8 +432,8 @@ export const runProviderSuite = (target: ProviderTarget): void => {
       unwrap(
         await run(() =>
           scoped(function* () {
-            yield* target.install()
-            yield* install(AiClient, { models: { tts: 'model-tts' } })
+            yield* target.use()
+            yield* AiClient.use({ models: { tts: 'model-tts' } })
             const outcome = yield* attempt(Ai.actions.tts('say this'))
             expect((outcome as AnyType).error).toBe(AiErrors.Configuration)
           }),
@@ -446,8 +445,8 @@ export const runProviderSuite = (target: ProviderTarget): void => {
       unwrap(
         await run(() =>
           scoped(function* () {
-            yield* target.install({ stt: 'transcribed text' })
-            yield* install(AiClient, { models: { stt: 'model-stt' } })
+            yield* target.use({ stt: 'transcribed text' })
+            yield* AiClient.use({ models: { stt: 'model-stt' } })
             const specs = yield* captureSpecs()
             const text = yield* Ai.actions.stt(new Uint8Array([9, 9]), {
               language: 'en',
@@ -466,11 +465,11 @@ export const runProviderSuite = (target: ProviderTarget): void => {
       unwrap(
         await run(() =>
           scoped(function* () {
-            yield* target.install({
+            yield* target.use({
               capabilities: { embed: false, tts: false },
               chat: [{ kind: 'text', text: 'still works' }],
             })
-            yield* install(AiClient, {
+            yield* AiClient.use({
               models: { chat: 'model-chat', embed: 'model-embed', tts: 'model-tts' },
               defaults: { voice: 'v' },
             })
@@ -488,10 +487,10 @@ export const runProviderSuite = (target: ProviderTarget): void => {
     it('scope teardown resolves promptly with a stream mid-flight', async () => {
       const task = run(() =>
         scoped(function* () {
-          yield* target.install({
+          yield* target.use({
             chatStream: [{ chunks: [{ text: 'first' }], hang: true }],
           })
-          yield* install(AiClient, { models: { chat: 'model-chat' } })
+          yield* AiClient.use({ models: { chat: 'model-chat' } })
           const flow = yield* Ai.actions.chatStream('stream on')
           const subscription = yield* flow
           const first = yield* subscription.next()

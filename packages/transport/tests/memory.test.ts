@@ -1,5 +1,4 @@
 import { attempt, fork, race, run, sleep } from 'std:effect'
-import { install } from 'std:plugin'
 import { isFailure, unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
 
@@ -18,8 +17,7 @@ runTransportSuite({
   label: 'memory',
   enabled: true,
   // a small payload limit so the suite exercises chunking (data plane and lane frames)
-  install: (prefix = 'suite') =>
-    install(MemoryTransport, { prefix, link, maxPayloadBytes: 64 * 1024 }),
+  use: (prefix = 'suite') => MemoryTransport.use({ prefix, link, maxPayloadBytes: 64 * 1024 }),
   expect: { receipts: true, requestReply: false, groups: true, durable: true },
 })
 
@@ -28,8 +26,8 @@ describe('transport — memory: outage simulation', () => {
     const outage = createLink()
     unwrap(
       await run(function* () {
-        yield* install(BunIO)
-        yield* install(MemoryTransport, { prefix: 'app', link: outage })
+        yield* BunIO.use()
+        yield* MemoryTransport.use({ prefix: 'app', link: outage })
         const status = yield* Transport.actions.status()
         expect((yield* status.next() as AnyType).value).toBe('connected')
         const sub = yield* Transport.actions.subscribe<string>('ping')
@@ -63,8 +61,8 @@ describe('transport — memory: chaos link', () => {
         const unreliable = createLink({
           chaos: { seed, dropRate: 0.3, duplicateRate: 0.3 },
         })
-        yield* install(BunIO)
-        yield* install(MemoryTransport, { prefix: 'app', link: unreliable })
+        yield* BunIO.use()
+        yield* MemoryTransport.use({ prefix: 'app', link: unreliable })
         const sub = yield* Transport.actions.subscribe<number>('n')
         for (let n = 0; n < 40; n += 1) {
           yield* Transport.actions.publish('n', n)
@@ -104,8 +102,8 @@ describe('transport — memory: chaos link and lanes', () => {
         const unreliable = createLink({
           chaos: { seed: 3, dropRate: 0.5, duplicateRate: 0, maxDelayMs: 1 },
         })
-        yield* install(BunIO)
-        yield* install(MemoryTransport, { prefix: 'app', link: unreliable })
+        yield* BunIO.use()
+        yield* MemoryTransport.use({ prefix: 'app', link: unreliable })
         const values: number[] = Array.from({ length: 40 }, (_, index) => index)
         const source = {
           *[Symbol.iterator]() {

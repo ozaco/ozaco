@@ -1,0 +1,11 @@
+import { createTags } from 'std:shared'
+
+export const EffectErrors = createTags(
+  'std:effect',
+
+  'halted',
+  'iteration-error',
+  'missing-context',
+  'no-scope-handler',
+  'using',
+)

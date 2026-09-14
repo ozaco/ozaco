@@ -3,9 +3,10 @@ import type { Flow, Future } from 'std:effect'
 import { operation } from 'std:effect'
 import type { AnyType } from 'std:shared'
 
-import { CONNECTING, OPEN } from '../const'
 import type { Helpers } from '../types/helpers'
 import type { WsDef } from '../types/ws'
+
+import { CONNECTING, OPEN } from './const'
 
 /** Whether a socket generation can still take a `close(code, reason)` call. */
 const isLive = (socket: WsDef.SocketLike | undefined): socket is WsDef.SocketLike =>

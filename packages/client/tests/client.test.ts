@@ -3,7 +3,7 @@ import { ClientErrors, createClient } from 'client:core'
 import { attempt, run, sleep, until } from 'std:effect'
 import { unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
-import { wsImpl } from 'std:ws'
+import { WsClient } from 'std:ws'
 
 import { describe, expect, it } from 'bun:test'
 
@@ -154,7 +154,7 @@ describe('client — realtime resume', () => {
     }
     unwrap(
       await run(function* () {
-        yield* wsImpl.set(Spy as AnyType)
+        yield* WsClient.use({ impl: Spy as AnyType })
         const { url } = yield* boot()
         const client = yield* createClient<Api>({ url })
         yield* client.notes.create({ title: 'before-drop', done: false } as AnyType)

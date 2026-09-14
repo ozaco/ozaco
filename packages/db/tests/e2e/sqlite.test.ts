@@ -1,6 +1,5 @@
 import { DbClient, column, table } from 'db:core'
 import { run, sleep, until } from 'std:effect'
-import { install } from 'std:plugin'
 import { unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
 
@@ -19,7 +18,7 @@ runAdapterSuite({
   label: 'sqlite',
   enabled: true,
   raw: true,
-  install: () => install(SqliteAdapter),
+  use: () => SqliteAdapter.use(),
 })
 
 describe('sqlite — concurrent connections', () => {
@@ -29,9 +28,9 @@ describe('sqlite — concurrent connections', () => {
 
     unwrap(
       await run(function* () {
-        yield* install(BunIO)
-        yield* install(SqliteAdapter, { path, busyTimeoutMs: 3000 })
-        yield* install(DbClient, { tables: [todos] })
+        yield* BunIO.use()
+        yield* SqliteAdapter.use({ path, busyTimeoutMs: 3000 })
+        yield* DbClient.use({ tables: [todos] })
         const db = (yield* DbClient.context.expect()) as AnyType
 
         // the adapter flipped the FILE to WAL — readers can't block this writer any more

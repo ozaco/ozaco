@@ -6,6 +6,7 @@ import type { AnyType } from 'std:shared'
 
 import { critical } from '../base/coroutine'
 import { encapsulate, TaskGroupContext } from '../base/task-group'
+import { EffectErrors } from '../errors'
 import type { Helpers } from '../types/helpers'
 import type { Future, Task } from '../types/operation'
 
@@ -129,7 +130,7 @@ class TaskInternal<T> implements Task<T> {
       }
       throw asFailure(result)
     } else {
-      throw fail('halted')
+      throw fail(EffectErrors.Halted)
     }
   }
 
@@ -142,7 +143,7 @@ class TaskInternal<T> implements Task<T> {
 
     // std contract: the promise side resolves a Result and NEVER rejects — success resolves
     // Success<T>, an operation failure resolves the Failure itself, a halt resolves
-    // fail('halted'). (`yield* task` keeps raising, that side is unchanged.)
+    // fail(EffectErrors.Halted). (`yield* task` keeps raising, that side is unchanged.)
     this._promise = new Promise(resolve => {
       // oxlint-disable-next-line promise/always-return
       this.routine.future.then(rawOutcome => {
@@ -162,7 +163,7 @@ class TaskInternal<T> implements Task<T> {
             resolve(asFailure(result) as T)
           }
         } else {
-          resolve(fail('halted') as T)
+          resolve(fail(EffectErrors.Halted) as T)
         }
       })
     })

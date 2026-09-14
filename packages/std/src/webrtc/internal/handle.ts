@@ -2,6 +2,7 @@ import type { Flow, Future, Operation, Queue } from 'std:effect'
 import { attempt, lift, operation } from 'std:effect'
 import { fail } from 'std:result'
 
+import { RtcErrors } from '../errors'
 import type { Helpers } from '../types/helpers'
 import type { RtcDef } from '../types/rtc'
 
@@ -65,7 +66,7 @@ export const createHandle = (session: Helpers.Session): RtcDef.Peer => {
     stats: operation(function* () {
       const generation = session.generation
       if (!generation?.alive) {
-        return yield* fail('rtc/stats', 'the peer has no live connection to read stats from')
+        return yield* fail(RtcErrors.Stats, 'the peer has no live connection to read stats from')
       }
 
       return yield* readStats(generation.pc)

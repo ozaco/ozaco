@@ -1,6 +1,5 @@
 import { run } from 'std:effect'
 import { DefaultLogger, Logger, LogLevel } from 'std:logger'
-import { install } from 'std:plugin'
 import { isFailure, unwrap } from 'std:result'
 
 import { describe, expect, it } from 'bun:test'
@@ -13,8 +12,8 @@ describe('logger creation + record shape', () => {
 
     unwrap(
       await run(function* () {
-        yield* install(DefaultLogger, { timestamp: () => 1111 })
-        yield* install(captureTransport('capture', sink))
+        yield* DefaultLogger.use({ timestamp: () => 1111 })
+        yield* captureTransport('capture', sink).use()
 
         yield* Logger.actions.info('hello', 'world', { a: 1 })
       }),
@@ -38,13 +37,13 @@ describe('logger creation + record shape', () => {
 
     expect(isFailure(outcome)).toBe(true)
     if (isFailure(outcome)) {
-      expect(outcome.error).toBe('missing-action')
+      expect(outcome.error).toBe('std:plugin.missing-action')
     }
   })
 
   it('logging with a logger but zero transports is a successful no-op', async () => {
     const outcome = await run(function* () {
-      yield* install(DefaultLogger)
+      yield* DefaultLogger.use()
       yield* Logger.actions.info('into the void')
       return 'done'
     })
@@ -59,8 +58,8 @@ describe('level thresholds', () => {
 
     unwrap(
       await run(function* () {
-        yield* install(DefaultLogger)
-        yield* install(captureTransport('capture', sink))
+        yield* DefaultLogger.use()
+        yield* captureTransport('capture', sink).use()
 
         yield* Logger.actions.trace('t')
         yield* Logger.actions.debug('d')
@@ -84,8 +83,8 @@ describe('level thresholds', () => {
 
     unwrap(
       await run(function* () {
-        yield* install(DefaultLogger, { level: LogLevel.error })
-        yield* install(captureTransport('capture', errorOnly))
+        yield* DefaultLogger.use({ level: LogLevel.error })
+        yield* captureTransport('capture', errorOnly).use()
 
         yield* Logger.actions.info('dropped')
         yield* Logger.actions.warn('dropped')
@@ -100,8 +99,8 @@ describe('level thresholds', () => {
 
     unwrap(
       await run(function* () {
-        yield* install(DefaultLogger, { level: LogLevel.silent })
-        yield* install(captureTransport('capture', silenced))
+        yield* DefaultLogger.use({ level: LogLevel.silent })
+        yield* captureTransport('capture', silenced).use()
 
         yield* Logger.actions.fatal('still dropped')
       }),
@@ -114,8 +113,8 @@ describe('level thresholds', () => {
     const sink = createSink()
 
     const outcome = await run(function* () {
-      yield* install(DefaultLogger, { level: LogLevel.warn })
-      yield* install(captureTransport('capture', sink))
+      yield* DefaultLogger.use({ level: LogLevel.warn })
+      yield* captureTransport('capture', sink).use()
 
       const before = {
         trace: yield* Logger.actions.isLevelEnabled(LogLevel.trace),
@@ -148,8 +147,8 @@ describe('level thresholds', () => {
 
     unwrap(
       await run(function* () {
-        yield* install(DefaultLogger)
-        yield* install(captureTransport('capture', sink))
+        yield* DefaultLogger.use()
+        yield* captureTransport('capture', sink).use()
 
         yield* Logger.actions.log(LogLevel.warn, 'via-log', { n: 1 })
         yield* Logger.actions.log(LogLevel.debug, 'below threshold')

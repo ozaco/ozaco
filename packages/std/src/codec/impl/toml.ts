@@ -7,7 +7,7 @@ import type { AnyType } from 'std:shared'
 import { parse, stringify } from 'smol-toml'
 
 import pkg from '../../../package.json'
-import { Codec } from '../definitions'
+import { Codec } from '../definition'
 import { CodecErrors } from '../errors'
 import type { CodecDef } from '../types'
 
@@ -17,11 +17,13 @@ const decoder = new TextDecoder()
 const getSelf = (): CodecDef => TomlCodec
 
 /**
- * A zero-dependency TOML codec for the `std:codec` registry (a from-scratch parser + serializer,
- * adapted from Deno's `@std/toml`; TOML datetimes are intentionally unsupported). `parseToml` /
- * `stringifyToml` return a `Result`, so this stays effect-native — the codec just `yield*`s the
- * failure, no try/catch. Default priority 500, below `JsonCodec` (999): installing both keeps JSON
- * as the default; register with a higher `{ priority }` to prefer TOML, or install it alone.
+ * A TOML codec for the `std:codec` registry, backed by `smol-toml` (an optional dependency — install
+ * `smol-toml` alongside `@ozaco/std` to use it). `smol-toml` throws on bad input, so every action
+ * wraps its call in try/catch and re-raises the thrown error as a `CodecErrors.*` failure (`Encode` /
+ * `Decode` / `Stringify` / `Parse`). TOML datetimes pass through untouched — `smol-toml` parses them
+ * into its `Date` subclass and nothing strips or rejects them. Default priority 500, below
+ * `JsonCodec` (999): installing both keeps JSON as the default; register with a higher
+ * `{ priority }` to prefer TOML, or install it alone.
  */
 export const TomlCodec = Codec.implement({
   name: 'std/toml-codec',

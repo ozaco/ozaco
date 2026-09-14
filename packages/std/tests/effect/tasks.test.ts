@@ -136,7 +136,7 @@ describe('structured concurrency: task trees', () => {
       return isFailure(raised) ? raised.error : 'no-error'
     })
 
-    expect(unwrap(outcome)).toBe('halted')
+    expect(unwrap(outcome)).toBe('std:effect.halted')
   })
 
   it('a forked task is halted at the scoped() boundary and its teardown runs', async () => {

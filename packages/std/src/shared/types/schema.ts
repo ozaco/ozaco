@@ -181,9 +181,10 @@ export namespace StandardJSONSchemaV1 {
  * A schema this system can both VALIDATE against and DESCRIBE.
  *
  * The two standards are siblings, not parent and child: one carries `validate`, the other carries
- * `jsonSchema`, and neither implies the other. Requiring the intersection is what lets one
- * declaration serve a runtime check and an OpenAPI document without a second source of truth —
- * and it is safe rather than aspirational because zod satisfies both.
+ * `jsonSchema`, and neither implies the other. The intersection exists so a single declaration can
+ * be handed to code that needs either side — a runtime check today, a JSON Schema / OpenAPI
+ * description when a consumer asks for one — without the caller having to prove both up front.
+ * zod satisfies both standards, so the requirement costs nothing at the usual call sites.
  */
 export type Schema<Input = unknown, Output = Input> = StandardSchemaV1<Input, Output> &
   StandardJSONSchemaV1<Input, Output>

@@ -2,7 +2,6 @@ import type { Operation } from 'std:effect'
 import { run, scoped } from 'std:effect'
 import type { LoggerDef } from 'std:logger'
 import { DefaultLogger, Logger, LoggerTransport, LogLevel } from 'std:logger'
-import { install } from 'std:plugin'
 import { fail, isFailure, unwrap } from 'std:result'
 
 import { describe, expect, it, spyOn } from 'bun:test'
@@ -39,9 +38,9 @@ describe('transport fan-out', () => {
 
     unwrap(
       await run(function* () {
-        yield* install(DefaultLogger, { timestamp: () => 5 })
-        yield* install(captureTransport('capture-a', first))
-        yield* install(captureTransport('capture-b', second))
+        yield* DefaultLogger.use({ timestamp: () => 5 })
+        yield* captureTransport('capture-a', first).use()
+        yield* captureTransport('capture-b', second).use()
 
         yield* Logger.actions.info('broadcast')
       }),
@@ -58,9 +57,9 @@ describe('transport fan-out', () => {
 
     unwrap(
       await run(function* () {
-        yield* install(DefaultLogger)
-        yield* install(captureTransport('capture-loose', loose))
-        yield* install(captureTransport('capture-strict', strict, LogLevel.warn))
+        yield* DefaultLogger.use()
+        yield* captureTransport('capture-loose', loose).use()
+        yield* captureTransport('capture-strict', strict, LogLevel.warn).use()
 
         yield* Logger.actions.info('info-only')
         yield* Logger.actions.warn('warned')
@@ -77,9 +76,9 @@ describe('transport fan-out', () => {
 
     unwrap(
       await run(function* () {
-        yield* install(DefaultLogger)
-        yield* install(captureTransport('capture-dup', stale))
-        yield* install(captureTransport('capture-dup', active))
+        yield* DefaultLogger.use()
+        yield* captureTransport('capture-dup', stale).use()
+        yield* captureTransport('capture-dup', active).use()
 
         yield* Logger.actions.info('once')
       }),
@@ -95,9 +94,9 @@ describe('transport fan-out', () => {
 
     unwrap(
       await run(function* () {
-        yield* install(DefaultLogger)
-        yield* install(captureTransport('capture-a', first))
-        yield* install(captureTransport('capture-b', second))
+        yield* DefaultLogger.use()
+        yield* captureTransport('capture-a', first).use()
+        yield* captureTransport('capture-b', second).use()
 
         yield* Logger.actions.flush()
         yield* Logger.actions.close()
@@ -110,8 +109,8 @@ describe('transport fan-out', () => {
 
   it('a failing transport write propagates as the log call failure', async () => {
     const outcome = await run(function* () {
-      yield* install(DefaultLogger)
-      yield* install(failingTransport('capture-broken'))
+      yield* DefaultLogger.use()
+      yield* failingTransport('capture-broken').use()
 
       yield* Logger.actions.info('will not land')
     })
@@ -126,10 +125,10 @@ describe('transport fan-out', () => {
     const sink = createSink()
 
     const outcome = await run(function* () {
-      yield* install(DefaultLogger)
+      yield* DefaultLogger.use()
 
       yield* scoped(function* () {
-        yield* install(captureTransport('capture-scoped', sink))
+        yield* captureTransport('capture-scoped', sink).use()
         yield* Logger.actions.info('inside')
       })
 
@@ -153,8 +152,8 @@ describe('console transport', () => {
     try {
       unwrap(
         await run(function* () {
-          yield* install(DefaultLogger, { level: LogLevel.trace })
-          yield* install(ConsoleTransport, { format: plainFormat })
+          yield* DefaultLogger.use({ level: LogLevel.trace })
+          yield* ConsoleTransport.use({ format: plainFormat })
 
           yield* Logger.actions.trace('t')
           yield* Logger.actions.debug('d')
@@ -184,9 +183,9 @@ describe('console transport', () => {
     try {
       unwrap(
         await run(function* () {
-          yield* install(JsonCodec)
-          yield* install(DefaultLogger, { timestamp: () => 1111 })
-          yield* install(ConsoleTransport, { pretty: false, msgKey: 'note', errorKey: 'problem' })
+          yield* JsonCodec.use()
+          yield* DefaultLogger.use({ timestamp: () => 1111 })
+          yield* ConsoleTransport.use({ pretty: false, msgKey: 'note', errorKey: 'problem' })
 
           yield* Logger.actions.info('hi', { n: 1 })
           yield* Logger.actions.error('bad', fail('boom', 'why'))
@@ -199,7 +198,6 @@ describe('console transport', () => {
         note: 'hi',
         n: 1,
       })
-      // toMatchObject: the failure-payload data leak (see records.test.ts todo) adds extra keys
       expect(JSON.parse(errorSpy.mock.calls[0]?.[0] as string)).toMatchObject({
         level: LogLevel.error,
         time: 1111,
@@ -210,5 +208,34 @@ describe('console transport', () => {
       infoSpy.mockRestore()
       errorSpy.mockRestore()
     }
+  })
+})
+
+describe('console transport install order', () => {
+  it('installing ConsoleTransport BEFORE the logger fails: setup needs the Logger context', async () => {
+    // `ConsoleTransport.setup` does `useContext(Logger)` to inherit the logger level, so the logger
+    // must already be installed in the scope (documented on the setup docblock, AUDIT L5)
+    const outcome = await run(function* () {
+      yield* JsonCodec.use()
+      yield* ConsoleTransport.use({ format: plainFormat })
+      yield* DefaultLogger.use()
+      return 'unreachable'
+    })
+
+    expect(isFailure(outcome)).toBe(true)
+    if (isFailure(outcome)) {
+      expect(outcome.error).toBe('std:effect.missing-context')
+    }
+  })
+
+  it('installing ConsoleTransport AFTER the logger succeeds and inherits its level', async () => {
+    const outcome = await run(function* () {
+      yield* JsonCodec.use()
+      yield* DefaultLogger.use({ level: LogLevel.warn })
+      const ctx = yield* ConsoleTransport.use({ format: plainFormat })
+      return ctx.level
+    })
+
+    expect(unwrap(outcome)).toBe(LogLevel.warn)
   })
 })

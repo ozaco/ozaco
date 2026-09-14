@@ -1,6 +1,5 @@
 import type { Operation } from 'std:effect'
 import { attempt, sleep } from 'std:effect'
-import { install } from 'std:plugin'
 import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 
@@ -49,14 +48,14 @@ export function* createServer<const TServices extends readonly ServiceDef.Servic
   }
 
   const hosted = hostedOf(options as ServerDef.Options, role)
-  const kernel = yield* install(ServerClient, { ...options, hosted } as ServerDef.Options)
+  const kernel = yield* ServerClient.use({ ...options, hosted } as ServerDef.Options)
 
   // the carrier first: plugins may lean on it at setup (observe forward/collect, presence)
   if (options.carrier) {
     yield* installEntry(options.carrier)
     kernel.carrier = pluginOf(options.carrier) as CarrierDef
   } else {
-    yield* install(LocalCarrier)
+    yield* LocalCarrier.use()
     kernel.carrier = LocalCarrier
   }
 
@@ -86,7 +85,7 @@ export function* createServer<const TServices extends readonly ServiceDef.Servic
   }
 
   if (!kernel.outcomes) {
-    yield* install(MemoryOutcomes)
+    yield* MemoryOutcomes.use()
     kernel.outcomes = MemoryOutcomes
   }
 

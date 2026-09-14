@@ -31,7 +31,7 @@ describe('s3 fetch client', () => {
 
       expect(isFailure(outcome)).toBe(true)
       if (isFailure(outcome)) {
-        expect(outcome.error).toBe('s3-failed')
+        expect(outcome.error).toBe('std:io.s3-failed')
         expect(outcome.message).toBe('s3 403 Forbidden for "some/key"')
       }
     } finally {

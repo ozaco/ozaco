@@ -37,6 +37,9 @@ export type IOActions = {
     optional?: readonly K[],
   ) => Operation<{ [P in keyof R]: P extends K ? R[P] : NonNullable<R[P]> }>
 
+  /** `length` cryptographically random bytes. BunIO/WebIO use WebCrypto `getRandomValues`, which
+   * the spec caps at 65536 bytes per call (browsers throw `QuotaExceededError` above that; Bun did
+   * not in a probe); NodeIO uses `node:crypto.randomBytes` with no such cap. */
   randomBytes: (length: number) => Operation<Uint8Array>
   /** Generate a ULID — lexicographically sortable, monotonic within a `window`. See {@link UlidOptions}. */
   ulid: (options?: UlidOptions) => Operation<string>
@@ -129,8 +132,11 @@ export type IOActions = {
   ensureFile: (path: PathLike) => Operation<void>
   emptyDir: (path: PathLike) => Operation<void>
   walk: (root: PathLike, options?: WalkOptions) => Operation<WalkEntry[]>
-  /** Watch a file or directory via `fsPromises.watch` (event-based, recursive-capable), streaming
-   * {@link WatchEvent}s until the stream is torn down. */
+  /** Watch a file or directory, streaming {@link WatchEvent}s until the flow is torn down. Prefers a
+   * Watchman subscription (optional `fb-watchman` dependency + a reachable daemon; always recursive
+   * for a directory, so `recursive` is ignored there) and falls back to `fsPromises.watch`
+   * (event-based, `recursive` honored where the platform supports it). Set the env var
+   * `STD_WATCHMAN=off` to skip Watchman and force the `fs.watch` fallback. */
   watch: (path: PathLike, options?: WatchOptions) => Flow<WatchEvent, never>
 
   /** Join path segments with the platform separator and normalize the result. */

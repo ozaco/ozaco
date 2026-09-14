@@ -2,11 +2,11 @@ import type { Result } from 'std:result'
 import { fail, isFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
 
+import { attempt } from '../base/attempt'
 import { createFuture } from '../base/future'
+import { EffectErrors } from '../errors'
 import type { Helpers } from '../types/helpers'
 import type { Future, Operation, Scope } from '../types/operation'
-
-import { attempt } from './attempt'
 
 /**
  * An operation as a hybrid {@link Future}: the value IS the operation — `yield*` composes it
@@ -27,7 +27,7 @@ export const toFuture = <T>(
 
   const settled = (): Promise<Result<T>> => {
     if (options?.signal?.aborted) {
-      return Promise.resolve(fail('halted', 'aborted before start') as AnyType)
+      return Promise.resolve(fail(EffectErrors.Halted, 'aborted before start') as AnyType)
     }
 
     // hold: resolve the value EARLY, keep the task (and what it opened) alive on the hold op
@@ -57,7 +57,7 @@ export const toFuture = <T>(
       options.signal?.addEventListener(
         'abort',
         () => {
-          early.resolve(fail('halted', 'the operation was aborted') as AnyType)
+          early.resolve(fail(EffectErrors.Halted, 'the operation was aborted') as AnyType)
           // halt() is a lazy Future — consuming it is what interrupts the task
           void task.halt().catch(() => {})
         },

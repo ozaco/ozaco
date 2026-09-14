@@ -12,7 +12,7 @@ import { encoder } from './internal'
 import type { FileDef } from './types'
 
 const FileTransportImpl = LoggerTransport.implement<FileDef.Context, [options: FileDef.Options]>({
-  name: 'file-transport',
+  name: 'std/file-transport',
   version: pkg.version,
 
   *setup(options) {

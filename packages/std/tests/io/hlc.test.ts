@@ -1,6 +1,5 @@
 import { attempt, run } from 'std:effect'
 import { IO } from 'std:io'
-import { install } from 'std:plugin'
 import { isFailure, unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
 
@@ -15,7 +14,7 @@ describe('hlc', () => {
   it('mints fixed-width, monotonic tokens for one origin (same-ms counter)', async () => {
     const tokens = unwrap(
       await run(function* () {
-        yield* install(BunIO)
+        yield* BunIO.use()
         const out: string[] = []
         for (let i = 0; i < 1000; i++) {
           out.push(yield* IO.actions.hlc({ origin: 'NDEA0001' }))
@@ -33,7 +32,7 @@ describe('hlc', () => {
   it('round-trips through decodeHlc and carries the origin', async () => {
     const result = unwrap(
       await run(function* () {
-        yield* install(WebIO)
+        yield* WebIO.use()
         const before = Date.now()
         const token = yield* IO.actions.hlc({ origin: 'ndeb0002' }) // lowercase accepted, upper-cased
         const parts = yield* IO.actions.decodeHlc(token)
@@ -49,7 +48,7 @@ describe('hlc', () => {
   it('keeps independent counters per origin in one process', async () => {
     const result = unwrap(
       await run(function* () {
-        yield* install(BunIO)
+        yield* BunIO.use()
         const a1 = yield* IO.actions.decodeHlc(yield* IO.actions.hlc({ origin: 'AAAAAAAA' }))
         const b1 = yield* IO.actions.decodeHlc(yield* IO.actions.hlc({ origin: 'BBBBBBBB' }))
         const a2 = yield* IO.actions.decodeHlc(yield* IO.actions.hlc({ origin: 'AAAAAAAA' }))
@@ -68,7 +67,7 @@ describe('hlc', () => {
   it('observeHlc pulls the clock forward so later tokens sort after the remote one', async () => {
     const result = unwrap(
       await run(function* () {
-        yield* install(BunIO)
+        yield* BunIO.use()
         // a peer whose clock is 5s ahead (within the drift bound)
         const ahead = Date.now() + 5000
         const remote = encodeFake(ahead, 7, 'REMTE000')
@@ -86,7 +85,7 @@ describe('hlc', () => {
   it('rejects remote clocks beyond maxDriftMs without failing', async () => {
     const result = unwrap(
       await run(function* () {
-        yield* install(BunIO)
+        yield* BunIO.use()
         const farFuture = encodeFake(Date.now() + 10 * 60_000, 0, 'DRFT0000')
         const adopted = yield* IO.actions.observeHlc(farFuture, { maxDriftMs: 60_000 })
         const local = yield* IO.actions.decodeHlc(yield* IO.actions.hlc({ origin: 'PEER0002' }))
@@ -101,7 +100,7 @@ describe('hlc', () => {
   it('fails hlc-invalid on bad origins and malformed tokens', async () => {
     const result = unwrap(
       await run(function* () {
-        yield* install(BunIO)
+        yield* BunIO.use()
         const badOrigin = yield* attempt(IO.actions.hlc({ origin: 'node-a' }))
         // I/L/O/U are not in the alphabet and are NOT aliased for origins (identity must be exact)
         const lookAlike = yield* attempt(IO.actions.hlc({ origin: 'NODEA000' }))
@@ -116,10 +115,10 @@ describe('hlc', () => {
       }),
     )
     expect(result).toEqual({
-      badOrigin: 'hlc-invalid',
-      lookAlike: 'hlc-invalid',
-      short: 'hlc-invalid',
-      alphabet: 'hlc-invalid',
+      badOrigin: 'std:io.hlc-invalid',
+      lookAlike: 'std:io.hlc-invalid',
+      short: 'std:io.hlc-invalid',
+      alphabet: 'std:io.hlc-invalid',
     })
   })
 })

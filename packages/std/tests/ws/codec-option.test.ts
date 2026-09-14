@@ -1,9 +1,8 @@
 import type { CodecDef } from 'std:codec'
 import { run } from 'std:effect'
-import { install } from 'std:plugin'
 import { unwrap } from 'std:result'
 import type { WsDef } from 'std:ws'
-import { Ws } from 'std:ws'
+import { Ws, WsClient } from 'std:ws'
 
 import { describe, expect, it } from 'bun:test'
 
@@ -18,13 +17,13 @@ const noisy = fakeCodec('NOISY')
 
 /** Installs Ws (with optional install-wide defaults), JsonCodec, and FAKE. */
 function* bootstrap(defaults?: WsDef.Options) {
-  yield* install(Ws, defaults)
-  yield* install(JsonCodec) // priority 999 — the routed Codec protocol would pick this
-  yield* install(fake) // priority 500
+  yield* WsClient.use(defaults)
+  yield* JsonCodec.use() // priority 999 — the routed Codec protocol would pick this
+  yield* fake.use() // priority 500
 }
 
 describe('install-wide codec default', () => {
-  it('install(Ws, { codec }) applies to every connect; a per-connect codec overrides it', async () => {
+  it('WsClient.use({ codec }) applies to every connect; a per-connect codec overrides it', async () => {
     const server = echoServer()
     try {
       const outcome = await run(function* () {
@@ -86,10 +85,10 @@ describe('connect codec option', () => {
   it('decoding uses the preferred codec; without the option the routed one applies', async () => {
     const readFirst = (server: ReturnType<typeof pushServer>, codec?: CodecDef) =>
       run(function* () {
-        yield* install(Ws)
-        yield* install(JsonCodec)
+        yield* WsClient.use()
+        yield* JsonCodec.use()
         // outranks JsonCodec, so the ROUTED protocol picks it — and its parse mangles plain JSON
-        yield* install(noisy, { priority: 1500 })
+        yield* noisy.use({ priority: 1500 })
 
         const conn = yield* Ws.actions.connect(
           `ws://localhost:${server.port}`,

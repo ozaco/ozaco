@@ -149,6 +149,49 @@ describe('on / emit', () => {
   })
 })
 
+// Pins current behavior (AUDIT V4): emit discards listener results, so failures are not contained.
+describe('emit with a failing listener', () => {
+  it('a synchronously throwing listener propagates out of emit and aborts the remaining ones', () => {
+    const emitter = createEvent<{ job: [] }>()
+    let after = 0
+
+    emitter.on('job', () => {
+      throw new Error('listener-threw')
+    })
+    emitter.on('job', () => {
+      after += 1
+    })
+
+    expect(() => emitter.emit('job')).toThrow('listener-threw')
+    expect(after).toBe(0)
+
+    // the throw did not unregister anything: the next emit fails the same way
+    expect(() => emitter.emit('job')).toThrow('listener-threw')
+    expect(emitter.listenerCount('job')).toBe(2)
+  })
+
+  it('a rejecting async listener is never awaited: emit returns, peers run, the rejection is dropped', async () => {
+    const emitter = createEvent<{ job: [] }>()
+    let pending: Promise<void> | undefined
+    let after = 0
+
+    emitter.on('job', () => {
+      pending = Promise.reject(new Error('listener-rejected'))
+      // emit throws the returned promise away, so nothing downstream can observe it through emit;
+      // at the runtime level this surfaces as an unhandled rejection unless someone else holds it
+      return pending
+    })
+    emitter.on('job', () => {
+      after += 1
+    })
+
+    expect(emitter.emit('job')).toBeUndefined()
+    expect(after).toBe(1)
+
+    await expect(pending).rejects.toThrow('listener-rejected')
+  })
+})
+
 describe('once', () => {
   it('fires exactly once and unregisters itself', () => {
     const emitter = createEvent<{ ping: [string] }>()

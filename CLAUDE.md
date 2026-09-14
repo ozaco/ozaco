@@ -34,38 +34,49 @@ foundation. Layers, bottom up:
   schemas in the TYPES too, `scope` is the trusted per-caller filter (tenancy, optionally
   `{ read, write }`), `ops` sets per-op options/errors; the manifest is `ozaco/2` (unified
   action+socket entries) and realtime sockets authorize with a first `{ t: 'auth' }` frame
-  (tokens never ride the URL). See `packages/server/README.md`.
+  (tokens never ride the URL). `createServer({ plugins })` takes `Plugin.use(...)` values. See
+  `packages/server/README.md`.
 - **`@ozaco/client`** – the manifest-driven typed client for a `@ozaco/server` node
 - **`@ozaco/ai`**, **`@ozaco/cli`** – AI providers and the CLI toolkit
 - `apps/panel` (docs try-it UI) and `apps/observe` (dev console) are embedded into the server's
   `Docs` / `ObservePlugin`; `examples/demo` is the end-to-end reference app.
 
-**Workspaces:** `packages/`, `plugins/`, `apps/`, `tools/`
+**Workspaces** (root `package.json`): `packages/`, `plugins/`, `apps/`, `tools/`, `experiments/`,
+`examples/` — only `packages/`, `apps/` and `examples/` exist on disk today.
 
 ### @ozaco/std Modules
 
-The core package exports these modules via path aliases (e.g., `std:result`, `std:logger`):
+The core package exports these modules via path aliases (e.g., `std:result`, `std:logger`). Every
+plugin installs with `yield* Plugin.use(...args)` (`yield* JsonCodec.use()`,
+`yield* WsClient.use({ codec })`) — there is no `install()`. Error tags are `createTags` bundles
+with dotted values, one per module, exported from the module barrel (`EffectErrors`,
+`PluginErrors`, `CodecErrors`, `ConfigErrors`, `IOErrors`, `FetchErrors`, `WsErrors`, `RtcErrors`;
+`WsErrors.Connect` is `'std:ws.connect'`). Plugin/protocol names all start with `std/`
+(`std/io`, `std/bun-io`, `std/logger`, `std/default-logger`, `std/console-transport`,
+`std/file-transport`, `std/ws`, `std/ws-client`, `std/webrtc`, `std/webrtc-client`, …).
+See `packages/std/README.md` for how each module works underneath.
 
-- **result** - `Result<T,E>` type with utilities: `fail`, `succeed`, `appendCauses`, `orElse`, `pipe`, `guard`, `map`
-- **shared** - Common types (`BlobType`, `Helpers`) and utilities (`isPromise`, `isResult`, `deepMerge`, `match`)
-- **effect** - Effection-style structured concurrency: `Operation`, `Flow` (the effect stream abstraction — "stream" refers only to native platform streams), `spawn`/`fork` (fork for background pumps whose result is not awaited), scopes, signals/channels/queues
-- **event** - Typed event emitter (`createEvent`) plus effect bridges (`useEvent`, `onEvent`, `useBufferedEvent`)
-- **plugin** - Plugin architecture: protocols, `install`, contexts, `around`/`before`/`after` hooks
-- **codec** - Codec protocol with `JsonCodec`/`TomlCodec`/`YamlCodec` impls (`encode`/`decode`, `encodeFlow`/`decodeFlow`)
-- **config** - Config discovery/merge/watch plugin (installed with an IO impl + the config file codec; `JsonCodec` must also be installed — config pins it as a baseline, e.g. for watch change-detection)
-- **io** - Platform IO protocol (`BunIO`/`NodeIO`/`WebIO`): fs, flows, processes, net, crypto, watch
-- **logger** - Logger plugin with transport abstraction (`std:logger/transport/console`, `std:logger/transport/file`)
-- **fetch** - HTTP client plugin: `install(Fetch, { baseUrl, headers, timeoutMs })`, `Fetch.actions.get(...).json()` builders, `Fetch.around` middleware over the single `request` dispatch
-- **ws** - WebSocket client plugin: `Ws.actions.connect` returns a scope-bound resource with optional auto-`reconnect` (one continuous `messages` Flow across generations) and `keepalive`
-- **webrtc** - WebRTC peer plugin (client AND server — the API is peer-symmetric): `Rtc.actions.connect(signal, options)` negotiates over any `{ send, messages }` duplex (a `Ws` connection qualifies) and returns a scope-bound peer; data channels are Flow-based with backpressure-aware `send`, ICE restarts (`iceRestart`) and whole-session redials (`reconnect`, ws-style — local channels/tracks survive) are supervised; typed media via `peer.addTrack` → `Sender` + remote `tracks` Flow (browser-first — impl without `addTrack` fails `rtc/unsupported`); browser global or auto-imported `node-datachannel` polyfill (optional dep) on Bun/Node, injectable via `rtcImpl`; observability is always on — `peer.metrics` (session counters), a bounded `peer.timeline` plus the live `peer.events` Flow (dial/offer/answer/glare/candidate/channel/track/ice-restart/redial/close), and `peer.stats()` normalizing the impl's `getStats` (`observe: { sampleMs, timeline }` sizes it and turns the sampler on)
+- **result** - `Result<T,E>` / `Maybe` types with `fail`, `succeed`, `appendCauses`, `asFailure`, `asFailureFrom`, `auto`, `throwable`, `unwrap`, `just`, `nothing` and the `is*` guards (`isSuccess`/`isFailure`/`isResult`/`isJust`/`isNothing`/`isMaybe`); no `map`/`orElse`/`pipe` here
+- **shared** - Common types (`AnyType`, `EmptyType`, `Simplify`, `Tags`, exported `Helpers`) and utilities: `createTags`, `match`, `pipe`, `deepMerge`, path helpers (`getPath`/`setPath`/`unsetPath`/`flatten`/`flattenEntries`), `validateSync`, `serializeError`, `hasFlag`, `lazyPromise`, `PriorityQueue`, runtime guards (`isPromise`, `isArray`, …; `isResult` lives in `result`)
+- **effect** - Effection-style structured concurrency: `Operation`, `Flow` (the effect stream abstraction — "stream" refers only to native platform streams), scopes, contexts, signals/channels/queues; `spawn` returns at once (the child may never start if the scope closes first), `fork` is guaranteed started before it returns and is supervised — use `fork`/`resource` when teardown must be armed; `attempt`/`recover`/`mapError` handle failures as values (`box` is gone); `EffectErrors` = halted, iteration-error, missing-context, no-scope-handler, using
+- **event** - Typed event emitter (`createEvent`) plus effect bridges (`useEvent`, `onEvent`, `useEventOnce`, `useBufferedEvent`)
+- **plugin** - Plugin architecture: protocols (`defineProtocol` with `handlers`/`defaults`/`exec`, `Protocol.implement(...).build(...)`), `definePlugin`, `Plugin.use`, contexts, `before`/`after`/`around`/`error` hooks; `PluginErrors` = missing-action, protocol-not-cloneable
+- **codec** - Codec protocol with `JsonCodec`/`TomlCodec`/`YamlCodec` impls (`encode`/`decode`, `stringify`/`parse`, `encodeFlow`/`decodeFlow`) plus the `encodeFrame`/`decodeFrame` protocol handlers used by ws/webrtc; `CodecErrors` incl. `AlreadyRegistered`; `YamlCodec` exists but nothing in the monorepo uses it
+- **config** - Config discovery/merge/edit/watch plugin: `Config.use(options)` builds the context only, `Config.actions.load()` discovers; needs an IO impl + the file codec (default `TomlCodec`) installed; `JsonCodec` is required only by `watch` (change-detection fingerprint); `Features` bitflags from bit 0 (FILE=1, CHAIN=2, VARIANT=4, ENV=8, DIR=16); `ConfigErrors.MissingExtends`
+- **io** - Platform IO protocol (`BunIO`/`NodeIO`/`WebIO`): fs (`IO_FLAGS` from bit 0: FOLLOW_SYMLINKS=1, FILES=2, DIRS=4, APPEND=8, EXCLUSIVE=16), flows, path helpers, processes, net, env/ip/tmpdir, crypto, `ulid`/`uuid`/`hlc`, watch (Watchman preferred, `STD_WATCHMAN=off` disables it, `fs.watch` fallback), S3 (Bun native / Node SigV4-over-fetch / Web unsupported); `IOErrors` = unsupported, exists, missing-env, exec-failed, exec-spawn-failed, spawn-failed, process-error, kill-failed, stdin-write-failed, hlc-invalid, decrypt-failed, s3-failed
+- **logger** - `Logger` (impl `DefaultLogger`) + cloneable `LoggerTransport` fan-out (`std:logger/transport/console`, `std:logger/transport/file`); both transports' default formats pin `JsonCodec`; `ConsoleTransport` reads the logger context in `setup`, so install it after `DefaultLogger`
+- **fetch** - HTTP client protocol `Fetch` + impl `FetchClient.use({ baseUrl, headers, timeoutMs, codec })`; two-step response API (no builders): `const res = yield* Fetch.actions.get(url)` then `yield* res.json()` / `res.expect()`; verb shorthands call the pinned `FetchClient.actions.request` (hooks still wrap, so `Fetch.around({ request })` sees every call); platform call injectable via the `fetchImpl` context; `FetchErrors` = timeout, http-status, parse
+- **ws** - WebSocket protocol `Ws` (routed `Ws.actions.connect`, hooks via `Ws.around({ connect })`) + impl `WsClient.use({ impl, codec, reconnect, keepalive, … })`; `connect` returns a scope-bound resource with optional auto-`reconnect` (one continuous `messages` Flow across generations) and `keepalive`; `impl` is the socket constructor (omit for the platform global, a fake in tests, `false` to simulate none); `WsErrors` = connect, unsupported, reconnect-exhausted
+- **webrtc** - WebRTC protocol `Rtc` (routed `Rtc.actions.connect`, hooks via `Rtc.around({ connect })`) + impl `RtcClient.use({ impl, … })` (client AND server — the API is peer-symmetric): `Rtc.actions.connect(signal, options)` negotiates over any `{ send, messages }` duplex (a `Ws` connection qualifies) and returns a scope-bound peer; data channels are Flow-based with backpressure-aware `send`, ICE restarts (`iceRestart`) and whole-session redials (`reconnect`, ws-style — local channels/tracks survive) are supervised; typed media via `peer.addTrack` → `Sender` + remote `tracks` Flow (browser-first — impl without `addTrack` fails `RtcErrors.Unsupported`); `impl` is the peer-connection constructor (omit for the browser global or the auto-imported `node-datachannel` polyfill on Bun/Node, a fake in tests, `false` to simulate none); observability is always on — `peer.metrics` (session counters), a bounded `peer.timeline` plus the live `peer.events` Flow (kinds: dial/state/offer/answer/glare/candidate/channel/track/ice-restart/redial/stats/close/error), and `peer.stats()` normalizing the impl's `getStats` (`observe: { sampleMs, timeline }` sizes it and turns the sampler on); `RtcErrors` = unsupported, connect, connection, negotiation, signal, ice-exhausted, reconnect-exhausted, channel, timeout, track, stats
 
 ### Key Patterns
 
-- **Error handling:** Use Result helpers (`fail`, `succeed`, `appendCauses`, `orElse`), avoid bare throws
-- **Exports:** Use `const` arrows, keep modules side-effect free, re-export through `index.ts` barrels
+- **Error handling:** Use Result helpers (`fail`, `succeed`, `appendCauses`, `asFailure`) with the module's `*Errors` tag bundle, avoid bare throws
+- **Exports:** `const` arrows; generator actions/helpers must be `function*` declarations (or `operation(function* …)`); keep modules side-effect free, re-export through `index.ts` barrels (`types/helpers.ts` always via `export type *`)
+- **Layout:** module root holds `definition.ts` (`definitions.ts` only when several protocols live there, e.g. logger), `errors.ts`, `index.ts`, `types(.ts|/)`, `internal/`, `utils/`; `const.ts` at the root only when the barrel exports it, otherwise `internal/const.ts`
 - **Async:** Use `isPromise`/`isResult` helpers, return promises instead of mixing await with mutation
 - **Immutability:** Default immutable, mutate only when APIs require it (e.g., pushing into `failure.causes`)
-- **New utilities:** Add to `packages/std/src/<domain>/utils`, export immediately
+- **New utilities:** public helpers go in `packages/std/src/<module>/utils/` and are exported from the barrel immediately; module-private helpers go in `<module>/internal/` and are never imported from outside the module
 
 ## Code Style
 
@@ -73,5 +84,5 @@ OXC is canonical (oxlint + oxfmt): 2 spaces, width 100, single quotes, JSX singl
 
 - **Import order:** external packages → `std:*` aliases → relatives
 - **Use `import type`** for type-only imports
-- **Naming:** camelCase values, PascalCase types, SCREAMING_SNAKE_CASE for shared constants
+- **Naming:** camelCase values, PascalCase types, SCREAMING_SNAKE_CASE for shared constants; type namespaces are `<Module>Def` (consumer-facing), `Utils` (public utils' types), `Helpers` (internal shapes, still exported)
 - **TypeScript:** Honor `tsconfig.base.json` strictness (no relaxing `strict`, `verbatimModuleSyntax`)

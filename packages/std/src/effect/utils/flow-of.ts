@@ -1,10 +1,10 @@
 import { isFailure } from 'std:result'
 
+import { attempt } from '../base/attempt'
 import { lift } from '../base/lift'
 import { spawn } from '../base/spawn'
 import type { Flow, Operation } from '../types/operation'
 
-import { attempt } from './attempt'
 import { createQueue } from './queue'
 
 /**

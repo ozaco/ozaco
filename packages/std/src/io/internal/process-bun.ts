@@ -1,6 +1,7 @@
 import { operation, until } from 'std:effect'
 import { fail } from 'std:result'
 
+import { IOErrors } from '../errors'
 import type {
   ExecOptions,
   ExecResult,
@@ -33,7 +34,7 @@ export const bunExec = operation(function* (
       stderr: 'pipe',
     })
   } catch (error) {
-    return yield* fail('exec-spawn-failed', `failed to spawn "${cmd}": ${errorMessage(error)}`)
+    return yield* fail(IOErrors.ExecSpawnFailed, `failed to spawn "${cmd}": ${errorMessage(error)}`)
   }
 
   try {
@@ -51,7 +52,7 @@ export const bunExec = operation(function* (
     }
     return result
   } catch (error) {
-    return yield* fail('exec-failed', `command "${cmd}" failed: ${errorMessage(error)}`)
+    return yield* fail(IOErrors.ExecFailed, `command "${cmd}" failed: ${errorMessage(error)}`)
   }
 })
 
@@ -76,7 +77,7 @@ export const bunSpawn = operation(function* (
       stderr: 'pipe',
     })
   } catch (error) {
-    return yield* fail('spawn-failed', `failed to spawn "${cmd}": ${errorMessage(error)}`)
+    return yield* fail(IOErrors.SpawnFailed, `failed to spawn "${cmd}": ${errorMessage(error)}`)
   }
 
   const exited = operation(function* () {
@@ -89,7 +90,7 @@ export const bunSpawn = operation(function* (
       proc.stdin.write(toBytes(chunk))
       yield* until(Promise.resolve(proc.stdin.flush()))
     } catch (error) {
-      return yield* fail('stdin-write-failed', `failed to write stdin: ${errorMessage(error)}`)
+      return yield* fail(IOErrors.StdinWriteFailed, `failed to write stdin: ${errorMessage(error)}`)
     }
   })
 
@@ -101,7 +102,10 @@ export const bunSpawn = operation(function* (
     try {
       proc.kill(signal as number | undefined)
     } catch (error) {
-      return yield* fail('kill-failed', `failed to kill pid ${proc.pid}: ${errorMessage(error)}`)
+      return yield* fail(
+        IOErrors.KillFailed,
+        `failed to kill pid ${proc.pid}: ${errorMessage(error)}`,
+      )
     }
   })
 

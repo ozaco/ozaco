@@ -11,6 +11,7 @@ import fs from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 
 import pkg from '../../../package.json'
+import { IOErrors } from '../errors'
 import {
   decryptSecret,
   encryptSecret,
@@ -39,7 +40,7 @@ const toNodeHash = (alg: HashAlgorithm) =>
   alg === 'SHA-256' ? 'sha256' : alg === 'SHA-384' ? 'sha384' : 'sha512'
 
 export const NodeIO = IO.implement({
-  name: 'node-io',
+  name: 'std/node-io',
   version: pkg.version,
   *setup() {
     return null
@@ -120,7 +121,7 @@ export const NodeIO = IO.implement({
         // dest doesn't exist, safe to rename
       }
       if (destExists) {
-        return yield* fail('exists', `destination already exists: ${toPath(dest)}`)
+        return yield* fail(IOErrors.Exists, `destination already exists: ${toPath(dest)}`)
       }
     }
     yield* until(fs.rename(toPath(src), toPath(dest)))

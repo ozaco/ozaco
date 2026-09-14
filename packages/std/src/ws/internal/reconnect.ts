@@ -2,6 +2,7 @@ import { attempt, operation, sleep } from 'std:effect'
 import type { Result } from 'std:result'
 import { fail, isSuccess } from 'std:result'
 
+import { WsErrors } from '../errors'
 import type { Helpers } from '../types/helpers'
 import type { WsDef } from '../types/ws'
 
@@ -12,7 +13,7 @@ const delayOf = (budget: Helpers.ReconnectBudget, attemptNo: number) =>
 
 const exhausted = (budget: Helpers.ReconnectBudget, last: WsDef.CloseInfo) =>
   fail(
-    'ws/reconnect-exhausted',
+    WsErrors.ReconnectExhausted,
     `gave up after ${budget.retries} redial attempts (last close: ${last.code}${
       last.reason ? ` ${last.reason}` : ''
     })`,
@@ -22,7 +23,7 @@ const exhausted = (budget: Helpers.ReconnectBudget, last: WsDef.CloseInfo) =>
  * Reconnect supervisor (forked): one outage at a time — redial after `delayMs * backoff^attempt`
  * (capped by `maxDelayMs`); the attempt budget RESETS after every successful reopen, so only
  * consecutive failed redials exhaust it. Exhaustion ends the connection with a
- * `'ws/reconnect-exhausted'` failure close. Never raises: dial failures are attempted, everything
+ * `WsErrors.ReconnectExhausted` failure close. Never raises: dial failures are attempted, everything
  * else is synchronous bookkeeping.
  */
 export const supervise = operation(function* (

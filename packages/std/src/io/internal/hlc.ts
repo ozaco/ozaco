@@ -1,6 +1,7 @@
 // oxlint-disable import/exports-last
 import { fail } from 'std:result'
 
+import { IOErrors } from '../errors'
 import type { Hlc, HlcOptions, ObserveHlcOptions } from '../types/common'
 import type { Helpers } from '../types/helpers'
 
@@ -76,7 +77,7 @@ export function* hlcToken(options: HlcOptions) {
   const origin = normalizeOrigin(options.origin)
   if (!origin) {
     return yield* fail(
-      'hlc-invalid',
+      IOErrors.HlcInvalid,
       `hlc origin must be ${ORIGIN_LEN} Crockford base32 characters, got "${options.origin}"`,
     )
   }
@@ -98,13 +99,13 @@ export function* hlcToken(options: HlcOptions) {
 /** Decode a token back to its parts; fails `hlc-invalid` on anything but a 22-char Crockford token. */
 export function* hlcDecode(token: string) {
   if (typeof token !== 'string' || token.length !== TOKEN_LEN) {
-    return yield* fail('hlc-invalid', `hlc token must be ${TOKEN_LEN} characters`)
+    return yield* fail(IOErrors.HlcInvalid, `hlc token must be ${TOKEN_LEN} characters`)
   }
   const ts = decodeNumber(token.slice(0, TIME_LEN))
   const counter = decodeNumber(token.slice(TIME_LEN, TIME_LEN + COUNTER_LEN))
   const origin = normalizeOrigin(token.slice(TIME_LEN + COUNTER_LEN))
   if (ts === null || counter === null || origin === null) {
-    return yield* fail('hlc-invalid', `hlc token "${token}" is not Crockford base32`)
+    return yield* fail(IOErrors.HlcInvalid, `hlc token "${token}" is not Crockford base32`)
   }
   return { ts, counter, origin } as Hlc
 }

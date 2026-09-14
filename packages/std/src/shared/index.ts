@@ -17,3 +17,5 @@ export * from './utils/serialize'
 export * from './utils/string'
 export * from './utils/tags'
 export * from './utils/validate'
+
+export type * from './types/helpers'

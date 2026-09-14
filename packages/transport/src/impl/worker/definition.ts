@@ -1,6 +1,5 @@
 import { hasCodec } from 'std:codec'
 import { ensure } from 'std:effect'
-import { install } from 'std:plugin'
 import { fail } from 'std:result'
 
 import { JsonCodec } from 'std:codec/impl/json'
@@ -14,8 +13,8 @@ import type { Worker } from './types'
 
 /**
  * The worker-thread transport — one channel between a main thread and a worker (or any two
- * `MessagePort` ends): `install(WorkerTransport, { prefix, port: worker })` on one side,
- * `install(WorkerTransport, { prefix, port: self })` on the other. Every publish reaches both
+ * `MessagePort` ends): `WorkerTransport.use({ prefix, port: worker })` on one side,
+ * `WorkerTransport.use({ prefix, port: self })` on the other. Every publish reaches both
  * ends' subscribers (structured clone, at-most-once, no groups/durables/receipts — request/reply
  * is core's emulation, so a missing responder surfaces as `transport.timeout`). `JsonCodec` is
  * installed unless the scope has a codec.
@@ -28,7 +27,7 @@ export const WorkerTransport = Transport.implement<TransportDef.Options, [option
 
     *setup(options) {
       if (!(yield* hasCodec())) {
-        yield* install(JsonCodec)
+        yield* JsonCodec.use()
       }
       if (!isValidPrefix(options.prefix)) {
         return yield* fail(TransportErrors.Configuration, `invalid prefix "${options.prefix}"`)

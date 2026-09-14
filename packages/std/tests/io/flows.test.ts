@@ -1,7 +1,6 @@
 import type { Flow } from 'std:effect'
 import { attempt, createQueue, run, spawn, until } from 'std:effect'
 import { IO, IO_FLAGS } from 'std:io'
-import { install } from 'std:plugin'
 import { fail, isFailure, unwrap } from 'std:result'
 
 import { describe, expect, it } from 'bun:test'
@@ -44,7 +43,7 @@ describe('readFlow / writeFlow', () => {
   it('readFlow streams the file and closes with true', async () => {
     await withTempDir(async dir => {
       const outcome = await run(function* () {
-        yield* install(BunIO)
+        yield* BunIO.use()
 
         const file = join(dir, 'data.txt')
         yield* IO.actions.write(file, 'stream-payload')
@@ -67,7 +66,7 @@ describe('readFlow / writeFlow', () => {
   it('readFlow of a missing file closes with a Failure, not a clean end', async () => {
     await withTempDir(async dir => {
       const outcome = await run(function* () {
-        yield* install(BunIO)
+        yield* BunIO.use()
 
         const source = yield* IO.actions.readFlow(join(dir, 'missing.txt'))
         const first = yield* source.next()
@@ -85,7 +84,7 @@ describe('readFlow / writeFlow', () => {
   it('writeFlow drains a flow into the file', async () => {
     await withTempDir(async dir => {
       const outcome = await run(function* () {
-        yield* install(BunIO)
+        yield* BunIO.use()
 
         const file = join(dir, 'out.txt')
         yield* IO.actions.writeFlow(file, flowOf('hello ', 'flow ', 'world'))
@@ -100,7 +99,7 @@ describe('readFlow / writeFlow', () => {
   it('writeFlow with EXCLUSIVE fails on an existing file and leaves it untouched', async () => {
     await withTempDir(async dir => {
       const outcome = await run(function* () {
-        yield* install(BunIO)
+        yield* BunIO.use()
 
         const file = join(dir, 'guarded.txt')
         yield* IO.actions.write(file, 'already')
@@ -122,7 +121,7 @@ describe('readFlow / writeFlow', () => {
   it('readFlow feeds writeFlow: a whole-file streaming copy', async () => {
     await withTempDir(async dir => {
       const outcome = await run(function* () {
-        yield* install(BunIO)
+        yield* BunIO.use()
 
         const src = join(dir, 'src.txt')
         const dest = join(dir, 'dest.txt')
@@ -145,7 +144,7 @@ describe('readFlow / writeFlow', () => {
   it('writeFlow surfaces a Failure close value from its source instead of succeeding', async () => {
     await withTempDir(async dir => {
       const outcome = await run(function* () {
-        yield* install(BunIO)
+        yield* BunIO.use()
 
         const path = join(dir, 'truncated.txt')
         const queue = createQueue<Uint8Array, unknown>()
@@ -246,7 +245,7 @@ describe('fromReadable', () => {
 describe('toReadable', () => {
   it('round-trips a flow into a consumable ReadableStream', async () => {
     const outcome = await run(function* () {
-      yield* install(BunIO)
+      yield* BunIO.use()
 
       const { readable, pump } = yield* IO.actions.toReadable(flowOf('web ', 'stream'))
 
@@ -261,7 +260,7 @@ describe('toReadable', () => {
 
   it('a Failure close value errors the stream instead of ending it cleanly', async () => {
     const outcome = await run(function* () {
-      yield* install(BunIO)
+      yield* BunIO.use()
 
       const queue = createQueue<Uint8Array, unknown>()
       queue.add(encoder.encode('partial'))
@@ -284,7 +283,7 @@ describe('toReadable', () => {
 
   it('consumer cancel ends the pump even while the source is idle', async () => {
     const outcome = await run(function* () {
-      yield* install(BunIO)
+      yield* BunIO.use()
 
       // one chunk, never closed — without cancel the pump would park forever
       const queue = createQueue<Uint8Array, unknown>()

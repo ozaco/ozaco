@@ -3,7 +3,6 @@ import { Kv, KvErrors } from 'db:core'
 import { DEFAULT_KV_PREFIX, isValidKvPrefix, kvActions } from 'db:internal'
 import { hasCodec } from 'std:codec'
 import { attempt, ensure, until } from 'std:effect'
-import { install } from 'std:plugin'
 import { fail, isFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
 
@@ -17,7 +16,7 @@ import type { RedisKvDef } from './types'
 import { redisKvImpl } from './utils'
 
 /**
- * The Redis Kv store over the official `redis` client (v6) — `install(RedisKv, { prefix,
+ * The Redis Kv store over the official `redis` client (v6) — `RedisKv.use({ prefix,
  * url })`. Keys live under `<prefix>:`, TTLs are `PX`, tags are sets (`<prefix>:$tag:<tag>`)
  * written in the same `MULTI` as the value, counters are `INCRBY`, scans are `SCAN MATCH`. The
  * connection closes with the scope. `JsonCodec` is installed unless the scope has a codec.
@@ -29,7 +28,7 @@ export const RedisKv = Kv.implement<KvDef.Options, [options: RedisKvDef.Options]
 
   *setup(options) {
     if (!(yield* hasCodec())) {
-      yield* install(JsonCodec)
+      yield* JsonCodec.use()
     }
     const prefix = options.prefix ?? DEFAULT_KV_PREFIX
     if (!isValidKvPrefix(prefix)) {

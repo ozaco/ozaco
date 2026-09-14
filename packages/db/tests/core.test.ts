@@ -16,7 +16,6 @@ import {
 } from 'db:core'
 import { matches } from 'db:internal'
 import { attempt, run } from 'std:effect'
-import { install } from 'std:plugin'
 import { isFailure, unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
 
@@ -37,9 +36,9 @@ describe('core semantics (adapter-independent)', () => {
     )
     unwrap(
       await run(function* () {
-        yield* install(MemoryAdapter)
-        yield* install(BunIO)
-        const db = yield* install(DbClient, { tables: [people] })
+        yield* MemoryAdapter.use()
+        yield* BunIO.use()
+        const db = yield* DbClient.use({ tables: [people] })
         const short = yield* attempt(db.insert('people', { name: 'a' }))
         expect(isFailure(short)).toBe(true)
         expect((short as AnyType).error).toBe(DbErrors.Validation)
@@ -52,9 +51,9 @@ describe('core semantics (adapter-independent)', () => {
   it('CLEAR nulls an optional column in patch; a required column rejects it', async () => {
     unwrap(
       await run(function* () {
-        yield* install(MemoryAdapter)
-        yield* install(BunIO)
-        yield* install(DbClient, { schema })
+        yield* MemoryAdapter.use()
+        yield* BunIO.use()
+        yield* DbClient.use({ schema })
         const db = yield* useDb(schema)
         const ada = yield* db.insert('users', { name: 'ada', age: 36 })
         const cleared = yield* db.patch('users', ada._id, { age: CLEAR })
@@ -68,9 +67,9 @@ describe('core semantics (adapter-independent)', () => {
   it('resolves a typed handle through useDb', async () => {
     unwrap(
       await run(function* () {
-        yield* install(MemoryAdapter)
-        yield* install(BunIO)
-        yield* install(DbClient, { schema })
+        yield* MemoryAdapter.use()
+        yield* BunIO.use()
+        yield* DbClient.use({ schema })
         const db = yield* useDb(schema)
         const doc = yield* db.insert('users', { name: 'typed' })
         // compile-time: doc is the resolved row type of `users`
@@ -84,9 +83,9 @@ describe('core semantics (adapter-independent)', () => {
 
 describe('scoped reads and writes', () => {
   const bootstrap = function* () {
-    yield* install(MemoryAdapter)
-    yield* install(BunIO)
-    yield* install(DbClient, { tables: [users] })
+    yield* MemoryAdapter.use()
+    yield* BunIO.use()
+    yield* DbClient.use({ tables: [users] })
     return yield* useDb(schema)
   }
 
@@ -156,9 +155,9 @@ describe('scoped handle — db.scoped(filter)', () => {
   const scopedSchema = defineSchema({ tenants })
 
   const bootstrap = function* () {
-    yield* install(MemoryAdapter)
-    yield* install(BunIO)
-    yield* install(DbClient, { schema: scopedSchema })
+    yield* MemoryAdapter.use()
+    yield* BunIO.use()
+    yield* DbClient.use({ schema: scopedSchema })
     return yield* useDb(scopedSchema)
   }
 
@@ -372,9 +371,9 @@ describe('adapter middleware', () => {
   it('DbAdapter.around wraps the data plane (the metrics/tracing seam)', async () => {
     unwrap(
       await run(function* () {
-        yield* install(MemoryAdapter)
-        yield* install(BunIO)
-        const db = yield* install(DbClient, { tables: [users] })
+        yield* MemoryAdapter.use()
+        yield* BunIO.use()
+        const db = yield* DbClient.use({ tables: [users] })
         const seen: string[] = []
         yield* DbAdapter.around({
           find: ([spec]: AnyType[], next: AnyType) =>

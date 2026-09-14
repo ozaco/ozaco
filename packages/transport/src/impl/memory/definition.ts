@@ -1,6 +1,5 @@
 import { hasCodec } from 'std:codec'
 import { ensure } from 'std:effect'
-import { install } from 'std:plugin'
 import { fail } from 'std:result'
 
 import { JsonCodec } from 'std:codec/impl/json'
@@ -28,7 +27,7 @@ export const MemoryTransport = Transport.implement<TransportDef.Options, [option
 
     *setup(options) {
       if (!(yield* hasCodec())) {
-        yield* install(JsonCodec)
+        yield* JsonCodec.use()
       }
 
       if (!isValidPrefix(options.prefix)) {

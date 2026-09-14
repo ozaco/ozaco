@@ -1,7 +1,7 @@
 import type { Operation } from 'std:effect'
 import { attempt, run, scoped } from 'std:effect'
 import type { Protocol } from 'std:plugin'
-import { defineProtocol, install } from 'std:plugin'
+import { defineProtocol } from 'std:plugin'
 import { fail, isFailure, unwrap } from 'std:result'
 
 import { describe, expect, it } from 'bun:test'
@@ -76,8 +76,8 @@ describe('custom exec: priority selection over Install.value', () => {
     const { Store, impl } = makeStore({ exec: prioritySelect })
 
     const outcome = await run(function* () {
-      yield* install(impl('high', 1000))
-      yield* install(impl('low', 1))
+      yield* impl('high', 1000).use()
+      yield* impl('low', 1).use()
 
       return yield* Store.actions.label()
     })
@@ -89,8 +89,8 @@ describe('custom exec: priority selection over Install.value', () => {
     const { Store, impl } = makeStore({ exec: prioritySelect })
 
     const outcome = await run(function* () {
-      yield* install(impl('older', 500))
-      yield* install(impl('newer', 500))
+      yield* impl('older', 500).use()
+      yield* impl('newer', 500).use()
 
       return yield* Store.actions.label()
     })
@@ -103,8 +103,8 @@ describe('custom exec: priority selection over Install.value', () => {
     const Low = impl('low', 1)
 
     const outcome = await run(function* () {
-      yield* install(impl('high', 1000))
-      yield* install(Low)
+      yield* impl('high', 1000).use()
+      yield* Low.use()
 
       return { routed: yield* Store.actions.label(), pinned: yield* Low.actions.label() }
     })
@@ -142,8 +142,8 @@ describe('custom exec: priority selection over Install.value', () => {
     const trace: string[] = []
 
     const outcome = await run(function* () {
-      yield* install(impl('a', 1))
-      yield* install(impl('b', 2))
+      yield* impl('a', 1).use()
+      yield* impl('b', 2).use()
 
       yield* Store.before({
         *label() {
@@ -194,7 +194,7 @@ describe('dispatch resolution edge cases', () => {
     })
 
     const outcome = await run(function* () {
-      yield* install(Impl)
+      yield* Impl.use()
       return yield* Dual.actions.info()
     })
 
@@ -224,7 +224,7 @@ describe('dispatch resolution edge cases', () => {
     })
 
     const outcome = await run(function* () {
-      yield* install(Impl)
+      yield* Impl.use()
 
       const owned = yield* Proto.actions.toString()
 
@@ -236,7 +236,7 @@ describe('dispatch resolution edge cases', () => {
       return { owned, missing: isFailure(missing) && missing.error }
     })
 
-    expect(unwrap(outcome)).toEqual({ owned: 'own-action', missing: 'missing-action' })
+    expect(unwrap(outcome)).toEqual({ owned: 'own-action', missing: 'std:plugin.missing-action' })
   })
 
   it('re-installing the same plugin replaces its registry entry instead of duplicating it', async () => {
@@ -250,8 +250,8 @@ describe('dispatch resolution edge cases', () => {
     const Same = impl('same', 1, [['k', 'first-value']])
 
     const outcome = await run(function* () {
-      yield* install(Same)
-      yield* install(Same)
+      yield* Same.use()
+      yield* Same.use()
 
       return yield* Store.actions.get('k')
     })
@@ -283,7 +283,7 @@ describe('dispatch resolution edge cases', () => {
     })
 
     const outcome = await run(function* () {
-      const installAttempt = yield* attempt(() => install(Broken))
+      const installAttempt = yield* attempt(() => Broken.use())
       const dispatchAttempt = yield* attempt(() => Flaky.actions.ping())
 
       return {
@@ -292,7 +292,10 @@ describe('dispatch resolution edge cases', () => {
       }
     })
 
-    expect(unwrap(outcome)).toEqual({ install: 'setup-exploded', dispatch: 'missing-action' })
+    expect(unwrap(outcome)).toEqual({
+      install: 'setup-exploded',
+      dispatch: 'std:plugin.missing-action',
+    })
   })
 
   it('a protocol call made INSIDE a pinned action dispatches normally (pin does not stick)', async () => {
@@ -333,8 +336,8 @@ describe('dispatch resolution edge cases', () => {
     const Second = impl('second')
 
     const outcome = await run(function* () {
-      yield* install(First)
-      yield* install(Second)
+      yield* First.use()
+      yield* Second.use()
 
       return {
         pinnedWho: yield* First.actions.who(),
@@ -353,8 +356,8 @@ describe('cloneable contexts + metadata', () => {
     const Second = impl('second', 2)
 
     const outcome = await run(function* () {
-      const firstValue = yield* install(First)
-      const secondValue = yield* install(Second)
+      const firstValue = yield* First.use()
+      const secondValue = yield* Second.use()
 
       return {
         firstCtx: (yield* First.context.expect()).label,
@@ -412,11 +415,63 @@ describe('cloneable contexts + metadata', () => {
     expect(Impl.getMeta('fallback')).toBeUndefined()
 
     const outcome = await run(function* () {
-      yield* install(Impl)
+      yield* Impl.use()
       return [yield* Meta.actions.work(), yield* Meta.actions.fallback!()]
     })
 
     expect(unwrap(outcome)).toEqual(['worked', 'fallback'])
+  })
+
+  it('getKeys lists defaults and impl actions but NOT protocol handlers (pins AUDIT P2)', async () => {
+    interface KeyedActions {
+      work(): Operation<string>
+      handled?(): Operation<string>
+      fallback?(): Operation<string>
+    }
+
+    const Keyed = defineProtocol<unknown, KeyedActions>({
+      name: name('keyed'),
+      version: '1.0.0',
+      handlers: {
+        *handled() {
+          return 'handled'
+        },
+      },
+      defaults: {
+        *fallback() {
+          return 'fallback'
+        },
+      },
+    })
+
+    const Impl = Keyed.implement({
+      name: name('keyed-impl'),
+      version: '1.0.0',
+      *setup() {
+        return undefined
+      },
+    }).build({
+      *work() {
+        return 'worked'
+      },
+    })
+
+    // AUDIT P2: dispatch resolves `handlers` first, yet getKeys() is built from defaults + actions
+    // only, so `handled` is dispatchable but not enumerable. This test pins that gap; flip the
+    // expectation if getKeys() ever grows to include protocol handlers.
+    expect(Impl.getKeys().toSorted()).toEqual(['fallback', 'work'])
+    expect(Impl.getKeys()).not.toContain('handled')
+
+    const outcome = await run(function* () {
+      yield* Impl.use()
+      return [
+        yield* Keyed.actions.work(),
+        yield* Keyed.actions.handled!(),
+        yield* Keyed.actions.fallback!(),
+      ]
+    })
+
+    expect(unwrap(outcome)).toEqual(['worked', 'handled', 'fallback'])
   })
 })
 
@@ -463,7 +518,7 @@ describe('hook layering', () => {
     const trace: string[] = []
 
     const outcome = await run(function* () {
-      yield* install(Impl)
+      yield* Impl.use()
 
       yield* Store.before({
         *get(args) {
@@ -508,7 +563,7 @@ describe('hook layering', () => {
     const trace: string[] = []
 
     const outcome = await run(function* () {
-      yield* install(Impl)
+      yield* Impl.use()
 
       yield* Tree.before({
         fs: {
@@ -538,7 +593,7 @@ describe('hook layering', () => {
     const trace: string[] = []
 
     const outcome = await run(function* () {
-      yield* install(impl('solo', 1, [['k', 'v']]))
+      yield* impl('solo', 1, [['k', 'v']]).use()
 
       yield* Store.before({
         *get() {

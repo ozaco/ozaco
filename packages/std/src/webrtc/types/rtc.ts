@@ -5,13 +5,14 @@ import type { Result } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 /**
- * `std:webrtc` — an effect-native WebRTC peer plugin, the datagram counterpart to `std:ws`. The
- * same plugin serves BOTH ends of a connection: `RTCPeerConnection` is peer-symmetric, so "client"
- * and "server" only differ in which implementation backs them. In the browser (and Deno) the
- * platform global is used; on Bun/Node the optional `node-datachannel` polyfill is auto-imported
- * on first use (install it next to `@ozaco/std`); anything else is injected via `rtcImpl`.
+ * `std:webrtc` — an effect-native WebRTC peer, the datagram counterpart to `std:ws`. `Rtc` is the
+ * protocol (routed dispatch + hooks) and `RtcClient` its platform implementation. The same client
+ * serves BOTH ends of a connection: `RTCPeerConnection` is peer-symmetric, so "client" and
+ * "server" only differ in which implementation backs them. In the browser (and Deno) the platform
+ * global is used; on Bun/Node the optional `node-datachannel` polyfill is auto-imported on first
+ * use (install it next to `@ozaco/std`); anything else is passed as the `impl` option.
  *
- * Install `Rtc` (optionally with default options), then `Rtc.actions.connect(signal, options)`
+ * Install `RtcClient` (optionally with default options), then `Rtc.actions.connect(signal, options)`
  * opens a peer RESOURCE bound to the caller's scope. Signaling (offer/answer/ICE) runs over the
  * given {@link RtcDef.SignalLike} duplex — a `Ws.actions.connect(...)` connection satisfies it
  * structurally — using the perfect-negotiation pattern (`polite` decides who yields on glare).
@@ -21,7 +22,7 @@ import type { AnyType } from 'std:shared'
  * mark). Framing matches `std:ws`: strings/binary pass as-is, other values go through the
  * registered `std:codec` — install a codec (e.g. `JsonCodec`) for structured values.
  */
-export type RtcDef = Plugin<RtcDef.Context, [defaults?: RtcDef.Options], RtcDef.Actions>
+export type RtcDef = Plugin<RtcDef.Context, [options?: RtcDef.ClientOptions], RtcDef.Contract>
 
 export namespace RtcDef {
   // --- implementation subsets -----------------------------------------------------------------
@@ -113,15 +114,15 @@ export namespace RtcDef {
     createDataChannel(label: string, options?: ChannelInit): ChannelLike
     close(): void
 
-    /** MEDIA (optional — not every implementation has it; `addTrack` raises `rtc/unsupported`
-     * when absent). The browser has the full set; the node-datachannel polyfill's media surface
+    /** MEDIA (optional — not every implementation has it; `addTrack` raises
+     * `RtcErrors.Unsupported` when absent). The browser has the full set; the node-datachannel polyfill's media surface
      * is limited/experimental. */
     addTrack?(track: TrackLike, ...streams: StreamLike[]): SenderLike
     removeTrack?(sender: SenderLike): void
     getSenders?(): SenderLike[]
 
     /** OBSERVABILITY (optional): the live statistics report. `peer.stats()` raises
-     * `rtc/unsupported` when the implementation has none. */
+     * `RtcErrors.Unsupported` when the implementation has none. */
     getStats?(): Promise<StatsReportLike>
 
     onnegotiationneeded: (() => void) | null
@@ -131,7 +132,8 @@ export namespace RtcDef {
     ontrack?: ((event: TrackEventLike) => void) | null
   }
 
-  /** The peer-connection implementation `connect` constructs peers with (injectable via `rtcImpl`). */
+  /** The peer-connection implementation `connect` constructs peers with (the `impl` option of
+   * `RtcClient.use`). */
   export type ImplLike = new (configuration?: Configuration) => PeerLike
 
   /** An `RTCConfiguration` subset; extra impl-specific keys pass through untouched. */
@@ -182,7 +184,7 @@ export namespace RtcDef {
 
   /**
    * ICE-restart budget. Present (even `{}`) = supervised restarts on `failed`; absent = a failed
-   * connection settles with `rtc/connection`.
+   * connection settles with `RtcErrors.Connection`.
    */
   export interface IceRestartOptions {
     /** Max restart offers per outage (default `5`). The budget RESETS after a successful recovery,
@@ -262,8 +264,9 @@ export namespace RtcDef {
      * (default `262_144`). */
     lowWaterMark?: number | undefined
 
-    /** Max ms `channel()` waits for the channel to open before failing `rtc/timeout`
-     * (default `10_000`; `0` disables). */
+    /** Max ms a LOCAL `channel()` call waits for the channel to open before failing
+     * `RtcErrors.Timeout` (default `10_000`; `0` disables). Local channels only: remote channels
+     * (emitted on `channels`) have no open deadline. */
     openTimeoutMs?: number | undefined
   }
 
@@ -280,15 +283,17 @@ export namespace RtcDef {
     configuration?: Configuration | undefined
 
     /** Supervised ICE restarts on `connectionState: 'failed'`. Omit for single-shot behavior
-     * (a failed connection settles every flow with `rtc/connection`). */
+     * (a failed connection settles every flow with `RtcErrors.Connection`). */
     iceRestart?: IceRestartOptions | undefined
 
     /** Session-level redial of a DEAD connection over the same signal (the `Ws`-style reconnect;
      * `iceRestart` recovers a LIVING connection in place, this replaces a dead one). Closes with
-     * `rtc/reconnect-exhausted` when the budget runs out. */
+     * `RtcErrors.ReconnectExhausted` when the budget runs out. */
     reconnect?: ReconnectOptions | undefined
 
-    /** Defaults for every `channel()` call (shallow-merged under per-call options). */
+    /** Defaults for every `channel()` call (shallow-merged under per-call options). Also applied
+     * to REMOTE channels emitted on `channels` (water marks, wire init) — except `openTimeoutMs`,
+     * which only bounds local `channel()` calls. */
     channel?: ChannelOptions | undefined
 
     /** Preferred codec for frame (de)serialization — same semantics as `WsDef.Options.codec`:
@@ -304,8 +309,16 @@ export namespace RtcDef {
   // --- handles ----------------------------------------------------------------------------------
 
   /**
-   * The close value flows settle with: `true` on a clean end, or a failure — e.g.
-   * `'rtc/ice-exhausted'` when the restart budget ran out.
+   * The close value flows settle with: `true` on a clean end, or a failure. The session-level
+   * tags a failure close carries (all from `RtcErrors`, exported by `std:webrtc`; values are
+   * dotted, e.g. `'std:webrtc.timeout'`): `RtcErrors.Connection` (the connection `failed` with no
+   * `iceRestart`, or the impl closed it under `reconnect`), `RtcErrors.IceExhausted` (the restart
+   * budget ran out), `RtcErrors.ReconnectExhausted` (the redial budget ran out),
+   * `RtcErrors.Negotiation` (an offer/answer step failed — `createOffer`/`createAnswer`,
+   * `setLocalDescription`/`setRemoteDescription`, or the signal `send` of an answer), and
+   * `RtcErrors.Signal` (the signal flow closed before the connection reached `connected`).
+   * Per-channel failures close with `RtcErrors.Channel` (a channel-level `error` preceded the
+   * close).
    */
   export type FlowClose = true | Result.Failure<unknown>
 
@@ -361,7 +374,9 @@ export namespace RtcDef {
     readonly track: TrackLike | null
 
     /** Swap the outgoing track in place — no renegotiation when the kinds match; `null` mutes.
-     * Requires the impl's `replaceTrack` (raises `rtc/unsupported` otherwise). */
+     * Requires the impl's `replaceTrack` (raises `RtcErrors.Unsupported` otherwise); raises
+     * `RtcErrors.Track` when the sender is already removed / the peer ended, or `replaceTrack`
+     * rejects. */
     replace(track: TrackLike | null): Operation<void>
 
     /** Stop sending for good: `removeTrack` + renegotiation. Idempotent. */
@@ -444,7 +459,9 @@ export namespace RtcDef {
     offersReceived: number
     answersSent: number
     answersReceived: number
-    /** simultaneous offers seen (ignored as the impolite side, rolled into as the polite one). */
+    /** offer glare, counted from BOTH directions: a remote offer that arrived while ours was in
+     * flight (ignored as the impolite side, rolled into as the polite one) PLUS our own offers
+     * deferred because a remote offer already held the floor. */
     glare: number
     candidatesSent: number
     candidatesReceived: number
@@ -465,7 +482,9 @@ export namespace RtcDef {
     tracksSent: number
     tracksReceived: number
 
-    /** failed steps (a failed connection, negotiation, or restart round). */
+    /** failed steps: a `failed` connection state, a failed negotiation step, or a peer
+     * construction that threw. An exhausted `iceRestart` / `reconnect` budget settles the session
+     * (`RtcErrors.IceExhausted` / `RtcErrors.ReconnectExhausted`) but does NOT count here. */
     failures: number
   }
 
@@ -542,7 +561,10 @@ export namespace RtcDef {
     readonly reconnects: number
 
     /** Open a data channel bound to the caller's scope; resolves once the channel is OPEN (first
-     * channel drives the initial offer/answer; later ones open in-band without renegotiation). */
+     * channel drives the initial offer/answer; later ones open in-band without renegotiation).
+     * Raises `RtcErrors.Channel` when the peer is already closed, `createDataChannel` throws, or
+     * the channel closes (or the session settles) before it opens; `RtcErrors.Timeout` when it
+     * is not open within `openTimeoutMs`. */
     channel(label: string, options?: ChannelOptions): Operation<Channel>
 
     /** Channels the REMOTE peer opens, as an effect Flow (each already open when emitted; single
@@ -550,8 +572,9 @@ export namespace RtcDef {
     readonly channels: Flow<Channel, FlowClose>
 
     /** Start sending a media track (browser-first: the impl must expose `addTrack`, else
-     * `rtc/unsupported`); drives renegotiation and resolves with a session-stable
-     * {@link Sender}. Under `reconnect` the track is re-added on every redialed generation. */
+     * `RtcErrors.Unsupported`); drives renegotiation and resolves with a session-stable
+     * {@link Sender}. Raises `RtcErrors.Track` when the peer is already closed or the impl's
+     * `addTrack` throws. Under `reconnect` the track is re-added on every redialed generation. */
     addTrack(track: TrackLike, ...streams: StreamLike[]): Operation<Sender>
 
     /** Tracks the REMOTE peer announces, as an effect Flow (single consumer). Like remote
@@ -562,7 +585,8 @@ export namespace RtcDef {
     /** `connectionState` transitions as an effect Flow (single consumer). */
     readonly states: Flow<string, FlowClose>
 
-    /** Queue an ICE restart offer manually (also driven automatically by `iceRestart`). */
+    /** Queue an ICE restart offer manually (also driven automatically by `iceRestart`). A silent
+     * no-op without a live generation — never dialed, mid-redial gap, or already ended. */
     restartIce(): Operation<void>
 
     /** Close the peer for good: signal `rtc:bye`, close the connection, settle every flow. */
@@ -585,24 +609,37 @@ export namespace RtcDef {
      * sent while nobody is subscribed are dropped (the timeline keeps them). */
     readonly events: Flow<Event, FlowClose>
 
-    /** Read + normalize the implementation's `getStats()` report. Raises `rtc/unsupported` when
-     * the impl has no `getStats`, `rtc/stats` when the call itself fails. */
+    /** Read + normalize the implementation's `getStats()` report. Raises `RtcErrors.Unsupported`
+     * when the impl has no `getStats`; `RtcErrors.Stats` when the call itself rejects OR when
+     * there is no live generation to read from (never connected, mid-redial gap, or ended). */
     stats(): Operation<Stats>
   }
 
+  /** What `RtcClient.use` takes: connect defaults plus the peer-connection implementation. */
+  export interface ClientOptions extends Options {
+    /** The peer-connection constructor `connect` uses. Omit for the platform `RTCPeerConnection`
+     * (with the `node-datachannel` polyfill auto-imported on Bun/Node when the global is absent);
+     * pass a fake in tests; pass `false` to simulate a platform without any implementation (the
+     * auto-import is skipped too and every connect fails `RtcErrors.Unsupported`). */
+    impl?: ImplLike | false | undefined
+  }
+
   /**
-   * The installed plugin context: install-time defaults, merged (shallow, per top-level key)
-   * under each `connect` call's own options.
+   * The installed client context: install-time defaults, merged (shallow, per top-level key)
+   * under each `connect` call's own options, plus the `impl` option as given (resolved lazily on
+   * each connect).
    */
   export interface Context {
     defaults: Options
+    impl: ImplLike | false | undefined
   }
 
-  export interface Actions {
+  /** The action contract `Rtc` routes and `RtcClient` implements. */
+  export interface Contract {
     /** Open a peer connection bound to the caller's scope, negotiating over `signal`. Resolves
-     * immediately with the peer handle (channels connect lazily), or raises `'rtc/unsupported'`
-     * (no implementation — set `rtcImpl` or install `node-datachannel`) / `'rtc/connect'` (the
-     * implementation refused the configuration). */
+     * immediately with the peer handle (channels connect lazily), or raises
+     * `RtcErrors.Unsupported` (no implementation — pass `impl` to `RtcClient.use` or install
+     * `node-datachannel`) / `RtcErrors.Connect` (the implementation refused the configuration). */
     connect(signal: SignalLike, options?: Options): Operation<Peer>
   }
 }

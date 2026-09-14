@@ -4,7 +4,8 @@ import { DbClient, where } from 'db:core'
 import type { ObserveDef, ServerDef } from 'server:core'
 import type { Operation } from 'std:effect'
 import { attempt, fork, scoped, withResolvers } from 'std:effect'
-import { install, isUse } from 'std:plugin'
+import type { Plugin } from 'std:plugin'
+import { isUse } from 'std:plugin'
 import { isFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
 
@@ -25,13 +26,11 @@ export function* openStore(
   yield* fork(() =>
     scoped(function* () {
       if (adapter) {
-        yield* isUse(adapter) ? adapter : install(adapter as AnyType)
+        yield* isUse(adapter) ? adapter : (adapter as Plugin<AnyType, [], AnyType>).use()
       }
       // `safe`: this client shares the adapter with the app's — it must never drop what it does
       // not declare (the app's tables are "leftovers" from its point of view)
-      const opened = yield* attempt(() =>
-        install(DbClient, { tables: [...observeTables], safe: true }),
-      )
+      const opened = yield* attempt(() => DbClient.use({ tables: [...observeTables], safe: true }))
       if (isFailure(opened)) {
         ready.reject(opened)
         return

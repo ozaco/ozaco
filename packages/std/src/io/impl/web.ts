@@ -1,11 +1,12 @@
 import type { Flow } from 'std:effect'
-import { operation, resource } from 'std:effect'
+import { resource } from 'std:effect'
 import type { FlowClose } from 'std:io'
 import { IO } from 'std:io'
 import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import pkg from '../../../package.json'
+import { IOErrors } from '../errors'
 import { readWebEnv } from '../internal/env'
 import { fromReadable } from '../internal/from-readable'
 import { hlcDecode, hlcObserve, hlcToken } from '../internal/hlc'
@@ -18,13 +19,13 @@ import { webHash, webHmac, webRandomBytes } from '../internal/webcrypto'
 
 /** The browser has no filesystem — these actions fail clearly instead of pretending to work. */
 const unsupported = (action: string): AnyType =>
-  operation(function* () {
-    return yield* fail('io-unsupported', `IO.${action} is not available in a web environment`)
-  })
+  function* () {
+    return yield* fail(IOErrors.Unsupported, `IO.${action} is not available in a web environment`)
+  }
 
 const unsupportedFlow = (action: string): Flow<Uint8Array, FlowClose> =>
   resource(function* () {
-    return yield* fail('io-unsupported', `IO.${action} is not available in a web environment`)
+    return yield* fail(IOErrors.Unsupported, `IO.${action} is not available in a web environment`)
   }) as Flow<Uint8Array, FlowClose>
 
 /**
@@ -34,7 +35,7 @@ const unsupportedFlow = (action: string): Flow<Uint8Array, FlowClose> =>
  * browser has no fs); `fromReadable` still works for adapting an existing web `ReadableStream`.
  */
 export const WebIO = IO.implement({
-  name: 'web-io',
+  name: 'std/web-io',
   version: pkg.version,
   *setup() {
     return null

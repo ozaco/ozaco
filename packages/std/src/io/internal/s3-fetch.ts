@@ -3,13 +3,15 @@ import type { AnyType } from 'std:shared'
 
 import { createHash, createHmac } from 'node:crypto'
 
+import { IOErrors } from '../errors'
 import type { S3ListOptions, S3Options, S3PresignOptions } from '../types/common'
 import type { Helpers } from '../types/helpers'
 
 // A dependency-free, SigV4-signed S3 client over `fetch` (Node / any runtime without Bun's native
 // `S3Client`). It mirrors the slice of Bun's `S3Client` shape that `createS3` consumes, so the same
-// effect-native wrapper drives both. Path-style addressing (`<endpoint>/<bucket>/<key>`) — works with
-// MinIO and any S3-compatible endpoint; falls back to AWS virtual-hosted style when no endpoint is set.
+// effect-native wrapper drives both. Always path-style addressing (`<endpoint>/<bucket>/<key>`) —
+// works with MinIO and any S3-compatible endpoint; when no endpoint is set the base is the regional
+// AWS endpoint `https://s3.<region>.amazonaws.com` (still path-style, never virtual-hosted).
 
 const env = (key: string): string | undefined => (globalThis as AnyType).process?.env?.[key]
 
@@ -95,7 +97,7 @@ const listPart = (xml: string, tag: string): string | undefined =>
 // `createS3`'s `until` wrapping, so effect callers observe an `s3-failed` failure, not a bare Error.
 const ensureOk = (response: Response, key: string): void => {
   if (!response.ok) {
-    throw fail('s3-failed', `s3 ${response.status} ${response.statusText} for "${key}"`)
+    throw fail(IOErrors.S3Failed, `s3 ${response.status} ${response.statusText} for "${key}"`)
   }
 }
 

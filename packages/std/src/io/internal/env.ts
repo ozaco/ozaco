@@ -3,6 +3,8 @@ import { operation } from 'std:effect'
 import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 
+import { IOErrors } from '../errors'
+
 const makeReadEnv = (getSource: () => Record<string, string | undefined>) =>
   operation(function* (
     mapper: (data: Record<string, string | undefined>) => Record<string, unknown>,
@@ -13,7 +15,7 @@ const makeReadEnv = (getSource: () => Record<string, string | undefined>) =>
 
     for (const key of Object.keys(result)) {
       if (!optionalKeys.has(key) && (result as AnyType)[key] === undefined) {
-        return yield* fail('missing-env', `missing required env variable: "${key}"`)
+        return yield* fail(IOErrors.MissingEnv, `missing required env variable: "${key}"`)
       }
     }
 

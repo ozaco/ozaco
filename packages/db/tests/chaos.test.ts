@@ -2,7 +2,6 @@ import type { Change, Database, Schema, Spec } from 'db:core'
 import { Db, DbBus, DbClient } from 'db:core'
 import type { Operation } from 'std:effect'
 import { attempt, createQueue, fork, run, scoped, sleep, withResolvers } from 'std:effect'
-import { install } from 'std:plugin'
 import { isFailure, unwrap } from 'std:result'
 
 import { describe, expect, it } from 'bun:test'
@@ -71,11 +70,11 @@ function* spawnNode(origin: string, path: string, link: Memory.Link): Operation<
 
   yield* fork(() =>
     scoped(function* () {
-      yield* install(SqliteAdapter, { path })
-      yield* install(BunIO)
-      yield* install(MemoryTransport, { prefix: 'chaos', link })
-      yield* install(DbBus)
-      const db = yield* install(DbClient, {
+      yield* SqliteAdapter.use({ path })
+      yield* BunIO.use()
+      yield* MemoryTransport.use({ prefix: 'chaos', link })
+      yield* DbBus.use()
+      const db = yield* DbClient.use({
         tables: [users],
         origin,
         pollMs: POLL_MS,

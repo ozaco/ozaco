@@ -113,6 +113,9 @@ export class FakePeer implements RtcDef.PeerLike {
   /** Candidates the negotiation actually delivered (asserted by the buffering test). */
   candidates: (RtcDef.CandidateLike | undefined)[] = []
   linked: FakePeer | undefined
+  /** Test control: when set, the matching impl call rejects (`offer`/`answer`/`stats`) or throws
+   * (`channel`) with the given error — drives the failure-tag paths deterministically. */
+  faults: { offer?: Error; answer?: Error; stats?: Error; channel?: Error } = {}
 
   readonly hub: FakeHub
   readonly id: number
@@ -137,10 +140,16 @@ export class FakePeer implements RtcDef.PeerLike {
 
   createOffer(options?: { iceRestart?: boolean }): Promise<RtcDef.DescriptionLike> {
     void options
+    if (this.faults.offer) {
+      return Promise.reject(this.faults.offer)
+    }
     return Promise.resolve({ type: 'offer', sdp: this.mintSdp('offer', this.id) })
   }
 
   createAnswer(): Promise<RtcDef.DescriptionLike> {
+    if (this.faults.answer) {
+      return Promise.reject(this.faults.answer)
+    }
     return Promise.resolve({ type: 'answer', sdp: this.mintSdp('answer', this.id) })
   }
 
@@ -195,6 +204,9 @@ export class FakePeer implements RtcDef.PeerLike {
 
   createDataChannel(label: string, options?: RtcDef.ChannelInit): RtcDef.ChannelLike {
     void options
+    if (this.faults.channel) {
+      throw this.faults.channel
+    }
     const channel = new FakeChannel(label)
     this.channels.push(channel)
     if (this.connectionState === 'connected') {
@@ -212,6 +224,9 @@ export class FakePeer implements RtcDef.PeerLike {
   /** A W3C-shaped statistics report: one transport, the selected candidate pair (host ↔ srflx),
    * one RTP stream each way, and every data channel with its exact wire counters. */
   getStats(): Promise<RtcDef.StatsReportLike> {
+    if (this.faults.stats) {
+      return Promise.reject(this.faults.stats)
+    }
     const bytesSent = this.channels.reduce((total, channel) => total + channel.bytesSent, 0)
     const report = new Map<string, AnyType>([
       [

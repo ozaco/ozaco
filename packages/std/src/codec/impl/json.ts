@@ -7,7 +7,7 @@ import type { AnyType } from 'std:shared'
 import { JSONParser } from '@streamparser/json'
 
 import pkg from '../../../package.json'
-import { Codec } from '../definitions'
+import { Codec } from '../definition'
 import { CodecErrors } from '../errors'
 import type { CodecDef } from '../types'
 

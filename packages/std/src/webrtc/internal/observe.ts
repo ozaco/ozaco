@@ -1,9 +1,10 @@
 import type { Signal } from 'std:effect'
 import { createSignal } from 'std:effect'
 
-import { TIMELINE_LIMIT } from '../const'
 import type { Helpers } from '../types/helpers'
 import type { RtcDef } from '../types/rtc'
+
+import { TIMELINE_LIMIT } from './const'
 
 // The peer's observability spine: a bag of integer counters, a bounded ring of timeline entries,
 // and a live signal of the same entries. Everything here is synchronous and allocation-light —

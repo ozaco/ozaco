@@ -1,3 +1,3 @@
-export * from './definitions'
+export * from './definition'
 export * from './errors'
 export * from './types'

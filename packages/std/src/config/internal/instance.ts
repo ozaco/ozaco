@@ -34,7 +34,8 @@ const writeData = operation(function* (
 
 /**
  * Build a config instance whose actions run against the context yielded by `getCtx`. The default
- * instance reads the scope-installed context (`() => useContext(Config)`); `open` binds a private one.
+ * instance (`Config.actions.*`) reads the scope-installed context
+ * (`() => useContext(ConfigImpl.context)`); `open` binds a private one instead.
  */
 export const makeInstance = (getCtx: () => Operation<ConfigDef.Context>): ConfigDef.Instance => ({
   *load(cwd?: string) {

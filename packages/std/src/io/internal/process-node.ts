@@ -3,6 +3,7 @@ import { fail } from 'std:result'
 
 import { spawn as childSpawn } from 'node:child_process'
 
+import { IOErrors } from '../errors'
 import type {
   ExecOptions,
   ExecResult,
@@ -55,7 +56,7 @@ export const nodeExec = operation(function* (
       }),
     )
   } catch (error) {
-    return yield* fail('exec-failed', `command "${cmd}" failed: ${errorMessage(error)}`)
+    return yield* fail(IOErrors.ExecFailed, `command "${cmd}" failed: ${errorMessage(error)}`)
   }
 })
 
@@ -75,7 +76,7 @@ export const nodeSpawn = operation(function* (
   try {
     child = childSpawn(cmd, [...(args ?? [])], { ...config })
   } catch (error) {
-    return yield* fail('spawn-failed', `failed to spawn "${cmd}": ${errorMessage(error)}`)
+    return yield* fail(IOErrors.SpawnFailed, `failed to spawn "${cmd}": ${errorMessage(error)}`)
   }
 
   // Attach the exit/error listeners eagerly: an unhandled 'error' event would otherwise crash the
@@ -94,7 +95,7 @@ export const nodeSpawn = operation(function* (
     try {
       return yield* until(exitedPromise)
     } catch (error) {
-      return yield* fail('process-error', `process "${cmd}" errored: ${errorMessage(error)}`)
+      return yield* fail(IOErrors.ProcessError, `process "${cmd}" errored: ${errorMessage(error)}`)
     }
   })
 
@@ -124,8 +125,9 @@ export const nodeSpawn = operation(function* (
 
   const kill = operation(function* (signal?: number | string) {
     const ok = child.kill(signal as NodeJS.Signals | number | undefined)
+
     if (!ok) {
-      return yield* fail('kill-failed', `failed to signal pid ${child.pid ?? -1}`)
+      return yield* fail(IOErrors.KillFailed, `failed to signal pid ${child.pid ?? -1}`)
     }
   })
 

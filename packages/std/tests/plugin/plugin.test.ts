@@ -1,7 +1,7 @@
 import type { Operation } from 'std:effect'
 import { run, scoped, useScope } from 'std:effect'
 import type { Protocol } from 'std:plugin'
-import { definePlugin, defineProtocol, install, isPlugin, isProtocol } from 'std:plugin'
+import { definePlugin, defineProtocol, isPlugin, isProtocol } from 'std:plugin'
 import { isFailure, unwrap } from 'std:result'
 
 import { describe, expect, it } from 'bun:test'
@@ -58,7 +58,7 @@ describe('protocol (flat surface)', () => {
     const MemoryDb = memory('memory-db')
 
     const outcome = await run(function* () {
-      yield* install(MemoryDb, [[1, 'one']])
+      yield* MemoryDb.use([[1, 'one']])
 
       yield* Db.actions.put(2, 'two')
       return [yield* Db.actions.find(1), yield* Db.actions.find(2)]
@@ -76,7 +76,7 @@ describe('protocol (flat surface)', () => {
 
     expect(isFailure(outcome)).toBe(true)
     if (isFailure(outcome)) {
-      expect(outcome.error).toBe('missing-action')
+      expect(outcome.error).toBe('std:plugin.missing-action')
     }
   })
 
@@ -86,7 +86,7 @@ describe('protocol (flat surface)', () => {
 
     const outcome = await run(function* () {
       const inside = yield* scoped(function* () {
-        yield* install(MemoryDb, [[1, 'one']])
+        yield* MemoryDb.use([[1, 'one']])
         return yield* Db.actions.find(1)
       })
 
@@ -109,8 +109,8 @@ describe('protocol (flat surface)', () => {
     const Second = memory('second-db')
 
     const outcome = await run(function* () {
-      yield* install(First, [[1, 'from-first']])
-      yield* install(Second, [[1, 'from-second']])
+      yield* First.use([[1, 'from-first']])
+      yield* Second.use([[1, 'from-second']])
 
       return {
         protocol: yield* Db.actions.find(1), // default exec: last installed wins
@@ -138,8 +138,8 @@ describe('protocol (flat surface)', () => {
     const { Db, memory } = makeDb({ cloneable: true, exec: fanout })
 
     const outcome = await run(function* () {
-      yield* install(memory('a-db'), [[1, 'a']])
-      yield* install(memory('b-db'), [[1, 'b']])
+      yield* memory('a-db').use([[1, 'a']])
+      yield* memory('b-db').use([[1, 'b']])
 
       // the fan-out exec turns a single-impl result into an array of every impl's result
       return (yield* Db.actions.find(1)) as unknown
@@ -152,14 +152,14 @@ describe('protocol (flat surface)', () => {
     const { Db, memory } = makeDb()
 
     const outcome = await run(function* () {
-      yield* install(memory('one-db'), [])
-      yield* install(memory('other-db'), [])
+      yield* memory('one-db').use([])
+      yield* memory('other-db').use([])
       return yield* Db.actions.find(1)
     })
 
     expect(isFailure(outcome)).toBe(true)
     if (isFailure(outcome)) {
-      expect(outcome.error).toBe('protocol-not-cloneable')
+      expect(outcome.error).toBe('std:plugin.protocol-not-cloneable')
     }
   })
 })
@@ -206,7 +206,7 @@ describe('hooks over the api layer', () => {
     const trace: string[] = []
 
     const outcome = await run(function* () {
-      yield* install(MemoryDb, [[1, 'one']])
+      yield* MemoryDb.use([[1, 'one']])
 
       const decorated = yield* scoped(function* () {
         yield* Db.before({
@@ -317,7 +317,7 @@ describe('nested actions + standalone plugins + guards', () => {
     })
 
     const outcome = await run(function* () {
-      yield* install(MemIo)
+      yield* MemIo.use()
       return yield* Io.actions.fs.read('/tmp/x')
     })
 
@@ -353,7 +353,7 @@ describe('nested actions + standalone plugins + guards', () => {
     })
 
     const outcome = await run(function* () {
-      yield* install(Extended, [[1, 'one']])
+      yield* Extended.use([[1, 'one']])
 
       return {
         contract: yield* Extended.actions.find(1),
@@ -382,7 +382,7 @@ describe('nested actions + standalone plugins + guards', () => {
     })
 
     const outcome = await run(function* () {
-      yield* install(Counter, 41)
+      yield* Counter.use(41)
       return yield* Counter.actions.increment()
     })
 
@@ -400,7 +400,7 @@ describe('nested actions + standalone plugins + guards', () => {
 
     const outcome = await run(function* () {
       const scope = yield* useScope()
-      const value = yield* install(MemoryDb, [[9, 'nine']])
+      const value = yield* MemoryDb.use([[9, 'nine']])
 
       return scope.get(MemoryDb.context) === value
     })

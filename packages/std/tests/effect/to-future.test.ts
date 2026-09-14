@@ -96,7 +96,7 @@ describe('toFuture', () => {
             controller.abort()
             const outcome = await pending
             expect(isFailure(outcome)).toBe(true)
-            expect((outcome as { error: string }).error).toBe('halted')
+            expect((outcome as { error: string }).error).toBe('std:effect.halted')
           })(),
         )
 
@@ -124,7 +124,7 @@ describe('toFuture', () => {
         yield* until(
           (async () => {
             const outcome = await future
-            expect((outcome as { error: string }).error).toBe('halted')
+            expect((outcome as { error: string }).error).toBe('std:effect.halted')
           })(),
         )
 

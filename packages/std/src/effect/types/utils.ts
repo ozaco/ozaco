@@ -1,6 +1,6 @@
 import type { Result } from 'std:result'
 
-import type { Operation, Flow, Subscription } from './operation'
+import type { Operation, Flow } from './operation'
 
 export namespace Utils {
   export interface Exit {
@@ -26,13 +26,6 @@ export namespace Utils {
     next(): Operation<void>
   }
 
-  export interface EachLoop<T> {
-    subscription: Subscription<T, unknown>
-    current: IteratorResult<T>
-    finish: () => void
-    stale?: true
-  }
-
   export interface HostOperation<T> {
     deno(): Operation<T>
     node(): Operation<T>
@@ -42,25 +35,25 @@ export namespace Utils {
   /** Options shared by `backoffDelay`, `backoff` and `retry`. */
   export interface BackoffOptions {
     /** Delay of the first attempt in milliseconds (default 250). */
-    delayMs?: number
+    delayMs?: number | undefined
     /** Exponential growth factor applied per attempt (default 2). */
-    factor?: number
+    factor?: number | undefined
     /** Upper bound on the computed delay in milliseconds (default 30_000). */
-    maxDelayMs?: number
+    maxDelayMs?: number | undefined
     /**
      * Jitter as a 0..1 fraction of the computed delay that may be randomly shaved off (default 0 —
      * fully deterministic).
      */
-    jitter?: number
+    jitter?: number | undefined
     /** Injectable randomness source returning 0..1; only consulted when `jitter > 0` (default `Math.random`). */
-    random?: () => number
+    random?: (() => number) | undefined
   }
 
   /** Options for `retry`. */
   export interface RetryOptions extends BackoffOptions {
     /** Maximum number of tries, including the first one (default 3). */
-    attempts?: number
+    attempts?: number | undefined
     /** Retry predicate: return `false` to re-raise the failure immediately instead of retrying. */
-    when?: (failure: Result.Failure<unknown>) => boolean
+    when?: ((failure: Result.Failure<unknown>) => boolean) | undefined
   }
 }

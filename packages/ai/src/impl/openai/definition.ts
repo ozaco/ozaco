@@ -41,13 +41,13 @@ const CAPABILITIES: ProviderDef.Capabilities = {
 /**
  * The OpenAI-compatible provider — talks to the network EXCLUSIVELY through the `Fetch` plugin
  * and (de)serializes every JSON wire payload through the installed `JsonCodec`, so both
- * `install(FetchClient)` (any options) and `install(JsonCodec)` must come first:
+ * `FetchClient.use()` (any options) and `JsonCodec.use()` must come first:
  *
  * ```ts
- * yield* install(FetchClient)
- * yield* install(JsonCodec)
- * yield* install(OpenAIProvider, { apiKey, baseUrl })
- * yield* install(AiClient, { models: { chat: 'gpt-4o-mini' } })
+ * yield* FetchClient.use()
+ * yield* JsonCodec.use()
+ * yield* OpenAIProvider.use({ apiKey, baseUrl })
+ * yield* AiClient.use({ models: { chat: 'gpt-4o-mini' } })
  * ```
  *
  * Works against api.openai.com and any OpenAI-compatible server (incl. local) via `baseUrl`.
@@ -65,7 +65,7 @@ export const OpenAIProvider = AiProvider.implement<
     if (!(yield* Fetch.context.get())) {
       return yield* fail(
         AiErrors.Configuration,
-        'std:fetch is not installed — install(FetchClient) before the openai provider',
+        'std:fetch is not installed — FetchClient.use() before the openai provider',
       )
     }
     if (!options.apiKey) {

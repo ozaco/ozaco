@@ -1,8 +1,7 @@
 import { attempt, run } from 'std:effect'
-import { install } from 'std:plugin'
 import { isFailure, unwrap } from 'std:result'
 import type { WsDef } from 'std:ws'
-import { Ws, wsImpl } from 'std:ws'
+import { Ws, WsClient } from 'std:ws'
 
 import { describe, expect, it } from 'bun:test'
 
@@ -17,8 +16,8 @@ describe('Ws.actions.connect', () => {
       const url = `ws://localhost:${server.port}`
 
       const outcome = await run(function* () {
-        yield* install(JsonCodec)
-        yield* install(Ws)
+        yield* JsonCodec.use()
+        yield* WsClient.use()
 
         const connection = yield* Ws.actions.connect(url)
         const snapshot = {
@@ -44,13 +43,13 @@ describe('Ws.actions.connect', () => {
     await server.stop(true)
 
     const outcome = await run(function* () {
-      yield* install(Ws)
+      yield* WsClient.use()
       const result = yield* attempt(() => Ws.actions.connect(`ws://localhost:${deadPort}`))
 
       return isFailure(result) ? String(result.error) : 'connected'
     })
 
-    expect(unwrap(outcome)).toBe('ws/connect')
+    expect(unwrap(outcome)).toBe('std:ws.connect')
   })
 
   it('a failed upgrade (plain HTTP response) surfaces as a ws/connect failure', async () => {
@@ -63,13 +62,13 @@ describe('Ws.actions.connect', () => {
     })
     try {
       const outcome = await run(function* () {
-        yield* install(Ws)
+        yield* WsClient.use()
         const result = yield* attempt(() => Ws.actions.connect(`ws://localhost:${server.port}`))
 
         return isFailure(result) ? String(result.error) : 'connected'
       })
 
-      expect(unwrap(outcome)).toBe('ws/connect')
+      expect(unwrap(outcome)).toBe('std:ws.connect')
     } finally {
       server.stop(true)
     }
@@ -77,15 +76,15 @@ describe('Ws.actions.connect', () => {
 
   it('a missing WebSocket implementation fails with ws/unsupported', async () => {
     const outcome = await run(function* () {
-      yield* install(Ws)
+      yield* WsClient.use()
       // simulate a platform without a WebSocket global (`?? default` swallows undefined, so use false)
-      yield* wsImpl.set(false as unknown as WsDef.ImplLike)
+      yield* WsClient.use({ impl: false as unknown as WsDef.ImplLike })
       const result = yield* attempt(() => Ws.actions.connect('ws://localhost:1'))
 
       return isFailure(result) ? String(result.error) : 'connected'
     })
 
-    expect(unwrap(outcome)).toBe('ws/unsupported')
+    expect(unwrap(outcome)).toBe('std:ws.unsupported')
   })
 
   it('connect without installing the plugin fails with missing-action', async () => {
@@ -95,6 +94,6 @@ describe('Ws.actions.connect', () => {
       return isFailure(result) ? String(result.error) : 'connected'
     })
 
-    expect(unwrap(outcome)).toBe('missing-action')
+    expect(unwrap(outcome)).toBe('std:plugin.missing-action')
   })
 })

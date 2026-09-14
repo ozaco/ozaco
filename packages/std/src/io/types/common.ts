@@ -50,10 +50,20 @@ export interface WritableLike {
   off(event: string, listener: (...args: AnyType[]) => void): this
 }
 
+/** Options for {@link IOActions.walk}. */
 export interface WalkOptions {
+  /** Which entries to collect: `IO_FLAGS.FILES`, `IO_FLAGS.DIRS` or both (the default). Add
+   * `IO_FLAGS.FOLLOW_SYMLINKS` to `stat` instead of `lstat`, so a symlink to a directory is reported
+   * as a directory and descended into (otherwise it is a leaf `isSymlink` entry). */
   flags?: number | undefined
+  /** Deepest directory level to descend into, counting `root`'s direct children as depth `0` — so
+   * `maxDepth: 0` lists only the root's own entries. Default: unbounded. */
   maxDepth?: number | undefined
+  /** Keep only entries whose full path matches at least one pattern. Filters what is collected, not
+   * what is traversed: a non-matching directory is still descended into. */
   match?: RegExp[] | undefined
+  /** Prune entries whose full path matches any pattern: they are neither collected nor (for a
+   * directory) descended into. Applied before `match`. */
   skip?: RegExp[] | undefined
 }
 
@@ -75,7 +85,8 @@ export interface WatchOptions {
 export interface UlidOptions {
   /** Quantize the timestamp to this many ms (`floor(now/window)*window`); default `1` (per-ms). */
   window?: number | undefined
-  /** Total id length EXCLUDING `bucket` (10 timestamp chars + `length - 10` random); default `26`. */
+  /** Total id length EXCLUDING `bucket` (10 timestamp chars + `length - 10` random); default `26`.
+   * Not validated: the random tail is at least 1 char, so any `length <= 10` yields an 11-char id. */
   length?: number | undefined
   /** Fixed prefix segment (namespace/shard tag); ids from different buckets never collide. */
   bucket?: string | undefined
@@ -243,10 +254,13 @@ export interface UdpSocket {
   close: () => Operation<void>
 }
 
-// --- S3 (object storage) — Bun's built-in S3Client (BunIO only) ------------------------------------
+// --- S3 (object storage) — Bun's native S3Client on BunIO, a SigV4-over-fetch client on NodeIO ---
 
-/** Connection + credentials for an S3 client. Any field may be omitted to fall back to Bun's env
- * (`S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` / `S3_REGION` / `S3_BUCKET` / `S3_ENDPOINT`, …). */
+/** Connection + credentials for an S3 client. Any field may be omitted to fall back to the env:
+ * Bun's `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` / `S3_SESSION_TOKEN` / `S3_REGION` /
+ * `S3_BUCKET` / `S3_ENDPOINT` first, then (NodeIO's fetch client only) the AWS SDK names
+ * `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_SESSION_TOKEN` / `AWS_REGION` /
+ * `AWS_ENDPOINT_URL_S3`; the fetch client also defaults `region` to `us-east-1`. */
 export interface S3Options {
   readonly accessKeyId?: string
   readonly secretAccessKey?: string
@@ -315,8 +329,10 @@ export interface S3File {
   presign: (options?: S3PresignOptions) => Operation<string>
 }
 
-/** An S3 client bound to a bucket/credentials — `IO.actions.s3(options)`. Uses Bun's built-in
- * `S3Client`; on non-Bun runtimes every operation fails `io-unsupported`. */
+/** An S3 client bound to a bucket/credentials — `IO.actions.s3(options)`. BunIO uses Bun's built-in
+ * `S3Client`; NodeIO uses a dependency-free SigV4-over-`fetch` client (path-style URLs). Only WebIO
+ * has no client: the handle is still constructible there, but every operation fails
+ * `IOErrors.Unsupported`. */
 export interface S3Client {
   /** A handle to one object. */
   file: (key: string) => S3File

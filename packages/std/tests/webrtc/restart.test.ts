@@ -1,7 +1,6 @@
 import { run, sleep } from 'std:effect'
-import { install } from 'std:plugin'
 import { isFailure, unwrap } from 'std:result'
-import { Rtc, rtcImpl } from 'std:webrtc'
+import { Rtc, RtcClient } from 'std:webrtc'
 
 import { describe, expect, it } from 'bun:test'
 
@@ -15,9 +14,8 @@ describe('ICE restart supervision', () => {
     const fake = createFakeRtc()
 
     const outcome = await run(function* () {
-      yield* install(JsonCodec)
-      yield* install(Rtc)
-      yield* rtcImpl.set(fake.impl)
+      yield* JsonCodec.use()
+      yield* RtcClient.use({ impl: fake.impl })
 
       const [signalA, signalB] = createSignalPair()
       const budget = { retries: 4, delayMs: 10 }
@@ -49,9 +47,8 @@ describe('ICE restart supervision', () => {
     const fake = createFakeRtc()
 
     const outcome = await run(function* () {
-      yield* install(JsonCodec)
-      yield* install(Rtc)
-      yield* rtcImpl.set(fake.impl)
+      yield* JsonCodec.use()
+      yield* RtcClient.use({ impl: fake.impl })
 
       const [signalA, signalB] = createSignalPair()
       const peerA = yield* Rtc.actions.connect(signalA, {
@@ -75,16 +72,18 @@ describe('ICE restart supervision', () => {
       }
     })
 
-    expect(unwrap(outcome)).toEqual({ reason: 'ice-exhausted', flowClose: 'rtc/ice-exhausted' })
+    expect(unwrap(outcome)).toEqual({
+      reason: 'ice-exhausted',
+      flowClose: 'std:webrtc.ice-exhausted',
+    })
   })
 
   it('without an iceRestart budget a failed connection settles with rtc/connection', async () => {
     const fake = createFakeRtc()
 
     const outcome = await run(function* () {
-      yield* install(JsonCodec)
-      yield* install(Rtc)
-      yield* rtcImpl.set(fake.impl)
+      yield* JsonCodec.use()
+      yield* RtcClient.use({ impl: fake.impl })
 
       const [signalA, signalB] = createSignalPair()
       const peerA = yield* Rtc.actions.connect(signalA)
@@ -106,16 +105,15 @@ describe('ICE restart supervision', () => {
       }
     })
 
-    expect(unwrap(outcome)).toEqual({ reason: 'failed', flowClose: 'rtc/connection' })
+    expect(unwrap(outcome)).toEqual({ reason: 'failed', flowClose: 'std:webrtc.connection' })
   })
 
   it('the states flow streams the connection-state transitions', async () => {
     const fake = createFakeRtc()
 
     const outcome = await run(function* () {
-      yield* install(JsonCodec)
-      yield* install(Rtc)
-      yield* rtcImpl.set(fake.impl)
+      yield* JsonCodec.use()
+      yield* RtcClient.use({ impl: fake.impl })
 
       const [signalA, signalB] = createSignalPair()
       const peerA = yield* Rtc.actions.connect(signalA, {

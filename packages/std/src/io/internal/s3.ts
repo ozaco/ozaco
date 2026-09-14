@@ -3,6 +3,7 @@ import { operation, until } from 'std:effect'
 import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 
+import { IOErrors } from '../errors'
 import type {
   S3Client,
   S3File,
@@ -34,15 +35,18 @@ const mapList = (native: AnyType): S3ListResult => ({
  * Wrap a native S3 client (Bun's `S3Client` on Bun, a SigV4-over-`fetch` client elsewhere) as an
  * effect-native {@link S3Client}. `native` is `null` on runtimes with no S3 at all (e.g. the browser) —
  * the client is still constructible so the platform surface stays uniform, but every operation fails
- * `io-unsupported`. Native async calls are `until`-wrapped; file handles are lazy — nothing hits the
- * network until an operation runs.
+ * `IOErrors.Unsupported`. Native async calls are `until`-wrapped; file handles are lazy — nothing
+ * hits the network until an operation runs.
  */
 export const createS3 = (native: AnyType): S3Client => {
   const client: AnyType = native
 
   const useClient = operation(function* () {
     if (!client) {
-      return yield* fail('io-unsupported', 'IO.s3 requires Bun (S3Client is unavailable here)')
+      return yield* fail(
+        IOErrors.Unsupported,
+        'IO.s3 is not available in a web environment (no S3 client on this runtime)',
+      )
     }
     return client
   })

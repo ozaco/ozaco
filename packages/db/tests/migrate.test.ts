@@ -1,7 +1,6 @@
 import { column, Db, DbClient, DbErrors, table } from 'db:core'
 import { isDestructive } from 'db:internal'
 import { attempt, run } from 'std:effect'
-import { install } from 'std:plugin'
 import { isFailure, unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
 
@@ -20,9 +19,9 @@ describe('migrations — plan and apply', () => {
   it('auto migration reconciles at install; the follow-up plan is index-only', async () => {
     unwrap(
       await run(function* () {
-        yield* install(MemoryAdapter)
-        yield* install(BunIO)
-        yield* install(DbClient, { tables: [users] })
+        yield* MemoryAdapter.use()
+        yield* BunIO.use()
+        yield* DbClient.use({ tables: [users] })
         const plan = yield* Db.actions.planMigration()
         const structural = plan.steps.filter((step: AnyType) => step.kind !== 'create-index')
         expect(structural).toEqual([])
@@ -33,9 +32,9 @@ describe('migrations — plan and apply', () => {
   it("migrations: 'manual' defers table creation to Db.actions.migrate()", async () => {
     unwrap(
       await run(function* () {
-        yield* install(MemoryAdapter)
-        yield* install(BunIO)
-        const db = yield* install(DbClient, { tables: [users], migrations: 'manual' })
+        yield* MemoryAdapter.use()
+        yield* BunIO.use()
+        const db = yield* DbClient.use({ tables: [users], migrations: 'manual' })
 
         const before = yield* attempt(db.query('users').collect())
         expect(isFailure(before)).toBe(true)
@@ -56,9 +55,9 @@ describe('migrations — plan and apply', () => {
     try {
       unwrap(
         await run(function* () {
-          yield* install(SqliteAdapter, { path })
-          yield* install(BunIO)
-          const db = yield* install(DbClient, { tables: [v1] })
+          yield* SqliteAdapter.use({ path })
+          yield* BunIO.use()
+          const db = yield* DbClient.use({ tables: [v1] })
           yield* db.insert('items', { a: 'one', extra: 'keep?' })
         }),
       )
@@ -66,9 +65,9 @@ describe('migrations — plan and apply', () => {
       // same file, new schema, safe mode: `b` added, `extra` NOT dropped
       unwrap(
         await run(function* () {
-          yield* install(SqliteAdapter, { path })
-          yield* install(BunIO)
-          const db = yield* install(DbClient, { tables: [v2], migrations: 'manual', safe: true })
+          yield* SqliteAdapter.use({ path })
+          yield* BunIO.use()
+          const db = yield* DbClient.use({ tables: [v2], migrations: 'manual', safe: true })
 
           const plan = yield* Db.actions.planMigration()
           const kinds = plan.steps.map((step: AnyType) => step.kind)
@@ -89,9 +88,9 @@ describe('migrations — plan and apply', () => {
       // safe off: the undeclared column is dropped
       unwrap(
         await run(function* () {
-          yield* install(SqliteAdapter, { path })
-          yield* install(BunIO)
-          yield* install(DbClient, { tables: [v2] })
+          yield* SqliteAdapter.use({ path })
+          yield* BunIO.use()
+          yield* DbClient.use({ tables: [v2] })
           const rows = yield* Db.actions.raw('SELECT * FROM "items"')
           expect(rows.rows[0]).not.toHaveProperty('extra')
         }),
@@ -104,9 +103,9 @@ describe('migrations — plan and apply', () => {
   it('imperative DDL: dropTable / dropIndex / reindex', async () => {
     unwrap(
       await run(function* () {
-        yield* install(SqliteAdapter)
-        yield* install(BunIO)
-        const db = yield* install(DbClient, { tables: [users] })
+        yield* SqliteAdapter.use()
+        yield* BunIO.use()
+        const db = yield* DbClient.use({ tables: [users] })
         yield* db.insert('users', { name: 'ada' })
 
         yield* Db.actions.reindex('users')

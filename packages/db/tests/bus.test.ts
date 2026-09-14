@@ -4,7 +4,6 @@ import type { Operation } from 'std:effect'
 import { attempt, createQueue, fork, race, run, scoped, sleep, useContext } from 'std:effect'
 import { useBufferedEvent } from 'std:event'
 import { IO } from 'std:io'
-import { install } from 'std:plugin'
 import { unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
 
@@ -26,8 +25,8 @@ describe('change bus', () => {
     unwrap(
       await run(function* () {
         const link = createLink()
-        yield* install(MemoryTransport, { prefix: 'app', link })
-        yield* install(DbBus)
+        yield* MemoryTransport.use({ prefix: 'app', link })
+        yield* DbBus.use()
         const bus = yield* useContext(DbBus)
         expect(bus).toMatchObject({ transportName: 'memory', topic: 'db.change' })
         const feed = yield* useBufferedEvent(bus.events, 'change')
@@ -54,11 +53,11 @@ describe('change bus', () => {
   it('a pinned transport and a custom topic; no transport at all → db.configuration', async () => {
     unwrap(
       await run(function* () {
-        const missing = yield* attempt(install(DbBus))
+        const missing = yield* attempt(DbBus.use())
         expect((missing as AnyType).error).toBe(DbErrors.Configuration)
 
-        yield* install(MemoryTransport, { prefix: 'app' })
-        yield* install(DbBus, { transport: MemoryTransport, topic: 'changes.users' })
+        yield* MemoryTransport.use({ prefix: 'app' })
+        yield* DbBus.use({ transport: MemoryTransport, topic: 'changes.users' })
         const heard = yield* Transport.actions.subscribe<Bus.Envelope>('changes.users')
         yield* DbBus.actions.publish({ origin: 'NDEA0001', seq: 1, tx: 'T1', events: [] })
         expect(((yield* heard.next()) as AnyType).value.value.seq).toBe(1)
@@ -69,9 +68,9 @@ describe('change bus', () => {
   it('without any bus the local bus publishes into the void (single node)', async () => {
     unwrap(
       await run(function* () {
-        yield* install(MemoryAdapter)
-        yield* install(BunIO)
-        const db = yield* install(DbClient, { tables: [users] })
+        yield* MemoryAdapter.use()
+        yield* BunIO.use()
+        const db = yield* DbClient.use({ tables: [users] })
         const bus = yield* Db.actions.bus()
         expect(typeof bus.origin).toBe('string')
         expect(yield* Db.actions.bridge()).toBe(0)
@@ -86,13 +85,13 @@ describe('change bus', () => {
   it('a failing or slow transport never touches the write path; overflow drops, stats count', async () => {
     unwrap(
       await run(function* () {
-        yield* install(MemoryAdapter)
-        yield* install(BunIO)
-        yield* install(MemoryTransport, { prefix: 'app' })
-        yield* install(DbBus)
+        yield* MemoryAdapter.use()
+        yield* BunIO.use()
+        yield* MemoryTransport.use({ prefix: 'app' })
+        yield* DbBus.use()
         // the transport goes away under the bus: every publish now fails
         yield* Transport.actions.drain()
-        const db = yield* install(DbClient, { tables: [users], bus: { maxPending: 2 } })
+        const db = yield* DbClient.use({ tables: [users], bus: { maxPending: 2 } })
         // writes succeed regardless of the transport
         yield* db.insert('users', { name: 'a' })
         yield* db.insert('users', { name: 'b' })
@@ -106,10 +105,10 @@ describe('change bus', () => {
   it('options.id mints every document id; an invalid origin fails db.configuration', async () => {
     unwrap(
       await run(function* () {
-        yield* install(MemoryAdapter)
-        yield* install(BunIO)
+        yield* MemoryAdapter.use()
+        yield* BunIO.use()
         let counter = 0
-        const db = yield* install(DbClient, {
+        const db = yield* DbClient.use({
           tables: [users],
           *id() {
             counter += 1
@@ -122,7 +121,7 @@ describe('change bus', () => {
         expect([one._id, two._id]).toEqual(['custom-2', 'custom-3'])
         expect(counter).toBe(3)
 
-        const bad = yield* attempt(install(DbClient, { tables: [users], origin: 'NODE-A' }))
+        const bad = yield* attempt(DbClient.use({ tables: [users], origin: 'NODE-A' }))
         expect((bad as AnyType).error).toBe(DbErrors.Configuration)
       }),
     )
@@ -131,11 +130,11 @@ describe('change bus', () => {
   it('outbox: a slow carrier never delays writes; overflow coalesces; close drains the rest', async () => {
     unwrap(
       await run(function* () {
-        yield* install(MemoryAdapter)
-        yield* install(BunIO)
-        yield* install(MemoryTransport, { prefix: 'app' })
+        yield* MemoryAdapter.use()
+        yield* BunIO.use()
+        yield* MemoryTransport.use({ prefix: 'app' })
         const shipped = yield* Transport.actions.subscribe<Bus.Envelope>('db.change')
-        yield* install(DbBus)
+        yield* DbBus.use()
         // the carrier is GATED rather than slow-by-clock: every publish waits for a token, so
         // the test holds on any machine speed — nothing ships until the gate opens
         const gate = createQueue<void>()
@@ -150,7 +149,7 @@ describe('change bus', () => {
             })(),
         })
         const stats = yield* scoped(function* () {
-          const db = yield* install(DbClient, {
+          const db = yield* DbClient.use({
             tables: [users],
             bus: { maxPending: 2, drainTimeoutMs: 500 },
           })
@@ -194,11 +193,11 @@ describe('change bus', () => {
   it('drift: a foreign token from far in the future is applied but counted as driftRejected', async () => {
     unwrap(
       await run(function* () {
-        yield* install(MemoryAdapter)
-        yield* install(BunIO)
-        yield* install(MemoryTransport, { prefix: 'app' })
-        yield* install(DbBus)
-        const db = yield* install(DbClient, { tables: [users] })
+        yield* MemoryAdapter.use()
+        yield* BunIO.use()
+        yield* MemoryTransport.use({ prefix: 'app' })
+        yield* DbBus.use()
+        const db = yield* DbClient.use({ tables: [users] })
         const feed = yield* db.changes('users')
         // a token minted by a clock 10 minutes ahead: Crockford(ms, 10) + counter(4) + origin(8)
         const encode = (value: number, length: number) => {
@@ -230,13 +229,13 @@ describe('change bus', () => {
   it('withBusMeta: correlation data rides the envelope; log:false tables keep no change log', async () => {
     unwrap(
       await run(function* () {
-        yield* install(MemoryAdapter)
-        yield* install(BunIO)
-        yield* install(MemoryTransport, { prefix: 'app' })
+        yield* MemoryAdapter.use()
+        yield* BunIO.use()
+        yield* MemoryTransport.use({ prefix: 'app' })
         const shipped = yield* Transport.actions.subscribe<Bus.Envelope>('db.change')
-        yield* install(DbBus)
+        yield* DbBus.use()
         const scratch = table('scratch', { n: column.int() }, { log: false })
-        const db = yield* install(DbClient, { tables: [users, scratch] })
+        const db = yield* DbClient.use({ tables: [users, scratch] })
 
         yield* withBusMeta({ requestId: 'req-1' }, () => db.insert('users', { name: 'ada' }))
         const envelope = ((yield* shipped.next()) as AnyType).value.value as Bus.Envelope
@@ -272,9 +271,9 @@ describe('change bus', () => {
           const ready = createQueue<void, void>()
           const listener = yield* fork(() =>
             scoped(function* () {
-              yield* install(SqliteAdapter, { path })
-              yield* install(BunIO)
-              const db = yield* install(DbClient, {
+              yield* SqliteAdapter.use({ path })
+              yield* BunIO.use()
+              const db = yield* DbClient.use({
                 tables: [users],
                 origin: 'NDEB0002',
                 pollMs: 25,
@@ -292,9 +291,9 @@ describe('change bus', () => {
           )
           yield* ready.next()
           yield* scoped(function* () {
-            yield* install(SqliteAdapter, { path })
-            yield* install(BunIO)
-            const db = yield* install(DbClient, { tables: [users], origin: 'NDEA0001' })
+            yield* SqliteAdapter.use({ path })
+            yield* BunIO.use()
+            const db = yield* DbClient.use({ tables: [users], origin: 'NDEA0001' })
             yield* db.insert('users', { name: 'polled' })
           })
           expect(yield* listener).toEqual(['polled'])
@@ -316,11 +315,11 @@ describe('change bus', () => {
     })
 
     const nodeOf = function* (origin: string): Operation<AnyType> {
-      yield* install(SqliteAdapter, { path })
-      yield* install(BunIO)
-      yield* install(MemoryTransport, { prefix: 'app', link })
-      yield* install(DbBus)
-      const db = yield* install(DbClient, { tables: [users], origin })
+      yield* SqliteAdapter.use({ path })
+      yield* BunIO.use()
+      yield* MemoryTransport.use({ prefix: 'app', link })
+      yield* DbBus.use()
+      const db = yield* DbClient.use({ tables: [users], origin })
       return db
     }
 

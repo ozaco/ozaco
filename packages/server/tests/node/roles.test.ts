@@ -1,6 +1,5 @@
 import { action, createServer, ServerErrors, service } from 'server:core'
 import { attempt, createQueue, fork, run, scoped, sleep, until } from 'std:effect'
-import { install } from 'std:plugin'
 import { unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
 
@@ -21,7 +20,7 @@ describe('server — roles', () => {
         const worker = yield* fork(() =>
           scoped(function* () {
             yield* storage()
-            yield* install(MemoryTransport, { prefix: 'app', link })
+            yield* MemoryTransport.use({ prefix: 'app', link })
             const app = yield* createServer({
               services: [todos],
               carrier: NetworkCarrier,
@@ -38,7 +37,7 @@ describe('server — roles', () => {
         yield* ready.next()
         yield* scoped(function* () {
           yield* storage()
-          yield* install(MemoryTransport, { prefix: 'app', link })
+          yield* MemoryTransport.use({ prefix: 'app', link })
           const gateway = yield* createServer({
             services: [todos],
             edge: BunEdge,
@@ -80,7 +79,7 @@ describe('server — roles', () => {
         // nobody hosts todos: a gateway that depends on it cannot become ready
         yield* scoped(function* () {
           yield* storage()
-          yield* install(MemoryTransport, { prefix: 'ready', link })
+          yield* MemoryTransport.use({ prefix: 'ready', link })
           const lonely = yield* createServer({
             services: [todos],
             edge: BunEdge,
@@ -105,7 +104,7 @@ describe('server — roles', () => {
           scoped(function* () {
             yield* sleep(200)
             yield* storage()
-            yield* install(MemoryTransport, { prefix: 'ready', link })
+            yield* MemoryTransport.use({ prefix: 'ready', link })
             const app = yield* createServer({
               services: [todos],
               carrier: NetworkCarrier.use({ presence }),
@@ -120,7 +119,7 @@ describe('server — roles', () => {
         )
         yield* scoped(function* () {
           yield* storage()
-          yield* install(MemoryTransport, { prefix: 'ready', link })
+          yield* MemoryTransport.use({ prefix: 'ready', link })
           const gateway = yield* createServer({
             services: [todos],
             edge: BunEdge,
@@ -152,7 +151,7 @@ describe('server — roles', () => {
         // the silent trap, refused loudly: hosting nothing while not being a gateway
         yield* scoped(function* () {
           yield* storage()
-          yield* install(MemoryTransport, { prefix: 'trap', link })
+          yield* MemoryTransport.use({ prefix: 'trap', link })
           const outcome = yield* attempt(
             createServer({
               services: [todos],
@@ -172,7 +171,7 @@ describe('server — roles', () => {
         })
         yield* scoped(function* () {
           yield* storage()
-          yield* install(MemoryTransport, { prefix: 'trap', link })
+          yield* MemoryTransport.use({ prefix: 'trap', link })
           const app = yield* createServer({
             services: [todos, other],
             carrier: NetworkCarrier,

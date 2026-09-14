@@ -1,6 +1,5 @@
 import { hasCodec } from 'std:codec'
 import { attempt, ensure, until } from 'std:effect'
-import { install } from 'std:plugin'
 import { fail, isFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
 
@@ -15,7 +14,7 @@ import type { Redis } from './types'
 import { redisImpl } from './utils'
 
 /**
- * Redis transport over the official `redis` client (v6, RESP3) — `install(RedisTransport, { prefix, url })`.
+ * Redis transport over the official `redis` client (v6, RESP3) — `RedisTransport.use({ prefix, url })`.
  * Pub/sub for data/event/flow/stream (channels `<prefix>.<topic>`, headers framed into the
  * payload), Redis Streams for competing-consumer groups and durables (`subscribe({ group |
  * durable })` / `serve({ group })` — literal topics only; durables ack explicitly and reclaim
@@ -29,7 +28,7 @@ export const RedisTransport = Transport.implement<TransportDef.Options, [options
 
   *setup(options) {
     if (!(yield* hasCodec())) {
-      yield* install(JsonCodec)
+      yield* JsonCodec.use()
     }
     if (!isValidPrefix(options.prefix)) {
       return yield* fail(TransportErrors.Configuration, `invalid prefix "${options.prefix}"`)

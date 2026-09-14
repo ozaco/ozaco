@@ -8,8 +8,8 @@ export type CodecDef = Plugin<CodecDef.Context, unknown[], CodecDef.Actions>
 
 export namespace CodecDef {
   export interface Options {
-    name?: string
-    priority?: number
+    name?: string | undefined
+    priority?: number | undefined
   }
 
   export interface Context {

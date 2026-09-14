@@ -1,7 +1,6 @@
 import { attempt, run } from 'std:effect'
-import { install } from 'std:plugin'
 import { isFailure, unwrap } from 'std:result'
-import { Rtc, rtcImpl } from 'std:webrtc'
+import { Rtc, RtcClient } from 'std:webrtc'
 
 import { describe, expect, it } from 'bun:test'
 
@@ -14,9 +13,8 @@ describe('Rtc.actions.connect', () => {
     const fake = createFakeRtc()
 
     const outcome = await run(function* () {
-      yield* install(JsonCodec)
-      yield* install(Rtc)
-      yield* rtcImpl.set(fake.impl)
+      yield* JsonCodec.use()
+      yield* RtcClient.use({ impl: fake.impl })
 
       const [signalA, signalB] = createSignalPair()
       const peerA = yield* Rtc.actions.connect(signalA)
@@ -67,9 +65,8 @@ describe('Rtc.actions.connect', () => {
     const fake = createFakeRtc()
 
     const outcome = await run(function* () {
-      yield* install(JsonCodec)
-      yield* install(Rtc)
-      yield* rtcImpl.set(fake.impl)
+      yield* JsonCodec.use()
+      yield* RtcClient.use({ impl: fake.impl })
 
       const [signalA, signalB] = createSignalPair()
       const peerA = yield* Rtc.actions.connect(signalA)
@@ -95,9 +92,8 @@ describe('Rtc.actions.connect', () => {
     const fake = createFakeRtc()
 
     const outcome = await run(function* () {
-      yield* install(JsonCodec)
-      yield* install(Rtc)
-      yield* rtcImpl.set(fake.impl)
+      yield* JsonCodec.use()
+      yield* RtcClient.use({ impl: fake.impl })
 
       const [signalA, signalB] = createSignalPair()
       const peerA = yield* Rtc.actions.connect(signalA)
@@ -128,9 +124,8 @@ describe('Rtc.actions.connect', () => {
     const fake = createFakeRtc()
 
     const outcome = await run(function* () {
-      yield* install(JsonCodec)
-      yield* install(Rtc)
-      yield* rtcImpl.set(fake.impl)
+      yield* JsonCodec.use()
+      yield* RtcClient.use({ impl: fake.impl })
 
       const [signalA, signalB] = createSignalPair()
       const peerA = yield* Rtc.actions.connect(signalA)
@@ -154,15 +149,14 @@ describe('Rtc.actions.connect', () => {
 
   it('a missing implementation fails with rtc/unsupported', async () => {
     const outcome = await run(function* () {
-      yield* install(Rtc)
-      yield* rtcImpl.set(false)
+      yield* RtcClient.use({ impl: false })
       const [signalA] = createSignalPair()
       const result = yield* attempt(() => Rtc.actions.connect(signalA))
 
       return isFailure(result) ? String(result.error) : 'connected'
     })
 
-    expect(unwrap(outcome)).toBe('rtc/unsupported')
+    expect(unwrap(outcome)).toBe('std:webrtc.unsupported')
   })
 
   it('connect without installing the plugin fails with missing-action', async () => {
@@ -173,6 +167,6 @@ describe('Rtc.actions.connect', () => {
       return isFailure(result) ? String(result.error) : 'connected'
     })
 
-    expect(unwrap(outcome)).toBe('missing-action')
+    expect(unwrap(outcome)).toBe('std:plugin.missing-action')
   })
 })

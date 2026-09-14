@@ -1,5 +1,6 @@
-import type { Operation } from './types/operation'
-import { all } from './utils/all'
+import type { Operation } from '../types/operation'
+
+import { all } from './all'
 
 export function* map<T, U>(
   arr: readonly T[],

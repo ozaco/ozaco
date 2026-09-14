@@ -10,11 +10,11 @@ export type LoggerDef = Plugin<LoggerDef.Context, [options?: LoggerDef.Options],
 
 export namespace LoggerDef {
   export interface Options {
-    level?: LogLevel
-    bindings?: Record<string, unknown>
-    msgKey?: string
-    errorKey?: string
-    timestamp?: () => number
+    level?: LogLevel | undefined
+    bindings?: Record<string, unknown> | undefined
+    msgKey?: string | undefined
+    errorKey?: string | undefined
+    timestamp?: (() => number) | undefined
   }
 
   export interface Context {

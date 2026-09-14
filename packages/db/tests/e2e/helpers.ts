@@ -2,7 +2,6 @@ import { column, Db, DbAdapter, DbClient, DbErrors, table, where } from 'db:core
 import { isDestructive } from 'db:internal'
 import type { Operation } from 'std:effect'
 import { attempt, race, run, scoped, sleep, useContext } from 'std:effect'
-import { install } from 'std:plugin'
 import { fail, isFailure, unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
 
@@ -23,7 +22,7 @@ export interface AdapterTarget {
   /** Whether the adapter declares the `raw` capability. */
   readonly raw: boolean
   /** Install a FRESH backend into the current scope. */
-  readonly install: () => Operation<unknown>
+  readonly use: () => Operation<unknown>
 }
 
 /**
@@ -34,9 +33,9 @@ export interface AdapterTarget {
  */
 export const runAdapterSuite = (target: AdapterTarget): void => {
   const bootstrap = function* (): Operation<AnyType> {
-    yield* target.install()
-    yield* install(BunIO)
-    const db = yield* install(DbClient, { tables: [users, posts], migrations: 'manual' })
+    yield* target.use()
+    yield* BunIO.use()
+    const db = yield* DbClient.use({ tables: [users, posts], migrations: 'manual' })
     yield* Db.actions.dropTable('posts')
     yield* Db.actions.dropTable('users')
     yield* Db.actions.migrate()
@@ -1070,17 +1069,17 @@ export const runAdapterSuite = (target: AdapterTarget): void => {
           const hidden = yield* attempt(Db.actions.touch('__changes_users'))
           expect((hidden as AnyType).error).toBe(DbErrors.Validation)
           const reserved = yield* attempt(
-            install(DbClient, { tables: [table('__secret', { x: column.text() })] }),
+            DbClient.use({ tables: [table('__secret', { x: column.text() })] }),
           )
           expect((reserved as AnyType).error).toBe(DbErrors.Configuration)
 
           // the schema speaks snake_case: camelCase table and column names are refused
           const camelTable = yield* attempt(
-            install(DbClient, { tables: [table('uploadChunks', { x: column.text() })] }),
+            DbClient.use({ tables: [table('uploadChunks', { x: column.text() })] }),
           )
           expect((camelTable as AnyType).error).toBe(DbErrors.Configuration)
           const camelColumn = yield* attempt(
-            install(DbClient, { tables: [table('chunks', { requestId: column.text() })] }),
+            DbClient.use({ tables: [table('chunks', { requestId: column.text() })] }),
           )
           expect((camelColumn as AnyType).error).toBe(DbErrors.Configuration)
           expect((camelColumn as AnyType).message).toContain('requestId')
@@ -1100,15 +1099,15 @@ export const runAdapterSuite = (target: AdapterTarget): void => {
       const v2 = table('gauges', { value: column.int() })
       unwrap(
         await run(function* () {
-          yield* target.install()
-          yield* install(BunIO)
-          const before = yield* install(DbClient, { tables: [v1], migrations: 'manual' })
+          yield* target.use()
+          yield* BunIO.use()
+          const before = yield* DbClient.use({ tables: [v1], migrations: 'manual' })
           yield* Db.actions.dropTable('gauges')
           yield* Db.actions.migrate()
           yield* before.insert('gauges', { value: '42' })
           // the same storage, re-declared: a child scope installs the new schema over it
           yield* scoped(function* () {
-            const db = yield* install(DbClient, { tables: [v2], migrations: 'manual' })
+            const db = yield* DbClient.use({ tables: [v2], migrations: 'manual' })
             const { capabilities } = yield* useContext(DbAdapter)
             const drift = (yield* Db.actions.planMigration()).steps.find(
               (step: AnyType) => step.kind === 'alter-column',
@@ -1143,9 +1142,9 @@ export const runAdapterSuite = (target: AdapterTarget): void => {
     it('leftovers: a table removed from the schema (and its log) is planned away; foreign tables stay', async () => {
       unwrap(
         await run(function* () {
-          yield* target.install()
-          yield* install(BunIO)
-          const before = yield* install(DbClient, { tables: [users, posts], migrations: 'manual' })
+          yield* target.use()
+          yield* BunIO.use()
+          const before = yield* DbClient.use({ tables: [users, posts], migrations: 'manual' })
           yield* Db.actions.dropTable('posts')
           yield* Db.actions.dropTable('users')
           yield* Db.actions.migrate()
@@ -1157,7 +1156,7 @@ export const runAdapterSuite = (target: AdapterTarget): void => {
 
           // the same storage, `posts` no longer declared
           yield* scoped(function* () {
-            yield* install(DbClient, { tables: [users], migrations: 'manual', safe: true })
+            yield* DbClient.use({ tables: [users], migrations: 'manual', safe: true })
             const plan = yield* Db.actions.planMigration()
             const dropped = plan.steps
               .filter((step: AnyType) => step.kind === 'drop-table')
@@ -1173,7 +1172,7 @@ export const runAdapterSuite = (target: AdapterTarget): void => {
             )
           })
           yield* scoped(function* () {
-            yield* install(DbClient, { tables: [users], migrations: 'manual' })
+            yield* DbClient.use({ tables: [users], migrations: 'manual' })
             yield* Db.actions.migrate()
             const tables = yield* DbAdapter.actions.tables()
             expect(tables).not.toContain('posts')
@@ -1229,10 +1228,10 @@ export const runAdapterSuite = (target: AdapterTarget): void => {
     it('since: answered by the change log — skip, recompute, snapshot', async () => {
       unwrap(
         await run(function* () {
-          yield* target.install()
-          yield* install(BunIO)
+          yield* target.use()
+          yield* BunIO.use()
           // a tiny replay window so "older than the window" is reachable in a test
-          const db = yield* install(DbClient, {
+          const db = yield* DbClient.use({
             tables: [users, posts],
             migrations: 'manual',
             replayWindowMs: 10,

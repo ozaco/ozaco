@@ -317,7 +317,7 @@ export namespace Database {
      * must be given). */
     readonly tables?: readonly Schema.Table[] | undefined
 
-    /** Pin this client to one adapter plugin (`install(DbClient, { adapter: PgAdapter, … })`).
+    /** Pin this client to one adapter plugin (`DbClient.use({ adapter: PgAdapter, … })`).
      * Default: the routed `DbAdapter` dispatch — the most recently installed adapter. */
     readonly adapter?: Adapter | undefined
 
@@ -351,7 +351,7 @@ export namespace Database {
     readonly id?: (() => Operation<string>) | undefined
   }
 
-  /** The `Db` protocol context — the typed handle itself (`yield* install(DbClient, …)` and
+  /** The `Db` protocol context — the typed handle itself (`yield* DbClient.use(…)` and
    * `useDb(...)` both resolve it). */
   export type Context = Handle
 

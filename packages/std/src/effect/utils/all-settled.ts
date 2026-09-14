@@ -1,6 +1,6 @@
 import type { Result } from 'std:result'
 
-import { box } from '../base/box'
+import { attempt } from '../base/attempt'
 import type { Operation } from '../types/operation'
 import type { Utils } from '../types/utils'
 
@@ -14,7 +14,7 @@ export function* allSettled<T extends readonly Operation<unknown>[] | []>(
   ops: T,
 ): Operation<Utils.AllSettled<T>> {
   const results = yield* all(
-    ops.map(operation => box(() => operation)) as {
+    ops.map(operation => attempt(() => operation)) as {
       [P in keyof T]: Operation<Result<Utils.Yielded<T[P]>>>
     },
   )

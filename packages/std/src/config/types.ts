@@ -50,7 +50,7 @@ export namespace ConfigDef {
     /** Directory to start discovery from (default `process.cwd()`). */
     cwd?: string | undefined
 
-    /** Active variant overlay name (`<variant>.<name>.<ext>` wins); default the `STD_CONFIG` env var. */
+    /** Active variant overlay name (`.<variant>.<name>.<ext>` wins); default the `STD_CONFIG` env var. */
     variant?: string | undefined
 
     /** Directory to stop discovery at, inclusive (default the home dir). */
@@ -97,7 +97,8 @@ export namespace ConfigDef {
   /** A self-contained config: its own discovery/merge/working file. The default one is `Config`'s
    * own actions; `open` mints extra, fully-independent instances. */
   export interface Instance {
-    /** (Re)discover `<name>.<ext>` from cwd up to home, resolve `extends`, refresh the merged view. */
+    /** (Re)discover `.<name>.<ext>` (`<name>.<ext>` when `dot` is `false`) from cwd up to home,
+     * resolve `extends`, refresh the merged view. */
     load(cwd?: string): Operation<void>
     /** Re-run discovery against the current cwd (pick up on-disk changes) without moving `cwd`. */
     refresh(): Operation<void>

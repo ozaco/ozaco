@@ -82,7 +82,7 @@ runEdgeSuite({
   enabled: true,
   edge: DenoEdge.use(),
   listens: true,
-  *install() {
+  *use() {
     yield* denoImpl.set(fakeDeno as AnyType)
   },
 })

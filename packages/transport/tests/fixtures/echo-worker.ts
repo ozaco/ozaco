@@ -3,7 +3,6 @@
  * `echo`, answers `ping` with `pong`, and streams a lane on request.
  */
 import { run, sleep } from 'std:effect'
-import { install } from 'std:plugin'
 
 import { BunIO } from 'std:io/impl/bun'
 import { Transport } from 'transport:core'
@@ -13,8 +12,8 @@ import { WorkerTransport } from 'transport:impl/worker'
 declare const self: Worker.PortLike
 
 void run(function* () {
-  yield* install(BunIO)
-  yield* install(WorkerTransport, { prefix: 'w', port: self })
+  yield* BunIO.use()
+  yield* WorkerTransport.use({ prefix: 'w', port: self })
   yield* Transport.actions.serve<{ n: number }, { n: number; from: string }>(
     'echo',
     function* (args) {

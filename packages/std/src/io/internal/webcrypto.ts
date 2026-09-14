@@ -2,6 +2,8 @@ import { operation, until } from 'std:effect'
 
 import type { HashAlgorithm } from '../types/common'
 
+/** Random bytes via WebCrypto `getRandomValues` — the spec caps one call at 65536 bytes (browsers
+ * throw `QuotaExceededError` beyond it); NodeIO's `node:crypto.randomBytes` has no such limit. */
 export const webRandomBytes = operation(function* (length: number) {
   const out = new Uint8Array(length)
   crypto.getRandomValues(out)

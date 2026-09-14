@@ -1,7 +1,6 @@
 import { Db, DbBus, DbClient } from 'db:core'
 import type { Operation } from 'std:effect'
 import { createQueue, fork, race, run, scoped, sleep, useContext } from 'std:effect'
-import { install } from 'std:plugin'
 import { unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
 
@@ -38,12 +37,12 @@ const networks: Network[] = [
   {
     label: 'nats',
     url: nats,
-    transport: () => install(NatsTransport, { prefix, servers: nats!, storage: 'memory' }),
+    transport: () => NatsTransport.use({ prefix, servers: nats!, storage: 'memory' }),
   },
   {
     label: 'redis',
     url: redis,
-    transport: () => install(RedisTransport, { prefix, url: redis! }),
+    transport: () => RedisTransport.use({ prefix, url: redis! }),
   },
 ]
 
@@ -53,11 +52,11 @@ for (const network of networks) {
       const dir = mkdtempSync(join(tmpdir(), `ozaco-db-bus-${network.label}-`))
       const path = join(dir, 'shared.sqlite')
       const nodeOf = function* (origin: string): Operation<AnyType> {
-        yield* install(SqliteAdapter, { path })
-        yield* install(BunIO)
+        yield* SqliteAdapter.use({ path })
+        yield* BunIO.use()
         yield* network.transport()
-        yield* install(DbBus)
-        return yield* install(DbClient, { tables: [users], origin })
+        yield* DbBus.use()
+        return yield* DbClient.use({ tables: [users], origin })
       }
       try {
         unwrap(
@@ -110,10 +109,10 @@ describe.skipIf(!(nats && redis))('bus pinned to one of two installed transports
   it('ships through the pinned transport even when another was installed later', async () => {
     unwrap(
       await run(function* () {
-        yield* install(RedisTransport, { prefix, url: redis! })
-        yield* install(NatsTransport, { prefix, servers: nats!, storage: 'memory' })
+        yield* RedisTransport.use({ prefix, url: redis! })
+        yield* NatsTransport.use({ prefix, servers: nats!, storage: 'memory' })
         // routed calls now hit NATS (most recent) — the bus is told to use Redis instead
-        yield* install(DbBus, { transport: RedisTransport })
+        yield* DbBus.use({ transport: RedisTransport })
         expect((yield* useContext(DbBus)).transportName).toBe('redis')
         const onRedis = yield* RedisTransport.actions.subscribe<AnyType>('db.change')
         const onNats = yield* NatsTransport.actions.subscribe<AnyType>('db.change')

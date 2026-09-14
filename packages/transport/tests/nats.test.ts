@@ -1,5 +1,4 @@
 import { attempt, fork, race, run, scoped, sleep, until } from 'std:effect'
-import { install } from 'std:plugin'
 import { isFailure, unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
 
@@ -18,8 +17,8 @@ const url = process.env.TRANSPORT_TEST_NATS_URL
 runTransportSuite({
   label: 'nats',
   enabled: Boolean(url),
-  install: (prefix = 'suite') =>
-    install(NatsTransport, { prefix, servers: url!, ackWaitMs: 1000, storage: 'memory' }),
+  use: (prefix = 'suite') =>
+    NatsTransport.use({ prefix, servers: url!, ackWaitMs: 1000, storage: 'memory' }),
   expect: { receipts: false, requestReply: true, groups: true, durable: true },
   ackWaitMs: 1000,
 })
@@ -30,8 +29,8 @@ describe.skipIf(!url)('transport — nats: stream provisioning', () => {
     unwrap(
       await run(function* () {
         yield* scoped(function* () {
-          yield* install(BunIO)
-          yield* install(NatsTransport, {
+          yield* BunIO.use()
+          yield* NatsTransport.use({
             prefix,
             servers: url!,
             storage: 'memory',
@@ -40,8 +39,8 @@ describe.skipIf(!url)('transport — nats: stream provisioning', () => {
         })
         // same stream name, new max age: create-or-update must not fail on the drift
         yield* scoped(function* () {
-          yield* install(BunIO)
-          yield* install(NatsTransport, {
+          yield* BunIO.use()
+          yield* NatsTransport.use({
             prefix,
             servers: url!,
             storage: 'memory',
@@ -73,8 +72,8 @@ describe.skipIf(!url)('transport — nats: in-flight cancellation', () => {
     const prefix = `cancel.${crypto.randomUUID().slice(0, 8)}`
     unwrap(
       await run(function* () {
-        yield* install(BunIO)
-        yield* install(NatsTransport, { prefix, servers: url!, storage: 'memory' })
+        yield* BunIO.use()
+        yield* NatsTransport.use({ prefix, servers: url!, storage: 'memory' })
         let served = 0
         yield* Transport.actions.serve<number, string>('slow', function* (ms) {
           served += 1
@@ -97,8 +96,8 @@ describe.skipIf(!url)('transport — nats: in-flight cancellation', () => {
     const prefix = `stop.${crypto.randomUUID().slice(0, 8)}`
     unwrap(
       await run(function* () {
-        yield* install(BunIO)
-        yield* install(NatsTransport, { prefix, servers: url!, storage: 'memory' })
+        yield* BunIO.use()
+        yield* NatsTransport.use({ prefix, servers: url!, storage: 'memory' })
         const stop = yield* Transport.actions.serve<number, string>('work', function* (ms) {
           yield* sleep(ms)
           return 'late'
@@ -124,8 +123,8 @@ describe.skipIf(!url)('transport — nats: in-flight cancellation', () => {
     unwrap(
       await run(() =>
         scoped(function* () {
-          yield* install(BunIO)
-          yield* install(NatsTransport, { prefix, servers: url!, storage: 'memory' })
+          yield* BunIO.use()
+          yield* NatsTransport.use({ prefix, servers: url!, storage: 'memory' })
           const plain = yield* Transport.actions.subscribe<string>('t.plain')
           const durable = yield* Transport.actions.subscribe<string>('t.durable', { durable: 'd' })
           yield* fork(function* () {
@@ -153,8 +152,8 @@ describe.skipIf(!(url && container))('transport — nats: server interruption', 
     unwrap(
       await run(function* () {
         // file storage: the stream outlives the restart (memory streams would not)
-        yield* install(BunIO)
-        yield* install(NatsTransport, { prefix, servers: url!, storage: 'file', ackWaitMs: 1000 })
+        yield* BunIO.use()
+        yield* NatsTransport.use({ prefix, servers: url!, storage: 'file', ackWaitMs: 1000 })
         const status = yield* Transport.actions.status()
         expect(((yield* status.next()) as AnyType).value).toBe('connected')
         const plain = yield* Transport.actions.subscribe<string>('r.plain')

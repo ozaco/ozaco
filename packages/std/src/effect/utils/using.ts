@@ -2,6 +2,7 @@ import { fail } from 'std:result'
 
 import { call } from '../base/call'
 import { resource } from '../base/resource'
+import { EffectErrors } from '../errors'
 import type { Operation } from '../types/operation'
 
 /**
@@ -17,7 +18,10 @@ export function* using<T extends Disposable | AsyncDisposable>(value: T): Operat
         : undefined
 
   if (!dispose) {
-    throw fail('using', 'using() value must implement Symbol.dispose or Symbol.asyncDispose')
+    throw fail(
+      EffectErrors.Using,
+      'using() value must implement Symbol.dispose or Symbol.asyncDispose',
+    )
   }
 
   return yield* resource<T>(function* (provide) {

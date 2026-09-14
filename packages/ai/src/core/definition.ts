@@ -25,7 +25,7 @@ import type { Helpers } from './types/helpers'
  * through `Ai.actions.*` (chat / chatStream / embed / tts / ttsStream / stt). The context is the
  * resolved client state ({@link AiDef.Context}) — resolve it anywhere with {@link useAi}.
  * `JsonCodec` is a baseline dependency: the tool loop (de)serializes tool arguments and results
- * through it, so `install(JsonCodec)` alongside the provider.
+ * through it, so `JsonCodec.use()` alongside the provider.
  */
 const AiProtocol = defineProtocol<AiDef.Context, AiDef.Actions>({
   name: 'ai',

@@ -1,7 +1,6 @@
 import { createServer, Observe } from 'server:core'
 import { ObservePlugin } from 'server:plugins'
 import { createQueue, fork, run, scoped, sleep } from 'std:effect'
-import { install } from 'std:plugin'
 import { unwrap } from 'std:result'
 
 import { describe, expect, it } from 'bun:test'
@@ -23,7 +22,7 @@ describe('observe — cluster', () => {
         const worker = yield* fork(() =>
           scoped(function* () {
             yield* storage()
-            yield* install(MemoryTransport, { prefix: 'obs', link })
+            yield* MemoryTransport.use({ prefix: 'obs', link })
             const svc = yield* createServer({
               services: [todos],
               carrier: NetworkCarrier.use({ presence }),
@@ -45,7 +44,7 @@ describe('observe — cluster', () => {
         // the gateway collects
         yield* scoped(function* () {
           yield* storage()
-          yield* install(MemoryTransport, { prefix: 'obs', link })
+          yield* MemoryTransport.use({ prefix: 'obs', link })
           const gateway = yield* createServer({
             services: [todos],
             carrier: NetworkCarrier.use({ presence }),
@@ -96,7 +95,7 @@ describe('observe — cluster', () => {
     unwrap(
       await run(function* () {
         yield* storage()
-        yield* install(MemoryTransport, { prefix: 'lonely', link })
+        yield* MemoryTransport.use({ prefix: 'lonely', link })
         const server = yield* createServer({
           services: [todos],
           carrier: NetworkCarrier.use({ presence }),
@@ -118,7 +117,7 @@ describe('observe — cluster', () => {
     unwrap(
       await run(function* () {
         yield* storage()
-        yield* install(MemoryTransport, { prefix: 'lonely2', link })
+        yield* MemoryTransport.use({ prefix: 'lonely2', link })
         const server = yield* createServer({
           services: [todos],
           carrier: NetworkCarrier.use({ presence }),

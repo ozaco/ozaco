@@ -18,7 +18,7 @@ export type ManualOperation<T> = Generator<
 /**
  * An {@link Operation} that is also awaitable. The promise side resolves to a `Result` and never
  * rejects (std contract) — success resolves `Success<T>`, an operation failure resolves the
- * `Failure` itself, and a halt resolves `fail('halted')`. The operation side (`yield*`) returns
+ * `Failure` itself, and a halt resolves `fail(EffectErrors.Halted)`. The operation side (`yield*`) returns
  * the value or raises the Failure.
  */
 export interface Future<T> extends Operation<T>, Promise<Result<T>> {}
@@ -59,11 +59,11 @@ export interface Scope {
   around<A>(api: Api<A>, ...options: Parameters<Api<A>['around']>): void
 }
 
-export interface Subscription<T, TDone> {
-  next(): Operation<IteratorResult<T, TDone>>
+export interface Subscription<T, TClose> {
+  next(): Operation<IteratorResult<T, TClose>>
 }
 
-export type Flow<T, TReturn> = Operation<Subscription<T, TReturn>>
+export type Flow<T, TClose> = Operation<Subscription<T, TClose>>
 
 /**
  * A {@link Flow} that is ALSO async-iterable — the {@link Future} idea applied to streams, so

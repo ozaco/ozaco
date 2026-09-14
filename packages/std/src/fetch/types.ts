@@ -9,8 +9,8 @@ export namespace FetchDef {
   /**
    * Thrown errors (network faults, aborts, body-read failures) pass through UNTOUCHED — reified
    * with `asFailure` so their original name + cause chain survive — hence `unknown`. The only
-   * string tags fetch raises itself are the deliberate, non-thrown conditions: `'http-status'` (a
-   * non-ok response under `.expect()`), `'parse'` (a response with no body) and `'timeout'` (a
+   * string tags fetch raises itself are the deliberate, non-thrown conditions: `FetchErrors.HttpStatus` (a
+   * non-ok response under `.expect()`), `FetchErrors.Parse` (a response with no body) and `FetchErrors.Timeout` (a
    * `timeoutMs` deadline hit before the response settled).
    */
   export type Error = unknown
@@ -33,7 +33,7 @@ export namespace FetchDef {
     signal?: never
 
     /** Aborts the request (via the internal `AbortController`) if no response settled within the
-     * deadline — the failure surfaces as the `'timeout'` tag. Overrides the installed `timeoutMs`
+     * deadline — the failure surfaces as the `FetchErrors.Timeout` tag. Overrides the installed `timeoutMs`
      * default. Scope halt/failure still aborts. */
     timeoutMs?: number
 
@@ -106,14 +106,15 @@ export namespace FetchDef {
     /** The raw, undecoded byte flow of the response body. */
     raw(): Operation<Flow<Uint8Array, void>>
 
-    /** Raises `'http-status'` unless the response is `ok`; returns the response otherwise. */
+    /** Raises `FetchErrors.HttpStatus` unless the response is `ok`; returns the response otherwise. */
     expect(): Operation<Response>
   }
 
   /**
    * The action contract. `request` is the single choke point every verb funnels through — the
-   * method shorthands delegate to the ROUTED `request` dispatch, so hooks installed against it
-   * (`Fetch.around({ request })`) wrap the actual network call no matter which verb was used.
+   * method shorthands delegate to the PINNED `FetchClient.actions.request`, and hooks installed
+   * against it (`Fetch.around({ request })`) still wrap the actual network call no matter which
+   * verb was used.
    * Hooks see the PRE-resolution arguments (`baseUrl`/default-header/timeout merging happens
    * inside the impl). Usage is two-step: `const res = yield* Fetch.actions.get(url)`, then
    * `yield* res.json<T>()` (or `res.expect()` first).

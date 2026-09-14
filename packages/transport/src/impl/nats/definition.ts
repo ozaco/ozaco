@@ -1,6 +1,5 @@
 import { hasCodec } from 'std:codec'
 import { attempt, ensure, until } from 'std:effect'
-import { install } from 'std:plugin'
 import { fail, isFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
 
@@ -16,7 +15,7 @@ import type { Nats } from './types'
 import { natsImpl } from './utils'
 
 /**
- * NATS transport over `@nats-io` v3 — `install(NatsTransport, { prefix, servers })`. JetStream
+ * NATS transport over `@nats-io` v3 — `NatsTransport.use({ prefix, servers })`. JetStream
  * by default: the install provisions ONE stream per application prefix (`<PREFIX>`, subjects
  * `<prefix>.>`, create-or-update) and every publish lands in it; plain subscriptions are ordered
  * ephemeral consumers from "now", groups share a named consumer, durables are durable consumers
@@ -31,7 +30,7 @@ export const NatsTransport = Transport.implement<TransportDef.Options, [options:
 
   *setup(options) {
     if (!(yield* hasCodec())) {
-      yield* install(JsonCodec)
+      yield* JsonCodec.use()
     }
     if (!isValidPrefix(options.prefix)) {
       return yield* fail(TransportErrors.Configuration, `invalid prefix "${options.prefix}"`)

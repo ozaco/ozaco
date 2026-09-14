@@ -16,7 +16,7 @@ export interface KvTarget {
   readonly enabled: boolean
   /** Install a store into the current scope under a key prefix (default `'suite'`). Every call
    * must join the SAME backend (a shared memory link, one redis). */
-  readonly install: (prefix?: string) => Operation<unknown>
+  readonly use: (prefix?: string) => Operation<unknown>
   readonly expect: {
     readonly persistent: boolean
     readonly atomic: boolean
@@ -35,7 +35,7 @@ export const runKvSuite = (target: KvTarget): void => {
     it('reports identity, prefix and capabilities', async () => {
       unwrap(
         await run(function* () {
-          yield* target.install()
+          yield* target.use()
           const info = yield* useContext(Kv)
           expect(info.store).toBe(target.label)
           expect(info.prefix).toBe('suite')
@@ -48,7 +48,7 @@ export const runKvSuite = (target: KvTarget): void => {
     it('get/set/has/del round-trip codec values of every shape; missing keys are undefined', async () => {
       unwrap(
         await run(function* () {
-          yield* target.install()
+          yield* target.use()
           const key = unique('v')
           expect(yield* Kv.actions.get<AnyType>(key)).toBeUndefined()
           expect(yield* Kv.actions.has(key)).toBe(false)
@@ -72,7 +72,7 @@ export const runKvSuite = (target: KvTarget): void => {
     it('ttl: values expire; ttl() reports remaining lifetime; expire() resets it', async () => {
       unwrap(
         await run(function* () {
-          yield* target.install()
+          yield* target.use()
           const key = unique('ttl')
           yield* Kv.actions.set(key, 'soon', { ttlMs: 120 })
           const left = yield* Kv.actions.ttl(key)
@@ -98,7 +98,7 @@ export const runKvSuite = (target: KvTarget): void => {
     it('tags: invalidate drops every key carrying the tag, nothing else', async () => {
       unwrap(
         await run(function* () {
-          yield* target.install()
+          yield* target.use()
           const base = unique('tag')
           const tagA = unique('a')
           const tagB = unique('b')
@@ -122,7 +122,7 @@ export const runKvSuite = (target: KvTarget): void => {
     it('incr: counters start at zero, add atomically, and a window TTL applies on creation only', async () => {
       unwrap(
         await run(function* () {
-          yield* target.install()
+          yield* target.use()
           const key = unique('n')
           expect(yield* Kv.actions.incr(key)).toBe(1)
           expect(yield* Kv.actions.incr(key, 5)).toBe(6)
@@ -148,7 +148,7 @@ export const runKvSuite = (target: KvTarget): void => {
     it('mset/mget and keys(): a namespace scan pages through in order', async () => {
       unwrap(
         await run(function* () {
-          yield* target.install()
+          yield* target.use()
           const base = unique('scan')
           yield* Kv.actions.mset(
             Array.from({ length: 7 }, (_, index) => [`${base}.${index}`, index] as const),
@@ -179,7 +179,7 @@ export const runKvSuite = (target: KvTarget): void => {
     it('wrap: cache-aside computes once per key, shares one in-flight computation, re-raises failures', async () => {
       unwrap(
         await run(function* () {
-          yield* target.install()
+          yield* target.use()
           const key = unique('wrap')
           let computed = 0
           const compute = function* () {
@@ -218,17 +218,17 @@ export const runKvSuite = (target: KvTarget): void => {
         await run(function* () {
           const key = unique('iso')
           yield* scoped(function* () {
-            yield* target.install('other')
+            yield* target.use('other')
             yield* Kv.actions.set(key, 'theirs')
           })
-          yield* target.install()
+          yield* target.use()
           expect(yield* Kv.actions.get<AnyType>(key)).toBeUndefined()
           yield* Kv.actions.set(key, 'mine')
           yield* Kv.actions.set(`${key}.2`, 'mine too')
           expect(yield* Kv.actions.clear()).toBeGreaterThanOrEqual(2)
           expect(yield* Kv.actions.get<AnyType>(key)).toBeUndefined()
           yield* scoped(function* () {
-            yield* target.install('other')
+            yield* target.use('other')
             expect(yield* Kv.actions.get<AnyType>(key)).toBe('theirs')
             yield* Kv.actions.clear()
           })
@@ -243,7 +243,7 @@ export const runKvSuite = (target: KvTarget): void => {
           const ready = createQueue<void, void>()
           const reader = yield* fork(() =>
             scoped(function* () {
-              yield* target.install()
+              yield* target.use()
               ready.add(undefined)
               for (;;) {
                 const value = yield* Kv.actions.get<string>(key)
@@ -256,7 +256,7 @@ export const runKvSuite = (target: KvTarget): void => {
           )
           yield* ready.next()
           yield* scoped(function* () {
-            yield* target.install()
+            yield* target.use()
             yield* Kv.actions.set(key, 'shared')
           })
           expect(yield* reader).toBe('shared')
@@ -265,7 +265,7 @@ export const runKvSuite = (target: KvTarget): void => {
     })
 
     it('an invalid prefix fails kv.configuration', async () => {
-      const outcome = await run(() => target.install('bad:prefix'))
+      const outcome = await run(() => target.use('bad:prefix'))
       expect(isFailure(outcome)).toBe(true)
       expect((outcome as AnyType).error).toBe(KvErrors.Configuration)
     })

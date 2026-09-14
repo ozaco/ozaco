@@ -3,7 +3,7 @@ import type { TransportDef } from 'transport:core'
 import { deliver, mulberry32 } from './internal'
 import type { Memory } from './types'
 
-/** A fresh link: `install(MemoryTransport, { link })` in every scope that should share it. With
+/** A fresh link: `MemoryTransport.use({ link })` in every scope that should share it. With
  * `chaos`, the link is an unreliable network in a box — deterministic per seed. */
 export const createLink = (options?: Memory.LinkOptions): Memory.Link => ({
   chaos: options?.chaos

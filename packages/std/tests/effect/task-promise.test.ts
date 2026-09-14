@@ -1,4 +1,4 @@
-import { box, createScope, run, sleep, spawn, suspend, useScope } from 'std:effect'
+import { attempt, createScope, run, sleep, spawn, suspend, useScope } from 'std:effect'
 import { fail, isFailure, isSuccess, unwrap } from 'std:result'
 
 import { describe, expect, it } from 'bun:test'
@@ -6,7 +6,7 @@ import { describe, expect, it } from 'bun:test'
 /**
  * The Task promise contract (std): the promise side ALWAYS resolves a Result and NEVER rejects —
  * success resolves `Success<T>`, an operation failure resolves the `Failure` itself, and a halt
- * resolves `fail('halted')`. Supervision: `spawn`/`fork`/default `scope.run` failures ALSO crash
+ * resolves `fail('std:effect.halted')`. Supervision: `spawn`/`fork`/default `scope.run` failures ALSO crash
  * the owning scope (structured concurrency); `scope.run(op, { detached: true })` delivers the
  * failure through the future ONLY. These semantics were previously divergent (raw success values,
  * halt rejections, unconditional scope crashes) and broke real servers — pinned here for good.
@@ -71,7 +71,7 @@ describe('task promise contract', () => {
     expect(rejected).toBe(false)
     expect(isFailure(outcome)).toBe(true)
     if (isFailure(outcome)) {
-      expect(outcome.error).toBe('halted')
+      expect(outcome.error).toBe('std:effect.halted')
     }
   })
 
@@ -128,7 +128,7 @@ describe('supervision', () => {
       // old semantics the scope crashed here at the next suspension point
       yield* sleep(20)
 
-      const delivered = yield* box(() => failing)
+      const delivered = yield* attempt(() => failing)
 
       return { alive: true, delivered }
     })

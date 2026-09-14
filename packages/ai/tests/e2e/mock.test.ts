@@ -1,7 +1,6 @@
 import type { Helpers } from 'ai:core'
 import { Ai, AiClient, AiErrors } from 'ai:core'
 import { attempt, run } from 'std:effect'
-import { install } from 'std:plugin'
 import { fail, unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
 
@@ -85,10 +84,10 @@ runProviderSuite({
     tts: true,
     stt: true,
   },
-  install: script =>
+  use: script =>
     (function* () {
-      yield* install(JsonCodec)
-      return yield* install(MockProvider, toMockScript(script))
+      yield* JsonCodec.use()
+      return yield* MockProvider.use(toMockScript(script))
     })(),
 })
 
@@ -96,8 +95,8 @@ describe('mock provider extras', () => {
   it('records every received spec in the calls log', async () => {
     unwrap(
       await run(function* () {
-        const mock = yield* install(MockProvider, { chat: { text: 'hi' } })
-        yield* install(AiClient, { models: { chat: 'model-chat', embed: 'model-embed' } })
+        const mock = yield* MockProvider.use({ chat: { text: 'hi' } })
+        yield* AiClient.use({ models: { chat: 'model-chat', embed: 'model-embed' } })
         yield* Ai.actions.chat('one')
         yield* Ai.actions.chat('two')
         yield* Ai.actions.embed(['a', 'b'])
@@ -115,10 +114,10 @@ describe('mock provider extras', () => {
   it('an explicit queue is consumed call by call and fails cleanly when exhausted', async () => {
     unwrap(
       await run(function* () {
-        yield* install(MockProvider, {
+        yield* MockProvider.use({
           chat: { queue: [{ text: 'first' }, { text: 'second' }] },
         })
-        yield* install(AiClient, { models: { chat: 'm' } })
+        yield* AiClient.use({ models: { chat: 'm' } })
         expect((yield* Ai.actions.chat('1')).text).toBe('first')
         expect((yield* Ai.actions.chat('2')).text).toBe('second')
         const outcome = yield* attempt(Ai.actions.chat('3'))

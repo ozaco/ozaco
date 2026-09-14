@@ -17,7 +17,7 @@ import type { Pg } from './types'
 const sql = sqlActions({ dialect: postgresDialect, exec })
 
 /**
- * Postgres adapter over node-postgres (`pg.Pool`) — `install(PgAdapter, { url })`, then
+ * Postgres adapter over node-postgres (`pg.Pool`) — `PgAdapter.use({ url })`, then
  * `DbClient`. The driver's own pool manages connections; transactions pin one client for their
  * duration (nested calls become savepoints). Plain write-through storage like every adapter:
  * change tracking is the core's (see the `Db` change log), nothing backend-specific.

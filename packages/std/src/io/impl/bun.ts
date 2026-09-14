@@ -9,6 +9,7 @@ import fs from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 
 import pkg from '../../../package.json'
+import { IOErrors } from '../errors'
 import {
   decryptSecret,
   encryptSecret,
@@ -33,7 +34,7 @@ import { watchPath } from '../internal/watch'
 import { webHash, webHmac, webRandomBytes } from '../internal/webcrypto'
 
 export const BunIO = IO.implement({
-  name: 'bun-io',
+  name: 'std/bun-io',
   version: pkg.version,
   *setup() {
     return null
@@ -110,9 +111,11 @@ export const BunIO = IO.implement({
 
   *rename(src, dest, options) {
     if (hasFlag(options?.flags ?? IO_FLAGS.NONE, IO_FLAGS.EXCLUSIVE)) {
+      // `Bun.file().exists()` is `false` for a directory: an existing DIRECTORY destination
+      // bypasses this guard on Bun (NodeIO fails `IOErrors.Exists` via `fs.access`).
       const destExists = yield* until(Bun.file(toPath(dest)).exists())
       if (destExists) {
-        return yield* fail('exists', `destination already exists: ${toPath(dest)}`)
+        return yield* fail(IOErrors.Exists, `destination already exists: ${toPath(dest)}`)
       }
     }
     yield* until(fs.rename(toPath(src), toPath(dest)))
@@ -124,7 +127,9 @@ export const BunIO = IO.implement({
 
   *exists(path) {
     // `Bun.file(dir).exists()` reports `false` for directories — use `fs.access` (matches NodeIO) so
-    // `exists` answers "path exists" for files and directories alike.
+    // `exists` answers "path exists" for files and directories alike. NOTE: `rename` (EXCLUSIVE
+    // guard) and `ensureFile` below still consult `Bun.file().exists()`, so a directory at the
+    // target slips past their checks on Bun (NodeIO's `fs.access` sees it) — see AUDIT I11/I12.
     try {
       yield* until(fs.access(toPath(path)))
       return true
@@ -155,6 +160,8 @@ export const BunIO = IO.implement({
     const p = toPath(path)
     const dir = dirname(p)
     yield* until(fs.mkdir(dir, { recursive: true }))
+    // `Bun.file(dir).exists()` is `false` for a directory, so `ensureFile('<dir>')` falls through
+    // to `Bun.write` and fails on Bun, whereas NodeIO (`fs.access`) treats it as a no-op.
     const fileExists = yield* until(Bun.file(p).exists())
     if (!fileExists) {
       yield* until(Bun.write(p, ''))

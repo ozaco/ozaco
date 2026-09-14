@@ -5,12 +5,13 @@ import { fail } from 'std:result'
 import { isArray, isString } from 'std:shared'
 
 import { EXTENDS_KEY } from '../const'
+import { ConfigErrors } from '../errors'
 import type { ConfigDef } from '../types'
 
 /**
  * Read and parse one config file into a `Source`, resolving its `extends` (a path or list of paths,
  * relative to the file) into nested sources. `seen` guards against cycles and double-reads. Returns
- * `undefined` when the file is absent or already visited; a malformed file fails via the codec.Operation<ConfigDef.Source | undefined>
+ * `undefined` when the file is absent or already visited; a malformed file fails via the codec.
  */
 export const readSource = operation(function* (
   ctx: ConfigDef.Context,
@@ -43,7 +44,10 @@ export const readSource = operation(function* (
     // An explicitly listed `extends` target that is missing is a mistake (typo), not an optional
     // layer — fail loudly. An already-seen path (cycle/duplicate) is fine and simply skipped below.
     if (!seen.has(resolved) && !(yield* IO.actions.exists(resolved))) {
-      return yield* fail(`config: "${path}" extends a missing file "${target}" (${resolved})`)
+      return yield* fail(
+        ConfigErrors.MissingExtends,
+        `config: "${path}" extends a missing file "${target}" (${resolved})`,
+      )
     }
 
     const source = yield* readSource(ctx, resolved, seen)

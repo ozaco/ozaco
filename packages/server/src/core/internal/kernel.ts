@@ -2,7 +2,7 @@
 import type { Operation } from 'std:effect'
 import { attempt, ensure, useContext } from 'std:effect'
 import type { Plugin } from 'std:plugin'
-import { install, isUse } from 'std:plugin'
+import { isUse } from 'std:plugin'
 import { fail, isFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
 
@@ -189,7 +189,7 @@ export function* installEntry(entry: ServerDef.PluginLike): Operation<unknown> {
     return yield* entry
   }
 
-  return yield* install(entry as Plugin<AnyType, [], AnyType>)
+  return yield* (entry as Plugin<AnyType, [], AnyType>).use()
 }
 
 /** The serving side of one service: what the carrier calls for a dispatch arriving here. */

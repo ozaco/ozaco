@@ -2,6 +2,7 @@ import type { Context, Operation } from 'std:effect'
 import { until, useAbortSignal } from 'std:effect'
 import { asFailure, fail } from 'std:result'
 
+import { FetchErrors } from '../errors'
 import type { FetchDef } from '../types'
 import { fetchImpl } from '../utils/context'
 import { createFetchResponse } from '../utils/response'
@@ -87,7 +88,7 @@ export const createRequestAction = (context: Context<FetchDef.Context>) =>
       const raw = (error as { error?: unknown } | null)?.error ?? error
 
       if (timeoutMs !== undefined && (raw as { name?: string } | null)?.name === 'TimeoutError') {
-        return yield* fail('timeout', `${target}: timed out after ${timeoutMs}ms`)
+        return yield* fail(FetchErrors.Timeout, `${target}: timed out after ${timeoutMs}ms`)
       }
 
       return yield* asFailure(error)

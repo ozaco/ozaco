@@ -1,6 +1,5 @@
 import { run } from 'std:effect'
 import { DefaultLogger, Logger } from 'std:logger'
-import { install } from 'std:plugin'
 import { fail, succeed, unwrap } from 'std:result'
 
 import { describe, expect, it } from 'bun:test'
@@ -13,8 +12,8 @@ describe('payload normalization', () => {
 
     unwrap(
       await run(function* () {
-        yield* install(DefaultLogger)
-        yield* install(captureTransport('capture', sink))
+        yield* DefaultLogger.use()
+        yield* captureTransport('capture', sink).use()
 
         yield* Logger.actions.info('one', null, 'two', undefined, 'three')
       }),
@@ -29,8 +28,8 @@ describe('payload normalization', () => {
 
     unwrap(
       await run(function* () {
-        yield* install(DefaultLogger)
-        yield* install(captureTransport('capture', sink))
+        yield* DefaultLogger.use()
+        yield* captureTransport('capture', sink).use()
 
         yield* Logger.actions.info({ a: 1, shared: 'first' }, 'between', { b: 2, shared: 'second' })
       }),
@@ -45,8 +44,8 @@ describe('payload normalization', () => {
 
     unwrap(
       await run(function* () {
-        yield* install(DefaultLogger)
-        yield* install(captureTransport('capture', sink))
+        yield* DefaultLogger.use()
+        yield* captureTransport('capture', sink).use()
 
         yield* Logger.actions.error('request failed', fail('boom', 'it broke', 'c-1', 'c-2'))
         yield* Logger.actions.error(fail('bare'))
@@ -64,8 +63,8 @@ describe('payload normalization', () => {
 
     unwrap(
       await run(function* () {
-        yield* install(DefaultLogger)
-        yield* install(captureTransport('capture', sink))
+        yield* DefaultLogger.use()
+        yield* captureTransport('capture', sink).use()
 
         yield* Logger.actions.error(fail('boom', 'why'))
       }),
@@ -79,8 +78,8 @@ describe('payload normalization', () => {
 
     unwrap(
       await run(function* () {
-        yield* install(DefaultLogger)
-        yield* install(captureTransport('capture', sink))
+        yield* DefaultLogger.use()
+        yield* captureTransport('capture', sink).use()
 
         yield* Logger.actions.info(succeed('unwrapped'), succeed({ n: 7 }))
       }),
@@ -97,8 +96,8 @@ describe('bindings', () => {
 
     unwrap(
       await run(function* () {
-        yield* install(DefaultLogger, { bindings: { app: 'std' } })
-        yield* install(captureTransport('capture', sink))
+        yield* DefaultLogger.use({ bindings: { app: 'std' } })
+        yield* captureTransport('capture', sink).use()
 
         yield* Logger.actions.info('first')
         yield* Logger.actions.bind({ req: 'r-1' })
@@ -116,8 +115,8 @@ describe('bindings', () => {
     const sink = createSink()
 
     const outcome = await run(function* () {
-      yield* install(DefaultLogger)
-      yield* install(captureTransport('capture', sink))
+      yield* DefaultLogger.use()
+      yield* captureTransport('capture', sink).use()
 
       const value = yield* Logger.actions.child({ traceId: 't-1' }, function* () {
         yield* Logger.actions.info('inside')

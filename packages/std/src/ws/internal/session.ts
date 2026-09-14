@@ -1,8 +1,9 @@
 import { createQueue, withResolvers } from 'std:effect'
 
-import { RECONNECT_DEFAULTS } from '../const'
 import type { Helpers } from '../types/helpers'
 import type { WsDef } from '../types/ws'
+
+import { RECONNECT_DEFAULTS } from './const'
 
 const budgetOf = (options?: WsDef.ReconnectOptions): Helpers.ReconnectBudget | undefined =>
   options

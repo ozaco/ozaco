@@ -5,9 +5,10 @@ import type { Result } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 /**
- * `std:ws` — an effect-native WebSocket CLIENT plugin, the socket counterpart to `std:fetch`.
- * Install `Ws` (optionally with default options), then `Ws.actions.connect(url, options)` opens a
- * connection RESOURCE bound to the caller's scope: when the scope closes, the socket closes and
+ * `std:ws` — an effect-native WebSocket CLIENT, the socket counterpart to `std:fetch`. `Ws` is
+ * the protocol (routed dispatch + hooks) and `WsClient` its platform implementation. Install
+ * `WsClient` (optionally with default options and a socket `impl`), then
+ * `Ws.actions.connect(url, options)` opens a connection RESOURCE bound to the caller's scope: when the scope closes, the socket closes and
  * every background pump is torn down — no manual `close()` needed (it stays available). With
  * `reconnect` configured, dropped sockets are redialed in the background and every socket
  * generation feeds the same continuous `messages` flow. Framing mirrors the server gateway's WS
@@ -15,7 +16,7 @@ import type { AnyType } from 'std:shared'
  * as-is, every other value is codec-encoded on send + codec-decoded on receive. A codec (e.g.
  * `JsonCodec`) must be installed in scope for structured values.
  */
-export type WsDef = Plugin<WsDef.Context, [defaults?: WsDef.Options], WsDef.Actions>
+export type WsDef = Plugin<WsDef.Context, [options?: WsDef.ClientOptions], WsDef.Contract>
 
 export namespace WsDef {
   /** The WHATWG WebSocket subset the browser / Bun / Node global `WebSocket` all satisfy. */
@@ -35,9 +36,9 @@ export namespace WsDef {
   }
 
   /**
-   * The WebSocket implementation `connect` constructs sockets with (injectable via `wsImpl`).
-   * Accepts the standard `protocols` second arg OR the Bun/Node options-object form
-   * (`{ headers, protocols }`).
+   * The WebSocket implementation `connect` constructs sockets with (the `impl` option of
+   * `WsClient.use`). Accepts the standard `protocols` second arg OR the Bun/Node options-object
+   * form (`{ headers, protocols }`).
    */
   export type ImplLike = new (
     url: string | URL,
@@ -92,7 +93,7 @@ export namespace WsDef {
 
     /** Preferred codec for frame (de)serialization: a specific codec impl whose pinned actions are
      * used instead of the routed `Codec` protocol (which picks the highest-priority install). Set
-     * it install-wide via `install(Ws, { codec })` (defaults merge under each connect's options) or
+     * it install-wide via `WsClient.use({ codec })` (defaults merge under each connect's options) or
      * per connection; the impl must still be installed in scope — pinned dispatch fails
      * `missing-action` otherwise. */
     codec?: CodecDef | undefined
@@ -100,7 +101,7 @@ export namespace WsDef {
 
   /**
    * The close value the message stream settles with: `true` on a permanent clean close, or a
-   * failure — e.g. `'ws/reconnect-exhausted'` when the reconnect budget ran out.
+   * failure — e.g. `WsErrors.ReconnectExhausted` when the reconnect budget ran out.
    */
   export type FlowClose = true | Result.Failure<unknown>
 
@@ -131,7 +132,7 @@ export namespace WsDef {
 
     /** Incoming frames as ONE continuous effect Flow across reconnects (codec-decoded on pull,
      * buffered until consumed). Closes only on permanent end: `true` after a clean client close or
-     * an unreconnected server close, or a failure (e.g. `'ws/reconnect-exhausted'`). */
+     * an unreconnected server close, or a failure (e.g. `WsErrors.ReconnectExhausted`). */
     readonly messages: Flow<unknown, FlowClose>
 
     /** Close the connection for good (never reconnected); resolves once fully closed. */
@@ -141,17 +142,28 @@ export namespace WsDef {
     readonly closed: Future<CloseInfo>
   }
 
+  /** What `WsClient.use` takes: connect defaults plus the socket implementation. */
+  export interface ClientOptions extends Options {
+    /** The socket constructor `connect` uses. Omit for the platform `WebSocket`; pass a fake in
+     * tests; pass `false` to simulate a platform without one (every connect then fails
+     * `WsErrors.Unsupported`). */
+    impl?: ImplLike | false | undefined
+  }
+
   /**
-   * The installed plugin context: install-time defaults, merged (shallow, per top-level key)
-   * under each `connect` call's own options.
+   * The installed client context: install-time defaults, merged (shallow, per top-level key)
+   * under each `connect` call's own options, plus the resolved socket implementation.
    */
   export interface Context {
     defaults: Options
+    impl: ImplLike | false | undefined
   }
 
-  export interface Actions {
+  /** The action contract `Ws` routes and `WsClient` implements. */
+  export interface Contract {
     /** Open a WebSocket bound to the caller's scope. Resolves once the socket is OPEN, or raises
-     * `'ws/connect'` (handshake error) / `'ws/unsupported'` (no impl — set `wsImpl`). */
+     * `WsErrors.Connect` (handshake error) / `WsErrors.Unsupported` (no implementation — pass
+     * `impl` to `WsClient.use`). */
     connect(url: string | URL, options?: Options): Operation<Connection>
   }
 }

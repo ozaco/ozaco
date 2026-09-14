@@ -2,6 +2,7 @@ import type { Operation } from 'std:effect'
 import { attempt, fork, resource } from 'std:effect'
 import { fail } from 'std:result'
 
+import { RtcErrors } from '../errors'
 import type { RtcDef } from '../types/rtc'
 
 import { dialGeneration } from './generation'
@@ -34,7 +35,7 @@ export const createPeer = (
     // initial dial — a construction failure surfaces directly to the connect() caller
     const dialError = dialGeneration(session, impl)
     if (dialError !== undefined) {
-      return yield* fail('rtc/connect', `peer construction failed: ${dialError}`)
+      return yield* fail(RtcErrors.Connect, `peer construction failed: ${dialError}`)
     }
 
     yield* fork(() => pumpSignal(session))

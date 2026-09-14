@@ -1,7 +1,6 @@
 import type { ConfigDef } from 'std:config'
 import { Config } from 'std:config'
 import { run } from 'std:effect'
-import { install } from 'std:plugin'
 import { isFailure, unwrap } from 'std:result'
 
 import { describe, expect, it } from 'bun:test'
@@ -16,9 +15,9 @@ const makeRoot = () => mkdtemp(join(tmpdir(), 'ozaco-config-'))
 const jsonText = (value: unknown) => JSON.stringify(value)
 
 const bootstrap = function* (options: ConfigDef.Options) {
-  yield* install(BunIO)
-  yield* install(JsonCodec)
-  yield* install(Config, { codec: JsonCodec, name: 'cfgspec', ...options })
+  yield* BunIO.use()
+  yield* JsonCodec.use()
+  yield* Config.use({ codec: JsonCodec, name: 'cfgspec', ...options })
   yield* Config.actions.load()
 }
 
@@ -107,8 +106,9 @@ describe('config extends resolution', () => {
 
       expect(isFailure(outcome)).toBe(true)
       if (isFailure(outcome)) {
-        expect(String(outcome.error)).toContain('extends a missing file')
-        expect(String(outcome.error)).toContain('nope.json')
+        expect(outcome.error).toBe('std:config.missing-extends')
+        expect(outcome.message).toContain('extends a missing file')
+        expect(outcome.message).toContain('nope.json')
       }
     } finally {
       await rm(root, { recursive: true, force: true })

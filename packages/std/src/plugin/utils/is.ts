@@ -1,4 +1,4 @@
-import { PLUGIN, PROTOCOL, USE } from '../const'
+import { PLUGIN, PROTOCOL, USE } from '../internal/const'
 import type { Plugin } from '../types/plugin'
 import type { Protocol } from '../types/protocol'
 

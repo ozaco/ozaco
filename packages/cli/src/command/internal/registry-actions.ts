@@ -24,7 +24,7 @@ export const register = operation(function* (command: RegistryDef.Command) {
   // Build + store the node only — do NOT run the command's `setup` here. Setup runs LAZILY when
   // the command is actually dispatched (see `runCommand`), in its own scope. Running it eagerly at
   // register would fire EVERY registered top-level command's setup in the shared registry scope, so
-  // two commands that install the same protocol impl (e.g. two plugins both `install(YamlCodec)`)
+  // two commands that install the same protocol impl (e.g. two plugins both `YamlCodec.use()`)
   // collide — the multi-plugin host case, where all installed plugins are registered up front just
   // to populate `--help`. Program help only reads name/description off the stored node, never the
   // setup.

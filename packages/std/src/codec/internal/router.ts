@@ -1,7 +1,8 @@
 import { attempt, filter, operation, some, toSorted, useContext } from 'std:effect'
 import { fail, isSuccess } from 'std:result'
 
-import { Codec } from '../definitions'
+import { Codec } from '../definition'
+import { CodecErrors } from '../errors'
 import type { CodecDef } from '../types'
 
 import { CodecRegistryContext } from './context'
@@ -30,7 +31,10 @@ export const codecRegisterHandler: CodecDef.Handlers['register'] = operation(
         return targetCtx.name === transportCtx.name
       })
     ) {
-      return yield* fail('unexpected', `codec ${transportCtx.name} is already registered`)
+      return yield* fail(
+        CodecErrors.AlreadyRegistered,
+        `codec ${transportCtx.name} is already registered`,
+      )
     }
 
     yield* CodecRegistryContext.set(

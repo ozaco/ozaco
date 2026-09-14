@@ -16,12 +16,11 @@
  */
 import type { Queue } from 'std:effect'
 import { attempt, createQueue, fork, race, run, sleep, until } from 'std:effect'
-import { install } from 'std:plugin'
 import { isFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
 import type { RtcDef } from 'std:webrtc'
-import { Rtc } from 'std:webrtc'
-import { Ws } from 'std:ws'
+import { Rtc, RtcClient } from 'std:webrtc'
+import { Ws, WsClient } from 'std:ws'
 
 import { JsonCodec } from 'std:codec/impl/json'
 
@@ -76,9 +75,9 @@ const tag = (frame: AnyType) =>
       : String(frame?.t ?? typeof frame)
 
 const outcome = run(function* () {
-  yield* install(JsonCodec)
-  yield* install(Ws)
-  yield* install(Rtc)
+  yield* JsonCodec.use()
+  yield* WsClient.use()
+  yield* RtcClient.use()
 
   const room = location.hash.slice(1) || 'demo'
   pick('#room').textContent = `#${room}`

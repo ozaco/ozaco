@@ -1,7 +1,6 @@
 import { attempt, run } from 'std:effect'
 import type { FetchDef } from 'std:fetch'
 import { Fetch, FetchClient, fetchImpl } from 'std:fetch'
-import { install } from 'std:plugin'
 import { isFailure, unwrap } from 'std:result'
 
 import { afterAll, describe, expect, it } from 'bun:test'
@@ -53,7 +52,7 @@ afterAll(() => {
 describe('request dispatch', () => {
   it('GET wraps the platform response and exposes its accessors', async () => {
     const outcome = await run(function* () {
-      yield* install(FetchClient)
+      yield* FetchClient.use()
 
       const response = yield* Fetch.actions.request(`${base}/json`)
 
@@ -85,7 +84,7 @@ describe('request dispatch', () => {
 
   it('POST delivers method, headers, and body to the server', async () => {
     const outcome = await run(function* () {
-      yield* install(FetchClient)
+      yield* FetchClient.use()
 
       const response = yield* Fetch.actions.post(`${base}/echo`, {
         headers: { 'x-token': 'secret-42' },
@@ -104,7 +103,7 @@ describe('request dispatch', () => {
 
   it('every method shorthand pins its HTTP verb', async () => {
     const outcome = await run(function* () {
-      yield* install(FetchClient)
+      yield* FetchClient.use()
 
       const readMethod = function* (response: FetchDef.Response) {
         const echoed = yield* response.json<{ method: string }>()
@@ -136,7 +135,7 @@ describe('request dispatch', () => {
 
   it('reading the body flips bodyUsed', async () => {
     const outcome = await run(function* () {
-      yield* install(FetchClient)
+      yield* FetchClient.use()
 
       const response = yield* Fetch.actions.request(`${base}/json`)
       const before = response.bodyUsed
@@ -150,7 +149,7 @@ describe('request dispatch', () => {
 
   it('the fetchImpl context injects a custom transport', async () => {
     const outcome = await run(function* () {
-      yield* install(FetchClient)
+      yield* FetchClient.use()
 
       return yield* fetchImpl.with(
         () => Promise.resolve(new Response('injected')),
@@ -169,15 +168,15 @@ describe('request dispatch', () => {
 
     expect(isFailure(outcome)).toBe(true)
     if (isFailure(outcome)) {
-      expect(outcome.error).toBe('missing-action')
+      expect(outcome.error).toBe('std:plugin.missing-action')
     }
   })
 })
 
 describe('expect()', () => {
-  it('builder expect() passes a 2xx response straight through to the readers', async () => {
+  it('expect() passes a 2xx response straight through to the readers', async () => {
     const outcome = await run(function* () {
-      yield* install(FetchClient)
+      yield* FetchClient.use()
 
       const response = yield* Fetch.actions.get(`${base}/json`)
       const checked = yield* response.expect()
@@ -188,9 +187,9 @@ describe('expect()', () => {
     expect(unwrap(outcome)).toEqual({ ok: true })
   })
 
-  it('builder expect() turns a non-2xx status into an http-status failure', async () => {
+  it('expect() turns a non-2xx status into an http-status failure', async () => {
     const outcome = await run(function* () {
-      yield* install(FetchClient)
+      yield* FetchClient.use()
 
       const response = yield* Fetch.actions.get(`${base}/missing`)
 
@@ -199,14 +198,14 @@ describe('expect()', () => {
 
     expect(isFailure(outcome)).toBe(true)
     if (isFailure(outcome)) {
-      expect(outcome.error).toBe('http-status')
+      expect(outcome.error).toBe('std:fetch.http-status')
       expect(outcome.message).toBe(`${base}/missing: 404 Not Found`)
     }
   })
 
   it('response expect() returns the same wrapped response on ok and fails on non-ok', async () => {
     const outcome = await run(function* () {
-      yield* install(FetchClient)
+      yield* FetchClient.use()
 
       const good = yield* Fetch.actions.get(`${base}/json`)
       const passed = yield* good.expect()
@@ -223,7 +222,7 @@ describe('expect()', () => {
 
     expect(unwrap(outcome)).toEqual({
       samePassthrough: true,
-      error: 'http-status',
+      error: 'std:fetch.http-status',
       message: `${base}/missing: 404 Not Found`,
     })
   })
@@ -241,7 +240,7 @@ describe('request-level failures', () => {
     }
 
     const outcome = await run(function* () {
-      yield* install(FetchClient)
+      yield* FetchClient.use()
 
       return yield* Fetch.actions.request(`http://127.0.0.1:${port}/`)
     })
@@ -257,14 +256,14 @@ describe('request-level failures', () => {
 
   it('timeoutMs aborts a hung request with a timeout failure', async () => {
     const outcome = await run(function* () {
-      yield* install(FetchClient)
+      yield* FetchClient.use()
 
       return yield* Fetch.actions.request(`${base}/slow`, { timeoutMs: 30 })
     })
 
     expect(isFailure(outcome)).toBe(true)
     if (isFailure(outcome)) {
-      expect(outcome.error).toBe('timeout')
+      expect(outcome.error).toBe('std:fetch.timeout')
       expect(outcome.message).toBe(`${base}/slow: timed out after 30ms`)
     }
   })

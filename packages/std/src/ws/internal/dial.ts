@@ -3,9 +3,11 @@ import { operation, withResolvers } from 'std:effect'
 import type { Result } from 'std:result'
 import { fail } from 'std:result'
 
-import { CONNECTING, OPEN } from '../const'
+import { WsErrors } from '../errors'
 import type { Helpers } from '../types/helpers'
 import type { WsDef } from '../types/ws'
+
+import { CONNECTING, OPEN } from './const'
 
 /**
  * Construct one socket. Headers require the Bun/Node options-object constructor form; without
@@ -55,7 +57,7 @@ const wire = (
     if (session.ended || session.closedByClient) {
       // the connection ended while this dial was in flight — do not adopt, just dispose
       socket.close()
-      opened.reject(fail('ws/connect', `connection closed during dial: ${String(url)}`))
+      opened.reject(fail(WsErrors.Connect, `connection closed during dial: ${String(url)}`))
       return
     }
 
@@ -72,7 +74,10 @@ const wire = (
   }
 
   socket.onerror = () => {
-    const failure = fail('ws/connect', `websocket error: ${String(url)}`) as Result.Failure<unknown>
+    const failure = fail(
+      WsErrors.Connect,
+      `websocket error: ${String(url)}`,
+    ) as Result.Failure<unknown>
     opened.reject(failure) // no-op once already open
 
     if (!session.ended && session.socket === socket && !reconnect) {
@@ -108,7 +113,7 @@ const wire = (
 
 /**
  * Dial ONE socket generation: construct, wire, resolve once OPEN (adopting the socket as
- * current) or raise `'ws/connect'`. On failure — or a halt mid-handshake — the socket is unhooked
+ * current) or raise `WsErrors.Connect`. On failure — or a halt mid-handshake — the socket is unhooked
  * and disposed so nothing leaks.
  */
 export const dial = operation(function* (session: Helpers.Session, impl: WsDef.ImplLike) {

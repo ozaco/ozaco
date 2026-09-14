@@ -49,7 +49,7 @@ const DbBusImpl = definePlugin<Bus.Context, [options?: Bus.Options]>({
 })
 
 /**
- * The cross-node change bus — ONE plugin for every network: `install(DbBus, { transport })`
+ * The cross-node change bus — ONE plugin for every network: `DbBus.use({ transport })`
  * after installing a transport, and every committed write of this node travels to its peers as an
  * envelope on the transport's data plane (`<prefix>.db.change`), while the peers' envelopes feed
  * this node's watchers. No durability is asked of the transport: a lost envelope is a sequence

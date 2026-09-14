@@ -3,6 +3,7 @@ import { attempt, until } from 'std:effect'
 import { fail, isSuccess } from 'std:result'
 import type { AnyType } from 'std:shared'
 
+import { RtcErrors } from '../errors'
 import type { RtcDef } from '../types/rtc'
 
 // `getStats()` normalization: every implementation reports the same W3C entry types but with
@@ -69,14 +70,14 @@ const pairOf = (selected: AnyType, byId: Map<string, AnyType>): RtcDef.PairStats
 export function* readStats(pc: RtcDef.PeerLike): Operation<RtcDef.Stats> {
   if (typeof pc.getStats !== 'function') {
     return yield* fail(
-      'rtc/unsupported',
+      RtcErrors.Unsupported,
       'this implementation reports no statistics (getStats is absent)',
     )
   }
 
   const read = yield* attempt(() => until(pc.getStats!()))
   if (!isSuccess(read)) {
-    return yield* fail('rtc/stats', 'getStats failed')
+    return yield* fail(RtcErrors.Stats, 'getStats failed')
   }
 
   const byId = new Map<string, AnyType>()

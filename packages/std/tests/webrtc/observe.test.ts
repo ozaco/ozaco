@@ -1,8 +1,7 @@
 import { attempt, fork, run, sleep } from 'std:effect'
-import { install } from 'std:plugin'
 import { isFailure, unwrap } from 'std:result'
 import type { RtcDef } from 'std:webrtc'
-import { Rtc, rtcImpl } from 'std:webrtc'
+import { Rtc, RtcClient } from 'std:webrtc'
 
 import { describe, expect, it } from 'bun:test'
 
@@ -21,9 +20,8 @@ describe('peer observability', () => {
     const fake = createFakeRtc()
 
     const outcome = await run(function* () {
-      yield* install(JsonCodec)
-      yield* install(Rtc)
-      yield* rtcImpl.set(fake.impl)
+      yield* JsonCodec.use()
+      yield* RtcClient.use({ impl: fake.impl })
 
       const [signalA, signalB] = createSignalPair()
       const peerA = yield* Rtc.actions.connect(signalA)
@@ -82,9 +80,8 @@ describe('peer observability', () => {
     const fake = createFakeRtc()
 
     const outcome = await run(function* () {
-      yield* install(JsonCodec)
-      yield* install(Rtc)
-      yield* rtcImpl.set(fake.impl)
+      yield* JsonCodec.use()
+      yield* RtcClient.use({ impl: fake.impl })
 
       const [signalA, signalB] = createSignalPair()
       // keep only the last 3 entries — the flow still sees every one of them
@@ -119,9 +116,8 @@ describe('peer observability', () => {
     const fake = createFakeRtc()
 
     const outcome = await run(function* () {
-      yield* install(JsonCodec)
-      yield* install(Rtc)
-      yield* rtcImpl.set(fake.impl)
+      yield* JsonCodec.use()
+      yield* RtcClient.use({ impl: fake.impl })
 
       const [signalA, signalB] = createSignalPair()
       const peerA = yield* Rtc.actions.connect(signalA)
@@ -174,9 +170,8 @@ describe('peer observability', () => {
     const fake = createFakeRtc({ stats: false })
 
     const outcome = await run(function* () {
-      yield* install(JsonCodec)
-      yield* install(Rtc)
-      yield* rtcImpl.set(fake.impl)
+      yield* JsonCodec.use()
+      yield* RtcClient.use({ impl: fake.impl })
 
       const [signalA, signalB] = createSignalPair()
       const peerA = yield* Rtc.actions.connect(signalA)
@@ -188,16 +183,15 @@ describe('peer observability', () => {
       return { tag: isFailure(result) ? String(result.error) : 'ok' }
     })
 
-    expect(unwrap(outcome)).toEqual({ tag: 'rtc/unsupported' })
+    expect(unwrap(outcome)).toEqual({ tag: 'std:webrtc.unsupported' })
   })
 
   it('samples stats into the timeline when observe.sampleMs is set', async () => {
     const fake = createFakeRtc()
 
     const outcome = await run(function* () {
-      yield* install(JsonCodec)
-      yield* install(Rtc)
-      yield* rtcImpl.set(fake.impl)
+      yield* JsonCodec.use()
+      yield* RtcClient.use({ impl: fake.impl })
 
       const [signalA, signalB] = createSignalPair()
       const peerA = yield* Rtc.actions.connect(signalA, { observe: { sampleMs: 15 } })
@@ -219,9 +213,8 @@ describe('peer observability', () => {
     const fake = createFakeRtc()
 
     const outcome = await run(function* () {
-      yield* install(JsonCodec)
-      yield* install(Rtc)
-      yield* rtcImpl.set(fake.impl)
+      yield* JsonCodec.use()
+      yield* RtcClient.use({ impl: fake.impl })
 
       const [signalA, signalB] = createSignalPair()
       const budget = { retries: 4, delayMs: 10 } // both sides redial on the same clock

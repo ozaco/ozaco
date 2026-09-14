@@ -3,9 +3,10 @@ import { attempt, operation, sleep } from 'std:effect'
 import { isSuccess } from 'std:result'
 import type { AnyType } from 'std:shared'
 
-import { KEEPALIVE_DEFAULTS, OPEN } from '../const'
 import type { Helpers } from '../types/helpers'
 import type { WsDef } from '../types/ws'
+
+import { KEEPALIVE_DEFAULTS, OPEN } from './const'
 
 /**
  * Keepalive pump (forked, only when configured): send `payload` through the normal codec framing

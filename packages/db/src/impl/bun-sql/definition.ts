@@ -13,7 +13,7 @@ import { exec, SqlClient, StateRef, transactional } from './internal'
 import type { BunSql } from './types'
 
 /**
- * Postgres adapter over Bun's built-in `SQL` client — `install(BunSqlAdapter, { url })`, then
+ * Postgres adapter over Bun's built-in `SQL` client — `BunSqlAdapter.use({ url })`, then
  * `DbClient`. Bun manages the connection pool; transactions reserve one connection for their
  * duration (nested calls become savepoints).
  */

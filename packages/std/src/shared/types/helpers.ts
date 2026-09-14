@@ -1,4 +1,4 @@
-/** The shapes this module passes around inside itself. */
+/** Public helper shapes of the shared module: `FlatEntry` is the return type of `flattenEntries`. */
 export namespace Helpers {
   /** A flattened leaf: its dotted key path and the value found there. */
   export interface FlatEntry {

@@ -2,7 +2,6 @@ import type { ConfigDef } from 'std:config'
 import { Config } from 'std:config'
 import { run, sleep, withResolvers } from 'std:effect'
 import { IO } from 'std:io'
-import { install } from 'std:plugin'
 import { unwrap } from 'std:result'
 
 import { describe, expect, it } from 'bun:test'
@@ -27,12 +26,12 @@ describe('config watch', () => {
       await writeFile(base, 'count = 1\n')
 
       const outcome = await run(function* () {
-        yield* install(BunIO)
+        yield* BunIO.use()
         // JsonCodec is config's baseline dependency (watch change-detection pins it);
         // TomlCodec is the codec the config FILES are parsed with
-        yield* install(JsonCodec)
-        yield* install(TomlCodec)
-        yield* install(Config, { codec: TomlCodec, name: 'cfgspec', cwd: root, home: root })
+        yield* JsonCodec.use()
+        yield* TomlCodec.use()
+        yield* Config.use({ codec: TomlCodec, name: 'cfgspec', cwd: root, home: root })
         yield* Config.actions.load()
 
         const changed = withResolvers<ConfigDef.Object>()
@@ -70,9 +69,9 @@ describe('config watch', () => {
       await writeFile(base, jsonText({ count: 1 }))
 
       const outcome = await run(function* () {
-        yield* install(BunIO)
-        yield* install(JsonCodec)
-        yield* install(Config, { codec: JsonCodec, name: 'cfgspec', cwd: root, home: root })
+        yield* BunIO.use()
+        yield* JsonCodec.use()
+        yield* Config.use({ codec: JsonCodec, name: 'cfgspec', cwd: root, home: root })
         yield* Config.actions.load()
 
         const initial = yield* Config.actions.get('count')

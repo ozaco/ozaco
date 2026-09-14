@@ -15,7 +15,7 @@ import { createLock, exec, StateRef, transactional } from './internal'
 import type { Sqlite } from './types'
 
 /**
- * SQLite adapter over `bun:sqlite` — `install(SqliteAdapter, { path })`, then `DbClient`. The
+ * SQLite adapter over `bun:sqlite` — `SqliteAdapter.use({ path })`, then `DbClient`. The
  * handle closes with its scope. Transactions serialize on the single shared handle (nested calls
  * become savepoints).
  */

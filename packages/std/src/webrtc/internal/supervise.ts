@@ -2,6 +2,7 @@ import { operation, sleep } from 'std:effect'
 import type { Result } from 'std:result'
 import { fail } from 'std:result'
 
+import { RtcErrors } from '../errors'
 import type { Helpers } from '../types/helpers'
 import type { RtcDef } from '../types/rtc'
 
@@ -63,7 +64,7 @@ export const superviseIce = operation(function* (session: Helpers.Session, budge
         session.endGeneration(
           generation,
           fail(
-            'rtc/ice-exhausted',
+            RtcErrors.IceExhausted,
             `gave up after ${budget.retries} ice restart attempts`,
           ) as Result.Failure<unknown>,
           { state: generation.pc.connectionState, reason: 'ice-exhausted' },
@@ -143,7 +144,7 @@ export const superviseReconnect = operation(function* (
 
     session.settle(
       fail(
-        'rtc/reconnect-exhausted',
+        RtcErrors.ReconnectExhausted,
         `gave up after ${budget.retries} redial attempts`,
       ) as Result.Failure<unknown>,
       { state: session.stateOf(), reason: 'reconnect-exhausted' },

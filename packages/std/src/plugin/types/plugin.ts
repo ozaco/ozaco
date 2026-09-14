@@ -1,7 +1,7 @@
 import type { Context, Operation } from 'std:effect'
 import type { AnyType, EmptyType } from 'std:shared'
 
-import type { PLUGIN, USE } from '../const'
+import type { PLUGIN, USE } from '../internal/const'
 
 import type { Hooks } from './hooks'
 
@@ -9,7 +9,7 @@ import type { Hooks } from './hooks'
  * A built implementation. Its action members live under `.actions`, mirroring the api layer, and
  * always target THIS implementation (`SqliteDb.actions.find(id)`) even when the protocol has
  * several installs. The control surface (`name`, `version`, `tag`, `description`, `context`,
- * `setup`, `getKeys`, `getMeta`) sits on the handle itself.
+ * `setup`, `use`, `getKeys`, `getMeta`) sits on the handle itself.
  */
 export type Plugin<
   TContext = unknown,

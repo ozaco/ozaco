@@ -1,5 +1,3 @@
-import { install } from 'std:plugin'
-
 import { createMemoryKv, MemoryKv } from 'db:impl/memory-kv'
 
 import { runKvSuite } from './suite'
@@ -10,6 +8,6 @@ const link = createMemoryKv()
 runKvSuite({
   label: 'memory',
   enabled: true,
-  install: (prefix = 'suite') => install(MemoryKv, { prefix, link }),
+  use: (prefix = 'suite') => MemoryKv.use({ prefix, link }),
   expect: { persistent: false, atomic: false },
 })

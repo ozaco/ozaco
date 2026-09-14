@@ -1,7 +1,6 @@
 import { run, until } from 'std:effect'
-import { install } from 'std:plugin'
 import { unwrap } from 'std:result'
-import { Ws } from 'std:ws'
+import { Ws, WsClient } from 'std:ws'
 
 import { describe, expect, it } from 'bun:test'
 
@@ -32,8 +31,8 @@ describe('keepalive', () => {
     const { server, received, gate } = recordingServer(2)
     try {
       const outcome = await run(function* () {
-        yield* install(JsonCodec)
-        yield* install(Ws)
+        yield* JsonCodec.use()
+        yield* WsClient.use()
 
         const connection = yield* Ws.actions.connect(`ws://localhost:${server.port}`, {
           keepalive: { intervalMs: 20 },
@@ -55,8 +54,8 @@ describe('keepalive', () => {
     const { server, received, gate } = recordingServer(2)
     try {
       const outcome = await run(function* () {
-        yield* install(JsonCodec)
-        yield* install(Ws)
+        yield* JsonCodec.use()
+        yield* WsClient.use()
 
         const connection = yield* Ws.actions.connect(`ws://localhost:${server.port}`, {
           keepalive: { intervalMs: 20, payload: { type: 'ping' } },

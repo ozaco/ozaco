@@ -1,8 +1,7 @@
 import { attempt, run, scoped, sleep } from 'std:effect'
-import { install } from 'std:plugin'
 import { isFailure, unwrap } from 'std:result'
 import type { RtcDef } from 'std:webrtc'
-import { Rtc, rtcImpl } from 'std:webrtc'
+import { Rtc, RtcClient } from 'std:webrtc'
 
 import { describe, expect, it } from 'bun:test'
 
@@ -18,9 +17,8 @@ describe('typed media surface', () => {
     const fake = createFakeRtc()
 
     const outcome = await run(function* () {
-      yield* install(JsonCodec)
-      yield* install(Rtc)
-      yield* rtcImpl.set(fake.impl)
+      yield* JsonCodec.use()
+      yield* RtcClient.use({ impl: fake.impl })
 
       const [signalA, signalB] = createSignalPair()
       const peerA = yield* Rtc.actions.connect(signalA)
@@ -60,9 +58,8 @@ describe('typed media surface', () => {
     const fake = createFakeRtc()
 
     const outcome = await run(function* () {
-      yield* install(JsonCodec)
-      yield* install(Rtc)
-      yield* rtcImpl.set(fake.impl)
+      yield* JsonCodec.use()
+      yield* RtcClient.use({ impl: fake.impl })
 
       const [signalA, signalB] = createSignalPair()
       const peerA = yield* Rtc.actions.connect(signalA)
@@ -86,9 +83,8 @@ describe('typed media surface', () => {
     const fake = createFakeRtc()
 
     const outcome = await run(function* () {
-      yield* install(JsonCodec)
-      yield* install(Rtc)
-      yield* rtcImpl.set(fake.impl)
+      yield* JsonCodec.use()
+      yield* RtcClient.use({ impl: fake.impl })
 
       const [signalA, signalB] = createSignalPair()
       const peerA = yield* Rtc.actions.connect(signalA)
@@ -113,7 +109,7 @@ describe('typed media surface', () => {
 
     expect(unwrap(outcome)).toEqual({
       removeFlags: [true, true],
-      replaceAfterRemove: 'rtc/track',
+      replaceAfterRemove: 'std:webrtc.track',
     })
   })
 
@@ -121,9 +117,8 @@ describe('typed media surface', () => {
     const fake = createFakeRtc({ media: false })
 
     const outcome = await run(function* () {
-      yield* install(JsonCodec)
-      yield* install(Rtc)
-      yield* rtcImpl.set(fake.impl)
+      yield* JsonCodec.use()
+      yield* RtcClient.use({ impl: fake.impl })
 
       const [signalA, signalB] = createSignalPair()
       const peerA = yield* Rtc.actions.connect(signalA)
@@ -134,16 +129,15 @@ describe('typed media surface', () => {
       return isFailure(result) ? String(result.error) : 'added'
     })
 
-    expect(unwrap(outcome)).toBe('rtc/unsupported')
+    expect(unwrap(outcome)).toBe('std:webrtc.unsupported')
   })
 
   it('a session redial re-adds live tracks — the remote re-announces them', async () => {
     const fake = createFakeRtc()
 
     const outcome = await run(function* () {
-      yield* install(JsonCodec)
-      yield* install(Rtc)
-      yield* rtcImpl.set(fake.impl)
+      yield* JsonCodec.use()
+      yield* RtcClient.use({ impl: fake.impl })
 
       const [signalA, signalB] = createSignalPair()
       const budget = { retries: 4, delayMs: 10 }

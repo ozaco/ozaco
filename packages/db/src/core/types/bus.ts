@@ -8,7 +8,7 @@ import type { Change } from './change'
 /**
  * The `DbBus` plugin surface — the multi-node layer on top of the node's local
  * {@link Change.Bus}. One plugin, any network: it ships envelopes through an `@ozaco/transport`
- * plugin (`install(DbBus, { transport: NatsTransport })`) and emits what the peers ship back.
+ * plugin (`DbBus.use({ transport: NatsTransport })`) and emits what the peers ship back.
  */
 export namespace Bus {
   export interface Options {
@@ -22,7 +22,7 @@ export namespace Bus {
     readonly topic?: string | undefined
   }
 
-  /** What `install(DbBus)` resolves: the carrier's identity + the emitter foreign envelopes
+  /** What `DbBus.use()` resolves: the carrier's identity + the emitter foreign envelopes
    * arrive on (`events.emit('change', envelope)` for every message from a peer). */
 
   export interface Context {

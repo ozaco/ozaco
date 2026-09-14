@@ -1,7 +1,6 @@
 import { run } from 'std:effect'
-import { install } from 'std:plugin'
 import { unwrap } from 'std:result'
-import { Rtc } from 'std:webrtc'
+import { Rtc, RtcClient } from 'std:webrtc'
 
 import { afterAll, describe, expect, it } from 'bun:test'
 
@@ -9,7 +8,7 @@ import { JsonCodec } from 'std:codec/impl/json'
 
 import { createSignalPair } from './fake'
 
-// The REAL leg: no `rtcImpl` override, so `connect` exercises the Bun/Node auto-import of the
+// The REAL leg: no `impl` option, so `connect` exercises the Bun/Node auto-import of the
 // optional `node-datachannel` polyfill (installed as a dev dependency in this repo). Skips
 // cleanly when the native module is unavailable. The specifiers stay variables so tsc never
 // resolves the package's own (DOM-lib-conflicting) type declarations.
@@ -28,8 +27,8 @@ afterAll(async () => {
 describe.skipIf(!polyfill)('webrtc over node-datachannel (auto-import)', () => {
   it('connects two real loopback peers and exchanges frames', async () => {
     const outcome = await run(function* () {
-      yield* install(JsonCodec)
-      yield* install(Rtc)
+      yield* JsonCodec.use()
+      yield* RtcClient.use()
 
       const [signalA, signalB] = createSignalPair()
       const peerA = yield* Rtc.actions.connect(signalA)

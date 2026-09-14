@@ -1,7 +1,6 @@
 import type { Operation } from 'std:effect'
 import {
   attempt,
-  box,
   call,
   callcc,
   createScope,
@@ -159,12 +158,12 @@ describe('mapError / operation() normalization', () => {
     expect(unwrap(outcome) as string[]).toContain('codec:encode')
   })
 
-  it('box captures both directions without touching the enclosing task', async () => {
+  it('attempt captures both directions without touching the enclosing task', async () => {
     const outcome = await run(function* () {
-      const good = yield* box(function* () {
+      const good = yield* attempt(function* () {
         return 'fine'
       })
-      const bad = yield* box(function* () {
+      const bad = yield* attempt(function* () {
         throw new Error('boxed boom')
       })
 

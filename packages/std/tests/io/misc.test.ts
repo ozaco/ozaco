@@ -1,7 +1,6 @@
 import { attempt, run, sleep, spawn, withResolvers } from 'std:effect'
 import type { WatchEvent } from 'std:io'
 import { IO } from 'std:io'
-import { install } from 'std:plugin'
 import { isFailure, unwrap } from 'std:result'
 
 import { describe, expect, it } from 'bun:test'
@@ -21,7 +20,7 @@ const toHex = (bytes: Uint8Array): string =>
 describe('env', () => {
   it('maps present variables, tolerates declared-optional ones, fails on missing required', async () => {
     const outcome = await run(function* () {
-      yield* install(BunIO)
+      yield* BunIO.use()
 
       const parsed = yield* IO.actions.env(
         data => ({ path: data.PATH, extra: data.OZACO_IO_TEST_NOT_SET }),
@@ -42,7 +41,7 @@ describe('env', () => {
     expect(unwrap(outcome)).toEqual({
       hasPath: true,
       extra: undefined,
-      missingError: 'missing-env',
+      missingError: 'std:io.missing-env',
     })
   })
 })
@@ -50,7 +49,7 @@ describe('env', () => {
 describe('ids and randomness', () => {
   it('randomBytes/uuid/ulid produce well-formed, distinct values', async () => {
     const outcome = await run(function* () {
-      yield* install(BunIO)
+      yield* BunIO.use()
 
       const bytes = yield* IO.actions.randomBytes(32)
       const uuidA = yield* IO.actions.uuid()
@@ -87,7 +86,7 @@ describe('ids and randomness', () => {
 describe('hashing', () => {
   it('hash and hmac match known SHA-256 vectors', async () => {
     const outcome = await run(function* () {
-      yield* install(BunIO)
+      yield* BunIO.use()
 
       const digest = yield* IO.actions.hash('SHA-256', encoder.encode('abc'))
       const mac = yield* IO.actions.hmac(
@@ -109,7 +108,7 @@ describe('hashing', () => {
 describe('secretbox (encrypt/decrypt)', () => {
   it('round-trips bytes and string input under the same secret', async () => {
     const outcome = await run(function* () {
-      yield* install(BunIO)
+      yield* BunIO.use()
 
       const sealed = yield* IO.actions.encrypt('very secret data', 'passphrase-123')
       const opened = yield* IO.actions.decrypt(sealed, 'passphrase-123')
@@ -125,7 +124,7 @@ describe('secretbox (encrypt/decrypt)', () => {
 
   it('a wrong secret or tampered ciphertext fails with decrypt-failed', async () => {
     const outcome = await run(function* () {
-      yield* install(BunIO)
+      yield* BunIO.use()
 
       const sealed = yield* IO.actions.encrypt('secret', 'right-passphrase')
 
@@ -142,8 +141,8 @@ describe('secretbox (encrypt/decrypt)', () => {
     })
 
     expect(unwrap(outcome)).toEqual({
-      wrongSecret: 'decrypt-failed',
-      corrupted: 'decrypt-failed',
+      wrongSecret: 'std:io.decrypt-failed',
+      corrupted: 'std:io.decrypt-failed',
     })
   })
 })
@@ -151,7 +150,7 @@ describe('secretbox (encrypt/decrypt)', () => {
 describe('signatures', () => {
   it('sign/verify round-trips; altered data fails; a malformed key is a tagged Failure', async () => {
     const outcome = await run(function* () {
-      yield* install(BunIO)
+      yield* BunIO.use()
 
       const pair = yield* IO.actions.generateKeyPair()
       const signature = yield* IO.actions.sign('signed message', pair.privateKey)
@@ -181,7 +180,7 @@ describe('signatures', () => {
 describe('system', () => {
   it('ip lists interfaces and tmpdir mirrors the OS temp directory', async () => {
     const outcome = await run(function* () {
-      yield* install(BunIO)
+      yield* BunIO.use()
 
       const interfaces = yield* IO.actions.ip()
 
@@ -214,7 +213,7 @@ describe('watch', () => {
 
     try {
       const outcome = await run(function* () {
-        yield* install(BunIO)
+        yield* BunIO.use()
 
         const events = yield* IO.actions.watch(dir)
         const got = withResolvers<WatchEvent>()
@@ -254,7 +253,7 @@ describe('watch', () => {
 describe('web impl', () => {
   it('unsupported actions fail cleanly as Results while crypto keeps working', async () => {
     const outcome = await run(function* () {
-      yield* install(WebIO)
+      yield* WebIO.use()
 
       const read = yield* attempt(() => IO.actions.read('/nowhere.txt'))
       const exec = yield* attempt(() => IO.actions.exec('echo'))
@@ -268,8 +267,8 @@ describe('web impl', () => {
     })
 
     expect(unwrap(outcome)).toEqual({
-      readError: 'io-unsupported',
-      execError: 'io-unsupported',
+      readError: 'std:io.unsupported',
+      execError: 'std:io.unsupported',
       bytesLength: 8,
     })
   })
@@ -282,17 +281,17 @@ describe('protocol wiring', () => {
       return isFailure(result) ? result.error : 'no-failure'
     })
 
-    expect(unwrap(outcome)).toBe('missing-action')
+    expect(unwrap(outcome)).toBe('std:plugin.missing-action')
   })
 
   it('the io protocol is single-impl: a second impl refuses to install', async () => {
     const outcome = await run(function* () {
-      yield* install(BunIO)
-      const second = yield* attempt(() => install(WebIO))
+      yield* BunIO.use()
+      const second = yield* attempt(() => WebIO.use())
 
       return isFailure(second) ? second.error : 'no-failure'
     })
 
-    expect(unwrap(outcome)).toBe('protocol-not-cloneable')
+    expect(unwrap(outcome)).toBe('std:plugin.protocol-not-cloneable')
   })
 })

@@ -18,7 +18,6 @@ Ozaco repo itself uses.
 ```
 
 ```ts
-import { install } from 'std:plugin'
 import { column, DbClient, table } from 'db:core'
 import { MemoryAdapter } from 'db:impl/memory'
 import { action, service } from 'server:core'
@@ -86,7 +85,6 @@ shipped declarations name only `@ozaco/*`, so no alias resolution — and no bun
 involved.
 
 ```ts
-import { install } from '@ozaco/std/plugin'
 import { column, DbClient, table } from '@ozaco/db'
 import { MemoryAdapter } from '@ozaco/db/impl/memory'
 import { action, service } from '@ozaco/server'

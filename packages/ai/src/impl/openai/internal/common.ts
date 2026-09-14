@@ -3,7 +3,7 @@ import { AiErrors, RETRY_AFTER_CAUSE } from 'ai:core'
 import type { Context, Operation } from 'std:effect'
 import { attempt, createContext } from 'std:effect'
 import type { FetchDef } from 'std:fetch'
-import { Fetch } from 'std:fetch'
+import { Fetch, FetchErrors } from 'std:fetch'
 import { fail, isFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
 
@@ -137,7 +137,7 @@ export function* send(
 ): Operation<FetchDef.Response> {
   const outcome = yield* attempt(Fetch.actions.post(`${state.base}/${path}`, init))
   if (isFailure(outcome)) {
-    if (outcome.error === 'timeout') {
+    if (outcome.error === FetchErrors.Timeout) {
       return yield* fail(AiErrors.Timeout, outcome.message)
     }
     return yield* fail(

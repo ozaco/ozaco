@@ -12,7 +12,6 @@ import {
   until,
   useContext,
 } from 'std:effect'
-import { install } from 'std:plugin'
 import { fail, isFailure, unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
 
@@ -30,7 +29,7 @@ export interface TransportTarget {
   /** Install a transport into the current scope under an application prefix (default
    * `'suite'`). Every call must join the SAME broker (so two scopes can talk) — a shared memory
    * link, one NATS server, one Redis. */
-  readonly install: (prefix?: string) => Operation<unknown>
+  readonly use: (prefix?: string) => Operation<unknown>
   readonly expect: {
     readonly receipts: boolean
     readonly requestReply: boolean
@@ -78,7 +77,7 @@ const checksum = async (data: Uint8Array): Promise<string> => {
 
 /** Transports mint ids through the installed IO: the suite provides one per scope. */
 function* installIo(): Operation<void> {
-  yield* install(BunIO)
+  yield* BunIO.use()
 }
 
 export const runTransportSuite = (target: TransportTarget): void => {
@@ -87,7 +86,7 @@ export const runTransportSuite = (target: TransportTarget): void => {
       unwrap(
         await run(function* () {
           yield* installIo()
-          yield* target.install()
+          yield* target.use()
           const info = yield* useContext(Transport)
           expect(info.transport).toBe(target.label)
           expect(info.capabilities.receipts).toBe(target.expect.receipts)
@@ -107,7 +106,7 @@ export const runTransportSuite = (target: TransportTarget): void => {
           const other = yield* fork(() =>
             scoped(function* () {
               yield* installIo()
-              yield* target.install('other')
+              yield* target.use('other')
               const sub = yield* Transport.actions.subscribe<string>(topic)
               ready.add(undefined)
               const step = yield* sub.next()
@@ -116,7 +115,7 @@ export const runTransportSuite = (target: TransportTarget): void => {
           )
           yield* ready.next()
           yield* installIo()
-          yield* target.install()
+          yield* target.use()
           const mine = yield* Transport.actions.subscribe<string>(topic)
           yield* sleep(50)
           yield* Transport.actions.publish(topic, 'for suite only')
@@ -126,7 +125,7 @@ export const runTransportSuite = (target: TransportTarget): void => {
           // the other application sees nothing of it — only its own traffic
           yield* scoped(function* () {
             yield* installIo()
-            yield* target.install('other')
+            yield* target.use('other')
             yield* Transport.actions.publish(topic, 'for other only')
           })
           expect(yield* other).toBe('for other only')
@@ -138,7 +137,7 @@ export const runTransportSuite = (target: TransportTarget): void => {
       unwrap(
         await run(function* () {
           yield* installIo()
-          yield* target.install()
+          yield* target.use()
           const root = unique('data')
           const exact = yield* Transport.actions.subscribe<{ n: number }>(`${root}.a.b`)
           const star = yield* Transport.actions.subscribe(`${root}.*.b`)
@@ -174,7 +173,7 @@ export const runTransportSuite = (target: TransportTarget): void => {
       unwrap(
         await run(function* () {
           yield* installIo()
-          yield* target.install()
+          yield* target.use()
           const topic = unique('transient')
           const live = yield* Transport.actions.subscribe<{ beat: number }>(`${topic}.>`, {
             transient: true,
@@ -199,7 +198,7 @@ export const runTransportSuite = (target: TransportTarget): void => {
         unwrap(
           await run(function* () {
             yield* installIo()
-            yield* target.install()
+            yield* target.use()
             const topic = unique('group')
             const received: number[][] = [[], []]
             const a = yield* Transport.actions.subscribe<number>(topic, { group: 'workers' })
@@ -233,7 +232,7 @@ export const runTransportSuite = (target: TransportTarget): void => {
       unwrap(
         await run(function* () {
           yield* installIo()
-          yield* target.install()
+          yield* target.use()
           const topic = unique('event')
           const seen: string[] = []
           const { emitter, stop } = yield* Transport.actions.events<string>(topic)
@@ -256,7 +255,7 @@ export const runTransportSuite = (target: TransportTarget): void => {
       unwrap(
         await run(function* () {
           yield* installIo()
-          yield* target.install()
+          yield* target.use()
           const topic = unique('rpc')
           yield* Transport.actions.serve<{ a: number; b: number }, number>(topic, function* (args) {
             if (args.b === 0) {
@@ -282,7 +281,7 @@ export const runTransportSuite = (target: TransportTarget): void => {
         unwrap(
           await run(function* () {
             yield* installIo()
-            yield* target.install()
+            yield* target.use()
             const limit = (yield* useContext(Transport)).capabilities.maxPayloadBytes
             if (limit === null) {
               // nothing to sideband: this backend carries a message of any size
@@ -336,7 +335,7 @@ export const runTransportSuite = (target: TransportTarget): void => {
       unwrap(
         await run(function* () {
           yield* installIo()
-          yield* target.install()
+          yield* target.use()
           const slow = unique('slow')
           yield* Transport.actions.serve(slow, function* () {
             yield* sleep(500)
@@ -363,7 +362,7 @@ export const runTransportSuite = (target: TransportTarget): void => {
       unwrap(
         await run(function* () {
           yield* installIo()
-          yield* target.install()
+          yield* target.use()
           const limit = (yield* useContext(Transport)).capabilities.maxPayloadBytes
           if (limit === null) {
             return
@@ -392,7 +391,7 @@ export const runTransportSuite = (target: TransportTarget): void => {
       unwrap(
         await run(function* () {
           yield* installIo()
-          yield* target.install()
+          yield* target.use()
           const topic = unique('cancel')
           const seen: string[] = []
           yield* Transport.actions.serve<number, string>(topic, function* (ms) {
@@ -429,7 +428,7 @@ export const runTransportSuite = (target: TransportTarget): void => {
       unwrap(
         await run(function* () {
           yield* installIo()
-          yield* target.install()
+          yield* target.use()
           const topic = unique('balance')
           const hits = { a: 0, b: 0 }
           yield* Transport.actions.serve(
@@ -464,7 +463,7 @@ export const runTransportSuite = (target: TransportTarget): void => {
       unwrap(
         await run(function* () {
           yield* installIo()
-          yield* target.install()
+          yield* target.use()
           const topic = unique('flow')
           const items = Array.from({ length: 100 }, (_, i) => ({ i }))
           const consumer = yield* fork(function* () {
@@ -493,7 +492,7 @@ export const runTransportSuite = (target: TransportTarget): void => {
       unwrap(
         await run(function* () {
           yield* installIo()
-          yield* target.install()
+          yield* target.use()
           const topic = unique('flow-fail')
           const failing: Flow<number, void> = {
             *[Symbol.iterator]() {
@@ -539,7 +538,7 @@ export const runTransportSuite = (target: TransportTarget): void => {
       unwrap(
         await run(function* () {
           yield* installIo()
-          yield* target.install()
+          yield* target.use()
           const topic = unique('leave')
           const consumer = yield* fork(() =>
             scoped(function* () {
@@ -565,7 +564,7 @@ export const runTransportSuite = (target: TransportTarget): void => {
       unwrap(
         await run(function* () {
           yield* installIo()
-          yield* target.install()
+          yield* target.use()
           const topic = unique('halt')
           const slow: Flow<number, string> = {
             *[Symbol.iterator]() {
@@ -607,7 +606,7 @@ export const runTransportSuite = (target: TransportTarget): void => {
       unwrap(
         await run(function* () {
           yield* installIo()
-          yield* target.install()
+          yield* target.use()
           const topic = unique('credit')
           let sent = 0
           const counted: Flow<number, void> = {
@@ -658,7 +657,7 @@ export const runTransportSuite = (target: TransportTarget): void => {
       const received = unwrap(
         await run(function* () {
           yield* installIo()
-          yield* target.install()
+          yield* target.use()
           const topic = unique('stream')
           const reader = yield* fork(function* () {
             const readable = yield* Transport.actions.readable(topic, { credit: 8 })
@@ -692,7 +691,7 @@ export const runTransportSuite = (target: TransportTarget): void => {
       const seen = unwrap(
         await run(function* () {
           yield* installIo()
-          yield* target.install()
+          yield* target.use()
           const topic = unique('huge')
 
           const reader = yield* fork(function* () {
@@ -756,7 +755,7 @@ export const runTransportSuite = (target: TransportTarget): void => {
         unwrap(
           await run(function* () {
             yield* installIo()
-            yield* target.install()
+            yield* target.use()
             const billing = yield* Transport.actions.subscribe<number>(topic, {
               group: 'workers',
               prefix: 'billing',
@@ -779,7 +778,7 @@ export const runTransportSuite = (target: TransportTarget): void => {
       unwrap(
         await run(function* () {
           yield* installIo()
-          yield* target.install()
+          yield* target.use()
           const topic = unique('mw')
           const seen: string[] = []
           yield* Transport.around({
@@ -807,7 +806,7 @@ export const runTransportSuite = (target: TransportTarget): void => {
         unwrap(
           await run(function* () {
             yield* installIo()
-            yield* target.install()
+            yield* target.use()
             // the consumer is born now: what came before it is not its business
             yield* Transport.actions.publish(topic, 'before')
             yield* scoped(function* () {
@@ -878,7 +877,7 @@ export const runTransportSuite = (target: TransportTarget): void => {
             const consumer = yield* fork(() =>
               scoped(function* () {
                 yield* installIo()
-                yield* target.install()
+                yield* target.use()
                 const sub = yield* Transport.actions.subscribe<string>(topic, { durable })
                 ready.add(undefined)
                 const step = yield* sub.next()
@@ -889,7 +888,7 @@ export const runTransportSuite = (target: TransportTarget): void => {
             yield* ready.next()
             yield* scoped(function* () {
               yield* installIo()
-              yield* target.install()
+              yield* target.use()
               // no grace period: the consumer exists, so the broker must keep this
               yield* Transport.actions.publish(topic, 'immediately')
             })
@@ -907,7 +906,7 @@ export const runTransportSuite = (target: TransportTarget): void => {
         unwrap(
           await run(function* () {
             yield* installIo()
-            yield* target.install()
+            yield* target.use()
             const left = yield* Transport.actions.subscribe<number>(topic, { durable })
             const right = yield* Transport.actions.subscribe<number>(topic, { durable })
             const audit = yield* Transport.actions.subscribe<number>(topic, {
@@ -952,7 +951,7 @@ export const runTransportSuite = (target: TransportTarget): void => {
       unwrap(
         await run(function* () {
           yield* installIo()
-          yield* target.install()
+          yield* target.use()
           const info = yield* useContext(Transport)
           const limit = info.capabilities.maxPayloadBytes
           if (limit === null) {
@@ -981,7 +980,7 @@ export const runTransportSuite = (target: TransportTarget): void => {
       unwrap(
         await run(function* () {
           yield* installIo()
-          yield* target.install()
+          yield* target.use()
           const status = yield* Transport.actions.status()
           expect(((yield* status.next()) as AnyType).value).toBe('connected')
           yield* Transport.actions.drain()
@@ -999,7 +998,7 @@ export const runTransportSuite = (target: TransportTarget): void => {
           const listener = yield* fork(() =>
             scoped(function* () {
               yield* installIo()
-              yield* target.install()
+              yield* target.use()
               const sub = yield* Transport.actions.subscribe<string>(topic)
               ready.add(undefined)
               const step = yield* sub.next()
@@ -1009,7 +1008,7 @@ export const runTransportSuite = (target: TransportTarget): void => {
           yield* ready.next()
           yield* scoped(function* () {
             yield* installIo()
-            yield* target.install()
+            yield* target.use()
             // pub/sub keeps nothing for late subscribers: give the other scope a moment
             yield* sleep(50)
             yield* Transport.actions.publish(topic, 'hello across')

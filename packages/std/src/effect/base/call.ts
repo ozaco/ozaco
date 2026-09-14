@@ -4,7 +4,7 @@ import { isPromise } from 'std:shared'
 
 import type { Helpers } from '../types/helpers'
 import type { Operation } from '../types/operation'
-import { isCallTarget } from '../utils/is'
+import { isCallTarget, isNativeIterable } from '../utils/is'
 
 import { action } from './action'
 import { constant } from './constant'
@@ -38,12 +38,7 @@ export function call<T, TArgs extends unknown[] = []>(
   return {
     [Symbol.iterator]() {
       const target = callable(...args)
-      if (
-        typeof target === 'string' ||
-        Array.isArray(target) ||
-        target instanceof Map ||
-        target instanceof Set
-      ) {
+      if (isNativeIterable(target)) {
         return constant(target as T)[Symbol.iterator]()
       } else if (isCallTarget<T>(target)) {
         // iterable thenables (Task/Future) must take their OPERATION side: the std promise side

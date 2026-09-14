@@ -1,7 +1,6 @@
 import { fork, run, sleep, spawn } from 'std:effect'
-import { install } from 'std:plugin'
 import { isFailure, unwrap } from 'std:result'
-import { Rtc, rtcImpl } from 'std:webrtc'
+import { Rtc, RtcClient } from 'std:webrtc'
 
 import { describe, expect, it } from 'bun:test'
 
@@ -15,9 +14,8 @@ describe('session reconnect (redial)', () => {
     const fake = createFakeRtc()
 
     const outcome = await run(function* () {
-      yield* install(JsonCodec)
-      yield* install(Rtc)
-      yield* rtcImpl.set(fake.impl)
+      yield* JsonCodec.use()
+      yield* RtcClient.use({ impl: fake.impl })
 
       const [signalA, signalB] = createSignalPair()
       const budget = { retries: 4, delayMs: 10 }
@@ -93,9 +91,8 @@ describe('session reconnect (redial)', () => {
     const fake = createFakeRtc()
 
     const outcome = await run(function* () {
-      yield* install(JsonCodec)
-      yield* install(Rtc)
-      yield* rtcImpl.set(fake.impl)
+      yield* JsonCodec.use()
+      yield* RtcClient.use({ impl: fake.impl })
 
       const [signalA, signalB] = createSignalPair()
       const peerA = yield* Rtc.actions.connect(signalA, {
@@ -121,7 +118,7 @@ describe('session reconnect (redial)', () => {
 
     expect(unwrap(outcome)).toEqual({
       reason: 'reconnect-exhausted',
-      flowClose: 'rtc/reconnect-exhausted',
+      flowClose: 'std:webrtc.reconnect-exhausted',
     })
   })
 
@@ -129,9 +126,8 @@ describe('session reconnect (redial)', () => {
     const fake = createFakeRtc()
 
     const outcome = await run(function* () {
-      yield* install(JsonCodec)
-      yield* install(Rtc)
-      yield* rtcImpl.set(fake.impl)
+      yield* JsonCodec.use()
+      yield* RtcClient.use({ impl: fake.impl })
 
       const [signalA, signalB] = createSignalPair()
       const budget = { retries: 5, delayMs: 5 }

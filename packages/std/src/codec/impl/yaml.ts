@@ -7,7 +7,7 @@ import type { AnyType } from 'std:shared'
 import { dump, load } from 'js-yaml'
 
 import pkg from '../../../package.json'
-import { Codec } from '../definitions'
+import { Codec } from '../definition'
 import { CodecErrors } from '../errors'
 import type { CodecDef } from '../types'
 
@@ -27,11 +27,12 @@ const decodeOptions = {
 const getSelf = (): CodecDef => YamlCodec
 
 /**
- * A YAML codec for the `std:codec` registry, backed by `js-yaml` (an optional peer dependency —
- * install `js-yaml` alongside `@ozaco/std` to use it). `encode` / `decode` return a `Result`, so this
- * stays effect-native — the codec just `yield*`s the failure, no try/catch. Default priority 500,
- * below `JsonCodec` (999): installing both keeps JSON as the default; register with a higher
- * `{ priority }` to prefer YAML, or install it alone.
+ * A YAML codec for the `std:codec` registry, backed by `js-yaml` (an optional dependency — install
+ * `js-yaml` alongside `@ozaco/std` to use it). `js-yaml` throws on bad input, so every action wraps
+ * its call in try/catch and re-raises the thrown error as a `CodecErrors.*` failure (`Encode` /
+ * `Decode` / `Stringify` / `Parse`). Default priority 500, below `JsonCodec` (999): installing both
+ * keeps JSON as the default; register with a higher `{ priority }` to prefer YAML, or install it
+ * alone.
  */
 export const YamlCodec = Codec.implement({
   name: 'std/yaml-codec',

@@ -1,7 +1,6 @@
 import { run, sleep } from 'std:effect'
-import { install } from 'std:plugin'
 import { isFailure, unwrap } from 'std:result'
-import { Ws } from 'std:ws'
+import { Ws, WsClient } from 'std:ws'
 
 import { describe, expect, it } from 'bun:test'
 
@@ -12,7 +11,7 @@ import { wsServer } from './helpers'
 // Reconnect is BUILT IN: with `reconnect` configured, a server-initiated drop is redialed in the
 // background and every socket generation feeds the same continuous `messages` flow. These tests
 // pin that: flow continuity across generations, the `reconnects` counter, sends parking through a
-// reconnect window, and the 'ws/reconnect-exhausted' failure close when the budget runs out.
+// reconnect window, and the 'std:ws.reconnect-exhausted' failure close when the budget runs out.
 
 const OPEN = 1
 
@@ -74,8 +73,8 @@ describe('automatic reconnect', () => {
     const server = dropFirstServer()
     try {
       const outcome = await run(function* () {
-        yield* install(JsonCodec)
-        yield* install(Ws)
+        yield* JsonCodec.use()
+        yield* WsClient.use()
 
         const connection = yield* Ws.actions.connect(`ws://localhost:${server.port}`, {
           reconnect: { retries: 5, delayMs: 10 },
@@ -114,8 +113,8 @@ describe('automatic reconnect', () => {
     const server = dropOnCommandServer()
     try {
       const outcome = await run(function* () {
-        yield* install(JsonCodec)
-        yield* install(Ws)
+        yield* JsonCodec.use()
+        yield* WsClient.use()
 
         const connection = yield* Ws.actions.connect(`ws://localhost:${server.port}`, {
           reconnect: { retries: 5, delayMs: 25 },
@@ -147,9 +146,9 @@ describe('automatic reconnect', () => {
     const server = dropThenRefuseServer(4008, 'go-away')
     try {
       const outcome = await run(function* () {
-        yield* install(JsonCodec)
+        yield* JsonCodec.use()
         // install-time defaults: connect() below passes no options at all
-        yield* install(Ws, { reconnect: { retries: 3, delayMs: 10, backoff: 2 } })
+        yield* WsClient.use({ reconnect: { retries: 3, delayMs: 10, backoff: 2 } })
 
         const connection = yield* Ws.actions.connect(`ws://localhost:${server.port}`)
         const subscription = yield* connection.messages
@@ -170,7 +169,7 @@ describe('automatic reconnect', () => {
       })
 
       expect(unwrap(outcome)).toEqual({
-        tag: 'ws/reconnect-exhausted',
+        tag: 'std:ws.reconnect-exhausted',
         message: 'gave up after 3 redial attempts (last close: 4008 go-away)',
         info: { code: 4008, reason: 'go-away' },
         reconnects: 0,

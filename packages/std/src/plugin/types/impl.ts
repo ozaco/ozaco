@@ -20,13 +20,13 @@ export namespace Impl {
     TActions extends EmptyType = EmptyType,
     THandlers extends EmptyType = EmptyType,
   >(options: {
-    subtype?: symbol
+    subtype?: symbol | undefined
     /** Allow several implementations to be installed side by side (each with its own context). */
-    cloneable?: boolean
+    cloneable?: boolean | undefined
 
     name: string
     version: string
-    description?: string
+    description?: string | undefined
 
     /** Protocol-level actions: not tied to an installed impl, always run exactly once. */
     handlers?: THandlers

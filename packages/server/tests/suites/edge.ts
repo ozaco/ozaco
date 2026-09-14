@@ -21,7 +21,7 @@ export interface EdgeTarget {
   /** whether the runtime can really listen (sockets/streams go over a port). */
   readonly listens: boolean
   /** runs before `createServer` (inject fakes into the scope). */
-  readonly install?: (() => Operation<void>) | undefined
+  readonly use?: (() => Operation<void>) | undefined
 }
 
 /** Extra actions the suite needs beyond the shared `todos` service. */
@@ -100,8 +100,8 @@ const media = service('media', {
 
 const boot = function* (target: EdgeTarget): Operation<ServerDef.Handle<AnyType>> {
   yield* storage()
-  if (target.install) {
-    yield* target.install()
+  if (target.use) {
+    yield* target.use()
   }
   return yield* createServer({
     services: [todos, media],

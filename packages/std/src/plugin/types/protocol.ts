@@ -1,15 +1,15 @@
 import type { Context, Operation } from 'std:effect'
 import type { AnyType, EmptyType } from 'std:shared'
 
-import type { PROTOCOL } from '../const'
+import type { PROTOCOL } from '../internal/const'
 
 import type { Hooks } from './hooks'
 import type { Plugin } from './plugin'
 
 /**
  * A protocol is a contract whose members live under `.actions`, mirroring the api layer:
- * `Db.actions.find(id)`. The control surface (`name`, `version`, `tag`, `context`, `implement`,
- * `around`, `before`, `after`, `error`) sits on the handle itself.
+ * `Db.actions.find(id)`. The control surface (`name`, `version`, `tag`, `description`, `context`,
+ * `implement`, `around`, `before`, `after`, `error`) sits on the handle itself.
  */
 export type Protocol<
   TContext = unknown,
@@ -45,7 +45,7 @@ export namespace Protocol {
     implement<TIContext extends TContext, TIArgs extends unknown[] = []>(options: {
       name: string
       version: string
-      description?: string
+      description?: string | undefined
       setup(...args: TIArgs): Operation<TIContext>
     }): Implementation<TIContext, TIArgs, TActions>
   }

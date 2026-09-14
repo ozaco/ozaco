@@ -4,11 +4,12 @@ import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 import { flatten } from 'std:shared'
 
-import { PLUGIN, USE } from '../const'
+import { PluginErrors } from '../errors'
 import type { Impl } from '../types/impl'
 import type { Plugin } from '../types/plugin'
 import type { Protocol } from '../types/protocol'
 
+import { PLUGIN, USE } from './const'
 import { createHookInstallers } from './hooks'
 import { createActionProxy } from './proxy'
 
@@ -70,7 +71,7 @@ export const createProtocolRuntime = (options: Impl.RuntimeOptions) => {
 
         if (self === undefined) {
           return yield* fail(
-            'missing-action',
+            PluginErrors.MissingAction,
             `no handler for "${key}" in "${options.name}", maybe forgot to install a "${options.name}" plugin?`,
           )
         }
@@ -166,7 +167,7 @@ export const buildPlugin = (
         const other = installs.find(entry => entry.tag !== pluginTag)
         if (other) {
           return yield* fail(
-            'protocol-not-cloneable',
+            PluginErrors.ProtocolNotCloneable,
             `protocol "${runtime.tag}" is not cloneable; "${other.tag}" already installed, refusing to install "${pluginTag}"`,
           )
         }

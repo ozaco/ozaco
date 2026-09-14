@@ -3,7 +3,7 @@ import { isFailure, succeed, unwrap } from 'std:result'
 
 import type { Operation, Task } from '../types/operation'
 
-import { box } from './box'
+import { attempt } from './attempt'
 import { createContext } from './context'
 import { critical } from './coroutine'
 
@@ -18,7 +18,7 @@ export class TaskGroup {
       set.clear()
       for (let i = tasks.length - 1; i >= 0; i--) {
         const task = tasks[i]!
-        const result = yield* box(task.halt)
+        const result = yield* attempt(task.halt)
         if (isFailure(result)) {
           total = result
         }

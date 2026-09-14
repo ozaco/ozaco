@@ -1,6 +1,5 @@
 import type { Flow } from 'std:effect'
 import { debounce, each, run, scoped, suspend } from 'std:effect'
-import { install } from 'std:plugin'
 import { unwrap } from 'std:result'
 
 import { describe, expect, it } from 'bun:test'
@@ -69,7 +68,7 @@ describe('codec flow pumps (forked)', () => {
 
     const outcome = await run(() =>
       scoped(function* () {
-        yield* install(JsonCodec)
+        yield* JsonCodec.use()
         yield* JsonCodec.actions.decodeFlow(source)
         // the scope closes right after this line with no further suspension — a lazily spawned
         // pump would never run: the source would stay unsubscribed and the channel close unarmed

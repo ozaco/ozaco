@@ -1,6 +1,7 @@
 import { isFailure } from 'std:result'
 
 import { createFuture } from '../base/future'
+import { EffectErrors } from '../errors'
 import type { Helpers } from '../types/helpers'
 import type { Flow, FutureFlow, Scope, Task } from '../types/operation'
 
@@ -151,7 +152,7 @@ export const createFutureFlow = <T>(scope: Scope, flow: Flow<T, void>): FutureFl
     void task.then(outcome => {
       jobs.delete(task)
 
-      if (isFailure(outcome) && outcome.error !== 'halted') {
+      if (isFailure(outcome) && outcome.error !== EffectErrors.Halted) {
         bridge.reject(outcome)
       }
 

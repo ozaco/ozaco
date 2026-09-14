@@ -9,15 +9,15 @@ import { perform } from './perform'
 
 // private effects for efficiency
 const getContext = <T>(context: Context<T>) =>
-  useScope(scope => scope.get(context), `get(${context.name})`)
+  $useScope(scope => scope.get(context), `get(${context.name})`)
 const setContext = <T>(context: Context<T>, value: T) =>
-  useScope(scope => scope.set(context, value), `set(${context.name}, ${value})`)
+  $useScope(scope => scope.set(context, value), `set(${context.name}, ${value})`)
 const expectContext = <T>(context: Context<T>) =>
-  useScope(scope => scope.expect(context), `expect(${context.name})`)
+  $useScope(scope => scope.expect(context), `expect(${context.name})`)
 const deleteContext = <T>(context: Context<T>) =>
-  useScope(scope => scope.delete(context), `delete(${context.name})`)
+  $useScope(scope => scope.delete(context), `delete(${context.name})`)
 
-function useScope<T>(fn: (scope: Scope) => T, cause: string): Helpers.Effect<T> {
+function $useScope<T>(fn: (scope: Scope) => T, cause: string): Helpers.Effect<T> {
   return {
     cause,
     enter: (resolve, { scope }) => {
@@ -39,7 +39,7 @@ export function createContext<T>(name: string, defaultValue?: T): Context<T> {
     expect: () => perform(expectContext(context)),
     delete: () => perform(deleteContext(context)),
     *with<R>(value: T, operation: (value: T) => Operation<R>): Operation<R> {
-      const scope = yield* perform(useScope(s => s, 'useScope()'))
+      const scope = yield* perform($useScope(s => s, '$useScope()'))
       const original = scope.hasOwn(context) ? scope.get(context) : undefined
       try {
         return yield* operation(scope.set(context, value))

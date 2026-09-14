@@ -1,9 +1,9 @@
 import { appendCauses, isFailure } from 'std:result'
 
+import { attempt } from '../base/attempt'
 import type { Operation } from '../types/operation'
 import type { Utils } from '../types/utils'
 
-import { attempt } from './attempt'
 import { sleep } from './sleep'
 
 /**

@@ -2,7 +2,6 @@ import type { Adapter } from 'db:core'
 import { DbAdapter, DbClient, DbErrors, useDb } from 'db:core'
 import { adapterDefaults } from 'db:internal'
 import { attempt, run } from 'std:effect'
-import { install } from 'std:plugin'
 import { fail, isFailure, unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
 
@@ -14,9 +13,9 @@ import { BunIO } from 'std:io/impl/bun'
 import { schema, users } from './helpers'
 
 const bootstrap = function* () {
-  yield* install(MemoryAdapter)
-  yield* install(BunIO)
-  yield* install(DbClient, { schema })
+  yield* MemoryAdapter.use()
+  yield* BunIO.use()
+  yield* DbClient.use({ schema })
   return yield* useDb(schema)
 }
 
@@ -179,9 +178,9 @@ describe('transactions — capability gating and retry', () => {
 
     unwrap(
       await run(function* () {
-        yield* install(NoTxAdapter)
-        yield* install(BunIO)
-        const db = yield* install(DbClient, { tables: [users] })
+        yield* NoTxAdapter.use()
+        yield* BunIO.use()
+        const db = yield* DbClient.use({ tables: [users] })
         const outcome = yield* attempt(
           db.transaction(function* () {
             return 1
@@ -218,9 +217,9 @@ describe('transactions — capability gating and retry', () => {
 
     unwrap(
       await run(function* () {
-        yield* install(FlakyAdapter)
-        yield* install(BunIO)
-        const db = yield* install(DbClient, { tables: [users] })
+        yield* FlakyAdapter.use()
+        yield* BunIO.use()
+        const db = yield* DbClient.use({ tables: [users] })
         const value = yield* db.transaction(function* () {
           bodyRuns += 1
           return 'done'

@@ -3,7 +3,6 @@ import { Ai, AiClient, AiErrors } from 'ai:core'
 import type { Operation } from 'std:effect'
 import { attempt, run } from 'std:effect'
 import { FetchClient } from 'std:fetch'
-import { install } from 'std:plugin'
 import { isFailure, unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
 
@@ -265,9 +264,9 @@ const installOpenAI = (
 ): Operation<unknown> =>
   (function* () {
     prime(script)
-    yield* install(FetchClient)
-    yield* install(JsonCodec)
-    return yield* install(OpenAIProvider, { apiKey: 'test-key', baseUrl: base, ...options })
+    yield* FetchClient.use()
+    yield* JsonCodec.use()
+    return yield* OpenAIProvider.use({ apiKey: 'test-key', baseUrl: base, ...options })
   })()
 
 // ---------------------------------------------------------------------------
@@ -286,7 +285,7 @@ runProviderSuite({
     tts: true,
     stt: true,
   },
-  install: script => installOpenAI(script),
+  use: script => installOpenAI(script),
 })
 
 describe('openai provider — wire & transport', () => {
@@ -296,7 +295,7 @@ describe('openai provider — wire & transport', () => {
         yield* installOpenAI(undefined, {
           headers: { Authorization: 'user-clobber-attempt', 'x-extra': 'yes' },
         })
-        yield* install(AiClient, { models: { chat: 'm' } })
+        yield* AiClient.use({ models: { chat: 'm' } })
         yield* Ai.actions.chat('hi')
         const request = state.requests[0]!
         expect(request.auth).toBe('Bearer test-key')
@@ -309,7 +308,7 @@ describe('openai provider — wire & transport', () => {
     unwrap(
       await run(function* () {
         yield* installOpenAI(undefined, { auth: { kind: 'header', name: 'X-Api-Key' } })
-        yield* install(AiClient, { models: { chat: 'm' } })
+        yield* AiClient.use({ models: { chat: 'm' } })
         yield* Ai.actions.chat('hi')
         const request = state.requests[0]!
         expect(request.headers.get('x-api-key')).toBe('test-key')
@@ -322,7 +321,7 @@ describe('openai provider — wire & transport', () => {
     unwrap(
       await run(function* () {
         yield* installOpenAI()
-        yield* install(AiClient, { models: { chat: 'm' } })
+        yield* AiClient.use({ models: { chat: 'm' } })
         yield* Ai.actions.chat('x', {
           tools: [{ name: 'add', description: 'adds', schema: { type: 'object' } }],
           toolChoice: { name: 'add' },
@@ -355,7 +354,7 @@ describe('openai provider — wire & transport', () => {
     unwrap(
       await run(function* () {
         yield* installOpenAI({ chatStream: [{ chunks: [{ text: 'a' }] }] })
-        yield* install(AiClient, { models: { chat: 'm' } })
+        yield* AiClient.use({ models: { chat: 'm' } })
         const flow = yield* Ai.actions.chatStream('x')
         yield* drain(flow)
         const body = state.requests[0]!.body
@@ -369,7 +368,7 @@ describe('openai provider — wire & transport', () => {
     unwrap(
       await run(function* () {
         yield* installOpenAI()
-        yield* install(AiClient, { models: { chat: 'm' } })
+        yield* AiClient.use({ models: { chat: 'm' } })
         state.special = 'mid-stream-error'
         const flow = yield* Ai.actions.chatStream('x')
         const { values, close } = yield* drain(flow)
@@ -385,7 +384,7 @@ describe('openai provider — wire & transport', () => {
     unwrap(
       await run(function* () {
         yield* installOpenAI()
-        yield* install(AiClient, { models: { chat: 'm' } })
+        yield* AiClient.use({ models: { chat: 'm' } })
         state.special = 'garbage-chunk'
         const flow = yield* Ai.actions.chatStream('x')
         const { values, close } = yield* drain(flow)
@@ -400,7 +399,7 @@ describe('openai provider — wire & transport', () => {
     unwrap(
       await run(function* () {
         yield* installOpenAI()
-        yield* install(AiClient, { models: { chat: 'm' } })
+        yield* AiClient.use({ models: { chat: 'm' } })
         state.special = 'split-event'
         const flow = yield* Ai.actions.chatStream('x')
         const { values, close } = yield* drain(flow)
@@ -414,7 +413,7 @@ describe('openai provider — wire & transport', () => {
     unwrap(
       await run(function* () {
         yield* installOpenAI(undefined, { timeoutMs: 100 })
-        yield* install(AiClient, { models: { chat: 'm' } })
+        yield* AiClient.use({ models: { chat: 'm' } })
         state.special = 'stall'
         const outcome = yield* attempt(Ai.actions.chat('x'))
         state.special = undefined
@@ -427,7 +426,7 @@ describe('openai provider — wire & transport', () => {
     unwrap(
       await run(function* () {
         yield* installOpenAI({ stt: 'hello' })
-        yield* install(AiClient, { models: { stt: 'model-stt' } })
+        yield* AiClient.use({ models: { stt: 'model-stt' } })
         const text = yield* Ai.actions.stt(new Uint8Array([1, 2]), {
           language: 'tr',
           filename: 'clip.wav',

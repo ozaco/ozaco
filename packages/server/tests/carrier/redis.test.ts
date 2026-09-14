@@ -1,5 +1,3 @@
-import { install } from 'std:plugin'
-
 import { RedisTransport } from 'transport:impl/redis'
 
 import { runCarrierSuite } from '../suites/carrier'
@@ -10,5 +8,5 @@ const prefix = `app${crypto.randomUUID().slice(0, 6)}`
 runCarrierSuite({
   label: 'redis',
   enabled: Boolean(url),
-  transport: () => install(RedisTransport, { prefix, url: url! }),
+  transport: () => RedisTransport.use({ prefix, url: url! }),
 })

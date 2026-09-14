@@ -3,7 +3,6 @@ import { Db, DbBus, DbClient } from 'db:core'
 import type { Operation } from 'std:effect'
 import { run, sleep, useContext } from 'std:effect'
 import { IO } from 'std:io'
-import { install } from 'std:plugin'
 import { unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
 
@@ -17,9 +16,9 @@ import { createLink, MemoryTransport } from 'transport:impl/memory'
 import { posts, users } from './helpers'
 
 const bootstrap = function* (): Operation<AnyType> {
-  yield* install(MemoryAdapter)
-  yield* install(BunIO)
-  return yield* install(DbClient, { tables: [users, posts] })
+  yield* MemoryAdapter.use()
+  yield* BunIO.use()
+  return yield* DbClient.use({ tables: [users, posts] })
 }
 
 describe('reactivity — changes feed', () => {
@@ -117,9 +116,9 @@ describe('reactivity — cross-node bus', () => {
   /** The bus over an in-process transport: the test records what this node ships through its
    * own subscription on the topic and injects what "peers" ship by publishing on it. */
   const makeBus = function* () {
-    yield* install(MemoryTransport, { prefix: 'app', link: createLink() })
+    yield* MemoryTransport.use({ prefix: 'app', link: createLink() })
     const shipped = yield* Transport.actions.subscribe<Bus.Envelope>('db.change')
-    yield* install(DbBus)
+    yield* DbBus.use()
     const inject = (envelope: Bus.Envelope) => Transport.actions.publish('db.change', envelope)
     return { shipped, inject }
   }

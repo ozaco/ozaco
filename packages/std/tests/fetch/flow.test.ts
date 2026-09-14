@@ -1,7 +1,6 @@
 import type { Flow } from 'std:effect'
 import { attempt, run } from 'std:effect'
 import { Fetch, FetchClient, fetchImpl } from 'std:fetch'
-import { install } from 'std:plugin'
 import { isFailure, unwrap } from 'std:result'
 
 import { afterAll, describe, expect, it } from 'bun:test'
@@ -78,8 +77,8 @@ function* drain<T, R>(source: Flow<T, R>) {
 describe('flow() codec streaming', () => {
   it('decodes a chunked response one value per top-level JSON entity', async () => {
     const outcome = await run(function* () {
-      yield* install(FetchClient)
-      yield* install(JsonCodec)
+      yield* FetchClient.use()
+      yield* JsonCodec.use()
 
       const response = yield* Fetch.actions.get(`${base}/ndjson`)
       const decoded = yield* response.flow<unknown>()
@@ -95,8 +94,8 @@ describe('flow() codec streaming', () => {
 
   it('a malformed JSON stream closes the flow with a Failure', async () => {
     const outcome = await run(function* () {
-      yield* install(FetchClient)
-      yield* install(JsonCodec)
+      yield* FetchClient.use()
+      yield* JsonCodec.use()
 
       const response = yield* Fetch.actions.get(`${base}/broken`)
       const decoded = yield* response.flow()
@@ -110,8 +109,8 @@ describe('flow() codec streaming', () => {
 
   it('an empty body closes cleanly with no values', async () => {
     const outcome = await run(function* () {
-      yield* install(FetchClient)
-      yield* install(JsonCodec)
+      yield* FetchClient.use()
+      yield* JsonCodec.use()
 
       const response = yield* Fetch.actions.get(`${base}/empty`)
       const decoded = yield* response.flow()
@@ -126,7 +125,7 @@ describe('flow() codec streaming', () => {
 describe('raw() byte flow', () => {
   it('streams the undecoded bytes and closes with void', async () => {
     const outcome = await run(function* () {
-      yield* install(FetchClient)
+      yield* FetchClient.use()
 
       const response = yield* Fetch.actions.get(`${base}/text`)
       const bytes = yield* response.raw()
@@ -160,8 +159,8 @@ describe('bodyless responses', () => {
     // a fetched response always carries a (possibly empty) body stream under Bun, so a bodyless
     // response is injected through the fetchImpl context instead of a server route
     const outcome = await run(function* () {
-      yield* install(FetchClient)
-      yield* install(JsonCodec)
+      yield* FetchClient.use()
+      yield* JsonCodec.use()
 
       return yield* fetchImpl.with(
         () => Promise.resolve(new Response(null, { status: 204 })),
@@ -178,6 +177,6 @@ describe('bodyless responses', () => {
       )
     })
 
-    expect(unwrap(outcome)).toEqual({ raw: 'parse', flow: 'parse' })
+    expect(unwrap(outcome)).toEqual({ raw: 'std:fetch.parse', flow: 'std:fetch.parse' })
   })
 })

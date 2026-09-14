@@ -1,7 +1,6 @@
 import { hasCodec } from 'std:codec'
 import { attempt, fork, sleep, useContext } from 'std:effect'
 import { IO } from 'std:io'
-import { install } from 'std:plugin'
 import { fail, isFailure } from 'std:result'
 
 import { JsonCodec } from 'std:codec/impl/json'
@@ -49,7 +48,7 @@ const DbImpl = Db.implement<Database.Context, [options: Database.Options]>({
 
   *setup(options) {
     if (!(yield* hasCodec())) {
-      yield* install(JsonCodec)
+      yield* JsonCodec.use()
     }
 
     const tables = options.schema?.tables ?? options.tables

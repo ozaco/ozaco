@@ -1,6 +1,5 @@
 import { Codec, hasCodec } from 'std:codec'
 import { attempt, createChannel, each, run, scoped, sleep, spawn, withResolvers } from 'std:effect'
-import { install } from 'std:plugin'
 import type { Result } from 'std:result'
 import { isFailure, unwrap } from 'std:result'
 
@@ -15,7 +14,7 @@ const encoder = new TextEncoder()
 describe('single-codec routing (exec with one entry)', () => {
   it('protocol-level encode/decode round-trips through the one installed codec', async () => {
     const outcome = await run(function* () {
-      yield* install(JsonCodec)
+      yield* JsonCodec.use()
 
       const payload = { kind: 'greeting', text: 'hello world — café', n: 42 }
       const bytes = yield* Codec.actions.encode(payload)
@@ -29,7 +28,7 @@ describe('single-codec routing (exec with one entry)', () => {
 
   it('stringify/parse route the same way', async () => {
     const outcome = await run(function* () {
-      yield* install(JsonCodec)
+      yield* JsonCodec.use()
 
       const text = yield* Codec.actions.stringify([1, 2, 3])
       return yield* Codec.actions.parse<number[]>(text)
@@ -43,7 +42,7 @@ describe('registry scope-locality', () => {
   it('hasCodec/getTransports reflect the current scope chain only', async () => {
     const outcome = await run(function* () {
       const inside = yield* scoped(function* () {
-        yield* install(JsonCodec)
+        yield* JsonCodec.use()
         return {
           has: yield* hasCodec(),
           count: (yield* Codec.actions.getTransports()).length,
@@ -64,15 +63,15 @@ describe('registry scope-locality', () => {
     })
   })
 
-  it('registering the same codec name twice fails with `unexpected`', async () => {
+  it('registering the same codec name twice fails with `CodecErrors.AlreadyRegistered`', async () => {
     const outcome = await run(function* () {
-      yield* install(JsonCodec)
-      const second = yield* attempt(() => install(JsonCodec))
+      yield* JsonCodec.use()
+      const second = yield* attempt(() => JsonCodec.use())
 
       return isFailure(second) ? second.error : 'no-failure'
     })
 
-    expect(unwrap(outcome)).toBe('unexpected')
+    expect(unwrap(outcome)).toBe('std:codec.already-registered')
   })
 })
 
@@ -85,8 +84,8 @@ describe('multi-codec priority routing (Codec.exec)', () => {
     const High = fakeCodec('fake-high')
 
     const outcome = await run(function* () {
-      yield* install(JsonCodec) // priority 999
-      yield* install(High, { priority: 1500 })
+      yield* JsonCodec.use() // priority 999
+      yield* High.use({ priority: 1500 })
 
       return yield* Codec.actions.stringify({ n: 1 })
     })
@@ -99,8 +98,8 @@ describe('multi-codec priority routing (Codec.exec)', () => {
     const Newer = fakeCodec('fake-newer')
 
     const outcome = await run(function* () {
-      yield* install(Older, { priority: 700 })
-      yield* install(Newer, { priority: 700 })
+      yield* Older.use({ priority: 700 })
+      yield* Newer.use({ priority: 700 })
 
       return yield* Codec.actions.stringify('tie')
     })
@@ -112,8 +111,8 @@ describe('multi-codec priority routing (Codec.exec)', () => {
     const High = fakeCodec('fake-high-2')
 
     const outcome = await run(function* () {
-      yield* install(High, { priority: 5000 })
-      yield* install(JsonCodec)
+      yield* High.use({ priority: 5000 })
+      yield* JsonCodec.use()
 
       // pinned to the JSON impl — never enters Codec.exec
       return yield* JsonCodec.actions.stringify({ ok: true })
@@ -126,7 +125,7 @@ describe('multi-codec priority routing (Codec.exec)', () => {
 describe('json codec streaming', () => {
   it('decodeFlow reassembles a multi-byte UTF-8 character split across chunks', async () => {
     const outcome = await run(function* () {
-      yield* install(JsonCodec)
+      yield* JsonCodec.use()
 
       const source = createChannel<Uint8Array, true | Result.Failure<unknown>>()
       const decoded = yield* JsonCodec.actions.decodeFlow<string>(source)
@@ -161,7 +160,7 @@ describe('json codec streaming', () => {
 
   it('encodeFlow → decodeFlow round-trips a sequence of values', async () => {
     const outcome = await run(function* () {
-      yield* install(JsonCodec)
+      yield* JsonCodec.use()
 
       const source = createChannel<unknown, true | Result.Failure<unknown>>()
       const encoded = yield* JsonCodec.actions.encodeFlow(source)
@@ -192,7 +191,7 @@ describe('json codec streaming', () => {
 
   it('a malformed JSON stream surfaces a Failure through the decode channel close', async () => {
     const outcome = await run(function* () {
-      yield* install(JsonCodec)
+      yield* JsonCodec.use()
 
       const source = createChannel<Uint8Array, true | Result.Failure<unknown>>()
       const decoded = yield* JsonCodec.actions.decodeFlow(source)

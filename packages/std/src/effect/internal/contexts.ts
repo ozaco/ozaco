@@ -6,7 +6,7 @@ import { createQueue } from '../utils/queue'
 
 import { Reducer } from './reducer'
 
-export const PriorityContext = createContext<number>('std:effect:scope.generation', 0)
+export const PriorityContext = createContext<number>('std:effect:scope.priority', 0)
 
 export const ChildrenContext = createContext<Set<Scope>>('std:effect:scope.children')
 
@@ -28,8 +28,8 @@ export const ExitContext = createContext<(exit: Utils.Exit) => Operation<void>>(
 export const EachStack = createContext<Helpers.EachLoop<unknown>[]>('std:effect:each')
 
 /**
- * Context deciding which queue implementation backs each signal subscription — override to change
- * buffering behavior within a scope.
+ * Context deciding which queue implementation backs each signal subscription. Internal: it is not
+ * exported, so the buffering strategy is fixed to `createQueue` for every scope.
  */
 export const SignalQueueFactoryContext: Context<typeof createQueue> = createContext(
   'std:effect:signal.createQueue',

@@ -1,12 +1,12 @@
 import { isFailure } from 'std:result'
 
+import { attempt } from '../base/attempt'
 import { call } from '../base/call'
 import { ensure } from '../base/ensure'
 import { fork } from '../base/spawn'
 import { withResolvers } from '../base/with-resolvers'
 import type { Flow, Operation, Subscription } from '../types/operation'
 
-import { attempt } from './attempt'
 import { createQueue } from './queue'
 
 /**

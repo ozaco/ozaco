@@ -1,7 +1,7 @@
 import type { EmptyType } from 'std:shared'
 
-import { EVENT } from '../const'
-import { callListener, removeFrom } from '../internal'
+import { EVENT } from '../internal/const'
+import { callListener, removeFrom } from '../internal/listeners'
 import type { EventEmitter } from '../types'
 
 export const createEvent = <T extends EventEmitter.Map = EmptyType>(): EventEmitter<T> => {
@@ -52,6 +52,10 @@ export const createEvent = <T extends EventEmitter.Map = EmptyType>(): EventEmit
     }
   }
 
+  // Fire-and-forget: listener results are discarded. A listener that THROWS synchronously
+  // propagates out of `emit` and the remaining listeners in that snapshot are not called; an
+  // async listener that REJECTS is never awaited, so its rejection is unhandled at the runtime
+  // level (use `emitAsync` to observe it). Pinned by tests/event/emitter.test.ts.
   const emit = <K extends keyof T & string>(name: K, ...args: T[K]): void => {
     const list = listeners.get(name)
     if (!list) {

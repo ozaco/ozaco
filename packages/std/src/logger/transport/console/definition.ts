@@ -13,9 +13,14 @@ const ConsoleTransportImpl = LoggerTransport.implement<
   ConsoleDef.Context,
   [options?: ConsoleDef.Options]
 >({
-  name: 'console-transport',
+  name: 'std/console-transport',
   version: pkg.version,
 
+  /**
+   * Must be installed AFTER the logger (`DefaultLogger` or another `Logger` impl): setup does
+   * `useContext(Logger)` to inherit the logger's level as the default transport level, so installing
+   * the transport first fails with `std:effect.missing-context`.
+   */
   *setup(options = {}) {
     const name = 'console'
 

@@ -27,8 +27,9 @@ export const hasCodec = operation(function* () {
 
 /**
  * The codec protocol: a registry of encoders/decoders sorted by priority. `Codec.actions.*` route to
- * the highest-priority registered codec (via the `*Root` handlers). Install a codec impl (e.g.
- * `JsonCodec`) to populate the registry. Lives in `std` so any std consumer — `std:fetch`, the server
+ * the highest-priority registered codec through the inline `exec` below; the registry actions
+ * (`register` / `unregister` / `getTransports` / `encodeFrame` / `decodeFrame`) are plain handlers
+ * and never route. Install a codec impl (e.g. `JsonCodec`) to populate the registry. Lives in `std` so any std consumer — `std:fetch`, the server
  * broker/transport, … — can encode/decode without coupling to a higher layer.
  */
 export const Codec = defineProtocol<CodecDef.Context, CodecDef.Actions, CodecDef.Handlers>({

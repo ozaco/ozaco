@@ -1,7 +1,6 @@
 import { CodecErrors } from 'std:codec'
 import { Config } from 'std:config'
 import { run } from 'std:effect'
-import { install } from 'std:plugin'
 import { isFailure } from 'std:result'
 
 import { describe, expect, it } from 'bun:test'
@@ -21,9 +20,9 @@ describe('config error paths', () => {
       await writeFile(join(root, '.cfgspec.json'), '{ this is not json')
 
       const outcome = await run(function* () {
-        yield* install(BunIO)
-        yield* install(JsonCodec)
-        yield* install(Config, { codec: JsonCodec, name: 'cfgspec', cwd: root, home: root })
+        yield* BunIO.use()
+        yield* JsonCodec.use()
+        yield* Config.use({ codec: JsonCodec, name: 'cfgspec', cwd: root, home: root })
         yield* Config.actions.load()
         return 'unreachable'
       })
@@ -45,19 +44,19 @@ describe('config error paths', () => {
 
     expect(isFailure(withoutConfig)).toBe(true)
     if (isFailure(withoutConfig)) {
-      expect(withoutConfig.error).toBe('missing-action')
+      expect(withoutConfig.error).toBe('std:plugin.missing-action')
     }
 
     // Config installed without an IO impl: setup cannot even resolve the working path
     const withoutIo = await run(function* () {
-      yield* install(JsonCodec)
-      yield* install(Config, { codec: JsonCodec, name: 'cfgspec', cwd: '/tmp', home: '/tmp' })
+      yield* JsonCodec.use()
+      yield* Config.use({ codec: JsonCodec, name: 'cfgspec', cwd: '/tmp', home: '/tmp' })
       return 'unreachable'
     })
 
     expect(isFailure(withoutIo)).toBe(true)
     if (isFailure(withoutIo)) {
-      expect(withoutIo.error).toBe('missing-action')
+      expect(withoutIo.error).toBe('std:plugin.missing-action')
     }
   })
 })

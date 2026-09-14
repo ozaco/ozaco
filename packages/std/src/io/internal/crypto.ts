@@ -14,6 +14,7 @@ import {
   scrypt,
 } from 'node:crypto'
 
+import { IOErrors } from '../errors'
 import type { KeyPair } from '../types/common'
 
 /*
@@ -90,10 +91,10 @@ export const encryptSecret = operation(function* (data: Uint8Array | string, sec
 
 export const decryptSecret = operation(function* (data: Uint8Array, secret: string) {
   if (data.length < HEADER_BYTES) {
-    return yield* fail('decrypt-failed', 'ciphertext is too short')
+    return yield* fail(IOErrors.DecryptFailed, 'ciphertext is too short')
   }
   if (data[0] !== VERSION) {
-    return yield* fail('decrypt-failed', `unsupported ciphertext version: ${data[0]}`)
+    return yield* fail(IOErrors.DecryptFailed, `unsupported ciphertext version: ${data[0]}`)
   }
 
   const salt = data.subarray(1, 1 + SALT_BYTES)
@@ -118,7 +119,7 @@ export const decryptSecret = operation(function* (data: Uint8Array, secret: stri
     failure => {
       key.fill(0)
       return fail(
-        'decrypt-failed',
+        IOErrors.DecryptFailed,
         'decryption failed — wrong secret or corrupted data',
         ...failure.causes,
       ) as Result.Failure<unknown>

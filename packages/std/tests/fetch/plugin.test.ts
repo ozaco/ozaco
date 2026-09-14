@@ -1,6 +1,5 @@
 import { run, scoped } from 'std:effect'
 import { createFetchResponse, Fetch, FetchClient } from 'std:fetch'
-import { install } from 'std:plugin'
 import { isFailure, unwrap } from 'std:result'
 
 import { afterAll, describe, expect, it } from 'bun:test'
@@ -67,7 +66,7 @@ describe('install options', () => {
     }
 
     const outcome = await run(function* () {
-      yield* install(FetchClient, { baseUrl: base })
+      yield* FetchClient.use({ baseUrl: base })
 
       const relative = yield* Fetch.actions.get('/where')
       const absoluteString = yield* Fetch.actions.get(`${otherBase}/where`)
@@ -97,7 +96,7 @@ describe('install options', () => {
     }
 
     const outcome = await run(function* () {
-      yield* install(FetchClient, {
+      yield* FetchClient.use({
         baseUrl: base,
         headers: { 'x-app': 'ozaco', 'x-token': 'default-token' },
       })
@@ -126,19 +125,19 @@ describe('install options', () => {
 
   it('timeoutMs option is the default deadline; a per-request timeoutMs overrides it', async () => {
     const timedOut = await run(function* () {
-      yield* install(FetchClient, { baseUrl: base, timeoutMs: 25 })
+      yield* FetchClient.use({ baseUrl: base, timeoutMs: 25 })
 
       return yield* Fetch.actions.get('/slow')
     })
 
     expect(isFailure(timedOut)).toBe(true)
     if (isFailure(timedOut)) {
-      expect(timedOut.error).toBe('timeout')
+      expect(timedOut.error).toBe('std:fetch.timeout')
       expect(timedOut.message).toBe(`${base}/slow: timed out after 25ms`)
     }
 
     const overridden = await run(function* () {
-      yield* install(FetchClient, { baseUrl: base, timeoutMs: 25 })
+      yield* FetchClient.use({ baseUrl: base, timeoutMs: 25 })
 
       const response = yield* Fetch.actions.get('/slow', { timeoutMs: 2000 })
 
@@ -150,14 +149,14 @@ describe('install options', () => {
 })
 
 describe('middleware over the request dispatch', () => {
-  it('an around hook injecting a header reaches builder accessor calls, then reverts with its scope', async () => {
+  it('an around hook injecting a header reaches the verb shorthands, then reverts with its scope', async () => {
     interface Auth {
       authorization: string | null
       req: string | null
     }
 
     const outcome = await run(function* () {
-      yield* install(FetchClient, { baseUrl: base })
+      yield* FetchClient.use({ baseUrl: base })
 
       const decorated = yield* scoped(function* () {
         yield* Fetch.around({
@@ -196,7 +195,7 @@ describe('middleware over the request dispatch', () => {
     const observedUrls: string[] = []
 
     const outcome = await run(function* () {
-      yield* install(FetchClient, { baseUrl: base })
+      yield* FetchClient.use({ baseUrl: base })
 
       // installed FIRST so it wraps the around layer below and observes short-circuits too
       yield* Fetch.after({

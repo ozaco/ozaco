@@ -5,10 +5,11 @@ import type { Result } from 'std:result'
 import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 
-import { CHANNEL_DEFAULTS } from '../const'
+import { RtcErrors } from '../errors'
 import type { Helpers } from '../types/helpers'
 import type { RtcDef } from '../types/rtc'
 
+import { CHANNEL_DEFAULTS } from './const'
 import { sizeOf } from './observe'
 
 /** Whether a native can still take a `close()` call. */
@@ -95,7 +96,9 @@ export const wrapChannel = (
     queue.close(close)
     closedResolvers.resolve(close)
     // no-op once already open
-    openedResolvers.reject(fail('rtc/channel', `channel "${first.label}" closed before it opened`))
+    openedResolvers.reject(
+      fail(RtcErrors.Channel, `channel "${first.label}" closed before it opened`),
+    )
     notifyOpen()
     notifyDrain()
   }
@@ -146,7 +149,7 @@ export const wrapChannel = (
     native.onerror = () => {
       if (!state.ended && !state.closedByClient && state.native === native) {
         state.erred = fail(
-          'rtc/channel',
+          RtcErrors.Channel,
           `data channel error: ${native.label}`,
         ) as Result.Failure<unknown>
       }
