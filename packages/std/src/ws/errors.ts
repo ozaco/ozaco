@@ -7,3 +7,14 @@ export const WsErrors = createTags(
   'unsupported',
   'reconnect-exhausted',
 )
+
+/** The cause names ws stamps on its operations. */
+export const WsCauses = createTags(
+  'std:ws',
+  'connect',
+  'dial',
+  'send',
+  'close',
+  'keepalive',
+  'reconnect',
+)

@@ -270,7 +270,14 @@ export interface S3Options {
   readonly endpoint?: string
   /** Canned ACL applied to writes (e.g. `'public-read'`). */
   readonly acl?: string
+  /** Part size in bytes for STREAMING writes (a `ReadableStream` body goes up as a multipart
+   * upload, one part per `partSize` bytes; default 5 MiB — S3's minimum, MinIO accepts smaller). */
+  readonly partSize?: number
 }
+
+/** What a write accepts: whole values, or a `ReadableStream` that is uploaded as it is read (multipart,
+ * `partSize` bytes buffered at a time). Adapt an effect Flow with `IO.actions.toReadable`. */
+export type S3Body = Uint8Array | string | Blob | ReadableStream<Uint8Array>
 
 /** Object metadata (from `stat`). */
 export interface S3Stat {
@@ -318,10 +325,12 @@ export interface S3File {
   json: <T = unknown>() => Operation<T>
   bytes: () => Operation<Uint8Array>
   arrayBuffer: () => Operation<ArrayBuffer>
-  /** The object's byte stream (a platform `ReadableStream`; adapt it with `IO.actions.fromReadable`). */
+  /** The object's byte stream, read end to end as it arrives (a platform `ReadableStream`; adapt
+   * it with `IO.actions.fromReadable`). */
   stream: () => Operation<ReadableStream<Uint8Array>>
-  /** Upload/overwrite the object; resolves to the number of bytes written. */
-  write: (data: Uint8Array | string | Blob) => Operation<number>
+  /** Upload/overwrite the object; resolves to the number of bytes written. A `ReadableStream`
+   * body streams end to end (multipart upload, bounded memory). */
+  write: (data: S3Body) => Operation<number>
   exists: () => Operation<boolean>
   delete: () => Operation<void>
   stat: () => Operation<S3Stat>
@@ -337,7 +346,7 @@ export interface S3Client {
   /** A handle to one object. */
   file: (key: string) => S3File
   read: (key: string) => Operation<Uint8Array>
-  write: (key: string, data: Uint8Array | string | Blob) => Operation<number>
+  write: (key: string, data: S3Body) => Operation<number>
   exists: (key: string) => Operation<boolean>
   delete: (key: string) => Operation<void>
   stat: (key: string) => Operation<S3Stat>

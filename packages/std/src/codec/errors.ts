@@ -13,4 +13,5 @@ export const CodecErrors = createTags(
 
   'no-match',
   'already-registered',
+  'cancelled',
 )

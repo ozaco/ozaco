@@ -1,7 +1,7 @@
 import { attempt, fork, run, sleep } from 'std:effect'
 import { isFailure, unwrap } from 'std:result'
 import type { RtcDef } from 'std:webrtc'
-import { Rtc, RtcClient } from 'std:webrtc'
+import { Rtc } from 'std:webrtc'
 
 import { describe, expect, it } from 'bun:test'
 
@@ -21,7 +21,7 @@ describe('peer observability', () => {
 
     const outcome = await run(function* () {
       yield* JsonCodec.use()
-      yield* RtcClient.use({ impl: fake.impl })
+      yield* fake.mock.use()
 
       const [signalA, signalB] = createSignalPair()
       const peerA = yield* Rtc.actions.connect(signalA)
@@ -81,7 +81,7 @@ describe('peer observability', () => {
 
     const outcome = await run(function* () {
       yield* JsonCodec.use()
-      yield* RtcClient.use({ impl: fake.impl })
+      yield* fake.mock.use()
 
       const [signalA, signalB] = createSignalPair()
       // keep only the last 3 entries — the flow still sees every one of them
@@ -117,7 +117,7 @@ describe('peer observability', () => {
 
     const outcome = await run(function* () {
       yield* JsonCodec.use()
-      yield* RtcClient.use({ impl: fake.impl })
+      yield* fake.mock.use()
 
       const [signalA, signalB] = createSignalPair()
       const peerA = yield* Rtc.actions.connect(signalA)
@@ -171,7 +171,7 @@ describe('peer observability', () => {
 
     const outcome = await run(function* () {
       yield* JsonCodec.use()
-      yield* RtcClient.use({ impl: fake.impl })
+      yield* fake.mock.use()
 
       const [signalA, signalB] = createSignalPair()
       const peerA = yield* Rtc.actions.connect(signalA)
@@ -191,7 +191,7 @@ describe('peer observability', () => {
 
     const outcome = await run(function* () {
       yield* JsonCodec.use()
-      yield* RtcClient.use({ impl: fake.impl })
+      yield* fake.mock.use()
 
       const [signalA, signalB] = createSignalPair()
       const peerA = yield* Rtc.actions.connect(signalA, { observe: { sampleMs: 15 } })
@@ -214,7 +214,7 @@ describe('peer observability', () => {
 
     const outcome = await run(function* () {
       yield* JsonCodec.use()
-      yield* RtcClient.use({ impl: fake.impl })
+      yield* fake.mock.use()
 
       const [signalA, signalB] = createSignalPair()
       const budget = { retries: 4, delayMs: 10 } // both sides redial on the same clock

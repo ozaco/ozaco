@@ -3,6 +3,7 @@ import type { Flow, Future } from 'std:effect'
 import { operation } from 'std:effect'
 import type { AnyType } from 'std:shared'
 
+import { WsCauses } from '../errors'
 import type { Helpers } from '../types/helpers'
 import type { WsDef } from '../types/ws'
 
@@ -76,7 +77,7 @@ export const createHandle = (session: Helpers.Session): WsDef.Connection => {
         // reconnect window: park until the next reopen (or the permanent end), then re-check
         yield* session.stateChanged()
       }
-    }, 'ws-send'),
+    }, WsCauses.Send),
 
     close: operation(function* (code, reason) {
       session.closedByClient = true
@@ -93,6 +94,6 @@ export const createHandle = (session: Helpers.Session): WsDef.Connection => {
       }
 
       yield* session.closed.operation
-    }, 'ws-close'),
+    }, WsCauses.Close),
   }
 }

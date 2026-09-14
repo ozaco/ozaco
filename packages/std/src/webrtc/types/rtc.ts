@@ -10,7 +10,7 @@ import type { AnyType } from 'std:shared'
  * serves BOTH ends of a connection: `RTCPeerConnection` is peer-symmetric, so "client" and
  * "server" only differ in which implementation backs them. In the browser (and Deno) the platform
  * global is used; on Bun/Node the optional `node-datachannel` polyfill is auto-imported on first
- * use (install it next to `@ozaco/std`); anything else is passed as the `impl` option.
+ * use (install it next to `@ozaco/std`); anything else implements the `Rtc` protocol.
  *
  * Install `RtcClient` (optionally with default options), then `Rtc.actions.connect(signal, options)`
  * opens a peer RESOURCE bound to the caller's scope. Signaling (offer/answer/ICE) runs over the
@@ -22,7 +22,7 @@ import type { AnyType } from 'std:shared'
  * mark). Framing matches `std:ws`: strings/binary pass as-is, other values go through the
  * registered `std:codec` — install a codec (e.g. `JsonCodec`) for structured values.
  */
-export type RtcDef = Plugin<RtcDef.Context, [options?: RtcDef.ClientOptions], RtcDef.Contract>
+export type RtcDef = Plugin<RtcDef.Context, [defaults?: RtcDef.Options], RtcDef.Contract>
 
 export namespace RtcDef {
   // --- implementation subsets -----------------------------------------------------------------
@@ -132,8 +132,9 @@ export namespace RtcDef {
     ontrack?: ((event: TrackEventLike) => void) | null
   }
 
-  /** The peer-connection implementation `connect` constructs peers with (the `impl` option of
-   * `RtcClient.use`). */
+  /** The peer-connection constructor shape `RtcClient` resolves at connect time (the platform
+   * global, else the `node-datachannel` polyfill on Bun/Node); a mock implements the `Rtc`
+   * protocol itself — see `tests/webrtc/fake.ts`. */
   export type ImplLike = new (configuration?: Configuration) => PeerLike
 
   /** An `RTCConfiguration` subset; extra impl-specific keys pass through untouched. */
@@ -615,31 +616,20 @@ export namespace RtcDef {
     stats(): Operation<Stats>
   }
 
-  /** What `RtcClient.use` takes: connect defaults plus the peer-connection implementation. */
-  export interface ClientOptions extends Options {
-    /** The peer-connection constructor `connect` uses. Omit for the platform `RTCPeerConnection`
-     * (with the `node-datachannel` polyfill auto-imported on Bun/Node when the global is absent);
-     * pass a fake in tests; pass `false` to simulate a platform without any implementation (the
-     * auto-import is skipped too and every connect fails `RtcErrors.Unsupported`). */
-    impl?: ImplLike | false | undefined
-  }
-
   /**
    * The installed client context: install-time defaults, merged (shallow, per top-level key)
-   * under each `connect` call's own options, plus the `impl` option as given (resolved lazily on
-   * each connect).
+   * under each `connect` call's own options.
    */
   export interface Context {
     defaults: Options
-    impl: ImplLike | false | undefined
   }
 
   /** The action contract `Rtc` routes and `RtcClient` implements. */
   export interface Contract {
     /** Open a peer connection bound to the caller's scope, negotiating over `signal`. Resolves
      * immediately with the peer handle (channels connect lazily), or raises
-     * `RtcErrors.Unsupported` (no implementation — pass `impl` to `RtcClient.use` or install
-     * `node-datachannel`) / `RtcErrors.Connect` (the implementation refused the configuration). */
+     * `RtcErrors.Unsupported` (no `RTCPeerConnection` global and no `node-datachannel` polyfill) /
+     * `RtcErrors.Connect` (the implementation refused the configuration). */
     connect(signal: SignalLike, options?: Options): Operation<Peer>
   }
 }

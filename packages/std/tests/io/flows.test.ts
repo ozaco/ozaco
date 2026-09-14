@@ -11,7 +11,7 @@ import { Readable } from 'node:stream'
 
 import { BunIO } from 'std:io/impl/bun'
 
-import { fromReadable } from '../../src/io/internal/from-readable'
+import { fromReadable } from '../../src/io/internal/stream/from-readable'
 
 const encoder = new TextEncoder()
 const decoder = new TextDecoder()
@@ -163,7 +163,7 @@ describe('readFlow / writeFlow', () => {
       expect(isFailure(outcome)).toBe(true)
       if (isFailure(outcome)) {
         expect(String(outcome.error)).toBe('upstream-died')
-        expect(outcome.causes).toContain('write-stream')
+        expect(outcome.causes).toContain('std:io.write-stream')
       }
     })
   })

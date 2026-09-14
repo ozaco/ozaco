@@ -7,7 +7,8 @@ import { hasFlag } from 'std:shared'
 
 import { createReadStream, createWriteStream } from 'node:fs'
 
-import { fromReadable } from './from-readable'
+import { IOCauses } from '../../errors'
+import { fromReadable } from '../stream/from-readable'
 
 const waitForFinish = (writable: WritableLike): ReturnType<typeof action<void>> =>
   action((resolve, reject) => {
@@ -17,7 +18,7 @@ const waitForFinish = (writable: WritableLike): ReturnType<typeof action<void>> 
     }
     const onError = (error: unknown) => {
       cleanup()
-      reject(appendCauses(asFailure(error), 'stream'))
+      reject(appendCauses(asFailure(error), IOCauses.Stream))
     }
     const cleanup = () => {
       writable.off('finish', onFinish)
@@ -26,7 +27,7 @@ const waitForFinish = (writable: WritableLike): ReturnType<typeof action<void>> 
     writable.on('finish', onFinish)
     writable.on('error', onError)
     return cleanup
-  }, 'stream')
+  }, IOCauses.Stream)
 
 const waitForDrain = (writable: WritableLike): ReturnType<typeof action<void>> =>
   action((resolve, reject) => {
@@ -36,7 +37,7 @@ const waitForDrain = (writable: WritableLike): ReturnType<typeof action<void>> =
     }
     const onError = (error: unknown) => {
       cleanup()
-      reject(appendCauses(asFailure(error), 'stream'))
+      reject(appendCauses(asFailure(error), IOCauses.Stream))
     }
     const cleanup = () => {
       writable.off('drain', onDrain)
@@ -45,7 +46,7 @@ const waitForDrain = (writable: WritableLike): ReturnType<typeof action<void>> =
     writable.on('drain', onDrain)
     writable.on('error', onError)
     return cleanup
-  }, 'stream')
+  }, IOCauses.Stream)
 
 export const readFileFlow = (path: string): Flow<Uint8Array, FlowClose> =>
   fromReadable(createReadStream(path))
@@ -95,6 +96,6 @@ export const writeFileFlow = operation(function* (
   } catch (error) {
     writable.destroy?.(error instanceof Error ? error : new Error(String(error)))
 
-    yield* appendCauses(asFailure(error), 'write-stream')
+    yield* appendCauses(asFailure(error), IOCauses.WriteStream)
   }
-}, 'write-stream')
+}, IOCauses.WriteStream)

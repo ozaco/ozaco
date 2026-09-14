@@ -2,7 +2,7 @@ import { attempt, operation, sleep } from 'std:effect'
 import type { Result } from 'std:result'
 import { fail, isSuccess } from 'std:result'
 
-import { RtcErrors } from '../errors'
+import { RtcCauses, RtcErrors } from '../errors'
 import type { Helpers } from '../types/helpers'
 
 import { wrapChannel } from './channel'
@@ -63,7 +63,7 @@ export const pumpSignal = operation(function* (session: Helpers.Session) {
       return
     }
   }
-}, 'rtc-signal-pump')
+}, RtcCauses.SignalPump)
 
 /** Candidate pump (forked): best-effort — a dead signal surfaces through the negotiation path. */
 export const pumpCandidates = operation(function* (session: Helpers.Session) {
@@ -82,7 +82,7 @@ export const pumpCandidates = operation(function* (session: Helpers.Session) {
       session.noteCandidate('out', item.value)
     }
   })
-}, 'rtc-candidate-pump')
+}, RtcCauses.CandidatePump)
 
 /**
  * Incoming-channel pump (forked): wrap each remote native, wait for it to OPEN, then emit it on
@@ -117,7 +117,7 @@ export const pumpIncoming = operation(function* (session: Helpers.Session) {
       observe.record('channel', `in:${entry.handle.label}`)
     }
   })
-}, 'rtc-incoming-channels')
+}, RtcCauses.IncomingChannels)
 
 /**
  * Stats sampler (forked, only when `observe.sampleMs` is set): one `stats` timeline entry per
@@ -137,4 +137,4 @@ export const sampleStats = operation(function* (session: Helpers.Session, everyM
       session.observe.record('stats', undefined, { data: flatten(snapshot.value) })
     }
   }
-}, 'rtc-stats-sampler')
+}, RtcCauses.StatsSampler)

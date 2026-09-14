@@ -84,7 +84,7 @@ describe('resilience', () => {
         expect(yield* server.call(svc, 'slow', { ms: 10 })).toBe('done')
         const timedOut = yield* attempt(server.call(svc, 'slow', { ms: 500 }))
         expect((timedOut as AnyType).error).toBe(ServerErrors.TimeoutPending)
-        expect((timedOut as AnyType).causes).toContain('resilience:timeout')
+        expect((timedOut as AnyType).causes).toContain('server:resilience.timeout')
 
         expect(yield* server.call(svc, 'flaky')).toBe(3)
 

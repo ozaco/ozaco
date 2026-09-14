@@ -1,6 +1,6 @@
-import type { ExecOptions, ProcessStatus } from '../types/common'
-import type { Helpers } from '../types/helpers'
-import { toPath } from '../utils/to-path'
+import type { ExecOptions, ProcessStatus } from '../../types/common'
+import type { Helpers } from '../../types/helpers'
+import { toPath } from '../../utils/to-path'
 
 const encoder = new TextEncoder()
 

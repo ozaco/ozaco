@@ -7,15 +7,15 @@ import type { AnyType } from 'std:shared'
 
 import pkg from '../../../package.json'
 import { IOErrors } from '../errors'
+import { hlcDecode, hlcObserve, hlcToken } from '../internal/crypto/hlc'
+import { ulidId } from '../internal/crypto/ulid'
+import { uuidId } from '../internal/crypto/uuid'
+import { webHash, webHmac, webRandomBytes } from '../internal/crypto/web'
 import { readWebEnv } from '../internal/env'
-import { fromReadable } from '../internal/from-readable'
-import { hlcDecode, hlcObserve, hlcToken } from '../internal/hlc'
-import { webPath } from '../internal/path-web'
-import { createS3 } from '../internal/s3'
-import { toReadable } from '../internal/to-readable'
-import { ulidId } from '../internal/ulid'
-import { uuidId } from '../internal/uuid'
-import { webHash, webHmac, webRandomBytes } from '../internal/webcrypto'
+import { webPath } from '../internal/path/web'
+import { createS3 } from '../internal/s3/create'
+import { fromReadable } from '../internal/stream/from-readable'
+import { toReadable } from '../internal/stream/to-readable'
 
 /** The browser has no filesystem — these actions fail clearly instead of pretending to work. */
 const unsupported = (action: string): AnyType =>

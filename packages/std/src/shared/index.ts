@@ -1,3 +1,4 @@
+export * from './errors'
 export * from './types/common'
 export * from './types/match'
 export * from './types/pipe'

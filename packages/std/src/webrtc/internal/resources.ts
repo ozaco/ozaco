@@ -2,7 +2,7 @@ import type { Operation } from 'std:effect'
 import { attempt, lift, operation, race, resource, sleep, until } from 'std:effect'
 import { fail, isSuccess } from 'std:result'
 
-import { RtcErrors } from '../errors'
+import { RtcCauses, RtcErrors } from '../errors'
 import type { Helpers } from '../types/helpers'
 import type { RtcDef } from '../types/rtc'
 
@@ -175,7 +175,7 @@ export const openTrack = (
         if (!isSuccess(swapped)) {
           return yield* fail(RtcErrors.Track, 'replaceTrack failed')
         }
-      }, 'rtc-replace-track'),
+      }, RtcCauses.ReplaceTrack),
 
       remove: lift(remove) as () => Operation<void>,
     }

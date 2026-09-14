@@ -6,7 +6,7 @@ import { basename, dirname } from 'node:path'
 
 import type { Client, Expression, SubscriptionConfig, WatchProjectResponse } from 'fb-watchman'
 
-import type { WatchEvent, WatchOptions } from '../types/common'
+import type { WatchEvent, WatchOptions } from '../../types/common'
 
 const SUBSCRIPTION = 'ozaco-config'
 

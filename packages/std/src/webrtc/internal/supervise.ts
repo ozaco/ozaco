@@ -2,7 +2,7 @@ import { operation, sleep } from 'std:effect'
 import type { Result } from 'std:result'
 import { fail } from 'std:result'
 
-import { RtcErrors } from '../errors'
+import { RtcCauses, RtcErrors } from '../errors'
 import type { Helpers } from '../types/helpers'
 import type { RtcDef } from '../types/rtc'
 
@@ -73,7 +73,7 @@ export const superviseIce = operation(function* (session: Helpers.Session, budge
       }
     }
   })
-}, 'rtc-ice-restart')
+}, RtcCauses.IceRestart)
 
 /**
  * Session-reconnect supervisor (forked, only when budgeted): one generation death at a time —
@@ -151,4 +151,4 @@ export const superviseReconnect = operation(function* (
     )
     return
   }
-}, 'rtc-reconnect')
+}, RtcCauses.Reconnect)

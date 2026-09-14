@@ -10,28 +10,28 @@ import { dirname, join } from 'node:path'
 
 import pkg from '../../../package.json'
 import { IOErrors } from '../errors'
+import { hlcDecode, hlcObserve, hlcToken } from '../internal/crypto/hlc'
 import {
   decryptSecret,
   encryptSecret,
   generateSignKeyPair,
   signData,
   verifyData,
-} from '../internal/crypto'
+} from '../internal/crypto/node'
+import { ulidId } from '../internal/crypto/ulid'
+import { uuidId } from '../internal/crypto/uuid'
+import { webHash, webHmac, webRandomBytes } from '../internal/crypto/web'
 import { readEnv } from '../internal/env'
-import { readFileFlow, writeFileFlow } from '../internal/flow'
-import { fromReadable } from '../internal/from-readable'
-import { hlcDecode, hlcObserve, hlcToken } from '../internal/hlc'
-import { tcpConnect, tcpListen, udpBind } from '../internal/net'
-import { mapStat, walkRecursive } from '../internal/node-shared'
-import { nodePath } from '../internal/path-node'
-import { bunExec, bunSpawn } from '../internal/process-bun'
-import { createS3 } from '../internal/s3'
-import { readInterfaces, readTmpDir } from '../internal/sys'
-import { toReadable } from '../internal/to-readable'
-import { ulidId } from '../internal/ulid'
-import { uuidId } from '../internal/uuid'
-import { watchPath } from '../internal/watch'
-import { webHash, webHmac, webRandomBytes } from '../internal/webcrypto'
+import { readFileFlow, writeFileFlow } from '../internal/fs/flow'
+import { mapStat, walkRecursive } from '../internal/fs/walk'
+import { watchPath } from '../internal/fs/watch'
+import { tcpConnect, tcpListen, udpBind } from '../internal/net/sockets'
+import { readInterfaces, readTmpDir } from '../internal/net/sys'
+import { nodePath } from '../internal/path/node'
+import { bunExec, bunSpawn } from '../internal/process/bun'
+import { createS3 } from '../internal/s3/create'
+import { fromReadable } from '../internal/stream/from-readable'
+import { toReadable } from '../internal/stream/to-readable'
 
 export const BunIO = IO.implement({
   name: 'std/bun-io',

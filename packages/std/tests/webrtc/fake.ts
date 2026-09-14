@@ -1,7 +1,10 @@
 import type { Flow, Operation, Queue } from 'std:effect'
-import { createQueue, lift } from 'std:effect'
+import { createQueue, lift, operation } from 'std:effect'
 import type { AnyType } from 'std:shared'
 import type { RtcDef } from 'std:webrtc'
+import { Rtc, RtcCauses } from 'std:webrtc'
+
+import { createPeer } from '../../src/webrtc/internal/peer'
 
 // An in-memory RTCPeerConnection fake: two peers constructed from the SAME `createFakeRtc()`
 // result link up once a full offer/answer exchange (matched by sdp strings) has been applied on
@@ -380,7 +383,7 @@ export const createFakeRtc = (options?: { media?: boolean; stats?: boolean }) =>
     return peer
   } as unknown as RtcDef.ImplLike
 
-  return { impl, hub }
+  return { impl, hub, mock: rtcMock(impl) }
 }
 
 /** Cut the connection: the given peers (all by default) drop to `failed` with cleared
@@ -428,4 +431,28 @@ export const createSignalPair = (): [
   })
 
   return [make(toB, toA), make(toA, toB), { toA, toB }]
+}
+
+/**
+ * A mock implementation of the `Rtc` protocol: the real peer machinery (negotiation, pumps,
+ * supervisors, channels) driven by the given peer-connection constructor instead of the platform
+ * one. `yield* rtcMock(impl).use(defaults?)` in place of `RtcClient.use(defaults?)`.
+ */
+export const rtcMock = (impl: RtcDef.ImplLike) => {
+  const mock = Rtc.implement<RtcDef.Context, [defaults?: RtcDef.Options]>({
+    name: 'std/webrtc-mock',
+    version: '0.0.0',
+
+    *setup(defaults) {
+      return { defaults: defaults ?? {} }
+    },
+  })
+
+  return mock.build({
+    connect: operation(function* (signal: RtcDef.SignalLike, options?: RtcDef.Options) {
+      const { defaults } = yield* mock.context.expect()
+
+      return yield* createPeer(impl, signal, { ...defaults, ...options })
+    }, RtcCauses.Connect),
+  })
 }

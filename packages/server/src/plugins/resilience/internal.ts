@@ -10,6 +10,7 @@ import type { AnyType } from 'std:shared'
 
 import { z } from 'zod'
 
+import { ResilienceCauses } from './errors'
 import type { ResilienceDef } from './types'
 
 const RETRY_DEFAULT = [ServerErrors.TimeoutUnreached, ServerErrors.Unavailable]
@@ -70,7 +71,7 @@ export function* withTimeout(
     return yield* fail(
       ServerErrors.TimeoutPending,
       `${keyOf(call)} exceeded ${ms}ms`,
-      'resilience:timeout',
+      ResilienceCauses.Timeout,
     )
   }
 
@@ -109,7 +110,7 @@ export function* withBreaker(
 
   if (circuit.openedAt !== null) {
     if (Date.now() - circuit.openedAt < halfOpenMs || circuit.trial) {
-      return yield* fail(ServerErrors.Unavailable, `${key}: circuit open`, 'resilience:breaker')
+      return yield* fail(ServerErrors.Unavailable, `${key}: circuit open`, ResilienceCauses.Breaker)
     }
 
     circuit.trial = true
@@ -145,7 +146,11 @@ export function* withBulkhead(
 
   if (slot.active >= bulkhead.max) {
     if (slot.waiting >= (bulkhead.queue ?? 0)) {
-      return yield* fail(ServerErrors.Unavailable, `${key}: bulkhead full`, 'resilience:bulkhead')
+      return yield* fail(
+        ServerErrors.Unavailable,
+        `${key}: bulkhead full`,
+        ResilienceCauses.Bulkhead,
+      )
     }
 
     slot.waiting += 1
@@ -221,7 +226,7 @@ export function* withRateLimit(
     return yield* fail(
       ServerErrors.RateLimited,
       `${keyOf(call)}: ${limit.limit} calls per ${limit.windowMs}ms exceeded`,
-      'resilience:rate-limit',
+      ResilienceCauses.RateLimit,
     )
   }
 

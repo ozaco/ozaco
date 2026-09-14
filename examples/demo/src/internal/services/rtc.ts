@@ -38,11 +38,11 @@
 import { action, Server, service, stream } from 'server:core'
 import type { Flow, Operation } from 'std:effect'
 import { attempt, flowOf, until } from 'std:effect'
-import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import { z } from 'zod'
 
+import { rtcErrors } from '../../errors'
 import type { Member, Pairing, RelayEvent, ReportInput, Room } from '../../types/internal'
 
 /** This process — a node ignores the echo of its own broadcasts (`events()` includes them). */
@@ -308,7 +308,7 @@ function* buildPage() {
     )
     const artifact = built.outputs[0]
     if (!built.success || !artifact) {
-      return yield* fail('rtc.build', built.logs.map(String).join('\n') || 'empty build output')
+      return yield* rtcErrors.build(built.logs.map(String).join('\n') || 'empty build output')
     }
     const script = (yield* until(artifact.text())).replaceAll('</script>', String.raw`<\/script>`)
     pageCache = new TextEncoder().encode(PAGE.replace('/*__SCRIPT__*/', script))
@@ -327,7 +327,7 @@ export const rtc = service(
       {
         output: stream.bytes('text/html; charset=utf-8'),
         route: { method: 'GET', path: '/rtc' },
-        errors: { 'rtc.build': 500 },
+        errors: rtcErrors.statuses,
         description: 'The browser call page \u2014 open twice with the same #room for a video call',
       },
       function* () {

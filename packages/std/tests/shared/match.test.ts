@@ -1,6 +1,6 @@
 import { isFailure, isSuccess, unwrap } from 'std:result'
 import type { AnyType, StandardSchemaV1 } from 'std:shared'
-import { match, validateSync } from 'std:shared'
+import { SharedErrors, match, validateSync } from 'std:shared'
 
 import { describe, expect, it } from 'bun:test'
 
@@ -99,7 +99,7 @@ describe('match', () => {
 })
 
 describe('validateSync', () => {
-  it('returns the parsed output, raw issues, or an async-schema failure', () => {
+  it('returns the parsed output, a tagged validation failure, or an async-schema failure', () => {
     const parsed = validateSync(numberSchema, 4)
     expect(isSuccess(parsed)).toBe(true)
     expect(unwrap(parsed)).toBe(8)
@@ -107,13 +107,16 @@ describe('validateSync', () => {
     const invalid = validateSync(numberSchema, 'nope')
     expect(isFailure(invalid)).toBe(true)
     if (isFailure(invalid)) {
-      expect(invalid.error).toEqual([{ message: 'expected number' }])
+      expect(invalid.error).toBe(SharedErrors.Validation)
+      expect(invalid.message).toBe('expected number')
+      expect(invalid.causes).toEqual(['expected number'])
     }
 
     const asyncOutcome = validateSync(asyncSchema, 'later')
     expect(isFailure(asyncOutcome)).toBe(true)
     if (isFailure(asyncOutcome)) {
-      expect(asyncOutcome.error[0]!.message).toContain('async schema')
+      expect(asyncOutcome.error).toBe(SharedErrors.AsyncSchema)
+      expect(asyncOutcome.message).toContain('async schema')
     }
   })
 })

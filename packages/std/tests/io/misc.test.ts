@@ -172,7 +172,7 @@ describe('signatures', () => {
       signatureLength: 64,
       valid: true,
       altered: false,
-      brokenKey: 'sign-failed',
+      brokenKey: 'std:io.sign-failed',
     })
   })
 })

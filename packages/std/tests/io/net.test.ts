@@ -133,7 +133,7 @@ describe('tcp', () => {
       return isFailure(refused) ? refused.error : 'no-failure'
     })
 
-    expect(unwrap(outcome)).toBe('tcp-connect-failed')
+    expect(unwrap(outcome)).toBe('std:io.tcp-connect-failed')
   })
 
   // Regression pin: tcpListen (src/io/internal/net.ts) runs each connection handler via

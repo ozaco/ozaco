@@ -21,6 +21,7 @@ import { z } from 'zod'
 
 import type { AuthDef } from '../auth'
 import { Auth } from '../auth'
+import { AuthCauses } from '../auth/errors'
 
 import type { Helpers } from './types/helpers'
 import type { ResourceDef } from './types/resource'
@@ -695,7 +696,7 @@ export const guardHandshake = (resource: ResourceDef.RealtimeSource) =>
         return yield* fail(
           ServerErrors.Unauthorized,
           'this resource requires auth, but no Auth plugin is installed',
-          'auth:missing',
+          AuthCauses.Missing,
         )
       }
 

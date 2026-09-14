@@ -1,6 +1,7 @@
 import type { Operation } from 'std:effect'
 import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
+import { createTags } from 'std:shared'
 
 import type { ErrorsDef } from '../types/errors'
 
@@ -26,9 +27,15 @@ export const serviceErrors = <
   statuses: TMap,
 ): ErrorsDef.Catalog<TPrefix, TMap> => {
   const out: Record<string, unknown> = { statuses: {} }
+  const tags = createTags(prefix, ...Object.keys(statuses)) as Record<string, string>
 
   for (const [key, status] of Object.entries(statuses)) {
-    const tag = `${prefix}.${key}`
+    const tag =
+      tags[
+        key.replaceAll(/(?:^|-)(?<letter>[a-z0-9])/gu, (_match, letter: string) =>
+          letter.toUpperCase(),
+        )
+      ]!
     const camel = key.replaceAll(/-(?<letter>[a-z])/gu, (_match, letter: string) =>
       letter.toUpperCase(),
     )

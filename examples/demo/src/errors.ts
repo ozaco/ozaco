@@ -7,3 +7,9 @@ export const mediaErrors = serviceErrors('media', { 'not-found': 404 })
 
 /** the todos resource's own taxonomy, wired per-op via crud `ops`. */
 export const todosErrors = serviceErrors('todos', { protected: 423 })
+
+/** the reports service: `flaky` is retried away by the resilience option, `boom` is asked for. */
+export const reportsErrors = serviceErrors('reports', { flaky: 500, boom: 500 })
+
+/** the rtc page build step. */
+export const rtcErrors = serviceErrors('rtc', { build: 500 })

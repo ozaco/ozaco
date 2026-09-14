@@ -1,6 +1,6 @@
 import { attempt, run } from 'std:effect'
 import { isFailure, unwrap } from 'std:result'
-import type { WsDef } from 'std:ws'
+import type { AnyType } from 'std:shared'
 import { Ws, WsClient } from 'std:ws'
 
 import { describe, expect, it } from 'bun:test'
@@ -75,13 +75,16 @@ describe('Ws.actions.connect', () => {
   })
 
   it('a missing WebSocket implementation fails with ws/unsupported', async () => {
+    // simulate a platform without a WebSocket global: WsClient reads it at connect time
+    const Native = (globalThis as AnyType).WebSocket
+    delete (globalThis as AnyType).WebSocket
     const outcome = await run(function* () {
       yield* WsClient.use()
-      // simulate a platform without a WebSocket global (`?? default` swallows undefined, so use false)
-      yield* WsClient.use({ impl: false as unknown as WsDef.ImplLike })
       const result = yield* attempt(() => Ws.actions.connect('ws://localhost:1'))
 
       return isFailure(result) ? String(result.error) : 'connected'
+    }).finally(() => {
+      ;(globalThis as AnyType).WebSocket = Native
     })
 
     expect(unwrap(outcome)).toBe('std:ws.unsupported')

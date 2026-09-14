@@ -9,7 +9,7 @@ import type { AnyType } from 'std:shared'
 import { importPKCS8, importSPKI, jwtVerify, SignJWT } from 'jose'
 import { z } from 'zod'
 
-import { AuthErrors } from './errors'
+import { AuthCauses, AuthErrors } from './errors'
 import type { AuthDef } from './types'
 
 const ENCODER = new TextEncoder()
@@ -155,7 +155,7 @@ export function* authorize(
   }
 
   if (!principal) {
-    return yield* fail(ServerErrors.Unauthorized, 'authentication required', 'auth:missing')
+    return yield* fail(ServerErrors.Unauthorized, 'authentication required', AuthCauses.Missing)
   }
 
   if (requirement === 'authenticated') {
@@ -163,16 +163,16 @@ export function* authorize(
   }
 
   if (requirement === 'user' && principal.type === 'service') {
-    return yield* fail(ServerErrors.Forbidden, 'a user token is required', 'auth:service-token')
+    return yield* fail(ServerErrors.Forbidden, 'a user token is required', AuthCauses.ServiceToken)
   }
 
   if (requirement === 'service' && principal.type !== 'service') {
-    return yield* fail(ServerErrors.Forbidden, 'a service token is required', 'auth:user-token')
+    return yield* fail(ServerErrors.Forbidden, 'a service token is required', AuthCauses.UserToken)
   }
 
   if (typeof requirement === 'function') {
     if (!requirement(principal)) {
-      return yield* fail(ServerErrors.Forbidden, 'auth predicate rejected', 'auth:predicate')
+      return yield* fail(ServerErrors.Forbidden, 'auth predicate rejected', AuthCauses.Predicate)
     }
 
     return
@@ -201,7 +201,7 @@ export function* authorize(
         return yield* fail(
           ServerErrors.Forbidden,
           `missing permission(s): ${missing.join(', ')}`,
-          'auth:permission',
+          AuthCauses.Permission,
         )
       }
     }
@@ -215,7 +215,7 @@ function* requireRoles(principal: AuthDef.Principal, roles: readonly string[]): 
     return yield* fail(
       ServerErrors.Forbidden,
       `missing role(s): ${missing.join(', ')}`,
-      'auth:role',
+      AuthCauses.Role,
     )
   }
 }

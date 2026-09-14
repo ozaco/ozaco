@@ -2,6 +2,7 @@ import { attempt, operation, until } from 'std:effect'
 import { isSuccess } from 'std:result'
 import type { AnyType } from 'std:shared'
 
+import { RtcCauses } from '../errors'
 import type { RtcDef } from '../types/rtc'
 
 /** Probe result cache — the polyfill import is attempted at most once per process. */
@@ -20,24 +21,15 @@ const loadPolyfill = operation(function* () {
   return (module_?.RTCPeerConnection ?? module_?.default?.RTCPeerConnection ?? false) as
     | RtcDef.ImplLike
     | false
-}, 'rtc-load-polyfill')
+}, RtcCauses.LoadPolyfill)
 
 /**
- * Resolve the peer-connection implementation: an `impl` given to `RtcClient.use` wins (`false`
- * means "none, and do not probe"); otherwise the platform global `RTCPeerConnection`; otherwise,
- * on Bun/Node, the optional `node-datachannel` polyfill is dynamically imported (once) and used.
- * Returns `undefined` when nothing is available — `connect` turns that into
- * `RtcErrors.Unsupported`.
+ * Resolve the peer-connection implementation: the platform global `RTCPeerConnection` when
+ * present; otherwise, on Bun/Node, the optional `node-datachannel` polyfill is dynamically
+ * imported (once) and used. Returns `undefined` when nothing is available — `connect` turns that
+ * into `RtcErrors.Unsupported`.
  */
-export const resolveImpl = operation(function* (injected: RtcDef.ImplLike | false | undefined) {
-  if (injected) {
-    return injected
-  }
-
-  if (injected === false) {
-    return undefined
-  }
-
+export const resolveImpl = operation(function* () {
   const global = (globalThis as AnyType).RTCPeerConnection as RtcDef.ImplLike | undefined
   if (global) {
     return global
@@ -50,4 +42,4 @@ export const resolveImpl = operation(function* (injected: RtcDef.ImplLike | fals
   polyfilled ??= yield* loadPolyfill()
 
   return polyfilled === false ? undefined : polyfilled
-}, 'rtc-resolve-impl')
+}, RtcCauses.ResolveImpl)

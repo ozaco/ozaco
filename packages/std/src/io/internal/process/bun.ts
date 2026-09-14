@@ -1,17 +1,17 @@
 import { operation, until } from 'std:effect'
 import { fail } from 'std:result'
 
-import { IOErrors } from '../errors'
+import { IOErrors } from '../../errors'
 import type {
   ExecOptions,
   ExecResult,
   ProcessHandle,
   SpawnOptions,
   WebReadableLike,
-} from '../types/common'
+} from '../../types/common'
+import { fromReadable } from '../stream/from-readable'
 
-import { fromReadable } from './from-readable'
-import { errorMessage, makeStatus, normalizeSpawn, toBytes } from './process'
+import { errorMessage, makeStatus, normalizeSpawn, toBytes } from './shared'
 
 /**
  * Run a command to completion with `Bun.spawn`, buffering stdout/stderr. A non-zero exit is data

@@ -1,9 +1,9 @@
 // oxlint-disable import/exports-last
 import { fail } from 'std:result'
 
-import { IOErrors } from '../errors'
-import type { Hlc, HlcOptions, ObserveHlcOptions } from '../types/common'
-import type { Helpers } from '../types/helpers'
+import { IOErrors } from '../../errors'
+import type { Hlc, HlcOptions, ObserveHlcOptions } from '../../types/common'
+import type { Helpers } from '../../types/helpers'
 
 // Crockford's base32 (no I/L/O/U) — lexicographic order matches numeric order.
 const ENCODING = '0123456789ABCDEFGHJKMNPQRSTVWXYZ'

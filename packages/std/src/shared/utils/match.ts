@@ -1,6 +1,7 @@
 import type { Result } from 'std:result'
 import { fail, isFailure, isSuccess, succeed, unwrap } from 'std:result'
 
+import { SharedErrors } from '../errors'
 import type { AnyType } from '../types/common'
 import type { MatchBuilder, MatchCase } from '../types/match'
 
@@ -11,7 +12,7 @@ const createBuilder = <Input, Remaining, Output>(
   value: Input,
   cases: MatchCase[],
 ): MatchBuilder<Input, Remaining, Output> => {
-  const execute = (): Result<AnyType, null> => {
+  const execute = (): Result<AnyType, string> => {
     for (const c of cases) {
       if (c.schema) {
         const result = validateSync(c.schema, value)
@@ -26,7 +27,7 @@ const createBuilder = <Input, Remaining, Output>(
       }
     }
 
-    return fail(null)
+    return fail(SharedErrors.NoMatch)
   }
 
   return {
@@ -52,7 +53,7 @@ const createBuilder = <Input, Remaining, Output>(
       const result = execute()
 
       if (isFailure(result)) {
-        unwrap(fail('non-exhaustive matching, no case matched the value'))
+        unwrap(fail(SharedErrors.NonExhaustive, 'no case matched the value'))
       }
 
       return result.value

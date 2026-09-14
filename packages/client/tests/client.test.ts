@@ -3,7 +3,6 @@ import { ClientErrors, createClient } from 'client:core'
 import { attempt, run, sleep, until } from 'std:effect'
 import { unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
-import { WsClient } from 'std:ws'
 
 import { describe, expect, it } from 'bun:test'
 
@@ -152,9 +151,11 @@ describe('client — realtime resume', () => {
         sockets.push(this)
       }
     }
+    // WsClient reads `globalThis.WebSocket` at connect time: swap in the spy for this run only
+    const Native = (globalThis as AnyType).WebSocket
+    ;(globalThis as AnyType).WebSocket = Spy
     unwrap(
       await run(function* () {
-        yield* WsClient.use({ impl: Spy as AnyType })
         const { url } = yield* boot()
         const client = yield* createClient<Api>({ url })
         yield* client.notes.create({ title: 'before-drop', done: false } as AnyType)
@@ -177,5 +178,6 @@ describe('client — realtime resume', () => {
         expect(sockets.length).toBeGreaterThan(1)
       }),
     )
+    ;(globalThis as AnyType).WebSocket = Native
   })
 })

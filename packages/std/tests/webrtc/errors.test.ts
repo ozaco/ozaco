@@ -1,14 +1,14 @@
 import { attempt, run, sleep, spawn } from 'std:effect'
 import { isFailure, unwrap } from 'std:result'
 import type { RtcDef } from 'std:webrtc'
-import { Rtc, RtcClient, RtcErrors } from 'std:webrtc'
+import { Rtc, RtcErrors } from 'std:webrtc'
 
 import { describe, expect, it } from 'bun:test'
 
 import { JsonCodec } from 'std:codec/impl/json'
 
 import type { FakePeer } from './fake'
-import { createFakeRtc, createSignalPair } from './fake'
+import { createFakeRtc, createSignalPair, rtcMock } from './fake'
 
 /** The tag a failed attempt carries, or a marker when it unexpectedly succeeded. */
 const tagOf = (result: unknown) => (isFailure(result) ? String(result.error) : 'succeeded')
@@ -19,7 +19,7 @@ describe('failure tags', () => {
 
     const outcome = await run(function* () {
       yield* JsonCodec.use()
-      yield* RtcClient.use({ impl: fake.impl })
+      yield* fake.mock.use()
 
       const [signalA, signalB] = createSignalPair()
       const peerA = yield* Rtc.actions.connect(signalA)
@@ -41,7 +41,7 @@ describe('failure tags', () => {
 
     const outcome = await run(function* () {
       yield* JsonCodec.use()
-      yield* RtcClient.use({ impl: fake.impl })
+      yield* fake.mock.use()
 
       const [signalA, , queues] = createSignalPair()
       const peerA = yield* Rtc.actions.connect(signalA)
@@ -66,7 +66,7 @@ describe('failure tags', () => {
 
     const outcome = await run(function* () {
       yield* JsonCodec.use()
-      yield* RtcClient.use({ impl: fake.impl })
+      yield* fake.mock.use()
 
       const [signalA, signalB] = createSignalPair()
       const peerA = yield* Rtc.actions.connect(signalA)
@@ -102,7 +102,7 @@ describe('failure tags', () => {
 
     const outcome = await run(function* () {
       yield* JsonCodec.use()
-      yield* RtcClient.use({ impl: fake.impl })
+      yield* fake.mock.use()
 
       const [signalA, signalB] = createSignalPair()
       const peerA = yield* Rtc.actions.connect(signalA)
@@ -132,7 +132,7 @@ describe('failure tags', () => {
     } as unknown as RtcDef.ImplLike
 
     const outcome = await run(function* () {
-      yield* RtcClient.use({ impl: Refusing })
+      yield* rtcMock(Refusing).use()
       const [signalA] = createSignalPair()
       const result = yield* attempt(() => Rtc.actions.connect(signalA))
 
@@ -147,7 +147,7 @@ describe('failure tags', () => {
 
     const outcome = await run(function* () {
       yield* JsonCodec.use()
-      yield* RtcClient.use({ impl: fake.impl })
+      yield* fake.mock.use()
 
       const [signalA, signalB] = createSignalPair()
       const peerA = yield* Rtc.actions.connect(signalA)
@@ -172,7 +172,7 @@ describe('failure tags', () => {
 
     const outcome = await run(function* () {
       yield* JsonCodec.use()
-      yield* RtcClient.use({ impl: fake.impl })
+      yield* fake.mock.use()
 
       const [signalA, signalB] = createSignalPair()
       const peerA = yield* Rtc.actions.connect(signalA)
@@ -194,7 +194,7 @@ describe('failure tags', () => {
 
     const outcome = await run(function* () {
       yield* JsonCodec.use()
-      yield* RtcClient.use({ impl: fake.impl })
+      yield* fake.mock.use()
 
       const [signalA, signalB] = createSignalPair()
       const peerA = yield* Rtc.actions.connect(signalA)

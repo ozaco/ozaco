@@ -3,6 +3,7 @@ import { attempt, createQueue, race, scoped, sleep } from 'std:effect'
 import { IO } from 'std:io'
 import { isFailure } from 'std:result'
 
+import { AuthCauses } from '../../../plugins/auth/errors'
 import { SOCKET_AUTH_GRACE_MS } from '../../const'
 import { CtxRef } from '../../context'
 import type { EdgeDef } from '../../types/edge'
@@ -105,7 +106,7 @@ export function* driveSocket(input: Helpers.SocketInput): Operation<void> {
           message: verdict.message,
           status: 401,
           where: `socket:${route.path}`,
-          causes: ['auth:first-frame'],
+          causes: [AuthCauses.FirstFrame],
           ts: Date.now(),
         },
       })

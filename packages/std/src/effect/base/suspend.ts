@@ -1,3 +1,4 @@
+import { EffectCauses } from '../errors'
 import type { Operation } from '../types/operation'
 
 import { action } from './action'
@@ -7,4 +8,4 @@ import { action } from './action'
  * its enclosing scope is destroyed, at which point it proceeds as though return had been called
  * from the point of suspension.
  */
-export const suspend = (): Operation<void> => action(() => () => {}, 'suspend')
+export const suspend = (): Operation<void> => action(() => () => {}, EffectCauses.Suspend)

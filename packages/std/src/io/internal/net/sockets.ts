@@ -17,6 +17,7 @@ import { createSocket } from 'node:dgram'
 import type { Socket } from 'node:net'
 import { connect, createServer } from 'node:net'
 
+import { IOErrors } from '../../errors'
 import type {
   FlowClose,
   TcpConnectOptions,
@@ -25,9 +26,8 @@ import type {
   TcpSocket,
   UdpBindOptions,
   UdpDatagram,
-} from '../types/common'
-
-import { errorMessage, toBytes } from './process'
+} from '../../types/common'
+import { errorMessage, toBytes } from '../process/shared'
 
 const queueFlow = <T, TClose>(queue: Queue<T, TClose>): Flow<T, TClose> => ({
   *[Symbol.iterator]() {
@@ -50,7 +50,7 @@ const nodeWrite = operation(function* (socket: Socket, chunk: Uint8Array | strin
     ),
     failure =>
       fail(
-        'tcp-write-failed',
+        IOErrors.TcpWriteFailed,
         errorMessage(failure.error),
         ...failure.causes,
       ) as Result.Failure<unknown>,
@@ -131,7 +131,7 @@ export const tcpListen = operation(function* (options: TcpListenOptions, onConne
     }),
     failure =>
       fail(
-        'tcp-listen-failed',
+        IOErrors.TcpListenFailed,
         errorMessage(failure.error),
         ...failure.causes,
       ) as Result.Failure<unknown>,
@@ -175,7 +175,7 @@ export const tcpConnect = operation(function* (options: TcpConnectOptions) {
     failure => {
       socket.destroy()
       return fail(
-        'tcp-connect-failed',
+        IOErrors.TcpConnectFailed,
         errorMessage(failure.error),
         ...failure.causes,
       ) as Result.Failure<unknown>
@@ -210,7 +210,7 @@ export const udpBind = operation(function* (options?: UdpBindOptions) {
     failure => {
       socket.close()
       return fail(
-        'udp-bind-failed',
+        IOErrors.UdpBindFailed,
         errorMessage(failure.error),
         ...failure.causes,
       ) as Result.Failure<unknown>
@@ -259,7 +259,7 @@ export const udpBind = operation(function* (options?: UdpBindOptions) {
       ),
       failure =>
         fail(
-          'udp-send-failed',
+          IOErrors.UdpSendFailed,
           errorMessage(failure.error),
           ...failure.causes,
         ) as Result.Failure<unknown>,

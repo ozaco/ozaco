@@ -6,7 +6,7 @@ import { fail } from 'std:result'
 
 import pkg from '../../../package.json'
 
-import { AuthErrors } from './errors'
+import { AuthCauses, AuthErrors } from './errors'
 import {
   authorize,
   bearerOf,
@@ -193,7 +193,11 @@ export const Auth = AuthImpl.build<AuthDef.Actions>({
     const ctx = yield* CtxRef.get()
     const principal = ctx?.auth as AuthDef.Principal | undefined
     if (!principal) {
-      return yield* fail(ServerErrors.Unauthorized, 'no principal on this dispatch', 'auth:missing')
+      return yield* fail(
+        ServerErrors.Unauthorized,
+        'no principal on this dispatch',
+        AuthCauses.Missing,
+      )
     }
     return principal
   },

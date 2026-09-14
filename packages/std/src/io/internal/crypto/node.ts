@@ -14,8 +14,8 @@ import {
   scrypt,
 } from 'node:crypto'
 
-import { IOErrors } from '../errors'
-import type { KeyPair } from '../types/common'
+import { IOErrors } from '../../errors'
+import type { KeyPair } from '../../types/common'
 
 /*
  * Secret-based authenticated encryption, hardened for maximum security:
@@ -172,7 +172,7 @@ export const signData = operation(function* (data: Uint8Array | string, privateK
     ),
     failure =>
       fail(
-        'sign-failed',
+        IOErrors.SignFailed,
         'signing failed — invalid private key',
         ...failure.causes,
       ) as Result.Failure<unknown>,
@@ -195,7 +195,7 @@ export const verifyData = operation(function* (
     ),
     failure =>
       fail(
-        'verify-failed',
+        IOErrors.VerifyFailed,
         'verification failed — invalid public key',
         ...failure.causes,
       ) as Result.Failure<unknown>,

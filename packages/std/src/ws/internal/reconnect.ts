@@ -2,7 +2,7 @@ import { attempt, operation, sleep } from 'std:effect'
 import type { Result } from 'std:result'
 import { fail, isSuccess } from 'std:result'
 
-import { WsErrors } from '../errors'
+import { WsCauses, WsErrors } from '../errors'
 import type { Helpers } from '../types/helpers'
 import type { WsDef } from '../types/ws'
 
@@ -66,4 +66,4 @@ export const supervise = operation(function* (
       return
     }
   }
-}, 'ws-reconnect')
+}, WsCauses.Reconnect)

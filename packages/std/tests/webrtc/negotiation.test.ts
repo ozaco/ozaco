@@ -1,6 +1,6 @@
 import { run } from 'std:effect'
 import { unwrap } from 'std:result'
-import { Rtc, RtcClient } from 'std:webrtc'
+import { Rtc } from 'std:webrtc'
 
 import { describe, expect, it } from 'bun:test'
 
@@ -14,7 +14,7 @@ describe('perfect negotiation', () => {
 
     const outcome = await run(function* () {
       yield* JsonCodec.use()
-      yield* RtcClient.use({ impl: fake.impl })
+      yield* fake.mock.use()
 
       const [signalA, signalB] = createSignalPair()
       const peerA = yield* Rtc.actions.connect(signalA) // impolite
@@ -55,7 +55,7 @@ describe('perfect negotiation', () => {
 
     const outcome = await run(function* () {
       yield* JsonCodec.use()
-      yield* RtcClient.use({ impl: fake.impl })
+      yield* fake.mock.use()
 
       const [signalA, signalB, queues] = createSignalPair()
       // noise the peer must skip: a keepalive string, an app frame, junk

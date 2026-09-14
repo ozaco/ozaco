@@ -1,4 +1,3 @@
-import type { StandardSchemaV1 } from 'cli:core'
 import { CliErrors, Terminal } from 'cli:core'
 import { usePalette } from 'cli:palette'
 import type { Operation } from 'std:effect'
@@ -18,18 +17,6 @@ import { tokenize } from './tokenize'
 
 const hasFlag = (argv: string[], flags: string[]): boolean =>
   argv.some(token => flags.includes(token))
-
-const formatIssues = (issues: readonly StandardSchemaV1.Issue[]): string =>
-  issues
-    .map(issue => {
-      const path = (issue.path ?? [])
-        .map(seg =>
-          typeof seg === 'object' ? String((seg as { key: PropertyKey }).key) : String(seg),
-        )
-        .join('.')
-      return path === '' ? issue.message : `${path}: ${issue.message}`
-    })
-    .join('\n')
 
 function* descend(node: Helpers.RuntimeNode, rest: string[], path: string[]): Operation<void> {
   const token = rest[0]
@@ -103,7 +90,7 @@ function* dispatch(node: Helpers.RuntimeNode, rest: string[], path: string[]): O
   if (meta.input !== undefined && errors.length === 0) {
     const result = validateSync(meta.input, built)
     if (isFailure(result)) {
-      errors.push(formatIssues(result.error))
+      errors.push(result.causes.join('\n'))
     } else {
       ctx = result.value
     }

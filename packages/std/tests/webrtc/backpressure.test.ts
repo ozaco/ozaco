@@ -1,6 +1,6 @@
 import { fork, run, sleep, spawn } from 'std:effect'
 import { unwrap } from 'std:result'
-import { Rtc, RtcClient } from 'std:webrtc'
+import { Rtc } from 'std:webrtc'
 
 import { describe, expect, it } from 'bun:test'
 
@@ -15,7 +15,7 @@ describe('channel backpressure', () => {
 
     const outcome = await run(function* () {
       yield* JsonCodec.use()
-      yield* RtcClient.use({ impl: fake.impl })
+      yield* fake.mock.use()
 
       const [signalA, signalB] = createSignalPair()
       const peerA = yield* Rtc.actions.connect(signalA)

@@ -3,17 +3,17 @@ import { fail } from 'std:result'
 
 import { spawn as childSpawn } from 'node:child_process'
 
-import { IOErrors } from '../errors'
+import { IOErrors } from '../../errors'
 import type {
   ExecOptions,
   ExecResult,
   ProcessHandle,
   ProcessStatus,
   SpawnOptions,
-} from '../types/common'
+} from '../../types/common'
+import { fromReadable } from '../stream/from-readable'
 
-import { fromReadable } from './from-readable'
-import { concatBytes, errorMessage, makeStatus, normalizeSpawn, toBytes } from './process'
+import { concatBytes, errorMessage, makeStatus, normalizeSpawn, toBytes } from './shared'
 
 /**
  * Run a command to completion with `node:child_process`, buffering stdout/stderr. A non-zero exit

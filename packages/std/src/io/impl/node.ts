@@ -12,28 +12,28 @@ import { dirname, join } from 'node:path'
 
 import pkg from '../../../package.json'
 import { IOErrors } from '../errors'
+import { hlcDecode, hlcObserve, hlcToken } from '../internal/crypto/hlc'
 import {
   decryptSecret,
   encryptSecret,
   generateSignKeyPair,
   signData,
   verifyData,
-} from '../internal/crypto'
+} from '../internal/crypto/node'
+import { ulidId } from '../internal/crypto/ulid'
+import { uuidId } from '../internal/crypto/uuid'
 import { readEnv } from '../internal/env'
-import { readFileFlow, writeFileFlow } from '../internal/flow'
-import { fromReadable } from '../internal/from-readable'
-import { hlcDecode, hlcObserve, hlcToken } from '../internal/hlc'
-import { tcpConnect, tcpListen, udpBind } from '../internal/net'
-import { mapStat, walkRecursive } from '../internal/node-shared'
-import { nodePath } from '../internal/path-node'
-import { nodeExec, nodeSpawn } from '../internal/process-node'
-import { createS3 } from '../internal/s3'
-import { fetchS3Client } from '../internal/s3-fetch'
-import { readInterfaces, readTmpDir } from '../internal/sys'
-import { toReadable } from '../internal/to-readable'
-import { ulidId } from '../internal/ulid'
-import { uuidId } from '../internal/uuid'
-import { watchPath } from '../internal/watch'
+import { readFileFlow, writeFileFlow } from '../internal/fs/flow'
+import { mapStat, walkRecursive } from '../internal/fs/walk'
+import { watchPath } from '../internal/fs/watch'
+import { tcpConnect, tcpListen, udpBind } from '../internal/net/sockets'
+import { readInterfaces, readTmpDir } from '../internal/net/sys'
+import { nodePath } from '../internal/path/node'
+import { nodeExec, nodeSpawn } from '../internal/process/node'
+import { createS3 } from '../internal/s3/create'
+import { fetchS3Client } from '../internal/s3/fetch'
+import { fromReadable } from '../internal/stream/from-readable'
+import { toReadable } from '../internal/stream/to-readable'
 import type { HashAlgorithm } from '../types/common'
 
 const toNodeHash = (alg: HashAlgorithm) =>

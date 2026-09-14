@@ -1,6 +1,6 @@
 import { operation } from 'std:effect'
 
-import type { UlidOptions } from '../types/common'
+import type { UlidOptions } from '../../types/common'
 
 // Crockford's base32 (no I/L/O/U) — lexicographic sort order matches numeric order.
 const ENCODING = '0123456789ABCDEFGHJKMNPQRSTVWXYZ'

@@ -2,7 +2,7 @@ import type { Flow, Future, Operation, Queue } from 'std:effect'
 import { attempt, lift, operation } from 'std:effect'
 import { fail } from 'std:result'
 
-import { RtcErrors } from '../errors'
+import { RtcCauses, RtcErrors } from '../errors'
 import type { Helpers } from '../types/helpers'
 import type { RtcDef } from '../types/rtc'
 
@@ -70,7 +70,7 @@ export const createHandle = (session: Helpers.Session): RtcDef.Peer => {
       }
 
       return yield* readStats(generation.pc)
-    }, 'rtc-stats'),
+    }, RtcCauses.Stats),
 
     restartIce: lift(() => {
       const generation = session.generation
@@ -89,6 +89,6 @@ export const createHandle = (session: Helpers.Session): RtcDef.Peer => {
       }
 
       yield* session.closed.operation
-    }, 'rtc-close'),
+    }, RtcCauses.Close),
   }
 }

@@ -3,6 +3,7 @@ import { attempt, operation, sleep } from 'std:effect'
 import { isSuccess } from 'std:result'
 import type { AnyType } from 'std:shared'
 
+import { WsCauses } from '../errors'
 import type { Helpers } from '../types/helpers'
 import type { WsDef } from '../types/ws'
 
@@ -35,4 +36,4 @@ export const keepAlive = operation(function* (
 
     socket.send(encoded.value as AnyType)
   }
-}, 'ws-keepalive')
+}, WsCauses.Keepalive)

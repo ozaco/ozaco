@@ -4,8 +4,8 @@ import type { AnyType } from 'std:shared'
 
 import { describe, expect, it } from 'bun:test'
 
-import { createS3 } from '../../src/io/internal/s3'
-import { fetchS3Client } from '../../src/io/internal/s3-fetch'
+import { createS3 } from '../../src/io/internal/s3/create'
+import { fetchS3Client } from '../../src/io/internal/s3/fetch'
 
 describe('s3 fetch client', () => {
   it('surfaces non-ok responses as s3-failed failures, not native errors', async () => {

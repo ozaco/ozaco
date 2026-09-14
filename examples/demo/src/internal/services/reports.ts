@@ -7,10 +7,10 @@ import { useDb } from 'db:core'
 import { action, refs, service } from 'server:core'
 import type { Operation } from 'std:effect'
 import { sleep } from 'std:effect'
-import { fail } from 'std:result'
 
 import { z } from 'zod'
 
+import { reportsErrors } from '../../errors'
 import { schema } from '../../utils/tables'
 
 // TYPE-only: `reports` calls these services without importing them at runtime, so the module
@@ -76,7 +76,7 @@ export const reports = service(
       function* ({ input }) {
         flakyCalls += 1
         if (flakyCalls <= input.failTimes) {
-          return yield* fail('reports.flaky', `attempt ${flakyCalls} failed`)
+          return yield* reportsErrors.flaky(`attempt ${flakyCalls} failed`)
         }
         const attempts = flakyCalls
         flakyCalls = 0
@@ -95,7 +95,7 @@ export const reports = service(
       function* ({ input }) {
         yield* sleep(20)
         if (input.boom) {
-          return yield* fail('reports.boom', 'asked to fail')
+          return yield* reportsErrors.boom('asked to fail')
         }
         return { ok: true }
       },

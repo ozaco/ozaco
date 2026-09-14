@@ -1,7 +1,7 @@
 import { run, scoped } from 'std:effect'
 import { unwrap } from 'std:result'
 import type { RtcDef } from 'std:webrtc'
-import { Rtc, RtcClient } from 'std:webrtc'
+import { Rtc } from 'std:webrtc'
 
 import { describe, expect, it } from 'bun:test'
 
@@ -15,7 +15,7 @@ describe('close semantics', () => {
 
     const outcome = await run(function* () {
       yield* JsonCodec.use()
-      yield* RtcClient.use({ impl: fake.impl })
+      yield* fake.mock.use()
 
       const [signalA, signalB] = createSignalPair()
       const peerA = yield* Rtc.actions.connect(signalA)
@@ -53,7 +53,7 @@ describe('close semantics', () => {
 
     const outcome = await run(function* () {
       yield* JsonCodec.use()
-      yield* RtcClient.use({ impl: fake.impl })
+      yield* fake.mock.use()
 
       const [signalA, signalB] = createSignalPair()
       const peerB = yield* Rtc.actions.connect(signalB, { polite: true })
@@ -79,7 +79,7 @@ describe('close semantics', () => {
 
     const outcome = await run(function* () {
       yield* JsonCodec.use()
-      yield* RtcClient.use({ impl: fake.impl })
+      yield* fake.mock.use()
 
       const [signalA, signalB] = createSignalPair()
       const peerA = yield* Rtc.actions.connect(signalA)

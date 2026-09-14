@@ -259,7 +259,7 @@ describe('auth', () => {
         expect(yield* server.call(gated, 'viewer', undefined, { meta })).toBe('seen')
         const missing = yield* attempt(server.call(gated, 'admin', undefined, { meta }))
         expect((missing as AnyType).error).toBe(ServerErrors.Forbidden)
-        expect((missing as AnyType).causes).toContain('auth:permission')
+        expect((missing as AnyType).causes).toContain('server:auth.permission')
 
         // the predicate sees the FULL principal
         expect(yield* server.call(gated, 'custom', undefined, { meta })).toBe('bespoke')

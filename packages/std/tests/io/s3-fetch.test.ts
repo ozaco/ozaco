@@ -1,4 +1,4 @@
-import { attempt, run } from 'std:effect'
+import { attempt, run, until } from 'std:effect'
 import { IO, IOErrors } from 'std:io'
 import { isFailure, unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
@@ -8,8 +8,8 @@ import { createHash, createHmac } from 'node:crypto'
 
 import { WebIO } from 'std:io/impl/web'
 
-import { createS3 } from '../../src/io/internal/s3'
-import { fetchS3Client } from '../../src/io/internal/s3-fetch'
+import { createS3 } from '../../src/io/internal/s3/create'
+import { fetchS3Client } from '../../src/io/internal/s3/fetch'
 
 // The SigV4-over-fetch client used by NodeIO, exercised against a stubbed global `fetch` — no
 // network, no credentials. Covers the object ops, list XML parsing, presign URL shape, and a SigV4
@@ -407,5 +407,117 @@ describe('IO.actions.s3 on WebIO', () => {
       list: IOErrors.Unsupported,
       presign: IOErrors.Unsupported,
     })
+  })
+})
+
+describe('fetch S3 client — streaming', () => {
+  it('stream() hands chunks over as they arrive, before the body has ended', async () => {
+    let release: () => void = () => {}
+    const gate = new Promise<void>(resolve => {
+      release = resolve
+    })
+    const body = new ReadableStream<Uint8Array>({
+      async start(controller) {
+        controller.enqueue(new TextEncoder().encode('first'))
+        await gate
+        controller.enqueue(new TextEncoder().encode('second'))
+        controller.close()
+      },
+    })
+    stubFetch(new Response(body, { status: 200 }))
+    const s3 = createS3(fetchS3Client(CONFIG))
+
+    const outcome = await run(function* () {
+      const stream = yield* s3.file('big.bin').stream()
+      const reader = stream.getReader()
+      const first = new TextDecoder().decode((yield* until(reader.read())).value)
+      release()
+      const second = new TextDecoder().decode((yield* until(reader.read())).value)
+      const end = yield* until(reader.read())
+
+      return { first, second, done: end.done }
+    })
+
+    expect(unwrap(outcome)).toEqual({ first: 'first', second: 'second', done: true })
+  })
+
+  it('a ReadableStream body is uploaded multipart, one part per partSize bytes, then completed', async () => {
+    const calls = stubFetch(
+      new Response(
+        '<InitiateMultipartUploadResult><UploadId>up-1</UploadId></InitiateMultipartUploadResult>',
+      ),
+      new Response(null, { status: 200, headers: { etag: '"p1"' } }),
+      new Response(null, { status: 200, headers: { etag: '"p2"' } }),
+      new Response(null, { status: 200, headers: { etag: '"p3"' } }),
+      new Response('<CompleteMultipartUploadResult/>', { status: 200 }),
+    )
+    const s3 = createS3(fetchS3Client({ ...CONFIG, partSize: 4 }))
+    const chunks = ['abc', 'defg', 'hi'].map(text => new TextEncoder().encode(text))
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        for (const chunk of chunks) {
+          controller.enqueue(chunk)
+        }
+        controller.close()
+      },
+    })
+
+    const outcome = await run(function* () {
+      return yield* s3.write('streamed.bin', body)
+    })
+
+    expect(unwrap(outcome)).toBe(9)
+    expect(calls.map(call => [call.method, new URL(call.url).search])).toEqual([
+      ['POST', '?uploads='],
+      ['PUT', '?partNumber=1&uploadId=up-1'],
+      ['PUT', '?partNumber=2&uploadId=up-1'],
+      ['PUT', '?partNumber=3&uploadId=up-1'],
+      ['POST', '?uploadId=up-1'],
+    ])
+    // parts are re-chunked to partSize regardless of how the source chunked them
+    expect(
+      calls.slice(1, 4).map(call => new TextDecoder().decode(call.body as Uint8Array)),
+    ).toEqual(['abcd', 'efgh', 'i'])
+    expect(calls[4]!.body).toBe(
+      '<CompleteMultipartUpload>' +
+        '<Part><PartNumber>1</PartNumber><ETag>"p1"</ETag></Part>' +
+        '<Part><PartNumber>2</PartNumber><ETag>"p2"</ETag></Part>' +
+        '<Part><PartNumber>3</PartNumber><ETag>"p3"</ETag></Part>' +
+        '</CompleteMultipartUpload>',
+    )
+    expect(calls[4]!.headers['content-type']).toBe('application/xml')
+    expect(calls[4]!.headers.authorization).toContain(
+      'SignedHeaders=content-type;host;x-amz-content-sha256;x-amz-date,',
+    )
+  })
+
+  it('a failing part aborts the multipart upload and fails std:io.s3-failed', async () => {
+    const calls = stubFetch(
+      new Response(
+        '<InitiateMultipartUploadResult><UploadId>up-2</UploadId></InitiateMultipartUploadResult>',
+      ),
+      new Response('nope', { status: 500, statusText: 'Boom' }),
+      new Response(null, { status: 204 }),
+    )
+    const s3 = createS3(fetchS3Client({ ...CONFIG, partSize: 4 }))
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('abcdefgh'))
+        controller.close()
+      },
+    })
+
+    const outcome = await run(function* () {
+      const result = yield* attempt(() => s3.write('streamed.bin', body))
+
+      return isFailure(result) ? [result.error, result.message] : 'no-failure'
+    })
+
+    expect(unwrap(outcome)).toEqual([IOErrors.S3Failed, 's3 500 Boom for "streamed.bin"'])
+    expect(calls.map(call => [call.method, new URL(call.url).search])).toEqual([
+      ['POST', '?uploads='],
+      ['PUT', '?partNumber=1&uploadId=up-2'],
+      ['DELETE', '?uploadId=up-2'],
+    ])
   })
 })

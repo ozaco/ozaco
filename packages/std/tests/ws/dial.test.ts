@@ -2,9 +2,11 @@ import { run } from 'std:effect'
 import { unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
 import type { WsDef } from 'std:ws'
-import { Ws, WsClient } from 'std:ws'
+import { Ws } from 'std:ws'
 
 import { describe, expect, it } from 'bun:test'
+
+import { wsMock } from './helpers'
 
 /** What the `impl` constructor received for the last socket: the standard `protocols` second arg
  * or the Bun/Node options-object form. */
@@ -45,7 +47,7 @@ const dialWith = async (options: WsDef.Options) => {
   constructed.length = 0
 
   const outcome = await run(function* () {
-    yield* WsClient.use({ impl: FakeSocket })
+    yield* wsMock(FakeSocket).use()
     const connection = yield* Ws.actions.connect('ws://fake.test/socket', options)
     const readyState = connection.readyState
     yield* connection.close()

@@ -9,3 +9,6 @@ export const EffectErrors = createTags(
   'no-scope-handler',
   'using',
 )
+
+/** The cause names effect stamps on its own primitives. */
+export const EffectCauses = createTags('std:effect', 'until', 'suspend')

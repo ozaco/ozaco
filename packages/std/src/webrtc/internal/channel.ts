@@ -5,7 +5,7 @@ import type { Result } from 'std:result'
 import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 
-import { RtcErrors } from '../errors'
+import { RtcCauses, RtcErrors } from '../errors'
 import type { Helpers } from '../types/helpers'
 import type { RtcDef } from '../types/rtc'
 
@@ -287,12 +287,12 @@ export const wrapChannel = (
 
         return
       }
-    }, 'rtc-channel-send'),
+    }, RtcCauses.ChannelSend),
 
     close: operation(function* () {
       end(true)
       yield* closedResolvers.operation
-    }, 'rtc-channel-close'),
+    }, RtcCauses.ChannelClose),
   }
 
   return { handle, opened: openedResolvers.operation, end, suspend, rebind }

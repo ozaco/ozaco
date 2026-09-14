@@ -134,7 +134,9 @@ export const JsonCodec = Codec.implement({
       }
 
       const subscription = yield* flow
-      let closeValue: true | Result.Failure<unknown> = asFailure(fail('cancelled', 'flow halted'))
+      let closeValue: true | Result.Failure<unknown> = asFailure(
+        fail(CodecErrors.Cancelled, 'flow halted'),
+      )
 
       try {
         while (true) {

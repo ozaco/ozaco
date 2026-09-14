@@ -6,7 +6,7 @@ import { describe, expect, it } from 'bun:test'
 
 import { JsonCodec } from 'std:codec/impl/json'
 
-import { fromReadable } from '../../src/io/internal/from-readable'
+import { fromReadable } from '../../src/io/internal/stream/from-readable'
 
 // Background pumps that outlive the call that created them must be forked, not spawned: spawn is
 // best-effort (a scope that never suspends again may close before the child ever runs), while fork
