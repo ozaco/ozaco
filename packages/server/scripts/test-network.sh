@@ -15,18 +15,38 @@ fi
 
 NATS="ozaco-server-nats-$$"
 REDIS="ozaco-server-redis-$$"
-docker run -d --rm --name "$NATS" -p 127.0.0.1:0:4222 nats:2-alpine -js >/dev/null
+docker run -d --rm --name "$NATS" -p 127.0.0.1:0:4222 -p 127.0.0.1:0:8222 \
+  nats:2-alpine -js -m 8222 >/dev/null
 docker run -d --rm --name "$REDIS" -p 127.0.0.1:0:6379 redis:7-alpine >/dev/null
 trap 'docker stop "$NATS" "$REDIS" >/dev/null 2>&1 || true' EXIT
 
 NATS_PORT="$(docker port "$NATS" 4222/tcp | head -1 | awk -F: '{print $NF}')"
 REDIS_PORT="$(docker port "$REDIS" 6379/tcp | head -1 | awk -F: '{print $NF}')"
-for port in "$NATS_PORT" "$REDIS_PORT"; do
-  for _ in $(seq 1 60); do
-    (echo > "/dev/tcp/127.0.0.1/${port}") >/dev/null 2>&1 && break
+
+# NATS answers TCP before JetStream is up (and Redis before it loads) — a connect right after
+# the port opens fails under load (`moon run :test-all`). Ask the server itself: the NATS
+# monitor endpoint reports JetStream readiness, Redis answers PING. Give up loudly after 60s.
+wait_nats() { # name, monitor host port
+  for _ in $(seq 1 240); do
+    curl -fsS "http://127.0.0.1:${2}/healthz?js-enabled-only=true" >/dev/null 2>&1 && return 0
     sleep 0.25
   done
-done
+  echo "nats ($1) did not become ready within 60s" >&2
+  docker logs "$1" 2>&1 | tail -20 >&2
+  return 1
+}
+wait_redis() { # name
+  for _ in $(seq 1 240); do
+    [ "$(docker exec "$1" redis-cli ping 2>/dev/null)" = "PONG" ] && return 0
+    sleep 0.25
+  done
+  echo "redis ($1) did not become ready within 60s" >&2
+  docker logs "$1" 2>&1 | tail -20 >&2
+  return 1
+}
+
+wait_nats "$NATS" "$(docker port "$NATS" 8222/tcp | head -1 | awk -F: '{print $NF}')"
+wait_redis "$REDIS"
 
 TRANSPORT_TEST_NATS_URL="nats://127.0.0.1:${NATS_PORT}" \
 TRANSPORT_TEST_REDIS_URL="redis://127.0.0.1:${REDIS_PORT}" \
