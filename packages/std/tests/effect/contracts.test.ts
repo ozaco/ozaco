@@ -4,24 +4,13 @@ import { fail, isFailure, isSuccess } from 'std:result'
 import { describe, expect, it } from 'bun:test'
 
 /**
- * AUDIT E5: the "promise side never rejects" contract (`types/operation.ts`) is pinned only for
- * `Task.promise` (tests/effect/task-promise.test.ts). This file pins the OTHER promise-side
- * surfaces — `task.halt()`, `task[Symbol.asyncDispose]()` and `createFuture().reject()` — exactly
- * as they behave TODAY.
- *
- * DEVIATION PINNED (AUDIT E1/E2): two of these paths currently REJECT, contradicting the
- * documented contract:
- *   - E2: `halt()` (and `Symbol.asyncDispose`, which inherits it) rejects when the halted task's
- *     unwind settles a failure (a failing `finally`/teardown). `utils/to-future.ts` works around it
- *     with `.catch(() => {})`.
- *   - E1: `createFuture().reject()` calls `promise.reject`, so the returned `Future` rejects — and
- *     the rejection value is the Failure's bare `error` field (the lazy promise unwraps it), so the
- *     message and causes are lost on the promise side.
- * The `it('DEVIATION …')` cases below assert the rejection on purpose: when E1/E2 are fixed they
- * will FAIL, which is the signal to flip them to the "resolves a Failure" expectation.
+ * The "promise side never rejects" contract (`types/operation.ts`) on EVERY promise-side surface:
+ * `Task.promise` (tests/effect/task-promise.test.ts), and here `task.halt()`,
+ * `task[Symbol.asyncDispose]()` and `createFuture().reject()`. Each of them resolves a `Result`
+ * — a Failure is a VALUE on the promise side and a raise on the operation side.
  */
 describe('halt() promise side', () => {
-  it('resolves undefined for a task that is still running', async () => {
+  it('resolves a Success for a task that is still running', async () => {
     const task = run(function* () {
       yield* suspend()
     })
@@ -33,7 +22,7 @@ describe('halt() promise side', () => {
     })
 
     expect(rejected).toBe(false)
-    expect(halted).toBeUndefined()
+    expect(isSuccess(halted)).toBe(true)
 
     const outcome = await task
     expect(isFailure(outcome)).toBe(true)
@@ -42,7 +31,7 @@ describe('halt() promise side', () => {
     }
   })
 
-  it('resolves undefined for a task that already failed on its own', async () => {
+  it('resolves a Success for a task that already failed on its own', async () => {
     // interrupting a settled task is a no-op: nothing was interrupted, so the settled failure is
     // NOT re-raised through halt() — the failure stays where it belongs, on the task promise
     const task = run(function* () {
@@ -58,13 +47,13 @@ describe('halt() promise side', () => {
     })
 
     expect(rejected).toBe(false)
-    expect(halted).toBeUndefined()
+    expect(isSuccess(halted)).toBe(true)
 
     const disposed = await task[Symbol.asyncDispose]().catch(() => 'rejected')
-    expect(disposed).toBeUndefined()
+    expect(isSuccess(disposed)).toBe(true)
   })
 
-  it('DEVIATION (E2): rejects when the halted task fails while unwinding', async () => {
+  it('resolves the Failure when the halted task fails while unwinding', async () => {
     const task = run(function* () {
       try {
         yield* suspend()
@@ -73,20 +62,17 @@ describe('halt() promise side', () => {
       }
     })
 
-    let rejection: unknown
+    let rejected = false
+    const halted = await task.halt().catch(() => {
+      rejected = true
+    })
 
-    try {
-      await task.halt()
-      rejection = 'resolved'
-    } catch (error) {
-      rejection = error
-    }
-
-    // the failure escapes as a rejection — the contract says it should resolve a Failure
-    expect(rejection).not.toBe('resolved')
-    expect(isFailure(rejection)).toBe(true)
-    if (isFailure(rejection)) {
-      expect(rejection.error).toBe('teardown.boom')
+    // the unwind failure is the RESOLVED value — never a rejection
+    expect(rejected).toBe(false)
+    expect(isFailure(halted)).toBe(true)
+    if (isFailure(halted)) {
+      expect(halted.error).toBe('teardown.boom')
+      expect(halted.message).toBe('raised during unwind')
     }
 
     // the task promise itself honors the contract: it resolves the same Failure
@@ -97,7 +83,7 @@ describe('halt() promise side', () => {
     }
   })
 
-  it('DEVIATION (E2): Symbol.asyncDispose inherits the rejection', async () => {
+  it('Symbol.asyncDispose settles the same way: `await using` never throws on teardown', async () => {
     const task = run(function* () {
       try {
         yield* suspend()
@@ -106,20 +92,20 @@ describe('halt() promise side', () => {
       }
     })
 
-    let rejection: unknown
+    let rejected = false
+    const disposed = await task[Symbol.asyncDispose]().catch(() => {
+      rejected = true
+    })
 
-    try {
-      await task[Symbol.asyncDispose]()
-      rejection = 'resolved'
-    } catch (error) {
-      rejection = error
+    expect(rejected).toBe(false)
+    expect(isFailure(disposed)).toBe(true)
+    if (isFailure(disposed)) {
+      expect(disposed.error).toBe('dispose.boom')
     }
 
-    expect(rejection).not.toBe('resolved')
-    expect(isFailure(rejection)).toBe(true)
-    if (isFailure(rejection)) {
-      expect(rejection.error).toBe('dispose.boom')
-    }
+    // the task promise itself resolves the same Failure
+    const outcome = await task
+    expect(isFailure(outcome) && outcome.error).toBe('dispose.boom')
   })
 
   it('the operation side of halt() raises the unwind failure (unchanged, in-effect)', async () => {
@@ -173,34 +159,29 @@ describe('createFuture() promise side', () => {
     }
   })
 
-  it('DEVIATION (E1): reject() makes the Future REJECT instead of resolving the Failure', async () => {
+  it('reject() resolves the promise side with the Failure itself — message and causes intact', async () => {
     const { future, reject } = createFuture<number>()
 
-    reject(fail('future.rejected', 'through promise.reject'))
+    reject(fail('future.rejected', 'through reject', 'probe:cause'))
 
-    let rejection: unknown
+    let rejected = false
+    const settled = await future.catch(() => {
+      rejected = true
+    })
 
-    try {
-      await future
-      rejection = 'resolved'
-    } catch (error) {
-      rejection = error
+    expect(rejected).toBe(false)
+    expect(isFailure(settled)).toBe(true)
+    if (isFailure(settled)) {
+      expect(settled.error).toBe('future.rejected')
+      expect(settled.message).toBe('through reject')
+      expect(settled.causes).toContain('probe:cause')
     }
-
-    expect(rejection).not.toBe('resolved')
-    // the promise rejects with the Failure's `error` field, NOT the Failure itself
-    expect(isFailure(rejection)).toBe(false)
-    expect(rejection).toBe('future.rejected')
   })
 
   it('reject() raises the Failure on the operation side (in-effect, as documented)', async () => {
     const { future, reject } = createFuture<number>()
 
     reject(fail('future.rejected'))
-
-    // keep the promise side observed so the deviation above cannot surface as an unhandled
-    // rejection while we exercise the operation side
-    future.catch(() => {})
 
     const outcome = await run(function* () {
       let raised: unknown

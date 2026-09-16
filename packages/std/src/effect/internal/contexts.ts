@@ -10,8 +10,9 @@ export const PriorityContext = createContext<number>('std:effect:scope.priority'
 
 export const ChildrenContext = createContext<Set<Scope>>('std:effect:scope.children')
 
-// upstream defines these next to the coroutine/trap modules; they live here so the import graph
-// stays acyclic — same defaults, same behavior
+// upstream defines these next to the coroutine/trap modules; they live here so THIS module stays
+// a leaf — `scope-internal` and `task` import each other by design (a scope runs tasks, a task
+// owns a scope) and neither needs to pull the contexts through that cycle
 export const SettleContext = createContext<Helpers.Settleware>(
   'std:effect:coroutine.settle',
   (outcome, next) => next(outcome),

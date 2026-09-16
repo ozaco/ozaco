@@ -1,6 +1,5 @@
 import type { Maybe, Result } from 'std:result'
 import { asFailure, isFailure, isSuccess, succeed } from 'std:result'
-import type { AnyType } from 'std:shared'
 
 import { createFuture } from '../base/future'
 import type { Helpers } from '../types/helpers'
@@ -16,15 +15,12 @@ export const createCoroutine = <T>({
 }: Helpers.CoroutineOptions<T>): Helpers.Coroutine<T> => {
   const reducer = scope.expect(ReducerContext)
 
-  let iterator:
-    | Iterator<Helpers.Effect<unknown> | Result.Failure<AnyType>, T, unknown>
-    | undefined = undefined
+  let iterator: Iterator<Helpers.Step, T, unknown> | undefined = undefined
   const { future, resolve: settle } = createFuture<Maybe<Result<T>>>()
 
-  // oxlint-disable-next-line no-unused-vars
   let resolver: Helpers.Coroutine<T>['resume'] | null = null
 
-  const routine = {
+  const routine: Helpers.Coroutine<T> = {
     scope,
     future,
     settle: outcome => {
@@ -63,7 +59,7 @@ export const createCoroutine = <T>({
         routine.resume(succeed())
       }
     },
-    step(): IteratorResult<Helpers.Effect<unknown> | Result.Failure<AnyType>, T> {
+    step(): IteratorResult<Helpers.Step, T> {
       if (!iterator) {
         iterator = operation()[Symbol.iterator]()
       }
@@ -100,7 +96,7 @@ export const createCoroutine = <T>({
         routine.resume(asFailure(error))
       }
     },
-  } as Helpers.Coroutine<T>
+  }
 
   return routine
 }

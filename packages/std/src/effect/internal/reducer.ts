@@ -44,10 +44,14 @@ export class Reducer {
           if (next.done) {
             const settle = item.scope.expect(SettleContext)
             settle(just(succeed(next.value)), item.settle)
-          } else if (isFailure(next.value)) {
-            item.resume(next.value)
           } else {
-            item.perform(next.value)
+            const step = next.value
+
+            if (isFailure(step)) {
+              item.resume(step)
+            } else {
+              item.perform(step)
+            }
           }
         } catch (error) {
           const settle = item.scope.expect(SettleContext)

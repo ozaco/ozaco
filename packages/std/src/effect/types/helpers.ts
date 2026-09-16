@@ -33,10 +33,15 @@ export namespace Helpers {
     operation(): Operation<T>
   }
 
+  /** What a coroutine's generator yields: an effect to perform, or a Failure to raise. */
+  export type Step = Effect<unknown> | Result.Failure<unknown>
+
   export interface Coroutine<T = unknown> {
     future: Future<Maybe<Result<T>>>
     scope: Scope
     data: {
+      /** the operation's generator, created on first access. */
+      iterator: Iterator<Step, T, unknown>
       exit(resolve: Resolve<Result<unknown>>): void
       enqueued: boolean
       critical: boolean
@@ -44,7 +49,9 @@ export namespace Helpers {
       resumeWith: Result<unknown>
     }
     resume(result: Result<unknown>): void
-    step(): IteratorResult<Effect<unknown>, T>
+
+    /** one step of the generator: `done` with the value, else an effect or a raised Failure. */
+    step(): IteratorResult<Step, T>
     unwind(): void
     perform(effect: Effect<unknown>): void
     settle(outcome: Maybe<Result<T>>): void

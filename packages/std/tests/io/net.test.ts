@@ -136,11 +136,11 @@ describe('tcp', () => {
     expect(unwrap(outcome)).toBe('std:io.tcp-connect-failed')
   })
 
-  // Regression pin: tcpListen (src/io/internal/net.ts) runs each connection handler via
+  // Regression pin: tcpListen (src/io/internal/net/sockets.ts) runs each connection handler via
   // `scope.run(...).finally(...)`; when the listening scope closes while a handler task is still
-  // live, the task is halted and that materialized promise rejects with a `halted` Failure. The
-  // impl now absorbs it with a trailing `.catch(() => {})`, so shutdown never leaks an unhandled
-  // rejection — this test fails the run if that guard ever disappears.
+  // live, the task is halted and its promise RESOLVES the `halted` Failure (a task's promise side
+  // never rejects), so the `finally` chain needs no `.catch` guard and shutdown leaks no unhandled
+  // rejection. Verified with a `process.on('unhandledRejection')` probe when the guard was removed.
   it('closing a server scope with a still-connected client leaks no unhandled rejection', async () => {
     const accepted = withResolvers<void>()
     const parked = operation(function* (socket: IODef.TcpSocket) {

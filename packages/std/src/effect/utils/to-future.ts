@@ -58,8 +58,8 @@ export const toFuture = <T>(
         'abort',
         () => {
           early.resolve(fail(EffectErrors.Halted, 'the operation was aborted') as AnyType)
-          // halt() is a lazy Future — consuming it is what interrupts the task
-          void task.halt().catch(() => {})
+          // halt() is a lazy Future — consuming it (`then`) is what interrupts the task
+          void task.halt().then(() => undefined)
         },
         { once: true },
       )
@@ -71,8 +71,8 @@ export const toFuture = <T>(
     const task = scope.run(op, { detached: true })
     options?.signal?.addEventListener(
       'abort',
-      // halt() is a lazy Future — consuming it is what interrupts the task
-      () => void task.halt().catch(() => {}),
+      // halt() is a lazy Future — consuming it (`then`) is what interrupts the task
+      () => void task.halt().then(() => undefined),
       { once: true },
     )
     return task as unknown as Promise<Result<T>>

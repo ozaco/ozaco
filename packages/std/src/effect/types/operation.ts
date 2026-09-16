@@ -24,8 +24,15 @@ export type ManualOperation<T> = Generator<
 export interface Future<T> extends Operation<T>, Promise<Result<T>> {}
 
 export interface Task<T> extends Future<T> {
+  /**
+   * Interrupt the task and wait for it to unwind. A lazy {@link Future}: consuming it (`yield*`
+   * or `await`/`then`) is what interrupts. The operation side raises a failure the unwind
+   * produced (a failing `finally`); the promise side resolves it as a `Failure` value and a
+   * `Success` otherwise — a task that already settled is not re-raised.
+   */
   halt(): Future<void>
 
+  /** `await using`: the same as `halt()`, settled the same way. */
   [Symbol.asyncDispose](): Promise<void>
 }
 

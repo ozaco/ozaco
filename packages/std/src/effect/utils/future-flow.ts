@@ -157,7 +157,12 @@ export const createFutureFlow = <T>(scope: Scope, flow: Flow<T, void>): FutureFl
       }
 
       bridge.close()
-      settleDone()
+
+      // `done` is the async side as a whole: the last open iteration settles it
+      if (jobs.size === 0) {
+        settleDone()
+      }
+
       return null
     })
 

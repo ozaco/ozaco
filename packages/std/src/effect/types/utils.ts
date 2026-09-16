@@ -3,10 +3,11 @@ import type { Result } from 'std:result'
 import type { Operation, Flow } from './operation'
 
 export namespace Utils {
+  /** How `main` ends: the process status (130 = SIGINT, 143 = SIGTERM), an optional message
+   * (stdout on 0, stderr otherwise) and the error that ended it, if any. */
   export interface Exit {
     status: number
     message?: string | undefined
-    signal?: string | undefined
     error?: unknown | undefined
   }
 

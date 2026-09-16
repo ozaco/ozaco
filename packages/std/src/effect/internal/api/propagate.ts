@@ -70,8 +70,16 @@ export function decorateApi<A>(
   api: Helpers.ApiInternal<A>,
   ...[decorator, options]: [decorator: Partial<Around<A>>, options?: { at: 'min' | 'max' }]
 ): void {
-  // read existing total and local
-  const current = scope.get(api.context) ?? { total: {}, local: {} }
+  // this scope's own state, or a fresh one seeded from the nearest ancestor's: the ancestor's
+  // local layers fold into the child's TOTAL (never its local), so a later ancestor decoration —
+  // which re-propagates the ancestor's total ⊕ local — composes each layer exactly once
+  const own = scope.hasOwn(api.context) ? scope.expect(api.context) : null
+  const inherited = own ?? scope.get(api.context)
+  const current: Helpers.ApiState<A> = own ?? {
+    total: inherited ? decorate(inherited.total, inherited.local) : {},
+    local: {},
+    handle: api.core,
+  }
 
   const local = decorate(current.local, {
     [options?.at ?? 'max']: decorator,

@@ -223,9 +223,9 @@ export namespace ClientDef {
         ? [input?: I, options?: CallOptions]
         : [input: I, options?: CallOptions]
 
-  /** Every call is a {@link Future}: `yield*` it (inline, the caller's task) OR `await` it
-   * (a detached job of the client's scope; resolves a `Result` success, rejects with the
-   * failure). Nothing is given up on either side. */
+  /** Every call is a {@link Future}: `yield*` it (inline, the caller's task — a failure raises)
+   * OR `await` it (a detached job of the client's scope — resolves the `Result`, the failure as
+   * a value, never rejects). Nothing is given up on either side. */
   export type Callable<R> = (...args: CallArgs<InputOf<R>>) => Future<Decoded<OutputOf<R>>>
 
   export type ClientOf<TApi> = {

@@ -97,14 +97,12 @@ export const tcpListen = operation(function* (
 
   const server = createServer(socket => {
     const handle = makeHandle(socket)
+    // the task's promise side resolves a Result and never rejects (a halt at listen-scope
+    // teardown included), so `finally` is the whole story: the socket goes with the handler
     void scope
       .run(() => onConnection(handle))
       .finally(() => {
         socket.destroy()
-      })
-      .catch(() => {
-        // a handler halted at listen-scope teardown rejects this materialized promise — expected
-        // during shutdown, and the socket is already destroyed above
       })
   })
 

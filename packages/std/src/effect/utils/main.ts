@@ -36,8 +36,8 @@ export async function main(body: (args: string[]) => Operation<void>): Promise<v
 
       try {
         const interrupt = {
-          SIGINT: () => scope.run(() => resolve({ status: 130, signal: 'SIGINT' })),
-          SIGTERM: () => scope.run(() => resolve({ status: 143, signal: 'SIGTERM' })),
+          SIGINT: () => scope.run(() => resolve({ status: 130 })),
+          SIGTERM: () => scope.run(() => resolve({ status: 143 })),
         }
 
         yield* withHost({
@@ -77,7 +77,7 @@ export async function main(body: (args: string[]) => Operation<void>): Promise<v
             } finally {
               process.off('SIGINT', interrupt.SIGINT)
               if (process.platform !== 'win32') {
-                process.off('SIGTERM', interrupt.SIGINT)
+                process.off('SIGTERM', interrupt.SIGTERM)
               }
             }
           },

@@ -18,10 +18,12 @@ export function createFuture<T>(): Helpers.FutureWithResolvers<T> {
     operation.resolve(rawValue)
   }
 
+  // the std contract: the promise side NEVER rejects — a rejection resolves the Failure itself
+  // (`await future` → `Failure`, `isFailure` tells) while the operation side raises it
   const reject = (rawError: unknown) => {
     const error = asFailure(rawError)
 
-    promise.reject(error)
+    promise.resolve(error as unknown as Result<T>)
     operation.reject(error)
   }
 

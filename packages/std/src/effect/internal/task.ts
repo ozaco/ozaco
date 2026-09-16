@@ -91,16 +91,20 @@ class TaskInternal<T> implements Task<T> {
       this.control.interrupt()
       return future
     }
-    const halted = async () => {
+    // the promise side of a Future never rejects: a failure raised while the task unwinds (a
+    // failing `finally`) resolves as that Failure; halting a task that already settled is a no-op
+    const halted = async (): Promise<Result<void>> => {
       const outcome = await signal()
 
       if (isFailure(outcome)) {
-        throw outcome
+        return outcome
       }
 
       if (control.interrupted && isJust(outcome.value) && isFailure(outcome.value.value)) {
-        throw outcome.value.value
+        return outcome.value.value
       }
+
+      return succeed()
     }
 
     return Object.create(future, {

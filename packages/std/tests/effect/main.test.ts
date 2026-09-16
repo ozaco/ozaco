@@ -10,10 +10,8 @@ import { join, resolve } from 'node:path'
  * `main`, waits for the program to announce it is running, sends the signal, and asserts the
  * exit status AND that the body's `finally` ran (graceful, not a hard kill).
  *
- * DEVIATION PINNED (AUDIT E3): the node branch removes the SIGTERM listener with the SIGINT
- * handler (`process.off('SIGTERM', interrupt.SIGINT)`), so the real SIGTERM listener leaks past
- * `main`'s teardown. The `listener symmetry` case asserts the leaked count as it is today — it
- * will FAIL once E3 is fixed, which is the signal to flip it to `SIGTERM=0`.
+ * Listener symmetry: both signal listeners the node branch registers are detached on the way out
+ * — the fixture prints `listeners SIGINT=<n> SIGTERM=<n>` at process exit.
  */
 
 const EFFECT_ENTRY = resolve(import.meta.dir, '../../src/effect/index.ts')
@@ -127,16 +125,11 @@ describe('main signal wiring', () => {
     expect(output).not.toContain('teardown')
   })
 
-  it.skipIf(skip)(
-    'DEVIATION (E3): listener symmetry — SIGINT is detached, SIGTERM leaks',
-    async () => {
-      const { finish } = launch('exit-now')
+  it.skipIf(skip)('listener symmetry — SIGINT and SIGTERM are both detached on exit', async () => {
+    const { finish } = launch('exit-now')
 
-      const { output } = await finish()
+    const { output } = await finish()
 
-      // the SIGINT listener is removed on the way out; the SIGTERM one is not (E3 — `process.off`
-      // is handed the SIGINT handler). Expected after the fix: `SIGINT=0 SIGTERM=0`.
-      expect(output).toContain('listeners SIGINT=0 SIGTERM=1')
-    },
-  )
+    expect(output).toContain('listeners SIGINT=0 SIGTERM=0')
+  })
 })

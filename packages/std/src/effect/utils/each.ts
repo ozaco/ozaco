@@ -75,28 +75,23 @@ export function each<T>(flow: Flow<T, unknown>): Operation<Iterable<T>> {
   }
 }
 
-each.next = function next(): Operation<void> {
-  return {
-    name: 'each.next()',
-    *[Symbol.iterator]() {
-      const stack = yield* EachStack.expect()
-      const context = stack[stack.length - 1]
+each.next = function* next(): Operation<void> {
+  const stack = yield* EachStack.expect()
+  const context = stack[stack.length - 1]
 
-      if (!context) {
-        throw fail(EffectErrors.IterationError, `cannot call next() outside of an iteration`)
-      }
+  if (!context) {
+    throw fail(EffectErrors.IterationError, `cannot call next() outside of an iteration`)
+  }
 
-      const current = yield* context.subscription.next()
-      delete context.stale
-      context.current = current
+  const current = yield* context.subscription.next()
+  delete context.stale
+  context.current = current
 
-      if (current.done) {
-        context.finish()
-        // same contract as the loop head: a Failure close raises instead of ending cleanly
-        if (isFailure(current.value)) {
-          return yield* current.value
-        }
-      }
-    },
-  } as Operation<void>
+  if (current.done) {
+    context.finish()
+    // same contract as the loop head: a Failure close raises instead of ending cleanly
+    if (isFailure(current.value)) {
+      return yield* current.value
+    }
+  }
 }

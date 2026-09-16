@@ -11,6 +11,7 @@ import { api } from '../utils/api'
 
 import { decorateApi } from './api/propagate'
 import { ChildrenContext, PriorityContext } from './contexts'
+import { snapshotOf, snapshots } from './snapshot'
 import { createTask } from './task'
 
 export function createScopeInternal(
@@ -45,6 +46,17 @@ export function buildScopeInternal(parent?: Scope): [Helpers.ScopeInternal, () =
   const contexts: Record<string, unknown> = Object.create(
     parent ? (parent as Helpers.ScopeInternal).contexts : null,
   )
+
+  // snapshot contexts (`markContextAsSnapshot`) are captured at fork, not read live
+  if (parent) {
+    for (const name of snapshots) {
+      const value = (parent as Helpers.ScopeInternal).contexts[name]
+
+      if (value !== undefined) {
+        contexts[name] = snapshotOf(value)
+      }
+    }
+  }
   const scope: Helpers.ScopeInternal = Object.create({
     [Symbol.toStringTag]: 'Scope',
     contexts,

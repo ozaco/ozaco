@@ -1,7 +1,8 @@
 import type { Result } from 'std:result'
 import { succeed } from 'std:result'
 
-import { CONTEXT, SNAPSHOT_FLAG } from '../const'
+import { CONTEXT } from '../const'
+import { snapshots } from '../internal/snapshot'
 import type { Helpers } from '../types/helpers'
 import type { Context, Operation, Scope } from '../types/operation'
 
@@ -56,7 +57,12 @@ export function createContext<T>(name: string, defaultValue?: T): Context<T> {
   return context
 }
 
+/**
+ * Copy-on-fork: a child scope takes a snapshot of this context's value when it is created (a
+ * plain object is shallow-copied) instead of reading the parent's live value — later `set`s in
+ * the parent and mutations on either side stay where they happen. The logger's bindings use it.
+ */
 export const markContextAsSnapshot = <T>(context: Context<T>): Context<T> => {
-  ;(context as Context<T> & { [SNAPSHOT_FLAG]?: true })[SNAPSHOT_FLAG] = true
+  snapshots.add(context.name)
   return context
 }
