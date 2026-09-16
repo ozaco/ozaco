@@ -216,8 +216,14 @@ export namespace Helpers {
   export interface EdgeState {
     readonly kernel: ServerDef.Context
     readonly actions: Pick<ServerDef.Actions, 'call' | 'emit' | 'dispatch'>
-    readonly router: RouterContext<Entry>
-    readonly sockets: RouterContext<EdgeDef.SocketRoute>
+
+    /** the routing tables — REPLACED as a whole by `remount` (a request reads them once). */
+    router: RouterContext<Entry>
+    sockets: RouterContext<EdgeDef.SocketRoute>
+
+    /** what was registered through `raw()` / `socket()` — re-added on every remount. */
+    readonly raws: EdgeDef.RawRoute[]
+    readonly socketRoutes: EdgeDef.SocketRoute[]
     readonly decorators: EdgeDef.Decorator[]
     readonly scope: Scope
     preflight: EdgeDef.Preflight | null

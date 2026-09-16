@@ -43,6 +43,9 @@ export interface DemoOptions {
 
   /** ship every row and trace to an OpenObserve deployment. */
   readonly openobserve?: OpenObserveTarget | undefined
+
+  /** development: watch `src/` and swap the services into the running node on every save. */
+  readonly hot?: boolean | undefined
 }
 
 /** the typed api of one demo node — what `createClient<Api>` speaks. */

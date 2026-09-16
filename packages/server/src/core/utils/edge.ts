@@ -15,6 +15,7 @@ import {
   handleRequest,
   isSocketRequest,
   mountActions,
+  remountActions,
   trackBody,
 } from '../internal/edge/engine'
 import type { EdgeDef } from '../types/edge'
@@ -96,13 +97,18 @@ export const edgeActions = (driver: EdgeDef.Driver): EdgeDef.Actions => ({
   *mount() {
     return mountActions(yield* EdgeStateRef.expect())
   },
+  *remount() {
+    return remountActions(yield* EdgeStateRef.expect())
+  },
   *raw(route) {
     const state = yield* EdgeStateRef.expect()
+    state.raws.push(route)
     addRoute(state.router, route.method, route.path, { kind: 'raw', route })
     state.kernel.routes.push({ method: route.method, path: route.path })
   },
   *socket(route) {
     const state = yield* EdgeStateRef.expect()
+    state.socketRoutes.push(route)
     addRoute(state.sockets, 'WS', route.path, route)
     state.kernel.sockets.push({
       path: route.path,

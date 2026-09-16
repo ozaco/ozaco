@@ -4,6 +4,7 @@ import { attempt } from 'std:effect'
 import { fail, isFailure } from 'std:result'
 
 import { ServerErrors } from '../errors'
+import type { EdgeDef } from '../types/edge'
 import type { ServerDef } from '../types/server'
 import type { ServiceDef } from '../types/service'
 import { isSocketAction } from '../utils/service'
@@ -48,6 +49,92 @@ export function* registerService(
   }
 
   kernel.hosted.add(def.name)
+  kernel.pluginServices.add(def.name)
+}
+
+/** The manifest entry of a socket declared inside a service. */
+export const socketInfoOf = (socket: ServiceDef.ServiceSocket): EdgeDef.SocketInfo => ({
+  path: socket.path,
+  service: socket.service,
+  protocol: socket.protocol,
+  description: socket.description,
+  authorizeMode: socket.authorizeMode,
+  defaults: socket.defaults,
+  receives: socket.receives,
+  sends: socket.sends,
+})
+
+/**
+ * Swap the APPLICATION's declarations for `services` — the kernel's registry maps are mutated
+ * in place (every layer reads `kernel.registry` on each dispatch/request, so nothing holds a
+ * stale copy), plugin-registered services are carried over untouched, and `kernel.sockets`
+ * (the manifest's socket list) is refreshed for the declared sockets. Atomic: the new registry
+ * is built and validated first; a failure leaves the running one as it was.
+ */
+export function* reloadRegistry(
+  kernel: ServerDef.Context,
+  services: readonly ServiceDef.Service[],
+): Operation<ServerDef.ReloadReport> {
+  for (const def of services) {
+    if (kernel.pluginServices.has(def.name)) {
+      return yield* fail(
+        ServerErrors.Configuration,
+        `service "${def.name}" is registered by a plugin and cannot be reloaded`,
+      )
+    }
+  }
+
+  const kept = [...kernel.registry.services.values()].filter(def =>
+    kernel.pluginServices.has(def.name),
+  )
+  const next = yield* buildRegistry([...kept, ...services])
+  yield* validateOptions(kernel, next)
+
+  const before = new Set(
+    [...kernel.registry.services.keys()].filter(name => !kernel.pluginServices.has(name)),
+  )
+  const now = new Set(services.map(def => def.name))
+  const report: ServerDef.ReloadReport = {
+    added: [...now].filter(name => !before.has(name)),
+    removed: [...before].filter(name => !now.has(name)),
+    replaced: [...now].filter(name => before.has(name)),
+    actions: next.actions.size,
+    sockets: next.sockets.length,
+  }
+
+  // --- the swap: synchronous from here, no yield until the maps agree again ----------------
+  const servicesMap = kernel.registry.services as Map<string, ServiceDef.Service>
+  const actionsMap = kernel.registry.actions as Map<string, ServiceDef.Action>
+  const socketsList = kernel.registry.sockets as ServiceDef.ServiceSocket[]
+  const declared = new Set(socketsList.filter(socket => !kernel.pluginServices.has(socket.service)))
+  servicesMap.clear()
+  actionsMap.clear()
+  socketsList.length = 0
+
+  for (const [name, def] of next.services) {
+    servicesMap.set(name, def)
+  }
+
+  for (const [key, def] of next.actions) {
+    actionsMap.set(key, def)
+  }
+
+  socketsList.push(...next.sockets)
+
+  // the manifest's socket list: drop the infos of the sockets the old declarations had, keep
+  // what the edge registered directly (`Edge.actions.socket`), add the new declarations'
+  const stale = new Set([...declared].map(socket => `${socket.service} ${socket.path}`))
+  const external = kernel.sockets.filter(info => !stale.has(`${info.service ?? ''} ${info.path}`))
+  kernel.sockets.length = 0
+  kernel.sockets.push(...external)
+
+  for (const socket of next.sockets) {
+    if (!kernel.pluginServices.has(socket.service)) {
+      kernel.sockets.push(socketInfoOf(socket))
+    }
+  }
+
+  return report
 }
 
 /** Build the registry from the declared services; duplicate names are a configuration failure. */
@@ -114,9 +201,13 @@ export const manifestOf = (kernel: ServerDef.Context): ServerDef.Manifest => ({
 })
 
 /** Every plugin option on every action must be owned by an installed plugin and pass its
- * validator — an option nobody handles is a typo, not a feature. */
-export function* validateOptions(kernel: ServerDef.Context): Operation<void> {
-  for (const [key, def] of kernel.registry.actions) {
+ * validator — an option nobody handles is a typo, not a feature. `registry` defaults to the
+ * kernel's own (a reload validates the candidate before swapping it in). */
+export function* validateOptions(
+  kernel: ServerDef.Context,
+  registry: ServerDef.Registry = kernel.registry,
+): Operation<void> {
+  for (const [key, def] of registry.actions) {
     for (const [option, value] of Object.entries(def.meta.options)) {
       const schema = kernel.options.get(option)
 

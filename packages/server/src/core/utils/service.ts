@@ -94,6 +94,10 @@ const metaOf = (kind: ServiceDef.Kind, config: ServiceDef.Config): ServiceDef.Me
   }
 }
 
+/** A `service()` declaration (any module instance — the brand is a registered symbol). */
+export const isService = (value: unknown): value is ServiceDef.Service =>
+  typeof value === 'object' && value !== null && (value as { _t?: unknown })._t === SERVICE
+
 /** A socket entry in an action map (`action.socket`). */
 export const isSocketAction = (
   value: unknown,

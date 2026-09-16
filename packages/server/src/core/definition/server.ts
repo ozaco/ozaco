@@ -1,4 +1,5 @@
 import type { Operation } from 'std:effect'
+import { attempt } from 'std:effect'
 import { createEvent } from 'std:event'
 import { IO } from 'std:io'
 import { fail } from 'std:result'
@@ -11,8 +12,15 @@ import { ServerErrors } from '../errors'
 import { roleOf } from '../internal/app'
 import { parseCall } from '../internal/call'
 import { callLocal, runDispatch } from '../internal/dispatch'
-import { actionsOf, asRequest, callRemote, carrierOf, traceFor } from '../internal/kernel'
-import { buildRegistry, manifestOf } from '../internal/registry'
+import {
+  actionsOf,
+  asRequest,
+  callRemote,
+  carrierOf,
+  serverFor,
+  traceFor,
+} from '../internal/kernel'
+import { buildRegistry, manifestOf, reloadRegistry, socketInfoOf } from '../internal/registry'
 import type { ServerDef } from '../types/server'
 import type { ServiceDef } from '../types/service'
 import { childTrace, report, rootTrace, toWire, withSpan } from '../utils/trace'
@@ -82,20 +90,11 @@ const ServerImpl = Server.implement<ServerDef.Context, [options: ServerDef.Optio
       outcomes: null,
       role: roleOf(options),
       hosted: new Set(options.hosted ?? registry.services.keys()),
+      pluginServices: new Set(),
       inflight: 0,
 
       routes: [],
-
-      sockets: registry.sockets.map(socket => ({
-        path: socket.path,
-        service: socket.service,
-        protocol: socket.protocol,
-        description: socket.description,
-        authorizeMode: socket.authorizeMode,
-        defaults: socket.defaults,
-        receives: socket.receives,
-        sends: socket.sends,
-      })),
+      sockets: registry.sockets.map(socketInfoOf),
     }
   },
 })
@@ -196,6 +195,48 @@ export const ServerClient: ServerDef.Client = ServerImpl.build({
 
   *manifest() {
     return manifestOf(yield* Server.context.expect())
+  },
+
+  *reload(services) {
+    const kernel = yield* Server.context.expect()
+
+    // a node that hosted every application service keeps doing so (a monolith, a `service`
+    // node told nothing); one with a narrowed set (gateway, `hosted: [...]`, SERVICE=…) hosts
+    // exactly what it was told — an added service is reached over the carrier there
+    const hostsAll =
+      kernel.role !== 'gateway' &&
+      [...kernel.registry.services.keys()].every(name => kernel.hosted.has(name))
+    const changed = yield* reloadRegistry(kernel, services)
+
+    for (const name of changed.removed) {
+      if (kernel.hosted.delete(name) && kernel.carrier) {
+        yield* attempt(() => kernel.carrier!.actions.unserve(name))
+      }
+    }
+
+    for (const name of changed.added) {
+      if (hostsAll) {
+        kernel.hosted.add(name)
+      }
+
+      if (kernel.hosted.has(name) && kernel.carrier) {
+        yield* kernel.carrier.actions.serve(name, serverFor(kernel, name))
+      }
+    }
+
+    // replaced services keep their carrier subscription: `serverFor` resolves the definition
+    // per dispatch. The edge rebuilds its tables from the registry.
+    if (kernel.edge) {
+      yield* kernel.edge.actions.remount()
+    }
+
+    for (const hooks of kernel.hooks) {
+      if (hooks.reload) {
+        yield* hooks.reload(changed)
+      }
+    }
+
+    return changed
   },
 
   *report(event) {

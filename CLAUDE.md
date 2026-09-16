@@ -30,12 +30,16 @@ foundation. Layers, bottom up:
   `bun-sql`, `memory-kv` / `redis-kv`)
 - **`@ozaco/server`** – the service/action kernel: `service()` / `action.*` / `createServer`, with
   edges (bun/node/deno), carriers, and plugins (auth, cache, cors, docs, observe, resilience,
-  `crud`). `crud(table, …)` is typed end to end: `schema` transforms reshape the derived zod
+  hot-reload, `crud`). `crud(table, …)` is typed end to end: `schema` transforms reshape the derived zod
   schemas in the TYPES too, `scope` is the trusted per-caller filter (tenancy, optionally
   `{ read, write }`), `ops` sets per-op options/errors; the manifest is `ozaco/2` (unified
   action+socket entries) and realtime sockets authorize with a first `{ t: 'auth' }` frame
-  (tokens never ride the URL). `createServer({ plugins })` takes `Plugin.use(...)` values. See
-  `packages/server/README.md`.
+  (tokens never ride the URL). `createServer({ plugins })` takes `Plugin.use(...)` values.
+  `server.reload(services)` swaps declarations on a running node (atomic; edge remount, carrier
+  re-serve, `hooks.reload`); `HotReload.use({ entry, watch })` drives it from file changes (Bun:
+  `Bun.build` bundles the watched subgraph into a fresh temp module per generation — never rely
+  on `Loader.registry`, it is absent under `bun test`; Bun's resolver caches directory entries,
+  so each generation gets its own directory). See `packages/server/README.md`.
 - **`@ozaco/client`** – the manifest-driven typed client for a `@ozaco/server` node
 - **`@ozaco/ai`**, **`@ozaco/cli`** – AI providers and the CLI toolkit
 - `apps/panel` (docs try-it UI) and `apps/observe` (dev console) are embedded into the server's

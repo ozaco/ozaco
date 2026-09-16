@@ -19,7 +19,7 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
-    "node-datachannel": "0.33.1",
+    "node-datachannel": "0.33.4",
     "typescript": "^7.0.2"
   }
 }

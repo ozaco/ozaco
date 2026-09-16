@@ -218,6 +218,26 @@ export namespace ServerDef {
     /** runs once the server listens / before it stops. */
     readonly start?: (() => Operation<void>) | undefined
     readonly stop?: (() => Operation<void>) | undefined
+
+    /** runs after `reload(services)` swapped the registry — a plugin that derived state from
+     * the declarations at `start` (watchers, caches) refreshes it here. */
+    readonly reload?: ((report: ReloadReport) => Operation<void>) | undefined
+  }
+
+  /** What one `reload(services)` changed, by service name. */
+  export interface ReloadReport {
+    /** services that were not declared before. */
+    readonly added: readonly string[]
+
+    /** services the new declaration no longer has (their routes are gone). */
+    readonly removed: readonly string[]
+
+    /** services declared before AND now — their actions were swapped for the new definitions. */
+    readonly replaced: readonly string[]
+
+    /** how many action routes / socket routes the node serves now. */
+    readonly actions: number
+    readonly sockets: number
   }
 
   // --- kernel context/actions ---------------------------------------------------------------
@@ -251,6 +271,10 @@ export namespace ServerDef {
 
     /** the services this node serves (every declared one, unless the role narrows it). */
     readonly hosted: Set<string>
+
+    /** services a PLUGIN registered (`PluginContext.services`): always hosted here, and never
+     * touched by `reload` — that swaps the application's declarations only. */
+    readonly pluginServices: Set<string>
 
     /** dispatches running here right now (what `stop()` drains). */
     inflight: number
@@ -292,6 +316,17 @@ export namespace ServerDef {
 
     /** The resolved manifest: services, actions, routes, planes, errors. */
     manifest(): Operation<Manifest>
+
+    /**
+     * Swap the APPLICATION's service declarations for `services` on the running node — the
+     * edge keeps listening, sockets stay open, the carrier keeps its membership. New routes are
+     * mounted, gone ones unmounted, in-flight dispatches finish on the definitions they
+     * started with. Plugin-registered services are kept. The swap is atomic: an invalid
+     * declaration (a duplicate name, an option no plugin handles) fails `server.configuration`
+     * and leaves everything as it was. This is what `HotReload` (plugins) drives from the file
+     * watcher — and what a test or a control endpoint calls directly.
+     */
+    reload(services: readonly ServiceDef.Service[]): Operation<ReloadReport>
 
     /** Report an observe event from application code — the `domain` row is the one meant for
      * you: a free-form audit/business record every installed exporter ships (the observe store
@@ -358,6 +393,9 @@ export namespace ServerDef {
     emit: Actions['emit']
     events: Actions['events']
     manifest: Actions['manifest']
+
+    /** Swap the service declarations in place — see `Actions.reload`. */
+    reload: Actions['reload']
   }
 
   export interface Info {

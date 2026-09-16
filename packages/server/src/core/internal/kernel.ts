@@ -192,16 +192,15 @@ export function* installEntry(entry: ServerDef.PluginLike): Operation<unknown> {
   return yield* (entry as Plugin<AnyType, [], AnyType>).use()
 }
 
-/** The serving side of one service: what the carrier calls for a dispatch arriving here. */
-export const serverFor = (
-  kernel: ServerDef.Context,
-  service: ServiceDef.Service,
-): CarrierDef.Server =>
+/** The serving side of one service: what the carrier calls for a dispatch arriving here. The
+ * definition is looked up on EVERY dispatch, so a `reload` reaches carrier traffic too. */
+export const serverFor = (kernel: ServerDef.Context, name: string): CarrierDef.Server =>
   function* (dispatch, inputs) {
-    const def = service.actions[dispatch.action]
+    const service = kernel.registry.services.get(name)
+    const def = service?.actions[dispatch.action]
 
-    if (!def || isSocketAction(def)) {
-      return yield* fail(ServerErrors.NotFound, `no action "${service.name}.${dispatch.action}"`)
+    if (!service || !def || isSocketAction(def)) {
+      return yield* fail(ServerErrors.NotFound, `no action "${name}.${dispatch.action}"`)
     }
 
     const trace = yield* continueTrace(dispatch.trace, kernel.serviceId)

@@ -99,7 +99,7 @@ export function* createServer<const TServices extends readonly ServiceDef.Servic
   // the registry, not `options.services`: a plugin-registered service (observe) serves too
   for (const def of kernel.registry.services.values()) {
     if (kernel.hosted.has(def.name)) {
-      yield* kernel.carrier.actions.serve(def.name, serverFor(kernel, def))
+      yield* kernel.carrier.actions.serve(def.name, serverFor(kernel, def.name))
     }
   }
 
@@ -126,6 +126,7 @@ export function* createServer<const TServices extends readonly ServiceDef.Servic
     emit: ServerClient.actions.emit,
     events: ServerClient.actions.events,
     manifest: ServerClient.actions.manifest,
+    reload: ServerClient.actions.reload,
     members,
 
     *info() {

@@ -129,6 +129,12 @@ export namespace EdgeDef {
 
     /** Mount every action route of the installed server (runs at `listen`; idempotent). */
     mount(): Operation<number>
+
+    /** Rebuild the routing tables from the kernel's CURRENT registry — what `reload` calls
+     * after swapping the declarations. Raw routes, socket routes, decorators and the preflight
+     * handler registered through the actions below are kept; open sockets stay open (their
+     * handlers already run). Resolves the number of action + socket routes mounted. */
+    remount(): Operation<number>
     raw(route: RawRoute): Operation<void>
     socket(route: SocketRoute): Operation<void>
     decorate(decorator: Decorator): Operation<void>

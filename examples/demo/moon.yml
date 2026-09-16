@@ -48,6 +48,16 @@ tasks:
     preset: server
     options:
       runDepsInParallel: false
+  dev:
+    command: bun run scripts/dev.ts
+    deps:
+      - panel:embed
+      - observe:embed
+      - server:build
+      - client:build
+    preset: server
+    options:
+      runDepsInParallel: false
   cluster:
     command: bun run scripts/cluster.ts
     deps:

@@ -6,6 +6,7 @@ own entrypoint, and variations are consts at the top of that entrypoint.
 
 ```bash
 moon run demo:start            # monolith on :3000 → /docs (panel) · /_observe (observe) · /_health
+moon run demo:dev              # the same, hot-reloading src/ on every save (HotReload)
 moon run demo:cluster          # gateway :3000 + api-1 + api-2 in one process (memory link)
 moon run demo:openobserve      # the same cluster, shipping streams + traces to OpenObserve
 bun run scripts/client.ts      # the typed client walks every use case against :3000

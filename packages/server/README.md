@@ -112,9 +112,40 @@ Installed in order through `createServer({ plugins })`; their dispatch hooks wra
 | `Docs.use({ path })`                               | an edge                                      | the manifest, OpenAPI 3.1 and the try-it panel                                       |
 | `ObservePlugin.use({ console, forward, collect })` | a `DbClient` (a carrier for forward/collect) | requests/spans/logs/failures as db rows, `/_observe`                                 |
 | `OtlpExporter` / `OpenObserveExporter`             | `ObservePlugin`                              | shipping those rows outward                                                          |
+| `HotReload.use({ entry, watch })`                  | —                                            | dev only: re-evaluates the service modules on save and swaps them in (`reload`)      |
 
 `NetworkCarrier` needs a transport (`MemoryTransport` / `NatsTransport` / `RedisTransport`)
 installed before it.
+
+## Hot reload
+
+A running node can swap its declarations without going down: `server.reload(services)` (also
+`Server.actions.reload`) rebuilds the registry, remounts the edge's routes and re-serves the
+carrier — the port stays open, sockets stay connected, the database and the transport keep
+their sessions, in-flight dispatches finish on the definitions they started with. The swap is
+atomic: a duplicate service name or an option no plugin handles fails `server.configuration`
+and nothing changes. It resolves what changed (`added` / `removed` / `replaced`), and every
+plugin's `reload` hook sees the same report.
+
+`HotReload` (plugins) drives it from the file system in development:
+
+```ts
+createServer({
+  services,
+  plugins: [HotReload.use({ entry: 'src/services.ts', watch: ['src'] })],
+})
+```
+
+`entry` exports the `services` array (or a default export); every save under `watch` becomes
+one reload after a short debounce. On Bun the entry is bundled together with everything under
+the watched paths into one fresh module — a change in ANY of those files reaches the node,
+while imports resolving outside (`@ozaco/*`, node_modules) stay the instances the app already
+runs. Other runtimes re-evaluate the entry alone. A broken save is reported and the last good
+declarations keep serving; `HotReload.actions.reload()` / `.status()` do it by hand.
+
+What a reload does NOT do: re-run plugin `start` hooks (a plugin refreshes derived state in its
+`reload` hook instead), re-install the database or the transport, or migrate module-level
+state — every module under the watched paths is a fresh instance after a reload.
 
 ## One codebase, three shapes
 
@@ -137,7 +168,7 @@ unserves and tears the plugins down in reverse.
 |                                                    |                                                                                                                           |
 | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | `@ozaco/server`                                    | everything above — the whole surface an application needs                                                                 |
-| `@ozaco/server/plugins`                            | `Auth`, `Cache`, `Cors`, `Docs`, `ObservePlugin`, `Resilience`, `crud`                                                    |
+| `@ozaco/server/plugins`                            | `Auth`, `Cache`, `Cors`, `Docs`, `HotReload`, `ObservePlugin`, `Resilience`, `crud`                                       |
 | `@ozaco/server/edge/{bun,node,deno}`               | the HTTP/WS runtimes                                                                                                      |
 | `@ozaco/server/carrier/network`                    | `NetworkCarrier`, over `@ozaco/transport`                                                                                 |
 | `@ozaco/server/plugins/observe/{otlp,openobserve}` | observe exporters                                                                                                         |

@@ -3,7 +3,7 @@
  * an entrypoint under `scripts/`). */
 import type { ServerDef } from 'server:core'
 import { createServer, Edge } from 'server:core'
-import { Auth, Cache, Cors, Docs, ObservePlugin, Resilience } from 'server:plugins'
+import { Auth, Cache, Cors, Docs, HotReload, ObservePlugin, Resilience } from 'server:plugins'
 import type { Operation } from 'std:effect'
 import { attempt, fork } from 'std:effect'
 import { isFailure } from 'std:result'
@@ -57,6 +57,14 @@ export function* createDemo(
     Resilience,
     Docs.use({ path: '/docs', title: 'ozaco demo' }),
   ]
+
+  if (options.hot) {
+    // the declarations module and the tree it imports — `src/`; a save anywhere under it swaps
+    // the services in place (routes, handlers, schemas), the node keeps running
+    const src = new URL('..', import.meta.url).pathname.replace(/\/$/u, '')
+
+    plugins.push(HotReload.use({ entry: `${src}/const.ts`, watch: [src] }))
+  }
 
   if (options.openobserve) {
     const target = options.openobserve

@@ -5,6 +5,7 @@ import { IO } from 'std:io'
 import { fail, isFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
 
+import type { RouterContext } from 'rou3'
 import { addRoute, createRouter, findRoute } from 'rou3'
 
 import { HEADERS, laneOf } from '../../const'
@@ -43,6 +44,8 @@ export function* createEdgeState(
     actions,
     router: createRouter<Helpers.Entry>(),
     sockets: createRouter<EdgeDef.SocketRoute>(),
+    raws: [],
+    socketRoutes: [],
     decorators: [],
     scope: yield* useScope(),
     preflight: null,
@@ -80,19 +83,20 @@ const decodeParams = (params: Record<string, string> | undefined): Record<string
     }),
   )
 
-/** Mount every action of the kernel's registry (idempotent). */
-export const mountActions = (state: Helpers.EdgeState): number => {
-  if (state.mounted) {
-    return 0
-  }
-
-  state.mounted = true
+/** Add the registry's action routes and declared sockets (`action.socket`) to the given
+ * tables. The declared sockets are already in `kernel.sockets` (the manifest); here they are
+ * routed. */
+const addRegistry = (
+  state: Helpers.EdgeState,
+  router: RouterContext<Helpers.Entry>,
+  sockets: RouterContext<EdgeDef.SocketRoute>,
+): number => {
   let count = 0
 
   for (const [key, def] of state.kernel.registry.actions) {
     const [service, action] = key.split('.') as [string, string]
 
-    addRoute(state.router, def.meta.route.method, def.meta.route.path, {
+    addRoute(router, def.meta.route.method, def.meta.route.path, {
       kind: 'action',
       service,
       action,
@@ -101,10 +105,8 @@ export const mountActions = (state: Helpers.EdgeState): number => {
     count += 1
   }
 
-  // sockets declared inside services (`action.socket`): already in kernel.sockets (the
-  // manifest), routed here
   for (const socket of state.kernel.registry.sockets) {
-    addRoute(state.sockets, 'WS', socket.path, {
+    addRoute(sockets, 'WS', socket.path, {
       path: socket.path,
       handler: socket.handler,
       authorize: socket.authorize ?? undefined,
@@ -117,6 +119,40 @@ export const mountActions = (state: Helpers.EdgeState): number => {
     })
     count += 1
   }
+
+  return count
+}
+
+/** Mount every action of the kernel's registry (idempotent). */
+export const mountActions = (state: Helpers.EdgeState): number => {
+  if (state.mounted) {
+    return 0
+  }
+
+  state.mounted = true
+
+  return addRegistry(state, state.router, state.sockets)
+}
+
+/** Rebuild both tables from the CURRENT registry plus everything registered through
+ * `raw()` / `socket()`, then swap them in — one assignment each, so a request in flight keeps
+ * the tables it resolved against and the next one sees the new declarations. */
+export const remountActions = (state: Helpers.EdgeState): number => {
+  const router = createRouter<Helpers.Entry>()
+  const sockets = createRouter<EdgeDef.SocketRoute>()
+
+  for (const route of state.raws) {
+    addRoute(router, route.method, route.path, { kind: 'raw', route })
+  }
+
+  for (const route of state.socketRoutes) {
+    addRoute(sockets, 'WS', route.path, route)
+  }
+
+  const count = addRegistry(state, router, sockets)
+  state.router = router
+  state.sockets = sockets
+  state.mounted = true
 
   return count
 }
