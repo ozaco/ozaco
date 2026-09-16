@@ -5,6 +5,7 @@ import pkg from '../../package.json'
 
 import {
   codecDecodeFrameHandler,
+  codecDecodeFramesHandler,
   codecEncodeFrameHandler,
   codecGetTransportsHandler,
   codecRegisterHandler,
@@ -64,5 +65,6 @@ export const Codec = defineProtocol<CodecDef.Context, CodecDef.Actions, CodecDef
     getTransports: codecGetTransportsHandler,
     encodeFrame: codecEncodeFrameHandler,
     decodeFrame: codecDecodeFrameHandler,
+    decodeFrames: codecDecodeFramesHandler,
   },
 })

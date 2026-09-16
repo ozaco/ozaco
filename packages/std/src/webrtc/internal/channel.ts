@@ -1,6 +1,6 @@
 import { Codec } from 'std:codec'
-import type { Flow, Future } from 'std:effect'
-import { createQueue, operation, withResolvers } from 'std:effect'
+import type { Flow } from 'std:effect'
+import { createFuture, createGate, createQueue, operation, withResolvers } from 'std:effect'
 import type { Result } from 'std:result'
 import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
@@ -49,8 +49,8 @@ export const wrapChannel = (
   const lowWaterMark = options.lowWaterMark ?? CHANNEL_DEFAULTS.lowWaterMark
 
   const queue = createQueue<unknown, RtcDef.FlowClose>()
-  const closedResolvers = withResolvers<RtcDef.FlowClose>('rtc:channel-closed')
-  const openedResolvers = withResolvers<void>('rtc:channel-open')
+  const closed = createFuture<RtcDef.FlowClose>()
+  const openedResolvers = withResolvers<void>(RtcCauses.ChannelOpen)
 
   const state = {
     /** The CURRENT generation's native (undefined while suspended for a redial). */
@@ -62,27 +62,15 @@ export const wrapChannel = (
     erred: undefined as Result.Failure<unknown> | undefined,
   }
 
-  // `send` parks on this gate while the buffer is above the high-water mark; every
-  // `bufferedamountlow` and the permanent end resolve the current gate and arm a fresh one.
-  let drainGate = withResolvers<void>('rtc:channel-drain')
-  const notifyDrain = () => {
-    const gate = drainGate
-    drainGate = withResolvers<void>('rtc:channel-drain')
-    gate.resolve()
-  }
-
-  // `send` parks on this gate while connecting or suspended; every open, rebind-to-open, and the
-  // permanent end resolve the current gate and arm a fresh one.
-  let openGate = withResolvers<void>('rtc:channel-open-gate')
-  const notifyOpen = () => {
-    const gate = openGate
-    openGate = withResolvers<void>('rtc:channel-open-gate')
-    gate.resolve()
-  }
+  // `send` parks on `drain` while the buffer is above the high-water mark (notified by
+  // `bufferedamountlow`), and on `open` while connecting or suspended (notified by every open and
+  // rebind-to-open); the permanent end notifies both.
+  const drain = createGate(RtcCauses.ChannelDrain)
+  const open = createGate(RtcCauses.ChannelOpen)
 
   const markOpen = () => {
     openedResolvers.resolve()
-    notifyOpen()
+    open.notify()
   }
 
   /** Permanent end — runs at most once: closes the messages queue (buffered frames still drain
@@ -94,13 +82,13 @@ export const wrapChannel = (
 
     state.ended = true
     queue.close(close)
-    closedResolvers.resolve(close)
+    closed.resolve(close)
     // no-op once already open
     openedResolvers.reject(
       fail(RtcErrors.Channel, `channel "${first.label}" closed before it opened`),
     )
-    notifyOpen()
-    notifyDrain()
+    open.notify()
+    drain.notify()
   }
 
   // on* assignment (not addEventListener): ChannelLike is the handler-property shape shared by
@@ -143,7 +131,7 @@ export const wrapChannel = (
     }
 
     native.onbufferedamountlow = () => {
-      notifyDrain()
+      drain.notify()
     }
 
     native.onerror = () => {
@@ -218,31 +206,18 @@ export const wrapChannel = (
     openedResolvers.resolve() // wrapped after the fact (e.g. a pre-opened remote channel)
   }
 
-  const closed = operation(function* () {
-    return yield* closedResolvers.operation
-  })() as Future<RtcDef.FlowClose>
-
-  // a Flow is `Operation<Subscription>`; this hands back a subscription whose `next()` pulls a
-  // raw frame off the queue and codec-decodes it — buffered frames survive until read.
-  const messages = {
+  // a Flow is `Operation<Subscription>`: every pull codec-decodes one raw frame off the queue —
+  // buffered frames survive until read.
+  const messages: Flow<unknown, RtcDef.FlowClose> = {
     *[Symbol.iterator]() {
-      return {
-        *next() {
-          const item = yield* queue.next()
-          if (item.done) {
-            return item
-          }
-
-          return { done: false, value: yield* Codec.actions.decodeFrame(item.value, codec) }
-        },
-      }
+      return yield* Codec.actions.decodeFrames(queue, codec)
     },
-  } as Flow<unknown, RtcDef.FlowClose>
+  }
 
   const handle: RtcDef.Channel = {
     label: first.label,
     messages,
-    closed,
+    closed: closed.future,
 
     get native() {
       return state.native as RtcDef.ChannelLike
@@ -260,12 +235,12 @@ export const wrapChannel = (
         }
 
         // read the CURRENT gates before checking, so a wake between check and park still lands
-        const opening = openGate
-        const draining = drainGate
+        const opening = open.wait()
+        const draining = drain.wait()
         const native = state.native
 
         if (!native || state.suspended || native.readyState === 'connecting') {
-          yield* opening.operation // park until (re)open or the permanent end, then re-check
+          yield* opening // park until (re)open or the permanent end, then re-check
           continue
         }
 
@@ -274,7 +249,7 @@ export const wrapChannel = (
         }
 
         if (native.bufferedAmount > highWaterMark) {
-          yield* draining.operation // backpressure: wait for bufferedamountlow, then re-check
+          yield* draining // backpressure: wait for bufferedamountlow, then re-check
           continue
         }
 
@@ -291,7 +266,7 @@ export const wrapChannel = (
 
     close: operation(function* () {
       end(true)
-      yield* closedResolvers.operation
+      yield* closed.future
     }, RtcCauses.ChannelClose),
   }
 

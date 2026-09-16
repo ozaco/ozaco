@@ -2,26 +2,20 @@ import { operation, until } from 'std:effect'
 import { fail } from 'std:result'
 
 import { IOErrors } from '../../errors'
-import type {
-  ExecOptions,
-  ExecResult,
-  ProcessHandle,
-  SpawnOptions,
-  WebReadableLike,
-} from '../../types/common'
+import type { IODef } from '../../types/io'
 import { fromReadable } from '../stream/from-readable'
 
 import { errorMessage, makeStatus, normalizeSpawn, toBytes } from './shared'
 
 /**
  * Run a command to completion with `Bun.spawn`, buffering stdout/stderr. A non-zero exit is data
- * (reported on the {@link ExecResult}), not a failure — only an inability to launch the process (or
+ * (reported on the {@link IODef.ExecResult}), not a failure — only an inability to launch the process (or
  * a runtime error draining it) surfaces as a `Result.Failure`.
  */
 export const bunExec = operation(function* (
   cmd: string,
   args?: readonly string[],
-  options?: ExecOptions,
+  options?: IODef.ExecOptions,
 ) {
   const config = normalizeSpawn(options)
 
@@ -45,7 +39,7 @@ export const bunExec = operation(function* (
         proc.exited,
       ]),
     )
-    const result: ExecResult = {
+    const result: IODef.ExecResult = {
       ...makeStatus(proc.exitCode, proc.signalCode),
       stdout: new Uint8Array(out),
       stderr: new Uint8Array(err),
@@ -64,7 +58,7 @@ export const bunExec = operation(function* (
 export const bunSpawn = operation(function* (
   cmd: string,
   args?: readonly string[],
-  options?: SpawnOptions,
+  options?: IODef.SpawnOptions,
 ) {
   const config = normalizeSpawn(options)
 
@@ -109,10 +103,10 @@ export const bunSpawn = operation(function* (
     }
   })
 
-  const handle: ProcessHandle = {
+  const handle: IODef.ProcessHandle = {
     pid: proc.pid,
-    stdout: fromReadable(proc.stdout.getReader() as WebReadableLike),
-    stderr: fromReadable(proc.stderr.getReader() as WebReadableLike),
+    stdout: fromReadable(proc.stdout.getReader() as IODef.WebReadableLike),
+    stderr: fromReadable(proc.stderr.getReader() as IODef.WebReadableLike),
     exited,
     write,
     closeStdin,

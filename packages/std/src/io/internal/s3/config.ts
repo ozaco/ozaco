@@ -1,7 +1,7 @@
 import type { AnyType } from 'std:shared'
 
-import type { S3Options } from '../../types/common'
 import type { Helpers } from '../../types/helpers'
+import type { IODef } from '../../types/io'
 
 const env = (key: string): string | undefined => (globalThis as AnyType).process?.env?.[key]
 
@@ -15,7 +15,7 @@ export const DEFAULT_PART_SIZE = 5 * 1024 * 1024
  * Merge explicit options over the environment: Bun's `S3_*` names first, then the AWS SDK names,
  * so one process configuration serves both platforms.
  */
-export const resolveConfig = (options: S3Options): Helpers.S3Config => ({
+export const resolveConfig = (options: IODef.S3Options): Helpers.S3Config => ({
   accessKeyId: options.accessKeyId ?? env('S3_ACCESS_KEY_ID') ?? env('AWS_ACCESS_KEY_ID') ?? '',
   secretAccessKey:
     options.secretAccessKey ?? env('S3_SECRET_ACCESS_KEY') ?? env('AWS_SECRET_ACCESS_KEY') ?? '',

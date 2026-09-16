@@ -1,3 +1,4 @@
+import { EffectCauses } from '../errors'
 import { createTask } from '../internal/task'
 import { trap } from '../internal/trap'
 import type { Helpers } from '../types/helpers'
@@ -15,7 +16,7 @@ import { withResolvers } from './with-resolvers'
 export function resource<T>(op: (provide: Helpers.Provide<T>) => Operation<void>): Operation<T> {
   return {
     *[Symbol.iterator]() {
-      const ready = withResolvers<T>('resource ready')
+      const ready = withResolvers<T>(EffectCauses.ResourceReady)
 
       function* provide(value: T): Operation<void> {
         ready.resolve(value)

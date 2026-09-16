@@ -11,10 +11,13 @@ export const WsErrors = createTags(
 /** The cause names ws stamps on its operations. */
 export const WsCauses = createTags(
   'std:ws',
+
   'connect',
   'dial',
   'send',
   'close',
   'keepalive',
   'reconnect',
+  'open',
+  'state-change',
 )

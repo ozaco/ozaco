@@ -11,4 +11,12 @@ export const EffectErrors = createTags(
 )
 
 /** The cause names effect stamps on its own primitives. */
-export const EffectCauses = createTags('std:effect', 'until', 'suspend')
+export const EffectCauses = createTags(
+  'std:effect',
+
+  'until',
+  'suspend',
+  'resource-ready',
+  'fork-started',
+  'to-readable-ready',
+)

@@ -1,13 +1,12 @@
 import type { Operation } from 'std:effect'
 import { useContext } from 'std:effect'
 
-import pkg from '../../package.json'
-
-import { LogLevel } from './const'
-import { Logger, LoggerTransport } from './definitions'
-import { LoggerBindingsContext } from './internal/context'
-import { buildEntry, dispatch, logAt } from './internal/helpers'
-import type { LoggerDef } from './types/logger'
+import pkg from '../../../package.json'
+import { LogLevel } from '../const'
+import { Logger, LoggerTransport } from '../definitions'
+import { LoggerBindingsContext } from '../internal/context'
+import { buildEntry, dispatch, logAt } from '../internal/helpers'
+import type { LoggerDef } from '../types/logger'
 
 export const DefaultLogger = Logger.implement({
   name: 'std/default-logger',

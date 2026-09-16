@@ -1,7 +1,6 @@
 // oxlint-disable unicorn/text-encoding-identifier-case
 
 import { until } from 'std:effect'
-import type { S3Options, WalkEntry } from 'std:io'
 import { IO, IO_FLAGS, toPath } from 'std:io'
 import { fail } from 'std:result'
 import { hasFlag } from 'std:shared'
@@ -34,9 +33,9 @@ import { createS3 } from '../internal/s3/create'
 import { fetchS3Client } from '../internal/s3/fetch'
 import { fromReadable } from '../internal/stream/from-readable'
 import { toReadable } from '../internal/stream/to-readable'
-import type { HashAlgorithm } from '../types/common'
+import type { IODef } from '../types/io'
 
-const toNodeHash = (alg: HashAlgorithm) =>
+const toNodeHash = (alg: IODef.HashAlgorithm) =>
   alg === 'SHA-256' ? 'sha256' : alg === 'SHA-384' ? 'sha384' : 'sha512'
 
 export const NodeIO = IO.implement({
@@ -180,7 +179,7 @@ export const NodeIO = IO.implement({
 
   *walk(root, options) {
     const p = toPath(root)
-    const results: WalkEntry[] = []
+    const results: IODef.WalkEntry[] = []
     yield* walkRecursive(
       p,
       {
@@ -221,7 +220,7 @@ export const NodeIO = IO.implement({
   tmpdir: readTmpDir,
 
   // Node has no built-in S3; use the dependency-free SigV4-over-fetch client.
-  *s3(options?: S3Options) {
+  *s3(options?: IODef.S3Options) {
     return createS3(fetchS3Client(options ?? {}))
   },
 })

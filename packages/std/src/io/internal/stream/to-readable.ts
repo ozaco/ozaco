@@ -2,6 +2,8 @@ import type { Operation, Flow } from 'std:effect'
 import { ensure, operation, race, until, withResolvers } from 'std:effect'
 import { asFailure, isFailure } from 'std:result'
 
+import { IOCauses } from '../../errors'
+
 /**
  * IO action — adapt an effect `Flow<Uint8Array>` into a web `ReadableStream<Uint8Array>`, the
  * inverse of `fromReadable`. Free of any `node:*` import so it bundles for the browser (`WebIO`); the
@@ -27,7 +29,7 @@ export const toReadable = operation(function* (source: Flow<Uint8Array, unknown>
   // that means one more production cycle per abandoned connection, and for a source that never
   // produces again, a pump that never returns and a scope that never unwinds. Racing the whole drain
   // against this signal is what makes departure, not the next chunk, end the pump.
-  const departed = withResolvers<void>('readable cancelled')
+  const departed = withResolvers<void>(IOCauses.ReadableCancelled)
 
   // resolves when the consumer pulls; the pump parks here once the controller is saturated
   let wake: (() => void) | null = null

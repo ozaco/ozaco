@@ -18,15 +18,7 @@ import type { Socket } from 'node:net'
 import { connect, createServer } from 'node:net'
 
 import { IOErrors } from '../../errors'
-import type {
-  FlowClose,
-  TcpConnectOptions,
-  TcpHandler,
-  TcpListenOptions,
-  TcpSocket,
-  UdpBindOptions,
-  UdpDatagram,
-} from '../../types/common'
+import type { IODef } from '../../types/io'
 import { errorMessage, toBytes } from '../process/shared'
 
 const queueFlow = <T, TClose>(queue: Queue<T, TClose>): Flow<T, TClose> => ({
@@ -69,14 +61,14 @@ const nodeClose = operation(function* (socket: Socket) {
   )
 })
 
-const makeHandle = (socket: Socket): TcpSocket => {
+const makeHandle = (socket: Socket): IODef.TcpSocket => {
   // Attach the reader EAGERLY (at accept/connect time) and buffer into a queue, so bytes are captured
   // even when the handler does async work (e.g. connecting an upstream) before consuming `data`. A
   // lazy subscribe would drop the first bytes under Bun's node:net (it does not buffer a paused
   // accepted socket the way Node does). Trade-off: no native backpressure — a slow consumer buffers.
-  const queue = createQueue<Uint8Array, FlowClose>()
+  const queue = createQueue<Uint8Array, IODef.FlowClose>()
   let settled = false
-  const settle = (close: FlowClose) => {
+  const settle = (close: IODef.FlowClose) => {
     if (!settled) {
       settled = true
       queue.close(close)
@@ -97,7 +89,10 @@ const makeHandle = (socket: Socket): TcpSocket => {
   }
 }
 
-export const tcpListen = operation(function* (options: TcpListenOptions, onConnection: TcpHandler) {
+export const tcpListen = operation(function* (
+  options: IODef.TcpListenOptions,
+  onConnection: IODef.TcpHandler,
+) {
   const scope = yield* useScope()
 
   const server = createServer(socket => {
@@ -160,7 +155,7 @@ export const tcpListen = operation(function* (options: TcpListenOptions, onConne
   return { port, hostname: options.hostname ?? '0.0.0.0', close }
 })
 
-export const tcpConnect = operation(function* (options: TcpConnectOptions) {
+export const tcpConnect = operation(function* (options: IODef.TcpConnectOptions) {
   const socket = connect({ port: options.port, host: options.hostname ?? '127.0.0.1' })
 
   yield* mapError(
@@ -189,8 +184,8 @@ export const tcpConnect = operation(function* (options: TcpConnectOptions) {
   return makeHandle(socket)
 })
 
-export const udpBind = operation(function* (options?: UdpBindOptions) {
-  const queue = createQueue<UdpDatagram, FlowClose>()
+export const udpBind = operation(function* (options?: IODef.UdpBindOptions) {
+  const queue = createQueue<IODef.UdpDatagram, IODef.FlowClose>()
   const socket = createSocket('udp4')
 
   socket.on('message', (msg, rinfo) => {

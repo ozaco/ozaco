@@ -1,5 +1,5 @@
-import { createQueue, fork, run, scoped, sleep, until } from 'std:effect'
-import { unwrap } from 'std:result'
+import { attempt, createQueue, fork, run, scoped, sleep, until } from 'std:effect'
+import { isFailure, unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
 import type { RtcDef } from 'std:webrtc'
 import { Rtc, RtcClient } from 'std:webrtc'
@@ -21,10 +21,36 @@ import { createDemo } from '../src'
 const polyfillSpecifier = 'node-datachannel/polyfill'
 const polyfill = await import(polyfillSpecifier).catch(() => undefined)
 
+// The same supervision the demo page runs with: a transient ICE `failed` (seen under CPU load on
+// the loopback polyfill) is answered with a restart offer instead of ending the session.
+const RESILIENT = { iceRestart: {}, reconnect: { retries: 3, delayMs: 200 } } as const
+
 interface RelayFrame {
   t?: string
   polite?: boolean
   epoch?: number
+}
+
+/** On a failed `channel()`, surface both peers' timelines — the negotiation is right there. */
+const openOrExplain = function* (
+  peer: RtcDef.Peer,
+  label: string,
+  others: readonly RtcDef.Peer[] = [],
+) {
+  const outcome = yield* attempt(() => peer.channel(label, { openTimeoutMs: 15_000 }))
+  if (isFailure(outcome)) {
+    const dump = (target: RtcDef.Peer) =>
+      `${target.id} ${target.connectionState}/${target.signalingState} offers=${target.metrics.offersSent}/${target.metrics.offersReceived} cands=${target.metrics.candidatesSent}/${target.metrics.candidatesReceived} restarts=${target.metrics.restarts}: ${target.timeline
+        .map(
+          event =>
+            `${event.kind}${event.detail ? `:${event.detail}` : ''}${event.error ? `!${event.error}` : ''}`,
+        )
+        .join(' ')}`
+    throw new Error(
+      `${String(outcome.error)} — ${outcome.message}\n${[peer, ...others].map(dump).join('\n')}`,
+    )
+  }
+  return outcome.value
 }
 
 /** Pull frames until the relay PAIRS this socket and hands it a role (a lone joiner waits). */
@@ -73,10 +99,16 @@ describe.skipIf(!polyfill)('webrtc over the demo signaling relay', () => {
         expect(roleA.polite).toBe(!roleB.polite)
         expect(roleA.epoch).toBe(roleB.epoch)
 
-        const peerA = yield* Rtc.actions.connect(socketA, { polite: roleA.polite === true })
-        const peerB = yield* Rtc.actions.connect(socketB, { polite: roleB.polite === true })
+        const peerA = yield* Rtc.actions.connect(socketA, {
+          polite: roleA.polite === true,
+          ...RESILIENT,
+        })
+        const peerB = yield* Rtc.actions.connect(socketB, {
+          polite: roleB.polite === true,
+          ...RESILIENT,
+        })
 
-        const callA = yield* peerA.channel('call', { openTimeoutMs: 15_000 })
+        const callA = yield* openOrExplain(peerA, 'call', [peerB])
         const channelsB = yield* peerB.channels
         const emitted = yield* channelsB.next()
         expect(emitted.done).toBe(false)
@@ -263,11 +295,16 @@ describe.skipIf(!polyfill)('webrtc over the demo signaling relay', () => {
         // the callee arrives 400ms late — the caller sits in `rtc:waiting` until the relay pairs
         // them, then the pairing negotiates over the cluster carrier
         const received = createQueue<string, void>()
+        const late: RtcDef.Peer[] = []
         yield* fork(function* () {
           yield* sleep(400)
           const socketB = yield* Ws.actions.connect(`${base}/rtc/cluster-e2e`)
           const roleB = yield* roleOf(socketB)
-          const peerB = yield* Rtc.actions.connect(socketB, { polite: roleB.polite === true })
+          const peerB = yield* Rtc.actions.connect(socketB, {
+            polite: roleB.polite === true,
+            ...RESILIENT,
+          })
+          late.push(peerB)
           const channels = yield* peerB.channels
           const emitted = yield* channels.next()
           received.add(emitted.done ? 'closed' : emitted.value.label)
@@ -276,8 +313,11 @@ describe.skipIf(!polyfill)('webrtc over the demo signaling relay', () => {
 
         const socketA = yield* Ws.actions.connect(`${base}/rtc/cluster-e2e`)
         const roleA = yield* roleOf(socketA)
-        const peerA = yield* Rtc.actions.connect(socketA, { polite: roleA.polite === true })
-        const call = yield* peerA.channel('call', { openTimeoutMs: 15_000 })
+        const peerA = yield* Rtc.actions.connect(socketA, {
+          polite: roleA.polite === true,
+          ...RESILIENT,
+        })
+        const call = yield* openOrExplain(peerA, 'call', late)
         expect(call.readyState).toBe('open')
         const label = yield* received.next()
         expect(label.done ? 'closed' : label.value).toBe('call')

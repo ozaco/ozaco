@@ -8,8 +8,7 @@ import type { RtcDef } from '../types/rtc'
 
 import { initOf, wrapChannel } from './channel'
 import { CHANNEL_DEFAULTS } from './const'
-
-const messageOf = (error: unknown) => (error instanceof Error ? error.message : String(error))
+import { messageOf } from './generation'
 
 /** `entry.opened` bounded by `openTimeoutMs` (`0` disables the deadline). */
 const awaitOpen = (entry: Helpers.ChannelEntry, label: string, timeoutMs: number) =>

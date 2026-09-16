@@ -1,11 +1,3 @@
-/** Retry settings applied for every field an `iceRestart` / `reconnect` block leaves out. */
-export const BUDGET_DEFAULTS = {
-  retries: 5,
-  delayMs: 250,
-  backoff: 1,
-  maxDelayMs: 30_000,
-} as const
-
 /** Data-channel defaults: backpressure marks (bytes) and the open deadline (ms). */
 export const CHANNEL_DEFAULTS = {
   highWaterMark: 1_048_576,

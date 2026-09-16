@@ -49,6 +49,32 @@ export namespace Utils {
     random?: (() => number) | undefined
   }
 
+  /** A resolved retry budget (see `budgetOf`): attempt `n` waits `delayMs * backoff^n`, capped. */
+  export interface Budget {
+    retries: number
+    delayMs: number
+    backoff: number
+    maxDelayMs: number
+  }
+
+  /** What a consumer writes for a budget — every field optional, filled from `BUDGET_DEFAULTS`. */
+  export interface BudgetOptions {
+    /** Max attempts per outage (default `5`). */
+    retries?: number | undefined
+    /** Delay before the first attempt, in ms (default `250`). */
+    delayMs?: number | undefined
+    /** Exponential multiplier per attempt: attempt `n` waits `delayMs * backoff^n` (default `1`). */
+    backoff?: number | undefined
+    /** Upper bound for the computed delay in ms (default `30_000`). */
+    maxDelayMs?: number | undefined
+  }
+
+  /** A re-armed wait point: `wait()` parks until the next `notify()`, which also arms a fresh gate. */
+  export interface Gate {
+    wait(): Operation<void>
+    notify(): void
+  }
+
   /** Options for `retry`. */
   export interface RetryOptions extends BackoffOptions {
     /** Maximum number of tries, including the first one (default 3). */

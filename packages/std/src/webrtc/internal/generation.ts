@@ -8,8 +8,6 @@ import type { RtcDef } from '../types/rtc'
 
 import { initOf } from './channel'
 
-const messageOf = (error: unknown) => (error instanceof Error ? error.message : String(error))
-
 const emptyGeneration = (pc: RtcDef.PeerLike): Helpers.Generation => ({
   pc,
   alive: true,
@@ -152,6 +150,10 @@ const readdTracks = (session: Helpers.Session, pc: RtcDef.PeerLike) => {
   return live
 }
 
+/** The message of a thrown value, for failure texts. */
+export const messageOf = (error: unknown) =>
+  error instanceof Error ? error.message : String(error)
+
 /**
  * Dial ONE generation: construct, wire, adopt as current, recreate every local channel and
  * track on it, kick negotiation. Returns an error message when construction itself failed.
@@ -194,7 +196,7 @@ export const dialGeneration = (
     generation.negotiations.add({ kind: 'channel' })
   }
 
-  session.notifyDial()
+  session.dial.notify()
 
   return undefined
 }

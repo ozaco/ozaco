@@ -1,4 +1,5 @@
-import { attempt, operation, sleep } from 'std:effect'
+import type { Utils } from 'std:effect'
+import { attempt, budgetDelay, operation, sleep } from 'std:effect'
 import type { Result } from 'std:result'
 import { fail, isSuccess } from 'std:result'
 
@@ -8,10 +9,7 @@ import type { WsDef } from '../types/ws'
 
 import { dial } from './dial'
 
-const delayOf = (budget: Helpers.ReconnectBudget, attemptNo: number) =>
-  Math.min(budget.delayMs * budget.backoff ** attemptNo, budget.maxDelayMs)
-
-const exhausted = (budget: Helpers.ReconnectBudget, last: WsDef.CloseInfo) =>
+const exhausted = (budget: Utils.Budget, last: WsDef.CloseInfo) =>
   fail(
     WsErrors.ReconnectExhausted,
     `gave up after ${budget.retries} redial attempts (last close: ${last.code}${
@@ -29,7 +27,7 @@ const exhausted = (budget: Helpers.ReconnectBudget, last: WsDef.CloseInfo) =>
 export const supervise = operation(function* (
   session: Helpers.Session,
   impl: WsDef.ImplLike,
-  budget: Helpers.ReconnectBudget,
+  budget: Utils.Budget,
 ) {
   while (true) {
     const outage = yield* session.outages.next()
@@ -40,7 +38,7 @@ export const supervise = operation(function* (
     let reopened = false
 
     for (let attemptNo = 0; attemptNo < budget.retries; attemptNo += 1) {
-      yield* sleep(delayOf(budget, attemptNo))
+      yield* sleep(budgetDelay(budget, attemptNo))
 
       if (session.ended || session.closedByClient) {
         return

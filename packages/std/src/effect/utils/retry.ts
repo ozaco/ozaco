@@ -1,6 +1,7 @@
 import { appendCauses, isFailure } from 'std:result'
 
 import { attempt } from '../base/attempt'
+import { BUDGET_DEFAULTS } from '../const'
 import type { Operation } from '../types/operation'
 import type { Utils } from '../types/utils'
 
@@ -27,6 +28,25 @@ export const backoffDelay = (attemptNumber: number, options: Utils.BackoffOption
   const random = options.random ?? Math.random
   return base * (1 - jitter + jitter * random())
 }
+
+/**
+ * Resolve a retry budget: absent options mean "no budget" (`undefined`), present options (even `{}`)
+ * fill every missing field from `BUDGET_DEFAULTS` — the shape ws/webrtc reconnect and ICE-restart
+ * supervisors run on.
+ */
+export const budgetOf = (options?: Utils.BudgetOptions): Utils.Budget | undefined =>
+  options
+    ? {
+        retries: options.retries ?? BUDGET_DEFAULTS.retries,
+        delayMs: options.delayMs ?? BUDGET_DEFAULTS.delayMs,
+        backoff: options.backoff ?? BUDGET_DEFAULTS.backoff,
+        maxDelayMs: options.maxDelayMs ?? BUDGET_DEFAULTS.maxDelayMs,
+      }
+    : undefined
+
+/** The delay before 0-based attempt `attemptNo` of a budget: `min(delayMs * backoff^n, maxDelayMs)`. */
+export const budgetDelay = (budget: Utils.Budget, attemptNo: number): number =>
+  Math.min(budget.delayMs * budget.backoff ** attemptNo, budget.maxDelayMs)
 
 /** Bind {@link backoffDelay} to a fixed set of options: `(attempt) => delayMs`. */
 export const backoff =

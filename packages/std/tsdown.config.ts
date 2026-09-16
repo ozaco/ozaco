@@ -22,6 +22,7 @@ export default defineConfig({
     'codec/impl/toml': './src/codec/impl/toml.ts',
     'codec/impl/yaml': './src/codec/impl/yaml.ts',
     logger: './src/logger/index.ts',
+    'logger/impl/default': './src/logger/impl/default.ts',
     'logger/transport/console': './src/logger/transport/console/index.ts',
     'logger/transport/file': './src/logger/transport/file/index.ts',
     config: './src/config/index.ts',

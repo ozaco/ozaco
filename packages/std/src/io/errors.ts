@@ -28,4 +28,10 @@ export const IOErrors = createTags(
 )
 
 /** The cause names io appends while unwinding a stream. */
-export const IOCauses = createTags('std:io', 'stream', 'write-stream')
+export const IOCauses = createTags(
+  'std:io',
+
+  'stream',
+  'write-stream',
+  'readable-cancelled',
+)

@@ -1,6 +1,5 @@
 import type { Operation } from 'std:effect'
 import { until } from 'std:effect'
-import type { IOStat, WalkEntry, WalkOptions } from 'std:io'
 import { IO_FLAGS } from 'std:io'
 import { hasFlag } from 'std:shared'
 
@@ -8,7 +7,9 @@ import type { Stats } from 'node:fs'
 import fs from 'node:fs/promises'
 import { join } from 'node:path'
 
-export const mapStat = (s: Stats): IOStat => ({
+import type { IODef } from '../../types/io'
+
+export const mapStat = (s: Stats): IODef.IOStat => ({
   isFile: s.isFile(),
   isDirectory: s.isDirectory(),
   isSymlink: s.isSymbolicLink(),
@@ -21,9 +22,10 @@ export const mapStat = (s: Stats): IOStat => ({
 // oxlint-disable-next-line max-params
 export function* walkRecursive(
   root: string,
-  options: Required<Pick<WalkOptions, 'flags' | 'maxDepth'>> & Pick<WalkOptions, 'match' | 'skip'>,
+  options: Required<Pick<IODef.WalkOptions, 'flags' | 'maxDepth'>> &
+    Pick<IODef.WalkOptions, 'match' | 'skip'>,
   depth: number,
-  results: WalkEntry[],
+  results: IODef.WalkEntry[],
 ): Operation<void> {
   const flags = options.flags ?? 0
 
@@ -50,7 +52,7 @@ export function* walkRecursive(
       continue
     }
 
-    const entry: WalkEntry = {
+    const entry: IODef.WalkEntry = {
       path: fullPath,
       name,
       isFile: s.isFile(),

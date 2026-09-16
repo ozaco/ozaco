@@ -1,5 +1,5 @@
-import type { ExecOptions, ProcessStatus } from '../../types/common'
 import type { Helpers } from '../../types/helpers'
+import type { IODef } from '../../types/io'
 import { toPath } from '../../utils/to-path'
 
 const encoder = new TextEncoder()
@@ -34,8 +34,8 @@ export const mergeEnv = (
   return merged
 }
 
-/** Derive a {@link ProcessStatus} from a raw exit code and terminating signal. */
-export const makeStatus = (code: number | null, signal: string | null): ProcessStatus => ({
+/** Derive a {@link IODef.ProcessStatus} from a raw exit code and terminating signal. */
+export const makeStatus = (code: number | null, signal: string | null): IODef.ProcessStatus => ({
   code,
   signal,
   success: code === 0 && signal === null,
@@ -57,7 +57,7 @@ export const concatBytes = (chunks: readonly Uint8Array[]): Uint8Array => {
 }
 
 /** Reduce the public process options into a platform-agnostic, defined-keys-only config. */
-export const normalizeSpawn = (options?: ExecOptions): Helpers.SpawnConfig => {
+export const normalizeSpawn = (options?: IODef.ExecOptions): Helpers.SpawnConfig => {
   const config: Helpers.SpawnConfig = {}
   if (options?.cwd !== undefined) {
     config.cwd = toPath(options.cwd)

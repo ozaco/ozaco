@@ -36,4 +36,7 @@ export const RtcCauses = createTags(
   'stats-sampler',
   'ice-restart',
   'reconnect',
+  'dial',
+  'channel-open',
+  'channel-drain',
 )

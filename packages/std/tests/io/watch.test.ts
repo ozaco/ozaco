@@ -1,5 +1,5 @@
 import { run, sleep, spawn, withResolvers } from 'std:effect'
-import type { WatchEvent } from 'std:io'
+import type { IODef } from 'std:io'
 import { IO } from 'std:io'
 import { unwrap } from 'std:result'
 
@@ -53,7 +53,7 @@ describe.skipIf(!watchmanUsable)('watch (Watchman path)', () => {
         yield* BunIO.use()
 
         const events = yield* IO.actions.watch(dir)
-        const got = withResolvers<WatchEvent>()
+        const got = withResolvers<IODef.WatchEvent>()
 
         yield* spawn(function* () {
           const first = yield* events.next()

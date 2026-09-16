@@ -1,5 +1,5 @@
-import type { S3ListOptions, S3Options, S3PresignOptions } from '../../types/common'
 import type { Helpers } from '../../types/helpers'
+import type { IODef } from '../../types/io'
 
 import { resolveConfig } from './config'
 import { uploadStream } from './multipart'
@@ -20,7 +20,7 @@ const toBytes = async (data: Uint8Array | string | Blob): Promise<Uint8Array | s
 const byteLength = (data: Uint8Array | string): number =>
   typeof data === 'string' ? new TextEncoder().encode(data).length : data.byteLength
 
-export const fetchS3Client = (options: S3Options): Helpers.S3Native => {
+export const fetchS3Client = (options: IODef.S3Options): Helpers.S3Native => {
   const config = resolveConfig(options)
   const transport = createTransport(config)
 
@@ -32,7 +32,7 @@ export const fetchS3Client = (options: S3Options): Helpers.S3Native => {
     return read(response)
   }
 
-  const presign = (key: string, presignOptions: S3PresignOptions = {}): string =>
+  const presign = (key: string, presignOptions: IODef.S3PresignOptions = {}): string =>
     presignUrl(config, {
       method: presignOptions.method ?? 'GET',
       url: transport.objectUrl(key),
@@ -88,7 +88,7 @@ export const fetchS3Client = (options: S3Options): Helpers.S3Native => {
     presign: presignOptions => presign(key, presignOptions),
   })
 
-  const list = async (listOptions: S3ListOptions = {}) => {
+  const list = async (listOptions: IODef.S3ListOptions = {}) => {
     const url = transport.bucketUrl()
     url.searchParams.set('list-type', '2')
     if (listOptions.prefix) {

@@ -1,5 +1,5 @@
 import type { CodecDef } from 'std:codec'
-import type { Flow, Helpers as EffectHelpers, Operation, Queue } from 'std:effect'
+import type { Flow, Helpers as EffectHelpers, Operation, Queue, Utils } from 'std:effect'
 import type { Result } from 'std:result'
 
 import type { RtcDef } from './rtc'
@@ -52,14 +52,6 @@ export namespace Helpers {
     retain?: (() => boolean) | undefined
     /** The peer's observer — message/byte counters are incremented on the wire path. */
     observe?: Observer | undefined
-  }
-
-  /** Fully-resolved retry settings (absent entirely when that supervision is disabled). */
-  export interface Budget {
-    retries: number
-    delayMs: number
-    backoff: number
-    maxDelayMs: number
   }
 
   /**
@@ -127,9 +119,9 @@ export namespace Helpers {
     readonly options: RtcDef.Options
     readonly polite: boolean
     /** Resolved ICE-restart budget — absent when restarts are unsupervised. */
-    readonly restart: Budget | undefined
+    readonly restart: Utils.Budget | undefined
     /** Resolved session-redial budget — absent when a dead connection settles the peer. */
-    readonly reconnect: Budget | undefined
+    readonly reconnect: Utils.Budget | undefined
 
     readonly observe: Observer
     /** `observe.counters` — the same object, kept short because every pump touches it. */
@@ -144,7 +136,7 @@ export namespace Helpers {
     /** generation deaths, one at a time, for the session-reconnect supervisor */
     readonly outages: Queue<Result.Failure<unknown>, void>
     /** Resolves with the final close info once the peer permanently ends. */
-    readonly closed: EffectHelpers.WithResolvers<RtcDef.CloseInfo>
+    readonly closed: EffectHelpers.FutureWithResolvers<RtcDef.CloseInfo>
 
     /** locally-opened channels (rebound on redial) */
     readonly localRecords: Set<LocalRecord>
@@ -165,10 +157,9 @@ export namespace Helpers {
     stateOf(): string
     /** May the channel layer hold a dying native for a rebind instead of settling? */
     retainLocal(): boolean
-    /** The gate `channel()` calls and the per-generation pumps park on through a redial gap. */
-    dialed(): Operation<void>
-    /** Wake everything parked on `dialed()` and arm a fresh gate. */
-    notifyDial(): void
+    /** The gate `channel()` calls and the per-generation pumps park on through a redial gap;
+     * notified on every dial and on the permanent end. */
+    readonly dial: Utils.Gate
 
     sendFrame(frame: RtcDef.SignalFrame): Operation<void>
     /** Count every candidate; record the first of each type per generation and direction. */

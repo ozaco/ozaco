@@ -1,6 +1,6 @@
 import { operation } from 'std:effect'
 
-import type { UlidOptions } from '../../types/common'
+import type { IODef } from '../../types/io'
 
 // Crockford's base32 (no I/L/O/U) — lexicographic sort order matches numeric order.
 const ENCODING = '0123456789ABCDEFGHJKMNPQRSTVWXYZ'
@@ -54,7 +54,7 @@ const bump = (digits: number[]): number[] => {
  *   - `length` (default 26): total id length EXCLUDING `bucket` (10 time chars + `length - 10` random).
  *   - `bucket` (default ''): a fixed prefix segment (namespace/shard tag); different buckets never collide.
  */
-export const ulidId = operation(function* (options?: UlidOptions) {
+export const ulidId = operation(function* (options?: IODef.UlidOptions) {
   const window = options?.window ?? 1
   const length = options?.length ?? DEFAULT_LEN
   const bucket = options?.bucket ?? ''

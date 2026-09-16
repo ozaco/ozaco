@@ -1,5 +1,4 @@
 import { until } from 'std:effect'
-import type { S3Options, WalkEntry } from 'std:io'
 import { IO, IO_FLAGS, toPath } from 'std:io'
 import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
@@ -32,6 +31,7 @@ import { bunExec, bunSpawn } from '../internal/process/bun'
 import { createS3 } from '../internal/s3/create'
 import { fromReadable } from '../internal/stream/from-readable'
 import { toReadable } from '../internal/stream/to-readable'
+import type { IODef } from '../types/io'
 
 export const BunIO = IO.implement({
   name: 'std/bun-io',
@@ -179,7 +179,7 @@ export const BunIO = IO.implement({
 
   *walk(root, options) {
     const p = toPath(root)
-    const results: WalkEntry[] = []
+    const results: IODef.WalkEntry[] = []
     yield* walkRecursive(
       p,
       {
@@ -219,7 +219,7 @@ export const BunIO = IO.implement({
   ip: readInterfaces,
   tmpdir: readTmpDir,
 
-  *s3(options?: S3Options) {
+  *s3(options?: IODef.S3Options) {
     return createS3(new (Bun.S3Client as AnyType)(options ?? {}))
   },
 })

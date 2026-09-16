@@ -1,4 +1,4 @@
-import type { Flow, Future, Operation, Queue } from 'std:effect'
+import type { Flow, Operation, Queue } from 'std:effect'
 import { attempt, lift, operation } from 'std:effect'
 import { fail } from 'std:result'
 
@@ -26,17 +26,13 @@ const flowOf = <T, TClose>(queue: Queue<T, TClose>): Flow<T, TClose> =>
 export const createHandle = (session: Helpers.Session): RtcDef.Peer => {
   const { observe, counters } = session
 
-  const closed = operation(function* () {
-    return yield* session.closed.operation
-  })() as Future<RtcDef.CloseInfo>
-
   return {
     id: observe.id,
     events: observe.events,
     channels: flowOf(session.channels),
     tracks: flowOf(session.tracks),
     states: flowOf(session.states),
-    closed,
+    closed: session.closed.future,
 
     get native() {
       return session.generation?.pc as RtcDef.PeerLike
@@ -88,7 +84,7 @@ export const createHandle = (session: Helpers.Session): RtcDef.Peer => {
         session.settle(true, { state: session.stateOf(), reason: 'client' })
       }
 
-      yield* session.closed.operation
+      yield* session.closed.future
     }, RtcCauses.Close),
   }
 }

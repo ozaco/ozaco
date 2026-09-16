@@ -4,25 +4,17 @@ import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import { IOErrors } from '../../errors'
-import type {
-  S3Body,
-  S3Client,
-  S3File,
-  S3ListOptions,
-  S3ListResult,
-  S3PresignOptions,
-  S3Stat,
-} from '../../types/common'
 import type { Helpers } from '../../types/helpers'
+import type { IODef } from '../../types/io'
 
-const mapStat = (native: AnyType): S3Stat => ({
+const mapStat = (native: AnyType): IODef.S3Stat => ({
   size: Number(native?.size ?? 0),
   etag: native?.etag ?? native?.eTag,
   lastModified: native?.lastModified,
   type: native?.type,
 })
 
-const mapList = (native: AnyType): S3ListResult => ({
+const mapList = (native: AnyType): IODef.S3ListResult => ({
   contents: ((native?.contents ?? []) as AnyType[]).map(entry => ({
     key: String(entry?.key ?? ''),
     size: entry?.size,
@@ -34,10 +26,10 @@ const mapList = (native: AnyType): S3ListResult => ({
 })
 
 /**
- * Stream a body into a native file. Bun's `S3File` exposes a multipart `writer()` sink — chunks go
+ * Stream a body into a native file. Bun's `IODef.S3File` exposes a multipart `writer()` sink — chunks go
  * up as they are read; the fetch client accepts the stream itself (its own multipart path).
  */
-const writeBody = async (file: Helpers.S3NativeFile, data: S3Body): Promise<number> => {
+const writeBody = async (file: Helpers.S3NativeFile, data: IODef.S3Body): Promise<number> => {
   if (!(data instanceof ReadableStream) || typeof file.writer !== 'function') {
     return file.write(data)
   }
@@ -64,14 +56,14 @@ const writeBody = async (file: Helpers.S3NativeFile, data: S3Body): Promise<numb
 }
 
 /**
- * Wrap a native S3 client (Bun's `S3Client` on Bun, the SigV4-over-`fetch` client elsewhere) as an
- * effect-native {@link S3Client}. `native` is `null` on runtimes with no S3 at all (the browser) —
+ * Wrap a native S3 client (Bun's `IODef.S3Client` on Bun, the SigV4-over-`fetch` client elsewhere) as an
+ * effect-native {@link IODef.S3Client}. `native` is `null` on runtimes with no S3 at all (the browser) —
  * the client is still constructible so the platform surface stays uniform, but every operation
  * fails `IOErrors.Unsupported`. Native async calls are `until`-wrapped; file handles are lazy —
  * nothing hits the network until an operation runs. Reads stream (`stream()` hands the network
  * body over as it arrives) and writes stream (a `ReadableStream` body goes up multipart).
  */
-export const createS3 = (native: Helpers.S3Native | null): S3Client => {
+export const createS3 = (native: Helpers.S3Native | null): IODef.S3Client => {
   const useClient = operation(function* () {
     if (!native) {
       return yield* fail(
@@ -87,7 +79,7 @@ export const createS3 = (native: Helpers.S3Native | null): S3Client => {
     return (yield* useClient()).file(key)
   })
 
-  const file = (key: string): S3File => ({
+  const file = (key: string): IODef.S3File => ({
     key,
 
     *text() {
@@ -107,7 +99,7 @@ export const createS3 = (native: Helpers.S3Native | null): S3Client => {
       // `Promise.resolve` normalizes both so `until` yields the stream either way.
       return yield* until(Promise.resolve((yield* fileOf(key)).stream()))
     },
-    *write(data: S3Body) {
+    *write(data: IODef.S3Body) {
       return yield* until(writeBody(yield* fileOf(key), data))
     },
     *exists() {
@@ -119,7 +111,7 @@ export const createS3 = (native: Helpers.S3Native | null): S3Client => {
     *stat() {
       return mapStat(yield* until((yield* fileOf(key)).stat()))
     },
-    *presign(presignOptions?: S3PresignOptions) {
+    *presign(presignOptions?: IODef.S3PresignOptions) {
       return (yield* fileOf(key)).presign(presignOptions)
     },
   })
@@ -130,7 +122,7 @@ export const createS3 = (native: Helpers.S3Native | null): S3Client => {
     *read(key: string) {
       return yield* until((yield* fileOf(key)).bytes())
     },
-    *write(key: string, data: S3Body) {
+    *write(key: string, data: IODef.S3Body) {
       return yield* until(writeBody(yield* fileOf(key), data))
     },
     *exists(key: string) {
@@ -142,10 +134,10 @@ export const createS3 = (native: Helpers.S3Native | null): S3Client => {
     *stat(key: string) {
       return mapStat(yield* until((yield* useClient()).stat(key)))
     },
-    *list(listOptions?: S3ListOptions) {
+    *list(listOptions?: IODef.S3ListOptions) {
       return mapList(yield* until((yield* useClient()).list(listOptions)))
     },
-    *presign(key: string, presignOptions?: S3PresignOptions) {
+    *presign(key: string, presignOptions?: IODef.S3PresignOptions) {
       return (yield* useClient()).presign(key, presignOptions)
     },
   }

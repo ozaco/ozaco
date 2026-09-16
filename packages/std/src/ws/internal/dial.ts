@@ -63,7 +63,7 @@ const wire = (
 
     session.socket = socket
     opened.resolve()
-    session.notifyState()
+    session.state.notify()
   }
 
   socket.onmessage = event => {
@@ -104,7 +104,7 @@ const wire = (
       return
     }
 
-    session.notifyState()
+    session.state.notify()
     session.outages.add(info) // hand the outage to the reconnect supervisor
   }
 }
@@ -123,7 +123,7 @@ export const dial = operation(function* (session: Helpers.Session, impl: WsDef.I
   // Bun/Node/browser and passed straight through by `decodeFrame`.
   socket.binaryType = 'arraybuffer'
 
-  const opened = withResolvers<void>('ws:open')
+  const opened = withResolvers<void>(WsCauses.Open)
   wire(session, socket, opened)
 
   let adopted = false

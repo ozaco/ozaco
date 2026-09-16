@@ -4,31 +4,25 @@ import { fail } from 'std:result'
 import { spawn as childSpawn } from 'node:child_process'
 
 import { IOErrors } from '../../errors'
-import type {
-  ExecOptions,
-  ExecResult,
-  ProcessHandle,
-  ProcessStatus,
-  SpawnOptions,
-} from '../../types/common'
+import type { IODef } from '../../types/io'
 import { fromReadable } from '../stream/from-readable'
 
 import { concatBytes, errorMessage, makeStatus, normalizeSpawn, toBytes } from './shared'
 
 /**
  * Run a command to completion with `node:child_process`, buffering stdout/stderr. A non-zero exit
- * is data (reported on the {@link ExecResult}); only a spawn/runtime error becomes a `Result.Failure`.
+ * is data (reported on the {@link IODef.ExecResult}); only a spawn/runtime error becomes a `Result.Failure`.
  */
 export const nodeExec = operation(function* (
   cmd: string,
   args?: readonly string[],
-  options?: ExecOptions,
+  options?: IODef.ExecOptions,
 ) {
   const config = normalizeSpawn(options)
 
   try {
     return yield* until(
-      new Promise<ExecResult>((resolve, reject) => {
+      new Promise<IODef.ExecResult>((resolve, reject) => {
         const child = childSpawn(cmd, [...(args ?? [])], { ...config })
         const out: Uint8Array[] = []
         const err: Uint8Array[] = []
@@ -68,7 +62,7 @@ export const nodeExec = operation(function* (
 export const nodeSpawn = operation(function* (
   cmd: string,
   args?: readonly string[],
-  options?: SpawnOptions,
+  options?: IODef.SpawnOptions,
 ) {
   const config = normalizeSpawn(options)
 
@@ -81,7 +75,7 @@ export const nodeSpawn = operation(function* (
 
   // Attach the exit/error listeners eagerly: an unhandled 'error' event would otherwise crash the
   // process, and the settled promise is what `exited()` reads.
-  const exitedPromise = new Promise<ProcessStatus>((resolve, reject) => {
+  const exitedPromise = new Promise<IODef.ProcessStatus>((resolve, reject) => {
     child.once('exit', (code, signal) => resolve(makeStatus(code, signal)))
     child.once('error', reject)
   })
@@ -131,7 +125,7 @@ export const nodeSpawn = operation(function* (
     }
   })
 
-  const handle: ProcessHandle = {
+  const handle: IODef.ProcessHandle = {
     pid: child.pid ?? -1,
     stdout: fromReadable(child.stdout),
     stderr: fromReadable(child.stderr),

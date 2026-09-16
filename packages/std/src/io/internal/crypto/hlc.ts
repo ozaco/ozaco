@@ -2,8 +2,8 @@
 import { fail } from 'std:result'
 
 import { IOErrors } from '../../errors'
-import type { Hlc, HlcOptions, ObserveHlcOptions } from '../../types/common'
 import type { Helpers } from '../../types/helpers'
+import type { IODef } from '../../types/io'
 
 // Crockford's base32 (no I/L/O/U) — lexicographic order matches numeric order.
 const ENCODING = '0123456789ABCDEFGHJKMNPQRSTVWXYZ'
@@ -73,7 +73,7 @@ const floor: Helpers.Clock = { ts: 0, counter: -1 }
 
 /** Mint a token: `ts = max(now, floor, last.ts)`, same-ms sends bump the counter, a counter
  * overflow spills into the next millisecond. */
-export function* hlcToken(options: HlcOptions) {
+export function* hlcToken(options: IODef.HlcOptions) {
   const origin = normalizeOrigin(options.origin)
   if (!origin) {
     return yield* fail(
@@ -107,12 +107,12 @@ export function* hlcDecode(token: string) {
   if (ts === null || counter === null || origin === null) {
     return yield* fail(IOErrors.HlcInvalid, `hlc token "${token}" is not Crockford base32`)
   }
-  return { ts, counter, origin } as Hlc
+  return { ts, counter, origin } as IODef.Hlc
 }
 
 /** The receive rule: adopt a remote timestamp as the new floor unless it is implausibly far ahead
  * of the local clock (`maxDriftMs`). Returns whether the clock was adopted. */
-export function* hlcObserve(token: string, options?: ObserveHlcOptions) {
+export function* hlcObserve(token: string, options?: IODef.ObserveHlcOptions) {
   const remote = yield* hlcDecode(token)
   const maxDrift = options?.maxDriftMs ?? DEFAULT_MAX_DRIFT_MS
   if (remote.ts - Date.now() > maxDrift) {

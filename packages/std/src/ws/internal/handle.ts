@@ -1,5 +1,5 @@
 import { Codec } from 'std:codec'
-import type { Flow, Future } from 'std:effect'
+import type { Flow } from 'std:effect'
 import { operation } from 'std:effect'
 import type { AnyType } from 'std:shared'
 
@@ -22,29 +22,16 @@ const isLive = (socket: WsDef.SocketLike | undefined): socket is WsDef.SocketLik
 export const createHandle = (session: Helpers.Session): WsDef.Connection => {
   const { reconnect, options } = session
 
-  const closed = operation(function* () {
-    return yield* session.closed.operation
-  })() as Future<WsDef.CloseInfo>
-
-  const messages = {
+  const messages: Flow<unknown, WsDef.FlowClose> = {
     *[Symbol.iterator]() {
-      return {
-        *next() {
-          const item = yield* session.frames.next()
-          if (item.done) {
-            return item
-          }
-
-          return { done: false, value: yield* Codec.actions.decodeFrame(item.value, options.codec) }
-        },
-      }
+      return yield* Codec.actions.decodeFrames(session.frames, options.codec)
     },
-  } as Flow<unknown, WsDef.FlowClose>
+  }
 
   return {
     url: String(session.url),
     messages,
-    closed,
+    closed: session.closed.future,
 
     get native() {
       return session.socket as WsDef.SocketLike
@@ -75,7 +62,7 @@ export const createHandle = (session: Helpers.Session): WsDef.Connection => {
         }
 
         // reconnect window: park until the next reopen (or the permanent end), then re-check
-        yield* session.stateChanged()
+        yield* session.state.wait()
       }
     }, WsCauses.Send),
 
@@ -93,7 +80,7 @@ export const createHandle = (session: Helpers.Session): WsDef.Connection => {
         }
       }
 
-      yield* session.closed.operation
+      yield* session.closed.future
     }, WsCauses.Close),
   }
 }

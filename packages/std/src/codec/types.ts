@@ -1,4 +1,4 @@
-import type { Flow, Operation } from 'std:effect'
+import type { Flow, Operation, Subscription } from 'std:effect'
 import type { Plugin } from 'std:plugin'
 import type { Result } from 'std:result'
 
@@ -50,5 +50,11 @@ export namespace CodecDef {
 
     encodeFrame<T>(data: unknown, preferred?: CodecDef): Operation<T>
     decodeFrame<T>(data: unknown, preferred?: CodecDef): Operation<T>
+    /** A subscription over `source` whose every item is `decodeFrame`d on pull — what ws/webrtc
+     * hand out as their `messages` Flow (`{ *[Symbol.iterator]() { return yield* decodeFrames(q) } }`). */
+    decodeFrames<T, TClose>(
+      source: Subscription<unknown, TClose>,
+      preferred?: CodecDef,
+    ): Operation<Subscription<T, TClose>>
   }
 }

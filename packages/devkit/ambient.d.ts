@@ -33,6 +33,9 @@ declare module 'std:logger' {
 declare module 'std:logger/transport/file' {
   export * from '@ozaco/std/logger/transport/file';
 }
+declare module 'std:logger/impl/default' {
+  export * from '@ozaco/std/logger/impl/default';
+}
 declare module 'std:logger/transport/console' {
   export * from '@ozaco/std/logger/transport/console';
 }

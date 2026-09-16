@@ -1,5 +1,5 @@
 import { attempt, run, sleep, spawn, withResolvers } from 'std:effect'
-import type { WatchEvent } from 'std:io'
+import type { IODef } from 'std:io'
 import { IO } from 'std:io'
 import { isFailure, unwrap } from 'std:result'
 
@@ -205,7 +205,7 @@ describe('system', () => {
 })
 
 describe('watch', () => {
-  it('a file change in a watched directory emits a WatchEvent', async () => {
+  it('a file change in a watched directory emits a IODef.WatchEvent', async () => {
     const dir = await mkdtemp(join(osTmpdir(), 'ozaco-io-'))
     // force the deterministic fs.watch fallback — Watchman availability varies per machine
     const previous = process.env.STD_WATCHMAN
@@ -216,7 +216,7 @@ describe('watch', () => {
         yield* BunIO.use()
 
         const events = yield* IO.actions.watch(dir)
-        const got = withResolvers<WatchEvent>()
+        const got = withResolvers<IODef.WatchEvent>()
 
         yield* spawn(function* () {
           const first = yield* events.next()

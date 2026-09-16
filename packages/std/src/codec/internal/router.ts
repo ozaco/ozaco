@@ -1,3 +1,4 @@
+import type { Subscription } from 'std:effect'
 import { attempt, filter, operation, some, toSorted, useContext } from 'std:effect'
 import { fail, isSuccess } from 'std:result'
 
@@ -85,3 +86,19 @@ export const codecDecodeFrameHandler = function* (data: unknown, preferred?: Cod
   }
   return data
 } as CodecDef.Handlers['decodeFrame']
+
+export const codecDecodeFramesHandler = function* (
+  source: Subscription<unknown, unknown>,
+  preferred?: CodecDef,
+) {
+  return {
+    *next() {
+      const item = yield* source.next()
+      if (item.done) {
+        return item
+      }
+
+      return { done: false, value: yield* Codec.actions.decodeFrame(item.value, preferred) }
+    },
+  }
+} as CodecDef.Handlers['decodeFrames']

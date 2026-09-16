@@ -1,11 +1,12 @@
 import type { Flow } from 'std:effect'
 import { createSignal, fork, resource, until } from 'std:effect'
-import type { NodeReadableLike, ReadableLike, FlowClose } from 'std:io'
 import { asFailure } from 'std:result'
 import { isBoolean } from 'std:shared'
 
-const isNodeReadable = (target: ReadableLike): target is NodeReadableLike =>
-  typeof (target as NodeReadableLike).on === 'function'
+import type { IODef } from '../../types/io'
+
+const isNodeReadable = (target: IODef.ReadableLike): target is IODef.NodeReadableLike =>
+  typeof (target as IODef.NodeReadableLike).on === 'function'
 
 /**
  * Adapt either a Node `Readable` (event-based) or a web `ReadableStreamDefaultReader`-like
@@ -15,17 +16,17 @@ const isNodeReadable = (target: ReadableLike): target is NodeReadableLike =>
  * mid-stream — consumers must check it, or truncation is indistinguishable from completion.
  */
 export const fromReadable = (
-  target: ReadableLike,
+  target: IODef.ReadableLike,
   options: {
     destroy?: boolean
   } = {},
-): Flow<Uint8Array, FlowClose> =>
+): Flow<Uint8Array, IODef.FlowClose> =>
   resource(function* (provide) {
     if (!isBoolean(options.destroy)) {
       options.destroy = true
     }
 
-    const signal = createSignal<Uint8Array, FlowClose>()
+    const signal = createSignal<Uint8Array, IODef.FlowClose>()
     const subscription = yield* signal
 
     if (isNodeReadable(target)) {
@@ -35,7 +36,7 @@ export const fromReadable = (
         signal.send(chunk instanceof Uint8Array ? chunk : new Uint8Array(chunk))
       }
 
-      const settle = (close: FlowClose) => {
+      const settle = (close: IODef.FlowClose) => {
         if (!settled) {
           settled = true
           signal.close(close)
@@ -67,7 +68,7 @@ export const fromReadable = (
     }
 
     yield* fork(function* () {
-      let close: FlowClose = true
+      let close: IODef.FlowClose = true
       try {
         while (true) {
           const { done, value } = yield* until(target.read())

@@ -1,4 +1,5 @@
-import { operation, sleep } from 'std:effect'
+import type { Utils } from 'std:effect'
+import { budgetDelay, operation, sleep } from 'std:effect'
 import type { Result } from 'std:result'
 import { fail } from 'std:result'
 
@@ -7,9 +8,6 @@ import type { Helpers } from '../types/helpers'
 import type { RtcDef } from '../types/rtc'
 
 import { dialGeneration } from './generation'
-
-const delayOf = (budget: Helpers.Budget, attemptNo: number) =>
-  Math.min(budget.delayMs * budget.backoff ** attemptNo, budget.maxDelayMs)
 
 const isConnected = (generation: Helpers.Generation | undefined) =>
   generation?.alive === true && generation.pc.connectionState === 'connected'
@@ -20,7 +18,7 @@ const isConnected = (generation: Helpers.Generation | undefined) =>
  * recovery; exhaustion ends the GENERATION (redialed under `reconnect`, terminal
  * `rtc/ice-exhausted` otherwise).
  */
-export const superviseIce = operation(function* (session: Helpers.Session, budget: Helpers.Budget) {
+export const superviseIce = operation(function* (session: Helpers.Session, budget: Utils.Budget) {
   const { counters, observe } = session
 
   yield* session.eachGeneration(function* (generation) {
@@ -46,7 +44,7 @@ export const superviseIce = operation(function* (session: Helpers.Session, budge
 
         observe.record('ice-restart', `attempt ${attemptNo + 1}`)
         generation.negotiations.add({ kind: 'restart' })
-        yield* sleep(delayOf(budget, attemptNo))
+        yield* sleep(budgetDelay(budget, attemptNo))
 
         if (gone()) {
           return
@@ -84,7 +82,7 @@ export const superviseIce = operation(function* (session: Helpers.Session, budge
 export const superviseReconnect = operation(function* (
   session: Helpers.Session,
   impl: RtcDef.ImplLike,
-  budget: Helpers.Budget,
+  budget: Utils.Budget,
 ) {
   const { counters, observe } = session
   const gone = () => session.ended || session.closedByClient
@@ -104,7 +102,7 @@ export const superviseReconnect = operation(function* (
 
     for (let attemptNo = 0; attemptNo < budget.retries; attemptNo += 1) {
       observe.record('redial', `attempt ${attemptNo + 1}`)
-      yield* sleep(delayOf(budget, attemptNo))
+      yield* sleep(budgetDelay(budget, attemptNo))
 
       if (gone()) {
         return
@@ -124,7 +122,7 @@ export const superviseReconnect = operation(function* (
       }
 
       // grace window: one backoff step for the fresh generation to negotiate + connect
-      yield* sleep(delayOf(budget, attemptNo))
+      yield* sleep(budgetDelay(budget, attemptNo))
 
       if (gone()) {
         return

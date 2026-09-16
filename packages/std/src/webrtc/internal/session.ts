@@ -1,23 +1,11 @@
-import { createQueue, withResolvers } from 'std:effect'
+import { budgetOf, createFuture, createGate, createQueue } from 'std:effect'
 import type { Result } from 'std:result'
 
+import { RtcCauses } from '../errors'
 import type { Helpers } from '../types/helpers'
 import type { RtcDef } from '../types/rtc'
 
-import { BUDGET_DEFAULTS } from './const'
 import { candidateTypeOf, createObserver } from './observe'
-
-const budgetOf = (
-  options?: RtcDef.IceRestartOptions | RtcDef.ReconnectOptions,
-): Helpers.Budget | undefined =>
-  options
-    ? {
-        retries: options.retries ?? BUDGET_DEFAULTS.retries,
-        delayMs: options.delayMs ?? BUDGET_DEFAULTS.delayMs,
-        backoff: options.backoff ?? BUDGET_DEFAULTS.backoff,
-        maxDelayMs: options.maxDelayMs ?? BUDGET_DEFAULTS.maxDelayMs,
-      }
-    : undefined
 
 const unwire = (pc: RtcDef.PeerLike) => {
   pc.onconnectionstatechange = null
@@ -42,10 +30,6 @@ export const createSession = (
    * timeline only wants to know that a `srflx`/`relay` route appeared, not each candidate). */
   const seenCandidates = new Set<string>()
 
-  // resolved every time a new generation dials (or the session ends) — `channel()` calls and
-  // the per-generation pumps park here through a redial gap
-  let dialGate = withResolvers<void>('rtc:dial')
-
   const session: Helpers.Session = {
     signal,
     options,
@@ -60,7 +44,9 @@ export const createSession = (
     states: createQueue<string, RtcDef.FlowClose>(),
     tracks: createQueue<RtcDef.IncomingTrack, RtcDef.FlowClose>(),
     outages: createQueue<Result.Failure<unknown>, void>(),
-    closed: withResolvers<RtcDef.CloseInfo>('rtc:closed'),
+    closed: createFuture<RtcDef.CloseInfo>(),
+    // `channel()` calls and the per-generation pumps park here through a redial gap
+    dial: createGate(RtcCauses.Dial),
 
     localRecords: new Set<Helpers.LocalRecord>(),
     remoteEntries: new Set<Helpers.ChannelEntry>(),
@@ -78,14 +64,6 @@ export const createSession = (
       !session.ended &&
       !session.closedByClient &&
       !session.signalEnded,
-
-    dialed: () => dialGate.operation,
-
-    notifyDial() {
-      const gate = dialGate
-      dialGate = withResolvers<void>('rtc:dial')
-      gate.resolve()
-    },
 
     sendFrame: frame => signal.send(frame),
 
@@ -142,7 +120,7 @@ export const createSession = (
       session.outages.close()
       session.closed.resolve(info)
       observe.close(close)
-      session.notifyDial()
+      session.dial.notify()
     },
 
     // local channels suspend for the rebind, remote handles close cleanly — fresh ones re-emit
@@ -186,7 +164,7 @@ export const createSession = (
           return generation
         }
 
-        yield* dialGate.operation
+        yield* session.dial.wait()
       }
 
       return undefined
@@ -199,7 +177,7 @@ export const createSession = (
         const generation = session.generation
 
         if (!generation?.alive || generation === previous) {
-          yield* dialGate.operation
+          yield* session.dial.wait()
           continue
         }
 

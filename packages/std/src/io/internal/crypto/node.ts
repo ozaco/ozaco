@@ -15,7 +15,7 @@ import {
 } from 'node:crypto'
 
 import { IOErrors } from '../../errors'
-import type { KeyPair } from '../../types/common'
+import type { IODef } from '../../types/io'
 
 /*
  * Secret-based authenticated encryption, hardened for maximum security:
@@ -137,7 +137,7 @@ export const decryptSecret = operation(function* (data: Uint8Array, secret: stri
 
 export const generateSignKeyPair = operation(function* () {
   return yield* until(
-    new Promise<KeyPair>((resolve, reject) => {
+    new Promise<IODef.KeyPair>((resolve, reject) => {
       genKeyPair(
         'ed25519',
         {

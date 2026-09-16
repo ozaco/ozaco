@@ -1,6 +1,5 @@
 import type { Flow } from 'std:effect'
 import { resource } from 'std:effect'
-import type { FlowClose } from 'std:io'
 import { IO } from 'std:io'
 import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
@@ -16,6 +15,7 @@ import { webPath } from '../internal/path/web'
 import { createS3 } from '../internal/s3/create'
 import { fromReadable } from '../internal/stream/from-readable'
 import { toReadable } from '../internal/stream/to-readable'
+import type { IODef } from '../types/io'
 
 /** The browser has no filesystem — these actions fail clearly instead of pretending to work. */
 const unsupported = (action: string): AnyType =>
@@ -23,10 +23,10 @@ const unsupported = (action: string): AnyType =>
     return yield* fail(IOErrors.Unsupported, `IO.${action} is not available in a web environment`)
   }
 
-const unsupportedFlow = (action: string): Flow<Uint8Array, FlowClose> =>
+const unsupportedFlow = (action: string): Flow<Uint8Array, IODef.FlowClose> =>
   resource(function* () {
     return yield* fail(IOErrors.Unsupported, `IO.${action} is not available in a web environment`)
-  }) as Flow<Uint8Array, FlowClose>
+  }) as Flow<Uint8Array, IODef.FlowClose>
 
 /**
  * The web implementation of `std:io`. Crypto (`randomBytes`/`hmac`/`hash`) runs on the Web Crypto

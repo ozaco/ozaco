@@ -1,6 +1,5 @@
 import type { Flow } from 'std:effect'
 import { action, each, operation } from 'std:effect'
-import type { FlowClose, WritableLike } from 'std:io'
 import { IO_FLAGS } from 'std:io'
 import { appendCauses, asFailure } from 'std:result'
 import { hasFlag } from 'std:shared'
@@ -8,9 +7,10 @@ import { hasFlag } from 'std:shared'
 import { createReadStream, createWriteStream } from 'node:fs'
 
 import { IOCauses } from '../../errors'
+import type { IODef } from '../../types/io'
 import { fromReadable } from '../stream/from-readable'
 
-const waitForFinish = (writable: WritableLike): ReturnType<typeof action<void>> =>
+const waitForFinish = (writable: IODef.WritableLike): ReturnType<typeof action<void>> =>
   action((resolve, reject) => {
     const onFinish = () => {
       cleanup()
@@ -29,7 +29,7 @@ const waitForFinish = (writable: WritableLike): ReturnType<typeof action<void>> 
     return cleanup
   }, IOCauses.Stream)
 
-const waitForDrain = (writable: WritableLike): ReturnType<typeof action<void>> =>
+const waitForDrain = (writable: IODef.WritableLike): ReturnType<typeof action<void>> =>
   action((resolve, reject) => {
     const onDrain = () => {
       cleanup()
@@ -48,7 +48,7 @@ const waitForDrain = (writable: WritableLike): ReturnType<typeof action<void>> =
     return cleanup
   }, IOCauses.Stream)
 
-export const readFileFlow = (path: string): Flow<Uint8Array, FlowClose> =>
+export const readFileFlow = (path: string): Flow<Uint8Array, IODef.FlowClose> =>
   fromReadable(createReadStream(path))
 
 export const writeFileFlow = operation(function* (
@@ -64,7 +64,7 @@ export const writeFileFlow = operation(function* (
     : hasFlag(f, IO_FLAGS.EXCLUSIVE)
       ? 'wx'
       : 'w'
-  const writable = createWriteStream(path, { flags: fsFlags }) as unknown as WritableLike
+  const writable = createWriteStream(path, { flags: fsFlags }) as unknown as IODef.WritableLike
 
   // A persistent 'error' listener: createWriteStream opens asynchronously and can emit 'error' (EACCES
   // on open, ENOSPC mid-write) during the `each(source)` / `each.next()` await windows where the
@@ -76,7 +76,7 @@ export const writeFileFlow = operation(function* (
   })
 
   try {
-    // `each` honors the FlowClose contract: a source closing with a Failure raises it here, so a
+    // `each` honors the IODef.FlowClose contract: a source closing with a Failure raises it here, so a
     // truncated upstream can never be sealed into the file as success
     for (const chunk of yield* each(source)) {
       if (streamError !== undefined) {

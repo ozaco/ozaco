@@ -6,7 +6,7 @@ import { basename, dirname } from 'node:path'
 
 import type { Client, Expression, SubscriptionConfig, WatchProjectResponse } from 'fb-watchman'
 
-import type { WatchEvent, WatchOptions } from '../../types/common'
+import type { IODef } from '../../types/io'
 
 const SUBSCRIPTION = 'ozaco-config'
 
@@ -53,7 +53,7 @@ const subscriptionConfig = (
  */
 const startWatchman = async (
   path: string,
-  emit: (event: WatchEvent) => void,
+  emit: (event: IODef.WatchEvent) => void,
 ): Promise<(() => void) | null> => {
   if (process.env.STD_WATCHMAN === 'off') {
     return null
@@ -114,7 +114,7 @@ const startWatchman = async (
 /** The `fs.watch` fallback: drain the async iterator into `emit` until `signal` aborts. */
 const drainNative = (
   spec: { path: string; recursive: boolean; signal: AbortSignal },
-  emit: (event: WatchEvent) => void,
+  emit: (event: IODef.WatchEvent) => void,
 ) =>
   operation(function* () {
     const iterator = fsWatch(spec.path, {
@@ -137,15 +137,18 @@ const drainNative = (
   })
 
 /**
- * Watch a file or directory, streaming {@link WatchEvent}s until the consumer tears the stream down.
+ * Watch a file or directory, streaming {@link IODef.WatchEvent}s until the consumer tears the stream down.
  * Prefers Watchman (optional `fb-watchman`); falls back to `fsPromises.watch`. `provide` suspends this
  * resource, so the fallback iterator is drained from a background task; teardown ends the Watchman
  * client or aborts the iterator (releasing the OS watcher).
  */
-export const watchPath = (path: string, options?: WatchOptions): Flow<WatchEvent, never> =>
+export const watchPath = (
+  path: string,
+  options?: IODef.WatchOptions,
+): Flow<IODef.WatchEvent, never> =>
   resource(function* (provide) {
-    const events = createSignal<WatchEvent, never>()
-    const emit = (event: WatchEvent) => events.send(event)
+    const events = createSignal<IODef.WatchEvent, never>()
+    const emit = (event: IODef.WatchEvent) => events.send(event)
 
     const stopWatchman = yield* until(startWatchman(path, emit))
     const controller = stopWatchman ? undefined : new AbortController()

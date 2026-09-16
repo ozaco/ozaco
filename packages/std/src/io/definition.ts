@@ -3,9 +3,9 @@ import type { AnyType } from 'std:shared'
 
 import pkg from '../../package.json'
 
-import type { IOActions } from './types/actions'
+import type { IODef } from './types/io'
 
-export const IO = defineProtocol<AnyType, IOActions>({
+export const IO = defineProtocol<AnyType, IODef.Actions>({
   name: 'std/io',
   version: pkg.version,
 })
