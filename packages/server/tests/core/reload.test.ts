@@ -31,6 +31,10 @@ const extra = service('extra', {
   ping: action.query({ output: z.string() }, function* () {
     return 'pong'
   }),
+  // a thrown (non-Result) error: the wire says WHAT went wrong under `server.internal`
+  boom: action.query({ output: z.string() }, function* () {
+    return yield* until(Promise.reject(new Error('page build exploded')))
+  }),
 })
 
 const get = function* (path: string) {
@@ -64,7 +68,7 @@ describe('kernel — reload', () => {
           added: ['extra'],
           removed: [],
           replaced: ['greeter'],
-          actions: 2,
+          actions: 3,
           sockets: 0,
         })
 
@@ -76,12 +80,19 @@ describe('kernel — reload', () => {
 
         // the added service is routed, hosted, documented
         expect((yield* get('/extra/ping')).body).toBe('"pong"')
+        const boom = yield* get('/extra/boom')
+        expect(boom.status).toBe(500)
+        expect(JSON.parse(boom.body).error).toMatchObject({
+          error: ServerErrors.Internal,
+          message: 'page build exploded',
+        })
         expect(yield* server.call(extra, 'ping')).toBe('pong')
         expect((yield* server.members('extra')).length).toBe(1)
         const manifest = yield* server.manifest()
         expect(manifest.actions.map(entry => `${entry.service}.${entry.action}`)).toEqual([
           'greeter.hello',
           'extra.ping',
+          'extra.boom',
         ])
 
         // raw routes registered on the edge survive the remount

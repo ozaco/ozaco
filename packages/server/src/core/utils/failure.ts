@@ -7,6 +7,20 @@ import type { ServiceDef } from '../types/service'
 export const tagOf = (failure: Result.Failure<unknown>): string =>
   typeof failure.error === 'string' ? failure.error : ServerErrors.Internal
 
+/** The message of a failure: its own, else — for a thrown non-Result error folded into
+ * `server.internal` — the error's, so the wire says WHAT went wrong, not just that it did. */
+export const messageOf = (failure: Result.Failure<unknown>): string => {
+  if (failure.message) {
+    return failure.message
+  }
+
+  if (typeof failure.error === 'string') {
+    return ''
+  }
+
+  return failure.error instanceof Error ? failure.error.message : String(failure.error)
+}
+
 /** The HTTP status of a failure: the action's override, then the core table, then 500. */
 export const statusOf = (
   failure: Result.Failure<unknown>,

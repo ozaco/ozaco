@@ -23,7 +23,10 @@ process.env['STD_WATCHMAN'] = 'off'
 
 type Hot = ServiceDef.Service<
   'hot',
-  { greet: ServiceDef.Action<z.ZodObject<{ name: z.ZodString }>, z.ZodString> }
+  {
+    greet: ServiceDef.Action<z.ZodObject<{ name: z.ZodString }>, z.ZodString>
+    where: ServiceDef.Action<undefined, z.ZodObject<{ url: z.ZodString; dir: z.ZodString }>>
+  }
 >
 
 /** A throwaway declarations module under the package (the `server:*` aliases resolve there),
@@ -48,6 +51,9 @@ function* scaffold(name: string): Operation<{ dir: string; entry: string; dep: s
       `        return \`\${GREETING}, \${input.name}\``,
       `      },`,
       `    ),`,
+      `    where: action.query({ output: z.object({ url: z.string(), dir: z.string() }) }, function* () {`,
+      `      return { url: import.meta.url, dir: import.meta.dir }`,
+      `    }),`,
       `  }),`,
       `]`,
       ``,
@@ -79,6 +85,11 @@ describe('plugins — hot reload', () => {
         expect(first.added).toEqual(['hot'])
         expect(yield* server.call(greet, { name: 'a' })).toBe('hello, a')
         expect((yield* HotReload.actions.status()).generation).toBe(1)
+
+        // a bundled module keeps ITS OWN location: a handler reading a sibling file by
+        // `import.meta` must not look into the temp bundle's directory
+        const where = yield* server.call(refs<Hot>('hot').where)
+        expect(where).toEqual({ url: `file://${files.entry}`, dir: files.dir })
 
         // a change in the DEPENDENCY reaches the handler: the subgraph was re-evaluated
         yield* setGreeting(files.dep, 'hi')

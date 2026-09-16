@@ -79,6 +79,42 @@ const resolveFrom = (specifier: string, importer: string): string | null => {
   }
 }
 
+const LOADER_OF: Readonly<Record<string, 'ts' | 'tsx' | 'js' | 'jsx'>> = {
+  '.ts': 'ts',
+  '.mts': 'ts',
+  '.cts': 'ts',
+  '.tsx': 'tsx',
+  '.js': 'js',
+  '.mjs': 'js',
+  '.cjs': 'js',
+  '.jsx': 'jsx',
+}
+
+const SOURCE_EXT = /\.(?:[cm]?[jt]s|[jt]sx)$/u
+const IMPORT_META = /\bimport\.meta\.(url|dirname|dir|filename|file|path)\b/gu
+
+/**
+ * A bundled module evaluates from the temp file, so its `import.meta` would point THERE — a
+ * handler that reads a sibling file (`new URL('../page.html', import.meta.url)`) would look in
+ * the wrong place. Pin every `import.meta.{url,dir,dirname,file,filename,path}` of a bundled
+ * module to the module's own location before it is bundled.
+ */
+export const pinImportMeta = (source: string, path: string): string => {
+  const at = path.lastIndexOf('/')
+  const dir = at > 0 ? path.slice(0, at) : '/'
+  const file = path.slice(at + 1)
+  const values: Readonly<Record<string, string>> = {
+    url: fileUrl(path),
+    dir,
+    dirname: dir,
+    file,
+    filename: path,
+    path,
+  }
+
+  return source.replace(IMPORT_META, (_match, key: string) => JSON.stringify(values[key]))
+}
+
 /**
  * Bun: bundle the entry with EVERY module under the roots into one fresh file — the change in
  * any of them reaches the node — while imports that resolve outside the roots stay external,
@@ -113,6 +149,15 @@ const bundleWithBun = async (
               }
 
               return { path: resolved ?? args.path, external: true }
+            })
+
+            // only bundled (in-root) modules are loaded; externals never reach here
+            build.onLoad({ filter: SOURCE_EXT }, async args => {
+              const at = args.path.lastIndexOf('.')
+              const loader = LOADER_OF[args.path.slice(at)] ?? 'ts'
+              const source = await Bun.file(args.path).text()
+
+              return { contents: pinImportMeta(source, args.path), loader }
             })
           },
         },

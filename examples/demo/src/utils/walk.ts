@@ -1,10 +1,9 @@
-// oxlint-disable import/exports-last
 /**
  * The typed client walk-through (`walk()`): every `@ozaco/server` use case once, against a
  * running demo. `scripts/client.ts` runs it printing each step; the e2e test asserts on it.
  */
-import { createClient } from 'client:core'
 import type { ClientDef } from 'client:core'
+import { createClient } from 'client:core'
 import type { Flow, Operation } from 'std:effect'
 import { attempt, scoped, sleep, until } from 'std:effect'
 import { isFailure } from 'std:result'

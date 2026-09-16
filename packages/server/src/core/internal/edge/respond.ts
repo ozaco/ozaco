@@ -3,7 +3,7 @@ import type { Result } from 'std:result'
 import { HEADERS } from '../../const'
 import type { ServiceDef } from '../../types/service'
 import type { StreamDef } from '../../types/stream'
-import { statusOf, tagOf } from '../../utils/failure'
+import { messageOf, statusOf, tagOf } from '../../utils/failure'
 import { brandOf, brandSpecOf, isBranded } from '../../utils/stream'
 
 const encoder = new TextEncoder()
@@ -133,7 +133,7 @@ export const failureResponse = (
   const wire = {
     ...failure,
     error: tagOf(failure),
-    message: failure.message ?? '',
+    message: messageOf(failure),
     causes: [...failure.causes],
     status: statusOf(failure, meta),
   }
