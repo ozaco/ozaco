@@ -4,7 +4,7 @@ import { unwrap } from 'std:result'
 import { describe, expect, it } from 'bun:test'
 
 /**
- * AUDIT E44: `critical` (base/coroutine.ts) marks a region whose `unwind()` (halt) is deferred:
+ * `critical` (base/coroutine.ts) marks a region whose `unwind()` (halt) is deferred:
  * the region runs to completion and the unwind takes effect at the next suspension point after
  * it. Scope teardown depends on this — `createTask` and `scoped` wrap `destroy` in `critical` —
  * yet it had no direct test. Pinned: the region completes, sync code right after the region still

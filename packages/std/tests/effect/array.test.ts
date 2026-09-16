@@ -15,8 +15,8 @@ import { fail, isFailure, unwrap } from 'std:result'
 import { describe, expect, it } from 'bun:test'
 
 /**
- * AUDIT E39: the effectful array helpers (`map/mapPar/some/filter/filterPar/reduce/toSorted`) had
- * no test at all although logger and codec use them in production. Pins: result ORDER always
+ * The effectful array helpers (`map/mapPar/some/filter/filterPar/reduce/toSorted`), used by logger
+ * and codec in production. Pins: result ORDER always
  * follows the input, the sequential helpers run one item at a time (and short-circuit where they
  * should), the `*Par` helpers run every item concurrently through `all` and inherit its
  * fail-fast + halt-the-rest semantics.

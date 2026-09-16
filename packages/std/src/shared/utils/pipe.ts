@@ -1,7 +1,7 @@
-import type { AnyFunction, AnyType } from 'std:shared'
-import { isPromise } from 'std:shared'
-
+import type { AnyFunction, AnyType } from '../types/common'
 import type { Pipe } from '../types/pipe'
+
+import { isPromise } from './is'
 
 export const pipe: Pipe = (value: unknown, ...functions: AnyFunction[]) => {
   let next: AnyType = value

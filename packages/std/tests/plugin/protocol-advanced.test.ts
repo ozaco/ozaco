@@ -422,7 +422,7 @@ describe('cloneable contexts + metadata', () => {
     expect(unwrap(outcome)).toEqual(['worked', 'fallback'])
   })
 
-  it('getKeys lists defaults and impl actions but NOT protocol handlers (pins AUDIT P2)', async () => {
+  it('getKeys lists defaults and impl actions but NOT protocol handlers', async () => {
     interface KeyedActions {
       work(): Operation<string>
       handled?(): Operation<string>
@@ -456,7 +456,7 @@ describe('cloneable contexts + metadata', () => {
       },
     })
 
-    // AUDIT P2: dispatch resolves `handlers` first, yet getKeys() is built from defaults + actions
+    // dispatch resolves `handlers` first, yet getKeys() is built from defaults + actions
     // only, so `handled` is dispatchable but not enumerable. This test pins that gap; flip the
     // expectation if getKeys() ever grows to include protocol handlers.
     expect(Impl.getKeys().toSorted()).toEqual(['fallback', 'work'])

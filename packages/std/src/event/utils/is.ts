@@ -1,6 +1,6 @@
 import type { AnyType } from 'std:shared'
 
-import { EVENT } from '../internal/const'
+import { EVENT } from '../const'
 import type { EventEmitter } from '../types'
 
 export const isEventEmitter = <T extends EventEmitter.Map = AnyType>(

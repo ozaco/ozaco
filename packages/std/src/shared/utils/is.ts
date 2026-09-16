@@ -39,25 +39,27 @@ export const isAsyncGenerator = (value: unknown): value is AsyncGenerator<AnyTyp
   typeof (value as AnyType)[Symbol.asyncIterator] === 'function'
 
 /** Checks whether a value is a number primitive (including `NaN`). */
-export const isNumber = (x: unknown): x is number => typeof x === 'number'
+export const isNumber = (value: unknown): value is number => typeof value === 'number'
 
 /** Checks whether a value is an `ArrayBuffer` (by its `Object.prototype.toString` tag). */
-export const isArrayBuffer = (x: unknown): x is ArrayBuffer =>
-  typeof x === 'object' &&
-  x !== null &&
-  Object.prototype.toString.call(x) === '[object ArrayBuffer]'
+export const isArrayBuffer = (value: unknown): value is ArrayBuffer =>
+  typeof value === 'object' &&
+  value !== null &&
+  Object.prototype.toString.call(value) === '[object ArrayBuffer]'
 
 /** Checks whether a value is a `SharedArrayBuffer`; always false where the global is missing. */
-export const isSharedArrayBuffer = (x: unknown): x is SharedArrayBuffer =>
+export const isSharedArrayBuffer = (value: unknown): value is SharedArrayBuffer =>
   typeof SharedArrayBuffer !== 'undefined' &&
-  typeof x === 'object' &&
-  x !== null &&
-  Object.prototype.toString.call(x) === '[object SharedArrayBuffer]'
+  typeof value === 'object' &&
+  value !== null &&
+  Object.prototype.toString.call(value) === '[object SharedArrayBuffer]'
 
 /** Checks whether a value is a typed array or `DataView` (`ArrayBuffer.isView`). */
-export const isArrayBufferView = (x: unknown): x is ArrayBufferView =>
-  typeof x === 'object' && x !== null && ArrayBuffer.isView(x)
+export const isArrayBufferView = (value: unknown): value is ArrayBufferView =>
+  typeof value === 'object' && value !== null && ArrayBuffer.isView(value)
 
 /** Checks whether a value is async-iterable (has a callable `Symbol.asyncIterator`). */
-export const isAsyncIterable = (value: AnyType): value is AsyncIterable<unknown> =>
-  value !== null && typeof value === 'object' && typeof value[Symbol.asyncIterator] === 'function'
+export const isAsyncIterable = (value: unknown): value is AsyncIterable<unknown> =>
+  value !== null &&
+  typeof value === 'object' &&
+  typeof (value as { [Symbol.asyncIterator]?: unknown })[Symbol.asyncIterator] === 'function'

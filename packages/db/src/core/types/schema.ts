@@ -1,4 +1,4 @@
-import type { StandardSchemaV1 } from 'std:shared'
+import type { Simplify, StandardSchemaV1 } from 'std:shared'
 
 import type { COLUMN, SCHEMA, TABLE } from '../const'
 
@@ -39,9 +39,6 @@ export namespace Schema {
   export interface SystemFieldsOf<TName extends string> extends SystemFields {
     readonly _id: Id<TName>
   }
-
-  /** Flatten a type into a single plain object so TS materializes (and displays) it eagerly. */
-  export type Simplify<T> = { [K in keyof T]: T[K] } & {}
 
   /** The DSL-side column metadata (turned into a {@link Spec.Column} by `table()`). */
   export interface ColumnMeta {

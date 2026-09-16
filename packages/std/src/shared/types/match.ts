@@ -1,13 +1,5 @@
-import type { Result } from 'std:result'
-
-import type { AnyType, GuardValue } from './common'
+import type { GuardValue } from './common'
 import type { StandardSchemaV1 } from './schema'
-
-export type MatchCase = {
-  handler: (value: AnyType) => AnyType
-  predicate?: (value: AnyType) => boolean
-  schema?: StandardSchemaV1
-}
 
 export interface MatchBuilder<Input, Remaining, Output> {
   with: <S extends StandardSchemaV1, R>(
@@ -32,7 +24,10 @@ export interface MatchBuilder<Input, Remaining, Output> {
 
   otherwise: <R>(handler: (value: Remaining) => R) => Output | R
 
-  exhaustive: [Remaining] extends [never] ? () => Output : Result.Failure<Remaining>
+  /** Every case covered: callable with no argument. Cases left: the signature demands the
+   * unhandled remainder, so `exhaustive()` is a compile error naming what is missing — at
+   * runtime an unmatched value fails `shared.non-exhaustive` either way. */
+  exhaustive: [Remaining] extends [never] ? () => Output : (unhandled: Remaining) => never
 
   run: () => Output | undefined
 }

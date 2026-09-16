@@ -200,8 +200,8 @@ describe('yaml codec', () => {
       expect(unwrap(outcome)).toEqual({ values: [{ a: 1, b: { c: 'x' } }], close: true })
     })
 
-    it('a malformed YAML stream currently FAILS the enclosing scope (pins AUDIT C13)', async () => {
-      // AUDIT C13: on a parse error the forked decoder sets the channel close to the Failure AND
+    it('a malformed YAML stream currently FAILS the enclosing scope', async () => {
+      // on a parse error the forked decoder sets the channel close to the Failure AND
       // `return yield* fail(...)`s — raising out of a supervised fork nobody awaits, which crashes the
       // owner scope with `CodecErrors.Decode` (JsonCodec only closes the channel). This test pins the
       // CURRENT behavior so a fix shows up as a deliberate assertion change, not a silent one.
@@ -246,8 +246,8 @@ describe('yaml codec', () => {
       expect(unwrap(outcome)).toEqual({ count: 1, close: 'upstream' })
     })
 
-    it('decodeFlow currently SWALLOWS a Failure close from its source (pins AUDIT C12)', async () => {
-      // AUDIT C12: toml/yaml `decodeFlow` never reads the source's close value — it only checks
+    it('decodeFlow currently SWALLOWS a Failure close from its source', async () => {
+      // toml/yaml `decodeFlow` never reads the source's close value — it only checks
       // `next.done` — so an upstream failure close is dropped: the bytes received so far are parsed
       // as a complete document and the decode channel closes cleanly. `JsonCodec.decodeFlow` and this
       // file's own `encodeFlow` forward the failure. This test pins the CURRENT behavior so a fix

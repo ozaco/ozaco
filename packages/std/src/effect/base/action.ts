@@ -13,6 +13,9 @@ import { perform } from './perform'
  * action was resolved, rejected, or discarded.
  */
 export function action<T>(executor: Helpers.Executor<T>, cause?: string): Operation<T> {
+  // an omitted cause appends nothing (it used to append a literal `undefined` entry)
+  const causes = cause === undefined ? [] : [cause]
+
   return perform({
     cause: cause ?? 'action',
     enter: settle => {
@@ -20,7 +23,7 @@ export function action<T>(executor: Helpers.Executor<T>, cause?: string): Operat
         settle(succeed(value) as Result.Success<T>)
       }
       const reject = (error: unknown) => {
-        settle(asFailure(error, cause))
+        settle(asFailure(error, ...causes))
       }
       const discard = executor(resolve, reject)
 
@@ -29,7 +32,7 @@ export function action<T>(executor: Helpers.Executor<T>, cause?: string): Operat
           discard()
           discarded(succeed())
         } catch (error) {
-          discarded(asFailure(error, cause))
+          discarded(asFailure(error, ...causes))
         }
       }
     },

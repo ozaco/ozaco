@@ -4,8 +4,8 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
 /**
- * AUDIT E41: `main` (utils/main.ts) wires SIGINT/SIGTERM into a graceful shutdown and exits with
- * the resulting status, but nothing tested it. `main` ends in `process.exit`, so it can only be
+ * `main` (utils/main.ts) wires SIGINT/SIGTERM into a graceful shutdown and exits with the
+ * resulting status. `main` ends in `process.exit`, so it can only be
  * observed from the outside: each case spawns a Bun subprocess running a tiny program built on
  * `main`, waits for the program to announce it is running, sends the signal, and asserts the
  * exit status AND that the body's `finally` ran (graceful, not a hard kill).

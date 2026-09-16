@@ -1,13 +1,18 @@
 import { isPromise } from 'std:shared'
 import type { AnyType } from 'std:shared'
 
-import type { Impl } from '../types/impl'
+import type { ResultDef } from '../types/def'
+import type { Result } from '../types/result'
 
 import { auto } from './auto'
 import { fail } from './fail'
 
-export const throwable: Impl.Throwable = (cb, rawCustomError, ...causes) => {
-  const CustomError = rawCustomError ?? Error
+export const throwable: ResultDef.Throwable = ((
+  cb: () => AnyType,
+  errorClass?: Result.ErrorConstructor,
+  ...causes: string[]
+): AnyType => {
+  const CustomError = errorClass ?? Error
 
   try {
     const result = cb()
@@ -30,4 +35,4 @@ export const throwable: Impl.Throwable = (cb, rawCustomError, ...causes) => {
 
     return fail(new CustomError(error as AnyType), 'from throwable', ...causes) as AnyType
   }
-}
+}) as ResultDef.Throwable

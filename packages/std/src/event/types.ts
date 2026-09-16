@@ -1,6 +1,6 @@
 import type { EmptyType } from 'std:shared'
 
-import type { EVENT } from './internal/const'
+import type { EVENT } from './const'
 
 export interface EventEmitter<T extends EventEmitter.Map = EmptyType> {
   _t: typeof EVENT

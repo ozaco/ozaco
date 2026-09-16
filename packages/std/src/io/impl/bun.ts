@@ -129,7 +129,8 @@ export const BunIO = IO.implement({
     // `Bun.file(dir).exists()` reports `false` for directories — use `fs.access` (matches NodeIO) so
     // `exists` answers "path exists" for files and directories alike. NOTE: `rename` (EXCLUSIVE
     // guard) and `ensureFile` below still consult `Bun.file().exists()`, so a directory at the
-    // target slips past their checks on Bun (NodeIO's `fs.access` sees it) — see AUDIT I11/I12.
+    // target slips past their checks on Bun (NodeIO's `fs.access` sees it) — a known divergence,
+    // pinned by tests/io/node.test.ts.
     try {
       yield* until(fs.access(toPath(path)))
       return true

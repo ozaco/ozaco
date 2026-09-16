@@ -9,9 +9,9 @@ import { join } from 'node:path'
 
 import { NodeIO } from 'std:io/impl/node'
 
-// NodeIO under test. Every other io suite installs BunIO (or WebIO); this one pins the Bun/Node
-// divergences listed in AUDIT.md §10 (I9–I18) with Node's OBSERVED behavior — the `node:*` APIs as
-// run by the test host — so a future unification has a pinned baseline for the Node side.
+// NodeIO under test. Every other io suite installs BunIO (or WebIO); this one pins the known
+// Bun/Node divergences with Node's OBSERVED behavior — the `node:*` APIs as run by the test host —
+// so a future unification has a pinned baseline for the Node side.
 
 const decoder = new TextDecoder()
 
@@ -59,8 +59,8 @@ describe('NodeIO installs', () => {
   })
 })
 
-describe('NodeIO fs divergences (I9–I13)', () => {
-  it('I9: write without flags into a missing directory fails ENOENT (Bun.write would create it)', async () => {
+describe('NodeIO fs divergences', () => {
+  it('write without flags into a missing directory fails ENOENT (Bun.write would create it)', async () => {
     await withTempDir(async dir => {
       const outcome = await run(function* () {
         yield* NodeIO.use()
@@ -77,7 +77,7 @@ describe('NodeIO fs divergences (I9–I13)', () => {
     })
   })
 
-  it('I10: copy into a missing directory fails ENOENT (Bun.write would create it)', async () => {
+  it('copy into a missing directory fails ENOENT (Bun.write would create it)', async () => {
     await withTempDir(async dir => {
       const outcome = await run(function* () {
         yield* NodeIO.use()
@@ -93,7 +93,7 @@ describe('NodeIO fs divergences (I9–I13)', () => {
     })
   })
 
-  it('I11: ensureFile on an existing directory is a no-op (Bun throws)', async () => {
+  it('ensureFile on an existing directory is a no-op (Bun throws)', async () => {
     await withTempDir(async dir => {
       const outcome = await run(function* () {
         yield* NodeIO.use()
@@ -110,7 +110,7 @@ describe('NodeIO fs divergences (I9–I13)', () => {
     })
   })
 
-  it('I12: rename EXCLUSIVE onto an existing directory fails std:io.exists (Bun bypasses the guard)', async () => {
+  it('rename EXCLUSIVE onto an existing directory fails std:io.exists (Bun bypasses the guard)', async () => {
     await withTempDir(async dir => {
       const outcome = await run(function* () {
         yield* NodeIO.use()
@@ -131,7 +131,7 @@ describe('NodeIO fs divergences (I9–I13)', () => {
     })
   })
 
-  it("I13: readText accepts any BufferEncoding — 'hex' and 'base64' decode (Bun's TextDecoder throws)", async () => {
+  it("readText accepts any BufferEncoding — 'hex' and 'base64' decode (Bun's TextDecoder throws)", async () => {
     await withTempDir(async dir => {
       const outcome = await run(function* () {
         yield* NodeIO.use()
@@ -154,7 +154,7 @@ describe('NodeIO fs divergences (I9–I13)', () => {
   })
 })
 
-describe('NodeIO crypto divergences (I14)', () => {
+describe('NodeIO crypto divergences', () => {
   it('randomBytes(70000) succeeds — node:crypto has no 65536-byte WebCrypto cap', async () => {
     const outcome = await run(function* () {
       yield* NodeIO.use()
@@ -167,8 +167,8 @@ describe('NodeIO crypto divergences (I14)', () => {
   })
 })
 
-describe('NodeIO process divergences (I15–I17)', () => {
-  it('I15: exec of a missing binary fails std:io.exec-failed (Bun: exec-spawn-failed)', async () => {
+describe('NodeIO process divergences', () => {
+  it('exec of a missing binary fails std:io.exec-failed (Bun: exec-spawn-failed)', async () => {
     const outcome = await run(function* () {
       yield* NodeIO.use()
 
@@ -179,7 +179,7 @@ describe('NodeIO process divergences (I15–I17)', () => {
     expect(unwrap(outcome)).toBe(IOErrors.ExecFailed)
   })
 
-  it('I16: spawn of a missing binary yields a handle whose exited() fails std:io.process-error', async () => {
+  it('spawn of a missing binary yields a handle whose exited() fails std:io.process-error', async () => {
     const outcome = await run(function* () {
       yield* NodeIO.use()
 
@@ -195,7 +195,7 @@ describe('NodeIO process divergences (I15–I17)', () => {
     expect(unwrap(outcome)).toEqual({ stage: 'exited', pid: -1, error: IOErrors.ProcessError })
   })
 
-  it('I17: kill on an already-exited child fails std:io.kill-failed (Bun succeeds silently)', async () => {
+  it('kill on an already-exited child fails std:io.kill-failed (Bun succeeds silently)', async () => {
     const outcome = await run(function* () {
       yield* NodeIO.use()
 

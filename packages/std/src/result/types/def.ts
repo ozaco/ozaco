@@ -3,7 +3,9 @@ import type { AnyType, IsPromiseStrict } from 'std:shared'
 import type { Maybe } from './maybe'
 import type { Result } from './result'
 
-export namespace Impl {
+/** The function shapes of the result module: what `succeed`, `fail`, `auto`, `throwable`,
+ * `appendCauses`, `unwrap`, `just`, `nothing` and `asFailure*` are typed as. */
+export namespace ResultDef {
   export interface Succeed {
     (): Result.Success<void>
 
@@ -22,20 +24,31 @@ export namespace Impl {
     <R extends Result<AnyType, AnyType>>(
       result: R,
     ): Result<Result.InferSuccess<R>, Result.InferFailure<R>>
+    /** a failing `result` yields `defaultValue` — itself a Result when one is given (a Failure
+     * default flows out as that Failure), else wrapped as a Success. */
     <R extends Result<AnyType, AnyType>, T>(
       result: R,
       defaultValue: T,
-    ): Result<Result.InferSuccess<R> | T, never>
+    ): Result.FromUnion<Result.InferSuccess<R> | T>
 
     <T extends `${string}`>(value: T): Result<T, never>
     <const T>(value: T): Result.FromUnion<T>
   }
 
-  export type Throwable = <R, E extends Result.ErrorConstructor>(
-    cb: () => R,
-    errorClass?: E,
-    ...causes: string[]
-  ) => Result.FromUnion<R | Result.Failure<E['prototype']>>
+  export interface Throwable {
+    /** an async callback: the promise settles to a `Result` — the rejection becomes the Failure. */
+    <T, E extends Result.ErrorConstructor = Result.ErrorConstructor>(
+      cb: () => Promise<T>,
+      errorClass?: E,
+      ...causes: string[]
+    ): Promise<Result.FromUnion<T | Result.Failure<E['prototype']>>>
+
+    <R, E extends Result.ErrorConstructor = Result.ErrorConstructor>(
+      cb: () => R,
+      errorClass?: E,
+      ...causes: string[]
+    ): Result.FromUnion<R | Result.Failure<E['prototype']>>
+  }
 
   export type AppendCauses = <T extends Result<AnyType, AnyType>>(
     result: T,
@@ -67,7 +80,7 @@ export namespace Impl {
   export type Nothing = <T = void>() => Maybe<T>
 
   export interface AsFailure {
-    <E>(error: Result.Failure<E>, cause?: string): Result.Failure<E>
-    (error: unknown, cause?: string): Result.Failure<unknown>
+    <E>(error: Result.Failure<E>, ...causes: string[]): Result.Failure<E>
+    (error: unknown, ...causes: string[]): Result.Failure<unknown>
   }
 }

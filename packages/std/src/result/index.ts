@@ -8,6 +8,7 @@ export * from './utils/success'
 export * from './utils/throwable'
 export * from './utils/unwrap'
 
+export type * from './types/def'
 export * from './types/maybe'
 export * from './types/result'
 

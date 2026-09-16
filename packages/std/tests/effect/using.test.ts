@@ -14,8 +14,7 @@ import { isFailure, unwrap } from 'std:result'
 import { describe, expect, it } from 'bun:test'
 
 /**
- * AUDIT E43: neither `using` (utils/using.ts) nor `useAbortSignal` (utils/abort-signal.ts) was
- * exercised by any effect test. Both are thin `resource`s: `using` adopts a JS disposable and
+ * `using` (utils/using.ts) and `useAbortSignal` (utils/abort-signal.ts) are thin `resource`s: `using` adopts a JS disposable and
  * disposes it when the scope ends (asyncDispose preferred, awaited), failing
  * `EffectErrors.Using` for a value that is neither; `useAbortSignal` hands out an AbortSignal that
  * aborts when the scope ends.

@@ -1,6 +1,7 @@
 import type { Result } from 'std:result'
 import { asFailure, isSuccess, succeed } from 'std:result'
-import type { PromiseWithResolvers } from 'std:shared'
+
+import type { PromiseWithResolvers } from '../types/common'
 
 export const lazyPromise = <T, E>(
   resolver: (resolve: (value: T) => void, reject: (error: E) => void) => void,

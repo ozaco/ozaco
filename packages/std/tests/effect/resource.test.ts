@@ -4,7 +4,7 @@ import { fail, isFailure, unwrap } from 'std:result'
 import { describe, expect, it } from 'bun:test'
 
 /**
- * AUDIT E40: `resource` (base/resource.ts) was never imported by any effect test. The header
+ * `resource` (base/resource.ts). The header
  * promises "the resource task runs at the priority of its caller" — pinned here by ordering the
  * resource body against a task spawned in the same reducer pass (a plain child runs one priority
  * tier deeper than its parent, the resource does not). The rest pins the provide/teardown

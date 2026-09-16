@@ -7,10 +7,20 @@ import { isObject } from './is'
  * deeply, while arrays and primitives are REPLACED wholesale by the later value. An `undefined`
  * value never overrides an earlier one. Inputs are never mutated — a fresh tree is returned and
  * nested objects are cloned so the result never aliases a source (arrays are shared by reference).
+ *
+ * Typed honestly: the result is a full `T` only when the FIRST source is one; partials alone merge
+ * into a `Partial<T>`.
  */
-export const deepMerge = <T extends Record<string, AnyType>>(
+export function deepMerge<T extends Record<string, AnyType>>(
+  base: T,
   ...sources: (Partial<T> | undefined)[]
-): T => {
+): T
+export function deepMerge<T extends Record<string, AnyType>>(
+  ...sources: (Partial<T> | undefined)[]
+): Partial<T>
+export function deepMerge<T extends Record<string, AnyType>>(
+  ...sources: (Partial<T> | undefined)[]
+): Partial<T> {
   const result: Record<string, AnyType> = {}
 
   for (const source of sources) {
@@ -29,5 +39,5 @@ export const deepMerge = <T extends Record<string, AnyType>>(
     }
   }
 
-  return result as T
+  return result as Partial<T>
 }

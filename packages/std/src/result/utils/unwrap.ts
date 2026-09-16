@@ -1,16 +1,21 @@
 import type { AnyType } from 'std:shared'
 import { isPromise } from 'std:shared'
 
-import type { Impl } from '../types/impl'
+import type { ResultDef } from '../types/def'
 
 import { isFailure, isResult } from './is'
 
-export const unwrap: Impl.Unwrap = ((...args: AnyType[]): AnyType => {
+export const unwrap: ResultDef.Unwrap = ((...args: AnyType[]): AnyType => {
   const firstArgument = args[0]
   const hasDefault = args.length === 2
   const defaultValue = hasDefault ? args[1] : undefined
 
+  // a non-Result passes through unchanged — on the sync path AND behind a promise
   const apply = (r: AnyType) => {
+    if (!isResult(r)) {
+      return r
+    }
+
     if (isFailure(r)) {
       if (hasDefault) {
         return defaultValue
@@ -26,9 +31,5 @@ export const unwrap: Impl.Unwrap = ((...args: AnyType[]): AnyType => {
     return firstArgument.then(apply)
   }
 
-  if (isResult(firstArgument)) {
-    return apply(firstArgument)
-  }
-
-  return firstArgument
+  return apply(firstArgument)
 }) as AnyType

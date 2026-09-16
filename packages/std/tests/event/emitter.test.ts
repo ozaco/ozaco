@@ -149,7 +149,7 @@ describe('on / emit', () => {
   })
 })
 
-// Pins current behavior (AUDIT V4): emit discards listener results, so failures are not contained.
+// Pins current behavior: emit discards listener results, so failures are not contained.
 describe('emit with a failing listener', () => {
   it('a synchronously throwing listener propagates out of emit and aborts the remaining ones', () => {
     const emitter = createEvent<{ job: [] }>()

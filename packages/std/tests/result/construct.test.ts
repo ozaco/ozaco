@@ -72,10 +72,11 @@ describe('maybe', () => {
       expect(some.value).toBe('here')
     }
 
-    // just() without an argument omits the value property entirely
+    // just() without an argument is just(undefined): the property is there, as the type says
     const empty = just()
     expect(isJust(empty)).toBe(true)
-    expect('value' in empty).toBe(false)
+    expect('value' in empty).toBe(true)
+    expect(isJust(empty) ? empty.value : 'missing').toBeUndefined()
   })
 })
 

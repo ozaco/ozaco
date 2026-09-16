@@ -1,11 +1,11 @@
 import type { AnyType } from 'std:shared'
 import { isPromise } from 'std:shared'
 
-import type { Impl } from '../types/impl'
+import type { ResultDef } from '../types/def'
 
 import { isFailure } from './is'
 
-export const appendCauses: Impl.AppendCauses = (result, ...causes): AnyType => {
+export const appendCauses: ResultDef.AppendCauses = (result, ...causes): AnyType => {
   const apply = (r: AnyType) => {
     if (isFailure(r)) {
       r.causes.push(...causes)

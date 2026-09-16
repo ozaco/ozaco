@@ -1,6 +1,7 @@
 import type { EmptyType } from 'std:shared'
+import { isPromise } from 'std:shared'
 
-import { EVENT } from '../internal/const'
+import { EVENT } from '../const'
 import { callListener, removeFrom } from '../internal/listeners'
 import type { EventEmitter } from '../types'
 
@@ -91,7 +92,7 @@ export const createEvent = <T extends EventEmitter.Map = EmptyType>(): EventEmit
 
     if (len === 1) {
       const result = callListener(list[0]!, args)
-      if (result && typeof (result as Promise<void>).then === 'function') {
+      if (isPromise(result)) {
         await result
       }
       return
@@ -101,7 +102,7 @@ export const createEvent = <T extends EventEmitter.Map = EmptyType>(): EventEmit
     let promises: Promise<void>[] | undefined
     for (const snapshot of snapshots) {
       const result = callListener(snapshot, args)
-      if (result && typeof (result as Promise<void>).then === 'function') {
+      if (isPromise(result)) {
         if (!promises) {
           promises = []
         }

@@ -4,7 +4,7 @@ import { unwrap } from 'std:result'
 import { describe, expect, it } from 'bun:test'
 
 /**
- * AUDIT E42: `SignalQueueFactoryContext` (internal/contexts.ts) decides which queue backs each
+ * `SignalQueueFactoryContext` (internal/contexts.ts) decides which queue backs each
  * signal subscription, but it is internal and unexported — no scope can override it, so the
  * buffering strategy is fixed to `createQueue`. What CAN be pinned is the observable default:
  * values sent while nobody is subscribed are dropped, and once a subscriber exists its queue

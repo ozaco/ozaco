@@ -9,8 +9,8 @@ import { join } from 'node:path'
 
 import { WebIO } from 'std:io/impl/web'
 
-// I51: the hand-rolled POSIX path helpers behind WebIO (src/io/internal/path-web.ts), incl. the
-// `normalize` step that `join` applies. I52: every action WebIO marks `unsupported` fails as a
+// The hand-rolled POSIX path helpers behind WebIO (src/io/internal/path/web.ts), incl. the
+// `normalize` step that `join` applies; and every action WebIO marks `unsupported` fails as a
 // tagged Result rather than throwing.
 
 describe('WebIO path helpers (POSIX)', () => {

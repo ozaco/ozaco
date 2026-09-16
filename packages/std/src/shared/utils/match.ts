@@ -3,14 +3,15 @@ import { fail, isFailure, isSuccess, succeed, unwrap } from 'std:result'
 
 import { SharedErrors } from '../errors'
 import type { AnyType } from '../types/common'
-import type { MatchBuilder, MatchCase } from '../types/match'
+import type { Helpers } from '../types/helpers'
+import type { MatchBuilder } from '../types/match'
 
 import { isFunction } from './is'
 import { validateSync } from './validate'
 
 const createBuilder = <Input, Remaining, Output>(
   value: Input,
-  cases: MatchCase[],
+  cases: Helpers.MatchCase[],
 ): MatchBuilder<Input, Remaining, Output> => {
   const execute = (): Result<AnyType, string> => {
     for (const c of cases) {

@@ -214,7 +214,7 @@ describe('console transport', () => {
 describe('console transport install order', () => {
   it('installing ConsoleTransport BEFORE the logger fails: setup needs the Logger context', async () => {
     // `ConsoleTransport.setup` does `useContext(Logger)` to inherit the logger level, so the logger
-    // must already be installed in the scope (documented on the setup docblock, AUDIT L5)
+    // must already be installed in the scope (documented on the setup docblock)
     const outcome = await run(function* () {
       yield* JsonCodec.use()
       yield* ConsoleTransport.use({ format: plainFormat })

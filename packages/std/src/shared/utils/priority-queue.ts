@@ -27,7 +27,7 @@ class Tier<T> {
 }
 
 export class PriorityQueue<T> {
-  public tiers: Tier<T>[] = []
+  private readonly tiers: Tier<T>[] = []
   public min = 0
   public max = 0
   push(priority: number, item: T): void {

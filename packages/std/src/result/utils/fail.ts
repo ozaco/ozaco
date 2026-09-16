@@ -1,31 +1,21 @@
-import type { AnyType, Writable } from 'std:shared'
+import type { AnyType } from 'std:shared'
 
 import { RESULT_FAILURE } from '../const'
-import type { Impl } from '../types/impl'
+import type { ResultDef } from '../types/def'
 import type { Result } from '../types/result'
 
-export const fail: Impl.Fail = (...args: AnyType[]) => {
-  const failure = {
+// every field the type declares is present, `error` included (undefined for the bare `fail()`)
+export const fail: ResultDef.Fail = (...args: AnyType[]) =>
+  ({
     _t: RESULT_FAILURE,
     _d: Date.now(),
+    error: args[0],
+    message: args[1] ?? '',
+    causes: args.slice(2),
 
     *[Symbol.iterator]() {
       // oxlint-disable-next-line no-this-alias
       const self = this
       yield self
     },
-  } as Writable<Result.Failure<AnyType>>
-
-  if (args.length === 0) {
-    failure.causes = [] as string[]
-    failure.message = ''
-
-    return failure as AnyType
-  }
-
-  failure.error = args[0]
-  failure.message = args[1] ?? ''
-  failure.causes = args.slice(2)
-
-  return failure as AnyType
-}
+  }) as Result.Failure<AnyType> as AnyType

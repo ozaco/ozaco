@@ -4,7 +4,7 @@ import { unwrap } from 'std:result'
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 
 /**
- * AUDIT E45: `interval` (utils/interval.ts) had no test. It is a `resource` around
+ * `interval` (utils/interval.ts) is a `resource` around
  * `setInterval` feeding a signal: ticks are emitted on schedule (and buffered per subscriber
  * while nobody pulls), and the timer is cleared the moment the subscribing scope ends. The
  * clearing is pinned by wrapping the timer globals — `interval` looks them up at call time.
