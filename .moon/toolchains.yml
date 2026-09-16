@@ -1,10 +1,10 @@
 $schema: https://moonrepo.dev/schemas/toolchain.json
 
 proto:
-  version: '0.61.0'
+  version: '0.62.2'
 
 bun:
-  version: 1.4.0
+  version: 1.4.2
 node:
   version: 25.9.0
 

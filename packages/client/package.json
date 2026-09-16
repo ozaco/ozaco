@@ -47,7 +47,7 @@
     "@ozaco/transport": "workspace:*",
     "tsdown": "catalog:build",
     "unrun": "catalog:build",
-    "zod": "^4.5.4"
+    "zod": "^4.6.5"
   },
   "peerDependencies": {
     "@ozaco/std": "*"
