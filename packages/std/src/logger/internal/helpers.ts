@@ -1,5 +1,5 @@
 import type { Operation } from 'std:effect'
-import { operation, useContext } from 'std:effect'
+import { useContext } from 'std:effect'
 
 import type { LogLevel } from '../const'
 import { Logger, LoggerTransport } from '../definitions'
@@ -20,11 +20,11 @@ export const logAt = (level: LogLevel) =>
     yield* dispatch(entry)
   }
 
-export const dispatch = operation(function* (entry: LoggerDef.Entry) {
+export function* dispatch(entry: LoggerDef.Entry) {
   // Fans out to every installed transport via the LoggerTransport protocol's `exec`. Each transport
   // applies its own level threshold inside `write`, so no per-transport filtering is needed here.
   yield* LoggerTransport.actions.write(entry)
-})
+}
 
 export const buildEntry = (
   source: Helpers.BuildEntrySource,

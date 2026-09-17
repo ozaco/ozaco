@@ -47,7 +47,8 @@ export namespace ConfigDef {
     /** Config name (default `ozaco`). */
     name?: string | undefined
 
-    /** Directory to start discovery from (default `process.cwd()`). */
+    /** Directory to start discovery from (default `process.cwd()`; in a browser the page's
+     * directory from `location.pathname`; `/` when there is neither). */
     cwd?: string | undefined
 
     /** Active variant overlay name (`.<variant>.<name>.<ext>` wins); default the `STD_CONFIG` env var. */
@@ -59,7 +60,8 @@ export namespace ConfigDef {
     /** Config dir/file should start with a dot (default `true`). */
     dot?: boolean | undefined
 
-    /** File extension without the dot (default derived from the codec, e.g. `toml`). */
+    /** File extension without the dot (default: the installed codec's own `ext` — `toml`, `json`,
+     * `yaml`; a codec installed with `{ ext: 'yml' }` names the files `.yml`). */
     ext?: string | undefined
 
     /** Enabled config features (default `Features.ALL`). */
@@ -103,13 +105,15 @@ export namespace ConfigDef {
     /** Re-run discovery against the current cwd (pick up on-disk changes) without moving `cwd`. */
     refresh(): Operation<void>
     /** Persist edits: no arg writes every file `set`/`remove`/`clear` touched back to its own path;
-     * a `path` exports the base working file's content there instead. */
+     * a `path` EXPORTS the base working file's content there — the sources stay dirty (unless
+     * `path` is the working file's own path, which persists it). */
     save(path?: string): Operation<void>
 
     /** Read a dotted key (`a.b.c`) from the merged config; omit `key` for the whole merged object. */
     get<T>(key?: string): Operation<T>
     /** Set a dotted key in the file that owns it or its nearest existing ancestor path (else the base
-     * working file); reflected in the merge at once, `save` to persist. */
+     * working file); reflected in the merge at once — an env overlay value for that key steps aside
+     * until the next `load`/`refresh` — `save` to persist. */
     set(key: string, value: unknown): Operation<void>
     /** Remove a dotted key from the file that currently provides it (in memory; call `save` to persist). */
     remove(key: string): Operation<void>

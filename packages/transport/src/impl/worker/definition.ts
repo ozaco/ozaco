@@ -1,4 +1,4 @@
-import { hasCodec } from 'std:codec'
+import { Codec } from 'std:codec'
 import { ensure } from 'std:effect'
 import { fail } from 'std:result'
 
@@ -26,7 +26,7 @@ export const WorkerTransport = Transport.implement<TransportDef.Options, [option
     description: 'Worker-thread transport over postMessage',
 
     *setup(options) {
-      if (!(yield* hasCodec())) {
+      if (!(yield* Codec.actions.hasCodec())) {
         yield* JsonCodec.use()
       }
       if (!isValidPrefix(options.prefix)) {

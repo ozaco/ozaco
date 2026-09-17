@@ -5,7 +5,7 @@ import pkg from '../../../package.json'
 import { LogLevel } from '../const'
 import { Logger, LoggerTransport } from '../definitions'
 import { LoggerBindingsContext } from '../internal/context'
-import { buildEntry, dispatch, logAt } from '../internal/helpers'
+import { logAt } from '../internal/helpers'
 import type { LoggerDef } from '../types/logger'
 
 export const DefaultLogger = Logger.implement({
@@ -27,13 +27,7 @@ export const DefaultLogger = Logger.implement({
   },
 }).build({
   *log(level: LogLevel, ...args: LoggerDef.Payload[]) {
-    const ctx = yield* useContext(Logger)
-    if (level < ctx.level) {
-      return
-    }
-    const bindings = (yield* LoggerBindingsContext.get()) ?? {}
-    const entry = buildEntry({ ctx, bindings }, level, args)
-    yield* dispatch(entry)
+    return yield* logAt(level)(...args)
   },
 
   trace: logAt(LogLevel.trace),

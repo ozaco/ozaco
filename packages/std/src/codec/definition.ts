@@ -1,4 +1,3 @@
-import { operation } from 'std:effect'
 import { defineProtocol } from 'std:plugin'
 
 import pkg from '../../package.json'
@@ -8,6 +7,7 @@ import {
   codecDecodeFramesHandler,
   codecEncodeFrameHandler,
   codecGetTransportsHandler,
+  codecHasCodecHandler,
   codecRegisterHandler,
   codecUnregisterHandler,
 } from './internal/router'
@@ -16,20 +16,9 @@ import type { CodecDef } from './types'
 export const CODEC = Symbol.for('std:codec')
 
 /**
- * Whether any codec is registered in the CURRENT scope. Use this (not `Codec.context.get()`) to
- * decide whether to auto-install a default codec. The registry is a scope-local effect Context
- * (`CodecRegistryContext`, inherited DOWNWARD through the protocol context) — NOT a global
- * string-keyed table. It reflects registrations visible in the current scope chain only, not those
- * made in unrelated scopes/bundles.
- */
-export const hasCodec = operation(function* () {
-  return (yield* codecGetTransportsHandler()).length > 0
-})
-
-/**
  * The codec protocol: a registry of encoders/decoders sorted by priority. `Codec.actions.*` route to
  * the highest-priority registered codec through the inline `exec` below; the registry actions
- * (`register` / `unregister` / `getTransports` / `encodeFrame` / `decodeFrame`) are plain handlers
+ * (`register` / `unregister` / `getTransports` / `hasCodec` / `encodeFrame` / `decodeFrame`) are plain handlers
  * and never route. Install a codec impl (e.g. `JsonCodec`) to populate the registry. Lives in `std` so any std consumer — `std:fetch`, the server
  * broker/transport, … — can encode/decode without coupling to a higher layer.
  */
@@ -63,6 +52,7 @@ export const Codec = defineProtocol<CodecDef.Context, CodecDef.Actions, CodecDef
     register: codecRegisterHandler,
     unregister: codecUnregisterHandler,
     getTransports: codecGetTransportsHandler,
+    hasCodec: codecHasCodecHandler,
     encodeFrame: codecEncodeFrameHandler,
     decodeFrame: codecDecodeFrameHandler,
     decodeFrames: codecDecodeFramesHandler,

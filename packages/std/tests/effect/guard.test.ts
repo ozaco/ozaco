@@ -1,22 +1,24 @@
 /**
- * `operation(fn, ...causes)`: a returned `Result` is unwrapped (Success → value, Failure → raise),
- * a plain value passes through, a thrown error is folded into a Failure carrying the causes.
+ * `guard(fn, ...causes)` — the wrapper for generators that want their failures STAMPED: a returned
+ * `Result` is unwrapped (Success → value, Failure → raise), a thrown error is folded into a
+ * Failure, and every failure leaving the body carries the given causes. Without causes there is
+ * nothing to stamp: write a plain generator instead.
  */
-import { attempt, operation, run } from 'std:effect'
+import { attempt, guard, run } from 'std:effect'
 import { fail, isFailure, isSuccess, succeed, unwrap } from 'std:result'
 
 import { describe, expect, it } from 'bun:test'
 
-describe('operation()', () => {
+describe('guard()', () => {
   it('unwraps a returned Success and passes a plain value through', async () => {
     unwrap(
       await run(function* () {
-        const wrapped = operation(function* () {
+        const wrapped = guard(function* () {
           return succeed(5) as unknown as number
-        })
-        const plain = operation(function* (n: number) {
+        }, 'guard:cause')
+        const plain = guard(function* (n: number) {
           return n * 2
-        })
+        }, 'guard:cause')
 
         expect(yield* wrapped()).toBe(5)
         expect(yield* plain(4)).toBe(8)
@@ -24,13 +26,13 @@ describe('operation()', () => {
     )
   })
 
-  it('raises a returned Failure and folds a throw into a Failure with the causes', async () => {
+  it('raises a returned Failure and folds a throw into a Failure — both carry the causes', async () => {
     unwrap(
       await run(function* () {
-        const returned = operation(function* () {
+        const returned = guard(function* () {
           return fail('op.returned', 'as a value') as unknown as number
         }, 'op:cause')
-        const thrown = operation(function* () {
+        const thrown = guard(function* () {
           throw new Error('thrown')
         }, 'op:cause')
 
@@ -50,10 +52,10 @@ describe('operation()', () => {
     unwrap(
       await run(function* () {
         let calls = 0
-        const counted = operation(function* () {
+        const counted = guard(function* () {
           calls += 1
           return calls
-        })
+        }, 'guard:count')
 
         expect(yield* counted()).toBe(1)
         expect(yield* counted()).toBe(2)

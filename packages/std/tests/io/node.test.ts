@@ -121,7 +121,7 @@ describe('NodeIO fs divergences', () => {
         yield* IO.actions.ensureDir(blockerDir)
 
         const result = yield* attempt(() =>
-          IO.actions.rename(src, blockerDir, { flags: IO_FLAGS.EXCLUSIVE }),
+          IO.actions.rename(src, blockerDir, { flags: IO_FLAGS.exclusive }),
         )
 
         return { error: errorOf(result), srcStillThere: yield* IO.actions.exists(src) }

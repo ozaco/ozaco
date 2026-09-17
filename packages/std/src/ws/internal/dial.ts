@@ -1,5 +1,5 @@
 import type { Helpers as EffectHelpers } from 'std:effect'
-import { operation, withResolvers } from 'std:effect'
+import { guard, withResolvers } from 'std:effect'
 import type { Result } from 'std:result'
 import { fail } from 'std:result'
 
@@ -116,7 +116,7 @@ const wire = (
  * current) or raise `WsErrors.Connect`. On failure — or a halt mid-handshake — the socket is unhooked
  * and disposed so nothing leaks.
  */
-export const dial = operation(function* (session: Helpers.Session, impl: WsDef.ImplLike) {
+export const dial = guard(function* (session: Helpers.Session, impl: WsDef.ImplLike) {
   const socket = construct(impl, session)
 
   // receive binary frames as ArrayBuffer, not the default Blob — consistent across

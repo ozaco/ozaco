@@ -1,5 +1,5 @@
 import type { Flow } from 'std:effect'
-import { createSignal, fork, operation, resource, until } from 'std:effect'
+import { createSignal, fork, resource, until } from 'std:effect'
 
 import { watch as fsWatch, stat } from 'node:fs/promises'
 import { basename, dirname } from 'node:path'
@@ -116,7 +116,7 @@ const drainNative = (
   spec: { path: string; recursive: boolean; signal: AbortSignal },
   emit: (event: IODef.WatchEvent) => void,
 ) =>
-  operation(function* () {
+  function* () {
     const iterator = fsWatch(spec.path, {
       recursive: spec.recursive,
       signal: spec.signal,
@@ -134,7 +134,7 @@ const drainNative = (
     } catch {
       // aborted on teardown, or the watch errored — stop quietly
     }
-  })
+  }
 
 /**
  * Watch a file or directory, streaming {@link IODef.WatchEvent}s until the consumer tears the stream down.

@@ -1,4 +1,4 @@
-import { Codec, hasCodec } from 'std:codec'
+import { Codec } from 'std:codec'
 import { attempt, createChannel, each, run, scoped, sleep, spawn, withResolvers } from 'std:effect'
 import type { Result } from 'std:result'
 import { isFailure, unwrap } from 'std:result'
@@ -44,13 +44,13 @@ describe('registry scope-locality', () => {
       const inside = yield* scoped(function* () {
         yield* JsonCodec.use()
         return {
-          has: yield* hasCodec(),
+          has: yield* Codec.actions.hasCodec(),
           count: (yield* Codec.actions.getTransports()).length,
         }
       })
 
       const outside = {
-        has: yield* hasCodec(),
+        has: yield* Codec.actions.hasCodec(),
         count: (yield* Codec.actions.getTransports()).length,
       }
 

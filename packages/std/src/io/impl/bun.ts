@@ -25,7 +25,7 @@ import { readFileFlow, writeFileFlow } from '../internal/fs/flow'
 import { mapStat, walkRecursive } from '../internal/fs/walk'
 import { watchPath } from '../internal/fs/watch'
 import { tcpConnect, tcpListen, udpBind } from '../internal/net/sockets'
-import { readInterfaces, readTmpDir } from '../internal/net/sys'
+import { readCwd, readHomeDir, readInterfaces, readTmpDir } from '../internal/net/sys'
 import { nodePath } from '../internal/path/node'
 import { bunExec, bunSpawn } from '../internal/process/bun'
 import { createS3 } from '../internal/s3/create'
@@ -86,11 +86,11 @@ export const BunIO = IO.implement({
       yield* until(Bun.write(toPath(path), data))
       return
     }
-    const flag = hasFlag(flags, IO_FLAGS.APPEND)
-      ? hasFlag(flags, IO_FLAGS.EXCLUSIVE)
+    const flag = hasFlag(flags, IO_FLAGS.append)
+      ? hasFlag(flags, IO_FLAGS.exclusive)
         ? 'ax'
         : 'a'
-      : hasFlag(flags, IO_FLAGS.EXCLUSIVE)
+      : hasFlag(flags, IO_FLAGS.exclusive)
         ? 'wx'
         : 'w'
     yield* until(fs.writeFile(toPath(path), data, { flag }))
@@ -102,7 +102,7 @@ export const BunIO = IO.implement({
 
   *copy(src, dest, options) {
     // oxlint-disable-next-line unicorn/prefer-ternary
-    if (hasFlag(options?.flags ?? IO_FLAGS.NONE, IO_FLAGS.EXCLUSIVE)) {
+    if (hasFlag(options?.flags ?? IO_FLAGS.none, IO_FLAGS.exclusive)) {
       yield* until(fs.copyFile(toPath(src), toPath(dest), 1))
     } else {
       yield* until(Bun.write(toPath(dest), Bun.file(toPath(src))))
@@ -110,7 +110,7 @@ export const BunIO = IO.implement({
   },
 
   *rename(src, dest, options) {
-    if (hasFlag(options?.flags ?? IO_FLAGS.NONE, IO_FLAGS.EXCLUSIVE)) {
+    if (hasFlag(options?.flags ?? IO_FLAGS.none, IO_FLAGS.exclusive)) {
       // `Bun.file().exists()` is `false` for a directory: an existing DIRECTORY destination
       // bypasses this guard on Bun (NodeIO fails `IOErrors.Exists` via `fs.access`).
       const destExists = yield* until(Bun.file(toPath(dest)).exists())
@@ -184,7 +184,7 @@ export const BunIO = IO.implement({
     yield* walkRecursive(
       p,
       {
-        flags: options?.flags ?? IO_FLAGS.FILES | IO_FLAGS.DIRS,
+        flags: options?.flags ?? IO_FLAGS.files | IO_FLAGS.dirs,
         maxDepth: options?.maxDepth ?? Number.POSITIVE_INFINITY,
         match: options?.match,
         skip: options?.skip,
@@ -219,6 +219,8 @@ export const BunIO = IO.implement({
   udpBind,
   ip: readInterfaces,
   tmpdir: readTmpDir,
+  cwd: readCwd,
+  homeDir: readHomeDir,
 
   *s3(options?: IODef.S3Options) {
     return createS3(new (Bun.S3Client as AnyType)(options ?? {}))

@@ -1,15 +1,13 @@
-import { operation } from 'std:effect'
-
 import type { Helpers } from '../../types/helpers'
 import type { PromptDef, PromptSpec } from '../../types/prompt'
 import { runPrompt } from '../../utils'
 import { labelOf } from '../choice'
 import { activeLine, cancelledLine, hint, label, submittedLine } from '../chrome'
 import { createInput, editLine, renderInput } from '../edit'
-import { isEnter, isDown, isUp } from '../keys'
+import { isDown, isEnter, isUp } from '../keys'
 import { paginate, wrapIndex } from '../list'
 
-export const autocomplete = operation(function* <T>(options: PromptDef.AutocompleteOptions<T>) {
+export function* autocomplete<T>(options: PromptDef.AutocompleteOptions<T>) {
   const defaultSuggest = (
     input: string,
     choices: readonly PromptDef.Choice<T>[],
@@ -75,4 +73,4 @@ export const autocomplete = operation(function* <T>(options: PromptDef.Autocompl
   }
 
   return yield* runPrompt(spec)
-})
+}

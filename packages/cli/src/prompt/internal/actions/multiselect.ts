@@ -1,14 +1,12 @@
-import { operation } from 'std:effect'
-
 import type { Helpers } from '../../types/helpers'
 import type { PromptDef, PromptSpec } from '../../types/prompt'
 import { runPrompt } from '../../utils'
 import { firstEnabled, indicesToValues, labelOf, resolveSelected } from '../choice'
 import { activeLine, cancelledLine, hint, label, submittedLine } from '../chrome'
-import { isEnter, isDown, isSpace, isUp } from '../keys'
+import { isDown, isEnter, isSpace, isUp } from '../keys'
 import { paginate, step } from '../list'
 
-export const multiselect = operation(function* <T>(options: PromptDef.MultiSelectOptions<T>) {
+export function* multiselect<T>(options: PromptDef.MultiSelectOptions<T>) {
   const choices = options.choices
   const disabled = (index: number): boolean => Boolean(choices[index]?.disabled)
 
@@ -105,4 +103,4 @@ export const multiselect = operation(function* <T>(options: PromptDef.MultiSelec
   }
 
   return yield* runPrompt(spec)
-})
+}

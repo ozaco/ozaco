@@ -1,4 +1,4 @@
-import { attempt, operation, sleep } from 'std:effect'
+import { attempt, guard, sleep } from 'std:effect'
 import type { Result } from 'std:result'
 import { fail, isSuccess } from 'std:result'
 
@@ -16,7 +16,7 @@ import { flatten, readStats } from './stats'
  * own redial is handled, not dropped). Non-`rtc:*` frames are ignored, so keepalive pings on a
  * shared socket are safe.
  */
-export const pumpSignal = operation(function* (session: Helpers.Session) {
+export const pumpSignal = guard(function* (session: Helpers.Session) {
   const subscription = yield* session.signal.messages
 
   while (true) {
@@ -66,7 +66,7 @@ export const pumpSignal = operation(function* (session: Helpers.Session) {
 }, RtcCauses.SignalPump)
 
 /** Candidate pump (forked): best-effort — a dead signal surfaces through the negotiation path. */
-export const pumpCandidates = operation(function* (session: Helpers.Session) {
+export const pumpCandidates = guard(function* (session: Helpers.Session) {
   yield* session.eachGeneration(function* (generation) {
     while (true) {
       const item = yield* generation.candidatesOut.next()
@@ -89,7 +89,7 @@ export const pumpCandidates = operation(function* (session: Helpers.Session) {
  * the `channels` flow — consumers never see a half-open channel. Remote handles die with their
  * generation; after a redial the remote side re-announces and fresh handles emit here.
  */
-export const pumpIncoming = operation(function* (session: Helpers.Session) {
+export const pumpIncoming = guard(function* (session: Helpers.Session) {
   const { options, observe, counters, remoteEntries } = session
 
   yield* session.eachGeneration(function* (generation) {
@@ -123,7 +123,7 @@ export const pumpIncoming = operation(function* (session: Helpers.Session) {
  * Stats sampler (forked, only when `observe.sampleMs` is set): one `stats` timeline entry per
  * tick, carrying the flattened snapshot — the metrics feed a reporter can pump anywhere.
  */
-export const sampleStats = operation(function* (session: Helpers.Session, everyMs: number) {
+export const sampleStats = guard(function* (session: Helpers.Session, everyMs: number) {
   while (!session.ended) {
     yield* sleep(everyMs)
 

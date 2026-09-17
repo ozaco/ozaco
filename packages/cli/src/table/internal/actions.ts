@@ -1,6 +1,6 @@
 import { Terminal, useTerminal } from 'cli:core'
 import { usePalette } from 'cli:palette'
-import { ensure, operation } from 'std:effect'
+import { ensure } from 'std:effect'
 
 import type { Helpers } from '../types/helpers'
 import type { TableDef } from '../types/table'
@@ -37,7 +37,7 @@ const setCell = (
   }
 }
 
-export const table = operation(function* (options: TableDef.Options) {
+export function* table(options: TableDef.Options) {
   const info = yield* useTerminal()
   const palette = yield* usePalette()
   const size = yield* Terminal.actions.size()
@@ -55,7 +55,7 @@ export const table = operation(function* (options: TableDef.Options) {
     const fit = Math.max(1, size.rows - chrome - RESERVED_ROWS)
     const maxBody = opts.window === undefined ? fit : Math.min(opts.window, fit)
 
-    const draw = operation(function* () {
+    const draw = function* () {
       const layout = makeLayout({
         options: opts,
         rows: state.rows,
@@ -63,9 +63,9 @@ export const table = operation(function* (options: TableDef.Options) {
         termColumns: size.columns,
       })
       yield* lease.render(frame({ layout, rows: state.rows, maxBody }).text)
-    })
+    }
 
-    const finish = operation(function* () {
+    const finish = function* () {
       if (state.ended) {
         return
       }
@@ -77,7 +77,7 @@ export const table = operation(function* (options: TableDef.Options) {
         termColumns: size.columns,
       })
       yield* lease.done(frame({ layout, rows: state.rows }).text)
-    })
+    }
 
     yield* draw()
     yield* ensure(function* () {
@@ -124,7 +124,7 @@ export const table = operation(function* (options: TableDef.Options) {
   const flushed = { value: 0 }
   const started = { value: false }
 
-  const startOnce = operation(function* () {
+  const startOnce = function* () {
     if (started.value) {
       return
     }
@@ -138,18 +138,18 @@ export const table = operation(function* (options: TableDef.Options) {
         yield* Terminal.actions.write(`${separator(layout)}\n`)
       }
     }
-  })
+  }
 
-  const flush = operation(function* (all: boolean) {
+  const flush = function* (all: boolean) {
     const limit = all ? state.rows.length : state.rows.length - 1
     while (flushed.value < limit) {
       yield* startOnce()
       yield* Terminal.actions.write(`${bodyRow(layout, state.rows[flushed.value]!)}\n`)
       flushed.value += 1
     }
-  })
+  }
 
-  const finish = operation(function* () {
+  const finish = function* () {
     if (state.ended) {
       return
     }
@@ -159,17 +159,17 @@ export const table = operation(function* (options: TableDef.Options) {
     if (opts.border === 'full') {
       yield* Terminal.actions.write(`${bottomBorder(layout)}\n`)
     }
-  })
+  }
 
   // An update reflects immediately: a not-yet-committed (pending) row is edited in place and
   // flushed later with the new value; an already-committed row can't be rewritten in a pipe, so its
   // new state is RE-APPENDED as a fresh line (duplicates are expected).
-  const reflect = operation(function* (index: number) {
+  const reflect = function* (index: number) {
     if (index < flushed.value && !state.ended) {
       yield* startOnce()
       yield* Terminal.actions.write(`${bodyRow(layout, state.rows[index]!)}\n`)
     }
-  })
+  }
 
   yield* ensure(function* () {
     yield* finish()
@@ -206,4 +206,4 @@ export const table = operation(function* (options: TableDef.Options) {
     },
     end: finish,
   } satisfies TableDef.Handle
-})
+}

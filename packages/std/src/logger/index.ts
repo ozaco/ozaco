@@ -1,4 +1,5 @@
 export * from './const'
+export * from './errors'
 export * from './impl/default'
 export * from './definitions'
 

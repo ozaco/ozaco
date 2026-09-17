@@ -10,11 +10,16 @@ export namespace CodecDef {
   export interface Options {
     name?: string | undefined
     priority?: number | undefined
+    /** The file extension (no dot) this codec's documents use — what `std:config` names its
+     * files with. Each impl has its own default (`json`, `toml`, `yaml`); pass `yml`, `cfg`, … */
+    ext?: string | undefined
   }
 
   export interface Context {
     name: string
     priority: number
+    /** The file extension (no dot) of this codec's documents. */
+    ext: string
   }
 
   export type EncodeError = (typeof CodecErrors)['Encode']
@@ -47,6 +52,9 @@ export namespace CodecDef {
     register(transport: CodecDef, entryCtx: CodecDef.Context): Operation<void>
     unregister(transport: CodecDef): Operation<void>
     getTransports(): Operation<CodecDef[]>
+    /** Whether any codec is registered in the CURRENT scope chain — what a plugin asks before
+     * installing a default codec of its own. */
+    hasCodec(): Operation<boolean>
 
     encodeFrame<T>(data: unknown, preferred?: CodecDef): Operation<T>
     decodeFrame<T>(data: unknown, preferred?: CodecDef): Operation<T>

@@ -10,7 +10,7 @@ import { hlcDecode, hlcObserve, hlcToken } from '../internal/crypto/hlc'
 import { ulidId } from '../internal/crypto/ulid'
 import { uuidId } from '../internal/crypto/uuid'
 import { webHash, webHmac, webRandomBytes } from '../internal/crypto/web'
-import { readWebEnv } from '../internal/env'
+import { readWebCwd, readWebEnv } from '../internal/env'
 import { webPath } from '../internal/path/web'
 import { createS3 } from '../internal/s3/create'
 import { fromReadable } from '../internal/stream/from-readable'
@@ -96,6 +96,10 @@ export const WebIO = IO.implement({
   udpBind: unsupported('udpBind'),
   ip: unsupported('ip'),
   tmpdir: unsupported('tmpdir'),
+  *cwd() {
+    return readWebCwd()
+  },
+  homeDir: unsupported('homeDir'),
 
   // The browser must not hold S3 credentials; the client is constructible but every op fails
   // `io-unsupported`.

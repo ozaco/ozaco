@@ -1,5 +1,5 @@
 import type { Operation } from 'std:effect'
-import { attempt, operation, sleep, until } from 'std:effect'
+import { attempt, guard, sleep, until } from 'std:effect'
 import type { Result } from 'std:result'
 import { fail, isSuccess } from 'std:result'
 
@@ -218,7 +218,7 @@ export function* handleDescription(
  * Channel kicks are skipped once both descriptions exist (SCTP is up — channels open in-band);
  * impl-fired renegotiation is skipped mid-negotiation.
  */
-export const superviseNegotiation = operation(function* (session: Helpers.Session) {
+export const superviseNegotiation = guard(function* (session: Helpers.Session) {
   const { polite, counters, observe } = session
 
   yield* session.eachGeneration(function* (generation) {

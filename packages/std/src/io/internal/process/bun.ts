@@ -1,4 +1,4 @@
-import { operation, until } from 'std:effect'
+import { until } from 'std:effect'
 import { fail } from 'std:result'
 
 import { IOErrors } from '../../errors'
@@ -12,11 +12,7 @@ import { errorMessage, makeStatus, normalizeSpawn, toBytes } from './shared'
  * (reported on the {@link IODef.ExecResult}), not a failure — only an inability to launch the process (or
  * a runtime error draining it) surfaces as a `Result.Failure`.
  */
-export const bunExec = operation(function* (
-  cmd: string,
-  args?: readonly string[],
-  options?: IODef.ExecOptions,
-) {
+export function* bunExec(cmd: string, args?: readonly string[], options?: IODef.ExecOptions) {
   const config = normalizeSpawn(options)
 
   let proc
@@ -48,18 +44,14 @@ export const bunExec = operation(function* (
   } catch (error) {
     return yield* fail(IOErrors.ExecFailed, `command "${cmd}" failed: ${errorMessage(error)}`)
   }
-})
+}
 
 /**
  * Spawn a long-lived child process with `Bun.spawn`, exposing its streams and lifecycle as effect
  * primitives. stdin/stdout/stderr are piped; consume (or `kill`) the handle within the spawning
  * scope.
  */
-export const bunSpawn = operation(function* (
-  cmd: string,
-  args?: readonly string[],
-  options?: IODef.SpawnOptions,
-) {
+export function* bunSpawn(cmd: string, args?: readonly string[], options?: IODef.SpawnOptions) {
   const config = normalizeSpawn(options)
 
   let proc
@@ -74,25 +66,25 @@ export const bunSpawn = operation(function* (
     return yield* fail(IOErrors.SpawnFailed, `failed to spawn "${cmd}": ${errorMessage(error)}`)
   }
 
-  const exited = operation(function* () {
+  const exited = function* () {
     yield* until(proc.exited)
     return makeStatus(proc.exitCode, proc.signalCode)
-  })
+  }
 
-  const write = operation(function* (chunk: Uint8Array | string) {
+  const write = function* (chunk: Uint8Array | string) {
     try {
       proc.stdin.write(toBytes(chunk))
       yield* until(Promise.resolve(proc.stdin.flush()))
     } catch (error) {
       return yield* fail(IOErrors.StdinWriteFailed, `failed to write stdin: ${errorMessage(error)}`)
     }
-  })
+  }
 
-  const closeStdin = operation(function* () {
+  const closeStdin = function* () {
     yield* until(Promise.resolve(proc.stdin.end()))
-  })
+  }
 
-  const kill = operation(function* (signal?: number | string) {
+  const kill = function* (signal?: number | string) {
     try {
       proc.kill(signal as number | undefined)
     } catch (error) {
@@ -101,7 +93,7 @@ export const bunSpawn = operation(function* (
         `failed to kill pid ${proc.pid}: ${errorMessage(error)}`,
       )
     }
-  })
+  }
 
   const handle: IODef.ProcessHandle = {
     pid: proc.pid,
@@ -113,4 +105,4 @@ export const bunSpawn = operation(function* (
     kill,
   }
   return handle
-})
+}

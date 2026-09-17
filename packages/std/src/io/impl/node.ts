@@ -26,7 +26,7 @@ import { readFileFlow, writeFileFlow } from '../internal/fs/flow'
 import { mapStat, walkRecursive } from '../internal/fs/walk'
 import { watchPath } from '../internal/fs/watch'
 import { tcpConnect, tcpListen, udpBind } from '../internal/net/sockets'
-import { readInterfaces, readTmpDir } from '../internal/net/sys'
+import { readCwd, readHomeDir, readInterfaces, readTmpDir } from '../internal/net/sys'
 import { nodePath } from '../internal/path/node'
 import { nodeExec, nodeSpawn } from '../internal/process/node'
 import { createS3 } from '../internal/s3/create'
@@ -90,12 +90,12 @@ export const NodeIO = IO.implement({
   },
 
   *write(path, data, options) {
-    const f = options?.flags ?? IO_FLAGS.NONE
-    const flag = hasFlag(f, IO_FLAGS.APPEND)
-      ? hasFlag(f, IO_FLAGS.EXCLUSIVE)
+    const f = options?.flags ?? IO_FLAGS.none
+    const flag = hasFlag(f, IO_FLAGS.append)
+      ? hasFlag(f, IO_FLAGS.exclusive)
         ? 'ax'
         : 'a'
-      : hasFlag(f, IO_FLAGS.EXCLUSIVE)
+      : hasFlag(f, IO_FLAGS.exclusive)
         ? 'wx'
         : 'w'
     yield* until(fs.writeFile(toPath(path), data, { flag }))
@@ -106,12 +106,12 @@ export const NodeIO = IO.implement({
   },
 
   *copy(src, dest, options) {
-    const mode = hasFlag(options?.flags ?? IO_FLAGS.NONE, IO_FLAGS.EXCLUSIVE) ? 1 : 0
+    const mode = hasFlag(options?.flags ?? IO_FLAGS.none, IO_FLAGS.exclusive) ? 1 : 0
     yield* until(fs.copyFile(toPath(src), toPath(dest), mode))
   },
 
   *rename(src, dest, options) {
-    if (hasFlag(options?.flags ?? IO_FLAGS.NONE, IO_FLAGS.EXCLUSIVE)) {
+    if (hasFlag(options?.flags ?? IO_FLAGS.none, IO_FLAGS.exclusive)) {
       let destExists = false
       try {
         yield* until(fs.access(toPath(dest)))
@@ -183,7 +183,7 @@ export const NodeIO = IO.implement({
     yield* walkRecursive(
       p,
       {
-        flags: options?.flags ?? IO_FLAGS.FILES | IO_FLAGS.DIRS,
+        flags: options?.flags ?? IO_FLAGS.files | IO_FLAGS.dirs,
         maxDepth: options?.maxDepth ?? Number.POSITIVE_INFINITY,
         match: options?.match,
         skip: options?.skip,
@@ -218,6 +218,8 @@ export const NodeIO = IO.implement({
   udpBind,
   ip: readInterfaces,
   tmpdir: readTmpDir,
+  cwd: readCwd,
+  homeDir: readHomeDir,
 
   // Node has no built-in S3; use the dependency-free SigV4-over-fetch client.
   *s3(options?: IODef.S3Options) {

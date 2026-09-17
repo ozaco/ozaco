@@ -39,7 +39,7 @@ describe('toml codec', () => {
     })
 
     expect(unwrap(outcome)).toEqual({
-      ctx: { name: 'std/toml-codec', priority: 500 },
+      ctx: { name: 'std/toml-codec', priority: 500, ext: 'toml' },
       transports: 1,
     })
   })

@@ -1,7 +1,7 @@
 import type { KvDef } from 'db:core'
 import { Kv, KvErrors } from 'db:core'
 import { DEFAULT_KV_PREFIX, isValidKvPrefix, kvActions } from 'db:internal'
-import { hasCodec } from 'std:codec'
+import { Codec } from 'std:codec'
 import { fail } from 'std:result'
 
 import { JsonCodec } from 'std:codec/impl/json'
@@ -22,7 +22,7 @@ export const MemoryKv = Kv.implement<KvDef.Options, [options?: MemoryKvDef.Optio
   description: 'In-process key/value store',
 
   *setup(options) {
-    if (!(yield* hasCodec())) {
+    if (!(yield* Codec.actions.hasCodec())) {
       yield* JsonCodec.use()
     }
     const prefix = options?.prefix ?? DEFAULT_KV_PREFIX

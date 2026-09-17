@@ -1,5 +1,5 @@
 import type { Utils } from 'std:effect'
-import { attempt, budgetDelay, operation, sleep } from 'std:effect'
+import { attempt, budgetDelay, guard, sleep } from 'std:effect'
 import type { Result } from 'std:result'
 import { fail, isSuccess } from 'std:result'
 
@@ -24,7 +24,7 @@ const exhausted = (budget: Utils.Budget, last: WsDef.CloseInfo) =>
  * `WsErrors.ReconnectExhausted` failure close. Never raises: dial failures are attempted, everything
  * else is synchronous bookkeeping.
  */
-export const supervise = operation(function* (
+export const supervise = guard(function* (
   session: Helpers.Session,
   impl: WsDef.ImplLike,
   budget: Utils.Budget,

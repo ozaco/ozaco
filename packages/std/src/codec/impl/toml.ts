@@ -32,7 +32,7 @@ export const TomlCodec = Codec.implement({
     const name = options.name ?? 'std/toml-codec'
     const priority = options.priority ?? 500
 
-    const context: CodecDef.Context = { name, priority }
+    const context: CodecDef.Context = { name, priority, ext: options.ext ?? 'toml' }
 
     yield* Codec.actions.register(getSelf(), context)
     yield* ensure(function* () {

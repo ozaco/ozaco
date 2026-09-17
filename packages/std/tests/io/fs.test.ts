@@ -67,15 +67,15 @@ describe('files', () => {
 
         const file = join(dir, 'log.txt')
         yield* IO.actions.write(file, 'one')
-        yield* IO.actions.write(file, '-two', { flags: IO_FLAGS.APPEND })
+        yield* IO.actions.write(file, '-two', { flags: IO_FLAGS.append })
         yield* IO.actions.append(file, encoder.encode('-three'))
 
         const clash = yield* attempt(() =>
-          IO.actions.write(file, 'x', { flags: IO_FLAGS.EXCLUSIVE }),
+          IO.actions.write(file, 'x', { flags: IO_FLAGS.exclusive }),
         )
 
         const fresh = join(dir, 'fresh.txt')
-        yield* IO.actions.write(fresh, 'new', { flags: IO_FLAGS.EXCLUSIVE })
+        yield* IO.actions.write(fresh, 'new', { flags: IO_FLAGS.exclusive })
 
         return {
           text: yield* IO.actions.readText(file),
@@ -110,10 +110,10 @@ describe('files', () => {
         yield* IO.actions.write(blocker, 'keep')
 
         const renameClash = yield* attempt(() =>
-          IO.actions.rename(renamed, blocker, { flags: IO_FLAGS.EXCLUSIVE }),
+          IO.actions.rename(renamed, blocker, { flags: IO_FLAGS.exclusive }),
         )
         const copyClash = yield* attempt(() =>
-          IO.actions.copy(src, blocker, { flags: IO_FLAGS.EXCLUSIVE }),
+          IO.actions.copy(src, blocker, { flags: IO_FLAGS.exclusive }),
         )
 
         return {
@@ -258,9 +258,9 @@ describe('walk', () => {
         yield* fixture(dir)
 
         const all = yield* IO.actions.walk(dir)
-        const filesOnly = yield* IO.actions.walk(dir, { flags: IO_FLAGS.FILES })
+        const filesOnly = yield* IO.actions.walk(dir, { flags: IO_FLAGS.files })
         const shallow = yield* IO.actions.walk(dir, {
-          flags: IO_FLAGS.FILES | IO_FLAGS.DIRS,
+          flags: IO_FLAGS.files | IO_FLAGS.dirs,
           maxDepth: 0,
         })
 
@@ -288,11 +288,11 @@ describe('walk', () => {
         yield* fixture(dir)
 
         const matched = yield* IO.actions.walk(dir, {
-          flags: IO_FLAGS.FILES,
+          flags: IO_FLAGS.files,
           match: [/\.txt$/u],
         })
         const pruned = yield* IO.actions.walk(dir, {
-          flags: IO_FLAGS.FILES,
+          flags: IO_FLAGS.files,
           skip: [/deep/u],
         })
 

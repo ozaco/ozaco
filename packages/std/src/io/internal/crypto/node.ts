@@ -1,4 +1,4 @@
-import { mapError, operation, until } from 'std:effect'
+import { mapError, until } from 'std:effect'
 import type { Result } from 'std:result'
 import { fail } from 'std:result'
 
@@ -48,7 +48,7 @@ const SCRYPT_P = 1
 // scrypt needs ~128 * N * r bytes (=64 MB here); give maxmem headroom so it is not rejected.
 const SCRYPT_MAXMEM = 128 * 1024 * 1024
 
-const deriveKey = operation(function* (secret: string, salt: Uint8Array) {
+function* deriveKey(secret: string, salt: Uint8Array) {
   return yield* until(
     new Promise<Buffer>((resolve, reject) => {
       scrypt(
@@ -66,9 +66,9 @@ const deriveKey = operation(function* (secret: string, salt: Uint8Array) {
       )
     }),
   )
-})
+}
 
-export const encryptSecret = operation(function* (data: Uint8Array | string, secret: string) {
+export function* encryptSecret(data: Uint8Array | string, secret: string) {
   const bytes = typeof data === 'string' ? encoder.encode(data) : data
   const salt = randomBytes(SALT_BYTES)
   const iv = randomBytes(IV_BYTES)
@@ -87,9 +87,9 @@ export const encryptSecret = operation(function* (data: Uint8Array | string, sec
   out.set(tag, 1 + SALT_BYTES + IV_BYTES)
   out.set(ct, HEADER_BYTES)
   return out
-})
+}
 
-export const decryptSecret = operation(function* (data: Uint8Array, secret: string) {
+export function* decryptSecret(data: Uint8Array, secret: string) {
   if (data.length < HEADER_BYTES) {
     return yield* fail(IOErrors.DecryptFailed, 'ciphertext is too short')
   }
@@ -126,7 +126,7 @@ export const decryptSecret = operation(function* (data: Uint8Array, secret: stri
     },
   )
   return new Uint8Array(plain)
-})
+}
 
 /*
  * Digital signatures via Ed25519 (modern, fast, small 64-byte signatures, no parameter footguns).
@@ -135,7 +135,7 @@ export const decryptSecret = operation(function* (data: Uint8Array, secret: stri
  * Keys are portable DER bytes: public = SPKI, private = PKCS8 (round-trip via generateKeyPair).
  */
 
-export const generateSignKeyPair = operation(function* () {
+export function* generateSignKeyPair() {
   return yield* until(
     new Promise<IODef.KeyPair>((resolve, reject) => {
       genKeyPair(
@@ -157,9 +157,9 @@ export const generateSignKeyPair = operation(function* () {
       )
     }),
   )
-})
+}
 
-export const signData = operation(function* (data: Uint8Array | string, privateKey: Uint8Array) {
+export function* signData(data: Uint8Array | string, privateKey: Uint8Array) {
   const bytes = typeof data === 'string' ? encoder.encode(data) : data
   return yield* mapError(
     // createPrivateKey / sign are synchronous and throw on a malformed key; the throw rejects the
@@ -177,9 +177,9 @@ export const signData = operation(function* (data: Uint8Array | string, privateK
         ...failure.causes,
       ) as Result.Failure<unknown>,
   )
-})
+}
 
-export const verifyData = operation(function* (
+export function* verifyData(
   data: Uint8Array | string,
   signature: Uint8Array,
   publicKey: Uint8Array,
@@ -200,4 +200,4 @@ export const verifyData = operation(function* (
         ...failure.causes,
       ) as Result.Failure<unknown>,
   )
-})
+}

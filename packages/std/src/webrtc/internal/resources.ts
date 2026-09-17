@@ -1,5 +1,5 @@
 import type { Operation } from 'std:effect'
-import { attempt, lift, operation, race, resource, sleep, until } from 'std:effect'
+import { attempt, guard, lift, race, resource, sleep, until } from 'std:effect'
 import { fail, isSuccess } from 'std:result'
 
 import { RtcCauses, RtcErrors } from '../errors'
@@ -10,17 +10,15 @@ import { initOf, wrapChannel } from './channel'
 import { CHANNEL_DEFAULTS } from './const'
 import { messageOf } from './generation'
 
+/** The losing arm of `awaitOpen`: fails `rtc.timeout` once `timeoutMs` passed. */
+function* openDeadline(label: string, timeoutMs: number): Operation<void> {
+  yield* sleep(timeoutMs)
+  yield* fail(RtcErrors.Timeout, `channel "${label}" did not open within ${timeoutMs}ms`)
+}
+
 /** `entry.opened` bounded by `openTimeoutMs` (`0` disables the deadline). */
 const awaitOpen = (entry: Helpers.ChannelEntry, label: string, timeoutMs: number) =>
-  timeoutMs > 0
-    ? race([
-        entry.opened,
-        operation(function* () {
-          yield* sleep(timeoutMs)
-          yield* fail(RtcErrors.Timeout, `channel "${label}" did not open within ${timeoutMs}ms`)
-        })(),
-      ])
-    : entry.opened
+  timeoutMs > 0 ? race([entry.opened, openDeadline(label, timeoutMs)]) : entry.opened
 
 /**
  * A local data channel is a RESOURCE in the CALLER's scope: it closes when that scope does, and
@@ -152,7 +150,7 @@ export const openTrack = (
         return record.track
       },
 
-      replace: operation(function* (next: RtcDef.TrackLike | null) {
+      replace: guard(function* (next: RtcDef.TrackLike | null) {
         if (record.removed || session.ended) {
           return yield* fail(RtcErrors.Track, 'sender is gone')
         }

@@ -1,12 +1,11 @@
 import type { Future } from 'std:effect'
-import { operation } from 'std:effect'
 import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import { IOErrors } from '../errors'
 
 const makeReadEnv = (getSource: () => Record<string, string | undefined>) =>
-  operation(function* (
+  function* (
     mapper: (data: Record<string, string | undefined>) => Record<string, unknown>,
     optional?: readonly string[],
   ) {
@@ -20,7 +19,7 @@ const makeReadEnv = (getSource: () => Record<string, string | undefined>) =>
     }
 
     return result
-  })
+  }
 
 const readEnvImpl = makeReadEnv(() => process.env as Record<string, string | undefined>)
 
@@ -41,3 +40,15 @@ export const readWebEnv = <R extends Record<string, unknown>, K extends keyof R 
   optional?: readonly K[],
 ): Future<{ [P in keyof R]: P extends K ? R[P] : NonNullable<R[P]> }> =>
   readWebEnvImpl(mapper, optional as readonly string[] | undefined) as AnyType
+
+/** A browser's working directory: the page's directory from `location.pathname` (up to its last
+ * `/`), `/` when there is no location. `globals` is injectable for tests. */
+export const readWebCwd = (globals: typeof globalThis = globalThis): string => {
+  const pathname = (globals as { location?: { pathname?: string } }).location?.pathname
+
+  if (pathname) {
+    return pathname.slice(0, pathname.lastIndexOf('/') + 1) || '/'
+  }
+
+  return '/'
+}

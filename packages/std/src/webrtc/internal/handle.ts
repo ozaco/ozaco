@@ -1,5 +1,5 @@
 import type { Flow, Operation, Queue } from 'std:effect'
-import { attempt, lift, operation } from 'std:effect'
+import { attempt, guard, lift } from 'std:effect'
 import { fail } from 'std:result'
 
 import { RtcCauses, RtcErrors } from '../errors'
@@ -59,7 +59,7 @@ export const createHandle = (session: Helpers.Session): RtcDef.Peer => {
     channel: (label, channelOptions) => openChannel(session, label, channelOptions),
     addTrack: (track, ...streams) => openTrack(session, track, streams),
 
-    stats: operation(function* () {
+    stats: guard(function* () {
       const generation = session.generation
       if (!generation?.alive) {
         return yield* fail(RtcErrors.Stats, 'the peer has no live connection to read stats from')
@@ -76,7 +76,7 @@ export const createHandle = (session: Helpers.Session): RtcDef.Peer => {
       }
     }) as () => Operation<void>,
 
-    close: operation(function* () {
+    close: guard(function* () {
       session.closedByClient = true
 
       if (!session.ended) {

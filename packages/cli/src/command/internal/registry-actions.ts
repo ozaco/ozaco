@@ -1,6 +1,6 @@
 import { CliErrors, Terminal } from 'cli:core'
 import { usePalette } from 'cli:palette'
-import { operation, useContext } from 'std:effect'
+import { useContext } from 'std:effect'
 import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 
@@ -18,7 +18,7 @@ import { runCommand } from './run'
 const hasFlag = (argv: string[], flags: string[]): boolean =>
   argv.some(token => flags.includes(token))
 
-export const register = operation(function* (command: RegistryDef.Command) {
+export function* register(command: RegistryDef.Command) {
   const spec = command as AnyType as CommandDef.Spec
   const node = buildNode(spec, spec.name)
   // Build + store the node only — do NOT run the command's `setup` here. Setup runs LAZILY when
@@ -30,14 +30,14 @@ export const register = operation(function* (command: RegistryDef.Command) {
   // setup.
   const ctx = yield* useContext(Registry)
   ctx.commands.set(node.name, node as AnyType as RegistryDef.Command)
-})
+}
 
-export const get = operation(function* (name: string) {
+export function* get(name: string) {
   const ctx = yield* useContext(Registry)
   return ctx.commands.get(name)
-})
+}
 
-export const run = operation(function* (argv?: string[]) {
+export function* run(argv?: string[]) {
   const ctx = yield* useContext(Registry)
   const palette = yield* usePalette()
   const args = (argv ?? processArgv()).slice()
@@ -61,4 +61,4 @@ export const run = operation(function* (argv?: string[]) {
   }
 
   yield* Terminal.actions.write(`${renderProgramHelp(ctx, palette)}\n`)
-})
+}

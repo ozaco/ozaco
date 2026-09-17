@@ -1,5 +1,3 @@
-import { operation } from 'std:effect'
-
 import type { Helpers } from '../../types/helpers'
 import type { PromptDef, PromptSpec } from '../../types/prompt'
 import { runPrompt } from '../../utils'
@@ -7,7 +5,7 @@ import { cancelledLine, inlineFrame, submittedLine } from '../chrome'
 import { createInput, editLine, renderInput } from '../edit'
 import { isEnter } from '../keys'
 
-export const password = operation(function* (options: PromptDef.PasswordOptions) {
+export function* password(options: PromptDef.PasswordOptions) {
   const mask = options.mask ?? '•'
   const echo = (value: string): string => (mask === '' ? '' : mask.repeat(value.length))
 
@@ -36,4 +34,4 @@ export const password = operation(function* (options: PromptDef.PasswordOptions)
   }
 
   return yield* runPrompt(spec)
-})
+}

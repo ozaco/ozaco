@@ -9,8 +9,10 @@ import type { Operation } from '../types/operation'
  * a `Success` yields its value, a `Failure` is raised — so a body may `return yield* attempt(...)`
  * and let the caller see the outcome the std way. A thrown error is folded into a `Failure`
  * carrying `causes`.
+ *
+ * YOU DONT NEED THİS MOST OF THE TIME, ONLY USE IF CAUSES PRESENT AS PARAMETERS
  */
-export function operation<Args extends AnyType[], T>(
+export function guard<Args extends AnyType[], T>(
   fn: (...args: Args) => Generator<Helpers.Step, T, unknown>,
   ...causes: string[]
 ): (...args: Args) => Operation<T> {

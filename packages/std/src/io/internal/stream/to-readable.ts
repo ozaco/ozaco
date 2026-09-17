@@ -1,5 +1,5 @@
 import type { Operation, Flow } from 'std:effect'
-import { ensure, operation, race, until, withResolvers } from 'std:effect'
+import { ensure, race, until, withResolvers } from 'std:effect'
 import { asFailure, isFailure } from 'std:result'
 
 import { IOCauses } from '../../errors'
@@ -18,7 +18,7 @@ import { IOCauses } from '../../errors'
  * `controller.error()` so a truncated source surfaces as a stream error rather than a clean end; the
  * consumer's `cancel()` ends the pump immediately, even while it is parked waiting for the next value.
  */
-export const toReadable = operation(function* (source: Flow<Uint8Array, unknown>) {
+export function* toReadable(source: Flow<Uint8Array, unknown>) {
   let controller: ReadableStreamDefaultController<Uint8Array>
   let cancelled = false
   let settled = false
@@ -115,4 +115,4 @@ export const toReadable = operation(function* (source: Flow<Uint8Array, unknown>
   }
 
   return { readable, pump }
-})
+}

@@ -1,14 +1,12 @@
-import { operation } from 'std:effect'
-
 import type { Helpers } from '../../types/helpers'
 import type { PromptDef, PromptSpec } from '../../types/prompt'
 import { runPrompt } from '../../utils'
 import { labelOf, resolveIndex } from '../choice'
 import { activeLine, cancelledLine, hint, label, submittedLine } from '../chrome'
-import { isEnter, isDown, isUp } from '../keys'
+import { isDown, isEnter, isUp } from '../keys'
 import { paginate, step } from '../list'
 
-export const select = operation(function* <T>(options: PromptDef.SelectOptions<T>) {
+export function* select<T>(options: PromptDef.SelectOptions<T>) {
   const choices = options.choices
   const disabled = (index: number): boolean => Boolean(choices[index]?.disabled)
   const initial = resolveIndex(options.initial, choices)
@@ -59,4 +57,4 @@ export const select = operation(function* <T>(options: PromptDef.SelectOptions<T
   }
 
   return yield* runPrompt(spec)
-})
+}

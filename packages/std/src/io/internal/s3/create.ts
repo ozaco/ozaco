@@ -1,5 +1,5 @@
 import type { Operation } from 'std:effect'
-import { operation, until } from 'std:effect'
+import { until } from 'std:effect'
 import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 
@@ -64,7 +64,7 @@ const writeBody = async (file: Helpers.S3NativeFile, data: IODef.S3Body): Promis
  * body over as it arrives) and writes stream (a `ReadableStream` body goes up multipart).
  */
 export const createS3 = (native: Helpers.S3Native | null): IODef.S3Client => {
-  const useClient = operation(function* () {
+  const useClient = function* () {
     if (!native) {
       return yield* fail(
         IOErrors.Unsupported,
@@ -73,11 +73,11 @@ export const createS3 = (native: Helpers.S3Native | null): IODef.S3Client => {
     }
 
     return native
-  })
+  }
 
-  const fileOf = operation(function* (key: string) {
+  const fileOf = function* (key: string) {
     return (yield* useClient()).file(key)
-  })
+  }
 
   const file = (key: string): IODef.S3File => ({
     key,

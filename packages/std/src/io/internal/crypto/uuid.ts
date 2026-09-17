@@ -1,5 +1,3 @@
-import { operation } from 'std:effect'
-
 const HEX = '0123456789abcdef'
 
 /**
@@ -7,7 +5,7 @@ const HEX = '0123456789abcdef'
  * Uses Web Crypto `getRandomValues` (present in node/bun/web alike) so the impl is shared across every
  * IO platform — and, unlike `crypto.randomUUID`, works in non-secure browser contexts too.
  */
-export const uuidId = operation(function* () {
+export function* uuidId() {
   const bytes = new Uint8Array(16)
   crypto.getRandomValues(bytes)
   bytes[6] = (bytes[6]! & 0x0f) | 0x40 // version 4
@@ -22,4 +20,4 @@ export const uuidId = operation(function* () {
     out += HEX[byte >> 4]! + HEX[byte & 0x0f]!
   }
   return out
-})
+}

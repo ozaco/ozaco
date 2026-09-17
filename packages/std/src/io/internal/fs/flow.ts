@@ -1,5 +1,5 @@
 import type { Flow } from 'std:effect'
-import { action, each, operation } from 'std:effect'
+import { action, each, guard } from 'std:effect'
 import { IO_FLAGS } from 'std:io'
 import { appendCauses, asFailure } from 'std:result'
 import { hasFlag } from 'std:shared'
@@ -51,17 +51,17 @@ const waitForDrain = (writable: IODef.WritableLike): ReturnType<typeof action<vo
 export const readFileFlow = (path: string): Flow<Uint8Array, IODef.FlowClose> =>
   fromReadable(createReadStream(path))
 
-export const writeFileFlow = operation(function* (
+export const writeFileFlow = guard(function* (
   path: string,
   source: Flow<Uint8Array, unknown>,
   flags?: number,
 ) {
-  const f = flags ?? IO_FLAGS.NONE
-  const fsFlags = hasFlag(f, IO_FLAGS.APPEND)
-    ? hasFlag(f, IO_FLAGS.EXCLUSIVE)
+  const f = flags ?? IO_FLAGS.none
+  const fsFlags = hasFlag(f, IO_FLAGS.append)
+    ? hasFlag(f, IO_FLAGS.exclusive)
       ? 'ax'
       : 'a'
-    : hasFlag(f, IO_FLAGS.EXCLUSIVE)
+    : hasFlag(f, IO_FLAGS.exclusive)
       ? 'wx'
       : 'w'
   const writable = createWriteStream(path, { flags: fsFlags }) as unknown as IODef.WritableLike

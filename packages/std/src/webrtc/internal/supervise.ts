@@ -1,5 +1,5 @@
 import type { Utils } from 'std:effect'
-import { budgetDelay, operation, sleep } from 'std:effect'
+import { budgetDelay, guard, sleep } from 'std:effect'
 import type { Result } from 'std:result'
 import { fail } from 'std:result'
 
@@ -18,7 +18,7 @@ const isConnected = (generation: Helpers.Generation | undefined) =>
  * recovery; exhaustion ends the GENERATION (redialed under `reconnect`, terminal
  * `rtc/ice-exhausted` otherwise).
  */
-export const superviseIce = operation(function* (session: Helpers.Session, budget: Utils.Budget) {
+export const superviseIce = guard(function* (session: Helpers.Session, budget: Utils.Budget) {
   const { counters, observe } = session
 
   yield* session.eachGeneration(function* (generation) {
@@ -79,7 +79,7 @@ export const superviseIce = operation(function* (session: Helpers.Session, budge
  * (capped); success = the new generation reaches `connected` within the next backoff step. The
  * budget RESETS after every recovery; exhaustion settles `rtc/reconnect-exhausted`.
  */
-export const superviseReconnect = operation(function* (
+export const superviseReconnect = guard(function* (
   session: Helpers.Session,
   impl: RtcDef.ImplLike,
   budget: Utils.Budget,

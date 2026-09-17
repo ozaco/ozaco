@@ -1,4 +1,4 @@
-import { attempt, operation, run, scoped, sleep, withResolvers } from 'std:effect'
+import { attempt, run, scoped, sleep, withResolvers } from 'std:effect'
 import type { IODef } from 'std:io'
 import { IO } from 'std:io'
 import { isFailure, unwrap } from 'std:result'
@@ -15,7 +15,7 @@ describe('tcp', () => {
     // Resolved when the handler unwinds naturally: a handler still parked at scope teardown is
     // halted, and its scope.run promise rejection is unhandled (see the todo below).
     const handlerFinished = withResolvers<void>()
-    const echo = operation(function* (socket: IODef.TcpSocket) {
+    const echo = function* (socket: IODef.TcpSocket) {
       try {
         const inbound = yield* socket.data
         while (true) {
@@ -28,7 +28,7 @@ describe('tcp', () => {
       } finally {
         handlerFinished.resolve()
       }
-    })
+    }
 
     const outcome = await run(() =>
       scoped(function* () {
@@ -87,14 +87,14 @@ describe('tcp', () => {
   })
 
   it('a server-side close ends the client data flow with a clean close value', async () => {
-    const replyAndClose = operation(function* (socket: IODef.TcpSocket) {
+    const replyAndClose = function* (socket: IODef.TcpSocket) {
       const inbound = yield* socket.data
       const first = yield* inbound.next()
       if (!first.done) {
         yield* socket.write('bye')
       }
       yield* socket.close()
-    })
+    }
 
     const outcome = await run(function* () {
       yield* BunIO.use()
@@ -143,7 +143,7 @@ describe('tcp', () => {
   // rejection. Verified with a `process.on('unhandledRejection')` probe when the guard was removed.
   it('closing a server scope with a still-connected client leaks no unhandled rejection', async () => {
     const accepted = withResolvers<void>()
-    const parked = operation(function* (socket: IODef.TcpSocket) {
+    const parked = function* (socket: IODef.TcpSocket) {
       accepted.resolve()
       const inbound = yield* socket.data
       while (true) {
@@ -152,7 +152,7 @@ describe('tcp', () => {
           return
         }
       }
-    })
+    }
 
     const outcome = await run(() =>
       scoped(function* () {

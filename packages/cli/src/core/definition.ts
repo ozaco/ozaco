@@ -1,5 +1,5 @@
 import type { Operation } from 'std:effect'
-import { fork, operation, resource } from 'std:effect'
+import { fork, resource } from 'std:effect'
 import { defineProtocol } from 'std:plugin'
 import { fail } from 'std:result'
 
@@ -37,12 +37,12 @@ const renderer = function* (
         yield* Terminal.actions.write(ansi.hideCursor)
       }
 
-      const draw = operation(function* (frame: string) {
+      const draw = function* (frame: string) {
         const codes = eraseCodes(region.rows)
         region.frame = frame
         region.rows = rowsOf(frame, region.columns)
         yield* Terminal.actions.write(codes + frame)
-      })
+      }
 
       const lease: TerminalDef.Renderer = {
         *render(frame: string) {

@@ -23,7 +23,7 @@ export const JsonCodec = Codec.implement({
     const name = options.name ?? 'std/json-codec'
     const priority = options.priority ?? 999
 
-    const context: CodecDef.Context = { name, priority }
+    const context: CodecDef.Context = { name, priority, ext: options.ext ?? 'json' }
 
     yield* Codec.actions.register(getSelf(), context)
     yield* ensure(function* () {

@@ -10,6 +10,8 @@ export namespace FileDef {
     level?: LogLevel | undefined
     msgKey?: string | undefined
     errorKey?: string | undefined
+    /** Create the missing parent directories at setup (default `true`); `false` fails setup with
+     * `std:logger.configuration` when the directory is not there. */
     ensureDir?: boolean | undefined
     /**
      * Number of formatted records to hold in memory before one appending write drains them all.

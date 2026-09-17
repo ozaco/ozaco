@@ -1,5 +1,5 @@
 import type { Context, Operation } from 'std:effect'
-import { createApi, createContext, operation } from 'std:effect'
+import { createApi, createContext, guard } from 'std:effect'
 import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 import { flatten } from 'std:shared'
@@ -37,7 +37,7 @@ export const createProtocolRuntime = (options: Helpers.RuntimeOptions) => {
     const flat = flatten(options.handlers)
     for (const key of Object.keys(flat)) {
       const raw = flat[key]!
-      handlers[key] = typeof raw === 'function' ? operation(raw, `${key}:handler`, tag) : raw
+      handlers[key] = typeof raw === 'function' ? guard(raw, `${key}:handler`, tag) : raw
     }
   }
 
@@ -45,13 +45,13 @@ export const createProtocolRuntime = (options: Helpers.RuntimeOptions) => {
     const flat = flatten(options.defaults)
     for (const key of Object.keys(flat)) {
       const raw = flat[key]!
-      defaults[key] = typeof raw === 'function' ? operation(raw, `${key}:default`, tag) : raw
+      defaults[key] = typeof raw === 'function' ? guard(raw, `${key}:default`, tag) : raw
     }
   }
 
   const exec = options.exec ?? defaultExec
 
-  const dispatch = operation(
+  const dispatch = guard(
     function* (key: string, args: AnyType[]) {
       const target = yield* targetCtx.get()
       const installs = (yield* installsCtx.get()) ?? []
@@ -158,7 +158,7 @@ export const buildPlugin = ({
     for (const key of Object.keys(flat)) {
       const raw = flat[key]!
       if (typeof raw === 'function') {
-        actions[key] = operation(raw, key, pluginTag)
+        actions[key] = guard(raw, key, pluginTag)
         meta.set(key, Object.fromEntries(Object.entries(raw)))
       } else {
         // value member: dispatched as-is, `yield* Plugin.key()` resolves to the value
@@ -167,7 +167,7 @@ export const buildPlugin = ({
     }
   }
 
-  const setup = operation(
+  const setup = guard(
     function* (...args: AnyType[]) {
       const installs = (yield* runtime.installsCtx.get()) ?? []
 

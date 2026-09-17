@@ -16,6 +16,7 @@ const fakeCodec = (label: string) =>
     version: '1.0.0',
     *setup(options: CodecDef.Options = {}) {
       const context: CodecDef.Context = {
+        ext: options.ext ?? 'fake',
         name: options.name ?? label,
         priority: options.priority ?? 500,
       }

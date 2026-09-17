@@ -1,5 +1,5 @@
 import { Codec } from 'std:codec'
-import { attempt, operation, sleep } from 'std:effect'
+import { attempt, guard, sleep } from 'std:effect'
 import { isSuccess } from 'std:result'
 import type { AnyType } from 'std:shared'
 
@@ -14,7 +14,7 @@ import { KEEPALIVE_DEFAULTS, OPEN } from './const'
  * every `intervalMs` while OPEN. Stops silently if the payload cannot be encoded (e.g. a
  * structured payload with no codec in scope) — it must never raise past the resource.
  */
-export const keepAlive = operation(function* (
+export const keepAlive = guard(function* (
   session: Helpers.Session,
   keepalive: WsDef.KeepaliveOptions,
 ) {

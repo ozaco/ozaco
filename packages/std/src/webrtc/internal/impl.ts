@@ -1,4 +1,4 @@
-import { attempt, operation, until } from 'std:effect'
+import { attempt, guard, until } from 'std:effect'
 import { isSuccess } from 'std:result'
 import type { AnyType } from 'std:shared'
 
@@ -13,7 +13,7 @@ const onNodeOrBun = () =>
 
 /** Import the optional `node-datachannel` polyfill once. The specifier stays a variable so
  * bundlers and tsc treat the optional dependency as fully external. */
-const loadPolyfill = operation(function* () {
+const loadPolyfill = guard(function* () {
   const specifier = 'node-datachannel/polyfill'
   const imported = yield* attempt(() => until(import(specifier)))
   const module_ = isSuccess(imported) ? (imported.value as AnyType) : undefined
@@ -29,7 +29,7 @@ const loadPolyfill = operation(function* () {
  * imported (once) and used. Returns `undefined` when nothing is available — `connect` turns that
  * into `RtcErrors.Unsupported`.
  */
-export const resolveImpl = operation(function* () {
+export const resolveImpl = guard(function* () {
   const global = (globalThis as AnyType).RTCPeerConnection as RtcDef.ImplLike | undefined
   if (global) {
     return global

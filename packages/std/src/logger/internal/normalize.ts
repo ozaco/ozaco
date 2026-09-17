@@ -1,4 +1,5 @@
 import { isFailure, isResult } from 'std:result'
+import { isObject } from 'std:shared'
 
 import type { Helpers } from '../types/helpers'
 import type { LoggerDef } from '../types/logger'
@@ -30,9 +31,14 @@ export const normalizePayload = (args: readonly LoggerDef.Payload[]): Helpers.No
       messages.push(arg)
       continue
     }
-    if (typeof arg === 'object') {
-      const record = arg as Record<string, unknown>
-      data = data ? { ...data, ...record } : { ...record }
+    if (Array.isArray(arg)) {
+      // an array is a VALUE, not fields: it joins the message as JSON text rather than spreading
+      // its indexes into `data` (plain data only — no codec needed for this)
+      messages.push(JSON.stringify(arg))
+      continue
+    }
+    if (isObject(arg)) {
+      data = data ? { ...data, ...arg } : { ...arg }
     }
   }
 

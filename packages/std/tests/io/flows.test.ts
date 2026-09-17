@@ -105,7 +105,7 @@ describe('readFlow / writeFlow', () => {
         yield* IO.actions.write(file, 'already')
 
         const denied = yield* attempt(() =>
-          IO.actions.writeFlow(file, flowOf('overwrite'), { flags: IO_FLAGS.EXCLUSIVE }),
+          IO.actions.writeFlow(file, flowOf('overwrite'), { flags: IO_FLAGS.exclusive }),
         )
 
         return {

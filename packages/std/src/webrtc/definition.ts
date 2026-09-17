@@ -1,5 +1,5 @@
 // oxlint-disable import/exports-last
-import { operation } from 'std:effect'
+import { guard } from 'std:effect'
 import { defineProtocol } from 'std:plugin'
 import { fail } from 'std:result'
 
@@ -43,7 +43,7 @@ const RtcClientImpl = Rtc.implement<RtcDef.Context, [defaults?: RtcDef.Options]>
 })
 
 export const RtcClient = RtcClientImpl.build({
-  connect: operation(function* (signal: RtcDef.SignalLike, options?: RtcDef.Options) {
+  connect: guard(function* (signal: RtcDef.SignalLike, options?: RtcDef.Options) {
     const { defaults } = yield* RtcClientImpl.context.expect()
 
     const impl = yield* resolveImpl()

@@ -1,4 +1,4 @@
-import { hasCodec } from 'std:codec'
+import { Codec } from 'std:codec'
 import { attempt, fork, sleep, useContext } from 'std:effect'
 import { IO } from 'std:io'
 import { fail, isFailure } from 'std:result'
@@ -47,7 +47,7 @@ const DbImpl = Db.implement<Database.Context, [options: Database.Options]>({
   description: 'The reactive database engine over the installed adapter',
 
   *setup(options) {
-    if (!(yield* hasCodec())) {
+    if (!(yield* Codec.actions.hasCodec())) {
       yield* JsonCodec.use()
     }
 

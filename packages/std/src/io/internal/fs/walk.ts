@@ -45,7 +45,7 @@ export function* walkRecursive(
 
     let s: Stats
     try {
-      s = hasFlag(flags, IO_FLAGS.FOLLOW_SYMLINKS)
+      s = hasFlag(flags, IO_FLAGS.followSymlinks)
         ? yield* until(fs.stat(fullPath))
         : yield* until(fs.lstat(fullPath))
     } catch {
@@ -66,11 +66,11 @@ export function* walkRecursive(
 
     const matchesPattern = !options.match?.length || options.match.some(re => re.test(fullPath))
 
-    if (entry.isFile && hasFlag(flags, IO_FLAGS.FILES) && matchesPattern) {
+    if (entry.isFile && hasFlag(flags, IO_FLAGS.files) && matchesPattern) {
       results.push(entry)
     }
     if (entry.isDirectory) {
-      if (hasFlag(flags, IO_FLAGS.DIRS) && matchesPattern) {
+      if (hasFlag(flags, IO_FLAGS.dirs) && matchesPattern) {
         results.push(entry)
       }
       yield* walkRecursive(fullPath, options, depth + 1, results)

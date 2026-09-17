@@ -1,5 +1,5 @@
 import type { Operation } from 'std:effect'
-import { attempt, createSignal, debounce, each, fork, operation } from 'std:effect'
+import { attempt, createSignal, debounce, each, fork } from 'std:effect'
 import { IO } from 'std:io'
 import { isSuccess } from 'std:result'
 import type { AnyType } from 'std:shared'
@@ -22,15 +22,11 @@ import {
 } from './utils'
 
 /** Serialize `data` with the context codec and write it to `target`, creating parent dirs. */
-const writeData = operation(function* (
-  ctx: ConfigDef.Context,
-  target: string,
-  data: ConfigDef.Object,
-) {
+function* writeData(ctx: ConfigDef.Context, target: string, data: ConfigDef.Object) {
   const text = yield* ctx.codec.actions.stringify(data)
   yield* IO.actions.ensureDir(yield* IO.actions.dirname(target))
   yield* IO.actions.write(target, text)
-})
+}
 
 /**
  * Build a config instance whose actions run against the context yielded by `getCtx`. The default
@@ -51,9 +47,15 @@ export const makeInstance = (getCtx: () => Operation<ConfigDef.Context>): Config
   *save(path?: string) {
     const ctx = yield* getCtx()
 
-    // Explicit target: export the base working file's content (with its `extends`) to `path`.
+    // Explicit target: export the base working file's content (with its `extends`) to `path`. An
+    // export leaves the sources dirty — only writing the working file to ITS OWN path persists it.
     if (path !== undefined) {
       yield* writeData(ctx, path, payloadOf(ctx.working))
+
+      if (path === ctx.working.path) {
+        ctx.dirty.delete(ctx.working.path)
+      }
+
       return
     }
 
@@ -77,6 +79,9 @@ export const makeInstance = (getCtx: () => Operation<ConfigDef.Context>): Config
     const target = findOrigin(sources(ctx), key) ?? ctx.working
     target.data = setPath(target.data, key, value)
     ctx.dirty.add(target.path)
+    // the set is what `get` answers from here on: an env overlay value for the key steps aside
+    // for this session (`load` / `refresh` rebuild the overlay and restore its precedence)
+    ctx.env = unsetPath(ctx.env, key)
     ctx.merged = merge(ctx)
   },
 
@@ -159,12 +164,12 @@ export const makeInstance = (getCtx: () => Operation<ConfigDef.Context>): Config
     let last = yield* JsonCodec.actions.stringify(ctx.merged)
 
     const feed = (stream: ReturnType<typeof IO.actions.watch>) =>
-      operation(function* () {
+      function* () {
         for (const _ of yield* each(stream)) {
           bump.send()
           yield* each.next()
         }
-      })
+      }
 
     return yield* fork(function* () {
       for (const dir of recursiveDirs) {
@@ -192,7 +197,7 @@ export const makeInstance = (getCtx: () => Operation<ConfigDef.Context>): Config
 })
 
 /** The `open` action: a brand-new context + an instance bound to it (independent of the scope). */
-export const openInstance = operation(function* (options?: ConfigDef.Options) {
+export function* openInstance(options?: ConfigDef.Options) {
   const ctx = yield* buildContext(options)
   return makeInstance(constCtx(ctx))
-})
+}

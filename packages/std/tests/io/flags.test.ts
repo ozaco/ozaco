@@ -10,8 +10,8 @@ import { join } from 'node:path'
 
 import { BunIO } from 'std:io/impl/bun'
 
-// `IO_FLAGS` is a bitfield allocated from bit 0 (FOLLOW_SYMLINKS=1, FILES=2, DIRS=4, APPEND=8,
-// EXCLUSIVE=16). These tests pin the numeric layout and that every consumer honors its bit.
+// `IO_FLAGS` is a bitfield allocated from bit 0 (followSymlinks=1, files=2, dirs=4, append=8,
+// exclusive=16). These tests pin the numeric layout and that every consumer honors its bit.
 
 const withTempDir = async (fn: (dir: string) => Promise<void>) => {
   const dir = await mkdtemp(join(tmpdir(), 'ozaco-io-flags-'))
@@ -24,21 +24,21 @@ const withTempDir = async (fn: (dir: string) => Promise<void>) => {
 
 describe('IO_FLAGS layout', () => {
   it('starts at 1 << 0 with the documented values', () => {
-    expect(IO_FLAGS.NONE).toBe(0)
-    expect(IO_FLAGS.FOLLOW_SYMLINKS).toBe(1)
-    expect(IO_FLAGS.FILES).toBe(2)
-    expect(IO_FLAGS.DIRS).toBe(4)
-    expect(IO_FLAGS.APPEND).toBe(8)
-    expect(IO_FLAGS.EXCLUSIVE).toBe(16)
+    expect(IO_FLAGS.none).toBe(0)
+    expect(IO_FLAGS.followSymlinks).toBe(1)
+    expect(IO_FLAGS.files).toBe(2)
+    expect(IO_FLAGS.dirs).toBe(4)
+    expect(IO_FLAGS.append).toBe(8)
+    expect(IO_FLAGS.exclusive).toBe(16)
   })
 
   it('every flag is a distinct single bit and combines without overlap', () => {
     const bits = [
-      IO_FLAGS.FOLLOW_SYMLINKS,
-      IO_FLAGS.FILES,
-      IO_FLAGS.DIRS,
-      IO_FLAGS.APPEND,
-      IO_FLAGS.EXCLUSIVE,
+      IO_FLAGS.followSymlinks,
+      IO_FLAGS.files,
+      IO_FLAGS.dirs,
+      IO_FLAGS.append,
+      IO_FLAGS.exclusive,
     ]
     for (const bit of bits) {
       // a power of two has exactly one bit set
@@ -51,7 +51,7 @@ describe('IO_FLAGS layout', () => {
       expect(hasFlag(all, bit)).toBe(true)
       expect(hasFlag(all & ~bit, bit)).toBe(false)
     }
-    expect(hasFlag(IO_FLAGS.NONE, IO_FLAGS.FILES)).toBe(false)
+    expect(hasFlag(IO_FLAGS.none, IO_FLAGS.files)).toBe(false)
   })
 })
 
@@ -69,10 +69,10 @@ describe('walk honors FILES / DIRS / FOLLOW_SYMLINKS', () => {
         yield* BunIO.use()
         yield* fixture(dir)
 
-        const files = yield* IO.actions.walk(dir, { flags: IO_FLAGS.FILES })
-        const dirs = yield* IO.actions.walk(dir, { flags: IO_FLAGS.DIRS })
-        const both = yield* IO.actions.walk(dir, { flags: IO_FLAGS.FILES | IO_FLAGS.DIRS })
-        const neither = yield* IO.actions.walk(dir, { flags: IO_FLAGS.NONE })
+        const files = yield* IO.actions.walk(dir, { flags: IO_FLAGS.files })
+        const dirs = yield* IO.actions.walk(dir, { flags: IO_FLAGS.dirs })
+        const both = yield* IO.actions.walk(dir, { flags: IO_FLAGS.files | IO_FLAGS.dirs })
+        const neither = yield* IO.actions.walk(dir, { flags: IO_FLAGS.none })
 
         return {
           files: files.map(entry => entry.name).toSorted(),
@@ -104,7 +104,7 @@ describe('walk honors FILES / DIRS / FOLLOW_SYMLINKS', () => {
         yield* fixture(dir)
 
         const followed = yield* IO.actions.walk(dir, {
-          flags: IO_FLAGS.FILES | IO_FLAGS.DIRS | IO_FLAGS.FOLLOW_SYMLINKS,
+          flags: IO_FLAGS.files | IO_FLAGS.dirs | IO_FLAGS.followSymlinks,
         })
         const link = followed.find(entry => entry.name === 'link')
 
@@ -133,24 +133,24 @@ describe('write honors APPEND / EXCLUSIVE', () => {
 
         const file = join(dir, 'log.txt')
         yield* IO.actions.write(file, 'one')
-        yield* IO.actions.write(file, '-two', { flags: IO_FLAGS.APPEND })
-        yield* IO.actions.write(file, '-three', { flags: IO_FLAGS.APPEND })
+        yield* IO.actions.write(file, '-two', { flags: IO_FLAGS.append })
+        yield* IO.actions.write(file, '-three', { flags: IO_FLAGS.append })
         const appended = yield* IO.actions.readText(file)
 
         const refused = yield* attempt(() =>
-          IO.actions.write(file, 'clobber', { flags: IO_FLAGS.EXCLUSIVE }),
+          IO.actions.write(file, 'clobber', { flags: IO_FLAGS.exclusive }),
         )
         const untouched = yield* IO.actions.readText(file)
 
         const fresh = join(dir, 'fresh.txt')
-        yield* IO.actions.write(fresh, 'new', { flags: IO_FLAGS.EXCLUSIVE })
+        yield* IO.actions.write(fresh, 'new', { flags: IO_FLAGS.exclusive })
 
         const appendExclusiveExisting = yield* attempt(() =>
-          IO.actions.write(file, 'x', { flags: IO_FLAGS.APPEND | IO_FLAGS.EXCLUSIVE }),
+          IO.actions.write(file, 'x', { flags: IO_FLAGS.append | IO_FLAGS.exclusive }),
         )
         const appendExclusiveFresh = join(dir, 'fresh-append.txt')
         yield* IO.actions.write(appendExclusiveFresh, 'ax', {
-          flags: IO_FLAGS.APPEND | IO_FLAGS.EXCLUSIVE,
+          flags: IO_FLAGS.append | IO_FLAGS.exclusive,
         })
 
         return {

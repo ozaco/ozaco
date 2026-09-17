@@ -3,7 +3,7 @@ import type { ServerDef, ServiceDef } from 'server:core'
 import { ServerErrors } from 'server:core'
 import { isService } from 'server:internal'
 import type { Operation } from 'std:effect'
-import { attempt, createSignal, debounce, each, fork, operation, until } from 'std:effect'
+import { attempt, createSignal, debounce, each, fork, until } from 'std:effect'
 import { IO } from 'std:io'
 import { Logger } from 'std:logger'
 import { fail, isFailure } from 'std:result'
@@ -268,7 +268,6 @@ export function* say(
     return
   }
 
-  // oxlint-disable-next-line no-console -- a dev plugin with no logger installed still speaks
   console[level](`[hot-reload] ${message}`, ...(data ? [data] : []))
 }
 
@@ -333,7 +332,7 @@ export function* watchRoots(
   const bump = createSignal<string, never>()
 
   const feed = (root: string) =>
-    operation(function* () {
+    function* () {
       for (const event of yield* each(IO.actions.watch(root, { recursive: true }))) {
         const path = event.path ? yield* IO.actions.join(root, event.path) : root
 
@@ -343,7 +342,7 @@ export function* watchRoots(
 
         yield* each.next()
       }
-    })
+    }
 
   state.watching = true
 

@@ -1,15 +1,5 @@
-import type { Queue, Flow } from 'std:effect'
-import {
-  action,
-  attempt,
-  call,
-  createQueue,
-  ensure,
-  mapError,
-  operation,
-  until,
-  useScope,
-} from 'std:effect'
+import type { Flow, Queue } from 'std:effect'
+import { action, attempt, call, createQueue, ensure, mapError, until, useScope } from 'std:effect'
 import type { Result } from 'std:result'
 import { asFailure, fail } from 'std:result'
 
@@ -27,7 +17,7 @@ const queueFlow = <T, TClose>(queue: Queue<T, TClose>): Flow<T, TClose> => ({
   },
 })
 
-const nodeWrite = operation(function* (socket: Socket, chunk: Uint8Array | string) {
+function* nodeWrite(socket: Socket, chunk: Uint8Array | string) {
   yield* mapError(
     until(
       new Promise<void>((resolve, reject) => {
@@ -47,9 +37,9 @@ const nodeWrite = operation(function* (socket: Socket, chunk: Uint8Array | strin
         ...failure.causes,
       ) as Result.Failure<unknown>,
   )
-})
+}
 
-const nodeClose = operation(function* (socket: Socket) {
+function* nodeClose(socket: Socket) {
   yield* attempt(
     until(
       new Promise<void>(resolve => {
@@ -59,7 +49,7 @@ const nodeClose = operation(function* (socket: Socket) {
       }),
     ),
   )
-})
+}
 
 const makeHandle = (socket: Socket): IODef.TcpSocket => {
   // Attach the reader EAGERLY (at accept/connect time) and buffer into a queue, so bytes are captured
@@ -89,10 +79,7 @@ const makeHandle = (socket: Socket): IODef.TcpSocket => {
   }
 }
 
-export const tcpListen = operation(function* (
-  options: IODef.TcpListenOptions,
-  onConnection: IODef.TcpHandler,
-) {
+export function* tcpListen(options: IODef.TcpListenOptions, onConnection: IODef.TcpHandler) {
   const scope = yield* useScope()
 
   const server = createServer(socket => {
@@ -136,7 +123,7 @@ export const tcpListen = operation(function* (
   // Close at most once: `close()` and the scope-teardown `ensure` share this guard (node's
   // server.close() throws ERR_SERVER_NOT_RUNNING on a server that is already closing).
   let closed = false
-  const close = operation(function* () {
+  const close = function* () {
     if (closed) {
       return
     }
@@ -146,14 +133,14 @@ export const tcpListen = operation(function* (
         server.close()
       }),
     )
-  })
+  }
 
   yield* ensure(() => close())
 
   return { port, hostname: options.hostname ?? '0.0.0.0', close }
-})
+}
 
-export const tcpConnect = operation(function* (options: IODef.TcpConnectOptions) {
+export function* tcpConnect(options: IODef.TcpConnectOptions) {
   const socket = connect({ port: options.port, host: options.hostname ?? '127.0.0.1' })
 
   yield* mapError(
@@ -180,9 +167,9 @@ export const tcpConnect = operation(function* (options: IODef.TcpConnectOptions)
   })
 
   return makeHandle(socket)
-})
+}
 
-export const udpBind = operation(function* (options?: IODef.UdpBindOptions) {
+export function* udpBind(options?: IODef.UdpBindOptions) {
   const queue = createQueue<IODef.UdpDatagram, IODef.FlowClose>()
   const socket = createSocket('udp4')
 
@@ -218,7 +205,7 @@ export const udpBind = operation(function* (options?: IODef.UdpBindOptions) {
   // Close at most once: `close()` and the scope-teardown `ensure` share this guard, otherwise the
   // second `socket.close()` throws in node:dgram (closing an already-closed handle).
   let closed = false
-  const close = operation(function* () {
+  const close = function* () {
     if (closed) {
       return
     }
@@ -233,11 +220,11 @@ export const udpBind = operation(function* (options?: IODef.UdpBindOptions) {
       ),
     )
     queue.close(true)
-  })
+  }
 
   yield* ensure(() => close())
 
-  const send = operation(function* (data: Uint8Array | string, port: number, address: string) {
+  const send = function* (data: Uint8Array | string, port: number, address: string) {
     yield* mapError(
       until(
         new Promise<void>((resolve, reject) => {
@@ -257,7 +244,7 @@ export const udpBind = operation(function* (options?: IODef.UdpBindOptions) {
           ...failure.causes,
         ) as Result.Failure<unknown>,
     )
-  })
+  }
 
   return { port: socket.address().port, messages: queueFlow(queue), send, close }
-})
+}

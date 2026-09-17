@@ -1,11 +1,11 @@
-import { operation, useContext } from 'std:effect'
+import { useContext } from 'std:effect'
 
 import { Palette } from '../definition'
 
-export const colorsAction = operation(function* () {
+export function* colorsAction() {
   return (yield* useContext(Palette)).colors
-})
+}
 
-export const symbolsAction = operation(function* () {
+export function* symbolsAction() {
   return (yield* useContext(Palette)).symbols
-})
+}

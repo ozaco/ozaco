@@ -41,7 +41,7 @@ export const YamlCodec = Codec.implement({
     const name = options.name ?? 'std/yaml-codec'
     const priority = options.priority ?? 500
 
-    const context: CodecDef.Context = { name, priority }
+    const context: CodecDef.Context = { name, priority, ext: options.ext ?? 'yaml' }
 
     yield* Codec.actions.register(getSelf(), context)
     yield* ensure(function* () {

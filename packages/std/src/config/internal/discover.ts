@@ -1,4 +1,3 @@
-import { operation } from 'std:effect'
 import { IO } from 'std:io'
 import { hasFlag } from 'std:shared'
 
@@ -13,7 +12,7 @@ import { baseFile, collectSources, dirName, infixFile } from './utils'
  * (later name wins) → base file. Each layer is toggled by its feature. Only files that exist on disk
  * are returned — the (possibly absent) working file is pinned later, never invented here.
  */
-const scanDir = operation(function* (ctx: ConfigDef.Context, dir: string, seen: Set<string>) {
+function* scanDir(ctx: ConfigDef.Context, dir: string, seen: Set<string>) {
   const out: ConfigDef.Source[] = []
 
   if (!(yield* IO.actions.exists(dir))) {
@@ -65,10 +64,10 @@ const scanDir = operation(function* (ctx: ConfigDef.Context, dir: string, seen: 
   }
 
   return out
-})
+}
 
 /** The directories to scan, innermost → outermost: `start`, then its parents up to `home` (`CHAIN`). */
-export const collectDirs = operation(function* (ctx: ConfigDef.Context, start: string) {
+export function* collectDirs(ctx: ConfigDef.Context, start: string) {
   const dirs: string[] = [start]
   if (!hasFlag(ctx.features, Features.CHAIN)) {
     return dirs
@@ -85,7 +84,7 @@ export const collectDirs = operation(function* (ctx: ConfigDef.Context, start: s
   }
 
   return dirs
-})
+}
 
 /**
  * Discover the chain from `start` (innermost → outermost, highest precedence first) and pin the
@@ -93,7 +92,7 @@ export const collectDirs = operation(function* (ctx: ConfigDef.Context, start: s
  * edits reflect in `merged`. When it does not, a standalone target is returned that is NOT part of the
  * chain, so it never appears in `tree` until it is actually written.
  */
-export const discover = operation(function* (ctx: ConfigDef.Context, start: string) {
+export function* discover(ctx: ConfigDef.Context, start: string) {
   const dirs = yield* collectDirs(ctx, start)
   const seen = new Set<string>()
   const chain: ConfigDef.Source[] = []
@@ -114,4 +113,4 @@ export const discover = operation(function* (ctx: ConfigDef.Context, start: stri
   }
 
   return { chain, working }
-})
+}

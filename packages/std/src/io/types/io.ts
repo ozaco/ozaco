@@ -61,8 +61,8 @@ export namespace IODef {
 
   /** Options for {@link IODef.Actions.walk}. */
   export interface WalkOptions {
-    /** Which entries to collect: `IO_FLAGS.FILES`, `IO_FLAGS.DIRS` or both (the default). Add
-     * `IO_FLAGS.FOLLOW_SYMLINKS` to `stat` instead of `lstat`, so a symlink to a directory is reported
+    /** Which entries to collect: `IO_FLAGS.files`, `IO_FLAGS.dirs` or both (the default). Add
+     * `IO_FLAGS.followSymlinks` to `stat` instead of `lstat`, so a symlink to a directory is reported
      * as a directory and descended into (otherwise it is a leaf `isSymlink` entry). */
     flags?: number | undefined
     /** Deepest directory level to descend into, counting `root`'s direct children as depth `0` — so
@@ -505,6 +505,13 @@ export namespace IODef {
 
     /** The OS temp directory (via `node:os.tmpdir()`). */
     tmpdir: () => Operation<string>
+
+    /** The current working directory: `process.cwd()` on Bun/Node; in a browser the page's
+     * directory (`location.pathname` up to its last `/`), `/` when there is no location. */
+    cwd: () => Operation<string>
+
+    /** The user's home directory (`node:os.homedir()`); unsupported in the browser. */
+    homeDir: () => Operation<string>
 
     /** Resolve an S3 client bound to `options` (falls back to the S3 env when a field is omitted): on Bun
      * its built-in `S3Client`, elsewhere a dependency-free SigV4-over-`fetch` client (the browser has

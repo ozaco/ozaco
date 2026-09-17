@@ -1,6 +1,6 @@
 import { Codec } from 'std:codec'
 import type { Flow } from 'std:effect'
-import { createFuture, createGate, createQueue, operation, withResolvers } from 'std:effect'
+import { createFuture, createGate, createQueue, guard, withResolvers } from 'std:effect'
 import type { Result } from 'std:result'
 import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
@@ -226,7 +226,7 @@ export const wrapChannel = (
       return state.native?.readyState ?? (state.ended ? 'closed' : 'connecting')
     },
 
-    send: operation(function* (data: unknown) {
+    send: guard(function* (data: unknown) {
       const payload = yield* Codec.actions.encodeFrame(data, codec)
 
       while (true) {
@@ -264,7 +264,7 @@ export const wrapChannel = (
       }
     }, RtcCauses.ChannelSend),
 
-    close: operation(function* () {
+    close: guard(function* () {
       end(true)
       yield* closed.future
     }, RtcCauses.ChannelClose),

@@ -1,5 +1,5 @@
 // oxlint-disable import/exports-last
-import { operation } from 'std:effect'
+import { guard } from 'std:effect'
 import { defineProtocol } from 'std:plugin'
 import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
@@ -42,7 +42,7 @@ const WsClientImpl = Ws.implement<WsDef.Context, [defaults?: WsDef.Options]>({
 })
 
 export const WsClient = WsClientImpl.build({
-  connect: operation(function* (url: string | URL, options?: WsDef.Options) {
+  connect: guard(function* (url: string | URL, options?: WsDef.Options) {
     const { defaults } = yield* WsClientImpl.context.expect()
 
     const impl = (globalThis as AnyType).WebSocket as WsDef.ImplLike | undefined

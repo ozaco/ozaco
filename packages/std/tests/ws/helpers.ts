@@ -1,4 +1,4 @@
-import { operation } from 'std:effect'
+import { guard } from 'std:effect'
 import type { WsDef } from 'std:ws'
 import { Ws, WsCauses } from 'std:ws'
 
@@ -60,7 +60,7 @@ const wsMock = (socket: WsDef.ImplLike) => {
   })
 
   return impl.build({
-    connect: operation(function* (url: string | URL, options?: WsDef.Options) {
+    connect: guard(function* (url: string | URL, options?: WsDef.Options) {
       const { defaults } = yield* impl.context.expect()
 
       return yield* createConnection(socket, url, { ...defaults, ...options })

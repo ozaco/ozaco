@@ -1,5 +1,3 @@
-import type { CodecDef } from 'std:codec'
-import { operation } from 'std:effect'
 import { IO } from 'std:io'
 import { deepMerge, getPath, hasFlag } from 'std:shared'
 
@@ -55,16 +53,15 @@ export const infixFile = (ctx: ConfigDef.Context, infix: string): string =>
 /** The config directory name, e.g. `.ozaco` (`DIR` feature). */
 export const dirName = (ctx: ConfigDef.Context): string => baseName(ctx)
 
-/** Derive a file extension from a codec name, e.g. `std/toml-codec` → `toml` (fallback `toml`). */
-export const codecExt = (codec: CodecDef): string => {
-  const match = /([a-z0-9]+)-codec/iu.exec(codec.name ?? '')
-  return match?.[1] ?? 'toml'
-}
+/** Whether `path` lies inside `dir` — with the platform's separator, so `C:\\x\\.ozaco` on Windows
+ * and `/x/.ozaco` on POSIX both work (and `/x/.ozaco-other` never matches). */
+export const withinDir = (path: string, dir: string, sep: string): boolean =>
+  path.startsWith(dir.endsWith(sep) ? dir : `${dir}${sep}`)
 
 export const constCtx = (ctx: ConfigDef.Context) =>
-  operation(function* () {
+  function* () {
     return ctx
-  })
+  }
 
 /** Every source, own + `extends`, highest precedence first (own data wins, later extends win). */
 export const collectSources = (list: ConfigDef.Source[]): ConfigDef.Source[] =>
@@ -123,7 +120,7 @@ export const payloadOf = (source: ConfigDef.Source): ConfigDef.Object =>
  * The directories/files `watch` should observe: each existing config directory (`DIR`) watched
  * recursively, plus every discovered source file NOT already covered by one of those directories.
  */
-export const watchTargets = operation(function* (ctx: ConfigDef.Context) {
+export function* watchTargets(ctx: ConfigDef.Context) {
   const recursiveDirs: string[] = []
   if (hasFlag(ctx.features, Features.DIR)) {
     for (const level of yield* collectDirs(ctx, ctx.cwd)) {
@@ -134,12 +131,15 @@ export const watchTargets = operation(function* (ctx: ConfigDef.Context) {
     }
   }
 
+  // the platform's separator, from the IO impl that built every path here
+  const sep = (yield* IO.actions.join('a', 'b')).slice(1, -1)
+
   const files = new Set<string>()
   for (const source of collectSources(ctx.chain)) {
-    if (!recursiveDirs.some(dir => source.path.startsWith(`${dir}/`))) {
+    if (!recursiveDirs.some(dir => withinDir(source.path, dir, sep))) {
       files.add(source.path)
     }
   }
 
   return { recursiveDirs, files: [...files] }
-})
+}

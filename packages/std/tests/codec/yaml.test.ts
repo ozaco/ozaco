@@ -39,7 +39,7 @@ describe('yaml codec', () => {
     })
 
     expect(unwrap(outcome)).toEqual({
-      ctx: { name: 'std/yaml-codec', priority: 500 },
+      ctx: { name: 'std/yaml-codec', priority: 500, ext: 'yaml' },
       transports: 1,
     })
   })

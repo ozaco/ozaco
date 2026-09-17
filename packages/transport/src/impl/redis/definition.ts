@@ -1,4 +1,4 @@
-import { hasCodec } from 'std:codec'
+import { Codec } from 'std:codec'
 import { attempt, ensure, until } from 'std:effect'
 import { fail, isFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
@@ -27,7 +27,7 @@ export const RedisTransport = Transport.implement<TransportDef.Options, [options
   description: 'Redis transport over pub/sub + Streams',
 
   *setup(options) {
-    if (!(yield* hasCodec())) {
+    if (!(yield* Codec.actions.hasCodec())) {
       yield* JsonCodec.use()
     }
     if (!isValidPrefix(options.prefix)) {

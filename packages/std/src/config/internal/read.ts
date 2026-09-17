@@ -1,5 +1,4 @@
 import type { ManualOperation } from 'std:effect'
-import { operation } from 'std:effect'
 import { IO } from 'std:io'
 import { fail } from 'std:result'
 import { isArray, isString } from 'std:shared'
@@ -13,7 +12,7 @@ import type { ConfigDef } from '../types'
  * relative to the file) into nested sources. `seen` guards against cycles and double-reads. Returns
  * `undefined` when the file is absent or already visited; a malformed file fails via the codec.
  */
-export const readSource = operation(function* (
+export function* readSource(
   ctx: ConfigDef.Context,
   path: string,
   seen: Set<string>,
@@ -62,4 +61,4 @@ export const readSource = operation(function* (
     extends: inherited,
     extendsSpec: isString(spec) || isArray<string>(spec) ? spec : undefined,
   }
-})
+}

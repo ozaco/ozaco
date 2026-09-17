@@ -1,6 +1,6 @@
 import { Codec } from 'std:codec'
 import type { Flow } from 'std:effect'
-import { operation } from 'std:effect'
+import { guard } from 'std:effect'
 import type { AnyType } from 'std:shared'
 
 import { WsCauses } from '../errors'
@@ -43,7 +43,7 @@ export const createHandle = (session: Helpers.Session): WsDef.Connection => {
       return session.reconnects
     },
 
-    send: operation(function* (data: unknown) {
+    send: guard(function* (data: unknown) {
       const payload = yield* Codec.actions.encodeFrame(data, options.codec)
 
       while (true) {
@@ -66,7 +66,7 @@ export const createHandle = (session: Helpers.Session): WsDef.Connection => {
       }
     }, WsCauses.Send),
 
-    close: operation(function* (code, reason) {
+    close: guard(function* (code, reason) {
       session.closedByClient = true
 
       if (!session.ended) {

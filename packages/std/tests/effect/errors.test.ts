@@ -5,8 +5,8 @@ import {
   callcc,
   createScope,
   ensure,
+  guard,
   mapError,
-  operation,
   recover,
   run,
   scoped,
@@ -108,7 +108,7 @@ describe('attempt / recover boundaries', () => {
   })
 })
 
-describe('mapError / operation() normalization', () => {
+describe('mapError / guard() normalization', () => {
   it('mapError rewrites the failure while leaving success untouched', async () => {
     const outcome = await run(function* () {
       const mapped = yield* attempt(() =>
@@ -126,15 +126,15 @@ describe('mapError / operation() normalization', () => {
     expect(unwrap(outcome) as string[]).toContain('mapped-tag')
   })
 
-  it('operation() re-raises a RETURNED failure and unwraps a RETURNED success', async () => {
-    const failing = operation(function* () {
+  it('guard() re-raises a RETURNED failure and unwraps a RETURNED success', async () => {
+    const failing = guard(function* () {
       // returned — not thrown, not yielded
       return fail('returned-failure', 'should still raise')
-    })
+    }, 'test:failing')
 
-    const succeeding = operation(function* () {
+    const succeeding = guard(function* () {
       return { _t: 'not-a-result', value: 42 }
-    })
+    }, 'test:succeeding')
 
     const outcome = await run(function* () {
       const captured = yield* attempt(() => failing())
@@ -145,8 +145,8 @@ describe('mapError / operation() normalization', () => {
     expect(unwrap(outcome)).toEqual({ raised: 'returned-failure', value: 42 })
   })
 
-  it('operation() appends its cause tags to thrown errors', async () => {
-    const tagged = operation(function* () {
+  it('guard() appends its cause tags to thrown errors', async () => {
+    const tagged = guard(function* () {
       throw new Error('inner explosion')
     }, 'codec:encode')
 

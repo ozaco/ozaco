@@ -1,5 +1,5 @@
 import type { Flow, Operation, Queue } from 'std:effect'
-import { createQueue, lift, operation } from 'std:effect'
+import { createQueue, guard, lift } from 'std:effect'
 import type { AnyType } from 'std:shared'
 import type { RtcDef } from 'std:webrtc'
 import { Rtc, RtcCauses } from 'std:webrtc'
@@ -449,7 +449,7 @@ export const rtcMock = (impl: RtcDef.ImplLike) => {
   })
 
   return mock.build({
-    connect: operation(function* (signal: RtcDef.SignalLike, options?: RtcDef.Options) {
+    connect: guard(function* (signal: RtcDef.SignalLike, options?: RtcDef.Options) {
       const { defaults } = yield* mock.context.expect()
 
       return yield* createPeer(impl, signal, { ...defaults, ...options })

@@ -1,9 +1,9 @@
-import { Terminal, useTerminal } from 'cli:core'
 import type { TerminalDef } from 'cli:core'
-import { usePalette } from 'cli:palette'
+import { Terminal, useTerminal } from 'cli:core'
 import type { PaletteDef } from 'cli:palette'
+import { usePalette } from 'cli:palette'
 import type { Operation, Task } from 'std:effect'
-import { ensure, operation, sleep, spawn } from 'std:effect'
+import { ensure, sleep, spawn } from 'std:effect'
 
 import type { Helpers } from '../types/helpers'
 import type { SpinnerDef } from '../types/spinner'
@@ -23,7 +23,7 @@ const normalizeBar = (options?: string | SpinnerDef.BarOptions): SpinnerDef.BarO
  * animation loop while interactive, and commits the final tree on finish. All drawing goes through
  * the lease — no cursor codes are written here, so the cursor can never leak hidden.
  */
-const setupTree = operation(function* (intervalMs: number) {
+function* setupTree(intervalMs: number) {
   const info = yield* useTerminal()
   const palette = yield* usePalette()
   const interactive = info.capabilities.interactive
@@ -43,7 +43,7 @@ const setupTree = operation(function* (intervalMs: number) {
     })
   }
 
-  const finish = operation(function* () {
+  const finish = function* () {
     if (state.stopped) {
       return
     }
@@ -55,14 +55,14 @@ const setupTree = operation(function* (intervalMs: number) {
 
     // commit the final tree and release the lease
     yield* lease.done(renderTree(state.roots, palette, state.frame))
-  })
+  }
 
   yield* ensure(function* () {
     yield* finish()
   })
 
   return { state, palette, finish }
-})
+}
 
 const makeBarHandle = (
   node: Helpers.TreeNode,
@@ -132,7 +132,7 @@ const makeTaskHandle = (node: Helpers.TreeNode): SpinnerDef.TaskHandle => ({
   },
 })
 
-export const start = operation(function* (options?: string | SpinnerDef.StartOptions) {
+export function* start(options?: string | SpinnerDef.StartOptions) {
   const opts = normalize(options)
   const info = yield* useTerminal()
   const palette = yield* usePalette()
@@ -160,7 +160,7 @@ export const start = operation(function* (options?: string | SpinnerDef.StartOpt
     })
   }
 
-  const stopWith = operation(function* (line: string | null) {
+  const stopWith = function* (line: string | null) {
     if (state.stopped) {
       return
     }
@@ -172,7 +172,7 @@ export const start = operation(function* (options?: string | SpinnerDef.StartOpt
 
     // `done` clears the live region itself; `null` releases without committing a line
     yield* lease.done(line ?? undefined)
-  })
+  }
 
   yield* ensure(function* () {
     yield* stopWith(null)
@@ -193,9 +193,9 @@ export const start = operation(function* (options?: string | SpinnerDef.StartOpt
   }
 
   return handle
-})
+}
 
-export const group = operation(function* (options?: SpinnerDef.GroupOptions) {
+export function* group(options?: SpinnerDef.GroupOptions) {
   const runner = yield* setupTree(options?.interval ?? DEFAULT_INTERVAL)
 
   const handle: SpinnerDef.GroupHandle = {
@@ -213,13 +213,13 @@ export const group = operation(function* (options?: SpinnerDef.GroupOptions) {
   }
 
   return handle
-})
+}
 
-export const bar = operation(function* (options?: string | SpinnerDef.BarOptions) {
+export function* bar(options?: string | SpinnerDef.BarOptions) {
   const opts = normalizeBar(options)
   const runner = yield* setupTree(opts.interval ?? DEFAULT_INTERVAL)
   const node = barNode(opts.message ?? '', { total: opts.total, width: opts.width })
   runner.state.roots.push(node)
 
   return makeBarHandle(node, runner.finish)
-})
+}

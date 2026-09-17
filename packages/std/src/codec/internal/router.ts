@@ -1,5 +1,5 @@
 import type { Subscription } from 'std:effect'
-import { attempt, filter, operation, some, toSorted, useContext } from 'std:effect'
+import { attempt, filter, some, toSorted, useContext } from 'std:effect'
 import { fail, isSuccess } from 'std:result'
 
 import { Codec } from '../definition'
@@ -8,7 +8,7 @@ import type { CodecDef } from '../types'
 
 import { CodecRegistryContext } from './context'
 
-export const sortedCodecs = operation(function* (
+export function* sortedCodecs(
   entries: CodecDef[],
   transport: CodecDef,
   transportCtx: CodecDef.Context,
@@ -19,51 +19,57 @@ export const sortedCodecs = operation(function* (
 
     return aCtx.priority - bCtx.priority
   })
-})
+}
 
-export const codecRegisterHandler: CodecDef.Handlers['register'] = operation(
-  function* (transport, transportCtx) {
-    const existing = yield* codecGetTransportsHandler()
+export const codecRegisterHandler: CodecDef.Handlers['register'] = function* (
+  transport,
+  transportCtx,
+) {
+  const existing = yield* codecGetTransportsHandler()
 
-    if (
-      yield* some(existing, function* (target) {
-        const targetCtx = yield* useContext(target)
+  if (
+    yield* some(existing, function* (target) {
+      const targetCtx = yield* useContext(target)
 
-        return targetCtx.name === transportCtx.name
-      })
-    ) {
-      return yield* fail(
-        CodecErrors.AlreadyRegistered,
-        `codec ${transportCtx.name} is already registered`,
-      )
-    }
-
-    yield* CodecRegistryContext.set(
-      yield* sortedCodecs([...existing, transport], transport, transportCtx),
+      return targetCtx.name === transportCtx.name
+    })
+  ) {
+    return yield* fail(
+      CodecErrors.AlreadyRegistered,
+      `codec ${transportCtx.name} is already registered`,
     )
-  },
-)
+  }
 
-export const codecUnregisterHandler: CodecDef.Handlers['unregister'] = operation(
-  function* (transport) {
-    const existing = yield* codecGetTransportsHandler()
-    const transportCtx = yield* useContext(transport)
+  yield* CodecRegistryContext.set(
+    yield* sortedCodecs([...existing, transport], transport, transportCtx),
+  )
+}
 
-    yield* CodecRegistryContext.set(
-      yield* filter(existing, function* (target) {
-        const targetCtx = yield* useContext(target)
+export const codecUnregisterHandler: CodecDef.Handlers['unregister'] = function* (transport) {
+  const existing = yield* codecGetTransportsHandler()
+  const transportCtx = yield* useContext(transport)
 
-        return targetCtx.name !== transportCtx.name
-      }),
-    )
-  },
-)
+  yield* CodecRegistryContext.set(
+    yield* filter(existing, function* (target) {
+      const targetCtx = yield* useContext(target)
 
-export const codecGetTransportsHandler: CodecDef.Handlers['getTransports'] = operation(
-  function* () {
-    return (yield* CodecRegistryContext.get()) ?? []
-  },
-)
+      return targetCtx.name !== transportCtx.name
+    }),
+  )
+}
+
+export const codecGetTransportsHandler: CodecDef.Handlers['getTransports'] = function* () {
+  return (yield* CodecRegistryContext.get()) ?? []
+}
+
+/**
+ * Whether any codec is registered in the CURRENT scope. The registry is a scope-local effect
+ * Context (`CodecRegistryContext`, inherited DOWNWARD) — NOT a global table: it reflects the
+ * registrations visible in the current scope chain only.
+ */
+export const codecHasCodecHandler: CodecDef.Handlers['hasCodec'] = function* () {
+  return (yield* codecGetTransportsHandler()).length > 0
+}
 
 export const codecEncodeFrameHandler = function* (data: unknown, preferred?: CodecDef) {
   if (typeof data === 'string') {

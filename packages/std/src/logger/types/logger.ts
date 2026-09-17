@@ -4,8 +4,6 @@ import type { Result } from 'std:result'
 
 import type { LogLevel } from '../const'
 
-import type { LoggerTransportDef } from './transport'
-
 export type LoggerDef = Plugin<LoggerDef.Context, [options?: LoggerDef.Options], LoggerDef.Actions>
 
 export namespace LoggerDef {
@@ -39,18 +37,6 @@ export namespace LoggerDef {
     bindings: Record<string, unknown>
     data: Record<string, unknown> | undefined
   }
-
-  export interface TransportEntry {
-    name: string
-    level?: LogLevel | undefined
-    transport: AnyTransportPlugin<unknown>
-  }
-
-  export type AnyTransportPlugin<TContext = unknown> = Plugin<
-    TContext,
-    [],
-    LoggerTransportDef.Actions
-  >
 
   export interface Actions {
     log(level: LogLevel, ...args: Payload[]): Operation<void>

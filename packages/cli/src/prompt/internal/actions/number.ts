@@ -1,5 +1,3 @@
-import { operation } from 'std:effect'
-
 import type { Helpers } from '../../types/helpers'
 import type { PromptDef, PromptSpec } from '../../types/prompt'
 import { runPrompt } from '../../utils'
@@ -7,7 +5,7 @@ import { cancelledLine, inlineFrame, submittedLine } from '../chrome'
 import { createInput, editLine, isPrintable, renderInput } from '../edit'
 import { isEnter } from '../keys'
 
-export const number = operation(function* (options: PromptDef.NumberOptions) {
+export function* number(options: PromptDef.NumberOptions) {
   const allowed = options.float ? /[-0-9.]/u : /[-0-9]/u
 
   const parse = (raw: string): Helpers.NumberParsed => {
@@ -64,4 +62,4 @@ export const number = operation(function* (options: PromptDef.NumberOptions) {
   }
 
   return yield* runPrompt(spec)
-})
+}

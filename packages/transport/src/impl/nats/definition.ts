@@ -1,4 +1,4 @@
-import { hasCodec } from 'std:codec'
+import { Codec } from 'std:codec'
 import { attempt, ensure, until } from 'std:effect'
 import { fail, isFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
@@ -29,7 +29,7 @@ export const NatsTransport = Transport.implement<TransportDef.Options, [options:
   description: 'NATS transport over @nats-io JetStream (one stream per application prefix)',
 
   *setup(options) {
-    if (!(yield* hasCodec())) {
+    if (!(yield* Codec.actions.hasCodec())) {
       yield* JsonCodec.use()
     }
     if (!isValidPrefix(options.prefix)) {

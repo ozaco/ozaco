@@ -138,6 +138,7 @@ const UNSUPPORTED_ACTIONS: string[] = [
   'udpBind',
   'ip',
   'tmpdir',
+  'homeDir',
 ]
 
 const UNSUPPORTED_FLOWS: string[] = ['readFlow', 'watch']

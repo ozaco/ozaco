@@ -1,4 +1,4 @@
-import { operation, until } from 'std:effect'
+import { until } from 'std:effect'
 import { fail } from 'std:result'
 
 import { spawn as childSpawn } from 'node:child_process'
@@ -13,11 +13,7 @@ import { concatBytes, errorMessage, makeStatus, normalizeSpawn, toBytes } from '
  * Run a command to completion with `node:child_process`, buffering stdout/stderr. A non-zero exit
  * is data (reported on the {@link IODef.ExecResult}); only a spawn/runtime error becomes a `Result.Failure`.
  */
-export const nodeExec = operation(function* (
-  cmd: string,
-  args?: readonly string[],
-  options?: IODef.ExecOptions,
-) {
+export function* nodeExec(cmd: string, args?: readonly string[], options?: IODef.ExecOptions) {
   const config = normalizeSpawn(options)
 
   try {
@@ -52,18 +48,14 @@ export const nodeExec = operation(function* (
   } catch (error) {
     return yield* fail(IOErrors.ExecFailed, `command "${cmd}" failed: ${errorMessage(error)}`)
   }
-})
+}
 
 /**
  * Spawn a long-lived child process with `node:child_process`, exposing its streams and lifecycle as
  * effect primitives. A launch error (e.g. missing executable) is reported asynchronously through
  * `exited()` and the byte streams, since Node surfaces it after the handle is created.
  */
-export const nodeSpawn = operation(function* (
-  cmd: string,
-  args?: readonly string[],
-  options?: IODef.SpawnOptions,
-) {
+export function* nodeSpawn(cmd: string, args?: readonly string[], options?: IODef.SpawnOptions) {
   const config = normalizeSpawn(options)
 
   let child
@@ -85,15 +77,15 @@ export const nodeSpawn = operation(function* (
   // `write()` surfaces the failure through its own callback; this listener only prevents the crash.
   child.stdin.on('error', () => {})
 
-  const exited = operation(function* () {
+  const exited = function* () {
     try {
       return yield* until(exitedPromise)
     } catch (error) {
       return yield* fail(IOErrors.ProcessError, `process "${cmd}" errored: ${errorMessage(error)}`)
     }
-  })
+  }
 
-  const write = operation(function* (chunk: Uint8Array | string) {
+  const write = function* (chunk: Uint8Array | string) {
     return yield* until(
       new Promise<void>((resolve, reject) => {
         child.stdin.write(toBytes(chunk), error => {
@@ -105,9 +97,9 @@ export const nodeSpawn = operation(function* (
         })
       }),
     )
-  })
+  }
 
-  const closeStdin = operation(function* () {
+  const closeStdin = function* () {
     return yield* until(
       new Promise<void>(resolve => {
         child.stdin.end(() => {
@@ -115,15 +107,15 @@ export const nodeSpawn = operation(function* (
         })
       }),
     )
-  })
+  }
 
-  const kill = operation(function* (signal?: number | string) {
+  const kill = function* (signal?: number | string) {
     const ok = child.kill(signal as NodeJS.Signals | number | undefined)
 
     if (!ok) {
       return yield* fail(IOErrors.KillFailed, `failed to signal pid ${child.pid ?? -1}`)
     }
-  })
+  }
 
   const handle: IODef.ProcessHandle = {
     pid: child.pid ?? -1,
@@ -135,4 +127,4 @@ export const nodeSpawn = operation(function* (
     kill,
   }
   return handle
-})
+}

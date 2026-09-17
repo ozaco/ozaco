@@ -1,12 +1,10 @@
-import { operation } from 'std:effect'
-
 import type { Helpers } from '../../types/helpers'
 import type { PromptDef, PromptSpec } from '../../types/prompt'
 import { runPrompt } from '../../utils'
 import { activeLine, cancelledLine, hint, submittedLine } from '../chrome'
 import { isEnter, isSpace } from '../keys'
 
-export const confirm = operation(function* (options: PromptDef.ConfirmOptions) {
+export function* confirm(options: PromptDef.ConfirmOptions) {
   const initial = options.initial ?? false
 
   const spec: PromptSpec<Helpers.ConfirmState, boolean> = {
@@ -38,4 +36,4 @@ export const confirm = operation(function* (options: PromptDef.ConfirmOptions) {
   }
 
   return yield* runPrompt(spec)
-})
+}

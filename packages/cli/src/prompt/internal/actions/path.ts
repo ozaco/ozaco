@@ -1,5 +1,5 @@
 import type { Operation } from 'std:effect'
-import { attempt, operation } from 'std:effect'
+import { attempt } from 'std:effect'
 import { IO } from 'std:io'
 import { isSuccess } from 'std:result'
 
@@ -18,16 +18,15 @@ const MAX_CANDIDATES = 8
  * prompt itself keeps working. Runs from the engine's effectful `prepare` step, and only when the
  * input actually changed (never inside `render`).
  */
-const defaultScan = (dir: string): Operation<PromptDef.PathEntry[]> =>
-  operation(function* () {
-    const walked = yield* attempt(IO.actions.walk(dir, { maxDepth: 1 }))
-    if (!isSuccess(walked)) {
-      return []
-    }
-    return walked.value
-      .filter(entry => entry.path !== dir)
-      .map(entry => ({ name: entry.name, isDir: entry.isDirectory }))
-  })()
+function* defaultScan(dir: string): Operation<PromptDef.PathEntry[]> {
+  const walked = yield* attempt(IO.actions.walk(dir, { maxDepth: 1 }))
+  if (!isSuccess(walked)) {
+    return []
+  }
+  return walked.value
+    .filter(entry => entry.path !== dir)
+    .map(entry => ({ name: entry.name, isDir: entry.isDirectory }))
+}
 
 const longestCommonPrefix = (items: readonly string[]): string => {
   if (items.length === 0) {
@@ -52,7 +51,7 @@ const splitValue = (value: string, root: string): Helpers.Split => {
   return { dir: dir === '' ? '.' : dir, prefix, base }
 }
 
-export const path = operation(function* (options: PromptDef.PathOptions) {
+export function* path(options: PromptDef.PathOptions) {
   const root = options.root ?? '.'
   const scan = options.scan ?? defaultScan
 
@@ -136,4 +135,4 @@ export const path = operation(function* (options: PromptDef.PathOptions) {
   }
 
   return yield* runPrompt(spec)
-})
+}
