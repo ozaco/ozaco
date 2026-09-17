@@ -3,7 +3,7 @@ import type { AnyType, EmptyType } from 'std:shared'
 
 import type { PROTOCOL } from '../internal/const'
 
-import type { Hooks } from './hooks'
+import type { Helpers } from './helpers'
 import type { Plugin } from './plugin'
 
 /**
@@ -35,10 +35,10 @@ export namespace Protocol {
     /** Holds the active implementation's context value while one of its actions runs. */
     context: Context<TContext>
 
-    around(handlers: Hooks.Around<TActions & THandlers>): Operation<void>
-    before(handlers: Hooks.Before<TActions & THandlers>): Operation<void>
-    after(handlers: Hooks.After<TActions & THandlers>): Operation<void>
-    error(handlers: Hooks.OnError<TActions & THandlers>): Operation<void>
+    around(handlers: Helpers.Around<TActions & THandlers>): Operation<void>
+    before(handlers: Helpers.Before<TActions & THandlers>): Operation<void>
+    after(handlers: Helpers.After<TActions & THandlers>): Operation<void>
+    error(handlers: Helpers.OnError<TActions & THandlers>): Operation<void>
 
     // setup args are typed HERE, at the implementation — the protocol itself carries no TArgs.
     // The context stays pinned to the protocol's named TContext so handles display cleanly.
@@ -56,7 +56,7 @@ export namespace Protocol {
     // ONE argument, two shapes. A literal matching the contract exactly hits the first overload:
     // the CONTRACT type flows through unchanged, so hovers show `Plugin<DbContext, ..., DbActions>`
     // instead of an expanded generator soup. A literal with EXTRA members falls through to the
-    // second: contract keys are stripped from the inferred TExtra (Hooks.Extras), custom actions
+    // second: contract keys are stripped from the inferred TExtra (Helpers.Extras), custom actions
     // stay callable, and plain values become yieldable operations
     // (`testValue: 12` → `yield* Plugin.actions.testValue`).
     build(actions: TActions): Plugin<TContext, TArgs, TActions>
@@ -66,8 +66,8 @@ export namespace Protocol {
       TContext,
       TArgs,
       TExtra extends TActions
-        ? TExtra & Hooks.Extras<TExtra, TActions>
-        : TActions & Hooks.Extras<TExtra, TActions>
+        ? TExtra & Helpers.Extras<TExtra, TActions>
+        : TActions & Helpers.Extras<TExtra, TActions>
     >
   }
 

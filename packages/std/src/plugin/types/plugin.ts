@@ -3,7 +3,7 @@ import type { AnyType, EmptyType } from 'std:shared'
 
 import type { PLUGIN, USE } from '../internal/const'
 
-import type { Hooks } from './hooks'
+import type { Helpers } from './helpers'
 
 /**
  * A built implementation. Its action members live under `.actions`, mirroring the api layer, and
@@ -61,6 +61,6 @@ export namespace Plugin {
     // (functions → (...args) => Operation<R>, values → Operation<V>)
     build<TActions extends EmptyType>(
       actions: TActions,
-    ): Plugin<TContext, TArgs, Hooks.Extras<TActions>>
+    ): Plugin<TContext, TArgs, Helpers.Extras<TActions>>
   }
 }

@@ -1,11 +1,11 @@
-import type { Operation } from 'std:effect'
-import { createApi, createContext, operation, useScope } from 'std:effect'
+import type { Context, Operation } from 'std:effect'
+import { createApi, createContext, operation } from 'std:effect'
 import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 import { flatten } from 'std:shared'
 
 import { PluginErrors } from '../errors'
-import type { Impl } from '../types/impl'
+import type { Helpers } from '../types/helpers'
 import type { Plugin } from '../types/plugin'
 import type { Protocol } from '../types/protocol'
 
@@ -21,8 +21,8 @@ const defaultExec: Protocol.Exec = function* (entries, run) {
  * The per-protocol nucleus: a single-member api (`dispatch`) plus the scope-local install
  * registry. Everything else — the flat protocol/plugin handles, hooks, pinning — is built on it.
  */
-export const createProtocolRuntime = (options: Impl.RuntimeOptions) => {
-  const tag = `${options.name}@${options.version ?? 'lts'}`
+export const createProtocolRuntime = (options: Helpers.RuntimeOptions) => {
+  const tag = `${options.name}@${options.version}`
 
   /** Holds the dispatched impl's context value while one of its actions runs. */
   const context = createContext<AnyType>(tag)
@@ -108,7 +108,9 @@ export const createProtocolRuntime = (options: Impl.RuntimeOptions) => {
 
   const api = createApi(`plugin.${tag}`, { dispatch })
 
-  const hooks = createHookInstallers(api)
+  // built on first use: a standalone plugin (`definePlugin`) never exposes them
+  let installers: ReturnType<typeof createHookInstallers> | undefined
+  const hooks = () => (installers ??= createHookInstallers(api))
 
   const call = (key: string, args: unknown[]) => api.actions.dispatch(key, args)
   const pinned = (pluginTag: string, key: string, args: unknown[]) =>
@@ -129,18 +131,24 @@ export const createProtocolRuntime = (options: Impl.RuntimeOptions) => {
   }
 }
 
-export const buildPlugin = (
-  runtime: ReturnType<typeof createProtocolRuntime>,
-  buildOptions: {
+export const buildPlugin = ({
+  runtime,
+  options: buildOptions,
+  actions: buildActions,
+  context: pluginContext,
+}: {
+  runtime: ReturnType<typeof createProtocolRuntime>
+  options: {
     name: string
     version: string
     description?: string | undefined
     setup(...args: AnyType[]): Operation<unknown>
-  },
-  buildActions?: Record<string, AnyType>,
-): AnyType => {
-  const pluginTag = `${buildOptions.name}@${buildOptions.version ?? 'lts'}`
-  const pluginContext = runtime.cloneable ? createContext<AnyType>(pluginTag) : runtime.context
+  }
+  actions: Record<string, AnyType> | undefined
+  /** the plugin's context — decided by `implement()` / `definePlugin()`, shared with them. */
+  context: Context<AnyType>
+}): AnyType => {
+  const pluginTag = `${buildOptions.name}@${buildOptions.version}`
 
   const actions: Record<string, AnyType> = {}
   const meta = new Map<string, Record<string, AnyType>>()
@@ -210,13 +218,19 @@ export const buildPlugin = (
       plugin: handle,
       args,
       *[Symbol.iterator]() {
-        const scope = yield* useScope()
-        const value = yield* setup(...args)
-        scope.set(pluginContext, value)
-        return value
+        // `setup` writes the plugin context into the current scope itself
+        return yield* setup(...args)
       },
     }),
-    getKeys: () => [...Object.keys(runtime.defaults), ...Object.keys(actions)],
+    // everything dispatch can resolve — protocol handlers, defaults and the impl's own
+    // actions — each name once
+    getKeys: () => [
+      ...new Set([
+        ...Object.keys(runtime.handlers),
+        ...Object.keys(runtime.defaults),
+        ...Object.keys(actions),
+      ]),
+    ],
     getMeta: (key: string) => meta.get(key),
   } satisfies Plugin<AnyType, AnyType[]>
   return handle

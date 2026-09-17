@@ -1,4 +1,5 @@
 {
+  "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "paths": {
       "std:shared": ["./src/shared/index.ts", "./dist/shared.d.ts"],

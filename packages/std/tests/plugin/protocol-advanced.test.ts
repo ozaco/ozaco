@@ -422,7 +422,7 @@ describe('cloneable contexts + metadata', () => {
     expect(unwrap(outcome)).toEqual(['worked', 'fallback'])
   })
 
-  it('getKeys lists defaults and impl actions but NOT protocol handlers', async () => {
+  it('getKeys lists protocol handlers, defaults and impl actions — each once', async () => {
     interface KeyedActions {
       work(): Operation<string>
       handled?(): Operation<string>
@@ -456,11 +456,8 @@ describe('cloneable contexts + metadata', () => {
       },
     })
 
-    // dispatch resolves `handlers` first, yet getKeys() is built from defaults + actions
-    // only, so `handled` is dispatchable but not enumerable. This test pins that gap; flip the
-    // expectation if getKeys() ever grows to include protocol handlers.
-    expect(Impl.getKeys().toSorted()).toEqual(['fallback', 'work'])
-    expect(Impl.getKeys()).not.toContain('handled')
+    // everything dispatch can resolve is enumerable: handlers first, defaults, the impl's own
+    expect(Impl.getKeys().toSorted()).toEqual(['fallback', 'handled', 'work'])
 
     const outcome = await run(function* () {
       yield* Impl.use()

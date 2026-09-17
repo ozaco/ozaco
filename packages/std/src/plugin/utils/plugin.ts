@@ -1,13 +1,13 @@
 import type { AnyType } from 'std:shared'
 
 import { buildPlugin, createProtocolRuntime } from '../internal/runtime'
-import type { Impl } from '../types/impl'
+import type { Helpers } from '../types/helpers'
 
 /**
  * Define a standalone plugin: an internal single-implementation protocol whose only impl is the
  * plugin itself. Calls on the handle are always pinned to that impl.
  */
-export const definePlugin: Impl.DefinePlugin = (options): AnyType => {
+export const definePlugin: Helpers.DefinePlugin = (options): AnyType => {
   const runtime = createProtocolRuntime({
     name: options.name,
     version: options.version,
@@ -17,6 +17,7 @@ export const definePlugin: Impl.DefinePlugin = (options): AnyType => {
   return {
     context: runtime.context,
 
-    build: (actions?: AnyType) => buildPlugin(runtime, options, actions),
+    build: (actions?: AnyType) =>
+      buildPlugin({ runtime, options, actions, context: runtime.context }),
   }
 }

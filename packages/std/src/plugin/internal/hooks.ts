@@ -1,16 +1,24 @@
 import type { Api, Operation } from 'std:effect'
+import type { Result } from 'std:result'
 import { appendCauses, asFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
 import { flatten } from 'std:shared'
 
-import type { Hooks } from '../types/hooks'
+import type { Helpers } from '../types/helpers'
+
+/** What a masked failure is remembered as: its tag and message; a bare `fail()` reads
+ * `untagged failure`, never `undefined`. */
+const maskedLabel = (failure: Result.Failure<unknown>): string => {
+  const tag = failure.error === undefined ? 'untagged failure' : String(failure.error)
+  return failure.message ? `${tag}: ${failure.message}` : tag
+}
 
 /**
  * Adapt a per-action handler map into ONE api middleware over `dispatch`: actions without a handler
  * pass straight through to `next`, decorated ones run through `wrap`.
  */
-const layer = (handlers: Record<string, AnyType>, wrap: Hooks.Wrap) => ({
-  dispatch: ([key, args]: [string, unknown[]], next: Hooks.Next): Operation<unknown> => ({
+const layer = (handlers: Record<string, AnyType>, wrap: Helpers.Wrap) => ({
+  dispatch: ([key, args]: [string, unknown[]], next: Helpers.Next): Operation<unknown> => ({
     *[Symbol.iterator]() {
       if (!Object.hasOwn(handlers, key)) {
         return yield* next(key, args)
@@ -25,7 +33,7 @@ const layer = (handlers: Record<string, AnyType>, wrap: Hooks.Wrap) => ({
  * `api.around` on the protocol's dispatch member — scope-scoped, inherited by children, reverted
  * when the scope closes.
  */
-export const createHookInstallers = (api: Api<Hooks.Dispatch>) => ({
+export const createHookInstallers = (api: Api<Helpers.Dispatch>) => ({
   around: (handlers: AnyType): Operation<void> =>
     api.around(
       layer(flatten(handlers), (fn, [key, args], next) =>
@@ -72,7 +80,7 @@ export const createHookInstallers = (api: Api<Hooks.Dispatch>) => ({
               // a throwing error hook masks the running failure while keeping it in the cause chain
               failure = appendCauses(
                 asFailure(hookError),
-                `masked: ${failure.message || String(failure.error)}`,
+                `masked: ${maskedLabel(failure)}`,
                 ...failure.causes,
               )
             }

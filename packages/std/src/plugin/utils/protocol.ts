@@ -1,12 +1,13 @@
 import type { Operation } from 'std:effect'
+import { createContext } from 'std:effect'
 import type { AnyType } from 'std:shared'
 
 import { PROTOCOL } from '../internal/const'
 import { createActionProxy } from '../internal/proxy'
 import { buildPlugin, createProtocolRuntime } from '../internal/runtime'
-import type { Impl } from '../types/impl'
+import type { Helpers } from '../types/helpers'
 
-export const defineProtocol: Impl.DefineProtocol = (options): AnyType => {
+export const defineProtocol: Helpers.DefineProtocol = (options): AnyType => {
   const runtime = createProtocolRuntime({
     name: options.name,
     version: options.version,
@@ -51,15 +52,24 @@ export const defineProtocol: Impl.DefineProtocol = (options): AnyType => {
       },
     },
 
-    around: runtime.hooks.around,
-    before: runtime.hooks.before,
-    after: runtime.hooks.after,
-    error: runtime.hooks.error,
+    around: (handlers: AnyType) => runtime.hooks().around(handlers),
+    before: (handlers: AnyType) => runtime.hooks().before(handlers),
+    after: (handlers: AnyType) => runtime.hooks().after(handlers),
+    error: (handlers: AnyType) => runtime.hooks().error(handlers),
 
-    implement: (implOptions: AnyType) => ({
-      context: runtime.context,
-      build: (actions: AnyType) => buildPlugin(runtime, implOptions, actions),
-    }),
+    implement: (implOptions: AnyType) => {
+      // a cloneable protocol gives every implementation its own context — decided HERE, so the
+      // definition's `context` and the built plugin's are the same object
+      const pluginContext = runtime.cloneable
+        ? createContext<AnyType>(`${implOptions.name}@${implOptions.version}`)
+        : runtime.context
+
+      return {
+        context: pluginContext,
+        build: (actions: AnyType) =>
+          buildPlugin({ runtime, options: implOptions, actions, context: pluginContext }),
+      }
+    },
   }
 
   return {

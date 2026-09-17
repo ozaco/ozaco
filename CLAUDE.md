@@ -99,3 +99,6 @@ OXC is canonical (oxlint + oxfmt): 2 spaces, width 100, single quotes, JSX singl
 - **Use `import type`** for type-only imports
 - **Naming:** camelCase values, PascalCase types, SCREAMING_SNAKE_CASE for shared constants; type namespaces are `<Module>Def` (consumer-facing), `Utils` (public utils' types), `Helpers` (internal shapes, still exported)
 - **TypeScript:** Honor `tsconfig.base.json` strictness (no relaxing `strict`, `verbatimModuleSyntax`)
+  — every package's `tsconfig.paths.json` MUST `extends: "../../tsconfig.base.json"` (the package
+  `tsconfig.json` extends the paths file); without it the project has no `target`/`strict` and the
+  editor reports ts2802 on every `yield*` (std lacked it until 2026-09-17)

@@ -1,7 +1,49 @@
 import type { Operation } from 'std:effect'
 import type { AnyType, EmptyType, ExplicitObject } from 'std:shared'
 
-export namespace Hooks {
+import type { Plugin } from './plugin'
+import type { Protocol } from './protocol'
+
+/**
+ * The plugin module's helper shapes: what `definePlugin` / `defineProtocol` are typed as, the
+ * hook shapes a protocol's `around` / `before` / `after` / `error` take (`Around`, `Before`,
+ * `After`, `OnError`, `Extras`, …) and the runtime's option bag. `Plugin` and `Protocol` — the
+ * types a consumer holds — are the module's real surface; nothing here needs a `<Module>Def`.
+ */
+export namespace Helpers {
+  export type DefinePlugin = <TContext, TArgs extends unknown[] = []>(options: {
+    subtype?: symbol | undefined
+
+    name: string
+    version: string
+    description?: string | undefined
+
+    setup(...args: TArgs): Operation<TContext>
+  }) => Plugin.Definition<TContext, TArgs>
+
+  export type DefineProtocol = <
+    TContext = unknown,
+    TActions extends EmptyType = EmptyType,
+    THandlers extends EmptyType = EmptyType,
+  >(options: {
+    subtype?: symbol | undefined
+    /** Allow several implementations to be installed side by side (each with its own context). */
+    cloneable?: boolean | undefined
+
+    name: string
+    version: string
+    description?: string | undefined
+
+    /** Protocol-level actions: not tied to an installed impl, always run exactly once. */
+    handlers?: THandlers | undefined
+    /** Fallback actions used when the dispatched impl does not provide the key. */
+    defaults?: Partial<TActions> | undefined
+
+    exec?: Protocol.Exec | undefined
+  }) => Protocol<TContext, TActions, THandlers>
+
+  // --- hooks: the per-action wrapper shapes a protocol's around/before/after/error take ---
+
   export type AnyAction = (...args: AnyType[]) => Operation<unknown>
 
   export type Dispatch = {
@@ -82,5 +124,16 @@ export namespace Hooks {
       : TE[K] extends Record<string, unknown>
         ? OnError<TE[K]>
         : never
+  }
+
+  /** What `createProtocolRuntime` takes — `defineProtocol`'s options minus the description. */
+  export interface RuntimeOptions {
+    name: string
+    version: string
+    subtype?: symbol | undefined
+    cloneable?: boolean | undefined
+    handlers?: Record<string, AnyType> | undefined
+    defaults?: Record<string, AnyType> | undefined
+    exec?: Protocol.Exec | undefined
   }
 }
