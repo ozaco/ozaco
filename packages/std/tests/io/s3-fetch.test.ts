@@ -300,6 +300,34 @@ describe('fetch S3 client — presign', () => {
     expect(url.searchParams.get('X-Amz-Signature')).toBe(expected)
   })
 
+  it('ignores acl and type — they are Bun-only and leave the presigned URL untouched', async () => {
+    setSystemTime(new Date('2013-05-24T00:00:00Z'))
+    const s3 = createS3(fetchS3Client({ ...CONFIG, acl: 'public-read' }))
+
+    const outcome = await run(function* () {
+      return {
+        bare: yield* createS3(fetchS3Client(CONFIG)).presign('k', { method: 'PUT' }),
+        decorated: yield* s3.presign('k', { method: 'PUT', acl: 'public-read', type: 'image/png' }),
+      }
+    })
+
+    const { bare, decorated } = unwrap(outcome)
+    expect(decorated).toBe(bare)
+    expect(decorated.toLowerCase()).not.toContain('acl')
+  })
+
+  it('a write sends no x-amz-acl header even when the client was given an acl', async () => {
+    const calls = stubFetch(new Response('', { status: 200 }))
+    const s3 = createS3(fetchS3Client({ ...CONFIG, acl: 'public-read' }))
+
+    const outcome = await run(function* () {
+      return yield* s3.write('k', 'body')
+    })
+
+    expect(unwrap(outcome)).toBe(4)
+    expect(Object.keys(calls[0]!.headers).map(key => key.toLowerCase())).not.toContain('x-amz-acl')
+  })
+
   it('includes X-Amz-Security-Token when a session token is configured', async () => {
     const s3 = createS3(fetchS3Client({ ...CONFIG, sessionToken: 'sess/tok' }))
 

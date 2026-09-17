@@ -8,7 +8,19 @@ import { describe, expect, it } from 'bun:test'
 import { BunIO } from 'std:io/impl/bun'
 import { WebIO } from 'std:io/impl/web'
 
+import { originOf } from '../../src/io/internal/crypto/hlc'
+
 const TOKEN = /^[0-9A-HJKMNP-TV-Z]{22}$/u
+
+describe('originOf', () => {
+  it('upper-cases a valid 8-char Crockford origin and answers null for anything else', () => {
+    expect(originOf('peer0001')).toBe('PEER0001')
+    expect(originOf('SHORT')).toBeNull()
+    expect(originOf('TOOLONG00')).toBeNull()
+    // I, L, O and U are outside the alphabet — rejected, not aliased to 1/0
+    expect(originOf('PEERIL00')).toBeNull()
+  })
+})
 
 describe('hlc', () => {
   it('mints fixed-width, monotonic tokens for one origin (same-ms counter)', async () => {
@@ -80,6 +92,27 @@ describe('hlc', () => {
     expect(result.adopted).toBe(true)
     expect(result.local > result.remote).toBe(true)
     expect(result.parts.ts).toBeGreaterThanOrEqual(result.ahead)
+  })
+
+  it('a token at or behind the local floor is accepted (true) and moves nothing', async () => {
+    const result = unwrap(
+      await run(function* () {
+        yield* BunIO.use()
+        const ahead = Date.now() + 5000
+        yield* IO.actions.observeHlc(encodeFake(ahead, 3, 'REMTE000'))
+        const before = yield* IO.actions.decodeHlc(yield* IO.actions.hlc({ origin: 'PEER0003' }))
+
+        // far in the PAST: nothing to adopt, still not drift
+        const accepted = yield* IO.actions.observeHlc(encodeFake(ahead - 60_000, 0, 'REMTE000'))
+        const after = yield* IO.actions.decodeHlc(yield* IO.actions.hlc({ origin: 'PEER0003' }))
+
+        return { accepted, before, after, ahead }
+      }),
+    )
+
+    expect(result.accepted).toBe(true)
+    expect(result.after.ts).toBeGreaterThanOrEqual(result.ahead)
+    expect(result.after.ts).toBeGreaterThanOrEqual(result.before.ts)
   })
 
   it('rejects remote clocks beyond maxDriftMs without failing', async () => {

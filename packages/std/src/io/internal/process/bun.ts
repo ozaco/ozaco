@@ -86,6 +86,7 @@ export function* bunSpawn(cmd: string, args?: readonly string[], options?: IODef
 
   const kill = function* (signal?: number | string) {
     try {
+      // Bun takes a signal NAME as well as a number; the cast only narrows to the overload TS picks
       proc.kill(signal as number | undefined)
     } catch (error) {
       return yield* fail(

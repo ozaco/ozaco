@@ -32,7 +32,8 @@ const getSelf = (): CodecDef => YamlCodec
  * its call in try/catch and re-raises the thrown error as a `CodecErrors.*` failure (`Encode` /
  * `Decode` / `Stringify` / `Parse`). Default priority 500, below `JsonCodec` (999): installing both
  * keeps JSON as the default; register with a higher `{ priority }` to prefer YAML, or install it
- * alone.
+ * alone. Shipped for consumers: nothing inside the monorepo installs it (config defaults to
+ * `TomlCodec`), so its only in-repo coverage is its own test file.
  */
 export const YamlCodec = Codec.implement({
   name: 'std/yaml-codec',
@@ -126,6 +127,14 @@ export const YamlCodec = Codec.implement({
     return channel
   },
 
+  /**
+   * A WHOLE-DOCUMENT decoder: buffers the source and emits one value after it closes (there is no
+   * second `json` parameter here — that switch is `JsonCodec`'s). Two known rough edges, both
+   * pinned by the tests: the source's close value is never read, so an upstream FAILURE close is
+   * dropped and the bytes received so far are parsed as if complete; and a parse error both closes
+   * the channel with the failure AND fails the forked decoder, which fails the scope that called
+   * `decodeFlow` with `CodecErrors.Decode` (`JsonCodec` only closes the channel).
+   */
   *decodeFlow(flow) {
     const channel = createChannel<unknown, true | Result.Failure<unknown>>()
 

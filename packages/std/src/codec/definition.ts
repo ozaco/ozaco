@@ -16,8 +16,9 @@ import type { CodecDef } from './types'
 export const CODEC = Symbol.for('std:codec')
 
 /**
- * The codec protocol: a registry of encoders/decoders sorted by priority. `Codec.actions.*` route to
- * the highest-priority registered codec through the inline `exec` below; the registry actions
+ * The codec protocol: a registry of encoders/decoders kept in ASCENDING priority order (the active,
+ * highest-priority codec is the LAST entry of `getTransports()`). `Codec.actions.*` route to the
+ * highest-priority registered codec through the inline `exec` below; the registry actions
  * (`register` / `unregister` / `getTransports` / `hasCodec` / `encodeFrame` / `decodeFrame`) are plain handlers
  * and never route. Install a codec impl (e.g. `JsonCodec`) to populate the registry. Lives in `std` so any std consumer — `std:fetch`, the server
  * broker/transport, … — can encode/decode without coupling to a higher layer.

@@ -2,6 +2,8 @@ import type { AnyType } from 'std:shared'
 
 /** The shapes this module passes around inside itself. */
 export namespace Helpers {
+  /** Per-origin HLC send state (last minted time + same-ms counter) — nothing to do with wall
+   * clocks or timers. */
   export interface Clock {
     ts: number
     counter: number

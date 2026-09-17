@@ -50,6 +50,9 @@ export namespace IODef {
 
   export type ReadableLike = NodeReadableLike | WebReadableLike
 
+  /** The slice of a Node `Writable` that `writeFlow` drives (write / drain / finish / error).
+   * Public so a mock or a custom stream can be typed against the same contract as
+   * {@link ReadableLike}; inside std only the file-flow writer consumes it. */
   export interface WritableLike {
     write(chunk: Uint8Array): boolean
     end(): this
@@ -86,7 +89,9 @@ export namespace IODef {
 
   /** Options for {@link IODef.Actions.watch}. */
   export interface WatchOptions {
-    /** Watch nested directories too (platform support varies). Defaults to `false`. */
+    /** Watch nested directories too. Read by the `fs.watch` fallback only (platform support
+     * varies there); a Watchman subscription is always recursive for a directory, whatever this
+     * says. Defaults to `false`. */
     recursive?: boolean | undefined
   }
 
@@ -169,11 +174,15 @@ export namespace IODef {
     readonly stderr: Flow<Uint8Array, FlowClose>
     /** Resolve with the exit status once the process ends. */
     exited: () => Operation<ProcessStatus>
-    /** Write a chunk to the child's stdin. */
+    /** Write a chunk to the child's stdin. A failing write is `std:io.stdin-write-failed` on BunIO;
+     * NodeIO lets the raw stream error through untagged (`EPIPE`, or `ERR_STREAM_DESTROYED` once
+     * the child is gone — where BunIO resolves silently). */
     write: (chunk: Uint8Array | string) => Operation<void>
     /** Close the child's stdin. */
     closeStdin: () => Operation<void>
-    /** Send a termination signal (default `SIGTERM`). */
+    /** Send a termination signal (default `SIGTERM`) — a number or a name (`'SIGKILL'`), both
+     * impls take either. On a child that has ALREADY exited NodeIO fails `std:io.kill-failed`
+     * (`child.kill()` reports the signal was not delivered); BunIO resolves silently. */
     kill: (signal?: number | string) => Operation<void>
   }
 
@@ -241,7 +250,9 @@ export namespace IODef {
   export interface UdpBindOptions {
     /** Local port to bind. Omit or `0` for an ephemeral port. */
     port?: number
-    /** Interface to bind. */
+    /** Interface to bind — an IPv4 address: the socket is always `udp4`, so the IPv6 addresses
+     * {@link IODef.Actions.ip} reports cannot be used here, and a `send` to an IPv6 destination
+     * fails `std:io.udp-send-failed`. */
     hostname?: string
   }
 
@@ -255,11 +266,13 @@ export namespace IODef {
   /** A handle to a bound UDP socket (see {@link IODef.Actions.udpBind}). */
   export interface UdpSocket {
     readonly port: number
-    /** Inbound datagrams, buffered from bind time. */
+    /** Inbound datagrams, buffered from bind time. Closes with `true` on `close()`, or with the
+     * failure when the socket errors after bind. The FIRST close value is the one a consumer
+     * reads: a `close()` after such an error only queues a second, unread `true`. */
     messages: Flow<UdpDatagram, FlowClose>
     /** Send a datagram to an explicit destination. */
     send: (data: Uint8Array | string, port: number, address: string) => Operation<void>
-    /** Close the socket. */
+    /** Close the socket. Idempotent — a second call (or the scope teardown after it) is a no-op. */
     close: () => Operation<void>
   }
 
@@ -277,7 +290,8 @@ export namespace IODef {
     readonly region?: string
     readonly bucket?: string
     readonly endpoint?: string
-    /** Canned ACL applied to writes (e.g. `'public-read'`). */
+    /** Canned ACL applied to writes (e.g. `'public-read'`). BunIO only — NodeIO's fetch client
+     * never reads it (no `x-amz-acl` is sent). */
     readonly acl?: string
     /** Part size in bytes for STREAMING writes (a `ReadableStream` body goes up as a multipart
      * upload, one part per `partSize` bytes; default 5 MiB — S3's minimum, MinIO accepts smaller). */
@@ -302,7 +316,9 @@ export namespace IODef {
     readonly expiresIn?: number
     /** The HTTP method the URL authorizes (default `'GET'`). */
     readonly method?: 'GET' | 'PUT' | 'DELETE' | 'HEAD'
+    /** Canned ACL baked into the URL. BunIO only — ignored by NodeIO's fetch client. */
     readonly acl?: string
+    /** Content type baked into the URL. BunIO only — ignored by NodeIO's fetch client. */
     readonly type?: string
   }
 
@@ -384,7 +400,8 @@ export namespace IODef {
     /** Decode a token into `{ ts, counter, origin }`; fails `hlc-invalid` on malformed input. */
     decodeHlc: (token: string) => Operation<Hlc>
     /** The HLC receive rule: pull the local clock floor up to a remote token's time (bounded by
-     * `maxDriftMs`). Resolves `true` when adopted, `false` when rejected as drift. */
+     * `maxDriftMs`). Resolves `false` ONLY when the token is rejected as drift; `true` otherwise —
+     * also for a token at or behind the local floor, which is accepted but moves nothing. */
     observeHlc: (token: string, options?: ObserveHlcOptions) => Operation<boolean>
     hmac: (algorithm: HashAlgorithm, key: Uint8Array, data: Uint8Array) => Operation<Uint8Array>
     hash: (algorithm: HashAlgorithm, data: Uint8Array) => Operation<Uint8Array>
@@ -405,6 +422,9 @@ export namespace IODef {
       publicKey: Uint8Array,
     ) => Operation<boolean>
 
+    /** Adapt a Node `Readable` or a web reader into a byte flow. `destroy` (default `true`)
+     * destroys/cancels the source when the flow is torn down. NOTE: the default is written back
+     * onto the options object you pass — hand it a fresh literal, not a shared/frozen one. */
     fromReadable: (
       target: ReadableLike,
       options?: { destroy?: boolean },
@@ -421,7 +441,15 @@ export namespace IODef {
       },
     ) => Operation<void>
     read: (path: PathLike) => Operation<Uint8Array>
+    /** Read a file as text (default UTF-8). `encoding` is a bare string because the accepted set is
+     * the impl's: NodeIO takes any `BufferEncoding` (`'hex'`, `'base64'`, `'latin1'`, …); BunIO
+     * decodes non-UTF-8 through `TextDecoder`, so only WHATWG labels work there (`'latin1'`,
+     * `'utf-16le'`, …) and `'hex'` / `'base64'` throw an untagged `RangeError`. */
     readText: (path: PathLike, encoding?: string) => Operation<string>
+    /** Write a whole file. `flags`: `IO_FLAGS.append` and/or `IO_FLAGS.exclusive` (fail when the
+     * file exists); other bits are ignored. Missing parent directories: BunIO WITHOUT flags goes
+     * through `Bun.write`, which creates them; BunIO with any flag and NodeIO always use
+     * `fs.writeFile` and fail `ENOENT`. Call {@link ensureDir} first for portable code. */
     write: (
       path: PathLike,
       data: Uint8Array | string,
@@ -429,7 +457,14 @@ export namespace IODef {
         flags?: number
       },
     ) => Operation<void>
+    /** Append bytes, creating the file when missing. Typed bytes-only on purpose (encode text
+     * yourself, or use {@link write} with `IO_FLAGS.append`, which takes a string); both impls
+     * forward to `fs.appendFile`, which would accept a string at runtime. */
     append: (path: PathLike, data: Uint8Array) => Operation<void>
+    /** Copy a file. `flags`: only `IO_FLAGS.exclusive` is consulted (fail when `dest` exists); every
+     * other bit is ignored. Missing parent directories of `dest`: BunIO without `exclusive` copies
+     * through `Bun.write` and creates them; NodeIO (and BunIO with `exclusive`) use `fs.copyFile`
+     * and fail `ENOENT`. */
     copy: (
       src: PathLike,
       dest: PathLike,
@@ -437,6 +472,11 @@ export namespace IODef {
         flags?: number
       },
     ) => Operation<void>
+    /** Rename/move. `flags`: only `IO_FLAGS.exclusive` is consulted — fail `std:io.exists` when
+     * `dest` exists; every other bit is ignored. The guard is a check-then-rename, not atomic. On
+     * BunIO the check does not see DIRECTORIES: a directory renames onto an existing empty directory,
+     * and a file onto a directory fails with the raw `EISDIR`; NodeIO answers `std:io.exists` for
+     * both. */
     rename: (
       src: PathLike,
       dest: PathLike,
@@ -461,6 +501,8 @@ export namespace IODef {
       },
     ) => Operation<string[]>
     ensureDir: (path: PathLike) => Operation<void>
+    /** Create the file (and its parent directories) when missing; an existing file is untouched.
+     * When `path` is an existing DIRECTORY NodeIO is a no-op, BunIO fails with the raw `EISDIR`. */
     ensureFile: (path: PathLike) => Operation<void>
     emptyDir: (path: PathLike) => Operation<void>
     walk: (root: PathLike, options?: WalkOptions) => Operation<WalkEntry[]>
@@ -489,7 +531,13 @@ export namespace IODef {
       type?: 'file' | 'dir' | 'junction',
     ) => Operation<void>
     readlink: (path: PathLike) => Operation<string>
+    /** Run a command to completion. A binary that cannot be started fails `std:io.exec-spawn-failed`
+     * on BunIO and `std:io.exec-failed` on NodeIO (Node reports it through the same callback as a
+     * failing command). */
     exec: (cmd: string, args?: readonly string[], options?: ExecOptions) => Operation<ExecResult>
+    /** Start a child process. A binary that cannot be started fails at once with
+     * `std:io.spawn-failed` on BunIO; on NodeIO the handle is returned and its `exited()` fails
+     * `std:io.process-error` (Node reports the spawn error asynchronously). */
     spawn: (
       cmd: string,
       args?: readonly string[],

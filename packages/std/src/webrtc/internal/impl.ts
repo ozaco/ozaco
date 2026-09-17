@@ -5,7 +5,9 @@ import type { AnyType } from 'std:shared'
 import { RtcCauses } from '../errors'
 import type { RtcDef } from '../types/rtc'
 
-/** Probe result cache — the polyfill import is attempted at most once per process. */
+/** Probe result cache — the polyfill import is attempted at most once per process, and a FAILED
+ * probe (`false`) is cached too: installing `node-datachannel` later in the same process is not
+ * picked up until a restart. A platform global `RTCPeerConnection` is re-read on every connect. */
 let polyfilled: RtcDef.ImplLike | false | undefined
 
 const onNodeOrBun = () =>

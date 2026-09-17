@@ -177,6 +177,24 @@ describe('toml codec', () => {
       })
     })
 
+    it('decodeFlow ignores the `json` flag of the shared contract (a JsonCodec-only switch)', async () => {
+      const outcome = await run(function* () {
+        yield* TomlCodec.use()
+
+        const source = createChannel<Uint8Array, true | Result.Failure<unknown>>()
+        // `false` makes JsonCodec emit raw text chunks; TOML still parses the whole document
+        const decoded = yield* TomlCodec.actions.decodeFlow(source, false)
+        const collected = yield* drain<unknown>(decoded)
+
+        yield* source.send(encoder.encode('a = 1\n'))
+        yield* source.close(true)
+
+        return yield* collected
+      })
+
+      expect(unwrap(outcome)).toEqual({ values: [{ a: 1 }], close: true })
+    })
+
     it('encodeFlow → decodeFlow round-trips (disjoint chunks merge into one document)', async () => {
       const outcome = await run(function* () {
         yield* TomlCodec.use()

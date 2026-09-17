@@ -2,13 +2,14 @@ import type { Flow } from 'std:effect'
 import { action, each, guard } from 'std:effect'
 import { IO_FLAGS } from 'std:io'
 import { appendCauses, asFailure } from 'std:result'
-import { hasFlag } from 'std:shared'
 
 import { createReadStream, createWriteStream } from 'node:fs'
 
 import { IOCauses } from '../../errors'
 import type { IODef } from '../../types/io'
 import { fromReadable } from '../stream/from-readable'
+
+import { writeFlagOf } from './shared'
 
 const waitForFinish = (writable: IODef.WritableLike): ReturnType<typeof action<void>> =>
   action((resolve, reject) => {
@@ -57,13 +58,7 @@ export const writeFileFlow = guard(function* (
   flags?: number,
 ) {
   const f = flags ?? IO_FLAGS.none
-  const fsFlags = hasFlag(f, IO_FLAGS.append)
-    ? hasFlag(f, IO_FLAGS.exclusive)
-      ? 'ax'
-      : 'a'
-    : hasFlag(f, IO_FLAGS.exclusive)
-      ? 'wx'
-      : 'w'
+  const fsFlags = writeFlagOf(f)
   const writable = createWriteStream(path, { flags: fsFlags }) as unknown as IODef.WritableLike
 
   // A persistent 'error' listener: createWriteStream opens asynchronously and can emit 'error' (EACCES

@@ -34,7 +34,7 @@ const method = (targetMethod: string) =>
  * injectable via the `fetchImpl` context.
  */
 const FetchClientImpl = Fetch.implement<FetchDef.Context, [options?: FetchDef.Options]>({
-  name: 'std/fetch',
+  name: 'std/fetch-client',
   version: pkg.version,
   description: 'Effect-native HTTP client over the platform fetch',
 

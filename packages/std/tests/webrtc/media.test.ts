@@ -159,6 +159,9 @@ describe('typed media surface', () => {
         reconnects: peerA.reconnects,
         senderLive: sender.native !== undefined,
         state: peerA.connectionState,
+        // one `addTrack` call, announced once per generation: the two counters are not symmetric
+        sent: peerA.metrics.tracksSent,
+        received: peerB.metrics.tracksReceived,
       }
     })
 
@@ -168,6 +171,8 @@ describe('typed media surface', () => {
       reconnects: 1,
       senderLive: true,
       state: 'connected',
+      sent: 1,
+      received: 2,
     })
   })
 })

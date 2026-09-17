@@ -72,6 +72,9 @@ describe('session reconnect (redial)', () => {
         oldClose,
         parkedArrived: parkedArrived.done ? 'closed' : parkedArrived.value,
         received,
+        // one `channel()` call, announced once per generation: the two counters are not symmetric
+        opened: peerA.metrics.channelsOpened,
+        accepted: peerB.metrics.channelsAccepted,
       }
     })
 
@@ -84,6 +87,8 @@ describe('session reconnect (redial)', () => {
       oldClose: true,
       parkedArrived: 'sent during the outage',
       received: ['welcome back'],
+      opened: 1,
+      accepted: 2,
     })
   })
 

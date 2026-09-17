@@ -176,6 +176,40 @@ describe('tcp', () => {
 })
 
 describe('udp', () => {
+  it('close is idempotent and the message flow closes with true exactly once read', async () => {
+    const outcome = await run(function* () {
+      yield* BunIO.use()
+
+      const socket = yield* IO.actions.udpBind()
+      const messages = yield* socket.messages
+
+      yield* socket.close()
+      const second = yield* attempt(() => socket.close())
+      const closing = yield* messages.next()
+
+      return {
+        second: isFailure(second) ? 'failed' : 'ok',
+        close: closing.done === true ? closing.value : 'still-open',
+      }
+    })
+
+    expect(unwrap(outcome)).toEqual({ second: 'ok', close: true })
+  })
+
+  it('the socket is IPv4-only: a send to an IPv6 destination fails udp-send-failed', async () => {
+    const outcome = await run(function* () {
+      yield* BunIO.use()
+
+      const socket = yield* IO.actions.udpBind({ hostname: '127.0.0.1' })
+      const sent = yield* attempt(() => socket.send('x', socket.port, '::1'))
+      yield* socket.close()
+
+      return isFailure(sent) ? sent.error : 'no-failure'
+    })
+
+    expect(unwrap(outcome)).toBe('std:io.udp-send-failed')
+  })
+
   it('two sockets exchange a datagram; close ends the message flow', async () => {
     const outcome = await run(function* () {
       yield* BunIO.use()

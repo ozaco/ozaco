@@ -12,7 +12,9 @@ import type { RtcDef } from '../types/rtc'
 import { CHANNEL_DEFAULTS } from './const'
 import { sizeOf } from './observe'
 
-/** Whether a native can still take a `close()` call. */
+/** Whether a native can still take a `close()` call. The ws handle has a predicate of the same
+ * name over NUMERIC `readyState`s; this one reads the data channel's string states, so the two
+ * are deliberately not shared. */
 const isLive = (native: RtcDef.ChannelLike | undefined): native is RtcDef.ChannelLike =>
   native !== undefined && (native.readyState === 'open' || native.readyState === 'connecting')
 

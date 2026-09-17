@@ -22,6 +22,7 @@ export const fromReadable = (
   } = {},
 ): Flow<Uint8Array, IODef.FlowClose> =>
   resource(function* (provide) {
+    // the default lands on the CALLER's object (documented on `IODef.Actions.fromReadable`)
     if (!isBoolean(options.destroy)) {
       options.destroy = true
     }

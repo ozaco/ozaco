@@ -9,7 +9,9 @@ import type { WsDef } from '../types/ws'
 
 import { CONNECTING, OPEN } from './const'
 
-/** Whether a socket generation can still take a `close(code, reason)` call. */
+/** Whether a socket generation can still take a `close(code, reason)` call. The webrtc channel
+ * has a predicate of the same name over STRING `readyState`s; this one reads the socket's numeric
+ * states, so the two are deliberately not shared. */
 const isLive = (socket: WsDef.SocketLike | undefined): socket is WsDef.SocketLike =>
   socket !== undefined && (socket.readyState === OPEN || socket.readyState === CONNECTING)
 

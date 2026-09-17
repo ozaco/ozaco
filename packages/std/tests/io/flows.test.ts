@@ -203,6 +203,20 @@ describe('fromReadable', () => {
     expect(released).toBe(true)
   })
 
+  it('writes the destroy default back onto the options object it was given', async () => {
+    const options: { destroy?: boolean } = {}
+    const kept = { destroy: false }
+
+    const outcome = await run(function* () {
+      yield* fromReadable(Readable.from([encoder.encode('x')]), options)
+      yield* fromReadable(Readable.from([encoder.encode('x')]), kept)
+    })
+
+    expect(isFailure(outcome)).toBe(false)
+    expect(options).toEqual({ destroy: true })
+    expect(kept).toEqual({ destroy: false })
+  })
+
   it('adapts a Node Readable: bytes arrive, close is true', async () => {
     const readable = Readable.from([Buffer.from('yaprak'), Buffer.from('-dere')])
 

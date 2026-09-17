@@ -5,7 +5,7 @@ import type { AnyType } from 'std:shared'
 import { hasFlag } from 'std:shared'
 
 import fs from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { dirname } from 'node:path'
 
 import pkg from '../../../package.json'
 import { IOErrors } from '../errors'
@@ -22,7 +22,7 @@ import { uuidId } from '../internal/crypto/uuid'
 import { webHash, webHmac, webRandomBytes } from '../internal/crypto/web'
 import { readEnv } from '../internal/env'
 import { readFileFlow, writeFileFlow } from '../internal/fs/flow'
-import { mapStat, walkRecursive } from '../internal/fs/walk'
+import { sharedFs, writeFlagOf } from '../internal/fs/shared'
 import { watchPath } from '../internal/fs/watch'
 import { tcpConnect, tcpListen, udpBind } from '../internal/net/sockets'
 import { readCwd, readHomeDir, readInterfaces, readTmpDir } from '../internal/net/sys'
@@ -40,6 +40,8 @@ export const BunIO = IO.implement({
     return null
   },
 }).build({
+  ...sharedFs,
+
   env: readEnv,
 
   randomBytes: webRandomBytes,
@@ -86,18 +88,8 @@ export const BunIO = IO.implement({
       yield* until(Bun.write(toPath(path), data))
       return
     }
-    const flag = hasFlag(flags, IO_FLAGS.append)
-      ? hasFlag(flags, IO_FLAGS.exclusive)
-        ? 'ax'
-        : 'a'
-      : hasFlag(flags, IO_FLAGS.exclusive)
-        ? 'wx'
-        : 'w'
+    const flag = writeFlagOf(flags)
     yield* until(fs.writeFile(toPath(path), data, { flag }))
-  },
-
-  *append(path, data) {
-    yield* until(fs.appendFile(toPath(path), data))
   },
 
   *copy(src, dest, options) {
@@ -121,10 +113,6 @@ export const BunIO = IO.implement({
     yield* until(fs.rename(toPath(src), toPath(dest)))
   },
 
-  *rm(path, options) {
-    yield* until(fs.rm(toPath(path), options))
-  },
-
   *exists(path) {
     // `Bun.file(dir).exists()` reports `false` for directories — use `fs.access` (matches NodeIO) so
     // `exists` answers "path exists" for files and directories alike. NOTE: `rename` (EXCLUSIVE
@@ -139,24 +127,6 @@ export const BunIO = IO.implement({
     }
   },
 
-  *stat(path) {
-    const s = yield* until(fs.stat(toPath(path)))
-    return mapStat(s)
-  },
-
-  *lstat(path) {
-    const s = yield* until(fs.lstat(toPath(path)))
-    return mapStat(s)
-  },
-
-  *readdir(path, options) {
-    return yield* until(fs.readdir(toPath(path), options))
-  },
-
-  *ensureDir(path) {
-    yield* until(fs.mkdir(toPath(path), { recursive: true }))
-  },
-
   *ensureFile(path) {
     const p = toPath(path)
     const dir = dirname(p)
@@ -169,47 +139,11 @@ export const BunIO = IO.implement({
     }
   },
 
-  *emptyDir(path) {
-    const p = toPath(path)
-    yield* until(fs.mkdir(p, { recursive: true }))
-    const entries = yield* until(fs.readdir(p))
-    for (const entry of entries) {
-      yield* until(fs.rm(join(p, entry), { recursive: true, force: true }))
-    }
-  },
-
-  *walk(root, options) {
-    const p = toPath(root)
-    const results: IODef.WalkEntry[] = []
-    yield* walkRecursive(
-      p,
-      {
-        flags: options?.flags ?? IO_FLAGS.files | IO_FLAGS.dirs,
-        maxDepth: options?.maxDepth ?? Number.POSITIVE_INFINITY,
-        match: options?.match,
-        skip: options?.skip,
-      },
-      0,
-      results,
-    )
-    return results
-  },
-
   join: nodePath.join,
   dirname: nodePath.dirname,
   basename: nodePath.basename,
   extname: nodePath.extname,
   isAbsolute: nodePath.isAbsolute,
-
-  *chmod(path, mode) {
-    yield* until(fs.chmod(toPath(path), mode))
-  },
-  *symlink(target, path, type) {
-    yield* until(fs.symlink(toPath(target), toPath(path), type))
-  },
-  *readlink(path) {
-    return yield* until(fs.readlink(toPath(path)))
-  },
 
   exec: bunExec,
   spawn: bunSpawn,

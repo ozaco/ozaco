@@ -1,5 +1,16 @@
 import { Codec } from 'std:codec'
-import { attempt, createChannel, each, run, scoped, sleep, spawn, withResolvers } from 'std:effect'
+import {
+  attempt,
+  createChannel,
+  each,
+  run,
+  scoped,
+  sleep,
+  spawn,
+  useContext,
+  withResolvers,
+} from 'std:effect'
+import { PluginErrors } from 'std:plugin'
 import type { Result } from 'std:result'
 import { isFailure, unwrap } from 'std:result'
 
@@ -73,6 +84,54 @@ describe('registry scope-locality', () => {
 
     expect(unwrap(outcome)).toBe('std:codec.already-registered')
   })
+  it('one impl installed under two names lands in the registry twice (keyed by name)', async () => {
+    const outcome = await run(function* () {
+      yield* JsonCodec.use({ name: 'json-a' })
+      yield* JsonCodec.use({ name: 'json-b' })
+
+      const listed = yield* Codec.actions.getTransports()
+      const names: string[] = []
+      for (const codec of listed) {
+        names.push((yield* useContext(codec)).name)
+      }
+
+      // ONE install is active (the second replaced the first), the registry still counts two —
+      // and both entries resolve the latest install's context
+      return { count: listed.length, samePlugin: listed[0] === listed[1], names }
+    })
+
+    expect(unwrap(outcome)).toEqual({
+      count: 2,
+      samePlugin: true,
+      names: ['json-b', 'json-b'],
+    })
+  })
+
+  it('an impl that never calls `register` is routable yet invisible to the registry', async () => {
+    const outcome = await run(function* () {
+      // the fake codec's setup builds a context only — routing reads the install list, the
+      // registry handlers read what `register` wrote
+      yield* fakeCodec('solo').use()
+
+      return {
+        routed: yield* Codec.actions.stringify({ a: 1 }),
+        has: yield* Codec.actions.hasCodec(),
+        count: (yield* Codec.actions.getTransports()).length,
+      }
+    })
+
+    expect(unwrap(outcome)).toEqual({ routed: 'solo:{"a":1}', has: false, count: 0 })
+  })
+
+  it('a protocol call with no codec installed fails `PluginErrors.MissingAction`', async () => {
+    const outcome = await run(function* () {
+      const result = yield* attempt(() => Codec.actions.stringify({ a: 1 }))
+
+      return isFailure(result) ? result.error : 'no-failure'
+    })
+
+    expect(unwrap(outcome)).toBe(PluginErrors.MissingAction)
+  })
 })
 
 describe('multi-codec priority routing (Codec.exec)', () => {
@@ -91,6 +150,21 @@ describe('multi-codec priority routing (Codec.exec)', () => {
     })
 
     expect(unwrap(outcome)).toBe('fake-high:{"n":1}')
+  })
+
+  it('getTransports lists the registry ascending by priority — the active codec is last', async () => {
+    const outcome = await run(function* () {
+      const Low = fakeCodec('order-low')
+      const High = fakeCodec('order-high')
+      yield* High.use({ priority: 900 })
+      yield* Low.use({ priority: 100 })
+      yield* Codec.actions.register(High, { name: 'order-high', priority: 900, ext: 'fake' })
+      yield* Codec.actions.register(Low, { name: 'order-low', priority: 100, ext: 'fake' })
+
+      return (yield* Codec.actions.getTransports()).map(codec => codec.name)
+    })
+
+    expect(unwrap(outcome)).toEqual(['order-low', 'order-high'])
   })
 
   it('breaks priority ties toward the most recently installed codec', async () => {

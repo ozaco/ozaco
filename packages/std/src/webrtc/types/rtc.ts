@@ -339,7 +339,10 @@ export namespace RtcDef {
    * scope; remote channels (from `peer.channels`) live until the peer ends or `close()` is called.
    */
   export interface Channel {
-    /** The underlying platform channel (escape hatch). */
+    /** The underlying platform channel (escape hatch). Under `reconnect` it is replaced on every
+     * redialed generation and is NOT there through the redial gap: the getter hands back
+     * `undefined` then, although the type does not say so (`Sender.native` does) — read it only
+     * while `readyState` is `'open'`. */
     readonly native: ChannelLike
     readonly label: string
     readonly readyState: ChannelLike['readyState']
@@ -454,7 +457,8 @@ export namespace RtcDef {
     /** connections CONSTRUCTED: the first dial plus every redial attempt (a redial that needed
      * three attempts to stick counts three). */
     generations: number
-    /** offer rounds this side drove to completion. */
+    /** offer rounds this side STARTED — counted when the offer goes out, so it moves with
+     * `offersSent`; a round's completion is the matching `answersReceived`. */
     negotiations: number
     offersSent: number
     offersReceived: number
@@ -471,7 +475,10 @@ export namespace RtcDef {
     restarts: number
     reconnects: number
 
-    /** channels this side opened / the remote announced. */
+    /** channels this side opened / the remote announced. NOT symmetric across a redial:
+     * `channelsOpened` counts a `peer.channel(...)` call once (its rebind onto a redialed
+     * generation is not re-counted), while `channelsAccepted` counts every announcement — the
+     * remote sees the same channel announced again per generation. */
     channelsOpened: number
     channelsAccepted: number
     messagesSent: number
@@ -480,6 +487,8 @@ export namespace RtcDef {
      * exact wire numbers live in `peer.stats()`'s data-channel entries). */
     bytesSent: number
     bytesReceived: number
+    /** the same asymmetry as the channel pair: `tracksSent` counts an `addTrack` call once,
+     * `tracksReceived` counts every generation's re-announcement of it. */
     tracksSent: number
     tracksReceived: number
 

@@ -12,12 +12,18 @@ export namespace FetchDef {
    * string tags fetch raises itself are the deliberate, non-thrown conditions: `FetchErrors.HttpStatus` (a
    * non-ok response under `.expect()`), `FetchErrors.Parse` (a response with no body) and `FetchErrors.Timeout` (a
    * `timeoutMs` deadline hit before the response settled).
+   *
+   * No signature refers to it (a failure's error is `unknown` everywhere in std); it exists as the
+   * named place this contract is written down, for consumers annotating their own handlers.
    */
   export type Error = unknown
 
   /**
    * The body union requests accept (platform `BodyInit`), spelled out so callers compiling
-   * without the `dom` lib don't have to hand-roll it.
+   * without the `dom` lib don't have to hand-roll it. `Init` itself stays `RequestInit`-based, so
+   * nothing in std refers to this type — it is there for consumers typing their own body builders.
+   * It is slightly WIDER than the lib's `BodyInit` (an `ArrayBufferView` here may sit over a
+   * `SharedArrayBuffer`), so narrow it where it meets `Init.body`.
    */
   export type Body =
     | string
@@ -50,7 +56,7 @@ export namespace FetchDef {
   export type Impl = (input: RequestInfo | URL, init?: RequestInit) => Promise<globalThis.Response>
 
   /** The close value a codec flow settles with: `true` on a clean end, or a failure mid-flow. */
-  type FlowClose = true | Result.Failure<unknown>
+  export type FlowClose = true | Result.Failure<unknown>
 
   /** Install-time options; every field is optional and becomes a scope-wide default. */
   export interface Options {
@@ -99,7 +105,9 @@ export namespace FetchDef {
     bytes(): Operation<Uint8Array>
 
     /** Whole body, decoded once through the registered codec — a codec (e.g. `JsonCodec`) must be
-     * installed in scope, otherwise the read fails with `missing-action`. */
+     * installed in scope, otherwise the read fails with `missing-action`. An EMPTY payload (204, a
+     * bodiless 200) resolves `undefined` without touching the codec: type it in when that can
+     * happen (`body<Foo | undefined>()`). */
     body<T = unknown>(): Operation<T>
     /** Body piped through the codec's streaming decoder — one decoded value per chunk. */
     flow<T = unknown>(): Operation<Flow<T, FlowClose>>

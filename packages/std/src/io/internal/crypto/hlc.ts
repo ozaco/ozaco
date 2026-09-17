@@ -62,7 +62,9 @@ const normalizeOrigin = (origin: string): string | null => {
 }
 
 /** The validated, upper-cased origin or `null` when it is not 8 Crockford base32 characters
- * (`0-9 A-H J K M N P-T V-Z`; I/L/O/U are rejected, not aliased). */
+ * (`0-9 A-H J K M N P-T V-Z`; I/L/O/U are rejected, not aliased). Not wired to an action: it is
+ * the pre-flight check for code that accepts an origin from configuration and wants to reject it
+ * before the first `hlc()` mint does. */
 export const originOf = (origin: string): string | null => normalizeOrigin(origin)
 
 // per-origin send state: one process may host several nodes (tests, pinned installs) and their
@@ -111,7 +113,8 @@ export function* hlcDecode(token: string) {
 }
 
 /** The receive rule: adopt a remote timestamp as the new floor unless it is implausibly far ahead
- * of the local clock (`maxDriftMs`). Returns whether the clock was adopted. */
+ * of the local clock (`maxDriftMs`). Returns `false` for such drift only; a token at or behind the
+ * floor is accepted (`true`) without moving the floor. */
 export function* hlcObserve(token: string, options?: IODef.ObserveHlcOptions) {
   const remote = yield* hlcDecode(token)
   const maxDrift = options?.maxDriftMs ?? DEFAULT_MAX_DRIFT_MS

@@ -71,6 +71,9 @@ export const codecHasCodecHandler: CodecDef.Handlers['hasCodec'] = function* () 
   return (yield* codecGetTransportsHandler()).length > 0
 }
 
+// the frame handlers are generic in the contract (`<T>(…) => Operation<T>`) but hand back either
+// the untouched input or the codec's output, so the implementations are written against `unknown`
+// and cast to the handler type — `T` is a caller-side annotation, never a runtime guarantee
 export const codecEncodeFrameHandler = function* (data: unknown, preferred?: CodecDef) {
   if (typeof data === 'string') {
     return data

@@ -63,7 +63,7 @@ member. To substitute a platform implementation, implement the protocol (`Ws.imp
 `Rtc.implement(...)`) — never an `impl` option (see `tests/ws/helpers.ts` `wsMock`,
 `tests/webrtc/fake.ts` `rtcMock`). Plugin/protocol names all start with `std/`
 (`std/io`, `std/bun-io`, `std/logger`, `std/default-logger`, `std/console-transport`,
-`std/file-transport`, `std/ws`, `std/ws-client`, `std/webrtc`, `std/webrtc-client`, …). Retry
+`std/file-transport`, `std/fetch`, `std/fetch-client`, `std/ws`, `std/ws-client`, `std/webrtc`, `std/webrtc-client`, …). Retry
 budgets and re-armed gates are `std:effect` primitives (`budgetOf`/`budgetDelay`/`BUDGET_DEFAULTS`,
 `createGate`), frame-decoding subscriptions come from `Codec.actions.decodeFrames` — ws and webrtc
 share them instead of re-implementing them.

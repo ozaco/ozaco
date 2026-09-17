@@ -7,7 +7,7 @@ import { hasFlag } from 'std:shared'
 
 import { createHash, createHmac, randomBytes as nodeRandomBytes } from 'node:crypto'
 import fs from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { dirname } from 'node:path'
 
 import pkg from '../../../package.json'
 import { IOErrors } from '../errors'
@@ -23,7 +23,7 @@ import { ulidId } from '../internal/crypto/ulid'
 import { uuidId } from '../internal/crypto/uuid'
 import { readEnv } from '../internal/env'
 import { readFileFlow, writeFileFlow } from '../internal/fs/flow'
-import { mapStat, walkRecursive } from '../internal/fs/walk'
+import { sharedFs, writeFlagOf } from '../internal/fs/shared'
 import { watchPath } from '../internal/fs/watch'
 import { tcpConnect, tcpListen, udpBind } from '../internal/net/sockets'
 import { readCwd, readHomeDir, readInterfaces, readTmpDir } from '../internal/net/sys'
@@ -38,6 +38,13 @@ import type { IODef } from '../types/io'
 const toNodeHash = (alg: IODef.HashAlgorithm) =>
   alg === 'SHA-256' ? 'sha256' : alg === 'SHA-384' ? 'sha384' : 'sha512'
 
+/**
+ * The IO impl for Node (and any runtime with the `node:*` builtins but no `Bun` global, e.g. Deno).
+ * Nothing inside this monorepo installs it — every first-party package runs on Bun — it ships for
+ * consumers on those runtimes. The fs handlers that need no Bun API are written the same way as
+ * `BunIO`'s; where the two DO differ (parent-directory creation, directory destinations, text
+ * encodings, process failure tags) the difference is stated on the `IODef.Actions` member.
+ */
 export const NodeIO = IO.implement({
   name: 'std/node-io',
   version: pkg.version,
@@ -45,6 +52,8 @@ export const NodeIO = IO.implement({
     return null
   },
 }).build({
+  ...sharedFs,
+
   env: readEnv,
 
   *randomBytes(length) {
@@ -91,18 +100,8 @@ export const NodeIO = IO.implement({
 
   *write(path, data, options) {
     const f = options?.flags ?? IO_FLAGS.none
-    const flag = hasFlag(f, IO_FLAGS.append)
-      ? hasFlag(f, IO_FLAGS.exclusive)
-        ? 'ax'
-        : 'a'
-      : hasFlag(f, IO_FLAGS.exclusive)
-        ? 'wx'
-        : 'w'
+    const flag = writeFlagOf(f)
     yield* until(fs.writeFile(toPath(path), data, { flag }))
-  },
-
-  *append(path, data) {
-    yield* until(fs.appendFile(toPath(path), data))
   },
 
   *copy(src, dest, options) {
@@ -126,10 +125,6 @@ export const NodeIO = IO.implement({
     yield* until(fs.rename(toPath(src), toPath(dest)))
   },
 
-  *rm(path, options) {
-    yield* until(fs.rm(toPath(path), options))
-  },
-
   *exists(path) {
     try {
       yield* until(fs.access(toPath(path)))
@@ -137,24 +132,6 @@ export const NodeIO = IO.implement({
     } catch {
       return false
     }
-  },
-
-  *stat(path) {
-    const s = yield* until(fs.stat(toPath(path)))
-    return mapStat(s)
-  },
-
-  *lstat(path) {
-    const s = yield* until(fs.lstat(toPath(path)))
-    return mapStat(s)
-  },
-
-  *readdir(path, options) {
-    return yield* until(fs.readdir(toPath(path), options))
-  },
-
-  *ensureDir(path) {
-    yield* until(fs.mkdir(toPath(path), { recursive: true }))
   },
 
   *ensureFile(path) {
@@ -168,47 +145,11 @@ export const NodeIO = IO.implement({
     }
   },
 
-  *emptyDir(path) {
-    const p = toPath(path)
-    yield* until(fs.mkdir(p, { recursive: true }))
-    const entries = yield* until(fs.readdir(p))
-    for (const entry of entries) {
-      yield* until(fs.rm(join(p, entry), { recursive: true, force: true }))
-    }
-  },
-
-  *walk(root, options) {
-    const p = toPath(root)
-    const results: IODef.WalkEntry[] = []
-    yield* walkRecursive(
-      p,
-      {
-        flags: options?.flags ?? IO_FLAGS.files | IO_FLAGS.dirs,
-        maxDepth: options?.maxDepth ?? Number.POSITIVE_INFINITY,
-        match: options?.match,
-        skip: options?.skip,
-      },
-      0,
-      results,
-    )
-    return results
-  },
-
   join: nodePath.join,
   dirname: nodePath.dirname,
   basename: nodePath.basename,
   extname: nodePath.extname,
   isAbsolute: nodePath.isAbsolute,
-
-  *chmod(path, mode) {
-    yield* until(fs.chmod(toPath(path), mode))
-  },
-  *symlink(target, path, type) {
-    yield* until(fs.symlink(toPath(target), toPath(path), type))
-  },
-  *readlink(path) {
-    return yield* until(fs.readlink(toPath(path)))
-  },
 
   exec: nodeExec,
   spawn: nodeSpawn,

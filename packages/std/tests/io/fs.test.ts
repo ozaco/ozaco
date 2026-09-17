@@ -317,6 +317,19 @@ describe('paths', () => {
     expect(toPath(new URL('file:///tmp/caf%C3%A9.txt'))).toBe('/tmp/café.txt')
   })
 
+  it('toPath handles the empty-host triple-slash form only; other file URLs pass through unchanged', () => {
+    // a Windows drive URL keeps its leading slash
+    expect(toPath('file:///C:/Users/x/f.txt')).toBe('/C:/Users/x/f.txt')
+    expect(toPath(new URL('file:///C:/Users/x/f.txt'))).toBe('/C:/Users/x/f.txt')
+    // a host (UNC share, localhost) or the single-slash form is not converted at all
+    expect(toPath('file://host/share/f.txt')).toBe('file://host/share/f.txt')
+    expect(toPath(new URL('file://host/share/f.txt'))).toBe('file://host/share/f.txt')
+    expect(toPath('file://localhost/tmp/x')).toBe('file://localhost/tmp/x')
+    expect(toPath('file:/tmp/x')).toBe('file:/tmp/x')
+    // anything without the scheme is a path already, relative ones included
+    expect(toPath('plain/rel.txt')).toBe('plain/rel.txt')
+  })
+
   it('actions accept URL paths; path helpers mirror node:path', async () => {
     await withTempDir(async dir => {
       const outcome = await run(function* () {

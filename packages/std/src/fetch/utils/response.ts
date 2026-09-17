@@ -89,8 +89,6 @@ export const createFetchResponse = (raw: Response, preferred?: CodecDef): FetchD
     raw: readRaw,
 
     *expect() {
-      yield* until(Promise.resolve())
-
       if (!raw.ok) {
         return yield* fail(FetchErrors.HttpStatus, `${raw.url}: ${raw.status} ${raw.statusText}`)
       }
