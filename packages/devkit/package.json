@@ -46,7 +46,7 @@
     "@ozaco/std": "workspace:*",
     "@ozaco/transport": "workspace:*",
     "tsdown": "catalog:build",
-    "unplugin": "3.3.0"
+    "unplugin": "catalog:shared"
   },
   "peerDependencies": {
     "@ozaco/ai": "*",

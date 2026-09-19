@@ -16,7 +16,7 @@
     "@ozaco/server": "workspace:*",
     "@ozaco/std": "workspace:*",
     "@ozaco/transport": "workspace:*",
-    "zod": "^4.6.5"
+    "zod": "catalog:shared"
   },
   "devDependencies": {
     "node-datachannel": "0.33.4",
