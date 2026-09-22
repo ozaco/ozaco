@@ -3,7 +3,14 @@ import { defineProtocol } from 'std:plugin'
 import { fail } from 'std:result'
 
 import pkg from '../../../package.json'
-import { SERVER, SERVER_CARRIER, SERVER_EDGE, SERVER_OBSERVE, SERVER_OUTCOMES } from '../const'
+import {
+  SERVER,
+  SERVER_CARRIER,
+  SERVER_EDGE,
+  SERVER_OBSERVE,
+  SERVER_OBSERVE_EXPORTER,
+  SERVER_OUTCOMES,
+} from '../const'
 import { ServerErrors } from '../errors'
 import type { CarrierDef } from '../types/carrier'
 import type { EdgeDef } from '../types/edge'
@@ -103,3 +110,36 @@ export const Observe: Protocol<ObserveDef.Options, ObserveDef.Actions> = defineP
     *flush() {},
   },
 })
+
+/**
+ * Where observations are SHIPPED: `OtlpExporter`, `OpenObserveExporter`, `StdoutExporter` (or
+ * one of your own — `ObserveExporter.implement(...)`), installed side by side. Cloneable: the
+ * kernel fans every event out to all installs, `start`s them with the node and `flush`es them
+ * at stop — nested installs included (an exporter may install another one inside its own
+ * setup and never relay a thing). Independent of the `Observe` store: exporters work with or
+ * without `ObservePlugin`.
+ */
+export const ObserveExporter: Protocol<ObserveDef.ExporterContext, ObserveDef.ExporterActions> =
+  defineProtocol<ObserveDef.ExporterContext, ObserveDef.ExporterActions>({
+    name: 'server-observe-exporter',
+    version: pkg.version,
+    description: 'A destination the observed requests, spans, logs, failures and events go to',
+
+    subtype: SERVER_OBSERVE_EXPORTER,
+    cloneable: true,
+
+    defaults: {
+      *export() {},
+      *start() {},
+      *flush() {},
+    },
+
+    // every exporter sees every call, in install order — SEQUENTIALLY, in the caller's scope:
+    // `start` forks age timers and beats that must outlive the call (an `all` fan-out would
+    // close its child scopes and halt them on the way out)
+    *exec(entries, run) {
+      for (const entry of entries) {
+        yield* run(entry)
+      }
+    },
+  })

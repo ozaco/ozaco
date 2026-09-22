@@ -56,9 +56,21 @@ export namespace ServiceDef {
     /** Always persist this action's outcome (otherwise only undeliverable replies are). */
     readonly outcome?: boolean | undefined
 
-    /** Failure tag → HTTP status overrides; also feeds the docs error catalog. */
+    /** Failure tag → HTTP status overrides; also feeds the docs error catalog. Any status goes,
+     * a 2xx included: `{ 'rpc.invalid-params': 200 }` delivers that failure as a 200 whose body
+     * is still the `{ error }` envelope, flagged by the `oz-error` header (the client reads the
+     * header, so it stays a failure there too) — the JSON-RPC / MCP shape. */
     readonly errors?: Readonly<Record<string, number>> | undefined
     readonly tags?: readonly string[] | undefined
+
+    /** The HTTP status of a SUCCESSFUL reply over the edge (`201` for a create, `202` for an
+     * accepted job…). Default `200`, or `204` when the handler answers nothing. Published in
+     * the manifest / OpenAPI. `ctx.reply({ status })` overrides it per call. */
+    readonly status?: number | undefined
+
+    /** Static response headers every successful edge reply of this action carries (a
+     * `cache-control`, a vendor header…). `ctx.reply({ headers })` adds per-call ones. */
+    readonly headers?: Readonly<Record<string, string>> | undefined
 
     /** Free-form documentation the manifest publishes VERBATIM on this action's entry (a
      * resource's filter surface, examples, vendor extensions…) — JSON-safe values only. */
@@ -107,6 +119,10 @@ export namespace ServiceDef {
     readonly outcome: boolean
     readonly errors: Readonly<Record<string, number>>
     readonly tags: readonly string[]
+
+    /** the success status over the edge (`null` = the default: 200, or 204 for no output). */
+    readonly status: number | null
+    readonly headers: Readonly<Record<string, string>>
 
     /** free-form docs block, published verbatim in the manifest (`null` when none). */
     readonly docs: Readonly<Record<string, unknown>> | null
@@ -236,6 +252,11 @@ export namespace ServiceDef {
   export interface ServiceOptions {
     readonly version?: string | undefined
     readonly description?: string | undefined
+
+    /** The `auth` requirement every action of this service gets unless it sets its own
+     * (`auth: false` opens one up again). Sockets keep their own `authorize` seam. Needs the
+     * `Auth` plugin like the per-action option does. */
+    readonly auth?: OptionsDef.Requirement | undefined
   }
 
   // --- typed references (what `ctx.call` / the client take) ----------------------------------

@@ -5,6 +5,7 @@ import type { Result } from 'std:result'
 import { isFailure } from 'std:result'
 
 import { TraceRef } from '../context'
+import { ObserveExporter } from '../definition/protocol'
 import type { Helpers } from '../types/helpers'
 import type { ObserveDef } from '../types/observe'
 import type { ServerDef } from '../types/server'
@@ -78,6 +79,11 @@ export function* report(kernel: ServerDef.Context, event: ObserveDef.Event): Ope
       // an observer must never fail the thing it observes
       yield* attempt(() => hooks.observe!(event))
     }
+  }
+
+  // …and neither may an exporter (every installed one, through the protocol's fan-out)
+  if (kernel.exporting) {
+    yield* attempt(() => ObserveExporter.actions.export(event))
   }
 }
 

@@ -163,11 +163,23 @@ export namespace ServerDef {
     /** Broadcast an event to every node (at-most-once). */
     emit(name: string, payload: unknown): Operation<void>
 
+    /** Shape THIS call's successful edge response: a status and/or extra headers, merged over
+     * the action's static `status`/`headers` (a later call wins per key). A no-op when the
+     * caller is not the edge (a carrier hop, `ctx.call`, `server.call`) — the reply then has
+     * no HTTP surface to shape. */
+    reply(reply: Reply): void
+
     /** Open a child span under this one (custom instrumentation). */
     span<T>(name: string, body: () => Operation<T>, attrs?: Record<string, unknown>): Operation<T>
   }
 
   // --- dispatch ------------------------------------------------------------------------------
+
+  /** What a handler may say about its successful HTTP reply — see {@link Ctx.reply}. */
+  export interface Reply {
+    readonly status?: number | undefined
+    readonly headers?: Readonly<Record<string, string>> | undefined
+  }
 
   /** One dispatch as the kernel sees it (before plugins). */
   export interface Call {
@@ -185,6 +197,9 @@ export namespace ServerDef {
     /** abort `signal` (the kernel fires it right before a cancelled handler is torn down, so the
      * handler's own cleanup sees `signal.aborted`). */
     readonly abort?: ((reason: string) => void) | undefined
+
+    /** The edge's sink for {@link Ctx.reply} — absent on every other transport. */
+    readonly reply?: ((reply: Reply) => void) | undefined
   }
 
   export type Dispatch = (call: Call, ctx: Ctx) => Operation<unknown>
@@ -278,6 +293,11 @@ export namespace ServerDef {
 
     /** dispatches running here right now (what `stop()` drains). */
     inflight: number
+
+    /** whether any `ObserveExporter` is installed — set by `createServer` once the plugins are
+     * in, read on the hot path (bodies are captured, events fanned out, only when someone
+     * listens). */
+    exporting: boolean
 
     /** socket routes mounted on the edge (for docs / the manifest). */
     readonly sockets: EdgeDef.SocketInfo[]

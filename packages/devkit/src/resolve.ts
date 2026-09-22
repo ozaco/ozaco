@@ -66,6 +66,7 @@ const DB_MODULES: Record<string, ModuleEntry> = {
   'db:impl/bun-sql': { subpath: 'impl/bun-sql', source: 'impl/bun-sql/index.ts' },
   'db:impl/memory-kv': { subpath: 'impl/memory-kv', source: 'impl/memory-kv/index.ts' },
   'db:impl/redis-kv': { subpath: 'impl/redis-kv', source: 'impl/redis-kv/index.ts' },
+  'db:impl/table-kv': { subpath: 'impl/table-kv', source: 'impl/table-kv/index.ts' },
 }
 
 const TRANSPORT_MODULES: Record<string, ModuleEntry> = {

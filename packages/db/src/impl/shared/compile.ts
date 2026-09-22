@@ -18,6 +18,8 @@ function* bind(builder: Sql.Builder, field: string, value: unknown) {
   return builder.dialect.placeholder(builder.params.length)
 }
 
+const LIKE_ESCAPE = String.raw`ESCAPE '\'`
+
 const COMPARE: Record<string, string> = {
   eq: '=',
   ne: '<>',
@@ -67,13 +69,15 @@ function* filterSql(builder: Sql.Builder, filter: Spec.Filter): Operation<string
       const column = quoteIdent(filter.field)
       const pattern = yield* bind(builder, filter.field, filter.pattern)
 
+      // `\` escapes `%`/`_`/itself on EVERY backend (Postgres' default, SQLite has none) so a
+      // pattern built with `escapeLike` means the same thing everywhere, memory included
       if (!filter.insensitive) {
-        return `${column} LIKE ${pattern}`
+        return `${column} LIKE ${pattern} ${LIKE_ESCAPE}`
       }
 
       return builder.dialect.ilike
-        ? `${column} ${builder.dialect.ilike} ${pattern}`
-        : `LOWER(${column}) LIKE LOWER(${pattern})`
+        ? `${column} ${builder.dialect.ilike} ${pattern} ${LIKE_ESCAPE}`
+        : `LOWER(${column}) LIKE LOWER(${pattern}) ${LIKE_ESCAPE}`
     }
 
     case 'is-null': {

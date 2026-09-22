@@ -4,6 +4,7 @@ export const SERVER_EDGE = Symbol.for('server:edge')
 export const SERVER_CARRIER = Symbol.for('server:carrier')
 export const SERVER_OUTCOMES = Symbol.for('server:outcomes')
 export const SERVER_OBSERVE = Symbol.for('server:observe')
+export const SERVER_OBSERVE_EXPORTER = Symbol.for('server:observe-exporter')
 
 /** Brands on definition-time values. */
 export const SERVICE = Symbol.for('server:service')

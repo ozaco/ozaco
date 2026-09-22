@@ -100,9 +100,22 @@ const bodyOf = (stream: StreamDef.Branded): { body: ReadableStream<Uint8Array>; 
   return { body, type }
 }
 
-/** The response of a successful dispatch. */
-export const responseOf = (value: unknown, requestId: string): Response => {
+/** What shapes a successful reply besides its value: the action's static `status`/`headers`
+ * with the handler's `ctx.reply` merged over them. */
+export interface ReplyShape {
+  readonly status?: number | null | undefined
+  readonly headers?: Readonly<Record<string, string>> | undefined
+}
+
+/** The response of a successful dispatch. The status defaults to 200 (204 for no value) unless
+ * the action or the handler said otherwise; a 204/304 never carries a body, so a value replied
+ * under such a status is dropped rather than producing an invalid response. */
+export const responseOf = (value: unknown, requestId: string, shape?: ReplyShape): Response => {
   const headers = new Headers({ [HEADERS.requestId]: requestId })
+
+  for (const [name, header] of Object.entries(shape?.headers ?? {})) {
+    headers.set(name, header)
+  }
 
   if (isBranded(value)) {
     const { body, type } = bodyOf(value)
@@ -113,14 +126,16 @@ export const responseOf = (value: unknown, requestId: string): Response => {
       headers.set('cache-control', 'no-cache')
     }
 
-    return new Response(body, { status: 200, headers })
+    return new Response(body, { status: shape?.status ?? 200, headers })
   }
 
-  if (value === undefined) {
-    return new Response(null, { status: 204, headers })
+  const status = shape?.status ?? (value === undefined ? 204 : 200)
+
+  if (value === undefined || status === 204 || status === 304) {
+    return new Response(null, { status, headers })
   }
 
-  return Response.json(value, { status: 200, headers })
+  return Response.json(value, { status, headers })
 }
 
 /** The response of a failed dispatch: the wire failure as JSON under `error`. */

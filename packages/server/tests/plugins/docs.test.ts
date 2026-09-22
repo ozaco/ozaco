@@ -1,6 +1,6 @@
-import { createServer, Edge } from 'server:core'
-import { Docs, manifestSchema, ObservePlugin, Resilience } from 'server:plugins'
-import { run, until } from 'std:effect'
+import { createServer, Edge, ServerErrors } from 'server:core'
+import { Auth, Docs, manifestSchema, ObservePlugin, Resilience, StaticAuth } from 'server:plugins'
+import { attempt, run, until } from 'std:effect'
 import { unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
 
@@ -83,6 +83,59 @@ describe('docs', () => {
         const live = yield* Edge.actions.handle(new Request('http://edge/_observe/api/requests'))
         expect(live.status).toBe(200)
         yield* server.stop()
+      }),
+    )
+  })
+
+  it('`auth` gates every docs route through Auth; the manifest documents the install default', async () => {
+    unwrap(
+      await run(function* () {
+        yield* storage()
+        const server = yield* createServer({
+          services: [todos],
+          edge: BunEdge,
+          plugins: [
+            StaticAuth.use({ tokens: { 'tok-docs': { sub: 'docs' } } }),
+            Auth.use({ default: 'authenticated' }),
+            Docs.use({ auth: 'authenticated' }),
+          ],
+        })
+        yield* server.start()
+        for (const path of ['/docs', '/docs/manifest', '/docs/openapi.json']) {
+          const denied = yield* Edge.actions.handle(new Request(`http://edge${path}`))
+          expect(denied.status).toBe(401)
+          const allowed = yield* Edge.actions.handle(
+            new Request(`http://edge${path}`, { headers: { authorization: 'Bearer tok-docs' } }),
+          )
+          expect(allowed.status).toBe(200)
+        }
+        const response = yield* Edge.actions.handle(
+          new Request('http://edge/docs/manifest', {
+            headers: { authorization: 'Bearer tok-docs' },
+          }),
+        )
+        const manifest = (yield* until(response.json())) as AnyType
+        expect(manifestSchema.safeParse(manifest).success).toBe(true)
+        // `todos.list` sets no `auth` of its own: documented as what the install default makes it
+        const todosDoc = manifest.services.find((entry: { name: string }) => entry.name === 'todos')
+        const list = todosDoc.actions.find((entry: { action: string }) => entry.action === 'list')
+        expect(list.auth).toEqual({ kind: 'authenticated' })
+        yield* server.stop()
+      }),
+    )
+
+    // gating without the Auth plugin is a configuration failure at start (a fresh scope: the
+    // Auth context above is scope-bound and would otherwise still be visible here)
+    unwrap(
+      await run(function* () {
+        yield* storage()
+        const bare = yield* createServer({
+          services: [todos],
+          edge: BunEdge,
+          plugins: [Docs.use({ auth: 'authenticated' })],
+        })
+        const started = yield* attempt(bare.start())
+        expect((started as AnyType).error).toBe(ServerErrors.Configuration)
       }),
     )
   })

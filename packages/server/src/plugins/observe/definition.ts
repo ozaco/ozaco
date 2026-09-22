@@ -11,7 +11,6 @@ import { instanceStats, membersView, runCluster } from './internal/cluster'
 import { enqueue, flush, startFlusher } from './internal/collector'
 import { mountConsole } from './internal/console'
 import { DAY_MS, StateRef } from './internal/context'
-import { mirror } from './internal/mirror'
 import { observeService } from './internal/service'
 import {
   exec,
@@ -28,7 +27,8 @@ import { requests, spans } from './utils/tables'
  * The observe store: every request, span, log line, failure and event the kernel reports becomes
  * a row in the `_ob_*` tables of a private `DbClient` (over the app's adapter, or the given
  * one), written in batches off the request path. `Observe.actions.request/query/watch` read it
- * back; `console: true` serves the dev console at `/_observe`; `stdout: true` echoes each row.
+ * back; `console: true` serves the dev console at `/_observe`. Shipping rows elsewhere is an
+ * `ObserveExporter`'s job (`StdoutExporter`, `OtlpExporter`, `OpenObserveExporter`).
  */
 export const ObservePlugin = Observe.implement<
   ObserveDef.Options,
@@ -67,7 +67,6 @@ export const ObservePlugin = Observe.implement<
         failures: options?.store?.failures ?? true,
         events: options?.store?.events ?? true,
       },
-      stdout: options?.stdout ?? false,
       forward:
         options?.cluster?.sendToCollector === true
           ? 'forward'
@@ -116,9 +115,6 @@ export const ObservePlugin = Observe.implement<
       name: 'observe',
       *observe(event) {
         enqueue(state, event)
-        if (state.stdout) {
-          mirror(event)
-        }
       },
       *start() {
         if (options?.console && kernel.edge) {

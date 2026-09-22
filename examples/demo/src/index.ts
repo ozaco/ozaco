@@ -7,6 +7,7 @@ export {
   APP_VERSION,
   AUTH_SECRET,
   HOSTNAME,
+  MCP_TOKEN,
   READY_TIMEOUT_MS,
   services,
   TRANSPORT_PREFIX,

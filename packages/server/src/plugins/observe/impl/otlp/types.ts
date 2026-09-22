@@ -1,4 +1,4 @@
-import type { ObserveDef, ServerDef, TraceDef } from 'server:core'
+import type { ObserveDef, TraceDef } from 'server:core'
 
 export namespace OtlpDef {
   export interface Options {
@@ -36,8 +36,11 @@ export namespace OtlpDef {
     readonly fetch?: typeof fetch | undefined
   }
 
-  export interface Context extends ServerDef.PluginContext {
+  export interface Context extends ObserveDef.ExporterContext {
     readonly url: string
+
+    /** the exporter's own export/start/flush, over the sinks the setup closed over. */
+    readonly handle: ObserveDef.ExporterActions
 
     readonly stats: () => {
       readonly spans: { sent: number; dropped: number; failed: number }

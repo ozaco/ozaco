@@ -7,6 +7,8 @@ import { ClientErrors } from '../errors'
 import type { ClientDef } from '../types/client'
 import type { ManifestDef } from '../types/manifest'
 
+import { authorization } from './http'
+
 export function* manifestOf(ctx: ClientDef.Context): Operation<ManifestDef.Manifest> {
   if (ctx.manifest) {
     return ctx.manifest
@@ -14,10 +16,18 @@ export function* manifestOf(ctx: ClientDef.Context): Operation<ManifestDef.Manif
 
   const url = new URL(`${ctx.options.docsPath ?? DEFAULT_DOCS_PATH}/manifest`, ctx.options.url)
   const doFetch = ctx.options.fetch ?? fetch
+
+  // a server may gate its docs (`Docs.use({ auth })`) — the manifest fetch carries the same
+  // bearer every call does
+  const bearer = authorization(ctx.options)
+  const headers: Record<string, string> = {
+    accept: 'application/json',
+    ...(bearer ? { authorization: bearer } : {}),
+  }
   let response: Response
 
   try {
-    response = yield* until(doFetch(url.toString(), { headers: { accept: 'application/json' } }))
+    response = yield* until(doFetch(url.toString(), { headers }))
   } catch (error) {
     const failure = isFailure(error) ? error : null
 

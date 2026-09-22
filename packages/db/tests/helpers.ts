@@ -8,6 +8,7 @@ export const users = table('users', {
   active: column.boolean().default(true),
   meta: column.json<{ tags: string[] }>().optional(),
   joined: column.timestamp().optional(),
+  avatar: column.blob().optional(),
 }).unique('by_name', ['name'])
 
 export const posts = table('posts', {

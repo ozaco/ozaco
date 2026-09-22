@@ -239,6 +239,9 @@ function* runAction({
   request.signal?.addEventListener('abort', () => controller.abort(ServerErrors.Cancelled))
   const dispatchTrace = yield* childTrace(trace)
 
+  // what the handler says about its own reply (`ctx.reply`), merged over the action's statics
+  let replied: ServerDef.Reply = {}
+
   const hop: TraceDef.Hop = {
     service: entry.service,
     action: entry.action,
@@ -259,6 +262,12 @@ function* runAction({
     transport: 'edge',
     signal: controller.signal,
     abort: reason => controller.abort(reason),
+    reply: reply => {
+      replied = {
+        status: reply.status ?? replied.status,
+        headers: { ...replied.headers, ...reply.headers },
+      }
+    },
   }
 
   // the kernel action unwraps a returned Result (std plugin contract): fold it back here.
@@ -275,7 +284,10 @@ function* runAction({
     captured.output = capturedValue(outcome.value)
   }
 
-  const response = responseOf(yield* materialize(outcome.value), trace.request_id)
+  const response = responseOf(yield* materialize(outcome.value), trace.request_id, {
+    status: replied.status ?? entry.meta.status,
+    headers: { ...entry.meta.headers, ...replied.headers },
+  })
   const kind = captured.output?.['kind']
 
   if (watched && captured.output && (kind === 'stream' || kind === 'flow') && response.body) {

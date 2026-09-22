@@ -46,7 +46,8 @@
       "db:impl/pg": ["./node_modules/@ozaco/db/dist/impl/pg"],
       "db:impl/bun-sql": ["./node_modules/@ozaco/db/dist/impl/bun-sql"],
       "db:impl/memory-kv": ["./node_modules/@ozaco/db/dist/impl/memory-kv"],
-      "db:impl/redis-kv": ["./node_modules/@ozaco/db/dist/impl/redis-kv"]
+      "db:impl/redis-kv": ["./node_modules/@ozaco/db/dist/impl/redis-kv"],
+      "db:impl/table-kv": ["./node_modules/@ozaco/db/dist/impl/table-kv"]
     }
   }
 }

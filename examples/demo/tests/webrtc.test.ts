@@ -282,7 +282,7 @@ describe.skipIf(!polyfill)('webrtc over the demo signaling relay', () => {
         })
         yield* node({
           role: 'service',
-          hosted: ['feed', 'reports', 'live', 'rtc', 'cluster'],
+          hosted: ['feed', 'reports', 'jobs', 'live', 'rtc', 'cluster'],
           instance: 'api-2',
           port: 0,
         })

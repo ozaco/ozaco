@@ -5,6 +5,7 @@ import type { AnyType } from 'std:shared'
 
 import { LocalCarrier } from '../definition/local'
 import { MemoryOutcomes } from '../definition/outcomes'
+import { ObserveExporter } from '../definition/protocol'
 import { ServerClient } from '../definition/server'
 import { ServerErrors } from '../errors'
 import { awaitDependencies, healthOf, hostedOf, infoOf, roleOf } from '../internal/app'
@@ -84,6 +85,10 @@ export function* createServer<const TServices extends readonly ServiceDef.Servic
     }
   }
 
+  // exporters register through their own protocol (nested installs included) — one flag tells
+  // the hot path whether fanning out and capturing bodies is worth anything
+  kernel.exporting = (yield* ObserveExporter.context.get()) !== undefined
+
   if (!kernel.outcomes) {
     yield* MemoryOutcomes.use()
     kernel.outcomes = MemoryOutcomes
@@ -158,6 +163,10 @@ export function* createServer<const TServices extends readonly ServiceDef.Servic
         }
       }
 
+      if (kernel.exporting) {
+        yield* ObserveExporter.actions.start()
+      }
+
       if (kernel.edge) {
         yield* kernel.edge.actions.mount()
         const info = yield* kernel.edge.actions.listen(listen ?? options.listen ?? {})
@@ -205,6 +214,11 @@ export function* createServer<const TServices extends readonly ServiceDef.Servic
         if (hooks.stop) {
           yield* attempt(hooks.stop)
         }
+      }
+
+      // 6. whatever the exporters still hold
+      if (kernel.exporting) {
+        yield* attempt(() => ObserveExporter.actions.flush())
       }
 
       state.started = false

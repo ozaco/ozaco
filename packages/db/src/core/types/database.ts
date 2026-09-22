@@ -365,13 +365,16 @@ export namespace Database {
     /** Compute the pending reconcile without applying it. */
     planMigration(): Operation<Spec.Plan>
 
-    /** Dialect-native escape hatch — dispatches to the adapter's `raw` (capability-gated). Pass
-     * `options.table` to decode result rows by that table's declared column kinds, and
-     * `options.emit` to announce what the statement changed (otherwise raw WRITES bypass
-     * reactivity — follow them with {@link publish} / {@link touch}). */
+    /** Dialect-native escape hatch — dispatches to the adapter's `raw` (capability-gated). ONE
+     * statement per string on every backend (a bound statement can never hold two); a SCRIPT is
+     * an array of statements, run in order inside one transaction (DDL batches, seeds — no
+     * params, no `table`/`emit`; the result carries the last statement's rows and the summed
+     * row count). Pass `options.table` to decode result rows by that table's declared column
+     * kinds, and `options.emit` to announce what the statement changed (otherwise raw WRITES
+     * bypass reactivity — follow them with {@link publish} / {@link touch}). */
 
     raw(
-      statement: string,
+      statement: string | readonly string[],
       params?: readonly unknown[],
       options?: RawOptions,
     ): Operation<Adapter.RawResult>

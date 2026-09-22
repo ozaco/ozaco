@@ -27,11 +27,21 @@ foundation. Layers, bottom up:
 - **`@ozaco/std`** – the standard library (effect, plugin, io, codec, logger, fetch, ws, webrtc…)
 - **`@ozaco/transport`** – the messaging plane (`memory` / `nats` / `redis` / `worker` impls)
 - **`@ozaco/db`** – the reactive, adapter-agnostic database + `Kv` (`memory` / `sqlite` / `pg` /
-  `bun-sql`, `memory-kv` / `redis-kv`)
+  `bun-sql`, `memory-kv` / `redis-kv` / `table-kv` — the last keeps the Kv as rows of the installed
+  adapter, no change log). Column kinds include `blob` (`Uint8Array`; sqlite BLOB / pg BYTEA);
+  `where.startsWith` escapes its prefix and LIKE always pins `ESCAPE '\'`; `Db.actions.raw` takes
+  one statement or a script (`string[]`, one transaction)
 - **`@ozaco/server`** – the service/action kernel: `service()` / `action.*` / `createServer`, with
   edges (bun/node/deno), carriers, and plugins (auth, cache, cors, docs, observe, resilience,
-  hot-reload, `crud`). `crud(table, …)` is typed end to end: `schema` transforms reshape the derived zod
-  schemas in the TYPES too, `scope` is the trusted per-caller filter (tenancy, optionally
+  hot-reload, `crud`). Multi-impl seams are cloneable protocols, never options: `Auth` is the
+  gate over `AuthStrategy` impls (`JwtAuth`, `StaticAuth`, installed BEFORE `Auth`; the first
+  SUCCESSFUL strategy answers) and `ObserveExporter` impls (`StdoutExporter`, `OtlpExporter`,
+  `OpenObserveExporter`) run side by side — the kernel fans events out, starts and flushes them.
+  An action's `errors` map may point a tag at any status, `200` included (the `{ error }`
+  envelope + `oz-error` header still mark it a failure; the client reads the header);
+  `status`/`headers` on the config and `ctx.reply(...)` shape the successful edge reply.
+  `crud(table, …)` is typed end to end: `schema` transforms reshape the derived zod schemas in
+  the TYPES too, `scope` is the trusted per-caller filter (tenancy, optionally
   `{ read, write }`), `ops` sets per-op options/errors; the manifest is `ozaco/2` (unified
   action+socket entries) and realtime sockets authorize with a first `{ t: 'auth' }` frame
   (tokens never ride the URL). `createServer({ plugins })` takes `Plugin.use(...)` values.

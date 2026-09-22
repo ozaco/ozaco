@@ -17,7 +17,7 @@ export { DbClient } from './definition/database'
 export { Db, DbAdapter, Kv } from './definition/protocol'
 
 export { useDb, withBusMeta } from './utils/database'
-export { filterFields, filterValues, where } from './utils/filter'
+export { escapeLike, filterFields, filterValues, where } from './utils/filter'
 export { clampLimit, sanitizeFilter } from './utils/sanitize'
 export { column, defineSchema, table } from './utils/schema'
 

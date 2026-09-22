@@ -11,7 +11,18 @@ export namespace Spec {
   export type FilterValue = string | number | boolean | null | Date
 
   /** The storage-level shape of a column. Adapters map each kind to their backend's native type. */
-  export type ColumnKind = 'text' | 'int' | 'float' | 'boolean' | 'timestamp' | 'json' | 'enum'
+  export type ColumnKind =
+    | 'text'
+    | 'int'
+    | 'float'
+    | 'boolean'
+    | 'timestamp'
+    | 'json'
+    | 'enum'
+
+    /** raw bytes (`Uint8Array`): sqlite BLOB, Postgres BYTEA. Not filterable/orderable, and
+     * not reshaped by any codec — vectors, thumbnails, signatures. */
+    | 'blob'
 
   /** One column as the adapter sees it — pure data, no DSL machinery. */
   export interface Column {
@@ -69,6 +80,9 @@ export namespace Spec {
     | {
         readonly op: 'like'
         readonly field: TField
+
+        /** SQL `LIKE` syntax: `%` any run, `_` one character, `\` escapes the next character on
+         * EVERY backend (`escapeLike` builds a literal run). */
         readonly pattern: string
         readonly insensitive?: boolean | undefined
       }

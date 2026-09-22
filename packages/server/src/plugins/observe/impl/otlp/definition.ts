@@ -1,8 +1,7 @@
-import type { Helpers, ServerDef } from 'server:core'
-import { Server, ServerErrors } from 'server:core'
+import type { Helpers, ObserveDef } from 'server:core'
+import { ObserveExporter, Server, ServerErrors } from 'server:core'
 import { createSink } from 'server:internal'
 import { attempt, fork, sleep } from 'std:effect'
-import { definePlugin } from 'std:plugin'
 import { fail, isFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
 
@@ -25,9 +24,10 @@ import type { OtlpDef } from './types'
  * OTLP/HTTP (JSON) exporter of what the kernel observes: every span becomes an OTLP span under
  * the request's trace (`v1/traces`), logs and failures become log records (`v1/logs`) — so any
  * collector (Jaeger, Tempo, Grafana, Datadog, …) sees the same spine the `_ob_*` tables hold.
- * Batched in memory; delivery failures are counted (`stats()`), never raised into requests.
+ * Batched in memory; delivery failures are counted (`stats()`), never raised into requests. An
+ * `ObserveExporter` impl: it runs next to any other exporter, with or without `ObservePlugin`.
  */
-export const OtlpExporter = definePlugin<OtlpDef.Context, [options: OtlpDef.Options]>({
+const OtlpExporterImpl = ObserveExporter.implement<OtlpDef.Context, [options: OtlpDef.Options]>({
   name: 'server-observe-otlp',
   version: pkg.version,
   description: 'OTLP/HTTP exporter of spans, logs and failures',
@@ -148,9 +148,8 @@ export const OtlpExporter = definePlugin<OtlpDef.Context, [options: OtlpDef.Opti
       }
     }
 
-    const hooks: ServerDef.Hooks = {
-      name: 'otlp',
-      *observe(event) {
+    const handle: ObserveDef.ExporterActions = {
+      *export(event) {
         if (event.t === 'span') {
           spans.push(otlpSpan(event.row))
 
@@ -192,7 +191,7 @@ export const OtlpExporter = definePlugin<OtlpDef.Context, [options: OtlpDef.Opti
           })
         }
       },
-      *stop() {
+      *flush() {
         yield* spans.flush()
         yield* logs.flush()
 
@@ -202,9 +201,22 @@ export const OtlpExporter = definePlugin<OtlpDef.Context, [options: OtlpDef.Opti
       },
     }
     return {
+      exporter: 'otlp',
       url: base,
       stats: () => ({ spans: spans.stats, logs: logs.stats, metrics: metricsStats }),
-      hooks,
+      handle,
     }
   },
-}).build()
+})
+
+export const OtlpExporter = OtlpExporterImpl.build({
+  *export(event: ObserveDef.Event) {
+    yield* (yield* OtlpExporterImpl.context.expect()).handle.export(event)
+  },
+  *start() {
+    yield* (yield* OtlpExporterImpl.context.expect()).handle.start()
+  },
+  *flush() {
+    yield* (yield* OtlpExporterImpl.context.expect()).handle.flush()
+  },
+})

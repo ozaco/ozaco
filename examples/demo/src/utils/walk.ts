@@ -8,6 +8,7 @@ import type { Flow, Operation } from 'std:effect'
 import { attempt, scoped, sleep, until } from 'std:effect'
 import { isFailure } from 'std:result'
 
+import { MCP_TOKEN } from '../const'
 import type { Api, Step } from '../types/demo'
 
 function* drain<T>(flow: Flow<T, void>, max = Infinity): Operation<T[]> {
@@ -214,6 +215,47 @@ export function* walk(url: string, report: (step: Step) => void = () => {}): Ope
   })
   const overview = yield* client.reports.overview()
   note('nested ctx.call', overview)
+
+  // --- reply shape: 202 + location, rpc-style 200 failure -------------------------------
+  const submitted = yield* client.$callWithMeta(
+    { service: 'jobs', action: 'submit' },
+    { kind: 'report' },
+  )
+  const job = submitted.value as { id: string; state: string }
+  const status = yield* client.jobs.status({ id: job.id })
+  const ghostJob = yield* attempt(client.jobs.status({ id: 'nope' }))
+  const pong = yield* client.jobs.rpc({ method: 'ping' })
+  const soft = yield* attempt(client.jobs.rpc({ method: 'nope' }))
+
+  note('jobs reply shape', {
+    submitStatus: submitted.meta.status,
+    state: status.state,
+    missing: isFailure(ghostJob) ? ghostJob.error : 'found?!',
+    rpc: pong.result,
+    // a failure the action maps to 200: still a failure here, the status rides in the causes
+    softFailure: isFailure(soft) ? { tag: soft.error, status: soft.causes.at(-1) } : 'value?!',
+  })
+
+  // --- static service token: no login, `auth: 'service'` -----------------------------------
+  const asUser = yield* attempt(client.jobs.pending({ limit: 5 }))
+  const mcp = yield* createClient<Api>({ url, token: MCP_TOKEN })
+  const pending = yield* mcp.jobs.pending({ limit: 10 })
+  const anonymousJobs = yield* attempt(
+    (yield* createClient<Api>({ url })).jobs.status({ id: job.id }),
+  )
+
+  note('static service token', {
+    userDenied: isFailure(asUser) ? asUser.error : 'listed?!',
+    pendingSeen: pending.ids.includes(job.id),
+    // the service-level `auth: 'authenticated'` covers `status` (only `rpc` opted out)
+    anonymousDenied: isFailure(anonymousJobs) ? anonymousJobs.error : 'served?!',
+  })
+
+  // --- prefix search: `where.startsWith` escapes the user's `%`/`_` ---------------------------
+  note('prefix search', {
+    upper: yield* client.media.search({ prefix: 'PHO' }),
+    wildcardIsLiteral: yield* client.media.search({ prefix: '%' }),
+  })
 
   // --- events + sse relay ---------------------------------------------------------------
   const relayed = yield* scoped(function* () {

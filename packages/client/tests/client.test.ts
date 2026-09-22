@@ -1,4 +1,4 @@
-import { generate } from 'client:codegen'
+import { generate, pull } from 'client:codegen'
 import { ClientErrors, createClient } from 'client:core'
 import { attempt, run, sleep, until } from 'std:effect'
 import { unwrap } from 'std:result'
@@ -7,7 +7,7 @@ import type { AnyType } from 'std:shared'
 import { describe, expect, it } from 'bun:test'
 
 import type { Api } from './fixture'
-import { boot } from './fixture'
+import { boot, FIXTURE_TOKEN } from './fixture'
 
 const drain = function* <T>(flow: AnyType): Generator<AnyType, T[], AnyType> {
   const out: T[] = []
@@ -49,6 +49,10 @@ describe('client', () => {
         // custom error → its tag, and the per-action status
         const teapot = yield* attempt(client.demo.explode({ code: 'demo.teapot' }))
         expect((teapot as AnyType).error).toBe('demo.teapot')
+        // a failure the action maps to 200 is STILL a failure here: the `oz-error` header says so
+        const soft = yield* attempt(client.demo.explode({ code: 'demo.soft' }))
+        expect((soft as AnyType).error).toBe('demo.soft')
+        expect((soft as AnyType).causes).toContain('status:200')
         // unknown action → client.no-route before any request
         const none = yield* attempt(client.$call('demo.nope'))
         expect((none as AnyType).error).toBe(ClientErrors.NoRoute)
@@ -118,6 +122,28 @@ describe('client', () => {
         const third = yield* rows.next()
         expect((third.value as AnyType).rows.map((row: AnyType) => row.title)).toEqual(['two'])
         yield* sleep(10)
+      }),
+    )
+  })
+
+  it('the manifest fetch carries the bearer, so gated docs (`Docs.use({ auth })`) still resolve', async () => {
+    unwrap(
+      await run(function* () {
+        const { url } = yield* boot({ auth: true })
+        const anonymous = yield* createClient<Api>({ url })
+        const denied = yield* attempt(anonymous.$manifest())
+        expect((denied as AnyType).error).toBe(ClientErrors.Network)
+        expect((denied as AnyType).message).toContain('401')
+
+        const client = yield* createClient<Api>({ url, token: FIXTURE_TOKEN })
+        const manifest = yield* client.$manifest()
+        expect(manifest.manifest).toBe('ozaco/2')
+        // codegen's `pull` carries the same bearer
+        const pulled = yield* attempt(pull(url))
+        expect((pulled as AnyType).error).toBe(ClientErrors.Network)
+        expect(yield* pull(url, { token: FIXTURE_TOKEN })).toContain('export interface Api')
+        // the demo actions themselves are open (no `default`), calls work as before
+        expect(yield* client.demo.byId({ id: 'x' })).toEqual({ id: 'x' })
       }),
     )
   })

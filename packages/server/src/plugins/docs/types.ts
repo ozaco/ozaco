@@ -1,10 +1,16 @@
-import type { ServiceDef } from 'server:core'
+import type { OptionsDef, ServiceDef } from 'server:core'
 
 export namespace DocsDef {
   export interface Options {
     /** where the panel and the manifest live. Default `/docs` (+ `/docs/manifest`). */
     readonly path?: string | undefined
     readonly title?: string | undefined
+
+    /** Gate EVERY docs route (panel, manifest, OpenAPI) behind an `Auth` requirement — the
+     * same shapes the `auth` action option takes; the bearer travels in the `authorization`
+     * header (the client sends it on its manifest fetch). Needs the `Auth` plugin. Default:
+     * open. */
+    readonly auth?: OptionsDef.Requirement | undefined
   }
 
   /** JSON Schema (zod v4 `toJSONSchema`) or an opaque marker for non-zod Standard Schemas. */
@@ -46,6 +52,13 @@ export namespace DocsDef {
     readonly output: PlaneDoc
     readonly errors: Readonly<Record<string, number>>
     readonly tags: readonly string[]
+
+    /** the HTTP status of a successful reply (200, or 204 when the action answers nothing,
+     * unless the action declares its own). */
+    readonly status: number
+
+    /** static response headers every successful reply carries. */
+    readonly headers: Readonly<Record<string, string>>
 
     /** the `auth` requirement, summarized for the panel/clients. */
     readonly auth: AuthDoc

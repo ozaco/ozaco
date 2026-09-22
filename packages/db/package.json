@@ -89,6 +89,17 @@
       },
       "source": "./src/impl/redis-kv/index.ts"
     },
+    "./impl/table-kv": {
+      "import": {
+        "types": "./dist/impl/table-kv.d.ts",
+        "default": "./dist/impl/table-kv.js"
+      },
+      "require": {
+        "types": "./dist/impl/table-kv.d.cts",
+        "default": "./dist/impl/table-kv.cjs"
+      },
+      "source": "./src/impl/table-kv/index.ts"
+    },
     "./impl/bun-sql": {
       "import": {
         "types": "./dist/impl/bun-sql.d.ts",

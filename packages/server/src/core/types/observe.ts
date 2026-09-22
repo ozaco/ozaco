@@ -160,6 +160,27 @@ export namespace ObserveDef {
   /** What the install resolves is exactly {@link Options} here. */
   export type Context = Options
 
+  // --- exporters -------------------------------------------------------------------------------
+
+  /** What an `ObserveExporter` impl resolves: at least its name. */
+  export interface ExporterContext {
+    /** `otlp`, `openobserve`, `stdout`, … */
+    readonly exporter: string
+  }
+
+  /**
+   * The exporter contract — a place the kernel's observations are SHIPPED to (an OTLP collector,
+   * OpenObserve, stdout). Several run side by side: the kernel fans every event out to all of
+   * them (`ObserveExporter` is cloneable; `exec` runs every install), starts them with the node
+   * and flushes them at stop. An exporter never fails the thing it observes — deliveries are
+   * counted, not raised.
+   */
+  export interface ExporterActions {
+    export(event: Event): Operation<void>
+    start(): Operation<void>
+    flush(): Operation<void>
+  }
+
   /** One node as the store has seen it lately: its edge/dispatch/carrier spans in the window. */
   export interface InstanceStats {
     readonly instance: string

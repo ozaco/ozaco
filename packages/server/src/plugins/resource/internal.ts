@@ -53,6 +53,8 @@ const columnSchema = (column: Spec.Column): z.ZodType => {
       return z.enum(column.enumValues as [string, ...string[]])
     }
 
+    // `json` and `blob` have no wire schema of their own: a json column is whatever the app
+    // stores, a blob is bytes the handler must encode itself (crud does not base64 for you)
     default: {
       return z.unknown()
     }

@@ -11,5 +11,9 @@ export const todosErrors = serviceErrors('todos', { protected: 423 })
 /** the reports service: `flaky` is retried away by the resilience option, `boom` is asked for. */
 export const reportsErrors = serviceErrors('reports', { flaky: 500, boom: 500 })
 
+/** the jobs service: `method-not-found` is delivered as a **200** with the error envelope
+ * (rpc-style — the `oz-error` header still marks it a failure, the client still fails). */
+export const jobsErrors = serviceErrors('jobs', { 'not-found': 404, 'method-not-found': 200 })
+
 /** the rtc page build step. */
 export const rtcErrors = serviceErrors('rtc', { build: 500 })

@@ -20,11 +20,12 @@ export const uploadsTable = table('uploads', {
   mime: column.text(),
 })
 
-/** File content, base64 per chunk row — written on upload, streamed back on download. */
+/** File content, raw bytes per chunk row (`column.blob()`: sqlite BLOB, no base64 detour) —
+ * written on upload, streamed back on download. */
 export const uploadChunksTable = table('upload_chunks', {
   upload_id: column.text(),
   seq: column.int(),
-  data: column.text(),
+  data: column.blob(),
 })
 
 /** The ONE schema declaration: the install takes it, `useDb(schema)` resolves the typed

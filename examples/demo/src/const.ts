@@ -2,6 +2,7 @@
 import { account } from './internal/services/account'
 import { cluster } from './internal/services/cluster'
 import { feed } from './internal/services/feed'
+import { jobs } from './internal/services/jobs'
 import { live } from './internal/services/live'
 import { media } from './internal/services/media'
 import { reports } from './internal/services/reports'
@@ -17,8 +18,12 @@ export const TRANSPORT_PREFIX = 'demo'
 /** HS256 signing secret — a DEMO value, change it for anything real. */
 export const AUTH_SECRET = 'demo-secret-change-me'
 export const ACCESS_TTL_MS = 15 * 60 * 1000
+
+/** A pre-shared SERVICE bearer (`StaticAuth.use({ tokens })`): another system (an MCP host, a cron)
+ * calls `auth: 'service'` actions with it — no login, no JWT. A DEMO value. */
+export const MCP_TOKEN = 'demo-mcp-token'
 export const READY_TIMEOUT_MS = 30_000
 export const HOSTNAME = '127.0.0.1'
 
 /** every service of the demo — a monolith hosts them all, the cluster splits them up. */
-export const services = [account, todos, feed, media, reports, live, rtc, cluster] as const
+export const services = [account, todos, feed, media, reports, jobs, live, rtc, cluster] as const

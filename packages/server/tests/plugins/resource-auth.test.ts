@@ -7,7 +7,7 @@
 import { column, DbClient, table } from 'db:core'
 import { createServer } from 'server:core'
 import type { AuthDef } from 'server:plugins'
-import { Auth, crud } from 'server:plugins'
+import { Auth, crud, JwtAuth } from 'server:plugins'
 import { run, sleep, until } from 'std:effect'
 import { unwrap } from 'std:result'
 
@@ -79,7 +79,7 @@ function* boot(sessionTtlMs: number) {
   const server = yield* createServer({
     services: [guarded, open],
     edge: BunEdge,
-    plugins: [Auth.use({ provider: provider(), secret: 'test-secret', sessionTtlMs })],
+    plugins: [JwtAuth.use({ provider: provider(), secret: 'test-secret', sessionTtlMs }), Auth],
   })
   const info = yield* server.start({ port: 0 })
   return { server, ws: info.url!.replace('http', 'ws'), subs }

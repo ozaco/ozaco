@@ -141,6 +141,7 @@ const socketKeyOf = (def: ServiceDef.Service | undefined, path: string): string 
 export const serviceDocOf = (
   def: ServiceDef.Service,
   sockets: readonly DocsDef.SocketDoc[],
+  defaultAuth: unknown = false,
 ): DocsDef.ServiceDoc => {
   const actions: DocsDef.EntryDoc[] = []
   const errors: Record<string, number> = {}
@@ -166,7 +167,9 @@ export const serviceDocOf = (
       output: planeDoc(meta.output, meta.outputPlane, 'output'),
       errors: meta.errors,
       tags: meta.tags,
-      auth: authDoc(meta.options['auth']),
+      status: meta.status ?? (meta.outputPlane === 'none' ? 204 : 200),
+      headers: meta.headers,
+      auth: authDoc(meta.options['auth'] ?? defaultAuth),
       docs: meta.docs,
       options: optionsDoc(meta.options),
     })
@@ -181,10 +184,16 @@ export const serviceDocOf = (
   }
 }
 
-export const manifestOf = (
-  kernel: ServerDef.Context,
-  docs: { readonly path: string; readonly console: boolean },
-): DocsDef.Manifest => {
+/** What the plugin resolved about its install: the mount path, whether the observe console is
+ * mounted, and the `Auth` install's `default` requirement (an action that sets no `auth` of its
+ * own is documented as THAT, not as open). */
+export interface ManifestOptions {
+  readonly path: string
+  readonly console: boolean
+  readonly defaultAuth: unknown
+}
+
+export const manifestOf = (kernel: ServerDef.Context, docs: ManifestOptions): DocsDef.Manifest => {
   const services: DocsDef.ServiceDoc[] = []
 
   for (const def of kernel.registry.services.values()) {
@@ -194,6 +203,7 @@ export const manifestOf = (
         kernel.sockets
           .filter(socket => socket.service === def.name)
           .map(socket => socketDocOf(socket, socketKeyOf(def, socket.path))),
+        docs.defaultAuth,
       ),
     )
   }

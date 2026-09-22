@@ -30,6 +30,7 @@ describe('demo — every use case end to end', () => {
           'feed',
           'media',
           'reports',
+          'jobs',
           'live',
           'rtc',
           'cluster',
@@ -91,6 +92,54 @@ describe('demo — every use case end to end', () => {
         ])
         expect(resilience.breaker[3]).toBe('server.unavailable')
         expect(detail(steps, 'nested ctx.call')).toEqual({ todos: 2, uploads: 1 })
+        expect(detail(steps, 'jobs reply shape')).toEqual({
+          submitStatus: 202,
+          state: 'queued',
+          missing: 'jobs.not-found',
+          rpc: 'pong',
+          softFailure: { tag: 'jobs.method-not-found', status: 'status:200' },
+        })
+        expect(detail(steps, 'static service token')).toEqual({
+          userDenied: 'server.forbidden',
+          pendingSeen: true,
+          anonymousDenied: 'server.unauthorized',
+        })
+        expect(detail(steps, 'prefix search')).toEqual({
+          upper: ['photo.bin'],
+          wildcardIsLiteral: [],
+        })
+        // the 202 carries the per-call `location` header; the rpc failure is a 200 + `oz-error`
+        const login = yield* until(
+          fetch(`${info.url}/account/login`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ email: 'ada@example.com', password: 'ada' }),
+          }),
+        )
+        const { accessToken } = (yield* until(login.json())) as AnyType
+        const submit = yield* until(
+          fetch(`${info.url}/jobs/submit`, {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/json',
+              authorization: `Bearer ${accessToken}`,
+            },
+            body: JSON.stringify({ kind: 'x' }),
+          }),
+        )
+        expect(submit.status).toBe(202)
+        expect(submit.headers.get('cache-control')).toBe('no-store')
+        expect(submit.headers.get('location')).toMatch(/^\/jobs\/status\//u)
+        const rpc = yield* until(
+          fetch(`${info.url}/jobs/rpc`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ method: 'nope' }),
+          }),
+        )
+        expect(rpc.status).toBe(200)
+        expect(rpc.headers.get('oz-error')).toBe('jobs.method-not-found')
+        expect(((yield* until(rpc.json())) as AnyType).error.error).toBe('jobs.method-not-found')
         expect(detail(steps, 'events')).toEqual(['demo.ping'])
         expect(detail(steps, 'slow within deadline')).toMatchObject({ aborted: false })
         expect(detail(steps, 'cluster').servedBy).toBe('mono')
@@ -141,7 +190,7 @@ describe('demo — cluster', () => {
         })
         const api2 = yield* node({
           role: 'service',
-          hosted: ['feed', 'reports', 'live', 'rtc', 'cluster'],
+          hosted: ['feed', 'reports', 'jobs', 'live', 'rtc', 'cluster'],
           instance: 'api-2',
           observe: 'forward',
         })
@@ -170,6 +219,12 @@ describe('demo — cluster', () => {
           downloaded: 3000,
         })
         expect(detail(steps, 'nested ctx.call')).toEqual({ todos: 2, uploads: 1 })
+        // the kv is rows of the shared sqlite file: a job queued on api-2 is visible cluster-wide
+        expect(detail(steps, 'jobs reply shape')).toMatchObject({
+          submitStatus: 202,
+          state: 'queued',
+        })
+        expect(detail(steps, 'static service token')).toMatchObject({ pendingSeen: true })
         expect(detail(steps, 'realtime watch')).toEqual({ syncRows: 1, afterCreate: 2 })
         // the hooks run on the node HOSTING todos (api-1), not on the gateway
         expect(detail(steps, 'crud hooks')).toMatchObject({ trimmed: 'hooked', shouted: 'HOOKED' })

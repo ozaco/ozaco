@@ -176,14 +176,22 @@ export function* generate(manifest: unknown, options?: GenerateOptions): Operati
   ].join('\n')
 }
 
-/** Fetch `GET <url>/docs/manifest` and generate the client source from it. */
+/** Fetch `GET <url>/docs/manifest` and generate the client source from it. `token` is the
+ * bearer a server with `Docs.use({ auth })` expects. */
 export function* pull(
   url: string,
-  options?: GenerateOptions & { docsPath?: string },
+  options?: GenerateOptions & { docsPath?: string; token?: string },
 ): Operation<string> {
   const base = url.endsWith('/') ? url.slice(0, -1) : url
   const target = `${base}${options?.docsPath ?? '/docs'}/manifest`
-  const response = yield* until(fetch(target))
+  const response = yield* until(
+    fetch(target, {
+      headers: {
+        accept: 'application/json',
+        ...(options?.token ? { authorization: `Bearer ${options.token}` } : {}),
+      },
+    }),
+  )
   if (!response.ok) {
     return yield* fail(ClientErrors.Network, `manifest: ${response.status} at ${target}`)
   }

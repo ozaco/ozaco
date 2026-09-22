@@ -36,7 +36,8 @@ const declare = <TValue>(
 /**
  * The column DSL — declares a table's storage shape explicitly (no validator introspection).
  * Chain `.optional()` for a nullable/omittable column and `.default(value | () => value)` for an
- * insert-time default. `json<T>()` types the stored JSON; `enumOf` constrains to a string union;
+ * insert-time default. `json<T>()` types the stored JSON; `blob()` stores raw bytes as a
+ * `Uint8Array` (no JSON detour, no base64); `enumOf` constrains to a string union;
  * `id('table')` brands the value type with the table it names — type-level only: the db layer
  * keeps no relations (no foreign keys, no loaders); the id is stored as plain text.
  */
@@ -47,6 +48,7 @@ export const column = {
   boolean: () => declare<boolean>('boolean'),
   timestamp: () => declare<Date>('timestamp'),
   json: <TValue = unknown>() => declare<TValue>('json'),
+  blob: () => declare<Uint8Array>('blob'),
   enumOf: <const TValues extends readonly [string, ...string[]]>(...values: TValues) =>
     declare<TValues[number]>('enum', { enumValues: values }),
   id: <TTable extends string>(_table: TTable) => declare<Schema.Id<TTable>>('text'),

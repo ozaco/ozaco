@@ -65,9 +65,6 @@ export namespace ObservePluginDef {
     /** Serve the dev console at `/_observe` (needs an edge). Default false. */
     readonly console?: boolean | undefined
 
-    /** Print every request/failure/log line to stdout as it happens (dev). Default false. */
-    readonly stdout?: boolean | undefined
-
     /** Which kinds this node records. Default: all of them. */
     readonly store?: Store | undefined
     readonly retention?: Retention | undefined
@@ -111,7 +108,6 @@ export namespace ObservePluginDef {
     readonly batch: ResolvedBatch
     readonly retention: ResolvedRetention
     readonly store: ResolvedStore
-    readonly stdout: boolean
     readonly forward: false | 'forward' | 'both'
     readonly fallback: 'local' | 'drop'
     readonly collect: boolean

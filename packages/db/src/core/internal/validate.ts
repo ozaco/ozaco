@@ -50,6 +50,10 @@ const kindProblem = (column: Spec.Column, value: unknown): string | null => {
         : `"${column.name}" expects a valid Date`
     }
 
+    case 'blob': {
+      return value instanceof Uint8Array ? null : `"${column.name}" expects a Uint8Array`
+    }
+
     default: {
       return null
     }

@@ -185,14 +185,38 @@ export const DbClient: Database.Client = DbImpl.build({
     return yield* planMigration(yield* useContext(StateRef))
   },
 
-  *raw(statement: string, params?: readonly unknown[], options?: Database.RawOptions) {
+  *raw(
+    statement: string | readonly string[],
+    params?: readonly unknown[],
+    options?: Database.RawOptions,
+  ) {
     const state = yield* useContext(StateRef)
+    if (Array.isArray(statement)) {
+      // a script: statements one by one, atomically — params and decoding belong to ONE statement
+      if ((params && params.length > 0) || options?.table || options?.emit) {
+        return yield* fail(
+          DbErrors.Validation,
+          'a raw script (string[]) takes no params, `table` or `emit` — pass one statement for those',
+        )
+      }
+      const statements = statement as readonly string[]
+      return yield* state.adapter.transaction(function* () {
+        let rows: readonly Spec.Doc[] = []
+        let rowCount = 0
+        for (const text of statements) {
+          const result = yield* state.adapter.raw(text)
+          rows = result.rows
+          rowCount += result.rowCount
+        }
+        return { rows, rowCount }
+      })
+    }
     const spec: Spec.Table | undefined = options?.table ? yield* specOf(options.table) : undefined
     const emit = options?.emit
     if (emit && !spec) {
       return yield* fail(DbErrors.Validation, '`emit` requires `table`')
     }
-    const result = yield* state.adapter.raw(statement, params, spec)
+    const result = yield* state.adapter.raw(statement as string, params, spec)
     if (!emit || !spec) {
       return result
     }

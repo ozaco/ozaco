@@ -58,6 +58,21 @@ const ilike = <const TField extends string>(
   pattern: string,
 ): Spec.Filter<TField> => ({ op: 'like', field, pattern, insensitive: true })
 
+/** Escape `%`, `_` and `\` so `text` matches ITSELF inside a `like` pattern — what to wrap user
+ * input in before concatenating your own wildcards: `where.like('name', `${escapeLike(q)}%`)`. */
+const escapeLike = (text: string): string => text.replaceAll(/[\\%_]/gu, String.raw`\$&`)
+
+const startsWith = <const TField extends string>(
+  field: TField,
+  prefix: string,
+  options?: { readonly insensitive?: boolean | undefined },
+): Spec.Filter<TField> => ({
+  op: 'like',
+  field,
+  pattern: `${escapeLike(prefix)}%`,
+  ...(options?.insensitive ? { insensitive: true } : {}),
+})
+
 const isNull = <const TField extends string>(field: TField): Spec.Filter<TField> => ({
   op: 'is-null',
   field,
@@ -81,7 +96,8 @@ const not = <TField extends string>(filter: Spec.Filter<TField>): Spec.Filter<TF
   filter,
 })
 
-/** The portable filter algebra: `where.eq('done', false)`, `where.and(a, b)`, … */
+/** The portable filter algebra: `where.eq('done', false)`, `where.and(a, b)`, … `startsWith`
+ * is `like` with the prefix escaped, so user input containing `%`/`_` matches literally. */
 export const where = {
   eq,
   ne,
@@ -93,12 +109,15 @@ export const where = {
   notOneOf,
   like,
   ilike,
+  startsWith,
   isNull,
   notNull,
   and,
   or,
   not,
 }
+
+export { escapeLike }
 
 /**
  * The exact values a filter PINS — what a row must carry to satisfy it: `eq` pins its value,

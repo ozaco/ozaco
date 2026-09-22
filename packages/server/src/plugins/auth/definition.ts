@@ -1,90 +1,120 @@
 import type { ServerDef } from 'server:core'
 import { CtxRef, Server, ServerErrors } from 'server:core'
-import { IO } from 'std:io'
-import { definePlugin } from 'std:plugin'
-import { fail } from 'std:result'
+import type { Operation } from 'std:effect'
+import { attempt } from 'std:effect'
+import { definePlugin, defineProtocol } from 'std:plugin'
+import type { Result } from 'std:result'
+import { fail, isFailure } from 'std:result'
 
 import pkg from '../../../package.json'
 
 import { AuthCauses, AuthErrors } from './errors'
-import {
-  authorize,
-  bearerOf,
-  DAY,
-  HOUR,
-  materialOf,
-  options,
-  sign,
-  tokensFor,
-  verify,
-} from './internal'
+import { authorize, bearerOf, options } from './internal'
 import type { AuthDef } from './types'
+
+const AUTH_STRATEGY = Symbol.for('server:auth-strategy')
+
+/**
+ * The credential protocol — `JwtAuth`, `StaticAuth` (an SSO / API-key strategy of your own via
+ * `AuthStrategy.implement(...)`) are its impls, installed SIDE BY SIDE. Every routed call
+ * (`AuthStrategyProtocol.actions.verify(token)`, `.login(credentials)`, …) asks the strategies in install
+ * order and answers with the FIRST SUCCESSFUL one: `undefined` and failures alike move on to the
+ * next strategy (an expired JWT does not stop a static token from being tried). When nobody
+ * succeeds, the first failure met is the answer — the most specific reason there is — and with
+ * no failure at all the call resolves `undefined` (nobody knew the credential). A strategy
+ * implements only what it supports and answers `undefined` for the rest.
+ */
+const AuthStrategyProtocol = defineProtocol<AuthDef.StrategyContext, AuthDef.Strategy>({
+  name: 'server/auth-strategy',
+  version: pkg.version,
+  description: 'One way to turn credentials or a bearer into a principal',
+  subtype: AUTH_STRATEGY,
+  cloneable: true,
+
+  defaults: {
+    *verify() {
+      return undefined
+    },
+    *login() {
+      return undefined
+    },
+    *refresh() {
+      return undefined
+    },
+    *signService() {
+      return undefined
+    },
+  },
+
+  *exec(entries, run) {
+    let failure: Result.Failure<unknown> | null = null
+
+    for (const entry of entries) {
+      const answer = yield* attempt(() => run(entry))
+
+      if (isFailure(answer)) {
+        failure ??= answer
+        continue
+      }
+
+      if (answer.value !== undefined) {
+        return answer.value
+      }
+    }
+
+    return failure ? yield* failure : undefined
+  },
+})
+
+/** A presented bearer → its principal, through the strategy chain; nobody recognizing it is
+ * `server.unauthorized`. */
+function* resolve(token: string): Operation<AuthDef.Principal> {
+  const principal = yield* AuthStrategyProtocol.actions.verify(token)
+
+  if (!principal) {
+    return yield* fail(
+      ServerErrors.Unauthorized,
+      'no auth strategy recognizes this token',
+      AuthErrors.InvalidToken,
+    )
+  }
+
+  return principal
+}
 
 const AuthImpl = definePlugin<
   AuthDef.Context & ServerDef.PluginContext,
-  [options: AuthDef.Options]
+  [options?: AuthDef.Options]
 >({
   name: 'server-auth',
   version: pkg.version,
-  description: 'JWT sessions / access+refresh rotation / service tokens, as action options',
+  description: 'The auth gate over the installed AuthStrategy impls, as the `auth` action option',
 
   *setup(given) {
     if (!(yield* Server.context.get())) {
       return yield* fail(ServerErrors.Configuration, 'Auth must be installed by createServer')
     }
 
-    // `plugins: [Auth]` (the bare handle) type-checks like the plugins that take no options —
-    // say so here instead of dying on `given.provider` with a raw TypeError
-    if (!given?.provider) {
+    // the chain is read on every call, but an install with nobody to ask is a mistake to name now
+    if (!(yield* AuthStrategyProtocol.context.get())) {
       return yield* fail(
         ServerErrors.Configuration,
-        'Auth needs options — plugins: [Auth.use({ provider, secret })], not [Auth]',
+        'Auth needs at least one strategy installed BEFORE it — plugins: [JwtAuth.use({ secret, provider }), StaticAuth.use({ tokens }), Auth]',
       )
     }
-    const mode = given.mode ?? 'session'
-    if (mode === 'access-refresh') {
-      const missing = (
-        ['saveRefresh', 'loadRefresh', 'rotateRefresh', 'revokeFamily'] as const
-      ).filter(hook => typeof given.provider[hook] !== 'function')
-      if (missing.length > 0) {
-        return yield* fail(
-          ServerErrors.Configuration,
-          `auth: access-refresh mode needs provider.${missing.join(', provider.')}`,
-        )
-      }
-    }
-    const material = yield* materialOf(given)
-    const context: AuthDef.Context = {
-      mode,
-      provider: given.provider,
-      material,
-      ttl: {
-        session: given.sessionTtlMs ?? 7 * DAY,
-        access: given.accessTtlMs ?? 15 * 60 * 1000,
-        refresh: given.refreshTtlMs ?? 30 * DAY,
-        service: given.serviceTtlMs ?? HOUR,
-      },
-    }
+    const context: AuthDef.Context = { default: given?.default ?? false }
     return {
       ...context,
       options,
       hooks: {
         name: 'auth',
         *dispatch(call, ctx, next) {
-          const requirement = (ctx.meta.options as { auth?: AuthDef.Requirement }).auth ?? false
+          // an action's own `auth` wins (a service-level one is already stamped on it); an
+          // action that says nothing gets the install's `default`
+          const own = (ctx.meta.options as { auth?: AuthDef.Requirement }).auth
+          const requirement = own ?? context.default
           const token = bearerOf(call.headers)
-          let principal: AuthDef.Principal | undefined = undefined
-          if (token) {
-            const verified = yield* verify(material, token)
-            if (verified.type === 'refresh') {
-              return yield* fail(
-                ServerErrors.Unauthorized,
-                'a refresh token cannot call actions',
-                AuthErrors.InvalidToken,
-              )
-            }
-            principal = verified
-          }
+          const principal = token ? yield* resolve(token) : undefined
           yield* authorize(principal, requirement)
           return yield* next(call, { ...ctx, auth: principal ?? null })
         },
@@ -94,99 +124,53 @@ const AuthImpl = definePlugin<
 })
 
 /**
- * Authentication: `Auth.use({ provider, secret | keys, mode })`. Every dispatch with a bearer
- * token gets its principal on `ctx.auth`; `action({ auth: 'user' | 'service' | 'any' | [roles] })`
- * gates the action (`server.unauthorized` / `server.forbidden`). `Auth.actions.login/refresh/
- * verify/signService` mint and check tokens; wrap them in your own actions (or `authService()`).
+ * Authentication: install one or more strategies, then `Auth` — `plugins: [JwtAuth.use({ secret,
+ * provider, mode }), StaticAuth.use({ tokens }), Auth.use({ default })]`. Every dispatch with a
+ * bearer gets its principal on `ctx.auth` from whichever strategy recognizes it; `action({ auth:
+ * 'user' | 'service' | 'authenticated' | [roles] })` gates the action (`server.unauthorized` /
+ * `server.forbidden`), `service(name, actions, { auth })` sets it for a whole service and
+ * `default` for every action that says nothing (`'authenticated'` = fail-closed).
+ * `Auth.actions.login/refresh/verify/signService` route to the first strategy that answers.
  */
+/** The strategy protocol — see the definition above; exported here so the exports stay last. */
+export const AuthStrategy = AuthStrategyProtocol
+
 export const Auth = AuthImpl.build<AuthDef.Actions>({
   *login(credentials) {
-    const context = yield* AuthImpl.context.expect()
-    const user = yield* context.provider.authenticate(credentials)
-    if (!user) {
-      return yield* fail(ServerErrors.Unauthorized, 'bad credentials', AuthErrors.BadCredentials)
+    const tokens = yield* AuthStrategyProtocol.actions.login(credentials)
+    if (!tokens) {
+      return yield* fail(
+        ServerErrors.Configuration,
+        'no auth strategy issues tokens — install JwtAuth with a `provider`',
+      )
     }
-    return yield* tokensFor(context, user, yield* IO.actions.uuid())
+    return tokens
   },
 
   *refresh(refreshToken) {
-    const context = yield* AuthImpl.context.expect()
-    if (context.mode !== 'access-refresh') {
-      return yield* fail(ServerErrors.Unsupported, 'refresh tokens need mode: access-refresh')
-    }
-    const verified = yield* verify(context.material, refreshToken)
-    if (verified.type !== 'refresh' || !verified.family) {
-      return yield* fail(ServerErrors.Unauthorized, 'not a refresh token', AuthErrors.InvalidToken)
-    }
-    const record = yield* context.provider.loadRefresh!(verified.jti)
-    if (!record || record.revoked || record.expiresAt < Date.now()) {
-      // a consumed token presented again: someone else has it — burn the whole family
-      yield* context.provider.revokeFamily!(verified.family)
+    const tokens = yield* AuthStrategyProtocol.actions.refresh(refreshToken)
+    if (!tokens) {
       return yield* fail(
-        ServerErrors.Unauthorized,
-        'refresh token replayed or revoked',
-        AuthErrors.Replayed,
+        ServerErrors.Unsupported,
+        'no auth strategy rotates refresh tokens — JwtAuth needs mode: access-refresh',
       )
     }
-    const user = yield* context.provider.loadUser(verified.sub)
-    if (!user) {
-      return yield* fail(ServerErrors.Unauthorized, 'unknown user', AuthErrors.InvalidToken)
-    }
-    const nextJti = yield* IO.actions.uuid()
-    const next: AuthDef.RefreshRecord = {
-      jti: nextJti,
-      sub: user.sub,
-      family: verified.family,
-      expiresAt: Date.now() + context.ttl.refresh,
-      revoked: false,
-    }
-    const rotated = yield* context.provider.rotateRefresh!(verified.jti, next)
-    if (!rotated) {
-      yield* context.provider.revokeFamily!(verified.family)
-      return yield* fail(ServerErrors.Unauthorized, 'refresh token replayed', AuthErrors.Replayed)
-    }
-    const base = {
-      sub: user.sub,
-      roles: user.roles ?? [],
-      permissions: user.permissions ?? [],
-      claims: user.claims ?? {},
-    }
-    return {
-      accessToken: yield* sign(
-        context.material,
-        { ...base, type: 'access', jti: yield* IO.actions.uuid() },
-        context.ttl.access,
-      ),
-      refreshToken: yield* sign(
-        context.material,
-        { ...base, type: 'refresh', jti: nextJti, family: verified.family },
-        context.ttl.refresh,
-      ),
-      expiresAt: Date.now() + context.ttl.access,
-    }
+    return tokens
   },
 
   *verify(token) {
-    const context = yield* AuthImpl.context.expect()
-    const verified = yield* verify(context.material, token)
-    const { family: _family, exp: _exp, ...principal } = verified
-    return principal
+    return yield* resolve(token)
   },
 
   *signService(name, roles = []) {
-    const context = yield* AuthImpl.context.expect()
-    return yield* sign(
-      context.material,
-      {
-        sub: `service:${name}`,
-        type: 'service',
-        roles,
-        permissions: [],
-        claims: {},
-        jti: yield* IO.actions.uuid(),
-      },
-      context.ttl.service,
-    )
+    const token = yield* AuthStrategyProtocol.actions.signService(name, roles)
+    if (!token) {
+      return yield* fail(
+        ServerErrors.Configuration,
+        'no auth strategy mints service tokens — install JwtAuth',
+      )
+    }
+    return token
   },
 
   *principal() {
@@ -203,20 +187,8 @@ export const Auth = AuthImpl.build<AuthDef.Actions>({
   },
 
   *authorize(requirement, headers) {
-    const context = yield* AuthImpl.context.expect()
     const token = bearerOf(headers)
-    let principal: AuthDef.Principal | undefined = undefined
-    if (token) {
-      const verified = yield* verify(context.material, token)
-      if (verified.type === 'refresh') {
-        return yield* fail(
-          ServerErrors.Unauthorized,
-          'a refresh token cannot authenticate',
-          AuthErrors.InvalidToken,
-        )
-      }
-      principal = verified
-    }
+    const principal = token ? yield* resolve(token) : undefined
     yield* authorize(principal, requirement)
     return principal ?? null
   },

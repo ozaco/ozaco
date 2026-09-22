@@ -3,7 +3,17 @@
  * an entrypoint under `scripts/`). */
 import type { ServerDef } from 'server:core'
 import { createServer, Edge } from 'server:core'
-import { Auth, Cache, Cors, Docs, HotReload, ObservePlugin, Resilience } from 'server:plugins'
+import {
+  Auth,
+  Cache,
+  Cors,
+  Docs,
+  HotReload,
+  JwtAuth,
+  ObservePlugin,
+  Resilience,
+  StaticAuth,
+} from 'server:plugins'
 import type { Operation } from 'std:effect'
 import { attempt, fork } from 'std:effect'
 import { isFailure } from 'std:result'
@@ -18,6 +28,7 @@ import {
   APP_VERSION,
   AUTH_SECRET,
   HOSTNAME,
+  MCP_TOKEN,
   READY_TIMEOUT_MS,
   services,
 } from '../const'
@@ -47,12 +58,18 @@ export function* createDemo(
       },
     }),
     Cors.use({ origins: '*' }),
-    Auth.use({
+    // two credential strategies side by side — JWTs from `account.login` and a pre-shared
+    // service bearer (see `jobs.pending`); the first strategy that recognizes a bearer answers.
+    // `Auth` is the gate over both; `default` is left open here — set `default:
+    // 'authenticated'` to make a node fail-closed
+    JwtAuth.use({
       provider: authProvider(),
       secret: AUTH_SECRET,
       mode: 'access-refresh',
       accessTtlMs: ACCESS_TTL_MS,
     }),
+    StaticAuth.use({ tokens: { [MCP_TOKEN]: { sub: 'service:mcp', type: 'service' } } }),
+    Auth,
     Cache,
     Resilience,
     Docs.use({ path: '/docs', title: 'ozaco demo' }),

@@ -75,11 +75,75 @@ const classify = (error: AnyType): string => {
   return DbErrors.Query
 }
 
-/** Run one statement on the shared handle, classifying any SQLiteError into a `DbErrors` failure. */
+/** The characters that open a run of text a `;` must NOT split on: string literals, the three
+ * quoted-identifier styles and the two comment styles. */
+const CLOSERS: Readonly<Record<string, string>> = {
+  "'": "'",
+  '"': '"',
+  '`': '`',
+  '[': ']',
+  '--': '\n',
+  '/*': '*/',
+}
+
+/**
+ * Whether `sql` holds MORE than one top-level statement. `bun:sqlite`'s `query()` prepares only
+ * the first statement and silently ignores the rest, so the executor must know when to hand a
+ * script to `run()` instead. Literals, quoted identifiers and comments are skipped as opaque
+ * runs, so a `;` inside them — or inside a trigger body — still counts (a trigger script runs
+ * whole through `run()`, which is exactly right).
+ */
+const isMultiStatement = (sql: string): boolean => {
+  let index = 0
+  let split = false
+
+  while (index < sql.length) {
+    const pair = sql.slice(index, index + 2)
+    const opener = CLOSERS[pair] ? pair : CLOSERS[sql[index]!] ? sql[index]! : null
+
+    if (opener) {
+      const closer = CLOSERS[opener]!
+      const end = sql.indexOf(closer, index + opener.length)
+      index = end === -1 ? sql.length : end + closer.length
+      // a doubled quote (`''`) simply re-opens the literal on the next pass
+      continue
+    }
+
+    const char = sql[index]!
+    index += 1
+
+    if (char === ';') {
+      split = true
+    } else if (split && !/\s/u.test(char)) {
+      return true
+    }
+  }
+
+  return false
+}
+
+/**
+ * Run one statement on the shared handle, classifying any SQLiteError into a `DbErrors` failure.
+ * A multi-statement SCRIPT (DDL batches, trigger definitions) runs whole through `run()` — it
+ * yields no rows and cannot take bind parameters, so a script with params fails loudly instead
+ * of silently binding to its first statement only.
+ */
 export const exec: Sql.Executor = function* (statement: string, params: readonly unknown[]) {
   const state = yield* useContext(StateRef)
 
   try {
+    if (isMultiStatement(statement)) {
+      if (params.length > 0) {
+        return yield* fail(
+          DbErrors.Query,
+          'a multi-statement script cannot take bind parameters — run the statements one by one',
+        )
+      }
+
+      const changes = state.db.run(statement)
+      return { rows: [], rowCount: Number(changes.changes ?? 0) }
+    }
+
     const rows = state.db.query(statement).all(...(params as AnyType[])) as AnyType[]
     return { rows, rowCount: rows.length }
   } catch (error) {

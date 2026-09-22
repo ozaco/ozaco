@@ -120,6 +120,9 @@ declare module 'db:impl/memory-kv' {
 declare module 'db:impl/redis-kv' {
   export * from '@ozaco/db/impl/redis-kv';
 }
+declare module 'db:impl/table-kv' {
+  export * from '@ozaco/db/impl/table-kv';
+}
 
 // --------- TRANSPORT ---------
 

@@ -1,7 +1,6 @@
-import type { Helpers, ServerDef } from 'server:core'
-import { Server, ServerErrors } from 'server:core'
+import type { Helpers, ObserveDef } from 'server:core'
+import { ObserveExporter, Server, ServerErrors } from 'server:core'
 import { createSink } from 'server:internal'
-import { definePlugin } from 'std:plugin'
 import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 
@@ -44,7 +43,7 @@ const ZERO = { sent: 0, dropped: 0, failed: 0 }
  *
  * Batched in memory; delivery failures are counted (`stats()`), never raised into requests.
  */
-export const OpenObserveExporter = definePlugin<
+const OpenObserveExporterImpl = ObserveExporter.implement<
   OpenObserveDef.Context,
   [options: OpenObserveDef.Options]
 >({
@@ -89,8 +88,8 @@ export const OpenObserveExporter = definePlugin<
     const bodies = options.bodies === true
 
     // the PANELS leg: the plain OtlpExporter, installed here against the same OpenObserve
-    // (its `/api/<org>` OTLP endpoints, same auth) — its hooks are relayed below since
-    // createServer only sees THIS plugin's context
+    // (its `/api/<org>` OTLP endpoints, same auth). It registers as an exporter of its own —
+    // the kernel fans events out to it directly, nothing to relay
     const otlpOptions = typeof options.otlp === 'object' ? options.otlp : undefined
     const otlp =
       options.otlp === false
@@ -132,13 +131,8 @@ export const OpenObserveExporter = definePlugin<
       )
     }
 
-    const hooks: ServerDef.Hooks = {
-      name: 'openobserve',
-      *observe(event) {
-        if (otlp?.hooks?.observe) {
-          yield* otlp.hooks.observe(event)
-        }
-
+    const handle: ObserveDef.ExporterActions = {
+      *export(event) {
         switch (event.t) {
           case 'request': {
             sinks.get('requests')?.push(ooRequest(event.row, bodies))
@@ -184,23 +178,16 @@ export const OpenObserveExporter = definePlugin<
         for (const sink of sinks.values()) {
           yield* sink.start()
         }
-
-        if (otlp?.hooks?.start) {
-          yield* otlp.hooks.start()
-        }
       },
-      *stop() {
+      *flush() {
         for (const sink of sinks.values()) {
           yield* sink.flush()
-        }
-
-        if (otlp?.hooks?.stop) {
-          yield* otlp.hooks.stop()
         }
       },
     }
 
     return {
+      exporter: 'openobserve',
       url: base,
       org,
       stats: () =>
@@ -208,7 +195,19 @@ export const OpenObserveExporter = definePlugin<
           ...Object.fromEntries(KINDS.map(kind => [kind, sinks.get(kind)?.stats ?? { ...ZERO }])),
           otlp: otlp ? otlp.stats() : null,
         }) as AnyType,
-      hooks,
+      handle,
     }
   },
-}).build()
+})
+
+export const OpenObserveExporter = OpenObserveExporterImpl.build({
+  *export(event: ObserveDef.Event) {
+    yield* (yield* OpenObserveExporterImpl.context.expect()).handle.export(event)
+  },
+  *start() {
+    yield* (yield* OpenObserveExporterImpl.context.expect()).handle.start()
+  },
+  *flush() {
+    yield* (yield* OpenObserveExporterImpl.context.expect()).handle.flush()
+  },
+})

@@ -15,7 +15,7 @@ export { ServerErrors, STATUS_OF } from './errors'
 export { CtxRef, TraceRef } from './context'
 
 export { DbOutcomes } from './definition/outcomes'
-export { Carrier, Edge, Observe, Outcomes, Server } from './definition/protocol'
+export { Carrier, Edge, Observe, ObserveExporter, Outcomes, Server } from './definition/protocol'
 
 export { serviceErrors } from './utils/errors'
 export { defineEvents } from './utils/events'

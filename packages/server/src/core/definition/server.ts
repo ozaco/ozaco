@@ -88,6 +88,7 @@ const ServerImpl = Server.implement<ServerDef.Context, [options: ServerDef.Optio
       carrier: null,
       edge: null,
       outcomes: null,
+      exporting: false,
       role: roleOf(options),
       hosted: new Set(options.hosted ?? registry.services.keys()),
       pluginServices: new Set(),

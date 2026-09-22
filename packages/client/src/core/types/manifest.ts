@@ -26,6 +26,10 @@ export namespace ManifestDef {
     readonly output: Plane
     readonly errors: Readonly<Record<string, number>>
     readonly tags: readonly string[]
+
+    /** the success status the server replies with (200 / 204 unless the action declares one). */
+    readonly status?: number | undefined
+    readonly headers?: Readonly<Record<string, string>> | undefined
     readonly options: Readonly<Record<string, unknown>>
   }
 

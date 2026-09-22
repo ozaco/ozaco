@@ -15,48 +15,10 @@ import type { AuthDef } from './types'
 const ENCODER = new TextEncoder()
 const BEARER = 'bearer '
 
-function* importKey(key: CryptoKey | string, alg: string, kind: 'private' | 'public') {
-  if (typeof key !== 'string') {
-    return key
-  }
+export const HOUR = 60 * 60 * 1000
+export const DAY = 24 * HOUR
 
-  const imported = yield* attempt(() =>
-    until(kind === 'private' ? importPKCS8(key, alg) : importSPKI(key, alg)),
-  )
-
-  if (isFailure(imported)) {
-    return yield* fail(
-      ServerErrors.Configuration,
-      `auth: cannot import ${kind} key`,
-      String(imported.error),
-    )
-  }
-
-  return imported.value
-}
-
-/** Install options → jose key material: HMAC secret → HS256, PEM/CryptoKey pair → its alg. */
-export function* materialOf(options: AuthDef.Options): Operation<AuthDef.Material> {
-  if (options.secret !== undefined) {
-    if (options.secret.length === 0) {
-      return yield* fail(ServerErrors.Configuration, 'auth: secret must be a non-empty string')
-    }
-
-    const bytes = ENCODER.encode(options.secret)
-
-    return { alg: 'HS256', signKey: bytes, verifyKey: bytes }
-  }
-
-  if (!options.keys) {
-    return yield* fail(ServerErrors.Configuration, 'auth: give a `secret` (HS256) or a `keys` pair')
-  }
-
-  return {
-    alg: options.keys.alg,
-    signKey: yield* importKey(options.keys.privateKey, options.keys.alg, 'private'),
-    verifyKey: yield* importKey(options.keys.publicKey, options.keys.alg, 'public'),
-  }
-}
+// --- shared by the coordinator and every strategy ------------------------------------------------
 
 /** The bearer token of a request, if any. */
 export const bearerOf = (headers: Readonly<Record<string, string>>): string | null => {
@@ -69,80 +31,6 @@ export const bearerOf = (headers: Readonly<Record<string, string>>): string | nu
   const token = header.slice(BEARER.length).trim()
 
   return token === '' ? null : token
-}
-
-export function* sign(
-  material: AuthDef.Material,
-  seed: AuthDef.Seed,
-  ttlMs: number,
-): Operation<string> {
-  const outcome = yield* attempt(() =>
-    until(
-      new SignJWT({
-        type: seed.type,
-        roles: [...seed.roles],
-        permissions: [...seed.permissions],
-        claims: seed.claims,
-        ...(seed.family ? { family: seed.family } : {}),
-      })
-        .setProtectedHeader({ alg: material.alg })
-        .setSubject(seed.sub)
-        .setJti(seed.jti)
-        .setIssuedAt()
-        .setExpirationTime(new Date(Date.now() + ttlMs))
-        .sign(material.signKey),
-    ),
-  )
-
-  if (isFailure(outcome)) {
-    return yield* fail(ServerErrors.Internal, 'auth: token signing failed', String(outcome.error))
-  }
-
-  return outcome.value
-}
-
-const strings = (value: unknown): readonly string[] =>
-  Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
-
-export function* verify(material: AuthDef.Material, token: string): Operation<AuthDef.Verified> {
-  const outcome = yield* attempt(() =>
-    until(jwtVerify(token, material.verifyKey, { algorithms: [material.alg] })),
-  )
-
-  if (isFailure(outcome)) {
-    const expired = String((outcome.error as AnyType)?.code ?? '').includes('EXPIRED')
-
-    return yield* fail(
-      ServerErrors.Unauthorized,
-      expired ? 'token expired' : 'token verification failed',
-      expired ? AuthErrors.ExpiredToken : AuthErrors.InvalidToken,
-    )
-  }
-
-  const raw = outcome.value.payload
-  const type = raw.type
-
-  if (
-    typeof raw.sub !== 'string' ||
-    typeof raw.jti !== 'string' ||
-    (type !== 'access' && type !== 'refresh' && type !== 'session' && type !== 'service')
-  ) {
-    return yield* fail(ServerErrors.Unauthorized, 'malformed token', AuthErrors.InvalidToken)
-  }
-
-  return {
-    sub: raw.sub,
-    jti: raw.jti,
-    type,
-    roles: strings(raw.roles),
-    permissions: strings(raw.permissions),
-    claims: (raw.claims && typeof raw.claims === 'object' ? raw.claims : {}) as Record<
-      string,
-      unknown
-    >,
-    family: typeof raw.family === 'string' ? raw.family : undefined,
-    exp: typeof raw.exp === 'number' ? raw.exp : undefined,
-  }
 }
 
 /** Whether a principal satisfies an action's `auth` requirement; a failure says why not. */
@@ -220,9 +108,6 @@ function* requireRoles(principal: AuthDef.Principal, roles: readonly string[]): 
   }
 }
 
-export const HOUR = 60 * 60 * 1000
-export const DAY = 24 * HOUR
-
 /** The `auth` action option (validated by the kernel). */
 export const options = {
   auth: z.union([
@@ -239,11 +124,144 @@ export const options = {
   ]),
 }
 
+// --- jwt ------------------------------------------------------------------------------------------
+
+function* importKey(key: CryptoKey | string, alg: string, kind: 'private' | 'public') {
+  if (typeof key !== 'string') {
+    return key
+  }
+
+  const imported = yield* attempt(() =>
+    until(kind === 'private' ? importPKCS8(key, alg) : importSPKI(key, alg)),
+  )
+
+  if (isFailure(imported)) {
+    return yield* fail(
+      ServerErrors.Configuration,
+      `auth: cannot import ${kind} key`,
+      String(imported.error),
+    )
+  }
+
+  return imported.value
+}
+
+/** Install options → jose key material: HMAC secret → HS256, PEM/CryptoKey pair → its alg. */
+export function* materialOf(given: AuthDef.JwtOptions): Operation<AuthDef.Material> {
+  if (given.secret !== undefined) {
+    if (given.secret.length === 0) {
+      return yield* fail(ServerErrors.Configuration, 'auth: secret must be a non-empty string')
+    }
+
+    const bytes = ENCODER.encode(given.secret)
+
+    return { alg: 'HS256', signKey: bytes, verifyKey: bytes }
+  }
+
+  if (!given.keys) {
+    return yield* fail(ServerErrors.Configuration, 'auth: give a `secret` (HS256) or a `keys` pair')
+  }
+
+  return {
+    alg: given.keys.alg,
+    signKey: yield* importKey(given.keys.privateKey, given.keys.alg, 'private'),
+    verifyKey: yield* importKey(given.keys.publicKey, given.keys.alg, 'public'),
+  }
+}
+
+export function* sign(
+  material: AuthDef.Material,
+  seed: AuthDef.Seed,
+  ttlMs: number,
+): Operation<string> {
+  const outcome = yield* attempt(() =>
+    until(
+      new SignJWT({
+        type: seed.type,
+        roles: [...seed.roles],
+        permissions: [...seed.permissions],
+        claims: seed.claims,
+        ...(seed.family ? { family: seed.family } : {}),
+      })
+        .setProtectedHeader({ alg: material.alg })
+        .setSubject(seed.sub)
+        .setJti(seed.jti)
+        .setIssuedAt()
+        .setExpirationTime(new Date(Date.now() + ttlMs))
+        .sign(material.signKey),
+    ),
+  )
+
+  if (isFailure(outcome)) {
+    return yield* fail(ServerErrors.Internal, 'auth: token signing failed', String(outcome.error))
+  }
+
+  return outcome.value
+}
+
+const strings = (value: unknown): readonly string[] =>
+  Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
+
+/**
+ * Verify a JWT against this material. `undefined` = not a token of ours (not a JWT at all,
+ * another key, a malformed payload) — another strategy may still recognize it; an EXPIRED token
+ * of ours is decisive: it fails.
+ */
+export function* verify(
+  material: AuthDef.Material,
+  token: string,
+): Operation<AuthDef.Verified | undefined> {
+  const outcome = yield* attempt(() =>
+    until(jwtVerify(token, material.verifyKey, { algorithms: [material.alg] })),
+  )
+
+  if (isFailure(outcome)) {
+    const expired = String((outcome.error as AnyType)?.code ?? '').includes('EXPIRED')
+
+    return expired
+      ? yield* fail(ServerErrors.Unauthorized, 'token expired', AuthErrors.ExpiredToken)
+      : undefined
+  }
+
+  const raw = outcome.value.payload
+  const type = raw.type
+
+  if (
+    typeof raw.sub !== 'string' ||
+    typeof raw.jti !== 'string' ||
+    (type !== 'access' && type !== 'refresh' && type !== 'session' && type !== 'service')
+  ) {
+    return undefined
+  }
+
+  return {
+    sub: raw.sub,
+    jti: raw.jti,
+    type,
+    roles: strings(raw.roles),
+    permissions: strings(raw.permissions),
+    claims: (raw.claims && typeof raw.claims === 'object' ? raw.claims : {}) as Record<
+      string,
+      unknown
+    >,
+    family: typeof raw.family === 'string' ? raw.family : undefined,
+    exp: typeof raw.exp === 'number' ? raw.exp : undefined,
+  }
+}
+
+/** The tokens a fresh login yields: one session token, or an access + refresh pair (saved
+ * through the context's provider — the caller has already made sure there is one). */
 export function* tokensFor(
-  context: AuthDef.Context,
+  context: AuthDef.JwtContext,
   user: AuthDef.User,
   family: string,
 ): Operation<AuthDef.Tokens> {
+  const { provider } = context
+
+  if (!provider) {
+    return yield* fail(ServerErrors.Configuration, 'auth: issuing tokens needs a provider')
+  }
+
   const base = {
     sub: user.sub,
     roles: user.roles ?? [],
@@ -273,7 +291,7 @@ export function* tokensFor(
     expiresAt: Date.now() + context.ttl.refresh,
     revoked: false,
   }
-  yield* context.provider.saveRefresh!(refresh)
+  yield* provider.saveRefresh!(refresh)
 
   return {
     accessToken: yield* sign(

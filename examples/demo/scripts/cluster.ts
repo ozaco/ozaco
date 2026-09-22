@@ -56,7 +56,7 @@ export const runCluster = (shared: Pick<DemoOptions, 'openobserve'> = {}): Promi
     yield* ready.next()
     yield* node({
       role: 'service',
-      hosted: ['feed', 'reports', 'live', 'rtc', 'cluster'],
+      hosted: ['feed', 'reports', 'jobs', 'live', 'rtc', 'cluster'],
       instance: 'api-2',
       observe: 'forward',
       port: 0,

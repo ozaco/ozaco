@@ -112,6 +112,9 @@ function* contextOf({
       )
     }) as ServerDef.Ctx['call'],
     emit: actions.emit,
+    reply: reply => {
+      call.reply?.(reply)
+    },
     *span(name, body, attrs) {
       return yield* withSpan(
         { kernel, trace: yield* childTrace(trace), kind: 'custom', name, attrs },
@@ -157,6 +160,8 @@ export function* contextFor(
     errors: {},
     tags: [],
     docs: null,
+    status: null,
+    headers: {},
     options: {},
   }
 

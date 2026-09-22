@@ -1,7 +1,8 @@
 import { column, DbClient, defineSchema, table, useDb, where } from 'db:core'
 import type { ServerDef } from 'server:core'
 import { createServer, Edge } from 'server:core'
-import { Auth, crud } from 'server:plugins'
+import type { AuthDef } from 'server:plugins'
+import { Auth, crud, JwtAuth } from 'server:plugins'
 import type { Operation } from 'std:effect'
 import { run, until } from 'std:effect'
 import { unwrap } from 'std:result'
@@ -150,17 +151,18 @@ describe('resource scope', () => {
           services: [notes],
           edge: BunEdge,
           plugins: [
-            Auth.use({
+            JwtAuth.use({
               secret: 'scope-test',
               provider: {
-                *authenticate(credentials) {
+                *authenticate(credentials: Record<string, unknown>) {
                   return { sub: String(credentials['tenant']) }
                 },
-                *loadUser(sub) {
+                *loadUser(sub: string) {
                   return { sub }
                 },
-              },
+              } satisfies AuthDef.Provider,
             }),
+            Auth,
           ],
         })
         const info = yield* server.start({ port: 0 })

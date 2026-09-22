@@ -50,6 +50,8 @@ const actionEntry = z.object({
     permissions: z.array(z.string()).optional(),
   }),
   docs: z.record(z.string(), z.unknown()).nullable().optional(),
+  status: z.number().optional(),
+  headers: z.record(z.string(), z.string()).optional(),
 })
 
 /** The loose shape of an OZACO MANIFEST v2 — what a consumer may validate a fetched manifest

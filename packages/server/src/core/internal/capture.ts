@@ -22,7 +22,7 @@ const SECRET = new Set([
 
 /** Bodies and headers are captured only when someone is actually observing. */
 export const observing = (kernel: ServerDef.Context): boolean =>
-  kernel.hooks.some(hooks => hooks.observe !== undefined)
+  kernel.exporting || kernel.hooks.some(hooks => hooks.observe !== undefined)
 
 /** The request headers as a row value: secrets redacted, long values capped. */
 export const capturedHeaders = (

@@ -78,7 +78,8 @@ const reasonOf = (error: unknown): { message: string; causes: readonly string[] 
   return { message: String(error), causes: [] }
 }
 
-const authorization = (options: ClientDef.Options): string | undefined => {
+/** The `authorization` header value of this client's token, if any (a value or a resolver). */
+export const authorization = (options: ClientDef.Options): string | undefined => {
   const token = typeof options.token === 'function' ? options.token() : options.token
   return token ? `Bearer ${token}` : undefined
 }
@@ -249,7 +250,9 @@ export function* request(
     brand: response.headers.get(HEADERS.brand),
   }
 
-  if (response.status >= 400) {
+  // a failure is what the server SAYS is one: the `oz-error` header rides every failure reply,
+  // including those an action maps to a 2xx (`errors: { 'rpc.invalid-params': 200 }`)
+  if (response.status >= 400 || response.headers.get(HEADERS.error) !== null) {
     settled = true
     clearTimeout(timer)
 

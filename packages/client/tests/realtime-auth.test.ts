@@ -9,7 +9,7 @@ import { ClientErrors, createClient } from 'client:core'
 import { column, DbClient, table } from 'db:core'
 import { createServer } from 'server:core'
 import type { AuthDef } from 'server:plugins'
-import { Auth, crud, Docs } from 'server:plugins'
+import { Auth, crud, Docs, JwtAuth } from 'server:plugins'
 import type { Operation } from 'std:effect'
 import { attempt, race, run, scoped, sleep } from 'std:effect'
 import type { Result } from 'std:result'
@@ -46,7 +46,7 @@ function* boot(): Operation<string> {
   const server = yield* createServer({
     services: [crud(notesTable, { auth: { read: 'user', write: 'user' } })],
     edge: BunEdge,
-    plugins: [Auth.use({ provider: provider(), secret: 'test-secret' }), Docs],
+    plugins: [JwtAuth.use({ provider: provider(), secret: 'test-secret' }), Auth, Docs],
   })
   const info = yield* server.start({ port: 0 })
 

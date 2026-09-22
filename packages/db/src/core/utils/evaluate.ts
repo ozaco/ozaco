@@ -56,11 +56,29 @@ export const sortDocs = (rows: readonly Spec.Doc[], order: readonly Spec.OrderBy
   })
 }
 
-const likeRegex = (pattern: string, insensitive: boolean): RegExp => {
-  const escaped = pattern.replaceAll(/[.*+?^${}()|[\]\\]/gu, String.raw`\$&`)
-  const source = `^${escaped.replaceAll('%', '.*').replaceAll('_', '.')}$`
+const literal = (char: string): string => char.replaceAll(/[.*+?^${}()|[\]\\]/gu, String.raw`\$&`)
 
-  return new RegExp(source, insensitive ? 'iu' : 'u')
+/** SQL `LIKE` as a regex — `%`/`_` wildcards, `\` escaping the next character (what the SQL
+ * adapters pin with `ESCAPE '\'`), `%` spanning newlines like the backends do. */
+const likeRegex = (pattern: string, insensitive: boolean): RegExp => {
+  let source = '^'
+
+  for (let index = 0; index < pattern.length; index += 1) {
+    const char = pattern[index]!
+
+    if (char === '\\' && index + 1 < pattern.length) {
+      index += 1
+      source += literal(pattern[index]!)
+    } else if (char === '%') {
+      source += String.raw`[\s\S]*`
+    } else if (char === '_') {
+      source += String.raw`[\s\S]`
+    } else {
+      source += literal(char)
+    }
+  }
+
+  return new RegExp(`${source}$`, insensitive ? 'iu' : 'u')
 }
 
 /** Three-way compare of `doc[field]` against the filter's value (null when incomparable). */

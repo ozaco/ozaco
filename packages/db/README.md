@@ -60,6 +60,7 @@ const users = table('users', {
   role: column.enumOf('admin', 'member').default(() => 'member'),
   tags: column.json<readonly string[]>(),
   joined: column.timestamp().optional(),
+  avatar: column.blob().optional(), // raw bytes (Uint8Array): sqlite BLOB / pg BYTEA, no base64
   team: column.id('teams'), //  a text column, branded with the table it points at
 })
   .unique('by_email', ['email'])
@@ -71,17 +72,17 @@ at install (`migrations: 'auto'`); `safe: true` skips the destructive steps.
 
 ## Reading
 
-|                                                             |                                                                                                                                                                      |
-| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `.where({ role: 'admin' })`                                 | equality shorthand                                                                                                                                                   |
-| `.filter(where.eq('done', false), …)`                       | the portable algebra — `eq ne gt gte lt lte oneOf notOneOf like ilike isNull notNull and or not`. Field names are checked against the table: a typo does not compile |
-| `.order('priority', 'desc').order('title')`                 | sort keys **stack**, `_id` closes them as a tiebreak                                                                                                                 |
-| `.select('title', 'size')`                                  | read only these columns (the system fields ride along, so paging and watching keep working)                                                                          |
-| `.collect() .take(n) .first() .unique() .count() .exists()` | terminals                                                                                                                                                            |
-| `.sum(f) .avg(f) .min(f) .max(f)`                           | aggregates computed in the backend                                                                                                                                   |
-| `.groupBy('role').count()`                                  | one answer row per group, carrying the grouped columns                                                                                                               |
-| `.paginate({ limit, cursor, direction, count })`            | keyset pagination over every sort key                                                                                                                                |
-| `.watch()` / `.watch({ mode: 'delta', since })`             | a live view of the same query                                                                                                                                        |
+|                                                             |                                                                                                                                                                                                                                                 |
+| ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.where({ role: 'admin' })`                                 | equality shorthand                                                                                                                                                                                                                              |
+| `.filter(where.eq('done', false), …)`                       | the portable algebra — `eq ne gt gte lt lte oneOf notOneOf like ilike startsWith isNull notNull and or not` (`startsWith` escapes the prefix; `escapeLike` does it by hand). Field names are checked against the table: a typo does not compile |
+| `.order('priority', 'desc').order('title')`                 | sort keys **stack**, `_id` closes them as a tiebreak                                                                                                                                                                                            |
+| `.select('title', 'size')`                                  | read only these columns (the system fields ride along, so paging and watching keep working)                                                                                                                                                     |
+| `.collect() .take(n) .first() .unique() .count() .exists()` | terminals                                                                                                                                                                                                                                       |
+| `.sum(f) .avg(f) .min(f) .max(f)`                           | aggregates computed in the backend                                                                                                                                                                                                              |
+| `.groupBy('role').count()`                                  | one answer row per group, carrying the grouped columns                                                                                                                                                                                          |
+| `.paginate({ limit, cursor, direction, count })`            | keyset pagination over every sort key                                                                                                                                                                                                           |
+| `.watch()` / `.watch({ mode: 'delta', since })`             | a live view of the same query                                                                                                                                                                                                                   |
 
 ## Writing
 
@@ -123,9 +124,9 @@ Both answer `db.validation` rather than passing anything through.
 
 ## Subpaths
 
-|                                             |                                                                                    |
-| ------------------------------------------- | ---------------------------------------------------------------------------------- |
-| `@ozaco/db`                                 | everything above                                                                   |
-| `@ozaco/db/impl/{memory,sqlite,pg,bun-sql}` | the database bindings                                                              |
-| `@ozaco/db/impl/{memory-kv,redis-kv}`       | the `Kv` stores                                                                    |
-| `@ozaco/db/internal`                        | the plumbing an adapter or a Kv store is built on — reach in only when writing one |
+|                                                |                                                                                                                      |
+| ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `@ozaco/db`                                    | everything above                                                                                                     |
+| `@ozaco/db/impl/{memory,sqlite,pg,bun-sql}`    | the database bindings                                                                                                |
+| `@ozaco/db/impl/{memory-kv,redis-kv,table-kv}` | the `Kv` stores — `TableKv` keeps them as rows of the installed adapter (persistent sqlite/pg cache without a redis) |
+| `@ozaco/db/internal`                           | the plumbing an adapter or a Kv store is built on — reach in only when writing one                                   |

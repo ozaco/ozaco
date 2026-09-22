@@ -1,14 +1,13 @@
-import { useDb } from 'db:core'
-import { action, service, stream } from 'server:core'
-import type { Flow } from 'std:effect'
-import { until } from 'std:effect'
-
 /**
  * Media: INPUT planes — a multipart upload (`parts`: fields + a file stream), a raw byte body
  * (`stream.bytes`), listing what was uploaded — and the way back OUT: `download` streams the
- * stored content from the db (base64 chunk rows read page by page, never the whole file at once).
+ * stored content from the db (blob chunk rows read page by page, never the whole file at once).
+ * `search` is a prefix lookup with `where.startsWith` (the prefix is escaped for you).
  */
-import { Buffer } from 'node:buffer'
+import { useDb, where } from 'db:core'
+import { action, service, stream } from 'server:core'
+import type { Flow } from 'std:effect'
+import { until } from 'std:effect'
 
 import { z } from 'zod'
 
@@ -17,7 +16,7 @@ import { schema } from '../../utils/tables'
 
 const Upload = z.object({ id: z.string(), name: z.string(), size: z.number(), mime: z.string() })
 
-/** One chunk row per this many raw bytes (base64 in the row, so ~341KB of text). */
+/** One chunk row per this many raw bytes. */
 const CHUNK_SIZE = 256 * 1024
 
 function* sizeOf(body: ReadableStream<Uint8Array>) {
@@ -80,7 +79,7 @@ export const media = service(
         let pendingSize = 0
 
         function* flush() {
-          const data = Buffer.from(concat(pending, pendingSize)).toString('base64')
+          const data = concat(pending, pendingSize)
           pending = []
           pendingSize = 0
           yield* db.insert('upload_chunks', { upload_id: id, seq: seq++, data })
@@ -154,7 +153,8 @@ export const media = service(
                   cursor = page.pageInfo.nextCursor
                   exhausted = !page.pageInfo.hasNext
 
-                  buffered = page.data.map(row => new Uint8Array(Buffer.from(row.data, 'base64')))
+                  // `data` is a blob column: the rows already carry Uint8Array
+                  buffered = page.data.map(row => row.data)
                 }
               },
             }
@@ -172,6 +172,24 @@ export const media = service(
       },
       function* ({ input }) {
         return { size: yield* sizeOf(input as ReadableStream<Uint8Array>) }
+      },
+    ),
+    search: action.query(
+      {
+        input: z.object({ prefix: z.string().min(1) }),
+        output: z.array(z.string()),
+        description:
+          'Upload names starting with `prefix` (case-insensitive) — `where.startsWith` escapes `%`/`_` in it',
+      },
+      function* ({ input }) {
+        const db = yield* useDb(schema)
+        const rows = yield* db
+          .query('uploads')
+          .filter(where.startsWith('name', input.prefix, { insensitive: true }))
+          .order('name')
+          .collect()
+
+        return rows.map(row => row.name)
       },
     ),
     list: action.query(

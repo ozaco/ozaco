@@ -25,6 +25,8 @@ const STRUCTURAL = [
   'errors',
   'tags',
   'docs',
+  'status',
+  'headers',
 ] as const
 
 type StructuralKey = Exclude<keyof ServiceDef.Config, keyof OptionsDef.ActionOptions>
@@ -90,6 +92,8 @@ const metaOf = (kind: ServiceDef.Kind, config: ServiceDef.Config): ServiceDef.Me
     errors: config.errors ?? {},
     tags: config.tags ?? [],
     docs: config.docs ?? null,
+    status: config.status ?? null,
+    headers: config.headers ?? {},
     options,
   }
 }
@@ -169,7 +173,8 @@ export const action = Object.assign(define('action'), {
   }),
 })
 
-/** Define a service: a name and its actions. Routes default to `/<service>/<action>`. */
+/** Define a service: a name and its actions. Routes default to `/<service>/<action>`; a
+ * service-level `auth` becomes the option of every action that does not set its own. */
 export const service = <const TName extends string, const TActions extends ServiceDef.ActionMap>(
   name: TName,
   actions: TActions,
@@ -186,12 +191,14 @@ export const service = <const TName extends string, const TActions extends Servi
         ]
       }
 
-      return [
-        key,
-        def.meta.route.path === ''
-          ? { ...def, meta: { ...def.meta, route: { ...def.meta.route, path: `/${name}/${key}` } } }
-          : def,
-      ]
+      const route =
+        def.meta.route.path === '' ? { ...def.meta.route, path: `/${name}/${key}` } : def.meta.route
+      const inherits = options?.auth !== undefined && def.meta.options['auth'] === undefined
+      const meta = inherits
+        ? { ...def.meta, route, options: { ...def.meta.options, auth: options.auth } }
+        : { ...def.meta, route }
+
+      return [key, { ...def, meta }]
     }),
   ) as TActions
 

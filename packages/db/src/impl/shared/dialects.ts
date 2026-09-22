@@ -23,6 +23,13 @@ function* encodeShared(kind: Spec.ColumnKind, value: unknown) {
     return yield* JsonCodec.actions.stringify(value)
   }
 
+  if (kind === 'blob' && value instanceof Uint8Array) {
+    // drivers bind a Buffer as bytes but may serialize a bare Uint8Array as JSON/text
+    return typeof Buffer === 'undefined'
+      ? value
+      : Buffer.from(value.buffer, value.byteOffset, value.byteLength)
+  }
+
   return value
 }
 
@@ -65,6 +72,13 @@ function* decodeShared(kind: Spec.ColumnKind, value: unknown) {
       return typeof value === 'number' ? value !== 0 : Boolean(value)
     }
 
+    case 'blob': {
+      // a plain Uint8Array in app land, whatever subclass (Buffer) the driver hands back
+      return value instanceof Uint8Array
+        ? new Uint8Array(value.buffer, value.byteOffset, value.byteLength)
+        : value
+    }
+
     default: {
       return value
     }
@@ -83,6 +97,7 @@ export const postgresDialect: Sql.Dialect = {
     boolean: 'BOOLEAN',
     timestamp: 'BIGINT',
     json: 'TEXT',
+    blob: 'BYTEA',
   },
   ilike: 'ILIKE',
   reindexTable: table => `REINDEX TABLE ${quoteIdent(table)}`,
@@ -114,6 +129,7 @@ export const sqliteDialect: Sql.Dialect = {
     boolean: 'INTEGER',
     timestamp: 'INTEGER',
     json: 'TEXT',
+    blob: 'BLOB',
   },
   ilike: null,
   reindexTable: table => `REINDEX ${quoteIdent(table)}`,

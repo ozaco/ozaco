@@ -72,6 +72,35 @@ export const runAdapterSuite = (target: AdapterTarget): void => {
       )
     })
 
+    it('blob columns store and return raw bytes (Uint8Array) on every backend', async () => {
+      unwrap(
+        await run(function* () {
+          const db = yield* bootstrap()
+          const bytes = new Uint8Array([0, 1, 2, 250, 251, 252, 253, 254, 255])
+          const made = yield* db.insert('users', { name: 'pixel', avatar: bytes })
+          expect(made.avatar).toBeInstanceOf(Uint8Array)
+          expect(Array.from(made.avatar as Uint8Array)).toEqual(Array.from(bytes))
+
+          // reads come back as plain Uint8Array (never a Buffer subclass, never base64 text)
+          const read = yield* db.get('users', made._id)
+          expect(Object.getPrototypeOf(read!.avatar)).toBe(Uint8Array.prototype)
+          expect(Array.from(read!.avatar as Uint8Array)).toEqual(Array.from(bytes))
+          const listed = yield* db.query('users').select('name', 'avatar').collect()
+          expect(Array.from((listed[0] as AnyType).avatar)).toEqual(Array.from(bytes))
+
+          // patch replaces the bytes; an empty blob is still a blob
+          const patched = yield* db.patch('users', made._id, { avatar: new Uint8Array() })
+          expect((patched.avatar as Uint8Array).length).toBe(0)
+
+          // anything but bytes is a validation failure
+          const text = yield* attempt(
+            db.insert('users', { name: 'nope', avatar: 'abc' as AnyType }),
+          )
+          expect((text as AnyType).error).toBe(DbErrors.Validation)
+        }),
+      )
+    })
+
     it('rejects invalid writes with db.validation', async () => {
       unwrap(
         await run(function* () {
@@ -169,6 +198,29 @@ export const runAdapterSuite = (target: AdapterTarget): void => {
 
           const g = yield* db.query('users').filter(where.like('name', 'g%')).collect()
           expect(g.map((row: AnyType) => row.name)).toEqual(['grace'])
+
+          // `_` is a wildcard in a raw pattern; `\` escapes it on every backend, and
+          // `startsWith` escapes the prefix for you
+          const gray = yield* db.insert('users', { name: 'g_ray' })
+          const wild = yield* db
+            .query('users')
+            .filter(where.like('name', 'g_%'))
+            .order('name')
+            .collect()
+          expect(wild.map((row: AnyType) => row.name)).toEqual(['g_ray', 'grace'])
+          const escaped = yield* db
+            .query('users')
+            .filter(where.like('name', String.raw`g\_%`))
+            .collect()
+          expect(escaped.map((row: AnyType) => row.name)).toEqual(['g_ray'])
+          const prefixed = yield* db.query('users').filter(where.startsWith('name', 'g_')).collect()
+          expect(prefixed.map((row: AnyType) => row.name)).toEqual(['g_ray'])
+          const caselessPrefix = yield* db
+            .query('users')
+            .filter(where.startsWith('name', 'G_', { insensitive: true }))
+            .collect()
+          expect(caselessPrefix.map((row: AnyType) => row.name)).toEqual(['g_ray'])
+          yield* db.delete('users', gray._id)
 
           const caseless = yield* db.query('users').filter(where.ilike('name', 'ADA')).collect()
           expect(caseless.map((row: AnyType) => row.name)).toEqual(['ada'])
@@ -719,6 +771,35 @@ export const runAdapterSuite = (target: AdapterTarget): void => {
           expect((nullName as AnyType).error).toBe(DbErrors.NotNull)
           const badTable = yield* attempt(Db.actions.raw('SELECT 1', [], { table: 'ghosts' }))
           expect((badTable as AnyType).error).toBe(DbErrors.Validation)
+
+          // a SCRIPT is an array: every statement runs, in one transaction, on every backend
+          yield* Db.actions.raw([
+            'CREATE TABLE "raw_a" ("x" INTEGER)',
+            'CREATE TABLE "raw_b" ("y" TEXT)',
+            'INSERT INTO "raw_a" ("x") VALUES (1)',
+          ])
+          const scripted = yield* attempt(Db.actions.raw(['SELECT 1'], [1]))
+          expect((scripted as AnyType).error).toBe(DbErrors.Validation)
+          const listing =
+            target.label === 'sqlite'
+              ? `SELECT "name" FROM sqlite_master WHERE "name" IN ('raw_a', 'raw_b') ORDER BY "name"`
+              : `SELECT "table_name" AS "name" FROM information_schema.tables WHERE "table_name" IN ('raw_a', 'raw_b') ORDER BY "name"`
+          const created = yield* Db.actions.raw(listing)
+          expect(created.rows).toEqual([{ name: 'raw_a' }, { name: 'raw_b' }])
+          const counted = yield* Db.actions.raw('SELECT COUNT(*) AS "n" FROM "raw_a"')
+          expect(Number(counted.rows[0]!['n'])).toBe(1)
+          // a bound statement can never hold two statements — every backend refuses
+          const bound = yield* attempt(
+            Db.actions.raw(`SELECT ${placeholder} AS "v"; SELECT 2 AS "v";`, [1]),
+          )
+          expect(isFailure(bound)).toBe(true)
+          // a ;-joined string with no params still runs whole on sqlite (bun:sqlite would
+          // otherwise silently keep the first statement) — the array form is the contract
+          yield* target.label === 'sqlite'
+            ? Db.actions.raw('DROP TABLE "raw_a"; DROP TABLE "raw_b";')
+            : Db.actions.raw(['DROP TABLE "raw_a"', 'DROP TABLE "raw_b"'])
+          const dropped = yield* Db.actions.raw(listing)
+          expect(dropped.rows).toEqual([])
         }),
       )
     })

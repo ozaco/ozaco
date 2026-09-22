@@ -21,23 +21,28 @@ is an entrypoint under `scripts/`.
 
 ## Use-case map
 
-| Feature                                                                                | Where                                              |
-| -------------------------------------------------------------------------------------- | -------------------------------------------------- |
-| query / mutation / action kinds, routes, validation, custom errors                     | `internal/services/*.ts`                           |
-| crud resource (`/todos`, If-Match conflicts) + realtime socket (`/todos/_realtime`)    | `internal/services/todos.ts`                       |
-| ndjson / sse / text / bytes outputs, deadline + cancel                                 | `internal/services/feed.ts`                        |
-| multipart `parts` input, raw byte body input, db-backed streaming download             | `internal/services/media.ts`                       |
-| cache (`cache`, tags, `invalidate`, table change invalidation)                         | `internal/services/reports.ts`                     |
-| retry / breaker / bulkhead / singleflight / rateLimit / timeout + fallback             | `internal/services/reports.ts`                     |
-| nested `ctx.call` (local or over the carrier)                                          | `reports.overview`                                 |
-| events (`ctx.emit`, `Server.actions.events`) relayed as SSE, custom socket route       | `internal/services/live.ts`                        |
-| auth: login / refresh rotation / replay detection / `auth: 'user'` / roles             | `internal/services/account.ts`, `internal/auth.ts` |
-| presence: members, who served a call                                                   | `internal/services/cluster.ts`                     |
-| WebRTC call page (`/rtc`), signaling relay across nodes, peer metrics into observe     | `internal/services/rtc.ts`, `internal/rtc-page.ts` |
-| app roles (monolith/gateway/service) via typed `DemoOptions`, one entrypoint per shape | `utils/demo.ts`, `scripts/*.ts`                    |
-| observe console, cluster forwarding, OpenObserve export (streams + panels)             | `utils/demo.ts`, `scripts/openobserve.ts`          |
-| docs manifest + OpenAPI (`/docs/openapi.json`) + panel, cors, health, raw route        | `utils/demo.ts`                                    |
-| typed client: calls, streams, uploads, realtime `$rows`, failures                      | `utils/walk.ts`                                    |
+| Feature                                                                                        | Where                                              |
+| ---------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| query / mutation / action kinds, routes, validation, custom errors                             | `internal/services/*.ts`                           |
+| crud resource (`/todos`, If-Match conflicts) + realtime socket (`/todos/_realtime`)            | `internal/services/todos.ts`                       |
+| ndjson / sse / text / bytes outputs, deadline + cancel                                         | `internal/services/feed.ts`                        |
+| multipart `parts` input, raw byte body input, db-backed streaming download                     | `internal/services/media.ts`                       |
+| cache (`cache`, tags, `invalidate`, table change invalidation)                                 | `internal/services/reports.ts`                     |
+| retry / breaker / bulkhead / singleflight / rateLimit / timeout + fallback                     | `internal/services/reports.ts`                     |
+| nested `ctx.call` (local or over the carrier)                                                  | `reports.overview`                                 |
+| events (`ctx.emit`, `Server.actions.events`) relayed as SSE, custom socket route               | `internal/services/live.ts`                        |
+| auth: login / refresh rotation / replay detection / `auth: 'user'` / roles                     | `internal/services/account.ts`, `internal/auth.ts` |
+| auth strategies side by side (`JwtAuth` + `StaticAuth` under one `Auth`), service-level `auth` | `internal/services/jobs.ts`, `utils/demo.ts`       |
+| reply shape: `status: 202` + static headers + per-call `ctx.reply({ headers })`                | `internal/services/jobs.ts`                        |
+| rpc-style failures: a domain error mapped to **200** (`oz-error` header, client still fails)   | `internal/services/jobs.ts`, `errors.ts`           |
+| `TableKv`: the kv as rows of the sqlite (jobs, cache, counters — persistent, cluster-shared)   | `internal/infrastructure.ts`                       |
+| `column.blob()` for the upload chunks, `where.startsWith` prefix search                        | `utils/tables.ts`, `internal/services/media.ts`    |
+| presence: members, who served a call                                                           | `internal/services/cluster.ts`                     |
+| WebRTC call page (`/rtc`), signaling relay across nodes, peer metrics into observe             | `internal/services/rtc.ts`, `internal/rtc-page.ts` |
+| app roles (monolith/gateway/service) via typed `DemoOptions`, one entrypoint per shape         | `utils/demo.ts`, `scripts/*.ts`                    |
+| observe console, cluster forwarding, OpenObserve export (streams + panels)                     | `utils/demo.ts`, `scripts/openobserve.ts`          |
+| docs manifest + OpenAPI (`/docs/openapi.json`) + panel, cors, health, raw route                | `utils/demo.ts`                                    |
+| typed client: calls, streams, uploads, realtime `$rows`, failures                              | `utils/walk.ts`                                    |
 
 ## Entrypoints
 
@@ -49,8 +54,9 @@ is an entrypoint under `scripts/`.
 
 The gateway waits for every service to show up in presence (`/_health` is 503 until then),
 forwards calls over the carrier, and collects the other nodes' spans/logs into one observe store.
-Infrastructure is fixed to the zero-dependency picks — memory transport, sqlite, memory kv; a
-different stack is a new entrypoint installing its own transport/adapter, not a flag.
+Infrastructure is fixed to the zero-dependency picks — memory transport, sqlite, and the kv as
+rows of that sqlite (`TableKv`); a different stack is a new entrypoint installing its own
+transport/adapter, not a flag.
 
 ### A call across two gateways
 
@@ -65,4 +71,5 @@ open http://127.0.0.1:3000/rtc#room   # tab 1 → gw-1
 open http://127.0.0.1:3001/rtc#room   # tab 2 → gw-2
 ```
 
-Seed users: `ada@example.com / ada` (admin), `bob@example.com / bob`.
+Seed users: `ada@example.com / ada` (admin), `bob@example.com / bob`. Service token (no login):
+`Authorization: Bearer demo-mcp-token` — what `jobs.pending` (`auth: 'service'`) expects.

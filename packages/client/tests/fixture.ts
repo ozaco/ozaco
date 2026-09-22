@@ -2,7 +2,7 @@
 import { column, DbClient, table } from 'db:core'
 import type { ServerDef } from 'server:core'
 import { action, createServer, service, stream } from 'server:core'
-import { crud, Docs, ObservePlugin } from 'server:plugins'
+import { Auth, crud, Docs, ObservePlugin, StaticAuth } from 'server:plugins'
 import type { Operation } from 'std:effect'
 import { sleep, until } from 'std:effect'
 import { fail } from 'std:result'
@@ -41,7 +41,7 @@ export const demo = service('demo', {
   ),
   nothing: action.mutation({}, function* () {}),
   explode: action.query(
-    { input: z.object({ code: z.string() }), errors: { 'demo.teapot': 418 } },
+    { input: z.object({ code: z.string() }), errors: { 'demo.teapot': 418, 'demo.soft': 200 } },
     function* ({ input }) {
       return yield* fail(input.code, `boom ${input.code}`)
     },
@@ -227,7 +227,16 @@ export const wall = service('wall', { feed: crud.realtime(notesTable) })
 export type Api = ServerDef.Handle<[typeof demo, typeof probe, typeof notes]>['api']
 
 /** Boot the fixture server on a random port; resolves its url. */
-export function* boot(options?: { docsPath?: string; observe?: boolean }): Operation<{
+/** The static bearer a gated fixture (`boot({ auth: true })`) accepts. */
+export const FIXTURE_TOKEN = 'tok-fixture'
+
+export function* boot(options?: {
+  docsPath?: string
+  observe?: boolean
+
+  /** gate the docs routes behind a static token (`FIXTURE_TOKEN`). */
+  auth?: boolean
+}): Operation<{
   url: string
   server: ServerDef.Handle<[typeof demo, typeof probe, typeof notes, typeof wall]>
 }> {
@@ -240,7 +249,13 @@ export function* boot(options?: { docsPath?: string; observe?: boolean }): Opera
     edge: BunEdge,
     plugins: [
       ...(options?.observe ? [ObservePlugin.use({ console: true, batch: { waitMs: 10 } })] : []),
-      Docs.use({ path: options?.docsPath ?? '/docs' }),
+      ...(options?.auth
+        ? [StaticAuth.use({ tokens: { [FIXTURE_TOKEN]: { sub: 'fixture' } } }), Auth]
+        : []),
+      Docs.use({
+        path: options?.docsPath ?? '/docs',
+        ...(options?.auth ? { auth: 'authenticated' as const } : {}),
+      }),
     ],
     name: 'client-fixture',
     version: '1.0.0',

@@ -13,6 +13,7 @@ export default defineConfig({
     'impl/bun-sql': './src/impl/bun-sql/index.ts',
     'impl/memory-kv': './src/impl/memory-kv/index.ts',
     'impl/redis-kv': './src/impl/redis-kv/index.ts',
+    'impl/table-kv': './src/impl/table-kv/index.ts',
   },
   format: ['esm', 'cjs'],
   dts: true,

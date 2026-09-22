@@ -1,3 +1,5 @@
+import type { AnyType } from 'std:shared'
+
 import type { DocsDef } from '../types'
 
 /** `{ error, message, causes, status }` — the edge's failure body. */
@@ -118,7 +120,7 @@ const okResponseOf = (action: DocsDef.ActionDoc): Record<string, unknown> => {
 }
 
 const responsesOf = (action: DocsDef.ActionDoc): Record<string, unknown> => {
-  const responses: Record<string, unknown> = { '200': okResponseOf(action) }
+  const responses: Record<string, unknown> = { [String(action.status)]: okResponseOf(action) }
   const byStatus = new Map<number, string[]>()
 
   for (const [tag, status] of Object.entries(action.errors)) {
@@ -126,9 +128,23 @@ const responsesOf = (action: DocsDef.ActionDoc): Record<string, unknown> => {
   }
 
   for (const [status, tags] of [...byStatus.entries()].toSorted(([a], [b]) => a - b)) {
-    responses[String(status)] = {
+    const failure = {
       description: tags.join(' · '),
       content: { 'application/json': { schema: FAILURE_SCHEMA } },
+    }
+
+    if (status !== action.status) {
+      responses[String(status)] = failure
+      continue
+    }
+
+    // a failure delivered under the SUCCESS status (rpc-style envelopes): one entry, either shape
+    const ok = responses[String(status)] as { description: string; content?: AnyType }
+    const okSchema = ok.content?.['application/json']?.schema ?? {}
+
+    responses[String(status)] = {
+      description: `${ok.description} · ${failure.description}`,
+      content: { 'application/json': { schema: { oneOf: [okSchema, FAILURE_SCHEMA] } } },
     }
   }
 
