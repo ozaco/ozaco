@@ -73,7 +73,7 @@
     },
     "packages/ai": {
       "name": "@ozaco/ai",
-      "version": "0.3.3",
+      "version": "0.3.4",
       "devDependencies": {
         "@ozaco/std": "workspace:*",
         "tsdown": "catalog:build",
