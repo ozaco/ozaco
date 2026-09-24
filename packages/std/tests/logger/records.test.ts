@@ -1,6 +1,6 @@
 import { run } from 'std:effect'
 import { DefaultLogger, Logger } from 'std:logger'
-import { fail, succeed, unwrap } from 'std:result'
+import { asFailure, fail, succeed, unwrap } from 'std:result'
 
 import { describe, expect, it } from 'bun:test'
 
@@ -56,6 +56,21 @@ describe('payload normalization', () => {
       { msg: 'request failed', error: 'boom: it broke: c-1 > c-2' },
       { msg: '', error: 'bare' },
     ])
+  })
+
+  it('a failure holding an Error renders it by name + message (formatFailure), not `{}`', async () => {
+    const sink = createSink()
+
+    unwrap(
+      await run(function* () {
+        yield* DefaultLogger.use()
+        yield* captureTransport('capture', sink).use()
+
+        yield* Logger.actions.error(asFailure(new TypeError('denied'), 'dialing'))
+      }),
+    )
+
+    expect(sink.entries[0]?.error).toBe('TypeError: denied: dialing')
   })
 
   it('a failure payload does not leak its internals into entry.data', async () => {

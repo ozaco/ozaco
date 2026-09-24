@@ -1,5 +1,5 @@
 import type { ServiceDef } from 'server:core'
-import type { Flow, Future, FutureFlow, Operation } from 'std:effect'
+import type { Flow, Future, FutureFlow, Operation, Scope } from 'std:effect'
 import type { AnyType, StandardSchemaV1 } from 'std:shared'
 
 import type { ManifestDef } from './manifest'
@@ -236,7 +236,9 @@ export namespace ClientDef {
 
   export type Handle<TApi> = ClientOf<TApi> & Statics
 
-  /** What {@link connectClient} resolves: the same handle plus the session teardown. */
+  /** What {@link connectClient} resolves: the same handle plus the session teardown. Its
+   * `$scope` is the session scope — `client.$scope.run(function* () { … })` runs an operation
+   * where the client's contexts live, so inline `yield*` calls work there. */
   export type ConnectedHandle<TApi> = Handle<TApi> & {
     /** Tear the connection down: every open stream and socket dies with the scope. */
     readonly $close: () => Promise<void>
@@ -272,6 +274,11 @@ export namespace ClientDef {
 
     /** the last request id a call received. */
     readonly $lastRequestId: () => string | null
+
+    /** The scope the client lives in (its plugins — IO, codec, ws — are installed there). Run an
+     * operation in it (`$scope.run(...)`) to `yield*` calls from a task that has none of those
+     * contexts itself; its teardown ends every open stream and socket. */
+    readonly $scope: Scope
 
     /** Replace the bearer token from here on (`null` clears it; the option resolver is the
      * fallback until the first set). */

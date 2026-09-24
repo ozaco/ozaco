@@ -76,6 +76,55 @@ export namespace Utils {
     notify(): void
   }
 
+  /** A counting semaphore (`createSemaphore`): FIFO permits, released on return, failure or halt. */
+  export interface Semaphore {
+    /** Take a permit (parking FIFO while none is free), run `op` inline, release the permit. */
+    run<T>(op: () => Operation<T>): Operation<T>
+    /** Permits free right now. */
+    available(): number
+    /** Callers parked for a permit right now. */
+    waiting(): number
+  }
+
+  /** A single-permit semaphore (`createMutex`). */
+  export interface Mutex {
+    run<T>(op: () => Operation<T>): Operation<T>
+    /** Whether a `run` body currently holds the lock. */
+    locked(): boolean
+    waiting(): number
+  }
+
+  export type BreakerState = 'closed' | 'open' | 'half-open'
+
+  /** Options for `createBreaker`. */
+  export interface BreakerOptions {
+    /** Consecutive (counted) failures that trip the circuit open. */
+    failures: number
+    /** How long an open circuit fails fast before letting one trial through (default 10_000). */
+    halfOpenMs?: number | undefined
+    /** Which failures count towards tripping (default: all). An ignored failure is re-raised as is. */
+    when?: ((failure: Result.Failure<unknown>) => boolean) | undefined
+    /** Prefix of the `BreakerOpen` message (`<name>: circuit open`). */
+    name?: string | undefined
+    /** Clock in ms (default `Date.now`) — injectable for tests. */
+    now?: (() => number) | undefined
+  }
+
+  /** A circuit breaker (`createBreaker`). */
+  export interface Breaker {
+    /** Run `op` through the circuit: fails fast with `EffectErrors.BreakerOpen` while open. */
+    run<T>(op: () => Operation<T>): Operation<T>
+    /** Open the circuit by hand; a `terminal` trip never half-opens — only `reset()` closes it. */
+    trip(reason?: unknown, options?: { terminal?: boolean | undefined }): void
+    /** Close the circuit and forget the failure count and the reason. */
+    reset(): void
+    state(): BreakerState
+    /** What opened the circuit: the tripping Failure or the `trip` reason (`undefined` when closed). */
+    readonly reason: unknown
+    /** Consecutive counted failures so far. */
+    readonly failures: number
+  }
+
   /** Options for `retry`. */
   export interface RetryOptions extends BackoffOptions {
     /** Maximum number of tries, including the first one (default 3). */

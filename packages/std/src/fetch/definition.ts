@@ -44,6 +44,7 @@ const FetchClientImpl = Fetch.implement<FetchDef.Context, [options?: FetchDef.Op
       headers: options?.headers,
       timeoutMs: options?.timeoutMs,
       codec: options?.codec,
+      tls: options?.tls,
     }
   },
 })

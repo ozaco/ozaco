@@ -29,7 +29,114 @@ const COMPARE: Record<string, string> = {
   lte: '<=',
 }
 
+/** Bind a value verbatim (already in its storage form). */
+const bindRaw = (builder: Sql.Builder, value: unknown): string => {
+  builder.params.push(value)
+  return builder.dialect.placeholder(builder.params.length)
+}
+
+type PathLeaf = Exclude<Spec.Filter, { readonly op: 'and' | 'or' | 'not' }>
+
+/** A plain boolean, NOT a type guard: the false branch must keep every leaf shape. */
+const isPathLeaf = (filter: Spec.Filter): boolean =>
+  filter.op !== 'and' &&
+  filter.op !== 'or' &&
+  filter.op !== 'not' &&
+  (filter as PathLeaf).path !== undefined &&
+  (filter as PathLeaf).path!.length > 0
+
+/** The scalar family a compared value belongs to (a `Date` compares as epoch millis). */
+const familyOf = (value: string | number | boolean): 'number' | 'string' | 'boolean' =>
+  typeof value === 'number' ? 'number' : typeof value === 'string' ? 'string' : 'boolean'
+
+/**
+ * A leaf reaching INTO a json column. Every comparison is guarded by the JSON type of the value
+ * at the path, so a number only meets numbers (and so on) — the memory evaluator's semantics,
+ * and never a cast error on Postgres. A missing key and JSON `null` are both SQL NULL.
+ */
+function* jsonLeafSql(builder: Sql.Builder, filter: PathLeaf): Operation<string> {
+  const { json } = builder.dialect
+  const column = quoteIdent(filter.field)
+  const segments = filter.path ?? []
+  // sqlite's `?` binds once per occurrence, so every expression binds its own path
+  const at = () => `${bindRaw(builder, json.path(segments))}${json.pathCast}`
+  const text = () => json.text(column, at())
+
+  const compare = function* (op: string, raw: Spec.FilterValue) {
+    const value = raw instanceof Date ? raw.getTime() : raw
+
+    if (value === null) {
+      return '1 = 0'
+    }
+
+    const type = `${json.type(column, at())} ${json.types[familyOf(value)]}`
+    const bound = yield* builder.dialect.encode(json.valueKind, value)
+    const target = json.value(column, at())
+
+    return `(${type} AND ${target} ${COMPARE[op]} ${bindRaw(builder, bound)}${json.valueCast})`
+  }
+
+  switch (filter.op) {
+    case 'eq':
+    case 'ne': {
+      if (filter.value === null) {
+        return `${text()} IS ${filter.op === 'eq' ? '' : 'NOT '}NULL`
+      }
+
+      return yield* compare(filter.op, filter.value)
+    }
+    case 'gt':
+    case 'gte':
+    case 'lt':
+    case 'lte': {
+      return yield* compare(filter.op, filter.value)
+    }
+    case 'in':
+    case 'not-in': {
+      // the presence check comes FIRST in the text, so it binds first (sqlite binds by order)
+      const present = filter.op === 'not-in' ? `${text()} IS NOT NULL AND ` : ''
+      const parts: string[] = []
+
+      for (const value of filter.value) {
+        if (value !== null) {
+          parts.push(yield* compare('eq', value))
+        }
+      }
+
+      const any = parts.length === 0 ? '1 = 0' : `(${parts.join(' OR ')})`
+
+      return filter.op === 'in' ? any : `(${present}NOT ${any})`
+    }
+    case 'like': {
+      const type = `${json.type(column, at())} ${json.types.string}`
+      const value = text()
+      const pattern = bindRaw(builder, filter.pattern)
+
+      if (!filter.insensitive) {
+        return `(${type} AND ${value} LIKE ${pattern} ${LIKE_ESCAPE})`
+      }
+
+      return builder.dialect.ilike
+        ? `(${type} AND ${value} ${builder.dialect.ilike} ${pattern} ${LIKE_ESCAPE})`
+        : `(${type} AND LOWER(${value}) LIKE LOWER(${pattern}) ${LIKE_ESCAPE})`
+    }
+    case 'is-null': {
+      return `${text()} IS NULL`
+    }
+    case 'not-null': {
+      return `${text()} IS NOT NULL`
+    }
+    default: {
+      return '1 = 1'
+    }
+  }
+}
+
 function* filterSql(builder: Sql.Builder, filter: Spec.Filter): Operation<string> {
+  if (isPathLeaf(filter)) {
+    return yield* jsonLeafSql(builder, filter as PathLeaf)
+  }
+
   switch (filter.op) {
     case 'eq':
     case 'ne': {
@@ -131,8 +238,14 @@ const statement = (text: string, builder: Sql.Builder): Sql.Statement => ({
 export function* compileFind(dialect: Sql.Dialect, spec: Spec.Find) {
   const builder = builderOf(dialect, spec.table)
   const where = yield* whereSql(builder, spec.filter)
-  const limit = spec.limit === null ? '' : ` LIMIT ${Math.trunc(spec.limit)}`
-  const offset = spec.offset ? ` OFFSET ${Math.trunc(spec.offset)}` : ''
+  const offset = spec.offset ? ` OFFSET ${Math.max(0, Math.trunc(spec.offset))}` : ''
+  // an OFFSET needs a LIMIT on sqlite — the dialect's "no limit" spelling fills in
+  const limit =
+    spec.limit === null
+      ? offset
+        ? ` ${dialect.unboundedLimit}`
+        : ''
+      : ` LIMIT ${Math.max(0, Math.trunc(spec.limit))}`
   const columns =
     spec.fields && spec.fields.length > 0 ? spec.fields.map(quoteIdent).join(', ') : '*'
 

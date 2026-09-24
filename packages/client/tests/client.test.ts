@@ -132,8 +132,9 @@ describe('client', () => {
         const { url } = yield* boot({ auth: true })
         const anonymous = yield* createClient<Api>({ url })
         const denied = yield* attempt(anonymous.$manifest())
-        expect((denied as AnyType).error).toBe(ClientErrors.Network)
-        expect((denied as AnyType).message).toContain('401')
+        // the gate's answer, decoded like any action failure — not a network error
+        expect((denied as AnyType).error).toBe('server.unauthorized')
+        expect((denied as AnyType).causes).toContain('status:401')
 
         const client = yield* createClient<Api>({ url, token: FIXTURE_TOKEN })
         const manifest = yield* client.$manifest()

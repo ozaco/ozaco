@@ -1,4 +1,4 @@
-import { isFailure, isResult } from 'std:result'
+import { formatFailure, isFailure, isResult } from 'std:result'
 import { isObject } from 'std:shared'
 
 import type { Helpers } from '../types/helpers'
@@ -18,9 +18,7 @@ export const normalizePayload = (args: readonly LoggerDef.Payload[]): Helpers.No
 
     if (isResult(arg)) {
       if (isFailure(arg)) {
-        const causes = arg.causes.length > 0 ? `: ${arg.causes.join(' > ')}` : ''
-        const message = arg.message ? `: ${arg.message}` : ''
-        error = `${String(arg.error)}${message}${causes}`
+        error = formatFailure(arg)
         // fully consumed — falling through would spread the failure's internals into `data`
         continue
       }

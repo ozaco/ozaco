@@ -7,7 +7,7 @@
  * The probes are never called: a generator body is type-checked all the same.
  */
 import type { Database, Schema } from 'db:core'
-import { column, defineSchema, table, useDb, where } from 'db:core'
+import { column, defineSchema, stripSystem, table, useDb, where } from 'db:core'
 import type { Operation } from 'std:effect'
 
 import { describe, expect, it } from 'bun:test'
@@ -20,6 +20,7 @@ const todos = table('todos', {
   note: column.text().optional(),
   meta: column.json<{ tags: string[] }>().optional(),
   due: column.timestamp().optional(),
+  seen: column.timestamp({ as: 'ms' }).optional(),
 })
 
 const tags = table('tags', {
@@ -93,6 +94,35 @@ const accepts = (): void => {
 
   // @ts-expect-error 'urgent' is not a member of the enum
   db.insert('todos', { title: 'x', done: false, priority: 'urgent', size: 1 })
+
+  // --- json paths: the first entry is a real column --------------------------------------------
+
+  db.query('todos').filter(where.eq(['meta', 'tags', 0], 'x'))
+  db.query('todos').filter(where.oneOf(['meta', 'owner', 'id'], ['a', 'b']))
+
+  // @ts-expect-error 'mtea' is not a column of todos
+  db.query('todos').filter(where.eq(['mtea', 'tags'], 'x'))
+
+  // --- timestamp({ as: 'ms' }) takes epoch millis ----------------------------------------------
+
+  db.insert('todos', { title: 'x', done: false, priority: 'low', size: 1, seen: 1 })
+
+  // @ts-expect-error an `as: 'ms'` timestamp is a number, not a Date
+  db.insert('todos', { title: 'x', done: false, priority: 'low', size: 1, seen: new Date() })
+
+  // --- import needs the id it keeps ------------------------------------------------------------
+
+  db.import('todos', [
+    { _id: 'a', _created_at: 1, title: 'x', done: false, priority: 'low', size: 1 },
+  ])
+
+  // @ts-expect-error an imported row carries its `_id`
+  db.import('todos', [{ title: 'x', done: false, priority: 'low', size: 1 }])
+
+  // --- skip keeps the query typed --------------------------------------------------------------
+
+  // @ts-expect-error skip does not loosen the field names
+  db.query('todos').skip(2).order('nope')
 }
 
 void accepts
@@ -179,6 +209,47 @@ function* probe(): Operation<void> {
   )
   const upsertedId: string = upserted._id
   void upsertedId
+
+  // `when` turns the answer into an outcome
+  const guarded = yield* db.upsert(
+    'todos',
+    { title: 'x' },
+    { done: false },
+    { when: where.eq('done', true) },
+  )
+  const op: 'inserted' | 'updated' | 'skipped' = guarded.op
+  const guardedTitle: string = guarded.doc.title
+  void [op, guardedTitle]
+
+  // @ts-expect-error `when` names real columns
+  yield* db.upsert('todos', { title: 'x' }, { done: false }, { when: where.eq('dnoe', true) })
+
+  const ignored = yield* db.insertOrIgnore('todos', {
+    title: 'x',
+    done: false,
+    priority: 'low',
+    size: 1,
+  })
+  // @ts-expect-error insertOrIgnore may answer null
+  void ignored.title
+
+  const seen: number | null = (yield* db.get('todos', 'a'))!.seen
+  const due: Date | null = (yield* db.get('todos', 'a'))!.due
+  void [seen, due]
+
+  const page = yield* db.query('todos').paginate({ page: 1, pageSize: 10 })
+  const pageRows: readonly { readonly title: string }[] = page.rows
+  const pages: number = page.pages
+  void [pageRows, pages]
+
+  const keyset = yield* db.query('todos').paginate({ limit: 10 })
+  void keyset.pageInfo.nextCursor
+
+  const copy = stripSystem((yield* db.get('todos', 'a'))!)
+  const copyTitle: string = copy.title
+  // @ts-expect-error the system fields are gone
+  void copy._id
+  void copyTitle
 }
 
 void probe
@@ -194,6 +265,14 @@ describe('db — types', () => {
         { op: 'gt', field: 'size', value: 3 },
       ],
     })
+
+    expect(where.eq(['meta', 'tags', 0], 'x')).toEqual({
+      op: 'eq',
+      field: 'meta',
+      path: ['tags', 0],
+      value: 'x',
+    })
+    expect(where.isNull(['meta'])).toEqual({ op: 'is-null', field: 'meta' })
 
     expect(where.ilike('title', 'a%')).toEqual({
       op: 'like',

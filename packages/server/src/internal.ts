@@ -31,6 +31,7 @@ export { ServerClient } from './core/definition/server'
 export { edgeActions, openEdge } from './core/utils/edge'
 export { breadcrumb } from './core/utils/failure'
 export { isSchema, isService, isSocketAction } from './core/utils/service'
+export { rewrapResponse } from './core/utils/response'
 export { createSink } from './core/utils/sink'
 export {
   brandOf,

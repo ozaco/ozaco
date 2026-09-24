@@ -16,4 +16,12 @@ export namespace Helpers {
     predicate?: ((value: AnyType) => boolean) | undefined
     schema?: StandardSchemaV1 | undefined
   }
+
+  /** A parsed version (build metadata dropped) — `prerelease` holds the dot-separated identifiers. */
+  export interface Version {
+    major: number
+    minor: number
+    patch: number
+    prerelease: string[]
+  }
 }

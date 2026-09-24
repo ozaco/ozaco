@@ -2,6 +2,7 @@ import type { Flow, Operation } from 'std:effect'
 import type { Plugin } from 'std:plugin'
 import type { AnyType, StandardSchemaV1 } from 'std:shared'
 
+import type { OptionsDef } from './options'
 import type { ServerDef } from './server'
 import type { ServiceDef } from './service'
 
@@ -108,15 +109,52 @@ export namespace EdgeDef {
     readonly sends: StandardSchemaV1 | null
   }
 
+  /** What a raw route handler receives besides the request and its params. */
+  export interface RawContext {
+    /** the caller the `Auth` gate verified (`null` when anonymous, or when no `Auth` is
+     * installed). */
+    readonly principal: OptionsDef.Principal | null
+  }
+
+  export type RawHandler = (
+    request: Request,
+    params: Readonly<Record<string, string>>,
+    context: RawContext,
+  ) => Operation<Response>
+
   /** A raw route served outside the action model (static files, dev consoles). */
   export interface RawRoute {
     readonly method: ServiceDef.HttpMethod | 'OPTIONS' | 'HEAD'
     readonly path: string
 
-    readonly handler: (
-      request: Request,
-      params: Readonly<Record<string, string>>,
-    ) => Operation<Response>
+    /** Who may reach it, exactly like an action's `auth` (`false` = public). Omitted, the
+     * installed `Auth`'s `default` applies — a fail-closed node (`default: 'authenticated'`)
+     * keeps raw routes closed too. Without `Auth` installed, anything but `false`/omitted is
+     * refused (`server.unauthorized`). */
+    readonly auth?: OptionsDef.Requirement | undefined
+    readonly handler: RawHandler
+  }
+
+  /** `Edge.actions.static(...)`: a directory served under a path prefix. */
+  export interface StaticOptions {
+    /** the URL prefix, `'/assets'` or `'/assets/**'` (the same). Default `'/'`. */
+    readonly path?: string | undefined
+
+    /** the directory served (relative = to the working directory). */
+    readonly dir: string
+
+    /** what a directory request serves. Default `'index.html'`; `false` = 404. */
+    readonly index?: string | false | undefined
+
+    /** serve dot-files (`.env`, `.git/…`). Default `false` — they answer 404. */
+    readonly dotfiles?: boolean | undefined
+
+    /** follow symlinks under `dir` (they may point outside it). Default `false` — a path that
+     * crosses one answers 404. */
+    readonly followSymlinks?: boolean | undefined
+
+    /** the routes' requirement — see {@link RawRoute.auth} (omitted = `Auth`'s default). */
+    readonly auth?: OptionsDef.Requirement | undefined
   }
 
   export interface Actions {
@@ -136,6 +174,11 @@ export namespace EdgeDef {
      * handlers already run). Resolves the number of action + socket routes mounted. */
     remount(): Operation<number>
     raw(route: RawRoute): Operation<void>
+
+    /** Serve the files of a directory under a prefix (GET + HEAD, as raw routes — the same
+     * `auth` gate): content-type by extension, `..` / escapes refused, 404 for missing files,
+     * the `index` file for directories. */
+    static(options: StaticOptions): Operation<void>
     socket(route: SocketRoute): Operation<void>
     decorate(decorator: Decorator): Operation<void>
     preflight(handler: Preflight): Operation<void>

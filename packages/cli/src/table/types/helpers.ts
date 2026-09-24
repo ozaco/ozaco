@@ -42,4 +42,10 @@ export namespace Helpers {
   }
 
   export type MutableRow = TableDef.Cell[] | Record<string, TableDef.Cell>
+
+  /** A table's row buffer; `ended` once `end()` committed it. */
+  export interface TableState {
+    rows: MutableRow[]
+    ended: boolean
+  }
 }

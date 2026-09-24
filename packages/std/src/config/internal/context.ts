@@ -10,6 +10,7 @@ import type { ConfigDef } from '../types'
 
 import { discover } from './discover'
 import { buildEnvOverlay, homeOrRoot, readVariant } from './env'
+import { readSource } from './read'
 import { baseFile, merge } from './utils'
 
 /** The extension the codec declares for its documents — the codec must be installed in this
@@ -27,13 +28,35 @@ function* extOf(codec: NonNullable<ConfigDef.Options['codec']>) {
   return codecCtx.value.ext
 }
 
+/** A targeted file's extension without the dot (`''` when it has none). */
+function* extFromPath(path: string) {
+  return (yield* IO.actions.extname(path)).slice(1)
+}
+
+/** The `path` mode's "discovery": exactly one file — the chain is it (when on disk), it is the
+ * working file, and no variant / env overlay applies. */
+function* reloadFile(ctx: ConfigDef.Context, path: string) {
+  const source = yield* readSource(ctx, path, new Set<string>())
+
+  ctx.variant = undefined
+  ctx.env = {}
+  ctx.chain = source ? [source] : []
+  ctx.working = source ?? { path, data: {}, extends: [] }
+  ctx.merged = merge(ctx)
+  ctx.dirty.clear()
+}
+
 /** Build a fresh, unattached config context from options (the shape the plugin `setup` returns). */
 export function* buildContext(options?: ConfigDef.Options) {
   const codec = options?.codec ?? TomlCodec
   const name = options?.name ?? DEFAULT_NAME
   const dot = options?.dot ?? true
-  const ext = options?.ext ?? (yield* extOf(codec))
-  const cwd = options?.cwd ?? (yield* IO.actions.cwd())
+  const path = options?.path
+  const ext = options?.ext ?? (path === undefined ? yield* extOf(codec) : yield* extFromPath(path))
+  const cwd =
+    path === undefined
+      ? (options?.cwd ?? (yield* IO.actions.cwd()))
+      : yield* IO.actions.dirname(path)
 
   const context: ConfigDef.Context = {
     name,
@@ -52,12 +75,20 @@ export function* buildContext(options?: ConfigDef.Options) {
     dirty: new Set<string>(),
   }
 
-  context.working.path = yield* IO.actions.join(cwd, baseFile(context))
+  if (path !== undefined) {
+    context.path = path
+  }
+
+  context.working.path = path ?? (yield* IO.actions.join(cwd, baseFile(context)))
   return context
 }
 
 /** (Re)discover the chain from `start`, recompute the env overlay + merged view, pin the working file. */
 export function* rediscover(ctx: ConfigDef.Context, start: string) {
+  if (ctx.path !== undefined) {
+    return yield* reloadFile(ctx, ctx.path)
+  }
+
   ctx.cwd = start
   ctx.variant = yield* readVariant(ctx)
   ctx.env = yield* buildEnvOverlay(ctx)

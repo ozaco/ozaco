@@ -30,15 +30,33 @@ foundation. Layers, bottom up:
   `bun-sql`, `memory-kv` / `redis-kv` / `table-kv` — the last keeps the Kv as rows of the installed
   adapter, no change log). Column kinds include `blob` (`Uint8Array`; sqlite BLOB / pg BYTEA);
   `where.startsWith` escapes its prefix and LIKE always pins `ESCAPE '\'`; `Db.actions.raw` takes
-  one statement or a script (`string[]`, one transaction)
+  one statement or a script (`string[]`, one transaction). `column.timestamp({ as: 'ms' })` is an
+  epoch-ms number (plain `timestamp()` stays a `Date`); `query.skip(n)` + offset
+  `paginate({ page, pageSize })` beside keyset `paginate({ limit, cursor })`; every `where.*` leaf
+  takes a json path (`where.eq(['payload', 'workspace'], v)`); `upsert(…, { when })` →
+  `{ op: 'inserted' | 'updated' | 'skipped', doc }` and `insertOrIgnore` (both retry once on
+  `db.unique`, so `match` needs a unique index); `db.import(table, rows)` keeps system fields
+  (`stripSystem(row)` drops them); memory-adapter top-level transactions are serialized. Sub-paths:
+  `@ozaco/db/queue` (`Queue.use({ table: queueTable('jobs') })`, `enqueue`/`work` with dedupe,
+  backoff, leases + sweeper, dead-letter), `@ozaco/db/adapter-kit` (`aggregateDocs`, `matches`, …)
+  and `@ozaco/db/testing` (`runAdapterSuite`, the only entry that imports `bun:test`)
 - **`@ozaco/server`** – the service/action kernel: `service()` / `action.*` / `createServer`, with
   edges (bun/node/deno), carriers, and plugins (auth, cache, cors, docs, observe, resilience,
   hot-reload, `crud`). Multi-impl seams are cloneable protocols, never options: `Auth` is the
   gate over `AuthStrategy` impls (`JwtAuth`, `StaticAuth`, installed BEFORE `Auth`; the first
-  SUCCESSFUL strategy answers) and `ObserveExporter` impls (`StdoutExporter`, `OtlpExporter`,
-  `OpenObserveExporter`) run side by side — the kernel fans events out, starts and flushes them.
-  An action's `errors` map may point a tag at any status, `200` included (the `{ error }`
-  envelope + `oz-error` header still mark it a failure; the client reads the header);
+  SUCCESSFUL strategy answers; `Auth.actions.check(req, headers)` answers principal-or-`null`) and
+  `ObserveExporter` impls (`StdoutExporter`, `OtlpExporter`, `OpenObserveExporter`) run side by
+  side — the kernel fans events out, starts and flushes them. Raw edge routes are gated by the
+  same Auth — `Edge.actions.raw({ auth })` and
+  `Edge.actions.static({ path, dir, index, dotfiles, followSymlinks, auth })` use the route's
+  `auth`,
+  else `Auth`'s `default`; `auth: false` is public (`/_health`, `/_observe`, Docs unless
+  `Docs.use({ auth })`) — and the handler's third argument is `{ principal }`. An output-schema
+  mismatch fails `server.output` (500), never `server.validation` (400). Never re-wrap with
+  `new Response(x.body, x)` — reading `.body` first loses a `Bun.file`'s content-type; use
+  `rewrapResponse` from `server:internal`. An action's `errors` map may point a tag at any
+  status, `200` included (the `{ error }` envelope + `oz-error` header still mark it a failure;
+  the client reads the header);
   `status`/`headers` on the config and `ctx.reply(...)` shape the successful edge reply.
   `crud(table, …)` is typed end to end: `schema` transforms reshape the derived zod schemas in
   the TYPES too, `scope` is the trusted per-caller filter (tenancy, optionally
@@ -50,8 +68,19 @@ foundation. Layers, bottom up:
   `Bun.build` bundles the watched subgraph into a fresh temp module per generation — never rely
   on `Loader.registry`, it is absent under `bun test`; Bun's resolver caches directory entries,
   so each generation gets its own directory). See `packages/server/README.md`.
-- **`@ozaco/client`** – the manifest-driven typed client for a `@ozaco/server` node
-- **`@ozaco/ai`**, **`@ozaco/cli`** – AI providers and the CLI toolkit
+- **`@ozaco/client`** – the manifest-driven typed client for a `@ozaco/server` node. Every `$` key
+  belongs to the client (unknown ones are `undefined`, never a service); `client.$scope` is the
+  scope its IO/codec/ws contexts live in (`client.$scope.run(function* () { yield* client.x.y() })`); a
+  manifest HTTP failure decodes like an action reply (bare 401/403 → `client.refused`), only a
+  failed round trip is `client.network`
+- **`@ozaco/ai`**, **`@ozaco/cli`** – AI providers and the CLI toolkit. cli: a trailing array
+  `args` field takes every remaining positional (a surplus one fails `cli.parse`); `ctx['--']` is
+  the passthrough and flags are not scanned past `--`; `defineCommand({ input, short, examples })`
+  options are inherited by every descendant action and `ctx.cwd` is read at run time;
+  `Registry.actions.run(argv, { report: true })` prints a failure once (`isReported(f)` →
+  `CliCauses.Reported`), parse errors + help go to stderr
+  (`Terminal.actions.write(text, { stream: 'stderr' })`); non-tty tables buffer until `end()` and fit every row; table handles
+  have `remove`/`replace`
 - `apps/panel` (docs try-it UI) and `apps/observe` (dev console) are embedded into the server's
   `Docs` / `ObservePlugin`; `examples/demo` is the end-to-end reference app.
 
@@ -79,17 +108,17 @@ budgets and re-armed gates are `std:effect` primitives (`budgetOf`/`budgetDelay`
 share them instead of re-implementing them.
 See `packages/std/README.md` for how each module works underneath.
 
-- **result** - `Result<T,E>` / `Maybe` types with `fail`, `succeed`, `appendCauses`, `asFailure`, `asFailureFrom`, `auto`, `throwable`, `unwrap`, `just`, `nothing` and the `is*` guards (`isSuccess`/`isFailure`/`isResult`/`isJust`/`isNothing`/`isMaybe`); no `map`/`orElse`/`pipe` here
-- **shared** - Common types (`AnyType`, `EmptyType`, `Simplify`, `Tags`, exported `Helpers`) and utilities: `createTags`, `match`, `pipe`, `deepMerge`, path helpers (`getPath`/`setPath`/`unsetPath`/`flatten`/`flattenEntries`), `validateSync`, `serializeError`, `hasFlag`, `lazyPromise`, `PriorityQueue`, runtime guards (`isPromise`, `isArray`, …; `isResult` lives in `result`)
-- **effect** - Effection-style structured concurrency: `Operation`, `Flow` (the effect stream abstraction — "stream" refers only to native platform streams), scopes, contexts, signals/channels/queues; `spawn` returns at once (the child may never start if the scope closes first), `fork` is guaranteed started before it returns and is supervised — use `fork`/`resource` when teardown must be armed; `attempt`/`recover`/`mapError` handle failures as values (`box` is gone); `EffectErrors` = halted, iteration-error, missing-context, no-scope-handler, using
+- **result** - `Result<T,E>` / `Maybe` types with `fail`, `succeed`, `appendCauses`, `asFailure`, `asFailureFrom` (both copy an `Error`'s message into `message`), `formatFailure` (`tag: message: cause > cause`, the ONE failure formatter — the logger uses it; render a Failure with it, never with `serializeError`), `auto`, `throwable`, `unwrap`, `just`, `nothing` and the `is*` guards (`isSuccess`/`isFailure`/`isResult`/`isJust`/`isNothing`/`isMaybe`); no `map`/`orElse`/`pipe` here
+- **shared** - Common types (`AnyType`, `EmptyType`, `Simplify`, `Tags`, exported `Helpers`) and utilities: `createTags`, `match`, `pipe`, `deepMerge`, path helpers (`getPath`/`setPath`/`unsetPath`/`flatten`/`flattenEntries`), `validateSync`, `serializeError` (NOT Failure-aware — `shared` never imports `result` for new code), `hasFlag`, bytes (`toHex`/`toBase64`/`fromBase64`, no Buffer), semver (`compareVersions`/`satisfies`), the `TlsOptions` type, `lazyPromise`, `PriorityQueue`, runtime guards (`isPromise`, `isArray`, …; `isResult` lives in `result`)
+- **effect** - Effection-style structured concurrency: `Operation`, `Flow` (the effect stream abstraction — "stream" refers only to native platform streams), scopes, contexts, signals/channels/queues; `spawn` returns at once (the child may never start if the scope closes first), `fork` is guaranteed started before it returns and is supervised — use `fork`/`resource` when teardown must be armed; `attempt`/`recover`/`mapError` handle failures as values (`box` is gone); `within(scope, op)` runs an op in another scope's contexts while the caller owns it (its failure reaches only the caller; it halts with the caller or the scope — never `scope.run(op, { detached: true })` for this); coordination primitives are `createGate`, `createMutex`/`createSemaphore(n)` (FIFO, permit released on failure/halt) and `createBreaker({ failures, halfOpenMs })` (a terminal `trip` never half-opens); `EffectErrors` = breaker-open, halted, iteration-error, missing-context, no-scope-handler, using
 - **event** - Typed event emitter (`createEvent`) plus effect bridges (`useEvent`, `onEvent`, `useEventOnce`, `useBufferedEvent`)
 - **plugin** - Plugin architecture: protocols (`defineProtocol` with `handlers`/`defaults`/`exec`, `Protocol.implement(...).build(...)`), `definePlugin`, `Plugin.use`, contexts, `before`/`after`/`around`/`error` hooks; `PluginErrors` = missing-action, protocol-not-cloneable
-- **codec** - Codec protocol with `JsonCodec`/`TomlCodec`/`YamlCodec` impls (`encode`/`decode`, `stringify`/`parse`, `encodeFlow`/`decodeFlow`) plus the `encodeFrame`/`decodeFrame` protocol handlers used by ws/webrtc; `CodecErrors` incl. `AlreadyRegistered`; `YamlCodec` exists but nothing in the monorepo uses it
-- **config** - Config discovery/merge/edit/watch plugin: `Config.use(options)` builds the context only, `Config.actions.load()` discovers; needs an IO impl + the file codec (default `TomlCodec`) installed; `JsonCodec` is required only by `watch` (change-detection fingerprint); `Features` bitflags from bit 0 (FILE=1, CHAIN=2, VARIANT=4, ENV=8, DIR=16); `ConfigErrors.MissingExtends`
-- **io** - Platform IO protocol (`BunIO`/`NodeIO`/`WebIO`; every type lives in the `IODef` namespace of `types/io.ts` — `IODef.Actions` is the contract, `IODef.S3Options`, `IODef.WatchEvent`, … the shapes): fs (`IO_FLAGS` from bit 0, camelCase keys: followSymlinks=1, files=2, dirs=4, append=8, exclusive=16), flows, path helpers, processes, net, env/ip/tmpdir/cwd/homeDir, crypto, `ulid`/`uuid`/`hlc`, watch (Watchman preferred, `STD_WATCHMAN=off` disables it, `fs.watch` fallback), S3 (Bun native / Node SigV4-over-fetch / Web unsupported; reads stream via `file.stream()`, a `ReadableStream` body streams up as a multipart upload with `partSize` parts — Bun's `writer()` sink, the fetch client's own multipart path); `internal/` is grouped by domain: `crypto/` (node, web, ulid, uuid, hlc), `fs/` (flow, walk, watch), `stream/` (from-readable, to-readable), `path/` (node, web), `process/` (shared, bun, node), `net/` (sockets, sys), `s3/` (config, sign, transport, xml, multipart, fetch, create); `IOErrors` = unsupported, exists, missing-env, exec-failed, exec-spawn-failed, spawn-failed, process-error, kill-failed, stdin-write-failed, sign-failed, verify-failed, hlc-invalid, decrypt-failed, s3-failed, tcp-listen-failed, tcp-connect-failed, tcp-write-failed, udp-bind-failed, udp-send-failed; `IOCauses` = stream, write-stream
+- **codec** - Codec protocol with `JsonCodec`/`TomlCodec`/`YamlCodec` impls (`encode`/`decode`, `stringify`/`parse`, `encodeFlow`/`decodeFlow`) plus the `encodeFrame`/`decodeFrame` protocol handlers used by ws/webrtc; `CodecErrors` incl. `AlreadyRegistered` (only a DIFFERENT impl claiming a taken name — re-installing the same codec, e.g. in a child scope, is a no-op); `YamlCodec` exists but nothing in the monorepo uses it
+- **config** - Config discovery/merge/edit/watch plugin: `Config.use(options)` builds the context only, `Config.actions.load()` discovers; needs an IO impl + the file codec (default `TomlCodec`) installed; `JsonCodec` is required only by `watch` (change-detection fingerprint); `Features` bitflags from bit 0 (FILE=1, CHAIN=2, VARIANT=4, ENV=8, DIR=16); the `path` option / `Config.actions.open({ path, codec })` loads exactly one file (its `extends` still resolve, no discovery); `ConfigErrors.MissingExtends`
+- **io** - Platform IO protocol (`BunIO`/`NodeIO`/`WebIO`; every type lives in the `IODef` namespace of `types/io.ts` — `IODef.Actions` is the contract, `IODef.S3Options`, `IODef.WatchEvent`, … the shapes): fs (`IO_FLAGS` from bit 0, camelCase keys: followSymlinks=1, files=2, dirs=4, append=8, exclusive=16), flows, path helpers, processes (`spawn(…, { stdio: 'inherit' | 'pipe' | { stdin, stdout, stderr } })`, `toTerminal(flow, { stream })`, the `decodeText(flow)` util decodes chunk-split UTF-8), net, env/ip/tmpdir/cwd/homeDir, `platform()` (`{ os, arch, uid? }`), `expandHome(path)`, crypto (`hash(…, { encoding: 'hex' | 'base64' })` returns a string), `ulid`/`uuid`/`hlc`, watch (Watchman preferred, `STD_WATCHMAN=off` disables it, `fs.watch` fallback), S3 (Bun native / Node SigV4-over-fetch / Web unsupported; reads stream via `file.stream()`, a `ReadableStream` body streams up as a multipart upload with `partSize` parts — Bun's `writer()` sink, the fetch client's own multipart path); `internal/` is grouped by domain: `crypto/` (node, web, ulid, uuid, hlc), `fs/` (flow, walk, watch), `stream/` (from-readable, to-readable), `path/` (node, web, home — `createExpandHome`), `process/` (shared, bun, node), `net/` (sockets, sys), `s3/` (config, sign, transport, xml, multipart, fetch, create); `IOErrors` = unsupported, exists, missing-env, exec-failed, exec-spawn-failed, spawn-failed, process-error, kill-failed, stdin-write-failed, sign-failed, verify-failed, hlc-invalid, decrypt-failed, s3-failed, tcp-listen-failed, tcp-connect-failed, tcp-write-failed, udp-bind-failed, udp-send-failed; `IOCauses` = stream, write-stream
 - **logger** - `Logger` (impl `DefaultLogger`, also at `std:logger/impl/default`) + cloneable `LoggerTransport` fan-out (`std:logger/transport/console`, `std:logger/transport/file`); both transports' default formats pin `JsonCodec`; `ConsoleTransport` reads the logger context in `setup`, so install it after `DefaultLogger`
-- **fetch** - HTTP client protocol `Fetch` + impl `FetchClient.use({ baseUrl, headers, timeoutMs, codec })`; two-step response API (no builders): `const res = yield* Fetch.actions.get(url)` then `yield* res.json()` / `res.expect()`; verb shorthands call the pinned `FetchClient.actions.request` (hooks still wrap, so `Fetch.around({ request })` sees every call); platform call injectable via the `fetchImpl` context; `FetchErrors` = timeout, http-status, parse
-- **ws** - WebSocket protocol `Ws` (routed `Ws.actions.connect`, hooks via `Ws.around({ connect })`) + impl `WsClient.use({ codec, reconnect, keepalive, … })`; `connect` returns a scope-bound resource with optional auto-`reconnect` (one continuous `messages` Flow across generations) and `keepalive`; `WsClient` constructs sockets with `globalThis.WebSocket`, read at connect time (no `WebSocket` global → `WsErrors.Unsupported`); a mock implements the protocol (`Ws.implement(...).build({ connect })`, see `tests/ws/helpers.ts` `wsMock`); `WsErrors` = connect, unsupported, reconnect-exhausted; `WsCauses` = connect, dial, send, close, keepalive, reconnect
+- **fetch** - HTTP client protocol `Fetch` + impl `FetchClient.use({ baseUrl, headers, timeoutMs, codec })`; two-step response API (no builders): `const res = yield* Fetch.actions.get(url)` then `yield* res.json()` / `res.expect()`; verb shorthands call the pinned `FetchClient.actions.request` (hooks still wrap, so `Fetch.around({ request })` sees every call); platform call injectable via the `fetchImpl` context; `tls` (`TlsOptions`) per request or as the install default; `FetchErrors` = timeout, http-status, parse, network (a platform transport fault, message = its code, e.g. `ConnectionRefused`)
+- **ws** - WebSocket protocol `Ws` (routed `Ws.actions.connect`, hooks via `Ws.around({ connect })`) + impl `WsClient.use({ codec, reconnect, keepalive, … })`; `connect` (takes `tls` too) returns a scope-bound resource with optional auto-`reconnect` (one continuous `messages` Flow across generations) and `keepalive`; `WsClient` constructs sockets with `globalThis.WebSocket`, read at connect time (no `WebSocket` global → `WsErrors.Unsupported`); a mock implements the protocol (`Ws.implement(...).build({ connect })`, see `tests/ws/helpers.ts` `wsMock`); `WsErrors` = connect, unsupported, reconnect-exhausted; `WsCauses` = connect, dial, send, close, keepalive, reconnect
 - **webrtc** - WebRTC protocol `Rtc` (routed `Rtc.actions.connect`, hooks via `Rtc.around({ connect })`) + impl `RtcClient.use(defaults?)` (client AND server — the API is peer-symmetric): `Rtc.actions.connect(signal, options)` negotiates over any `{ send, messages }` duplex (a `Ws` connection qualifies) and returns a scope-bound peer; data channels are Flow-based with backpressure-aware `send`, ICE restarts (`iceRestart`) and whole-session redials (`reconnect`, ws-style — local channels/tracks survive) are supervised; typed media via `peer.addTrack` → `Sender` + remote `tracks` Flow (browser-first — impl without `addTrack` fails `RtcErrors.Unsupported`); `RtcClient` resolves `RTCPeerConnection` at connect time (the browser global, else the auto-imported `node-datachannel` polyfill on Bun/Node, else `RtcErrors.Unsupported`); a mock implements the protocol (`Rtc.implement(...).build({ connect })`, see `tests/webrtc/fake.ts` `rtcMock`); observability is always on — `peer.metrics` (session counters), a bounded `peer.timeline` plus the live `peer.events` Flow (kinds: dial/state/offer/answer/glare/candidate/channel/track/ice-restart/redial/stats/close/error), and `peer.stats()` normalizing the impl's `getStats` (`observe: { sampleMs, timeline }` sizes it and turns the sampler on); `RtcErrors` = unsupported, connect, connection, negotiation, signal, ice-exhausted, reconnect-exhausted, channel, timeout, track, stats; `RtcCauses` names every pump/supervisor/handle operation
 
 ### Key Patterns
@@ -112,3 +141,7 @@ OXC is canonical (oxlint + oxfmt): 2 spaces, width 100, single quotes, JSX singl
   — every package's `tsconfig.paths.json` MUST `extends: "../../tsconfig.base.json"` (the package
   `tsconfig.json` extends the paths file); without it the project has no `target`/`strict` and the
   editor reports ts2802 on every `yield*` (std lacked it until 2026-09-17)
+- **Builds:** a tsdown config with external resolvers passes
+  `inputOptions: withDeclarationPlugins()` (devkit; one resolver for every ozaco family) — tsdown runs the `.d.cts` pass WITHOUT user plugins,
+  so the CJS types otherwise leak `std:*` aliases or inline private copies of std's types
+  (`devkit/tests/published-types.test.ts` checks both)

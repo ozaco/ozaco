@@ -46,15 +46,23 @@ export namespace TableDef {
     /** Append many rows at once; returns their indices (in order). */
     rows(rows: Row[]): Operation<number[]>
     /**
-     * Replace every cell of the row at `index`. Interactive tables redraw in place, so any row
-     * stays editable until `end()`. Non-interactive output can't rewrite a line already sent, so
-     * an update to an already-committed row is RE-APPENDED as a fresh line with the new values
-     * (duplicates are expected); the most-recent, not-yet-committed row is still edited in place.
+     * Replace every cell of the row at `index`. Interactive tables redraw in place; non-interactive
+     * tables buffer every row until `end()`, so any row stays editable until then in both modes.
      */
     update(index: number, row: Row): Operation<void>
     /** Update a single cell of the row at `index` — by column key (object rows) or index (arrays). */
     set(index: number, column: string | number, value: Cell): Operation<void>
-    /** Commit the table: the full, fully-aligned table is written to the scrollback. */
+    /**
+     * Remove the row at `index`; the rows after it shift up one index. Interactive tables redraw
+     * (leftover lines of the taller frame are cleared).
+     */
+    remove(index: number): Operation<void>
+    /** Replace ALL rows (indices restart at 0) — e.g. a refreshed listing. */
+    replace(rows: Row[]): Operation<void>
+    /**
+     * Commit the table: the full, fully-aligned table is written to the scrollback (for a
+     * non-interactive output this is the only write — widths fit every row).
+     */
     end(): Operation<void>
   }
 

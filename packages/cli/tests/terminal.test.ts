@@ -45,6 +45,35 @@ describe('cli — terminal', () => {
     expect(screen.read()).toBe('hello world')
   })
 
+  it('routes `{ stream: "stderr" }` writes to the error stream', async () => {
+    const screen = createMemoryScreen()
+
+    unwrap(
+      await withTerminal(screen, function* () {
+        yield* Terminal.actions.write('out')
+        yield* Terminal.actions.write(`${ESC}[31merr${ESC}[39m`, { stream: 'stderr' })
+        yield* Terminal.actions.write('!', { stream: 'stdout' })
+      }),
+    )
+
+    expect(screen.read()).toBe('out!')
+    expect(screen.read('stderr')).toContain(`${ESC}[31m`)
+    expect(screen.plain('stderr')).toBe('err')
+
+    screen.clear()
+    expect(screen.read('stderr')).toBe('')
+  })
+
+  it('reports a screen without explicit columns as a fallback size', async () => {
+    const screen = createMemoryScreen()
+
+    unwrap(
+      await withTerminal(screen, function* () {
+        expect(yield* Terminal.actions.size()).toEqual({ columns: 80, rows: 24, fallback: true })
+      }),
+    )
+  })
+
   it('strips escape sequences out of `plain()` — what a person would see', async () => {
     const screen = createMemoryScreen()
 

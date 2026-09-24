@@ -4,6 +4,7 @@ import type { AnyType } from 'std:shared'
 import { COLUMN, FIELDS, SCHEMA, TABLE } from '../const'
 import type { Schema } from '../types/schema'
 import type { Spec } from '../types/spec'
+import type { Utils } from '../types/utils'
 
 const makeColumn = <TValue>(
   kind: Spec.ColumnKind,
@@ -33,10 +34,16 @@ const declare = <TValue>(
     ...extra,
   })
 
+/** `timestamp()` reads back a `Date`; `timestamp({ as: 'ms' })` keeps epoch millis as a plain
+ * `number` in and out (like the system `_created_at`/`_updated_at`). Both are stored the same
+ * way — an integer of epoch millis — so switching between them needs no migration. */
+const timestamp = (options?: Utils.TimestampOptions) =>
+  options?.as === 'ms' ? declare<number>('int') : declare<Date>('timestamp')
+
 /**
  * The column DSL — declares a table's storage shape explicitly (no validator introspection).
  * Chain `.optional()` for a nullable/omittable column and `.default(value | () => value)` for an
- * insert-time default. `json<T>()` types the stored JSON; `blob()` stores raw bytes as a
+ * insert-time default. `timestamp({ as: 'ms' })` is epoch millis as a `number`; `json<T>()` types the stored JSON; `blob()` stores raw bytes as a
  * `Uint8Array` (no JSON detour, no base64); `enumOf` constrains to a string union;
  * `id('table')` brands the value type with the table it names — type-level only: the db layer
  * keeps no relations (no foreign keys, no loaders); the id is stored as plain text.
@@ -46,7 +53,7 @@ export const column = {
   int: () => declare<number>('int'),
   float: () => declare<number>('float'),
   boolean: () => declare<boolean>('boolean'),
-  timestamp: () => declare<Date>('timestamp'),
+  timestamp: timestamp as Utils.Timestamp,
   json: <TValue = unknown>() => declare<TValue>('json'),
   blob: () => declare<Uint8Array>('blob'),
   enumOf: <const TValues extends readonly [string, ...string[]]>(...values: TValues) =>

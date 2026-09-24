@@ -3,6 +3,7 @@ import { createTags } from 'std:shared'
 export const EffectErrors = createTags(
   'std:effect',
 
+  'breaker-open',
   'halted',
   'iteration-error',
   'missing-context',
@@ -16,6 +17,8 @@ export const EffectCauses = createTags(
 
   'until',
   'suspend',
+  'breaker',
+  'semaphore-acquire',
   'resource-ready',
   'fork-started',
   'to-readable-ready',

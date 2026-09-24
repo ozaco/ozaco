@@ -11,6 +11,7 @@ import { dirname } from 'node:path'
 
 import pkg from '../../../package.json'
 import { IOErrors } from '../errors'
+import { withEncoding } from '../internal/crypto/encode'
 import { hlcDecode, hlcObserve, hlcToken } from '../internal/crypto/hlc'
 import {
   decryptSecret,
@@ -26,13 +27,15 @@ import { readFileFlow, writeFileFlow } from '../internal/fs/flow'
 import { sharedFs, writeFlagOf } from '../internal/fs/shared'
 import { watchPath } from '../internal/fs/watch'
 import { tcpConnect, tcpListen, udpBind } from '../internal/net/sockets'
-import { readCwd, readHomeDir, readInterfaces, readTmpDir } from '../internal/net/sys'
+import { readCwd, readHomeDir, readInterfaces, readPlatform, readTmpDir } from '../internal/net/sys'
+import { createExpandHome } from '../internal/path/home'
 import { nodePath } from '../internal/path/node'
 import { nodeExec, nodeSpawn } from '../internal/process/node'
 import { createS3 } from '../internal/s3/create'
 import { fetchS3Client } from '../internal/s3/fetch'
 import { fromReadable } from '../internal/stream/from-readable'
 import { toReadable } from '../internal/stream/to-readable'
+import { processToTerminal } from '../internal/stream/to-terminal'
 import type { IODef } from '../types/io'
 
 const toNodeHash = (alg: IODef.HashAlgorithm) =>
@@ -71,10 +74,10 @@ export const NodeIO = IO.implement({
     return new Uint8Array(mac)
   },
 
-  *hash(algorithm, data) {
+  hash: withEncoding(function* (algorithm, data) {
     const digest = createHash(toNodeHash(algorithm)).update(data).digest()
     return new Uint8Array(digest)
-  },
+  }),
   encrypt: encryptSecret,
   decrypt: decryptSecret,
   generateKeyPair: generateSignKeyPair,
@@ -161,6 +164,9 @@ export const NodeIO = IO.implement({
   tmpdir: readTmpDir,
   cwd: readCwd,
   homeDir: readHomeDir,
+  expandHome: createExpandHome(readHomeDir, nodePath.join),
+  platform: readPlatform,
+  toTerminal: processToTerminal,
 
   // Node has no built-in S3; use the dependency-free SigV4-over-fetch client.
   *s3(options?: IODef.S3Options) {

@@ -1,6 +1,6 @@
 import { defineConfig } from 'tsdown'
 
-import { stdResolve, transportResolve } from '../devkit/src/resolve'
+import { stdResolve, transportResolve, withDeclarationPlugins } from '../devkit/src/resolve'
 
 // oxlint-disable-next-line import/no-default-export
 export default defineConfig({
@@ -24,4 +24,5 @@ export default defineConfig({
   // `transport:core` resolves to the external `@ozaco/transport` (dist/index.js), NOT inlined per
   // bundle — so the `Transport` protocol singleton stays shared across the impl modules.
   plugins: [stdResolve.rolldown(), transportResolve.rolldown()],
+  inputOptions: withDeclarationPlugins(),
 })

@@ -1,9 +1,10 @@
+// oxlint-disable import/exports-last
 import { until } from 'std:effect'
 import { fail } from 'std:result'
 import type { StandardSchemaV1 } from 'std:shared'
 import { isPromise } from 'std:shared'
 
-import { CLEAR } from '../const'
+import { CLEAR, FIELDS } from '../const'
 import { DbErrors } from '../errors'
 import type { Helpers } from '../types/helpers'
 import type { Schema } from '../types/schema'
@@ -179,4 +180,68 @@ export function* preparePatch(def: Schema.Table, value: unknown) {
   }
 
   return data
+}
+
+/** An HLC change token: 22 Crockford base32 characters. */
+const TOKEN = /^[0-9A-HJKMNP-TV-Z]{22}$/u
+
+const isStamp = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
+
+/**
+ * The system fields an `import` row carries, validated: `_id` a non-empty string (required),
+ * `_created_at`/`_updated_at` non-negative integer epoch millis, `_version` a change token.
+ * Missing timestamps/version are left out for the stamp to fill (`_updated_at` then follows
+ * `_created_at`).
+ */
+export function* systemOf(table: string, value: unknown) {
+  const input = objectOf(value)
+
+  if (!input) {
+    return yield* fail(DbErrors.Validation, `import into "${table}" expects objects`)
+  }
+
+  const problems: string[] = []
+  const out: Record<string, unknown> = {}
+  const id = input[FIELDS.id]
+
+  if (typeof id === 'string' && id.length > 0) {
+    out[FIELDS.id] = id
+  } else {
+    problems.push(`"${FIELDS.id}" must be a non-empty string`)
+  }
+
+  for (const field of [FIELDS.created, FIELDS.updated]) {
+    const stamp = input[field]
+
+    if (stamp === undefined) {
+      continue
+    }
+
+    if (isStamp(stamp)) {
+      out[field] = stamp
+    } else {
+      problems.push(`"${field}" must be a non-negative integer (epoch millis)`)
+    }
+  }
+
+  if (out[FIELDS.updated] === undefined && out[FIELDS.created] !== undefined) {
+    out[FIELDS.updated] = out[FIELDS.created]
+  }
+
+  const version = input[FIELDS.version]
+
+  if (version !== undefined) {
+    if (typeof version === 'string' && TOKEN.test(version)) {
+      out[FIELDS.version] = version
+    } else {
+      problems.push(`"${FIELDS.version}" must be a change token (22 Crockford base32 chars)`)
+    }
+  }
+
+  if (problems.length > 0) {
+    return yield* fail(DbErrors.Validation, `invalid import into "${table}"`, ...problems)
+  }
+
+  return out as Spec.Doc
 }

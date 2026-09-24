@@ -6,6 +6,8 @@ import type { Database } from '../types/database'
 import type { Helpers } from '../types/helpers'
 import type { Spec } from '../types/spec'
 
+import { isPathSegment } from './filter'
+
 const SCALAR_OPS = new Set(['eq', 'ne', 'gt', 'gte', 'lt', 'lte'])
 
 const isValue = (value: unknown): value is Spec.FilterValue =>
@@ -66,12 +68,27 @@ const walk = function* (
     return yield* reject(`field "${String(field)}" is not allowed`)
   }
 
+  // an optional path INTO the (json) field — the field itself is what the policy allows
+  let at: { readonly path?: readonly Spec.PathSegment[] } = {}
+
+  if (node.path !== undefined) {
+    if (
+      !Array.isArray(node.path) ||
+      node.path.length > 16 ||
+      !node.path.every(segment => isPathSegment(segment))
+    ) {
+      return yield* reject(`invalid path on field "${field}"`)
+    }
+
+    at = node.path.length === 0 ? {} : { path: [...(node.path as Spec.PathSegment[])] }
+  }
+
   if (SCALAR_OPS.has(op)) {
     if (!isValue(node.value)) {
       return yield* reject(`"${op}" expects a scalar value`)
     }
 
-    return { op: op as 'eq', field, value: node.value }
+    return { op: op as 'eq', field, ...at, value: node.value }
   }
 
   if (op === 'in' || op === 'not-in') {
@@ -82,7 +99,7 @@ const walk = function* (
       return yield* reject(`"${op}" expects an array of scalar values`)
     }
 
-    return { op, field, value: list as Spec.FilterValue[] }
+    return { op, field, ...at, value: list as Spec.FilterValue[] }
   }
 
   if (op === 'like') {
@@ -90,11 +107,11 @@ const walk = function* (
       return yield* reject('"like" expects a string pattern')
     }
 
-    return { op, field, pattern: node.pattern, insensitive: node.insensitive === true }
+    return { op, field, ...at, pattern: node.pattern, insensitive: node.insensitive === true }
   }
 
   if (op === 'is-null' || op === 'not-null') {
-    return { op, field }
+    return { op, field, ...at }
   }
 
   return yield* reject(`unknown operator "${op}"`)

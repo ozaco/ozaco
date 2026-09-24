@@ -230,6 +230,12 @@ export namespace ServerDef {
     /** observes every finished span/log/failure/event (the observe plugin). */
     readonly observe?: ((event: ObserveDef.Event) => Operation<void>) | undefined
 
+    /** gates every raw edge route (the Auth plugin): resolves the verified principal the
+     * handler receives; a failure is the response (401/403). */
+    readonly guard?:
+      | ((route: EdgeDef.RawRoute, request: Request) => Operation<OptionsDef.Principal | null>)
+      | undefined
+
     /** runs once the server listens / before it stops. */
     readonly start?: (() => Operation<void>) | undefined
     readonly stop?: (() => Operation<void>) | undefined

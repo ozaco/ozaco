@@ -98,6 +98,12 @@ export namespace Database {
       ...fields: TFields
     ): Query<Projected<TDoc, TFields[number]>>
 
+    /** Skip the first `count` rows of the result (SQL `OFFSET`) — applies to `collect`,
+     * `take`, `first`, `unique`, `exists` and `watch`; `count`, the aggregates and `paginate`
+     * ignore it. A query without `order` is sorted by `_created_at` (then `_id`) so the window
+     * is stable. Calls replace, they do not add up. */
+    skip(count: number): Query<TDoc>
+
     collect(): Operation<readonly TDoc[]>
     take(count: number): Operation<readonly TDoc[]>
     first(): Operation<TDoc | null>
@@ -106,7 +112,13 @@ export namespace Database {
     unique(): Operation<TDoc | null>
     count(): Operation<number>
     exists(): Operation<boolean>
+    /** Keyset pagination (`{ limit, cursor?, direction?, count? }` → `{ data, pageInfo, … }`):
+     * stable under concurrent writes, the form for feeds and infinite scroll. */
     paginate(options: Spec.PaginateOptions): Operation<Spec.Page<TDoc>>
+
+    /** Offset pagination (`{ page, pageSize }` → `{ rows, total, page, pages }`, `page`
+     * 1-based): numbered pages for tables and admin lists. One COUNT plus one windowed read. */
+    paginate(options: Spec.OffsetPaginateOptions): Operation<Spec.OffsetPage<TDoc>>
 
     /** Aggregates over the matching rows — one adapter round trip, nothing pulled into memory.
      * `avg`/`min`/`max` answer `null` when nothing matched. */
@@ -168,6 +180,34 @@ export namespace Database {
      * fails `db.conflict` when the document exists at a different version. */
     readonly ifVersion?: string | undefined
   }
+
+  /** `upsert` options with a `when` guard — see {@link Handle.upsert}. */
+  export interface UpsertWhenOptions<TDoc = Spec.Doc> extends WriteOptions<TDoc> {
+    /** Update the existing row ONLY while it also matches this predicate; otherwise leave it
+     * untouched (`op: 'skipped'`). Checked by the guarded UPDATE itself, so a row that moved on
+     * concurrently cannot be updated past it. */
+    readonly when: Spec.Filter<FieldOf<TDoc>>
+  }
+
+  /** What a guarded `upsert(…, { when })` did — and the row as it now stands (the untouched
+   * existing row when `skipped`). */
+  export interface UpsertOutcome<TDoc = Spec.Doc> {
+    readonly op: 'inserted' | 'updated' | 'skipped'
+    readonly doc: TDoc
+  }
+
+  /** One row for `import`: the columns plus the system fields to KEEP. `_id` is required; a
+   * missing `_created_at`/`_updated_at`/`_version` is stamped as on insert. */
+  export type ImportRow<TInsert> = TInsert & {
+    readonly _id: string
+    readonly _created_at?: number | undefined
+    readonly _updated_at?: number | undefined
+    readonly _version?: string | undefined
+  }
+
+  export type ImportOf<TSchema, TName extends TableName<TSchema>> = ImportRow<
+    InsertOf<TSchema, TName>
+  >
 
   export interface TransactionOptions {
     /** Retries on `db.conflict` (serialization/deadlock/busy) failures. Default 2. */
@@ -238,18 +278,50 @@ export namespace Database {
     ): Operation<readonly DocOf<TSchema, TName>[]>
 
     /** Insert, or patch the one row already matching `match` — atomically (the whole thing runs
-     * in a transaction, so two concurrent upserts cannot both insert). Fails
+     * in a transaction; when a concurrent upsert inserts the same key first, the loser's
+     * `db.unique` is retried once as the update it now is — declare a unique index over the
+     * `match` columns so the backend can tell). Fails
      * `db.data-integrity` when `match` names more than one row. `value` may omit what `match`
      * already pins (the insert branch writes `{ ...match, ...value }`); any other missing
      * required column fails `db.validation` there. Under a `scope` the lookup is narrowed, the
      * patch branch is guarded, and the insert branch is stamped with the scope's pinned
-     * values — a scope that pins no exact values fails `db.validation` on insert. */
+     * values — a scope that pins no exact values fails `db.validation` on insert.
+     *
+     * With `when` the update branch is GUARDED: an existing row is patched only while it also
+     * matches `when` (e.g. "re-arm a job only once it finished"), otherwise it is left alone —
+     * and the call answers WHAT happened: `{ op: 'inserted' | 'updated' | 'skipped', doc }`. */
+    upsert<TName extends TableName<TSchema>>(
+      table: TName,
+      match: MatchOf<DocOf<TSchema, TName>>,
+      value: Partial<InsertOf<TSchema, TName>>,
+      options: UpsertWhenOptions<DocOf<TSchema, TName>>,
+    ): Operation<UpsertOutcome<DocOf<TSchema, TName>>>
+
     upsert<TName extends TableName<TSchema>>(
       table: TName,
       match: MatchOf<DocOf<TSchema, TName>>,
       value: Partial<InsertOf<TSchema, TName>>,
       options?: WriteOptions<DocOf<TSchema, TName>>,
     ): Operation<DocOf<TSchema, TName>>
+
+    /** Insert, or do nothing when the row would violate a unique index (`null` then). Runs as
+     * its own (nested) transaction, so the failed insert leaves an enclosing transaction
+     * usable on every backend. Any other failure (validation, …) still surfaces. */
+    insertOrIgnore<TName extends TableName<TSchema>>(
+      table: TName,
+      value: InsertOf<TSchema, TName>,
+    ): Operation<DocOf<TSchema, TName> | null>
+
+    /** Insert rows moved from ANOTHER database, keeping their identity: `_id`, `_created_at`,
+     * `_updated_at` and `_version` are validated and preserved instead of re-stamped (`insert`
+     * always stamps, silently). The columns go through the same validation as `insert`; a
+     * duplicate `_id` fails `db.unique`. Every row is announced as an `insert` with a FRESH
+     * change token (the change is new to this database even when the row is not). Use
+     * `stripSystem(row)` for the opposite — a copy that gets a new identity. */
+    import<TName extends TableName<TSchema>>(
+      table: TName,
+      rows: readonly ImportOf<TSchema, TName>[],
+    ): Operation<readonly DocOf<TSchema, TName>[]>
 
     patch<TName extends TableName<TSchema>>(
       table: TName,

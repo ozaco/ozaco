@@ -10,6 +10,10 @@ export namespace AuthDef {
 
   export type Principal = OptionsDef.Principal
 
+  /** Request headers as `check` / `authorize` take them: a web `Headers`, or a record in any
+   * casing (`Authorization` and `authorization` alike). */
+  export type HeadersLike = Headers | Readonly<Record<string, string>>
+
   export interface Tokens {
     readonly accessToken: string
     readonly refreshToken?: string | undefined
@@ -65,13 +69,17 @@ export namespace AuthDef {
     /** The principal of the running dispatch (`ctx.auth`), or a failure when anonymous. */
     principal(): Operation<Principal>
 
-    /** Enforce a requirement OUTSIDE a dispatch (socket handshakes, raw routes): a presented
-     * bearer is ALWAYS verified (unknown/expired → `server.unauthorized`), then the requirement
-     * gates. Resolves the principal (`null` when anonymous and nothing was required). */
-    authorize(
-      requirement: Requirement,
-      headers: Readonly<Record<string, string>>,
-    ): Operation<Principal | null>
+    /** Enforce a requirement OUTSIDE a dispatch (socket handshakes, seams of your own — raw
+     * routes are already gated by their `auth`): a presented bearer is ALWAYS verified
+     * (unknown/expired → `server.unauthorized`), then the requirement gates. Resolves the
+     * principal (`null` when anonymous and nothing was required). */
+    authorize(requirement: Requirement, headers: HeadersLike): Operation<Principal | null>
+
+    /** {@link authorize} as a question: the principal when the headers satisfy the requirement,
+     * `null` when they do not (no / unknown / expired bearer, missing role …) — never an auth
+     * failure to recover from. Under `false` an anonymous caller resolves `null` too. Failures
+     * that are NOT a verdict (a provider's store down) still raise. */
+    check(requirement: Requirement, headers: HeadersLike): Operation<Principal | null>
   }
 
   // --- the jwt strategy ------------------------------------------------------------------------

@@ -27,6 +27,14 @@ export namespace TerminalDef {
     readonly capabilities: Capabilities
   }
 
+  /** The output stream a write goes to. */
+  export type Stream = 'stdout' | 'stderr'
+
+  export interface WriteOptions {
+    /** Where the text goes (default `'stdout'`). Diagnostics and error reports use `'stderr'`. */
+    stream?: Stream | undefined
+  }
+
   export interface RendererOptions {
     /** Queue (FIFO) for the live region instead of failing `cli.busy` when it is taken. */
     wait?: boolean
@@ -53,8 +61,11 @@ export namespace TerminalDef {
    * the protocol provides a failing default for impls that omit it.
    */
   export interface Actions {
-    /** Write raw text to the output. The ONLY output path — everything funnels through here. */
-    write(text: string): Operation<void>
+    /**
+     * Write raw text to the output. The ONLY output path — everything funnels through here.
+     * `{ stream: 'stderr' }` sends it to the error stream (impls without one fall back to stdout).
+     */
+    write(text: string, options?: WriteOptions): Operation<void>
     /** Current terminal size. */
     size(): Operation<Size>
     /** The decoded key flow of the active `session()`; fails `cli.terminal` outside one. */

@@ -122,7 +122,8 @@ export const payloadOf = (source: ConfigDef.Source): ConfigDef.Object =>
  */
 export function* watchTargets(ctx: ConfigDef.Context) {
   const recursiveDirs: string[] = []
-  if (hasFlag(ctx.features, Features.DIR)) {
+  // a targeted file (`path`) has no config directories — only its own sources are watched
+  if (ctx.path === undefined && hasFlag(ctx.features, Features.DIR)) {
     for (const level of yield* collectDirs(ctx, ctx.cwd)) {
       const configDir = yield* IO.actions.join(level, dirName(ctx))
       if (yield* IO.actions.exists(configDir)) {

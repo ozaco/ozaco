@@ -247,7 +247,18 @@ const invoke = (kernel: ServerDef.Context, def: ServiceDef.Action) =>
     const result = outcome.value
 
     if (meta.output && isSchema(meta.output)) {
-      return yield* validate(meta.output, result, `output of ${call.service}.${call.action}`)
+      const schema = meta.output
+      const checked = yield* attempt(() =>
+        validate(schema, result, `output of ${call.service}.${call.action}`),
+      )
+
+      // a handler answering outside its declared output is the SERVER's bug (500), never the
+      // caller's (`server.validation` is a 400)
+      if (isFailure(checked)) {
+        return yield* fail(ServerErrors.Output, checked.message, ...checked.causes)
+      }
+
+      return checked.value
     }
 
     if (meta.output && isStreamDecl(meta.output)) {

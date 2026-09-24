@@ -28,8 +28,47 @@ export namespace Sql {
 
     /** Every table of the current schema — rows must expose the name as `name`. */
     readonly tables: () => Statement
+
+    /** What an OFFSET without a LIMIT needs (`LIMIT -1` on sqlite, `LIMIT ALL` on Postgres). */
+    readonly unboundedLimit: string
+
+    /** How the dialect reaches into a `json` column (the path filters). */
+    readonly json: JsonDialect
     encode(kind: Spec.ColumnKind, value: unknown): Operation<unknown>
     decode(kind: Spec.ColumnKind, value: unknown): Operation<unknown>
+  }
+
+  /**
+   * The json-path plane of a dialect. `column` is a quoted identifier and `path` a placeholder
+   * (already cast) bound to {@link JsonDialect.path}'s output — every expression binds its own.
+   */
+  export interface JsonDialect {
+    /** The bind value of a path (`$."a"[0]` on sqlite, the text-array literal `{"a","0"}` on
+     * Postgres). */
+    path(segments: readonly Spec.PathSegment[]): string
+
+    /** appended to a path placeholder (`::text[]` on Postgres). */
+    readonly pathCast: string
+
+    /** the comparable value at the path. */
+    value(column: string, path: string): string
+
+    /** the value at the path as text — SQL NULL for a missing key AND for JSON `null`. */
+    text(column: string, path: string): string
+
+    /** the JSON type name of the value at the path. */
+    type(column: string, path: string): string
+
+    /** the condition (applied to {@link type}) a value of each scalar kind needs. */
+    readonly types: Readonly<Record<'number' | 'string' | 'boolean', string>>
+
+    /** the column kind a compared scalar is bound as through {@link Dialect.encode} — `json`
+     * (JSON text, compared as jsonb) on Postgres, `boolean` (true/false → 1/0, the rest as-is)
+     * on sqlite. */
+    readonly valueKind: Spec.ColumnKind
+
+    /** appended to a compared value's placeholder (`::jsonb` on Postgres). */
+    readonly valueCast: string
   }
 
   /** One statement under construction: binds accumulate in order, encoded by column kind. */

@@ -6,15 +6,18 @@ import type { AnyType } from 'std:shared'
 
 import pkg from '../../../package.json'
 import { IOErrors } from '../errors'
+import { withEncoding } from '../internal/crypto/encode'
 import { hlcDecode, hlcObserve, hlcToken } from '../internal/crypto/hlc'
 import { ulidId } from '../internal/crypto/ulid'
 import { uuidId } from '../internal/crypto/uuid'
 import { webHash, webHmac, webRandomBytes } from '../internal/crypto/web'
 import { readWebCwd, readWebEnv } from '../internal/env'
+import { createExpandHome } from '../internal/path/home'
 import { webPath } from '../internal/path/web'
 import { createS3 } from '../internal/s3/create'
 import { fromReadable } from '../internal/stream/from-readable'
 import { toReadable } from '../internal/stream/to-readable'
+import { consoleToTerminal } from '../internal/stream/to-terminal'
 import type { IODef } from '../types/io'
 
 /** The browser has no filesystem — these actions fail clearly instead of pretending to work. */
@@ -50,7 +53,7 @@ export const WebIO = IO.implement({
   decodeHlc: hlcDecode,
   observeHlc: hlcObserve,
   hmac: webHmac,
-  hash: webHash,
+  hash: withEncoding(webHash),
   encrypt: unsupported('encrypt'),
   decrypt: unsupported('decrypt'),
   generateKeyPair: unsupported('generateKeyPair'),
@@ -100,6 +103,12 @@ export const WebIO = IO.implement({
     return readWebCwd()
   },
   homeDir: unsupported('homeDir'),
+  // a `~` path asks `homeDir` and so fails unsupported; any other path passes through
+  expandHome: createExpandHome(unsupported('homeDir'), webPath.join),
+  *platform() {
+    return { os: 'browser', arch: 'unknown' }
+  },
+  toTerminal: consoleToTerminal,
 
   // The browser must not hold S3 credentials; the client is constructible but every op fails
   // `io-unsupported`.

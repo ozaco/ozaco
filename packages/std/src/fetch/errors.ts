@@ -6,4 +6,5 @@ export const FetchErrors = createTags(
   'timeout',
   'http-status',
   'parse',
+  'network',
 )

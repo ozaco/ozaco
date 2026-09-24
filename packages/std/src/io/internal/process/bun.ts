@@ -5,7 +5,15 @@ import { IOErrors } from '../../errors'
 import type { IODef } from '../../types/io'
 import { fromReadable } from '../stream/from-readable'
 
-import { errorMessage, makeStatus, normalizeSpawn, toBytes } from './shared'
+import {
+  emptyByteFlow,
+  errorMessage,
+  inheritedStdinWrite,
+  makeStatus,
+  normalizeSpawn,
+  resolveStdio,
+  toBytes,
+} from './shared'
 
 /**
  * Run a command to completion with `Bun.spawn`, buffering stdout/stderr. A non-zero exit is data
@@ -48,19 +56,20 @@ export function* bunExec(cmd: string, args?: readonly string[], options?: IODef.
 
 /**
  * Spawn a long-lived child process with `Bun.spawn`, exposing its streams and lifecycle as effect
- * primitives. stdin/stdout/stderr are piped; consume (or `kill`) the handle within the spawning
- * scope.
+ * primitives. stdin/stdout/stderr are piped unless `stdio` inherits them (an inherited output is
+ * an empty flow on the handle); consume (or `kill`) the handle within the spawning scope.
  */
 export function* bunSpawn(cmd: string, args?: readonly string[], options?: IODef.SpawnOptions) {
   const config = normalizeSpawn(options)
+  const stdio = resolveStdio(options?.stdio)
 
   let proc
   try {
     proc = Bun.spawn([cmd, ...(args ?? [])], {
       ...config,
-      stdin: 'pipe',
-      stdout: 'pipe',
-      stderr: 'pipe',
+      stdin: stdio.stdin,
+      stdout: stdio.stdout,
+      stderr: stdio.stderr,
     })
   } catch (error) {
     return yield* fail(IOErrors.SpawnFailed, `failed to spawn "${cmd}": ${errorMessage(error)}`)
@@ -71,17 +80,28 @@ export function* bunSpawn(cmd: string, args?: readonly string[], options?: IODef
     return makeStatus(proc.exitCode, proc.signalCode)
   }
 
+  // an inherited stream is `null` on the Bun process — typed loosely here, narrowed by `stdio`
+  const stdin = proc.stdin as Bun.FileSink | null
+  const stdout = proc.stdout as ReadableStream<Uint8Array> | null
+  const stderr = proc.stderr as ReadableStream<Uint8Array> | null
+
   const write = function* (chunk: Uint8Array | string) {
+    if (!stdin) {
+      return yield* inheritedStdinWrite()
+    }
+
     try {
-      proc.stdin.write(toBytes(chunk))
-      yield* until(Promise.resolve(proc.stdin.flush()))
+      stdin.write(toBytes(chunk))
+      yield* until(Promise.resolve(stdin.flush()))
     } catch (error) {
       return yield* fail(IOErrors.StdinWriteFailed, `failed to write stdin: ${errorMessage(error)}`)
     }
   }
 
   const closeStdin = function* () {
-    yield* until(Promise.resolve(proc.stdin.end()))
+    if (stdin) {
+      yield* until(Promise.resolve(stdin.end()))
+    }
   }
 
   const kill = function* (signal?: number | string) {
@@ -98,8 +118,8 @@ export function* bunSpawn(cmd: string, args?: readonly string[], options?: IODef
 
   const handle: IODef.ProcessHandle = {
     pid: proc.pid,
-    stdout: fromReadable(proc.stdout.getReader() as IODef.WebReadableLike),
-    stderr: fromReadable(proc.stderr.getReader() as IODef.WebReadableLike),
+    stdout: stdout ? fromReadable(stdout.getReader() as IODef.WebReadableLike) : emptyByteFlow(),
+    stderr: stderr ? fromReadable(stderr.getReader() as IODef.WebReadableLike) : emptyByteFlow(),
     exited,
     write,
     closeStdin,

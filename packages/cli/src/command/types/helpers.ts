@@ -12,6 +12,24 @@ export namespace Helpers {
     description?: string | undefined
     plugin: CommandDef.Built
     children: Record<string, RuntimeNode>
+    inherit?: CommandDef.Inherited | undefined
+    examples?: readonly CommandDef.Example[] | undefined
+  }
+
+  /** One contributor to an action's `ctx`: an inherited level or the action itself. */
+  export interface CtxSource {
+    input?: CommandDef.Inherited['input']
+    /** The field names this source owns when it has no schema (its raw values pass through). */
+    names: readonly string[]
+  }
+
+  /** Per-run values threaded down the dispatch walk. */
+  export interface RunState {
+    cwd: string
+    /** The tokens that selected the current node (for usage lines). */
+    path: string[]
+    /** Every node on the invoked path, root first — the inherited-options chain. */
+    chain: RuntimeNode[]
   }
 
   /** The `util.parseArgs` option config one option field compiles to (see internal/tokenize). */
@@ -38,6 +56,7 @@ export namespace Helpers {
     infos: readonly CommandDef.OptionInfo[]
     short: Record<string, string>
     args: readonly string[]
+    examples: readonly CommandDef.Example[]
   }
 
   /** A single property of the JSON Schema produced by `z.toJSONSchema` (what introspection walks). */
@@ -45,6 +64,7 @@ export namespace Helpers {
     type?: string | string[] | undefined
     enum?: readonly string[] | undefined
     default?: unknown
+    description?: string | undefined
     items?: { type?: string | undefined; enum?: readonly string[] | undefined } | undefined
   }
 

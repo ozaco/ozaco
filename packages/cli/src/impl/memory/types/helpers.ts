@@ -5,6 +5,8 @@ export namespace Helpers {
   /** What the fake screen keeps between the test's side and the driver's side. */
   export interface State {
     written: string
+    /** what went to the error stream (`write(text, { stream: 'stderr' })`). */
+    errors: string
     size: Size
     raw: boolean
     onText: ((text: string) => void) | null

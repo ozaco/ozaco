@@ -17,6 +17,7 @@ import { isFailure, unwrap } from 'std:result'
 import { describe, expect, it } from 'bun:test'
 
 import { JsonCodec } from 'std:codec/impl/json'
+import { TomlCodec } from 'std:codec/impl/toml'
 
 import { fakeCodec } from '../helpers/fake-codec'
 
@@ -74,12 +75,49 @@ describe('registry scope-locality', () => {
     })
   })
 
-  it('registering the same codec name twice fails with `CodecErrors.AlreadyRegistered`', async () => {
+  it('re-installing the SAME codec (same name) is an idempotent no-op — one registry entry', async () => {
     const outcome = await run(function* () {
       yield* JsonCodec.use()
       const second = yield* attempt(() => JsonCodec.use())
 
-      return isFailure(second) ? second.error : 'no-failure'
+      return {
+        ok: !isFailure(second),
+        count: (yield* Codec.actions.getTransports()).length,
+      }
+    })
+
+    expect(unwrap(outcome)).toEqual({ ok: true, count: 1 })
+  })
+
+  it('a child scope may re-install the codec its parent registered', async () => {
+    const outcome = await run(function* () {
+      yield* JsonCodec.use()
+
+      const inner = yield* scoped(function* () {
+        const again = yield* attempt(() => JsonCodec.use())
+        return {
+          ok: !isFailure(again),
+          count: (yield* Codec.actions.getTransports()).length,
+          encoded: yield* Codec.actions.stringify({ a: 1 }),
+        }
+      })
+
+      // the parent's registration is untouched by the child's install + teardown
+      return { inner, outerCount: (yield* Codec.actions.getTransports()).length }
+    })
+
+    expect(unwrap(outcome)).toEqual({
+      inner: { ok: true, count: 1, encoded: '{"a":1}' },
+      outerCount: 1,
+    })
+  })
+
+  it('a DIFFERENT codec claiming a registered name fails `CodecErrors.AlreadyRegistered`', async () => {
+    const outcome = await run(function* () {
+      yield* JsonCodec.use()
+      const clash = yield* attempt(() => TomlCodec.use({ name: 'std/json-codec' }))
+
+      return isFailure(clash) ? clash.error : 'no-failure'
     })
 
     expect(unwrap(outcome)).toBe('std:codec.already-registered')

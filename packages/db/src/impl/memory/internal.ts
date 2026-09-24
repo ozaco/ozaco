@@ -2,7 +2,7 @@
 import type { Spec } from 'db:core'
 import { DbErrors, FIELDS, VERSION_ZERO } from 'db:core'
 import { matches } from 'db:internal'
-import { createContext } from 'std:effect'
+import { createContext, until } from 'std:effect'
 import { fail } from 'std:result'
 
 import { JsonCodec } from 'std:codec/impl/json'
@@ -10,6 +10,42 @@ import { JsonCodec } from 'std:codec/impl/json'
 import type { Memory } from './types'
 
 export const StateRef = createContext<Memory.State>('db:impl/memory')
+
+/** How deep in nested transactions the current call runs (0 = none). */
+export const TxDepth = createContext<number>('db:impl/memory:tx-depth', 0)
+
+export const createLock = (): Memory.Lock => {
+  const waiters: Array<() => void> = []
+  let held = false
+
+  const release = (): void => {
+    const next = waiters.shift()
+
+    if (next) {
+      next() // hand the lock straight to the next waiter; it stays held
+      return
+    }
+
+    held = false
+  }
+
+  return {
+    *acquire() {
+      if (!held) {
+        held = true
+        return release
+      }
+
+      yield* until(
+        new Promise<void>(resolve => {
+          waiters.push(resolve)
+        }),
+      )
+
+      return release
+    },
+  }
+}
 
 export const clone = (doc: Spec.Doc): Spec.Doc => ({ ...doc })
 
@@ -81,6 +117,7 @@ export function* checkUnique(state: Memory.State, table: Spec.Table, candidate: 
 
 /** A deep copy of the state — the transaction rollback point. */
 export const snapshotOf = (state: Memory.State): Memory.State => ({
+  lock: state.lock,
   tables: new Map(
     [...state.tables].map(([name, rows]) => [
       name,
@@ -190,88 +227,4 @@ export const project = (doc: Spec.Doc, fields: readonly string[]): Spec.Doc => {
   }
 
   return out
-}
-
-const compare = (left: unknown, right: unknown): number => {
-  const a = left instanceof Date ? left.getTime() : left
-  const b = right instanceof Date ? right.getTime() : right
-
-  if (a === b) {
-    return 0
-  }
-
-  return (a as never) < (b as never) ? -1 : 1
-}
-
-const fold = (rows: readonly Spec.Doc[], op: Spec.AggregateOp): unknown => {
-  if (op.kind === 'count') {
-    return rows.length
-  }
-
-  const values = rows
-    .map(row => row[op.field!])
-    .filter(value => value !== null && value !== undefined)
-
-  if (values.length === 0) {
-    return op.kind === 'sum' ? 0 : null
-  }
-
-  switch (op.kind) {
-    case 'sum': {
-      return values.reduce<number>((total, value) => total + Number(value), 0)
-    }
-
-    case 'avg': {
-      return values.reduce<number>((total, value) => total + Number(value), 0) / values.length
-    }
-
-    case 'min': {
-      return values.reduce((best, value) => (compare(value, best) < 0 ? value : best))
-    }
-
-    default: {
-      return values.reduce((best, value) => (compare(value, best) > 0 ? value : best))
-    }
-  }
-}
-
-/** Group the matching rows and fold each group — the in-memory answer to `Spec.Aggregate`. */
-export function aggregateDocs(
-  rows: readonly Spec.Doc[],
-  spec: Spec.Aggregate,
-): readonly Spec.Doc[] {
-  const answer = (group: readonly Spec.Doc[], key: Spec.Doc): Spec.Doc => {
-    const out: Spec.Doc = { ...key }
-
-    for (const op of spec.ops) {
-      out[op.as] = fold(group, op)
-    }
-
-    return out
-  }
-
-  if (spec.groupBy.length === 0) {
-    return [answer(rows, {})]
-  }
-
-  const groups = new Map<string, { key: Spec.Doc; rows: Spec.Doc[] }>()
-
-  for (const row of rows) {
-    const key: Spec.Doc = {}
-
-    for (const field of spec.groupBy) {
-      key[field] = row[field] ?? null
-    }
-
-    const id = spec.groupBy.map(field => String(key[field])).join('\u0000')
-    const bucket = groups.get(id)
-
-    if (bucket) {
-      bucket.rows.push(row)
-    } else {
-      groups.set(id, { key, rows: [row] })
-    }
-  }
-
-  return [...groups.values()].map(bucket => answer(bucket.rows, bucket.key))
 }

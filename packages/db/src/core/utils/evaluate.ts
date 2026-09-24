@@ -81,9 +81,35 @@ const likeRegex = (pattern: string, insensitive: boolean): RegExp => {
   return new RegExp(`${source}$`, insensitive ? 'iu' : 'u')
 }
 
-/** Three-way compare of `doc[field]` against the filter's value (null when incomparable). */
-const ordered = (doc: Spec.Doc, filter: { field: string; value: Spec.FilterValue }) =>
-  compareValues(doc[filter.field], filter.value)
+/** The value a leaf filter addresses: the column, or — with a `path` — the value at that path
+ * inside the (json) column (`undefined` once the walk leaves an object/array). */
+const read = (
+  doc: Spec.Doc,
+  filter: { readonly field: string; readonly path?: readonly Spec.PathSegment[] | undefined },
+): unknown => {
+  let value: unknown = doc[filter.field]
+
+  for (const segment of filter.path ?? []) {
+    if (typeof value !== 'object' || value === null || value instanceof Date) {
+      return undefined
+    }
+
+    value = (value as Record<string, unknown>)[segment]
+  }
+
+  return value
+}
+
+/** Three-way compare of the addressed value against the filter's value (null when
+ * incomparable). */
+const ordered = (
+  doc: Spec.Doc,
+  filter: {
+    readonly field: string
+    readonly path?: readonly Spec.PathSegment[] | undefined
+    readonly value: Spec.FilterValue
+  },
+) => compareValues(read(doc, filter), filter.value)
 
 /**
  * Evaluate the portable filter algebra against one document, with SQL null semantics (comparisons
@@ -94,7 +120,7 @@ export const matches = (doc: Spec.Doc, filter: Spec.Filter): boolean => {
   switch (filter.op) {
     case 'eq': {
       if (filter.value === null) {
-        return isNil(doc[filter.field])
+        return isNil(read(doc, filter))
       }
 
       return ordered(doc, filter) === 0
@@ -102,7 +128,7 @@ export const matches = (doc: Spec.Doc, filter: Spec.Filter): boolean => {
 
     case 'ne': {
       if (filter.value === null) {
-        return !isNil(doc[filter.field])
+        return !isNil(read(doc, filter))
       }
 
       const rank = ordered(doc, filter)
@@ -131,16 +157,16 @@ export const matches = (doc: Spec.Doc, filter: Spec.Filter): boolean => {
     }
 
     case 'in': {
-      return filter.value.some(value => compareValues(doc[filter.field], value) === 0)
+      return filter.value.some(value => compareValues(read(doc, filter), value) === 0)
     }
 
     case 'not-in': {
-      const value = doc[filter.field]
+      const value = read(doc, filter)
       return !isNil(value) && !filter.value.some(entry => compareValues(value, entry) === 0)
     }
 
     case 'like': {
-      const value = doc[filter.field]
+      const value = read(doc, filter)
 
       return (
         typeof value === 'string' &&
@@ -149,11 +175,11 @@ export const matches = (doc: Spec.Doc, filter: Spec.Filter): boolean => {
     }
 
     case 'is-null': {
-      return isNil(doc[filter.field])
+      return isNil(read(doc, filter))
     }
 
     case 'not-null': {
-      return !isNil(doc[filter.field])
+      return !isNil(read(doc, filter))
     }
 
     case 'and': {

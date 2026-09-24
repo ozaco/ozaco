@@ -61,7 +61,7 @@ export const detect = (
     return null
   }
 
-  const { stdin, stdout, env } = runtime
+  const { stdin, stdout, stderr, env } = runtime
   const platform = runtime.platform ?? ''
   const tty = Boolean(stdin.isTTY) && Boolean(stdout.isTTY)
   const rawMode = tty && typeof stdin.setRawMode === 'function'
@@ -77,14 +77,15 @@ export const detect = (
   }
 
   const handle: Driver.Handle = {
-    write: text => {
-      stdout.write(text)
+    write: (text, stream) => {
+      ;(stream === 'stderr' ? (stderr ?? stdout) : stdout).write(text)
     },
 
-    size: (): Size => ({
-      columns: stdout.columns ?? DEFAULT_COLUMNS,
-      rows: stdout.rows ?? DEFAULT_ROWS,
-    }),
+    // a pipe/redirect reports no columns — flag the defaults so tables don't truncate to them
+    size: (): Size =>
+      stdout.columns === undefined
+        ? { columns: DEFAULT_COLUMNS, rows: stdout.rows ?? DEFAULT_ROWS, fallback: true }
+        : { columns: stdout.columns, rows: stdout.rows ?? DEFAULT_ROWS },
 
     listen: onText => {
       const decoder = new TextDecoder()

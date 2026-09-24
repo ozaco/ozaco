@@ -25,3 +25,12 @@ export const CliErrors = createTags(
   'unknown',
   'validation',
 )
+
+/**
+ * The cause names cli appends to a failure.
+ *
+ * - `reported` — the cli already rendered this failure to the user (the parse error + help, an
+ *   unknown command, or a handler failure under `Registry.actions.run(argv, { report: true })`);
+ *   callers check {@link isReported} and skip logging it again
+ */
+export const CliCauses = createTags('cli', 'reported')

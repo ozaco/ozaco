@@ -1,6 +1,12 @@
 import { defineConfig } from 'tsdown'
 
-import { dbResolve, serverResolve, stdResolve, transportResolve } from '../devkit/src/resolve'
+import {
+  dbResolve,
+  serverResolve,
+  stdResolve,
+  transportResolve,
+  withDeclarationPlugins,
+} from '../devkit/src/resolve'
 
 // oxlint-disable-next-line import/no-default-export
 export default defineConfig({
@@ -34,4 +40,5 @@ export default defineConfig({
     dbResolve.rolldown(),
     serverResolve.rolldown(),
   ],
+  inputOptions: withDeclarationPlugins(),
 })

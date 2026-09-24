@@ -3,7 +3,6 @@ import { Server, ServerErrors } from 'server:core'
 import { OBSERVE_CONSOLE_PATH } from 'server:internal'
 // oxlint-disable-next-line no-restricted-imports
 import { Auth } from 'server:plugins'
-import type { Operation } from 'std:effect'
 import { definePlugin } from 'std:plugin'
 import { fail } from 'std:result'
 
@@ -13,18 +12,6 @@ import { manifestOf } from './internal/manifest'
 import { openapiOf } from './internal/openapi'
 import { PANEL_HTML } from './internal/panel.gen'
 import type { DocsDef } from './types'
-
-/** Request headers as a lower-cased record — what `Auth.actions.authorize` reads. */
-const headersOf = (request: Request): Record<string, string> => {
-  const headers: Record<string, string> = {}
-
-  // oxlint-disable-next-line unicorn/no-array-for-each
-  request.headers.forEach((value, key) => {
-    headers[key.toLowerCase()] = value
-  })
-
-  return headers
-}
 
 /**
  * The docs plugin: the Ozaco Manifest v1 at `<path>/manifest` (services, actions, routes,
@@ -62,12 +49,6 @@ export const Docs = definePlugin<
         defaultAuth,
       })
 
-    // the gate every docs route runs first: a failure becomes the 401/403 the edge renders
-    function* gate(request: Request): Operation<void> {
-      if (requirement !== false) {
-        yield* Auth.actions.authorize(requirement, headersOf(request))
-      }
-    }
     return {
       manifest,
       hooks: {
@@ -88,24 +69,24 @@ export const Docs = definePlugin<
           yield* edge.actions.raw({
             method: 'GET',
             path: `${path}/manifest`,
-            *handler(request) {
-              yield* gate(request)
+            auth: requirement,
+            *handler() {
               return Response.json(manifest())
             },
           })
           yield* edge.actions.raw({
             method: 'GET',
             path: `${path}/openapi.json`,
-            *handler(request) {
-              yield* gate(request)
+            auth: requirement,
+            *handler() {
               return Response.json(openapiOf(manifest()))
             },
           })
           yield* edge.actions.raw({
             method: 'GET',
             path,
-            *handler(request) {
-              yield* gate(request)
+            auth: requirement,
+            *handler() {
               return new Response(
                 PANEL_HTML.replace('<title>ozaco</title>', `<title>${title}</title>`),
                 {

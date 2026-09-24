@@ -5,10 +5,11 @@ import { isFailure, unwrap } from 'std:result'
 
 import { describe, expect, it } from 'bun:test'
 import { mkdtemp, rm } from 'node:fs/promises'
-import { tmpdir as osTmpdir } from 'node:os'
+import { homedir, tmpdir as osTmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { BunIO } from 'std:io/impl/bun'
+import { NodeIO } from 'std:io/impl/node'
 import { WebIO } from 'std:io/impl/web'
 
 const encoder = new TextEncoder()
@@ -101,6 +102,91 @@ describe('hashing', () => {
     expect(unwrap(outcome)).toEqual({
       digest: 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad',
       mac: 'f7bc83f430538424b13298e6aa6fb143ef4d59a14946175997479dbc2d1a3cd8',
+    })
+  })
+})
+
+describe('hash encoding', () => {
+  it.each([
+    ['BunIO', BunIO],
+    ['NodeIO', NodeIO],
+    ['WebIO', WebIO],
+  ] as const)('%s: `{ encoding }` returns the digest as hex / base64 text', async (_, impl) => {
+    const outcome = await run(function* () {
+      yield* impl.use()
+
+      const data = encoder.encode('abc')
+      return {
+        hex: yield* IO.actions.hash('SHA-256', data, { encoding: 'hex' }),
+        base64: yield* IO.actions.hash('SHA-256', data, { encoding: 'base64' }),
+        bytes: (yield* IO.actions.hash('SHA-256', data)) instanceof Uint8Array,
+      }
+    })
+
+    expect(unwrap(outcome)).toEqual({
+      hex: 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad',
+      base64: 'ungWv48Bz+pBQUDeXa4iI7ADYaOWF3qctBD/YfIAFa0=',
+      bytes: true,
+    })
+  })
+})
+
+describe('platform / expandHome', () => {
+  it.each([
+    ['BunIO', BunIO],
+    ['NodeIO', NodeIO],
+  ] as const)('%s: platform mirrors process.platform / arch / getuid', async (_, impl) => {
+    const outcome = await run(function* () {
+      yield* impl.use()
+      return yield* IO.actions.platform()
+    })
+
+    expect(unwrap(outcome)).toEqual({
+      os: process.platform,
+      arch: process.arch,
+      uid: process.getuid?.(),
+    })
+  })
+
+  it.each([
+    ['BunIO', BunIO],
+    ['NodeIO', NodeIO],
+  ] as const)('%s: expandHome resolves a leading ~ only', async (_, impl) => {
+    const outcome = await run(function* () {
+      yield* impl.use()
+      return [
+        yield* IO.actions.expandHome('~'),
+        yield* IO.actions.expandHome('~/projects/app'),
+        yield* IO.actions.expandHome('~other/x'),
+        yield* IO.actions.expandHome('/abs/~/x'),
+        yield* IO.actions.expandHome('relative'),
+      ]
+    })
+
+    expect(unwrap(outcome)).toEqual([
+      homedir(),
+      join(homedir(), 'projects/app'),
+      '~other/x',
+      '/abs/~/x',
+      'relative',
+    ])
+  })
+
+  it('WebIO: platform is the browser; expandHome passes plain paths, fails on ~', async () => {
+    const outcome = await run(function* () {
+      yield* WebIO.use()
+      const tilde = yield* attempt(() => IO.actions.expandHome('~/x'))
+      return {
+        platform: yield* IO.actions.platform(),
+        plain: yield* IO.actions.expandHome('/a/b'),
+        tilde: isFailure(tilde) ? tilde.error : 'no-failure',
+      }
+    })
+
+    expect(unwrap(outcome)).toEqual({
+      platform: { os: 'browser', arch: 'unknown' },
+      plain: '/a/b',
+      tilde: 'std:io.unsupported',
     })
   })
 })

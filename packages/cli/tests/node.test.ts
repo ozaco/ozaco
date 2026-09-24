@@ -16,11 +16,16 @@ interface FakeOptions {
   readonly tty?: boolean
   readonly env?: Record<string, string | undefined>
   readonly platform?: string
+  readonly columns?: number | undefined
+  readonly stderr?: boolean
 }
 
-const swap = (options: FakeOptions = {}): { written: string[]; signals: Set<string> } => {
+const swap = (
+  options: FakeOptions = {},
+): { written: string[]; errors: string[]; signals: Set<string> } => {
   const tty = options.tty ?? true
   const written: string[] = []
+  const errors: string[] = []
   const signals = new Set<string>()
 
   ;(globalThis as AnyType).process = {
@@ -32,14 +37,20 @@ const swap = (options: FakeOptions = {}): { written: string[]; signals: Set<stri
       resume: () => {},
     },
 
-    stdout: { isTTY: tty, columns: 120, rows: 40, write: (text: string) => written.push(text) },
+    stdout: {
+      isTTY: tty,
+      columns: 'columns' in options ? options.columns : 120,
+      rows: 40,
+      write: (text: string) => written.push(text),
+    },
+    ...(options.stderr === false ? {} : { stderr: { write: (text: string) => errors.push(text) } }),
     env: options.env ?? {},
     platform: options.platform ?? 'darwin',
     on: (event: string) => signals.add(event),
     off: (event: string) => signals.delete(event),
   }
 
-  return { written, signals }
+  return { written, errors, signals }
 }
 
 afterEach(() => {
@@ -134,6 +145,25 @@ describe('cli — node terminal', () => {
     expect(signals.has('SIGINT')).toBe(true)
     stopInterrupt()
     expect(signals.has('SIGINT')).toBe(false)
+  })
+
+  it('writes to stderr on request, falling back to stdout without one', () => {
+    const { written, errors } = swap()
+    const binding = detect(undefined)!
+
+    binding.handle.write('out')
+    binding.handle.write('err', 'stderr')
+    expect(written).toEqual(['out'])
+    expect(errors).toEqual(['err'])
+
+    const bare = swap({ stderr: false })
+    detect(undefined)!.handle.write('err', 'stderr')
+    expect(bare.written).toEqual(['err'])
+  })
+
+  it('flags the default size when the output reports no columns (a pipe)', () => {
+    swap({ tty: false, columns: undefined })
+    expect(detect(undefined)!.handle.size()).toEqual({ columns: 80, rows: 40, fallback: true })
   })
 
   it('answers null where there is no process at all — a browser bundle', () => {

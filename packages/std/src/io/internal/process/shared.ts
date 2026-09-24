@@ -1,3 +1,8 @@
+import type { Flow, Operation } from 'std:effect'
+import { flowOf } from 'std:effect'
+import { fail } from 'std:result'
+
+import { IOErrors } from '../../errors'
 import type { Helpers } from '../../types/helpers'
 import type { IODef } from '../../types/io'
 import { toPath } from '../../utils/to-path'
@@ -70,4 +75,29 @@ export const normalizeSpawn = (options?: IODef.ExecOptions): Helpers.SpawnConfig
     config.timeout = options.timeout
   }
   return config
+}
+
+/** Resolve `SpawnOptions.stdio` per stream — an omitted stream stays `'pipe'`. */
+export const resolveStdio = (stdio: IODef.SpawnOptions['stdio']): Helpers.StdioConfig => {
+  if (stdio === undefined || typeof stdio === 'string') {
+    const mode = stdio ?? 'pipe'
+    return { stdin: mode, stdout: mode, stderr: mode }
+  }
+
+  return {
+    stdin: stdio.stdin ?? 'pipe',
+    stdout: stdio.stdout ?? 'pipe',
+    stderr: stdio.stderr ?? 'pipe',
+  }
+}
+
+/** The flow an INHERITED stdout/stderr exposes on the handle: nothing, closed clean at once. */
+export const emptyByteFlow = (): Flow<Uint8Array, IODef.FlowClose> =>
+  flowOf<Uint8Array, IODef.FlowClose>(function* () {
+    return true
+  })
+
+/** What `write` answers when stdin is inherited: the child reads the terminal, not the parent. */
+export function* inheritedStdinWrite(): Operation<void> {
+  return yield* fail(IOErrors.StdinWriteFailed, 'stdin is inherited: nothing to write to')
 }

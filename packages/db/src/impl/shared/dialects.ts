@@ -109,6 +109,22 @@ export const postgresDialect: Sql.Dialect = {
     params: [],
   }),
 
+  unboundedLimit: 'LIMIT ALL',
+
+  json: {
+    // a text[] literal: every segment double-quoted, `"`/`\` escaped
+    path: segments =>
+      `{${segments.map(segment => `"${String(segment).replaceAll(/["\\]/gu, String.raw`\$&`)}"`).join(',')}}`,
+    pathCast: '::text[]',
+    value: (column, path) => `(${column}::jsonb #> ${path})`,
+    text: (column, path) => `(${column}::jsonb #>> ${path})`,
+    type: (column, path) => `jsonb_typeof(${column}::jsonb #> ${path})`,
+    types: { number: "= 'number'", string: "= 'string'", boolean: "= 'boolean'" },
+    valueKind: 'json',
+    // through text: a driver that sees a bare `::jsonb` param (Bun SQL) JSON-encodes it again
+    valueCast: '::text::jsonb',
+  },
+
   introspect: table => ({
     text: 'SELECT column_name AS "name", data_type AS "type" FROM information_schema.columns WHERE table_name = $1 AND table_schema = current_schema()',
     params: [table],
@@ -142,6 +158,24 @@ export const sqliteDialect: Sql.Dialect = {
     params: [],
   }),
   introspect: table => ({ text: `PRAGMA table_info(${quoteIdent(table)})`, params: [] }),
+  unboundedLimit: 'LIMIT -1',
+
+  json: {
+    // segments are validated free of `"` (sqlite's quoted labels have no escape)
+    path: segments =>
+      `$${segments.map(segment => (typeof segment === 'number' ? `[${segment}]` : `."${segment}"`)).join('')}`,
+    pathCast: '',
+    value: (column, path) => `json_extract(${column}, ${path})`,
+    text: (column, path) => `json_extract(${column}, ${path})`,
+    type: (column, path) => `json_type(${column}, ${path})`,
+    types: {
+      number: "IN ('integer', 'real')",
+      string: "= 'text'",
+      boolean: "IN ('true', 'false')",
+    },
+    valueKind: 'boolean',
+    valueCast: '',
+  },
   *encode(kind, value) {
     if (kind === 'boolean' && typeof value === 'boolean') {
       return value ? 1 : 0

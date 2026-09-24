@@ -9,6 +9,7 @@ export namespace MemoryTerminalDef {
   }
 
   export interface ScreenOptions {
+    /** Screen width. Omitted: 80, reported as a `fallback` size (like a pipe with no width). */
     readonly columns?: number | undefined
     readonly rows?: number | undefined
     readonly capabilities?: Partial<TerminalDef.Capabilities> | undefined
@@ -30,11 +31,12 @@ export namespace MemoryTerminalDef {
     /** Raise the platform interrupt, as ctrl+c does outside raw mode. */
     interrupt(): void
 
-    /** Everything written so far, escape sequences included. */
-    read(): string
+    /** Everything written to `stream` (default stdout) so far, escape sequences included. */
+    read(stream?: TerminalDef.Stream): string
 
     /** The same, with the escape sequences stripped — what a person would see. */
-    plain(): string
+    plain(stream?: TerminalDef.Stream): string
+    /** Forget what was written, on both streams. */
     clear(): void
 
     /** Resize, and notify a `resize()` flow if the capability is on. */

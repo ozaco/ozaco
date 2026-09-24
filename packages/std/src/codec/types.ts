@@ -68,9 +68,10 @@ export namespace CodecDef {
   export interface Handlers {
     /**
      * Add a codec to the registry. Entries are keyed by `entryCtx.name` (the user-overridable
-     * `Options.name`), not by plugin identity: a name already present fails
-     * `CodecErrors.AlreadyRegistered`, while the SAME impl installed twice under two names lands
-     * twice — the install list holds it once, so `getTransports()` reports one more entry than
+     * `Options.name`), not by plugin identity: a name already held by a DIFFERENT impl fails
+     * `CodecErrors.AlreadyRegistered`; the same impl under the same name again (a child scope
+     * re-installing its parent's codec, a repeated `use()`) is an idempotent no-op that keeps one
+     * entry. The SAME impl installed twice under two names lands twice — the install list holds it once, so `getTransports()` reports one more entry than
      * there are active installs (both resolve the latest install's context).
      */
     register(transport: CodecDef, entryCtx: CodecDef.Context): Operation<void>

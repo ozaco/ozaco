@@ -2,16 +2,19 @@ import type { CodecDef } from 'std:codec'
 import type { Flow, Operation } from 'std:effect'
 import type { Plugin } from 'std:plugin'
 import type { Result } from 'std:result'
+import type { TlsOptions } from 'std:shared'
 
 export type FetchDef = Plugin<FetchDef.Context, [options?: FetchDef.Options], FetchDef.Contract>
 
 export namespace FetchDef {
   /**
-   * Thrown errors (network faults, aborts, body-read failures) pass through UNTOUCHED — reified
-   * with `asFailure` so their original name + cause chain survive — hence `unknown`. The only
-   * string tags fetch raises itself are the deliberate, non-thrown conditions: `FetchErrors.HttpStatus` (a
-   * non-ok response under `.expect()`), `FetchErrors.Parse` (a response with no body) and `FetchErrors.Timeout` (a
-   * `timeoutMs` deadline hit before the response settled).
+   * Thrown errors (aborts, body-read failures, a custom `fetchImpl`'s own throws) pass through
+   * UNTOUCHED — reified with `asFailure` so their original name + cause chain survive — hence
+   * `unknown`. The string tags fetch raises itself: `FetchErrors.HttpStatus` (a non-ok response
+   * under `.expect()`), `FetchErrors.Parse` (a response with no body), `FetchErrors.Timeout` (a
+   * `timeoutMs` deadline hit before the response settled) and `FetchErrors.Network` (a platform
+   * transport fault — refused/reset/DNS/TLS; the message is the platform code, e.g.
+   * `ConnectionRefused`, else its message).
    *
    * No signature refers to it (a failure's error is `unknown` everywhere in std); it exists as the
    * named place this contract is written down, for consumers annotating their own handlers.
@@ -47,7 +50,14 @@ export namespace FetchDef {
      * impl instead of the routed `Codec` protocol. Overrides the install-time `codec` default.
      * Stripped before the platform fetch; the impl must be installed in scope. */
     codec?: CodecDef
+
+    /** TLS material for this request — passed through as the platform `tls` init key (Bun reads
+     * it; runtimes without it ignore the key). Overrides the install-time `tls` default. */
+    tls?: Tls
   }
+
+  /** TLS options for a request — see `TlsOptions` (`std:shared`). */
+  export type Tls = TlsOptions
 
   /** `Init` for the method shorthands (`get`/`post`/…), which pin `method` themselves. */
   export type MethodInit = Omit<Init, 'method'>
@@ -75,6 +85,9 @@ export namespace FetchDef {
      * instead of the routed `Codec` protocol (highest-priority install). A per-request
      * `init.codec` overrides it; the impl must be installed in scope. */
     codec?: CodecDef | undefined
+
+    /** Default TLS options for every request; a per-request `init.tls` replaces them whole. */
+    tls?: Tls | undefined
   }
 
   /** The installed plugin context: the resolved `Options`, built once by `setup`. */
@@ -83,6 +96,7 @@ export namespace FetchDef {
     headers: HeadersInit | undefined
     timeoutMs: number | undefined
     codec: CodecDef | undefined
+    tls: Tls | undefined
   }
 
   export interface Response {

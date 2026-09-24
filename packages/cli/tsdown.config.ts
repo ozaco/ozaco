@@ -1,6 +1,6 @@
 import { defineConfig } from 'tsdown'
 
-import { cliResolve, stdResolve } from '../devkit/src/resolve'
+import { cliResolve, stdResolve, withDeclarationPlugins } from '../devkit/src/resolve'
 
 // oxlint-disable-next-line import/no-default-export
 export default defineConfig({
@@ -27,4 +27,5 @@ export default defineConfig({
   // `cli:core` resolves to the external `@ozaco/cli` (dist/index.js), NOT inlined per bundle — so
   // the `Terminal`/`Palette`/… protocol singletons stay shared across the module bundles.
   plugins: [stdResolve.rolldown(), cliResolve.rolldown()],
+  inputOptions: withDeclarationPlugins(),
 })

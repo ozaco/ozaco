@@ -12,8 +12,8 @@ import type { Spec } from '../types/spec'
 import { filterValues, where } from '../utils/filter'
 
 import { TxBuffer } from './context'
-import { createQuery } from './query'
-import { prepareInsert, preparePatch } from './validate'
+import { createQuery, guardPaths } from './query'
+import { prepareInsert, preparePatch, systemOf } from './validate'
 import { watchDoc } from './watch'
 
 /** The loose write options every internal path works with (the typed generics live on the
@@ -308,14 +308,15 @@ export const createHandle = (state: Database.State, base?: Spec.Filter): Databas
 
   /** Insert-or-update in ONE transaction: the read and the write cannot interleave with another
    * upsert of the same key, so the "both inserted" race is closed. The handle's base scope is
-   * applied by the inner calls themselves; only the per-call `options.scope` is added here. */
+   * applied by the inner calls themselves; only the per-call `options.scope` is added here.
+   * With `when`, the update branch is guarded by it and the answer says what happened. */
 
   // oxlint-disable-next-line max-params
-  const upsert = function* (
+  const upsertOnce = function* (
     table: string,
     match: Record<string, unknown>,
     value: unknown,
-    options?: WriteOptions,
+    options?: WriteOptions & { readonly when?: Spec.Filter | undefined },
   ) {
     return yield* transaction(function* (tx) {
       const loose = tx as AnyType
@@ -325,20 +326,99 @@ export const createHandle = (state: Database.State, base?: Spec.Filter): Databas
         lookup = lookup.filter(options.scope)
       }
 
-      const existing = yield* lookup.unique()
+      const existing = (yield* lookup.unique()) as Spec.Doc | null
 
       if (!existing) {
         const pins = yield* pinned(table, options?.scope)
-        return yield* loose.insert(table, { ...match, ...(value as object), ...pins })
+        const doc = yield* loose.insert(table, { ...match, ...(value as object), ...pins })
+        return { op: 'inserted' as const, doc: doc as Spec.Doc }
       }
 
-      const updated = yield* loose.patch(table, String((existing as Spec.Doc)[FIELDS.id]), value, {
+      if (options?.when) {
+        const target = yield* targetOf(table)
+        yield* guardPaths(target.spec, [options.when])
+      }
+
+      // `when` joins the guard: the UPDATE itself refuses a row that does not match it
+      const guard = options?.when
+        ? options.scope
+          ? where.and(options.scope, options.when)
+          : options.when
+        : options?.scope
+
+      const updated = yield* loose.patch(table, String(existing[FIELDS.id]), value, {
         ifVersion: options?.ifVersion,
-        scope: options?.scope,
+        scope: guard,
       })
 
-      return updated ?? existing
+      return updated
+        ? { op: 'updated' as const, doc: updated as Spec.Doc }
+        : { op: 'skipped' as const, doc: existing }
     })
+  }
+
+  // oxlint-disable-next-line max-params
+  const upsert = function* (
+    table: string,
+    match: Record<string, unknown>,
+    value: unknown,
+    options?: WriteOptions & { readonly when?: Spec.Filter | undefined },
+  ) {
+    // a concurrent upsert may insert the same key between our lookup and our insert: its row is
+    // there now, so ONE retry takes the update branch (another unique violation surfaces)
+    let outcome = yield* attempt(upsertOnce(table, match, value, options))
+
+    if (isFailure(outcome) && outcome.error === DbErrors.Unique) {
+      outcome = yield* attempt(upsertOnce(table, match, value, options))
+    }
+
+    const settled = (yield* outcome) as { readonly op: string; readonly doc: Spec.Doc }
+
+    return options?.when === undefined ? settled.doc : settled
+  }
+
+  const insertOrIgnore = function* (table: string, value: unknown) {
+    // its own (nested) transaction: a unique violation rolls back to a savepoint, so an
+    // enclosing Postgres transaction is not left aborted
+    const outcome = yield* attempt(transaction(tx => (tx as AnyType).insert(table, value)))
+
+    if (isFailure(outcome) && outcome.error === DbErrors.Unique) {
+      return null
+    }
+
+    return yield* outcome
+  }
+
+  const importRows = function* (table: string, values: readonly unknown[]) {
+    const target = yield* targetOf(table)
+    const pins = yield* pinned(table, base)
+    const rows: Spec.Doc[] = []
+
+    for (const value of values) {
+      const system = yield* systemOf(table, value)
+      const data = yield* prepareInsert(target.def, { ...(value as object), ...pins })
+      rows.push({ ...(yield* stamp(system)), ...data })
+    }
+
+    if (rows.length === 0) {
+      return []
+    }
+
+    const writes: Helpers.Tokened[] = []
+
+    // a FRESH token per change: the row keeps the version it had elsewhere, but the change log
+    // of THIS database needs tokens this node minted (ordering, `since`, replay)
+    for (const row of rows) {
+      writes.push(yield* hub.record({ table, id: String(row[FIELDS.id]), op: 'insert' }))
+    }
+
+    const stored = yield* adapter.insert(target.spec, rows)
+
+    for (const change of writes) {
+      yield* announce(change)
+    }
+
+    return stored.length === rows.length ? stored : rows
   }
 
   const handle = {
@@ -346,6 +426,8 @@ export const createHandle = (state: Database.State, base?: Spec.Filter): Databas
     insert,
     insertMany,
     upsert,
+    insertOrIgnore,
+    import: importRows,
     patch,
     replace,
     delete: remove,

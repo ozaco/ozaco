@@ -2,7 +2,7 @@ import type { CodecDef } from 'std:codec'
 import type { Flow, Future, Operation } from 'std:effect'
 import type { Plugin } from 'std:plugin'
 import type { Result } from 'std:result'
-import type { AnyType } from 'std:shared'
+import type { AnyType, TlsOptions } from 'std:shared'
 
 /**
  * `std:ws` — an effect-native WebSocket CLIENT, the socket counterpart to `std:fetch`. `Ws` is
@@ -45,7 +45,7 @@ export namespace WsDef {
     options?:
       | string
       | string[]
-      | { protocols?: string | string[]; headers?: Record<string, string> },
+      | { protocols?: string | string[]; headers?: Record<string, string>; tls?: TlsOptions },
   ) => SocketLike
 
   /** Auto-reconnect budget. Present (even `{}`) = reconnect enabled; absent = single-shot socket. */
@@ -83,6 +83,11 @@ export namespace WsDef {
      * `WebSocket` (passed as the options-object constructor form); the browser `WebSocket` cannot set
      * handshake headers — use a `?token=` query param there, matching the gateway's `wsBearer`. */
     headers?: Record<string, string> | undefined
+
+    /** TLS material for `wss://` dials (custom CA, client certificate, `rejectUnauthorized`) —
+     * passed as the `tls` key of the options-object constructor form, which Bun honors; runtimes
+     * without it ignore the key, and the browser (no options form) drops it. */
+    tls?: TlsOptions | undefined
 
     /** Redial dropped sockets automatically. Applies to server-initiated closes and errors — never
      * to client `close()` or scope teardown. Omit for the classic single-shot socket. */

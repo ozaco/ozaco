@@ -12,6 +12,18 @@ const stringify = (value: string | boolean): string =>
   typeof value === 'boolean' ? String(value) : value
 
 /**
+ * parseArgs' throw as one short line: its first sentence (`Unknown option '--bogus'`), without
+ * the error name or the `-- "--bogus"` hint that follows — never a serialized object.
+ */
+const describeThrow = (error: unknown): string => {
+  if (!(error instanceof Error)) {
+    return serializeError(error)
+  }
+  const [first] = error.message.split(/\.\s/u)
+  return (first ?? error.message).replace(/\.$/u, '')
+}
+
+/**
  * Tokenize argv with `util.parseArgs` (no hand-rolled parser; Bun ships the module natively). The
  * action's option `infos` + `short` map become the parseArgs option config: boolean fields take no
  * value, array fields are `multiple`, everything else is a string the schema later coerces. Tokens
@@ -46,7 +58,7 @@ export function* tokenize(
     call(() => parseArgs({ args: head, options, strict: true, allowPositionals: true })),
   )
   if (isFailure(parsed)) {
-    const message = serializeError(parsed)
+    const message = describeThrow(parsed.error)
     return { options: new Map(), positionals: [], rest, errors: [message] }
   }
 

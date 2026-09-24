@@ -2,6 +2,7 @@ import {
   appendCauses,
   asFailure,
   asFailureFrom,
+  formatFailure,
   auto,
   fail,
   isFailure,
@@ -99,10 +100,23 @@ describe('asFailure / asFailureFrom', () => {
     expect(wrapped.message).toBe('')
   })
 
-  it('asFailureFrom serializes foreign errors into the error slot', () => {
+  it('asFailure keeps an Error in the error slot and copies its text into message', () => {
+    const error = new TypeError('denied')
+    const wrapped = asFailure(error, 'opening socket')
+    expect(wrapped.error).toBe(error)
+    expect(wrapped.message).toBe('denied')
+    expect(wrapped.causes).toEqual(['opening socket'])
+
+    // a non-Error keeps the empty message
+    expect(asFailure({ code: 1 }).message).toBe('')
+  })
+
+  it('asFailureFrom tags a foreign error `std:result.unknown` and serializes it into the message', () => {
     const wrapped = asFailureFrom(new Error('kaput'), 'loading config')
-    expect(wrapped.error).toBe('Error: kaput')
+    expect(wrapped.error).toBe('std:result.unknown')
+    expect(wrapped.message).toBe('Error: kaput')
     expect(wrapped.causes).toEqual(['loading config'])
+    expect(asFailureFrom('plain').message).toBe('plain')
 
     const existing = fail('typed')
     expect(asFailureFrom(existing as AnyType)).toBe(existing as AnyType)
@@ -177,5 +191,35 @@ describe('throwable', () => {
       expect(bad.error).toBeInstanceOf(Error)
       expect(bad.message).toBe('from throwable')
     }
+  })
+})
+
+describe('formatFailure', () => {
+  it('renders error: message: causes, dropping empty segments', () => {
+    expect(formatFailure(fail('std:io.exists'))).toBe('std:io.exists')
+    expect(formatFailure(fail('std:io.exists', 'already there'))).toBe(
+      'std:io.exists: already there',
+    )
+    expect(formatFailure(fail('tag', 'msg', 'outer', 'inner'))).toBe('tag: msg: outer > inner')
+    expect(formatFailure(fail('tag', '', 'only-cause'))).toBe('tag: only-cause')
+  })
+
+  it('renders an Error by name + message, never `{}`, and does not repeat a folded message', () => {
+    expect(formatFailure(fail(new TypeError('denied'), 'while dialing'))).toBe(
+      'TypeError: denied: while dialing',
+    )
+    expect(formatFailure(asFailure(new Error('kaput'), 'loading'))).toBe('Error: kaput: loading')
+    expect(formatFailure(asFailureFrom(new Error('kaput'), 'loading'))).toBe(
+      'std:result.unknown: Error: kaput: loading',
+    )
+
+    const coded = Object.assign(new Error('refused'), { code: 'ECONNREFUSED' })
+    expect(formatFailure(asFailureFrom(coded))).toBe(
+      'std:result.unknown: Error: refused (ECONNREFUSED)',
+    )
+  })
+
+  it('renders an object error as JSON', () => {
+    expect(formatFailure(fail({ reason: 'bad' }, 'msg'))).toBe('{"reason":"bad"}: msg')
   })
 })

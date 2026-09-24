@@ -1,6 +1,6 @@
 import { attempt, run } from 'std:effect'
 import type { FetchDef } from 'std:fetch'
-import { Fetch, FetchClient, fetchImpl } from 'std:fetch'
+import { Fetch, FetchClient, FetchErrors, fetchImpl } from 'std:fetch'
 import { isFailure, unwrap } from 'std:result'
 
 import { afterAll, describe, expect, it } from 'bun:test'
@@ -247,7 +247,10 @@ describe('request-level failures', () => {
 
     expect(isFailure(outcome)).toBe(true)
     if (isFailure(outcome)) {
-      expect((outcome.error as { code?: string }).code).toBe('ConnectionRefused')
+      // tagged — the platform code (Bun's refused connection has an EMPTY message) is the message
+      expect(outcome.error).toBe(FetchErrors.Network)
+      expect(outcome.error).toBe('std:fetch.network')
+      expect(outcome.message).toBe('ConnectionRefused')
       // the cause chain names the dispatched action and its plugin tag
       expect(outcome.causes).toContain('request')
       expect(outcome.causes).toContain(`std/fetch@${pkg.version}`)
@@ -266,5 +269,83 @@ describe('request-level failures', () => {
       expect(outcome.error).toBe('std:fetch.timeout')
       expect(outcome.message).toBe(`${base}/slow: timed out after 30ms`)
     }
+  })
+})
+
+describe('network failures and tls', () => {
+  it('a platform TypeError without a code is tagged network, its message kept', async () => {
+    const outcome = await run(function* () {
+      yield* FetchClient.use()
+
+      return yield* fetchImpl.with(
+        () => Promise.reject(new TypeError('fetch failed')),
+        () => Fetch.actions.get(`${base}/json`),
+      )
+    })
+
+    expect(isFailure(outcome)).toBe(true)
+    if (isFailure(outcome)) {
+      expect(outcome.error).toBe('std:fetch.network')
+      expect(outcome.message).toBe('fetch failed')
+    }
+  })
+
+  it("a custom transport's own (non-network) throw still passes through untouched", async () => {
+    const boom = new RangeError('custom transport exploded')
+    const outcome = await run(function* () {
+      yield* FetchClient.use()
+
+      return yield* fetchImpl.with(
+        () => Promise.reject(boom),
+        () => Fetch.actions.get(`${base}/json`),
+      )
+    })
+
+    expect(isFailure(outcome)).toBe(true)
+    if (isFailure(outcome)) {
+      expect(outcome.error).toBe(boom)
+    }
+  })
+
+  it('tls reaches the platform init — install default, replaced whole per request', async () => {
+    const seen: unknown[] = []
+    const outcome = await run(function* () {
+      yield* FetchClient.use({ tls: { rejectUnauthorized: false } })
+
+      return yield* fetchImpl.with(
+        (_input, init) => {
+          seen.push((init as { tls?: unknown } | undefined)?.tls)
+          return Promise.resolve(new Response('ok'))
+        },
+        function* () {
+          yield* Fetch.actions.get(`${base}/json`)
+          yield* Fetch.actions.get(`${base}/json`, { tls: { ca: 'PEM' } })
+          return seen
+        },
+      )
+    })
+
+    expect(unwrap(outcome)).toEqual([{ rejectUnauthorized: false }, { ca: 'PEM' }])
+  })
+
+  it('without tls the init carries no tls key', async () => {
+    let init: RequestInit | undefined
+    const outcome = await run(function* () {
+      yield* FetchClient.use()
+
+      return yield* fetchImpl.with(
+        (_input, given) => {
+          init = given
+          return Promise.resolve(new Response('ok'))
+        },
+        function* () {
+          const response = yield* Fetch.actions.get(`${base}/json`)
+          return yield* response.text()
+        },
+      )
+    })
+
+    expect(unwrap(outcome)).toBe('ok')
+    expect(init !== undefined && 'tls' in init).toBe(false)
   })
 })

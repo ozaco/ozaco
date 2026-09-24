@@ -1,4 +1,9 @@
+import type { Result } from 'std:result'
+import { isFailure } from 'std:result'
+import { serializeError } from 'std:shared'
+
 import { ansi } from './const'
+import { CliCauses } from './errors'
 import type { WrapOptions } from './types/common'
 
 // Matches ESC [ ... <letter> (SGR colors, cursor ops). Built from ESC to avoid a literal control
@@ -85,4 +90,20 @@ export const wrapAnsi = (text: string, columns: number, options: WrapOptions = {
   }
 
   return out.join('\n')
+}
+
+/** Whether `value` is a failure the cli already rendered (it carries `CliCauses.Reported`). */
+export const isReported = (value: unknown): boolean =>
+  isFailure(value) && value.causes.includes(CliCauses.Reported)
+
+/**
+ * A failure as one short, human-readable block: `tag: message`, then its causes (deduplicated,
+ * the `reported` marker left out) on one indented line — never a serialized object dump.
+ */
+export const describeFailure = (failure: Result.Failure<unknown>): string => {
+  const tag = typeof failure.error === 'string' ? failure.error : serializeError(failure.error)
+  const head = failure.message === '' ? tag : `${tag}: ${failure.message}`
+  const causes = [...new Set(failure.causes)].filter(cause => cause !== CliCauses.Reported)
+
+  return causes.length === 0 ? head : `${head}\n  causes: ${causes.join(' › ')}`
 }

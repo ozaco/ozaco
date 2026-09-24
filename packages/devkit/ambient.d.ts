@@ -102,6 +102,15 @@ declare module 'db:core' {
 declare module 'db:internal' {
   export * from '@ozaco/db/internal';
 }
+declare module 'db:adapter-kit' {
+  export * from '@ozaco/db/adapter-kit';
+}
+declare module 'db:queue' {
+  export * from '@ozaco/db/queue';
+}
+declare module 'db:testing' {
+  export * from '@ozaco/db/testing';
+}
 declare module 'db:impl/memory' {
   export * from '@ozaco/db/impl/memory';
 }

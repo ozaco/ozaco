@@ -18,6 +18,7 @@ export { Db, DbAdapter, Kv } from './definition/protocol'
 
 export { useDb, withBusMeta } from './utils/database'
 export { escapeLike, filterFields, filterValues, where } from './utils/filter'
+export { stripSystem } from './utils/row'
 export { clampLimit, sanitizeFilter } from './utils/sanitize'
 export { column, defineSchema, table } from './utils/schema'
 
@@ -28,3 +29,4 @@ export type * from './types/database'
 export type * from './types/kv'
 export type * from './types/schema'
 export type * from './types/spec'
+export type * from './types/utils'

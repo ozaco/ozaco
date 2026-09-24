@@ -145,8 +145,47 @@ export namespace IODef {
     timeout?: number
   }
 
+  /** How a child's standard stream is wired: `'pipe'` hands it to the parent (the handle's
+   * `write` / `stdout` / `stderr`), `'inherit'` shares the parent's own stream (the terminal). */
+  export type StdioMode = 'pipe' | 'inherit'
+
   /** Options for {@link IODef.Actions.spawn}. */
-  export type SpawnOptions = ProcessOptions
+  export interface SpawnOptions extends ProcessOptions {
+    /** One mode for all three streams, or per stream (an omitted stream stays `'pipe'`); default
+     * `'pipe'`. An inherited `stdout` / `stderr` is an EMPTY flow on the handle (it closes `true`
+     * at once — the bytes go straight to the terminal); an inherited `stdin` makes `write` fail
+     * `std:io.stdin-write-failed` and `closeStdin` a no-op. */
+    stdio?: StdioMode | { stdin?: StdioMode; stdout?: StdioMode; stderr?: StdioMode } | undefined
+  }
+
+  /** The host platform, from {@link IODef.Actions.platform}. */
+  export interface Platform {
+    /** `process.platform` on Bun/Node (`'darwin'`, `'linux'`, `'win32'`, …); `'browser'` on WebIO. */
+    os: string
+    /** `process.arch` on Bun/Node (`'x64'`, `'arm64'`, …); `'unknown'` on WebIO. */
+    arch: string
+    /** The effective user id — POSIX only (`undefined` on Windows and in the browser). */
+    uid?: number | undefined
+  }
+
+  /** A digest's text form for {@link IODef.Actions.hash}: lowercase hex or standard base64. */
+  export type HashEncoding = 'hex' | 'base64'
+
+  /** `hash` returns the raw digest bytes, or its text form when an `encoding` is given. */
+  export interface Hash {
+    (algorithm: HashAlgorithm, data: Uint8Array): Operation<Uint8Array>
+    (
+      algorithm: HashAlgorithm,
+      data: Uint8Array,
+      options: { encoding: HashEncoding },
+    ): Operation<string>
+  }
+
+  /** Options for {@link IODef.Actions.toTerminal}. */
+  export interface TerminalOptions {
+    /** Which terminal stream to write (default `'stdout'`). */
+    stream?: 'stdout' | 'stderr' | undefined
+  }
 
   /** The exit status of a child process. */
   export interface ProcessStatus {
@@ -404,7 +443,8 @@ export namespace IODef {
      * also for a token at or behind the local floor, which is accepted but moves nothing. */
     observeHlc: (token: string, options?: ObserveHlcOptions) => Operation<boolean>
     hmac: (algorithm: HashAlgorithm, key: Uint8Array, data: Uint8Array) => Operation<Uint8Array>
-    hash: (algorithm: HashAlgorithm, data: Uint8Array) => Operation<Uint8Array>
+    /** Digest `data`; with `{ encoding: 'hex' | 'base64' }` the digest comes back as text. */
+    hash: Hash
 
     /** Encrypt with a secret (AES-256-GCM, key derived from the secret via scrypt). Reversible via {@link decrypt}. */
     encrypt: (data: Uint8Array | string, secret: string) => Operation<Uint8Array>
@@ -537,7 +577,8 @@ export namespace IODef {
     exec: (cmd: string, args?: readonly string[], options?: ExecOptions) => Operation<ExecResult>
     /** Start a child process. A binary that cannot be started fails at once with
      * `std:io.spawn-failed` on BunIO; on NodeIO the handle is returned and its `exited()` fails
-     * `std:io.process-error` (Node reports the spawn error asynchronously). */
+     * `std:io.process-error` (Node reports the spawn error asynchronously). `stdio: 'inherit'`
+     * (or per stream) shares the parent's terminal instead of piping — see {@link SpawnOptions}. */
     spawn: (
       cmd: string,
       args?: readonly string[],
@@ -560,6 +601,22 @@ export namespace IODef {
 
     /** The user's home directory (`node:os.homedir()`); unsupported in the browser. */
     homeDir: () => Operation<string>
+
+    /** Expand a leading `~` to {@link homeDir}: `~` alone and `~/…` (`~\…` too) resolve under the
+     * home directory; anything else (`~user/…`, a `~` mid-path) is returned unchanged. A path
+     * without `~` never touches `homeDir`, so it passes through on WebIO as well. */
+    expandHome: (path: string) => Operation<string>
+
+    /** The host platform: OS, CPU architecture and (POSIX) the effective uid. WebIO answers
+     * `{ os: 'browser', arch: 'unknown' }`. */
+    platform: () => Operation<Platform>
+
+    /** Write a byte flow to the terminal (`stdout` by default) as it arrives, resolving once the
+     * flow ends; a flow that closes with a failure raises it after the bytes before it were
+     * written. Bun/Node write the raw bytes (each write awaited, so backpressure holds); WebIO
+     * decodes them with a streaming `TextDecoder` (see `decodeText`) and logs whole lines to the
+     * console. Pair it with a piped `spawn` to tee a child's output. */
+    toTerminal: (source: Flow<Uint8Array, unknown>, options?: TerminalOptions) => Operation<void>
 
     /** Resolve an S3 client bound to `options` (falls back to the S3 env when a field is omitted): on Bun
      * its built-in `S3Client`, elsewhere a dependency-free SigV4-over-`fetch` client (the browser has

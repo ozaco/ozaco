@@ -1,6 +1,11 @@
 import { defineConfig } from 'tsdown'
 
-import { clientResolve, serverResolve, stdResolve } from '../devkit/src/resolve'
+import {
+  clientResolve,
+  serverResolve,
+  stdResolve,
+  withDeclarationPlugins,
+} from '../devkit/src/resolve'
 
 // oxlint-disable-next-line import/no-default-export
 export default defineConfig({
@@ -21,4 +26,5 @@ export default defineConfig({
   // stays external too: inlining would COPY the ServiceDef namespace (fresh phantom symbols)
   // and break the Action inference the typed inputs ride on.
   plugins: [stdResolve.rolldown(), serverResolve.rolldown(), clientResolve.rolldown()],
+  inputOptions: withDeclarationPlugins(),
 })

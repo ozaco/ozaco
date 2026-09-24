@@ -7,8 +7,8 @@ import type { Key, Size, TerminalDef } from 'cli:core'
  */
 export namespace Driver {
   export interface Handle {
-    /** the only output path. */
-    write(text: string): void
+    /** the only output path; `stream` is `'stderr'` for error output (default stdout). */
+    write(text: string, stream?: TerminalDef.Stream): void
     size(): Size
 
     /** Start delivering input as decoded text; the returned function detaches the listener.

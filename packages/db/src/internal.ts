@@ -23,8 +23,9 @@ export {
   TABLE_NAME,
 } from './core/const'
 export { adapterDefaults } from './core/utils/adapter'
+export { aggregateDocs } from './core/utils/aggregate'
 export { matches, sortDocs } from './core/utils/evaluate'
-export { filterFields } from './core/utils/filter'
+export { filterFields, filterPaths, isPathSegment } from './core/utils/filter'
 export { isDestructive, isSystemField, isTable } from './core/utils/is'
 export { isValidKvPrefix, kvActions } from './core/utils/kv'
 export { tableSpecOf } from './core/utils/schema'

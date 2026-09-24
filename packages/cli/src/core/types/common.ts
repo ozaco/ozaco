@@ -6,6 +6,11 @@ export interface WrapOptions {
 export interface Size {
   columns: number
   rows: number
+  /**
+   * `true` when the platform reported no size and `columns`/`rows` are the defaults (a pipe, a
+   * redirected file) — width-sensitive output (tables) then skips truncation instead of guessing.
+   */
+  fallback?: boolean | undefined
 }
 
 /** A decoded keypress event. */

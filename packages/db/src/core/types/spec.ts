@@ -10,6 +10,13 @@ export namespace Spec {
   /** A value a filter can compare against (JSON-serializable apart from `Date`). */
   export type FilterValue = string | number | boolean | null | Date
 
+  /** One step into a `json` column: an object key, or an array index. */
+  export type PathSegment = string | number
+
+  /** A field reference with a path into a `json` column: `['payload', 'workspace']` reads
+   * `payload.workspace`. The first entry is the column (checked like any field name). */
+  export type FieldPath<TField extends string = string> = readonly [TField, ...PathSegment[]]
+
   /** The storage-level shape of a column. Adapters map each kind to their backend's native type. */
   export type ColumnKind =
     | 'text'
@@ -62,16 +69,25 @@ export namespace Spec {
    * MEETS its query: `where.eq('dnoe', false)` builds a `Filter<'dnoe'>`, and
    * `db.query('todos').filter(...)` wants a `Filter<keyof Todo>`. A filter that arrives from the
    * wire is a plain `Filter` (fields unknown until `sanitizeFilter` checks them).
+   *
+   * A leaf with a `path` compares the value AT that path inside a `json` column (sqlite
+   * `json_extract`, Postgres `jsonb #>`, memory walks the object). Comparisons are type-strict on
+   * every backend — a number only meets numbers, a string strings, a boolean booleans (a `Date`
+   * compares as epoch millis); a missing key or JSON `null` is null.
    */
   export type Filter<TField extends string = string> =
     | {
         readonly op: 'eq' | 'ne' | 'gt' | 'gte' | 'lt' | 'lte'
         readonly field: TField
+
+        /** a path INTO the `json` column `field` (see {@link FieldPath}); absent → the column. */
+        readonly path?: readonly PathSegment[] | undefined
         readonly value: FilterValue
       }
     | {
         readonly op: 'in' | 'not-in'
         readonly field: TField
+        readonly path?: readonly PathSegment[] | undefined
 
         /** `value` everywhere: array ops take an array value (the wire also accepts a legacy
          * `values` key — `sanitizeFilter` normalizes it). */
@@ -80,13 +96,18 @@ export namespace Spec {
     | {
         readonly op: 'like'
         readonly field: TField
+        readonly path?: readonly PathSegment[] | undefined
 
         /** SQL `LIKE` syntax: `%` any run, `_` one character, `\` escapes the next character on
          * EVERY backend (`escapeLike` builds a literal run). */
         readonly pattern: string
         readonly insensitive?: boolean | undefined
       }
-    | { readonly op: 'is-null' | 'not-null'; readonly field: TField }
+    | {
+        readonly op: 'is-null' | 'not-null'
+        readonly field: TField
+        readonly path?: readonly PathSegment[] | undefined
+      }
     | { readonly op: 'and' | 'or'; readonly filters: readonly Filter<TField>[] }
     | { readonly op: 'not'; readonly filter: Filter<TField> }
 
@@ -201,6 +222,31 @@ export namespace Spec {
 
     /** Also compute the total matching-row count (an extra COUNT query). */
     readonly count?: boolean | undefined
+  }
+
+  /** Offset ("page N of M") pagination — `query.paginate({ page, pageSize })`. `page` is
+   * 1-based. */
+  export interface OffsetPaginateOptions {
+    readonly page: number
+    readonly pageSize: number
+  }
+
+  /** One page of an offset-paginated query. */
+  export interface OffsetPage<TDoc = Doc> {
+    readonly rows: readonly TDoc[]
+
+    /** Total rows matching the query. */
+    readonly total: number
+
+    /** The 1-based page these rows are (clamped to at least 1). */
+    readonly page: number
+
+    /** How many pages `total` spans at this page size (`0` when nothing matched). */
+    readonly pages: number
+    readonly pageSize: number
+
+    /** The table's last applied change token when the page was computed (a `since` seed). */
+    readonly token: string
   }
 
   /** The decoded form of an opaque keyset cursor: the boundary row's value for every sort key,

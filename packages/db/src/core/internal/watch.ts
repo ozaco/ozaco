@@ -108,8 +108,9 @@ export const watchQuery = (input: Helpers.QueryWatch): Flow<AnyType, never> => (
       if (!known || event.op === 'touch' || event.id === '' || known.has(event.id)) {
         return false
       }
+      // under `skip` a delete BEFORE the window shifts it — only an unwindowed query may skip
       if (event.op === 'delete') {
-        return true
+        return !input.windowed
       }
       if (event.op === 'update' && event.fields) {
         return !event.fields.some(field => input.fields.has(field))

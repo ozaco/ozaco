@@ -23,6 +23,8 @@ export namespace Helpers {
   export interface Process {
     readonly stdin: Stdin
     readonly stdout: Stdout
+    /** Absent on exotic hosts — writes then fall back to `stdout`. */
+    readonly stderr?: Stdout | undefined
     readonly env: Record<string, string | undefined>
     readonly platform?: string | undefined
     on(event: string, listener: () => void): unknown

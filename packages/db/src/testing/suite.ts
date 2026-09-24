@@ -1,7 +1,7 @@
-import { column, Db, DbAdapter, DbClient, DbErrors, table, where } from 'db:core'
+import { column, Db, DbAdapter, DbClient, DbErrors, stripSystem, table, where } from 'db:core'
 import { isDestructive } from 'db:internal'
 import type { Operation } from 'std:effect'
-import { attempt, race, run, scoped, sleep, useContext } from 'std:effect'
+import { all, attempt, race, run, scoped, sleep, useContext } from 'std:effect'
 import { fail, isFailure, unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
 
@@ -9,29 +9,18 @@ import { describe, expect, it } from 'bun:test'
 
 import { BunIO } from 'std:io/impl/bun'
 
-import { posts, users } from '../helpers'
+import { posts, users } from './fixtures'
+import type { Testing } from './types'
 
 const TOKEN = /^[0-9A-HJKMNP-TV-Z]{22}$/u
 
-/** One database+driver binding under end-to-end test. */
-export interface AdapterTarget {
-  /** Must equal the adapter's `info.adapter` name. */
-  readonly label: string
-  /** false → the whole suite is skipped (e.g. no live server configured). */
-  readonly enabled: boolean
-  /** Whether the adapter declares the `raw` capability. */
-  readonly raw: boolean
-  /** Install a FRESH backend into the current scope. */
-  readonly use: () => Operation<unknown>
-}
-
 /**
- * The full-surface end-to-end suite every adapter must pass: writes, queries, pagination,
+ * The adapter CONFORMANCE suite — the full-surface end-to-end tests every adapter must pass: writes, queries, pagination,
  * the reactive plane (changes / query watch / doc watch), transactions with event buffering,
  * the management plane and scope-teardown behavior. Tables are dropped and re-migrated per test,
  * so the suite is safe on shared servers too.
  */
-export const runAdapterSuite = (target: AdapterTarget): void => {
+export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
   const bootstrap = function* (): Operation<AnyType> {
     yield* target.use()
     yield* BunIO.use()
@@ -356,11 +345,11 @@ export const runAdapterSuite = (target: AdapterTarget): void => {
           yield* db.insert('users', { name: 'linus', age: 25, role: 'member' })
           yield* db.insert('users', { name: 'nobody', role: 'member' })
 
-          const all = db.query('users')
-          expect(yield* all.sum('age')).toBe(105)
-          expect(yield* all.min('age')).toBe(25)
-          expect(yield* all.max('age')).toBe(44)
-          expect(yield* all.avg('age')).toBe(35)
+          const every = db.query('users')
+          expect(yield* every.sum('age')).toBe(105)
+          expect(yield* every.min('age')).toBe(25)
+          expect(yield* every.max('age')).toBe(44)
+          expect(yield* every.avg('age')).toBe(35)
 
           // the filter applies to the aggregate too
           expect(yield* db.query('users').where({ role: 'admin' }).sum('age')).toBe(80)
@@ -1353,6 +1342,291 @@ export const runAdapterSuite = (target: AdapterTarget): void => {
           // garbage → snapshot, not a failure
           const junk = yield* db.query('users').watch({ since: 'not-a-token' })
           expect(((yield* junk.next()).value as AnyType).rows).toHaveLength(2)
+        }),
+      )
+    })
+
+    it('timestamp({ as: "ms" }) stores epoch millis and reads back a number', async () => {
+      unwrap(
+        await run(function* () {
+          const db = yield* bootstrap()
+          const seen = Date.UTC(2024, 0, 2, 3, 4, 5, 678)
+          const made = yield* db.insert('users', { name: 'ada', seen })
+          expect(made.seen).toBe(seen)
+
+          const read = yield* db.get('users', made._id)
+          expect(read.seen).toBe(seen)
+          expect(typeof read.seen).toBe('number')
+
+          yield* db.insert('users', { name: 'grace', seen: seen + 1000 })
+          const later = yield* db.query('users').filter(where.gt('seen', seen)).collect()
+          expect(later.map((row: AnyType) => row.name)).toEqual(['grace'])
+          expect(yield* db.query('users').max('seen')).toBe(seen + 1000)
+
+          // a Date is not epoch millis
+          const wrong = yield* attempt(db.insert('users', { name: 'x', seen: new Date() }))
+          expect((wrong as AnyType).error).toBe(DbErrors.Validation)
+        }),
+      )
+    })
+
+    it('skip(n) windows the row terminals; offset paginate answers page / pages / total', async () => {
+      unwrap(
+        await run(function* () {
+          const db = yield* bootstrap()
+
+          for (const [name, age] of [
+            ['a', 1],
+            ['b', 2],
+            ['c', 3],
+            ['d', 4],
+            ['e', 5],
+          ] as const) {
+            yield* db.insert('users', { name, age })
+          }
+
+          const names = (rows: readonly AnyType[]) => rows.map(row => row.name)
+          const byAge = () => db.query('users').order('age')
+
+          expect(names(yield* byAge().skip(2).collect())).toEqual(['c', 'd', 'e'])
+          expect(names(yield* byAge().skip(1).take(2))).toEqual(['b', 'c'])
+          expect((yield* byAge().skip(4).first()).name).toBe('e')
+          expect(yield* byAge().skip(5).exists()).toBe(false)
+          expect(names(yield* byAge().skip(1).skip(3).collect())).toEqual(['d', 'e'])
+          // count ignores the window
+          expect(yield* byAge().skip(3).count()).toBe(5)
+          // no declared order: the window still follows insertion (`_created_at`, `_id`)
+          expect(names(yield* db.query('users').skip(3).collect())).toEqual(['d', 'e'])
+
+          const one = yield* byAge().paginate({ page: 1, pageSize: 2 })
+          expect(names(one.rows)).toEqual(['a', 'b'])
+          expect([one.total, one.page, one.pages, one.pageSize]).toEqual([5, 1, 3, 2])
+          expect(typeof one.token).toBe('string')
+
+          const three = yield* byAge().paginate({ page: 3, pageSize: 2 })
+          expect(names(three.rows)).toEqual(['e'])
+
+          const beyond = yield* byAge().paginate({ page: 9, pageSize: 2 })
+          expect(beyond.rows).toEqual([])
+          expect(beyond.pages).toBe(3)
+
+          const filtered = yield* db
+            .query('users')
+            .filter(where.gt('age', 2))
+            .order('age', 'desc')
+            .paginate({ page: 2, pageSize: 2 })
+          expect(names(filtered.rows)).toEqual(['c'])
+          expect([filtered.total, filtered.pages]).toEqual([3, 2])
+
+          // the keyset form is untouched
+          const keyset = yield* byAge().paginate({ limit: 2 })
+          expect(names(keyset.data)).toEqual(['a', 'b'])
+          expect(keyset.pageInfo.hasNext).toBe(true)
+        }),
+      )
+    })
+
+    it('upsert { when }: inserts, updates only a matching row, otherwise skips (and says so)', async () => {
+      unwrap(
+        await run(function* () {
+          const db = yield* bootstrap()
+          const finished = where.eq('active', false)
+
+          const first = yield* db.upsert('users', { name: 'job' }, { age: 1 }, { when: finished })
+          expect(first.op).toBe('inserted')
+          expect(first.doc.age).toBe(1)
+
+          // the row is still active → the guarded update leaves it alone
+          const busy = yield* db.upsert('users', { name: 'job' }, { age: 2 }, { when: finished })
+          expect(busy.op).toBe('skipped')
+          expect(busy.doc.age).toBe(1)
+          expect((yield* db.get('users', first.doc._id)).age).toBe(1)
+
+          yield* db.patch('users', first.doc._id, { active: false })
+          const rearmed = yield* db.upsert(
+            'users',
+            { name: 'job' },
+            { age: 3, active: true },
+            { when: finished },
+          )
+          expect(rearmed.op).toBe('updated')
+          expect(rearmed.doc._id).toBe(first.doc._id)
+          expect(rearmed.doc.age).toBe(3)
+          expect(yield* db.query('users').count()).toBe(1)
+
+          // concurrent guarded upserts of one key: one row, one insert
+          const outcomes = yield* all([
+            db.upsert('users', { name: 'race' }, { age: 1 }, { when: finished }),
+            db.upsert('users', { name: 'race' }, { age: 2 }, { when: finished }),
+          ])
+          expect(outcomes.map((entry: AnyType) => entry.op).toSorted()).toEqual([
+            'inserted',
+            'skipped',
+          ])
+          expect(yield* db.query('users').where({ name: 'race' }).count()).toBe(1)
+
+          // insertOrIgnore: a unique violation is a quiet null, and leaves a transaction usable
+          const kept = yield* db.transaction(function* (tx: AnyType) {
+            const dup = yield* tx.insertOrIgnore('users', { name: 'job' })
+            expect(dup).toBeNull()
+            return yield* tx.insertOrIgnore('users', { name: 'fresh' })
+          })
+          expect(kept.name).toBe('fresh')
+          const invalid = yield* attempt(db.insertOrIgnore('users', { age: 1 }))
+          expect((invalid as AnyType).error).toBe(DbErrors.Validation)
+        }),
+      )
+    })
+
+    it('json path filters reach into json columns on every comparison', async () => {
+      unwrap(
+        await run(function* () {
+          const db = yield* bootstrap()
+          yield* db.insert('users', {
+            name: 'ada',
+            meta: { tags: ['x', 'y'], team: { id: 'core' }, score: 10, pro: true, note: null },
+          })
+          yield* db.insert('users', {
+            name: 'grace',
+            meta: { tags: ['y'], team: { id: 'infra' }, score: 25, pro: false },
+          })
+          yield* db.insert('users', { name: 'linus', meta: { tags: [], score: '25' } })
+          yield* db.insert('users', { name: 'nobody' })
+
+          const names = function* (...filters: AnyType[]) {
+            const rows = yield* db
+              .query('users')
+              .filter(...filters)
+              .order('name')
+              .collect()
+            return rows.map((row: AnyType) => row.name)
+          }
+
+          expect(yield* names(where.eq(['meta', 'team', 'id'], 'core'))).toEqual(['ada'])
+          expect(yield* names(where.ne(['meta', 'team', 'id'], 'core'))).toEqual(['grace'])
+          // type-strict: the number 25 does not meet the string '25'
+          expect(yield* names(where.eq(['meta', 'score'], 25))).toEqual(['grace'])
+          expect(yield* names(where.eq(['meta', 'score'], '25'))).toEqual(['linus'])
+          expect(yield* names(where.gt(['meta', 'score'], 10))).toEqual(['grace'])
+          expect(yield* names(where.gte(['meta', 'score'], 10))).toEqual(['ada', 'grace'])
+          expect(yield* names(where.lt(['meta', 'score'], 25))).toEqual(['ada'])
+          expect(yield* names(where.lte(['meta', 'score'], 25))).toEqual(['ada', 'grace'])
+          expect(yield* names(where.eq(['meta', 'pro'], true))).toEqual(['ada'])
+          expect(yield* names(where.eq(['meta', 'pro'], false))).toEqual(['grace'])
+          expect(yield* names(where.eq(['meta', 'tags', 0], 'x'))).toEqual(['ada'])
+          expect(yield* names(where.oneOf(['meta', 'team', 'id'], ['core', 'infra']))).toEqual([
+            'ada',
+            'grace',
+          ])
+          expect(yield* names(where.notOneOf(['meta', 'team', 'id'], ['core']))).toEqual(['grace'])
+          expect(yield* names(where.like(['meta', 'team', 'id'], 'in%'))).toEqual(['grace'])
+          expect(yield* names(where.ilike(['meta', 'team', 'id'], 'CO%'))).toEqual(['ada'])
+          expect(yield* names(where.startsWith(['meta', 'team', 'id'], 'cor'))).toEqual(['ada'])
+          // missing key and JSON null are both null
+          expect(yield* names(where.isNull(['meta', 'team']))).toEqual(['linus', 'nobody'])
+          expect(yield* names(where.isNull(['meta', 'note']))).toEqual([
+            'ada',
+            'grace',
+            'linus',
+            'nobody',
+          ])
+          expect(yield* names(where.notNull(['meta', 'pro']))).toEqual(['ada', 'grace'])
+          expect(yield* names(where.eq(['meta', 'team', 'id'], null))).toEqual(['linus', 'nobody'])
+          expect(
+            yield* names(
+              where.and(where.eq(['meta', 'tags', 0], 'y'), where.not(where.eq('name', 'x'))),
+            ),
+          ).toEqual(['grace'])
+          expect(
+            yield* db
+              .query('users')
+              .filter(where.gt(['meta', 'score'], 0))
+              .count(),
+          ).toBe(2)
+
+          // path filters also guard writes (a scoped handle)
+          const core = db.scoped(where.eq(['meta', 'team', 'id'], 'core'))
+          expect((yield* core.query('users').collect()).map((row: AnyType) => row.name)).toEqual([
+            'ada',
+          ])
+
+          // only json columns can be reached into; segments must be addressable
+          const text = yield* attempt(
+            db
+              .query('users')
+              .filter(where.eq(['name', 'x'], 1))
+              .collect(),
+          )
+          expect((text as AnyType).error).toBe(DbErrors.Validation)
+          const quote = yield* attempt(
+            db
+              .query('users')
+              .filter(where.eq(['meta', 'a"b'], 1))
+              .collect(),
+          )
+          expect((quote as AnyType).error).toBe(DbErrors.Validation)
+        }),
+      )
+    })
+
+    it('import keeps _id / timestamps / _version; stripSystem makes a fresh copy', async () => {
+      unwrap(
+        await run(function* () {
+          const db = yield* bootstrap()
+          const version = '01HZZZZZZZZZZZZZZZZZZZ'
+          const [kept] = yield* db.import('users', [
+            {
+              _id: 'fixed-id',
+              _created_at: 5,
+              _updated_at: 7,
+              _version: version,
+              name: 'ada',
+              age: 36,
+            },
+          ])
+          expect([kept._id, kept._created_at, kept._updated_at, kept._version]).toEqual([
+            'fixed-id',
+            5,
+            7,
+            version,
+          ])
+          const read = yield* db.get('users', 'fixed-id')
+          expect([read._created_at, read._updated_at, read._version, read.age]).toEqual([
+            5,
+            7,
+            version,
+            36,
+          ])
+          // the import is a change like any other
+          const log = yield* Db.actions.log('users')
+          expect(log.some(entry => entry.id === 'fixed-id' && entry.op === 'insert')).toBe(true)
+
+          // missing stamps are filled in; `_updated_at` follows `_created_at`
+          const [partial] = yield* db.import('users', [
+            { _id: 'second', _created_at: 11, name: 'grace' },
+          ])
+          expect([partial._created_at, partial._updated_at]).toEqual([11, 11])
+          expect(partial._version).toMatch(TOKEN)
+
+          const duplicate = yield* attempt(db.import('users', [{ _id: 'fixed-id', name: 'x' }]))
+          expect((duplicate as AnyType).error).toBe(DbErrors.Unique)
+          for (const bad of [
+            { name: 'no-id' },
+            { _id: '', name: 'empty-id' },
+            { _id: 'a', _created_at: -1, name: 'neg' },
+            { _id: 'b', _created_at: 1.5, name: 'frac' },
+            { _id: 'c', _version: 'nope', name: 'ver' },
+          ]) {
+            const failed = yield* attempt(db.import('users', [bad]))
+            expect([bad.name, (failed as AnyType).error]).toEqual([bad.name, DbErrors.Validation])
+          }
+
+          // a copy under a new identity
+          const copy = yield* db.insert('users', { ...stripSystem(read), name: 'ada-copy' })
+          expect(copy._id).not.toBe('fixed-id')
+          expect(copy._created_at).toBeGreaterThan(5)
+          expect(copy.age).toBe(36)
+          expect(Object.keys(stripSystem(read)).some(key => key.startsWith('_'))).toBe(false)
         }),
       )
     })

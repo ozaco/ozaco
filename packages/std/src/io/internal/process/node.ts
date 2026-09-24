@@ -7,7 +7,16 @@ import { IOErrors } from '../../errors'
 import type { IODef } from '../../types/io'
 import { fromReadable } from '../stream/from-readable'
 
-import { concatBytes, errorMessage, makeStatus, normalizeSpawn, toBytes } from './shared'
+import {
+  concatBytes,
+  emptyByteFlow,
+  errorMessage,
+  inheritedStdinWrite,
+  makeStatus,
+  normalizeSpawn,
+  resolveStdio,
+  toBytes,
+} from './shared'
 
 /**
  * Run a command to completion with `node:child_process`, buffering stdout/stderr. A non-zero exit
@@ -57,10 +66,14 @@ export function* nodeExec(cmd: string, args?: readonly string[], options?: IODef
  */
 export function* nodeSpawn(cmd: string, args?: readonly string[], options?: IODef.SpawnOptions) {
   const config = normalizeSpawn(options)
+  const stdio = resolveStdio(options?.stdio)
 
   let child
   try {
-    child = childSpawn(cmd, [...(args ?? [])], { ...config })
+    child = childSpawn(cmd, [...(args ?? [])], {
+      ...config,
+      stdio: [stdio.stdin, stdio.stdout, stdio.stderr],
+    })
   } catch (error) {
     return yield* fail(IOErrors.SpawnFailed, `failed to spawn "${cmd}": ${errorMessage(error)}`)
   }
@@ -75,7 +88,9 @@ export function* nodeSpawn(cmd: string, args?: readonly string[], options?: IODe
 
   // guard against an unhandled 'error' on child.stdin (EPIPE when the child closed its read end):
   // `write()` surfaces the failure through its own callback; this listener only prevents the crash.
-  child.stdin.on('error', () => {})
+  // an inherited stream is `null` on the child — every use below checks
+  const { stdin, stdout, stderr } = child
+  stdin?.on('error', () => {})
 
   const exited = function* () {
     try {
@@ -86,9 +101,13 @@ export function* nodeSpawn(cmd: string, args?: readonly string[], options?: IODe
   }
 
   const write = function* (chunk: Uint8Array | string) {
+    if (!stdin) {
+      return yield* inheritedStdinWrite()
+    }
+
     return yield* until(
       new Promise<void>((resolve, reject) => {
-        child.stdin.write(toBytes(chunk), error => {
+        stdin.write(toBytes(chunk), error => {
           if (error) {
             reject(error)
           } else {
@@ -100,9 +119,13 @@ export function* nodeSpawn(cmd: string, args?: readonly string[], options?: IODe
   }
 
   const closeStdin = function* () {
+    if (!stdin) {
+      return
+    }
+
     return yield* until(
       new Promise<void>(resolve => {
-        child.stdin.end(() => {
+        stdin.end(() => {
           resolve()
         })
       }),
@@ -119,8 +142,8 @@ export function* nodeSpawn(cmd: string, args?: readonly string[], options?: IODe
 
   const handle: IODef.ProcessHandle = {
     pid: child.pid ?? -1,
-    stdout: fromReadable(child.stdout),
-    stderr: fromReadable(child.stderr),
+    stdout: stdout ? fromReadable(stdout) : emptyByteFlow(),
+    stderr: stderr ? fromReadable(stderr) : emptyByteFlow(),
     exited,
     write,
     closeStdin,

@@ -1,7 +1,8 @@
-import { CliErrors, Terminal } from 'cli:core'
+import { CliCauses, CliErrors, describeFailure, isReported, Terminal } from 'cli:core'
 import { usePalette } from 'cli:palette'
-import { useContext } from 'std:effect'
-import { fail } from 'std:result'
+import type { Operation } from 'std:effect'
+import { attempt, useContext } from 'std:effect'
+import { appendCauses, fail, isFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import { VERSION_FLAGS } from '../const'
@@ -10,13 +11,36 @@ import type { CommandDef } from '../types/command'
 import type { Helpers } from '../types/helpers'
 import type { RegistryDef } from '../types/registry'
 
-import { processArgv } from './argv'
+import { hasFlag, processArgv } from './argv'
 import { renderProgramHelp } from './help'
 import { buildNode } from './node'
 import { runCommand } from './run'
 
-const hasFlag = (argv: string[], flags: string[]): boolean =>
-  argv.some(token => flags.includes(token))
+function* program(args: string[], options: RegistryDef.RunOptions): Operation<void> {
+  const ctx = yield* useContext(Registry)
+  const palette = yield* usePalette()
+  const head = args[0]
+
+  if (head !== undefined && !head.startsWith('-')) {
+    const node = ctx.commands.get(head) as AnyType as Helpers.RuntimeNode | undefined
+    if (node !== undefined) {
+      return yield* runCommand(node, args.slice(1), options)
+    }
+    const help = renderProgramHelp(ctx, palette)
+    yield* Terminal.actions.write(
+      `${palette.colors.error(`Unknown command '${head}'`)}\n\n${help}\n`,
+      { stream: 'stderr' },
+    )
+    return yield* fail(CliErrors.Unknown, `Unknown command '${head}'`, CliCauses.Reported)
+  }
+
+  if (ctx.version !== undefined && hasFlag(args, VERSION_FLAGS)) {
+    yield* Terminal.actions.write(`${ctx.version}\n`)
+    return
+  }
+
+  yield* Terminal.actions.write(`${renderProgramHelp(ctx, palette)}\n`)
+}
 
 export function* register(command: RegistryDef.Command) {
   const spec = command as AnyType as CommandDef.Spec
@@ -37,28 +61,29 @@ export function* get(name: string) {
   return ctx.commands.get(name)
 }
 
-export function* run(argv?: string[]) {
-  const ctx = yield* useContext(Registry)
-  const palette = yield* usePalette()
+/**
+ * Dispatch argv. Parse errors and unknown commands are rendered here (message + help, on stderr)
+ * and fail marked `CliCauses.Reported`. With `{ report: true }` a failing handler is rendered too —
+ * once, as `tag: message` + causes — and marked, so the caller checks `isReported` instead of
+ * logging it a second time. The failure is still returned (for the exit code).
+ */
+export function* run(argv?: string[], options: RegistryDef.RunOptions = {}) {
   const args = (argv ?? processArgv()).slice()
-  const head = args[0]
 
-  if (head !== undefined && !head.startsWith('-')) {
-    const node = ctx.commands.get(head) as AnyType as Helpers.RuntimeNode | undefined
-    if (node !== undefined) {
-      return yield* runCommand(node, args.slice(1))
-    }
-    const help = renderProgramHelp(ctx, palette)
-    yield* Terminal.actions.write(
-      `${palette.colors.error(`unknown command: ${head}`)}\n\n${help}\n`,
-    )
-    return yield* fail(CliErrors.Unknown, `unknown command: ${head}`)
+  if (options.report !== true) {
+    return yield* program(args, options)
   }
 
-  if (ctx.version !== undefined && hasFlag(args, VERSION_FLAGS)) {
-    yield* Terminal.actions.write(`${ctx.version}\n`)
+  const outcome = yield* attempt(() => program(args, options))
+  if (!isFailure(outcome)) {
     return
   }
-
-  yield* Terminal.actions.write(`${renderProgramHelp(ctx, palette)}\n`)
+  if (!isReported(outcome)) {
+    const palette = yield* usePalette()
+    yield* Terminal.actions.write(`${palette.colors.error(describeFailure(outcome))}\n`, {
+      stream: 'stderr',
+    })
+    appendCauses(outcome, CliCauses.Reported)
+  }
+  return yield* outcome
 }

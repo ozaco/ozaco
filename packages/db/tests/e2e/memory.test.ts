@@ -1,6 +1,6 @@
-import { MemoryAdapter } from 'db:impl/memory'
+import { runAdapterSuite } from 'db:testing'
 
-import { runAdapterSuite } from './helpers'
+import { MemoryAdapter } from 'db:impl/memory'
 
 runAdapterSuite({
   label: 'memory',

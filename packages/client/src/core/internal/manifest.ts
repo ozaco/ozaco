@@ -2,11 +2,12 @@ import type { Operation } from 'std:effect'
 import { until } from 'std:effect'
 import { fail, isFailure } from 'std:result'
 
-import { DEFAULT_DOCS_PATH } from '../const'
+import { DEFAULT_DOCS_PATH, HEADERS } from '../const'
 import { ClientErrors } from '../errors'
 import type { ClientDef } from '../types/client'
 import type { ManifestDef } from '../types/manifest'
 
+import { failureOf } from './decode'
 import { authorization } from './http'
 
 export function* manifestOf(ctx: ClientDef.Context): Operation<ManifestDef.Manifest> {
@@ -38,8 +39,13 @@ export function* manifestOf(ctx: ClientDef.Context): Operation<ManifestDef.Manif
     )
   }
 
+  // an HTTP failure is the SERVER's answer, not a network error: decoded like an action reply
+  // (its own tag + `status:<code>`), a bare 401/403 read as `client.refused`
   if (!response.ok) {
-    return yield* fail(ClientErrors.Network, `manifest: ${response.status} at ${url}`)
+    return yield* failureOf(response, response.headers.get(HEADERS.requestId), {
+      refused: true,
+      prefix: `manifest (${url}): `,
+    })
   }
 
   const manifest = (yield* until(response.json())) as ManifestDef.Manifest

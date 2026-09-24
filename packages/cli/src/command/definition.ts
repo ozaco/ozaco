@@ -34,18 +34,19 @@ export const DefaultRegistry = Registry.implement<
 
 /**
  * Define a leaf subcommand (mirrors server's `defineAction`). The `input` schema types the
- * handler's `ctx` (`StandardSchemaV1.InferOutput`); `short` maps fields to short flags; `args`
- * lists fields fillable positionally; `options` declares flags manually (required for non-zod
- * schemas — see internal/schema). Pure metadata-carrying handler — the runner parses+validates
- * before calling.
+ * handler's `ctx` (`StandardSchemaV1.InferOutput`, plus the runtime `'--'`/`cwd` fields); `short`
+ * maps fields to short flags; `args` lists fields fillable positionally (a trailing array field is
+ * variadic); `options` declares flags manually (required for non-zod schemas — see
+ * internal/schema); `examples` feed help. Pure metadata-carrying handler — the runner
+ * parses+validates before calling.
  */
 export function defineAction<S extends StandardSchemaV1, R>(
   config: CommandDef.ActionConfig<S> & { input: S },
-  handler: (ctx: StandardSchemaV1.InferOutput<S>) => Operation<R>,
+  handler: (ctx: CommandDef.Ctx<S>) => Operation<R>,
 ): CommandDef.Action<S, R>
 export function defineAction<R>(
   config: Omit<CommandDef.ActionConfig, 'input'>,
-  handler: (ctx: EmptyType) => Operation<R>,
+  handler: (ctx: EmptyType & CommandDef.Runtime) => Operation<R>,
 ): CommandDef.Action<unknown, R>
 export function defineAction(config: AnyType, handler: AnyType): AnyType {
   return Object.assign(handler, {
@@ -55,6 +56,7 @@ export function defineAction(config: AnyType, handler: AnyType): AnyType {
     options: config.options,
     short: config.short,
     args: config.args,
+    examples: config.examples,
   })
 }
 
@@ -62,7 +64,8 @@ export function defineAction(config: AnyType, handler: AnyType): AnyType {
  * Define a command. Returns a pure spec (no plugin is built here) — the registry compiles it into a
  * path-identified plugin tree at `register`, and installs each level lazily as dispatch descends
  * into it. `actions` mixes leaf actions (`defineAction`, split into `leaf`) and nested commands
- * (`subs`).
+ * (`subs`). `input`/`options`/`short` declare options inherited by every action below this command
+ * (see {@link CommandDef.Inherited}); `examples` feed help.
  */
 export const defineCommand = <TContext = unknown, TArgs extends unknown[] = []>(
   options: CommandDef.Options<TContext, TArgs>,
@@ -86,5 +89,10 @@ export const defineCommand = <TContext = unknown, TArgs extends unknown[] = []>(
     leaf,
     subs,
     setup: options.setup,
+    inherit:
+      options.input === undefined && options.options === undefined
+        ? undefined
+        : { input: options.input, options: options.options, short: options.short },
+    examples: options.examples,
   } as CommandDef.Spec<TContext, TArgs>
 }

@@ -66,6 +66,15 @@ export namespace ConfigDef {
 
     /** Enabled config features (default `Features.ALL`). */
     features?: Features | undefined
+
+    /** Target ONE file instead of discovering: `load`/`refresh` read exactly this path (its own
+     * `extends` still resolve — they are part of the file), it is the working file `set`/`save`
+     * write, and no parent walk, variant, config-dir or env overlay applies. `name`, `dot`,
+     * `variant`, `home` and `features` are then ignored, `load(cwd)`'s argument too; `ext`
+     * defaults to the path's own extension (so the codec need not declare one). A missing file
+     * loads as empty and is created by the first `save`. Pair it with `open` for a side config:
+     * `Config.actions.open({ path, codec: JsonCodec })`. */
+    path?: string | undefined
   }
 
   export interface Context {
@@ -82,6 +91,8 @@ export namespace ConfigDef {
     variantOption?: string | undefined
     home: string
     features: Features
+    /** The single targeted file (`Options.path`) — set ⇒ discovery is skipped entirely. */
+    path?: string | undefined
 
     /** Discovered chain, innermost → outermost. Per dir: variant → dir files → base (`extends` resolved). */
     chain: ConfigDef.Source[]

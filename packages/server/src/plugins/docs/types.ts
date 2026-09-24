@@ -9,7 +9,8 @@ export namespace DocsDef {
     /** Gate EVERY docs route (panel, manifest, OpenAPI) behind an `Auth` requirement — the
      * same shapes the `auth` action option takes; the bearer travels in the `authorization`
      * header (the client sends it on its manifest fetch). Needs the `Auth` plugin. Default:
-     * open. */
+     * open — explicitly `auth: false` on the routes, so a fail-closed `Auth` default does not
+     * close the docs; pass `auth` to gate them. */
     readonly auth?: OptionsDef.Requirement | undefined
   }
 

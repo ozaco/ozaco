@@ -102,6 +102,9 @@ export namespace Helpers {
 
     /** the `groupBy` keys of a grouped terminal. */
     readonly groupBy: readonly string[] | null
+
+    /** rows to skip before the row terminals start (`skip(n)`); `null` = none. */
+    readonly offset: number | null
   }
 
   /** Inputs of a single-document watch. */
@@ -124,6 +127,9 @@ export namespace Helpers {
      * result that touches none of them cannot affect it (the `fields` skip). */
     readonly fields: ReadonlySet<string>
     readonly load: () => Operation<readonly Spec.Doc[]>
+
+    /** the query skips rows (`skip(n)`): a delete outside the result may still shift it. */
+    readonly windowed?: boolean | undefined
 
     /** answer a `since` token from the change log (`internal/log.ts`). */
     readonly resolve: (since: string) => Operation<'skip' | 'recompute' | 'snapshot'>

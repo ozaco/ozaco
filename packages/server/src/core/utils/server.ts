@@ -150,6 +150,9 @@ export function* createServer<const TServices extends readonly ServiceDef.Servic
           method: 'GET',
           path: health,
 
+          // probes (load balancers, orchestrators) carry no bearer — always public
+          auth: false,
+
           *handler() {
             const body = yield* healthOf(state, kernel, members)
             return Response.json(body, { status: body.ready ? 200 : 503 })

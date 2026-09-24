@@ -20,6 +20,26 @@ export const DAY = 24 * HOUR
 
 // --- shared by the coordinator and every strategy ------------------------------------------------
 
+/** Headers as a lower-cased record: a web `Headers` or a record in any casing. */
+export const headerRecord = (headers: AuthDef.HeadersLike): Record<string, string> => {
+  const record: Record<string, string> = {}
+
+  if (headers instanceof Headers) {
+    // oxlint-disable-next-line unicorn/no-array-for-each
+    headers.forEach((value, key) => {
+      record[key.toLowerCase()] = value
+    })
+
+    return record
+  }
+
+  for (const [key, value] of Object.entries(headers)) {
+    record[key.toLowerCase()] = value
+  }
+
+  return record
+}
+
 /** The bearer token of a request, if any. */
 export const bearerOf = (headers: Readonly<Record<string, string>>): string | null => {
   const header = headers.authorization ?? headers.Authorization

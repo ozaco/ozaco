@@ -1,5 +1,7 @@
 import type { AnyType } from 'std:shared'
 
+import type { IODef } from './io'
+
 /** The shapes this module passes around inside itself. */
 export namespace Helpers {
   /** Per-origin HLC send state (last minted time + same-ms counter) — nothing to do with wall
@@ -13,6 +15,13 @@ export namespace Helpers {
     cwd?: string
     env?: Record<string, string>
     timeout?: number
+  }
+
+  /** `SpawnOptions.stdio` resolved per stream. */
+  export interface StdioConfig {
+    stdin: IODef.StdioMode
+    stdout: IODef.StdioMode
+    stderr: IODef.StdioMode
   }
 
   /** Fully-resolved S3 settings (options merged over the env fallbacks). */

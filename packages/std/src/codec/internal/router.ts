@@ -1,5 +1,5 @@
 import type { Subscription } from 'std:effect'
-import { attempt, filter, some, toSorted, useContext } from 'std:effect'
+import { attempt, filter, toSorted, useContext } from 'std:effect'
 import { fail, isSuccess } from 'std:result'
 
 import { Codec } from '../definition'
@@ -27,22 +27,32 @@ export const codecRegisterHandler: CodecDef.Handlers['register'] = function* (
 ) {
   const existing = yield* codecGetTransportsHandler()
 
-  if (
-    yield* some(existing, function* (target) {
-      const targetCtx = yield* useContext(target)
+  let conflict = false
+  let reinstall = false
+  for (const target of existing) {
+    if ((yield* useContext(target)).name !== transportCtx.name) {
+      continue
+    }
 
-      return targetCtx.name === transportCtx.name
-    })
-  ) {
+    // the SAME impl under the same name — typically a child scope re-installing a codec its parent
+    // already registered — is idempotent; only a DIFFERENT impl claiming the name conflicts
+    if (target === transport) {
+      reinstall = true
+    } else {
+      conflict = true
+    }
+  }
+
+  if (conflict) {
     return yield* fail(
       CodecErrors.AlreadyRegistered,
       `codec ${transportCtx.name} is already registered`,
     )
   }
 
-  yield* CodecRegistryContext.set(
-    yield* sortedCodecs([...existing, transport], transport, transportCtx),
-  )
+  // a re-install keeps its single entry but re-sorts it: the new install may carry a new priority
+  const entries = reinstall ? existing : [...existing, transport]
+  yield* CodecRegistryContext.set(yield* sortedCodecs(entries, transport, transportCtx))
 }
 
 export const codecUnregisterHandler: CodecDef.Handlers['unregister'] = function* (transport) {

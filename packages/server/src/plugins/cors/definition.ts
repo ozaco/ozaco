@@ -1,5 +1,6 @@
 import type { ServerDef } from 'server:core'
 import { HEADERS, Server, ServerErrors } from 'server:core'
+import { rewrapResponse } from 'server:internal'
 import { definePlugin } from 'std:plugin'
 import { fail } from 'std:result'
 
@@ -50,7 +51,7 @@ export const Cors = definePlugin<ServerDef.PluginContext, [options?: CorsDef.Opt
             if (origin === null) {
               return response
             }
-            const out = new Response(response.body, response)
+            const out = rewrapResponse(response)
             out.headers.set('access-control-allow-origin', origin)
             out.headers.set('access-control-expose-headers', config.exposeHeaders)
             if (config.credentials) {

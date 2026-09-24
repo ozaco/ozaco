@@ -53,7 +53,11 @@ export const openScreen = (
 
   const state: Helpers.State = {
     written: '',
-    size: { columns: options.columns ?? 80, rows: options.rows ?? 24 },
+    errors: '',
+    size:
+      options.columns === undefined
+        ? { columns: 80, rows: options.rows ?? 24, fallback: true }
+        : { columns: options.columns, rows: options.rows ?? 24 },
     raw: false,
     onText: null,
     onResize: null,
@@ -81,11 +85,12 @@ export const openScreen = (
     },
 
     interrupt: () => state.onInterrupt?.(),
-    read: () => state.written,
-    plain: () => stripAnsi(state.written),
+    read: (stream = 'stdout') => (stream === 'stderr' ? state.errors : state.written),
+    plain: (stream = 'stdout') => stripAnsi(stream === 'stderr' ? state.errors : state.written),
 
     clear: () => {
       state.written = ''
+      state.errors = ''
     },
 
     setSize: size => {
@@ -103,8 +108,12 @@ export const openScreen = (
   }
 
   const handle: Driver.Handle = {
-    write: text => {
-      state.written += text
+    write: (text, stream) => {
+      if (stream === 'stderr') {
+        state.errors += text
+      } else {
+        state.written += text
+      }
     },
     size: () => state.size,
 

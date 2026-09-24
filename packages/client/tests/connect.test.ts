@@ -8,6 +8,7 @@ import type { ClientDef } from 'client:core'
 import { connectClient, createClient } from 'client:core'
 import { run, until } from 'std:effect'
 import { isFailure, unwrap } from 'std:result'
+import type { AnyType } from 'std:shared'
 
 import { describe, expect, it } from 'bun:test'
 
@@ -75,6 +76,38 @@ describe('connectClient — Futures in promise land', () => {
             const materialized = second.value as ClientDef.Materialized<{ title: string }>
             expect(materialized.rows.map(row => row.title)).toEqual(['live'])
             await rows.cancel()
+
+            await client.$close()
+          })(),
+        )
+      }),
+    )
+  })
+
+  it('$scope: an operation run in the session scope `yield*`s calls inline', async () => {
+    unwrap(
+      await run(function* () {
+        const { url } = yield* boot()
+
+        yield* until(
+          (async () => {
+            const client = await connectClient<Api>({ url })
+
+            // the session scope carries the client's contexts (IO, codec, ws): inline calls work
+            const task = client.$scope.run(function* () {
+              const made = yield* client.demo.make({ title: 'scoped' })
+              const echoed = yield* client.demo.echo({ text: 'hi' })
+
+              return { made, echoed }
+            })
+            const outcome = unwrap(await task)
+
+            expect(outcome.made).toEqual({ id: 'n1', title: 'scoped' })
+            expect(outcome.echoed).toEqual({ text: 'hi' })
+
+            // `$`-keys are reserved: an unknown one never turns into a service proxy
+            expect((client as AnyType).$nope).toBeUndefined()
+            expect((client as AnyType).$scope).toBe(client.$scope)
 
             await client.$close()
           })(),

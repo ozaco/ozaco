@@ -10,7 +10,10 @@ import { wsMock } from './helpers'
 
 /** What the `impl` constructor received for the last socket: the standard `protocols` second arg
  * or the Bun/Node options-object form. */
-type ConstructorArg = string | string[] | { protocols?: string | string[]; headers?: AnyType }
+type ConstructorArg =
+  | string
+  | string[]
+  | { protocols?: string | string[]; headers?: AnyType; tls?: AnyType }
 
 const constructed: { url: string; arg: ConstructorArg | undefined }[] = []
 
@@ -95,6 +98,21 @@ describe('dial: constructor arguments', () => {
     expect(seen.arg).toEqual({ headers })
   })
 
+  it('tls alone produces the options-object form carrying only tls', async () => {
+    const tls = { ca: 'PEM', rejectUnauthorized: false }
+    const seen = await dialWith({ tls })
+
+    expect(seen.arg).toEqual({ tls })
+  })
+
+  it('tls rides alongside headers and protocols in the options-object form', async () => {
+    const headers = { authorization: 'Bearer token' }
+    const tls = { cert: 'CERT', key: 'KEY' }
+    const seen = await dialWith({ headers, protocols: 'json', tls })
+
+    expect(seen.arg).toEqual({ headers, protocols: 'json', tls })
+  })
+
   it('in a browser (document + window present) headers are dropped and protocols pass plainly', async () => {
     const globals = globalThis as AnyType
     const hadDocument = 'document' in globals
@@ -110,9 +128,11 @@ describe('dial: constructor arguments', () => {
         protocols: ['json'],
       })
       const headersOnly = await dialWith({ headers: { authorization: 'Bearer token' } })
+      const tlsOnly = await dialWith({ tls: { rejectUnauthorized: false } })
 
       expect(withProtocols.arg).toEqual(['json'])
       expect(headersOnly.arg).toBeUndefined()
+      expect(tlsOnly.arg).toBeUndefined()
     } finally {
       if (hadDocument) {
         globals.document = previousDocument

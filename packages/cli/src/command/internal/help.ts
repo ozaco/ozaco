@@ -22,41 +22,119 @@ const flagsFor = (info: CommandDef.OptionInfo, short: Record<string, string>): s
   return `${lead}${hint}`
 }
 
-/** Usage + options for a single action (subcommand). */
+const showDefault = (value: unknown): string => {
+  if (typeof value === 'string') {
+    return JSON.stringify(value)
+  }
+  if (Array.isArray(value) && value.length === 0) {
+    return '[]'
+  }
+  return Array.isArray(value) ? value.map(showDefault).join(', ') : String(value)
+}
+
+/** The right column of an option/argument line: description, then the muted metadata. */
+const detailsFor = (
+  info: CommandDef.OptionInfo | undefined,
+  palette: PaletteDef.Context,
+): string => {
+  if (info === undefined) {
+    return ''
+  }
+  const notes: string[] = []
+  if (info.enum !== undefined) {
+    notes.push(`choices: ${info.enum.join('|')}`)
+  }
+  if (info.hasDefault) {
+    notes.push(`default: ${showDefault(info.default)}`)
+  } else if (info.required) {
+    notes.push('required')
+  }
+  const meta = notes.length === 0 ? '' : palette.colors.muted(`(${notes.join(', ')})`)
+  return [info.description ?? '', meta].filter(part => part !== '').join(' ')
+}
+
+/** `<name>` for a required positional, `[name]` for an optional one, `...` for a variadic tail. */
+const argLabel = (
+  name: string,
+  info: CommandDef.OptionInfo | undefined,
+  variadic: boolean,
+): string => {
+  const label = variadic ? `${name}...` : name
+  return info !== undefined && info.required && !info.hasDefault ? `<${label}>` : `[${label}]`
+}
+
+const examplesSection = (
+  examples: readonly CommandDef.Example[],
+  palette: PaletteDef.Context,
+): string[] =>
+  examples.length === 0
+    ? []
+    : [
+        '',
+        palette.colors.bold('Examples:'),
+        ...section(
+          examples.map(example => [
+            example.run,
+            example.note === undefined ? '' : palette.colors.muted(example.note),
+          ]),
+          palette.colors.accent,
+        ),
+      ]
+
+/**
+ * Usage, arguments, options and examples for a single action (subcommand). Positional `args`
+ * fields render as `<name>` under `Arguments:` (not as flags); descriptions, defaults and required
+ * marks come from the resolved option metadata (the input schema's JSON Schema or the manual
+ * declarations).
+ */
 export const renderActionHelp = (
   action: Helpers.ActionHelp,
   palette: PaletteDef.Context,
 ): string => {
   const { colors } = palette
   const out: string[] = []
+  const byName = new Map(action.infos.map(info => [info.name, info]))
+  const positional = new Set(action.args)
+  const flags = action.infos.filter(info => !positional.has(info.name))
 
   if (action.description !== undefined) {
     out.push(action.description, '')
   }
 
+  const labels = action.args.map((arg, index) => {
+    const info = byName.get(arg)
+    return argLabel(arg, info, info?.array === true && index === action.args.length - 1)
+  })
   const usage = [...action.path]
-  if (action.infos.length > 0) {
+  if (flags.length > 0) {
     usage.push('[options]')
   }
-  for (const arg of action.args) {
-    usage.push(`<${arg}>`)
-  }
+  usage.push(...labels)
   out.push(`${colors.bold('Usage:')} ${usage.join(' ')}`)
 
-  if (action.infos.length > 0) {
+  if (action.args.length > 0) {
     out.push(
       '',
-      colors.bold('Options:'),
+      colors.bold('Arguments:'),
       ...section(
-        action.infos.map(info => {
-          const choices =
-            info.enum === undefined ? '' : ` ${colors.muted(`(choices: ${info.enum.join('|')})`)}`
-          return [flagsFor(info, action.short), choices]
-        }),
+        action.args.map((arg, index) => [labels[index]!, detailsFor(byName.get(arg), palette)]),
         colors.accent,
       ),
     )
   }
+
+  if (flags.length > 0) {
+    out.push(
+      '',
+      colors.bold('Options:'),
+      ...section(
+        flags.map(info => [flagsFor(info, action.short), detailsFor(info, palette)]),
+        colors.accent,
+      ),
+    )
+  }
+
+  out.push(...examplesSection(action.examples, palette))
 
   return out.join('\n')
 }
@@ -96,6 +174,8 @@ export const renderCommandHelp = (
       ),
     )
   }
+
+  out.push(...examplesSection(node.examples ?? [], palette))
 
   return out.join('\n')
 }

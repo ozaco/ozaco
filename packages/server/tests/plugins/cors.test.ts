@@ -1,9 +1,12 @@
 import { createServer, Edge } from 'server:core'
 import { Cors } from 'server:plugins'
-import { run } from 'std:effect'
+import { run, until } from 'std:effect'
 import { unwrap } from 'std:result'
 
 import { describe, expect, it } from 'bun:test'
+import { mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 import { BunEdge } from 'server:impl/edge/bun'
 
@@ -47,6 +50,47 @@ describe('cors', () => {
         expect(preflight.status).toBe(204)
         expect(preflight.headers.get('access-control-allow-methods')).toContain('POST')
         expect(preflight.headers.get('access-control-max-age')).toBe('600')
+        yield* server.stop()
+      }),
+    )
+  })
+
+  it('keeps the content-type a Bun.file body brings along (decorated, request id stamped)', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'oz-cors-'))
+    const file = join(dir, 'page.html')
+    writeFileSync(file, '<b>hi</b>')
+
+    unwrap(
+      await run(function* () {
+        yield* storage()
+        const server = yield* createServer({
+          services: [todos],
+          edge: BunEdge,
+          plugins: [Cors.use({ origins: ['https://app.test'] })],
+        })
+        const info = yield* server.start({ port: 0 })
+        yield* Edge.actions.raw({
+          method: 'GET',
+          path: '/page',
+          *handler() {
+            return new Response(Bun.file(file))
+          },
+        })
+        const response = yield* Edge.actions.handle(
+          new Request('http://edge/page', { headers: { origin: 'https://app.test' } }),
+        )
+        expect(response.headers.get('access-control-allow-origin')).toBe('https://app.test')
+        expect(response.headers.get('content-type')).toContain('text/html')
+        expect(response.headers.get('x-request-id')).toBeTruthy()
+        expect(yield* until(response.text())).toBe('<b>hi</b>')
+
+        // over a real socket too: the driver's body tracking keeps it as well
+        const served = yield* until(
+          fetch(`${info.url}/page`, { headers: { origin: 'https://app.test' } }),
+        )
+        expect(served.headers.get('content-type')).toContain('text/html')
+        expect(served.headers.get('access-control-allow-origin')).toBe('https://app.test')
+        expect(yield* until(served.text())).toBe('<b>hi</b>')
         yield* server.stop()
       }),
     )

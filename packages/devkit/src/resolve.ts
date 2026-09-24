@@ -60,6 +60,9 @@ const SERVER_MODULES: Record<string, ModuleEntry> = {
 const DB_MODULES: Record<string, ModuleEntry> = {
   'db:core': { subpath: '', source: 'core/index.ts' },
   'db:internal': { subpath: 'internal', source: 'internal.ts' },
+  'db:adapter-kit': { subpath: 'adapter-kit', source: 'adapter-kit.ts' },
+  'db:queue': { subpath: 'queue', source: 'queue/index.ts' },
+  'db:testing': { subpath: 'testing', source: 'testing/index.ts' },
   'db:impl/memory': { subpath: 'impl/memory', source: 'impl/memory/index.ts' },
   'db:impl/sqlite': { subpath: 'impl/sqlite', source: 'impl/sqlite/index.ts' },
   'db:impl/pg': { subpath: 'impl/pg', source: 'impl/pg/index.ts' },
@@ -365,6 +368,39 @@ const clientResolve: UnpluginInstance<ResolveOptions | undefined, false> = creat
     ),
 )
 
+/** The slice of tsdown's `inputOptions` hook this needs — kept structural so devkit does not
+ * depend on tsdown's types. */
+interface DeclarationBuild {
+  readonly cjsDts?: boolean | undefined
+}
+
+/**
+ * tsdown builds a dual package's `.d.cts` in a SEPARATE rolldown pass and leaves the user
+ * `plugins` out of it (0.23: `if (!cjsDts) plugins.push(userPlugins)`), so the resolvers never
+ * see it: an external alias either leaks as `from "std:effect"` (TS2307 for every CJS consumer)
+ * or — where a tsconfig path maps it — gets its source inlined, so the `.d.cts` carries its own
+ * copy of every std type instead of importing `@ozaco/std`. As `inputOptions`, this hands that
+ * pass ONE resolver for every family (std, transport, db, server, client, ai, cli), each alias
+ * pointing at its published package — what a declaration file must name whatever the build
+ * bundles:
+ *
+ * ```ts
+ * export default defineConfig({ plugins: [...], inputOptions: withDeclarationPlugins() })
+ * ```
+ */
+const withDeclarationPlugins = () => {
+  const resolver = resolveFactory('@ozaco/devkit:resolve:declarations')(
+    KIT_MODULES.flatMap(([modules, pkg]) => buildBindings(modules, pkg, undefined)),
+    true,
+  )
+
+  return <T extends { plugins?: unknown }>(
+    options: T,
+    _format: string,
+    build?: DeclarationBuild,
+  ): T => (build?.cjsDts ? { ...options, plugins: [options.plugins, resolver] } : options)
+}
+
 export {
   aiResolve,
   clientResolve,
@@ -375,5 +411,6 @@ export {
   serverResolve,
   stdResolve,
   transportResolve,
+  withDeclarationPlugins,
 }
 export type { KitResolveOptions, ResolveAliasOptions, ResolveOptions }

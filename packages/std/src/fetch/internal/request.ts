@@ -1,3 +1,4 @@
+// oxlint-disable unicorn/no-array-for-each
 import type { Context, Operation } from 'std:effect'
 import { until, useAbortSignal } from 'std:effect'
 import { asFailure, fail } from 'std:result'
@@ -36,19 +37,48 @@ const mergeHeaders = (
 
   const merged = new Headers(defaults)
 
+  // `forEach`, not `for…of`: `Headers` is only iterable under the `DOM.Iterable` lib (ts2488)
+  const override = (value: string, name: string) => merged.set(name, value)
+
   if (input instanceof Request) {
-    for (const [name, value] of input.headers) {
-      merged.set(name, value)
-    }
+    input.headers.forEach(override)
   }
 
   if (headers !== undefined) {
-    for (const [name, value] of new Headers(headers)) {
-      merged.set(name, value)
-    }
+    new Headers(headers).forEach(override)
   }
 
   return merged
+}
+
+/**
+ * A platform transport fault — the connection never produced a response (refused, reset, DNS,
+ * TLS). Fetch rejects those with a `TypeError` (spec) and Bun adds a string `code`
+ * (`ConnectionRefused`, `ECONNRESET`, …); aborts and timeouts are NOT network faults.
+ */
+const isNetworkError = (
+  raw: unknown,
+): raw is { name?: string; code?: unknown; message?: string } => {
+  if (raw === null || typeof raw !== 'object') {
+    return false
+  }
+
+  const { name, code } = raw as { name?: unknown; code?: unknown }
+  if (name === 'AbortError' || name === 'TimeoutError') {
+    return false
+  }
+
+  return raw instanceof TypeError || (raw instanceof Error && typeof code === 'string')
+}
+
+// the platform code when there is one (Bun's refused connection has an EMPTY message), else the
+// platform message, else the error name
+const networkMessage = (raw: { name?: string; code?: unknown; message?: string }): string => {
+  if (typeof raw.code === 'string' && raw.code !== '') {
+    return raw.code
+  }
+
+  return raw.message || raw.name || 'network error'
 }
 
 /**
@@ -59,10 +89,17 @@ const mergeHeaders = (
 export const createRequestAction = (context: Context<FetchDef.Context>) =>
   function* request(input: RequestInfo | URL, init?: FetchDef.Init): Operation<FetchDef.Response> {
     const options = yield* context.expect()
-    const { timeoutMs: initTimeoutMs, headers: initHeaders, codec: initCodec, ...rest } = init ?? {}
+    const {
+      timeoutMs: initTimeoutMs,
+      headers: initHeaders,
+      codec: initCodec,
+      tls: initTls,
+      ...rest
+    } = init ?? {}
 
     const timeoutMs = initTimeoutMs ?? options.timeoutMs
     const codec = initCodec ?? options.codec
+    const tls = initTls ?? options.tls
     const target = resolveInput(input, options.baseUrl)
     const headers = mergeHeaders(options.headers, input, initHeaders)
 
@@ -78,6 +115,10 @@ export const createRequestAction = (context: Context<FetchDef.Context>) =>
       if (headers !== undefined) {
         requestInit.headers = headers
       }
+      if (tls !== undefined) {
+        // Bun's `tls` fetch extension — not in the lib `RequestInit`; other runtimes ignore it
+        ;(requestInit as RequestInit & { tls?: FetchDef.Tls }).tls = tls
+      }
 
       const response = yield* until(impl!(target, requestInit))
 
@@ -89,6 +130,10 @@ export const createRequestAction = (context: Context<FetchDef.Context>) =>
 
       if (timeoutMs !== undefined && (raw as { name?: string } | null)?.name === 'TimeoutError') {
         return yield* fail(FetchErrors.Timeout, `${target}: timed out after ${timeoutMs}ms`)
+      }
+
+      if (isNetworkError(raw)) {
+        return yield* fail(FetchErrors.Network, networkMessage(raw))
       }
 
       return yield* asFailure(error)

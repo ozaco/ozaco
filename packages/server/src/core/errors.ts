@@ -15,6 +15,7 @@ export const ServerErrors = createTags(
   'server',
   'configuration',
   'validation',
+  'output',
   'bad-request',
   'unauthorized',
   'forbidden',
@@ -48,6 +49,7 @@ export const STATUS_OF: Readonly<Record<string, number>> = {
   [ServerErrors.TimeoutPending]: 504,
   [ServerErrors.Cancelled]: 499,
   [ServerErrors.Configuration]: 500,
+  [ServerErrors.Output]: 500,
   [ServerErrors.Internal]: 500,
 
   // the database's own taxonomy, as handlers usually let it through

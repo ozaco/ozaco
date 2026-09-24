@@ -1,6 +1,6 @@
 import type { Adapter, Spec } from 'db:core'
 import { DbAdapter, DbErrors } from 'db:core'
-import { adapterDefaults, matches, sortDocs } from 'db:internal'
+import { adapterDefaults, aggregateDocs, matches, sortDocs } from 'db:internal'
 import type { Operation } from 'std:effect'
 import { attempt, useContext } from 'std:effect'
 import { fail, isFailure } from 'std:result'
@@ -9,10 +9,10 @@ import type { AnyType } from 'std:shared'
 import pkg from '../../../package.json'
 
 import {
-  aggregateDocs,
   applySteps,
   checkUnique,
   clone,
+  createLock,
   filtered,
   keyOf,
   project,
@@ -20,6 +20,7 @@ import {
   snapshotOf,
   StateRef,
   tableOf,
+  TxDepth,
 } from './internal'
 import type { Memory } from './types'
 
@@ -34,7 +35,12 @@ export const MemoryAdapter = DbAdapter.implement<Adapter.Options, []>({
   description: 'In-memory reference adapter',
 
   *setup() {
-    const state: Memory.State = { tables: new Map(), shapes: new Map(), indexes: new Map() }
+    const state: Memory.State = {
+      tables: new Map(),
+      shapes: new Map(),
+      indexes: new Map(),
+      lock: createLock(),
+    }
     yield* StateRef.set(state)
     return {
       adapter: 'memory',
@@ -140,12 +146,21 @@ export const MemoryAdapter = DbAdapter.implement<Adapter.Options, []>({
   // entry point while the outer transaction stays open
   *transaction(body: () => Operation<unknown>) {
     const state = yield* useContext(StateRef)
-    const snapshot = snapshotOf(state)
-    const outcome = yield* attempt(body)
-    if (isFailure(outcome)) {
-      restore(state, snapshot)
-      return yield* outcome
+    const depth = (yield* TxDepth.get()) ?? 0
+    // a top-level transaction waits for the one in flight: its rollback snapshot must not
+    // predate (and so wipe) another transaction's writes
+    const release = depth === 0 ? yield* state.lock.acquire() : null
+
+    try {
+      const snapshot = snapshotOf(state)
+      const outcome = yield* attempt(() => TxDepth.with(depth + 1, body))
+      if (isFailure(outcome)) {
+        restore(state, snapshot)
+        return yield* outcome
+      }
+      return outcome.value as AnyType
+    } finally {
+      release?.()
     }
-    return outcome.value as AnyType
   },
 })

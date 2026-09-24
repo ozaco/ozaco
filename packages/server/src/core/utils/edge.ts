@@ -18,6 +18,7 @@ import {
   remountActions,
   trackBody,
 } from '../internal/edge/engine'
+import { staticRoutes } from '../internal/edge/files'
 import type { EdgeDef } from '../types/edge'
 import type { Helpers } from '../types/helpers'
 
@@ -70,6 +71,12 @@ const serveHandlers = (state: Helpers.EdgeState): EdgeDef.ServeHandlers => ({
   isSocket: request => isSocketRequest(state, request),
 })
 
+const addRaw = (state: Helpers.EdgeState, route: EdgeDef.RawRoute): void => {
+  state.raws.push(route)
+  addRoute(state.router, route.method, route.path, { kind: 'raw', route })
+  state.kernel.routes.push({ method: route.method, path: route.path })
+}
+
 /**
  * Assemble the edge actions over a runtime driver:
  * `Edge.implement({...}).build(edgeActions(driver))`. The engine is
@@ -101,10 +108,14 @@ export const edgeActions = (driver: EdgeDef.Driver): EdgeDef.Actions => ({
     return remountActions(yield* EdgeStateRef.expect())
   },
   *raw(route) {
+    addRaw(yield* EdgeStateRef.expect(), route)
+  },
+  *static(options) {
     const state = yield* EdgeStateRef.expect()
-    state.raws.push(route)
-    addRoute(state.router, route.method, route.path, { kind: 'raw', route })
-    state.kernel.routes.push({ method: route.method, path: route.path })
+
+    for (const route of yield* staticRoutes(options)) {
+      addRaw(state, route)
+    }
   },
   *socket(route) {
     const state = yield* EdgeStateRef.expect()

@@ -4,6 +4,7 @@ export * from './errors'
 
 export type * from './types/io'
 
+export * from './utils/decode-text'
 export * from './utils/to-path'
 
 export type * from './types/helpers'

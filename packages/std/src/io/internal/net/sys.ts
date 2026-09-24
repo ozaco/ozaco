@@ -1,3 +1,5 @@
+import type { Operation } from 'std:effect'
+
 import { homedir, networkInterfaces, tmpdir } from 'node:os'
 
 import type { IODef } from '../../types/io'
@@ -41,4 +43,13 @@ export function* readInterfaces() {
   }
 
   return result
+}
+
+// `process.platform` / `process.arch` and — POSIX only — the effective uid (`getuid` is absent on
+// Windows). Shared by the Bun and Node impls.
+export function* readPlatform(): Operation<IODef.Platform> {
+  const uid = typeof process.getuid === 'function' ? process.getuid() : undefined
+  return uid === undefined
+    ? { os: process.platform, arch: process.arch }
+    : { os: process.platform, arch: process.arch, uid }
 }

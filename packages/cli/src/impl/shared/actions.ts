@@ -40,8 +40,8 @@ export const terminalActions = (): Pick<
   TerminalDef.Actions,
   'write' | 'size' | 'keys' | 'resize' | 'session'
 > => ({
-  *write(text: string) {
-    ;(yield* bindingOf()).handle.write(text)
+  *write(text: string, options?: TerminalDef.WriteOptions) {
+    ;(yield* bindingOf()).handle.write(text, options?.stream ?? 'stdout')
   },
 
   *size() {

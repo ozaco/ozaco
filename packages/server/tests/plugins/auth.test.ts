@@ -230,6 +230,50 @@ describe('auth', () => {
     )
   })
 
+  it('`check` answers a requirement with the principal or null — headers or a record, any casing', async () => {
+    unwrap(
+      await run(function* () {
+        yield* storage()
+        yield* createServer({
+          services: [app],
+          plugins: [
+            StaticAuth.use({
+              tokens: {
+                'tok-ui': { sub: 'ui', roles: ['admin'] },
+                'tok-mcp': { sub: 'service:mcp', type: 'service' },
+              },
+            }),
+            Auth,
+          ],
+        })
+        const web = new Headers({ Authorization: 'Bearer tok-ui' })
+        expect(yield* Auth.actions.check('authenticated', web)).toMatchObject({ sub: 'ui' })
+        expect(
+          yield* Auth.actions.check(['admin'], { Authorization: 'Bearer tok-ui' }),
+        ).toMatchObject({ sub: 'ui' })
+        expect(
+          yield* Auth.actions.check('service', { authorization: 'Bearer tok-mcp' }),
+        ).toMatchObject({ sub: 'service:mcp' })
+
+        // every verdict is a value: missing, unknown, wrong type, missing role → null
+        expect(yield* Auth.actions.check('authenticated', {})).toBeNull()
+        expect(yield* Auth.actions.check('authenticated', new Headers())).toBeNull()
+        expect(yield* Auth.actions.check('authenticated', { authorization: 'Bearer x' })).toBeNull()
+        expect(yield* Auth.actions.check('service', web)).toBeNull()
+        expect(yield* Auth.actions.check(['root'], web)).toBeNull()
+
+        // open: anonymous is allowed and resolves null; a known bearer still resolves
+        expect(yield* Auth.actions.check(false, {})).toBeNull()
+        expect(yield* Auth.actions.check(false, web)).toMatchObject({ sub: 'ui' })
+
+        // `authorize` takes the same shapes and still raises
+        expect(yield* Auth.actions.authorize('authenticated', web)).toMatchObject({ sub: 'ui' })
+        const refused = yield* attempt(Auth.actions.authorize('authenticated', new Headers()))
+        expect((refused as AnyType).error).toBe(ServerErrors.Unauthorized)
+      }),
+    )
+  })
+
   it('refuses Auth without a strategy, JwtAuth without key material, StaticAuth without a `sub`', async () => {
     unwrap(
       await run(function* () {

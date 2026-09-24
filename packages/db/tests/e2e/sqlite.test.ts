@@ -1,4 +1,5 @@
 import { DbClient, column, table } from 'db:core'
+import { runAdapterSuite } from 'db:testing'
 import { run, sleep, until } from 'std:effect'
 import { unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
@@ -11,8 +12,6 @@ import { join } from 'node:path'
 
 import { SqliteAdapter } from 'db:impl/sqlite'
 import { BunIO } from 'std:io/impl/bun'
-
-import { runAdapterSuite } from './helpers'
 
 runAdapterSuite({
   label: 'sqlite',

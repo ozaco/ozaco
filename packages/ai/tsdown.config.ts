@@ -1,6 +1,6 @@
 import { defineConfig } from 'tsdown'
 
-import { aiResolve, stdResolve } from '../devkit/src/resolve'
+import { aiResolve, stdResolve, withDeclarationPlugins } from '../devkit/src/resolve'
 
 // oxlint-disable-next-line import/no-default-export
 export default defineConfig({
@@ -20,4 +20,5 @@ export default defineConfig({
   // `ai:core` resolves to the external `@ozaco/ai` (dist/index.js), NOT inlined per bundle — so
   // the `AiProvider`/`Ai` protocol singletons stay shared across the impl modules.
   plugins: [stdResolve.rolldown(), aiResolve.rolldown()],
+  inputOptions: withDeclarationPlugins(),
 })

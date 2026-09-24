@@ -9,6 +9,7 @@ import { dirname } from 'node:path'
 
 import pkg from '../../../package.json'
 import { IOErrors } from '../errors'
+import { withEncoding } from '../internal/crypto/encode'
 import { hlcDecode, hlcObserve, hlcToken } from '../internal/crypto/hlc'
 import {
   decryptSecret,
@@ -25,12 +26,14 @@ import { readFileFlow, writeFileFlow } from '../internal/fs/flow'
 import { sharedFs, writeFlagOf } from '../internal/fs/shared'
 import { watchPath } from '../internal/fs/watch'
 import { tcpConnect, tcpListen, udpBind } from '../internal/net/sockets'
-import { readCwd, readHomeDir, readInterfaces, readTmpDir } from '../internal/net/sys'
+import { readCwd, readHomeDir, readInterfaces, readPlatform, readTmpDir } from '../internal/net/sys'
+import { createExpandHome } from '../internal/path/home'
 import { nodePath } from '../internal/path/node'
 import { bunExec, bunSpawn } from '../internal/process/bun'
 import { createS3 } from '../internal/s3/create'
 import { fromReadable } from '../internal/stream/from-readable'
 import { toReadable } from '../internal/stream/to-readable'
+import { processToTerminal } from '../internal/stream/to-terminal'
 import type { IODef } from '../types/io'
 
 export const BunIO = IO.implement({
@@ -51,7 +54,7 @@ export const BunIO = IO.implement({
   decodeHlc: hlcDecode,
   observeHlc: hlcObserve,
   hmac: webHmac,
-  hash: webHash,
+  hash: withEncoding(webHash),
   encrypt: encryptSecret,
   decrypt: decryptSecret,
   generateKeyPair: generateSignKeyPair,
@@ -155,6 +158,9 @@ export const BunIO = IO.implement({
   tmpdir: readTmpDir,
   cwd: readCwd,
   homeDir: readHomeDir,
+  expandHome: createExpandHome(readHomeDir, nodePath.join),
+  platform: readPlatform,
+  toTerminal: processToTerminal,
 
   *s3(options?: IODef.S3Options) {
     return createS3(new (Bun.S3Client as AnyType)(options ?? {}))

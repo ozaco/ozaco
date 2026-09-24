@@ -103,9 +103,15 @@ const valuesOf = (
   },
 })
 
-/** The wire failure (`{ error }` body) rebuilt as a Result failure; `req:<id>` and
- * `status:<code>` are appended to the causes. */
-export function* failureOf(response: Response, requestId: string): Operation<never> {
+/** The wire failure (`{ error }` body) rebuilt as a Result failure; `req:<id>` (when known) and
+ * `status:<code>` are appended to the causes. With `refused`, a 401/403 whose reply carries no
+ * tag of its own (neither body nor `oz-error`) is tagged `client.refused` instead of `http.<code>`;
+ * `prefix` leads the message (`manifest: …`). */
+export function* failureOf(
+  response: Response,
+  requestId: string | null,
+  options: { readonly refused?: boolean; readonly prefix?: string } = {},
+): Operation<never> {
   const text = yield* until(response.text().catch(() => ''))
   let wire: { error?: string; message?: string; causes?: string[] } | null = null
 
@@ -114,14 +120,19 @@ export function* failureOf(response: Response, requestId: string): Operation<nev
   } catch {
     wire = null
   }
-  const tag = wire?.error ?? response.headers.get(HEADERS.error) ?? `http.${response.status}`
-  const message = wire?.message ?? (text.length > 0 ? text : response.statusText)
+  const refused = options.refused && (response.status === 401 || response.status === 403)
+  const tag =
+    wire?.error ??
+    response.headers.get(HEADERS.error) ??
+    (refused ? ClientErrors.Refused : `http.${response.status}`)
+  const message =
+    wire?.message ?? (text.length > 0 ? text : response.statusText || `HTTP ${response.status}`)
 
   return yield* fail(
     tag,
-    message,
+    `${options.prefix ?? ''}${message}`,
     ...(wire?.causes ?? []),
-    `req:${requestId}`,
+    ...(requestId === null ? [] : [`req:${requestId}`]),
     `status:${response.status}`,
   )
 }

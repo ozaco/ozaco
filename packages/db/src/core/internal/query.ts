@@ -1,3 +1,4 @@
+// oxlint-disable import/exports-last
 import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 
@@ -7,7 +8,7 @@ import type { Change } from '../types/change'
 import type { Database } from '../types/database'
 import type { Helpers } from '../types/helpers'
 import type { Spec } from '../types/spec'
-import { filterFields, where } from '../utils/filter'
+import { filterFields, filterPaths, isPathSegment, where } from '../utils/filter'
 
 import { decodeCursor, encodeCursor } from './cursor'
 import { resolveSince } from './log'
@@ -19,6 +20,7 @@ const EMPTY: Helpers.QueryState = {
   order: [],
   fields: null,
   groupBy: null,
+  offset: null,
 }
 
 /** A bare row id used as a cursor (opaque cursors are base64 of JSON — far longer, with
@@ -65,6 +67,32 @@ function* guard(target: Helpers.QueryTarget, query: Helpers.QueryState, extra: r
       `unknown column "${unknown}" in query on "${target.spec.name}"`,
     )
   }
+
+  yield* guardPaths(target.spec, query.filters)
+}
+
+/** Fail `db.validation` when a filter reaches into a column that is not `json`, or names a path
+ * segment no backend can address. */
+export function* guardPaths(spec: Spec.Table, filters: readonly Spec.Filter[]) {
+  const kinds = new Map(spec.columns.map(column => [column.name, column.kind]))
+
+  for (const { field, path } of filters.flatMap(filter => filterPaths(filter))) {
+    if (kinds.get(field) !== 'json') {
+      return yield* fail(
+        DbErrors.Validation,
+        `path filter on "${spec.name}.${field}": only json columns can be reached into`,
+      )
+    }
+
+    const bad = path.find(segment => !isPathSegment(segment))
+
+    if (bad !== undefined || path.length > 32) {
+      return yield* fail(
+        DbErrors.Validation,
+        `invalid path ${bad === undefined ? `(${path.length} segments)` : `segment "${String(bad)}"`} on "${spec.name}.${field}"`,
+      )
+    }
+  }
 }
 
 /** The effective sort: the declared keys plus `_id` as a deterministic tiebreak. */
@@ -79,10 +107,11 @@ function* find(target: Helpers.QueryTarget, query: Helpers.QueryState, limit: nu
   return yield* target.state.adapter.find({
     table: target.spec,
     filter: combine(predicatesOf(query)),
-    order: orderOf(query),
+    // a skipped window needs a stable order — the pagination default when none was declared
+    order: query.offset !== null && query.order.length === 0 ? pageKeys(query) : orderOf(query),
     fields: fieldsOf(query),
     limit,
-    offset: null,
+    offset: query.offset,
   })
 }
 
@@ -293,6 +322,43 @@ function* paginate(
   } as Spec.Page<AnyType>
 }
 
+/** Offset pagination: page N of `pageSize` rows along the query's order (`_created_at` when it
+ * declared none, `_id` closing it), plus the total and the page count. Any `skip` on the query
+ * does not apply here — the page is the offset. */
+function* paginateOffset(
+  target: Helpers.QueryTarget,
+  query: Helpers.QueryState,
+  options: Spec.OffsetPaginateOptions,
+) {
+  const keys = pageKeys(query)
+  yield* guard(
+    target,
+    query,
+    keys.map(key => key.field),
+  )
+  const pageSize = Math.max(1, Math.trunc(options.pageSize) || 1)
+  const page = Math.max(1, Math.trunc(options.page) || 1)
+  const total = yield* count(target, query)
+
+  const rows = yield* target.state.adapter.find({
+    table: target.spec,
+    filter: combine(predicatesOf(query)),
+    order: keys,
+    fields: fieldsOf(query),
+    limit: pageSize,
+    offset: (page - 1) * pageSize,
+  })
+
+  return {
+    rows,
+    total,
+    page,
+    pages: Math.ceil(total / pageSize),
+    pageSize,
+    token: target.state.hub.version(target.spec.name),
+  } as Spec.OffsetPage<AnyType>
+}
+
 /** Answer a `since` token from the table's change log (an unknown table has no log → snapshot). */
 function* resolveSinceOf(target: Helpers.QueryTarget, since: string) {
   const log = target.state.logs.get(target.spec.name)
@@ -364,9 +430,16 @@ export const createQuery = (
     min: (field: string) => scalar(target, query, opOf('min', field))(),
     max: (field: string) => scalar(target, query, opOf('max', field))(),
 
-    *paginate(options: Spec.PaginateOptions) {
-      return yield* paginate(target, query, options)
+    *paginate(options: Spec.PaginateOptions | Spec.OffsetPaginateOptions) {
+      return 'page' in options
+        ? yield* paginateOffset(target, query, options)
+        : yield* paginate(target, query, options)
     },
+    skip: (rows: number) =>
+      createQuery(target, {
+        ...query,
+        offset: Math.max(0, Math.trunc(rows) || 0) || null,
+      }),
     watch: (options?: Change.WatchOptions) => {
       const filter = combine(predicatesOf(query))
       return watchQuery({
@@ -379,6 +452,7 @@ export const createQuery = (
           ...query.order.map(entry => entry.field),
         ]),
         load: () => find(target, query, null),
+        windowed: query.offset !== null,
         resolve: since => resolveSinceOf(target, since),
         options,
       })

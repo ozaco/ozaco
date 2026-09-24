@@ -25,7 +25,9 @@ const fromDecls = (decls: readonly CommandDef.OptionDecl[]): CommandDef.OptionIn
     array: decl.array ?? false,
     enum: decl.enum,
     required: decl.required ?? false,
-    hasDefault: false,
+    hasDefault: decl.default !== undefined,
+    description: decl.description,
+    default: decl.default,
   }))
 
 const walk = (json: Helpers.JsonSchema): CommandDef.OptionInfo[] => {
@@ -41,6 +43,8 @@ const walk = (json: Helpers.JsonSchema): CommandDef.OptionInfo[] => {
       enum: array ? prop.items?.enum : prop.enum,
       required: required.has(name),
       hasDefault: prop.default !== undefined,
+      description: prop.description,
+      default: prop.default,
     })
   }
 
@@ -48,7 +52,7 @@ const walk = (json: Helpers.JsonSchema): CommandDef.OptionInfo[] => {
 }
 
 /**
- * Resolve an action's option metadata (drives tokenizing — boolean fields take no value — and help
+ * Resolve an action's (or a command's inherited) option metadata (drives tokenizing — boolean fields take no value — and help
  * rendering; validation/defaults stay with the schema itself). Precedence:
  *
  * 1. a manual `options` declaration on the action config — always wins,
@@ -57,9 +61,7 @@ const walk = (json: Helpers.JsonSchema): CommandDef.OptionInfo[] => {
  *    it, and a missing/incompatible zod degrades to no flags instead of crashing),
  * 3. anything else — no flags (non-zod Standard Schemas need the manual `options` declaration).
  */
-export function* optionsFromAction(
-  meta: CommandDef.ActionMeta,
-): Operation<CommandDef.OptionInfo[]> {
+export function* optionsFromAction(meta: CommandDef.Inherited): Operation<CommandDef.OptionInfo[]> {
   if (meta.options !== undefined) {
     return fromDecls(meta.options)
   }

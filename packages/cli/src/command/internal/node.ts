@@ -42,5 +42,7 @@ export const buildNode = (spec: CommandDef.Spec, path: string): Helpers.RuntimeN
     description: spec.description,
     plugin: compile(spec, path),
     children,
+    inherit: spec.inherit,
+    examples: spec.examples,
   }
 }

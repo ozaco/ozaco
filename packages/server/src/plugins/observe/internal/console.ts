@@ -13,6 +13,9 @@ export function* mountConsole(edge: EdgeDef): Operation<void> {
   yield* edge.actions.raw({
     method: 'GET',
     path: OBSERVE_CONSOLE_PATH,
+
+    // the page is a static shell: its data rides the `observe` service, gated like every action
+    auth: false,
     *handler() {
       return new Response(CONSOLE_HTML, {
         headers: { 'content-type': 'text/html; charset=utf-8' },

@@ -12,10 +12,12 @@ import { HEADERS, laneOf } from '../../const'
 import { ServerErrors } from '../../errors'
 import type { EdgeDef } from '../../types/edge'
 import type { Helpers } from '../../types/helpers'
+import type { OptionsDef } from '../../types/options'
 import type { ServerDef } from '../../types/server'
 import type { ServiceDef } from '../../types/service'
 import type { TraceDef } from '../../types/trace'
 import { statusOf } from '../../utils/failure'
+import { rewrapResponse } from '../../utils/response'
 import {
   brandOf,
   brandStream,
@@ -321,11 +323,43 @@ function* finish({ state, request, response, requestId }: Helpers.Finish): Opera
   }
 
   if (!out.headers.get(HEADERS.requestId)) {
-    out = new Response(out.body, out)
+    out = rewrapResponse(out)
     out.headers.set(HEADERS.requestId, requestId)
   }
 
   return out
+}
+
+/**
+ * Who may reach a raw route: the kernel's `guard` hooks decide (the Auth plugin — the route's
+ * `auth`, else its install `default`) and resolve the principal the handler receives. With no
+ * guard installed a route that asks for auth is refused — fail-closed, never silently open.
+ */
+function* guardRaw(
+  state: Helpers.EdgeState,
+  route: EdgeDef.RawRoute,
+  request: Request,
+): Operation<OptionsDef.Principal | null> {
+  const guards = state.kernel.hooks.filter(hooks => hooks.guard)
+
+  if (guards.length === 0) {
+    if (route.auth !== undefined && route.auth !== false) {
+      return yield* fail(
+        ServerErrors.Unauthorized,
+        `${route.method} ${route.path} requires auth, but no Auth plugin is installed`,
+      )
+    }
+
+    return null
+  }
+
+  let principal: OptionsDef.Principal | null = null
+
+  for (const hooks of guards) {
+    principal = (yield* hooks.guard!(route, request)) ?? principal
+  }
+
+  return principal
 }
 
 /** A failure RETURNED as a response never raises through a span — report its row here, so
@@ -382,7 +416,12 @@ export function* handleRequest(state: Helpers.EdgeState, request: Request): Oper
         const params = decodeParams(match.params)
         const entry = match.data
         if (entry.kind === 'raw') {
-          const raw = yield* attempt(() => entry.route.handler(request, params))
+          const { route } = entry
+          const raw = yield* attempt(function* () {
+            const principal = yield* guardRaw(state, route, request)
+
+            return yield* route.handler(request, params, { principal })
+          })
 
           if (isFailure(raw)) {
             return yield* reportedFailure(state, {
@@ -599,6 +638,13 @@ export const isSocketRequest = (state: Helpers.EdgeState, request: Request): boo
  * their pumps alive that long). Resolves immediately for bodies that are not streams.
  */
 export const trackBody = (response: Response): { response: Response; done: Promise<void> } => {
+  // headers BEFORE the body: a `Bun.file` body's content-type is lost once `.body` is read
+  const init: ResponseInit = {
+    status: response.status,
+    statusText: response.statusText,
+    headers: new Headers(response.headers),
+  }
+
   if (!response.body) {
     return { response, done: Promise.resolve() }
   }
@@ -631,5 +677,5 @@ export const trackBody = (response: Response): { response: Response; done: Promi
     },
   })
 
-  return { response: new Response(body, response), done }
+  return { response: new Response(body, init), done }
 }

@@ -74,10 +74,48 @@ await main(function* () {
 | `serviceErrors(prefix, statuses)`                        | the failure taxonomy in one place: `errors: media.statuses` on the action, `yield* media.notFound(...)` in the handler. Any status goes — a tag mapped to `200` still answers the `{ error }` envelope, flagged by the `oz-error` header (rpc-style), and the client still sees a failure                                                |
 | `stream.ndjson` / `.sse` / `.text` / `.bytes` / `.parts` | branded input/output planes; a stream handler may answer with an array, an async iterable, a `flowOf(...)` Flow or a branded stream                                                                                                                                                                                                      |
 
+A handler's answer is validated against its `output` schema too: a mismatch is the server's
+bug, so it fails `server.output` (500) — `server.validation` (400) is reserved for what the caller
+sent.
+
 An action's config carries the plugin options as **typed fields** — `auth`, `cache`, `invalidate`,
 `timeoutMs`, `retry`, `breaker`, `bulkhead`, `singleflight`, `rateLimit`, `fallback`. An unknown key
 is a compile error, and a configuration failure at `createServer` if the owning plugin is not
 installed.
+
+## Raw routes and static files
+
+Outside the action model the edge serves plain `Request → Response` routes and whole directories:
+
+```ts
+function* mountExtras() {
+  yield* Edge.actions.raw({
+    method: 'GET',
+    path: '/whoami',
+    auth: 'authenticated', // omitted = Auth's `default`; `false` = public
+    *handler(request, params, { principal }) {
+      return Response.json({ sub: principal?.sub ?? null })
+    },
+  })
+
+  // GET + HEAD under /assets: content-type by extension, index.html for directories, 404 for
+  // missing files and dot-files, `..` / encoded escapes and symlinks refused (`followSymlinks: true`)
+  yield* Edge.actions.static({ path: '/assets/**', dir: 'public', auth: false })
+}
+```
+
+Raw routes go through the **same gate as actions**: with `Auth` installed, a route's `auth` (the
+action option's shapes) or else `Auth`'s `default` decides — a fail-closed node
+(`default: 'authenticated'`) keeps raw routes and static files closed too, and the verified
+principal reaches the handler as `{ principal }`. A public route (`auth: false`) is served
+anonymously even when the bearer it carries is stale. Without `Auth`, a route asking for anything
+but `false` is refused (401). The built-in routes are public on purpose — `/_health` (probes),
+`/_observe` (the console shell; its data rides the gated `observe` service) and the `Docs` routes
+unless `Docs.use({ auth })` gates them.
+
+For a seam of your own, `Auth.actions.authorize(requirement, headers)` raises
+(`server.unauthorized` / `server.forbidden`) and `Auth.actions.check(requirement, headers)` answers
+the principal or `null` instead — both take a `Headers` or a record in any casing.
 
 ## `ctx`
 
@@ -103,16 +141,16 @@ The database and the cache are **not** mirrored on `ctx`: reach them where they 
 
 Installed in order through `createServer({ plugins })`; their dispatch hooks wrap in that order.
 
-| plugin                                                                                                     | needs installed first                        | gives                                                                                                                                                                                                                                                                                                                                                                     |
-| ---------------------------------------------------------------------------------------------------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `JwtAuth.use({ provider, secret \| keys, mode })` · `StaticAuth.use({ tokens })` · `Auth.use({ default })` | strategies BEFORE `Auth`                     | `Auth` is the gate: the `auth` action option, `ctx.auth`, `login` / `refresh` / `verify` / `signService` routed to the strategies — several `AuthStrategy` impls run side by side, the first SUCCESSFUL answer wins (`AuthStrategy.implement(...)` for SSO / API keys of your own); `default` is what an action without `auth` requires (`'authenticated'` = fail-closed) |
-| `Cache`                                                                                                    | a `Kv` (`MemoryKv` / `RedisKv` / `TableKv`)  | the `cache` and `invalidate` options, table-change invalidation                                                                                                                                                                                                                                                                                                           |
-| `Resilience`                                                                                               | —                                            | `timeoutMs`, `retry`, `breaker`, `bulkhead`, `singleflight`, `rateLimit`, `fallback`                                                                                                                                                                                                                                                                                      |
-| `Cors.use({ origins })`                                                                                    | an edge                                      | CORS headers and preflight                                                                                                                                                                                                                                                                                                                                                |
-| `Docs.use({ path, auth })`                                                                                 | an edge (`Auth` for `auth`)                  | the manifest, OpenAPI 3.1 and the try-it panel; `auth` gates all three behind a bearer                                                                                                                                                                                                                                                                                    |
-| `ObservePlugin.use({ console, forward, collect })`                                                         | a `DbClient` (a carrier for forward/collect) | requests/spans/logs/failures as db rows, `/_observe`                                                                                                                                                                                                                                                                                                                      |
-| `StdoutExporter` · `OtlpExporter.use({ url })` · `OpenObserveExporter.use({ url, org, auth })`             | —                                            | `ObserveExporter` impls: where the observed requests/spans/logs/failures/events are SHIPPED — install any number side by side (with or without `ObservePlugin`), the kernel fans every event out to all of them, starts them with the node and flushes them at stop; `ObserveExporter.implement(...)` for a destination of your own                                       |
-| `HotReload.use({ entry, watch })`                                                                          | —                                            | dev only: re-evaluates the service modules on save and swaps them in (`reload`)                                                                                                                                                                                                                                                                                           |
+| plugin                                                                                                     | needs installed first                        | gives                                                                                                                                                                                                                                                                                                                                                                                  |
+| ---------------------------------------------------------------------------------------------------------- | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `JwtAuth.use({ provider, secret \| keys, mode })` · `StaticAuth.use({ tokens })` · `Auth.use({ default })` | strategies BEFORE `Auth`                     | `Auth` is the gate: the `auth` action option, `ctx.auth`, `login` / `refresh` / `verify` / `signService` routed to the strategies — several `AuthStrategy` impls run side by side, the first SUCCESSFUL answer wins (`AuthStrategy.implement(...)` for SSO / API keys of your own); `default` is what an action or raw route without `auth` requires (`'authenticated'` = fail-closed) |
+| `Cache`                                                                                                    | a `Kv` (`MemoryKv` / `RedisKv` / `TableKv`)  | the `cache` and `invalidate` options, table-change invalidation                                                                                                                                                                                                                                                                                                                        |
+| `Resilience`                                                                                               | —                                            | `timeoutMs`, `retry`, `breaker`, `bulkhead`, `singleflight`, `rateLimit`, `fallback`                                                                                                                                                                                                                                                                                                   |
+| `Cors.use({ origins })`                                                                                    | an edge                                      | CORS headers and preflight (a `Bun.file` body keeps its content-type)                                                                                                                                                                                                                                                                                                                  |
+| `Docs.use({ path, auth })`                                                                                 | an edge (`Auth` for `auth`)                  | the manifest, OpenAPI 3.1 and the try-it panel; `auth` gates all three behind a bearer                                                                                                                                                                                                                                                                                                 |
+| `ObservePlugin.use({ console, forward, collect })`                                                         | a `DbClient` (a carrier for forward/collect) | requests/spans/logs/failures as db rows, `/_observe`                                                                                                                                                                                                                                                                                                                                   |
+| `StdoutExporter` · `OtlpExporter.use({ url })` · `OpenObserveExporter.use({ url, org, auth })`             | —                                            | `ObserveExporter` impls: where the observed requests/spans/logs/failures/events are SHIPPED — install any number side by side (with or without `ObservePlugin`), the kernel fans every event out to all of them, starts them with the node and flushes them at stop; `ObserveExporter.implement(...)` for a destination of your own                                                    |
+| `HotReload.use({ entry, watch })`                                                                          | —                                            | dev only: re-evaluates the service modules on save and swaps them in (`reload`)                                                                                                                                                                                                                                                                                                        |
 
 `NetworkCarrier` needs a transport (`MemoryTransport` / `NatsTransport` / `RedisTransport`)
 installed before it.

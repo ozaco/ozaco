@@ -9,7 +9,7 @@ import { fail, isFailure } from 'std:result'
 import pkg from '../../../package.json'
 
 import { AuthCauses, AuthErrors } from './errors'
-import { authorize, bearerOf, options } from './internal'
+import { authorize, bearerOf, headerRecord, options } from './internal'
 import type { AuthDef } from './types'
 
 const AUTH_STRATEGY = Symbol.for('server:auth-strategy')
@@ -82,6 +82,18 @@ function* resolve(token: string): Operation<AuthDef.Principal> {
   return principal
 }
 
+/** A requirement against request headers: a presented bearer is always verified. */
+function* authorizeHeaders(
+  requirement: AuthDef.Requirement,
+  headers: AuthDef.HeadersLike,
+): Operation<AuthDef.Principal | null> {
+  const token = bearerOf(headerRecord(headers))
+  const principal = token ? yield* resolve(token) : undefined
+  yield* authorize(principal, requirement)
+
+  return principal ?? null
+}
+
 const AuthImpl = definePlugin<
   AuthDef.Context & ServerDef.PluginContext,
   [options?: AuthDef.Options]
@@ -118,6 +130,21 @@ const AuthImpl = definePlugin<
           yield* authorize(principal, requirement)
           return yield* next(call, { ...ctx, auth: principal ?? null })
         },
+        *guard(route, request) {
+          // a raw route's own `auth` wins; one that says nothing is as closed as the install
+          const requirement = route.auth ?? context.default
+
+          if (requirement !== false) {
+            return yield* authorizeHeaders(requirement, request.headers)
+          }
+
+          // a public route (health, docs, static files) never fails on a stale bearer — it is
+          // simply served anonymously
+          const token = bearerOf(headerRecord(request.headers))
+          const known = token ? yield* attempt(() => resolve(token)) : null
+
+          return known && !isFailure(known) ? known.value : null
+        },
       },
     }
   },
@@ -129,7 +156,8 @@ const AuthImpl = definePlugin<
  * bearer gets its principal on `ctx.auth` from whichever strategy recognizes it; `action({ auth:
  * 'user' | 'service' | 'authenticated' | [roles] })` gates the action (`server.unauthorized` /
  * `server.forbidden`), `service(name, actions, { auth })` sets it for a whole service and
- * `default` for every action that says nothing (`'authenticated'` = fail-closed).
+ * `default` for every action that says nothing (`'authenticated'` = fail-closed) — and for every
+ * raw edge route that says nothing (`Edge.actions.raw({ auth })`).
  * `Auth.actions.login/refresh/verify/signService` route to the first strategy that answers.
  */
 /** The strategy protocol — see the definition above; exported here so the exports stay last. */
@@ -186,10 +214,19 @@ export const Auth = AuthImpl.build<AuthDef.Actions>({
     return principal
   },
 
-  *authorize(requirement, headers) {
-    const token = bearerOf(headers)
-    const principal = token ? yield* resolve(token) : undefined
-    yield* authorize(principal, requirement)
-    return principal ?? null
+  authorize: authorizeHeaders,
+
+  *check(requirement, headers) {
+    const verdict = yield* attempt(() => authorizeHeaders(requirement, headers))
+
+    if (!isFailure(verdict)) {
+      return verdict.value
+    }
+
+    if (verdict.error === ServerErrors.Unauthorized || verdict.error === ServerErrors.Forbidden) {
+      return null
+    }
+
+    return yield* verdict
   },
 })

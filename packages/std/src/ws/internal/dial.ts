@@ -10,19 +10,20 @@ import type { WsDef } from '../types/ws'
 import { CONNECTING, OPEN } from './const'
 
 /**
- * Construct one socket. Headers require the Bun/Node options-object constructor form; without
- * them, the standard `protocols` second arg keeps the browser WebSocket happy. A browser cannot
- * set handshake headers at all (its constructor rejects the options form): they are dropped
- * there — carry a token as a `?token=` query param instead.
+ * Construct one socket. Headers and TLS require the Bun/Node options-object constructor form;
+ * without them, the standard `protocols` second arg keeps the browser WebSocket happy. A browser
+ * cannot set handshake headers or TLS material at all (its constructor rejects the options form):
+ * they are dropped there — carry a token as a `?token=` query param instead.
  */
 const construct = (impl: WsDef.ImplLike, session: Helpers.Session): WsDef.SocketLike => {
   const { url, options } = session
   const inBrowser = typeof document !== 'undefined' && typeof window !== 'undefined'
 
-  if (options.headers && !inBrowser) {
+  if ((options.headers || options.tls) && !inBrowser) {
     return new impl(url, {
-      headers: options.headers,
+      ...(options.headers ? { headers: options.headers } : {}),
       ...(options.protocols ? { protocols: options.protocols } : {}),
+      ...(options.tls ? { tls: options.tls } : {}),
     })
   }
 

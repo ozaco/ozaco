@@ -160,6 +160,7 @@ export function* createClient<TApi = Record<string, Record<string, ClientDef.Ref
       } satisfies ClientDef.Window<TRow>
     },
     $lastRequestId: () => ctx.lastRequestId,
+    $scope: scope,
     $setToken: token => {
       tokenOverride = token
     },
@@ -185,7 +186,10 @@ export function* createClient<TApi = Record<string, Record<string, ClientDef.Ref
       if (key in target) {
         return (target as AnyType)[key]
       }
-      if (key === 'then') {
+      // `then` keeps the handle from reading as a thenable; every `$` key is reserved for the
+      // client's own statics (`$close` on a connected handle, future additions) — an unknown one
+      // is `undefined`, never a service proxy
+      if (key === 'then' || key.startsWith('$')) {
         return undefined
       }
       return serviceProxy(key)

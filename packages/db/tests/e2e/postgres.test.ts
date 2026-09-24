@@ -1,7 +1,7 @@
+import { runAdapterSuite } from 'db:testing'
+
 import { BunSqlAdapter } from 'db:impl/bun-sql'
 import { PgAdapter } from 'db:impl/pg'
-
-import { runAdapterSuite } from './helpers'
 
 /** Set DB_TEST_PG_URL (e.g. postgres://localhost/ozaco_test) to run these against a live server.
  * The suite drops and recreates its tables on every test. */
