@@ -1,16 +1,14 @@
 /**
  * The shared module's declared shapes agree with the runtime, and its public surface is what the
- * barrel says: a private queue internal, an honest `deepMerge`, one flattener, `unknown`-typed
- * guards, an `exhaustive` that stays a function, and the builder's case shape under `Helpers`.
+ * barrel says: a private queue internal, an honest `deepMerge`, one flattener and `unknown`-typed
+ * guards (the `match` builder's shapes live in `tests/schema/match.test.ts`).
  */
-import type { Helpers } from 'std:shared'
 import {
   deepMerge,
   flatten,
   flattenEntries,
   isAsyncIterable,
   isNumber,
-  match,
   PriorityQueue,
 } from 'std:shared'
 
@@ -75,33 +73,5 @@ describe('shared — declared shapes vs runtime', () => {
     expect(isAsyncIterable(null)).toBe(false)
     expect(isAsyncIterable({})).toBe(false)
     expect(isNumber(1)).toBe(true)
-  })
-
-  it('exhaustive stays a function — callable with no argument once every case is covered', () => {
-    type Shape = 'circle' | 'square'
-    const covered = match('circle' as Shape)
-      .when(
-        (value): value is 'circle' => value === 'circle',
-        () => 'round',
-      )
-      .when(
-        (value): value is 'square' => value === 'square',
-        () => 'boxy',
-      )
-    expect(covered.exhaustive()).toBe('round')
-
-    const partial = match('square' as Shape).when(
-      (value): value is 'circle' => value === 'circle',
-      () => 'round',
-    )
-    // @ts-expect-error — a case is missing: the signature demands the unhandled remainder
-    expect(() => partial.exhaustive()).toThrow()
-    // it is still a real function at runtime, not a Failure value
-    expect(typeof partial.exhaustive).toBe('function')
-  })
-
-  it('MatchCase lives under Helpers; the builder type is the public one', () => {
-    const recorded: Helpers.MatchCase = { handler: value => value, predicate: () => true }
-    expect(typeof recorded.handler).toBe('function')
   })
 })

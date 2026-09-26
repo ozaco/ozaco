@@ -6,8 +6,8 @@ import { DEFAULT_DOCS_PATH, HEADERS } from '../const'
 import { ClientErrors } from '../errors'
 import type { ClientDef } from '../types/client'
 import type { ManifestDef } from '../types/manifest'
+import { failureOf } from '../utils/failure'
 
-import { failureOf } from './decode'
 import { authorization } from './http'
 
 export function* manifestOf(ctx: ClientDef.Context): Operation<ManifestDef.Manifest> {

@@ -1,5 +1,4 @@
-import type { GuardValue } from './common'
-import type { StandardSchemaV1 } from './schema'
+import type { GuardValue, StandardSchemaV1 } from 'std:shared'
 
 export interface MatchBuilder<Input, Remaining, Output> {
   with: <S extends StandardSchemaV1, R>(

@@ -120,6 +120,95 @@ describe('tcp', () => {
     expect(unwrap(outcome)).toEqual({ reply: 'bye', close: true })
   })
 
+  it('a peer FIN ends only `data`: the reply still goes out (printf x | nc)', async () => {
+    // read everything the client sends, THEN answer — only possible if the socket stays writable
+    const answerAfterEof = function* (socket: IODef.TcpSocket) {
+      const inbound = yield* socket.data
+      const bytes: number[] = []
+      while (true) {
+        const chunk = yield* inbound.next()
+        if (chunk.done) {
+          break
+        }
+        bytes.push(...chunk.value)
+      }
+      yield* socket.write(`got:${decoder.decode(Uint8Array.from(bytes))}`)
+      yield* socket.end()
+    }
+
+    const outcome = await run(function* () {
+      yield* BunIO.use()
+
+      const server = yield* IO.actions.tcpListen({ port: 0 }, answerAfterEof)
+      const client = yield* IO.actions.tcpConnect({ port: server.port })
+      const received = yield* client.data
+
+      yield* client.write('x')
+      yield* client.end()
+      // a second end is a no-op
+      yield* client.end()
+
+      const bytes: number[] = []
+      let close: unknown = 'still-open'
+      while (true) {
+        const chunk = yield* received.next()
+        if (chunk.done) {
+          close = chunk.value
+          break
+        }
+        bytes.push(...chunk.value)
+      }
+
+      // both sides ended: the socket is gone, and `closed` answers every waiter the same
+      const closed = yield* client.closed
+      const again = yield* client.closed
+
+      yield* server.close()
+
+      return { reply: decoder.decode(Uint8Array.from(bytes)), close, closed, again }
+    })
+
+    expect(unwrap(outcome)).toEqual({ reply: 'got:x', close: true, closed: true, again: true })
+  })
+
+  it('after `end()` the half-closed side still reads until the peer ends', async () => {
+    const lateTalker = function* (socket: IODef.TcpSocket) {
+      const inbound = yield* socket.data
+      const first = yield* inbound.next()
+      // the client already sent FIN: its data has ended, yet we can still talk to it
+      yield* socket.write(first.done ? 'eof-first' : 'data-first')
+      yield* sleep(5)
+      yield* socket.write('-late')
+      yield* socket.close()
+    }
+
+    const outcome = await run(function* () {
+      yield* BunIO.use()
+
+      const server = yield* IO.actions.tcpListen({ port: 0 }, lateTalker)
+      const client = yield* IO.actions.tcpConnect({ port: server.port })
+      const received = yield* client.data
+
+      yield* client.end()
+
+      const bytes: number[] = []
+      while (true) {
+        const chunk = yield* received.next()
+        if (chunk.done) {
+          break
+        }
+        bytes.push(...chunk.value)
+      }
+      const closed = yield* client.closed
+
+      yield* server.close()
+
+      return { heard: decoder.decode(Uint8Array.from(bytes)), closed }
+    })
+
+    expect(unwrap(outcome)).toEqual({ heard: 'eof-first-late', closed: true })
+  })
+
   it('connecting to a dead port fails with tcp-connect-failed', async () => {
     const outcome = await run(function* () {
       yield* BunIO.use()

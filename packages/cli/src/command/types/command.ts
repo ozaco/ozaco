@@ -1,7 +1,7 @@
 import type { StandardSchemaV1 } from 'cli:core'
 import type { Operation } from 'std:effect'
 import type { Plugin } from 'std:plugin'
-import type { AnyType, EmptyType } from 'std:shared'
+import type { AnyType, EmptyType, Simplify } from 'std:shared'
 
 import type { ACTION, COMMAND } from '../const'
 
@@ -20,8 +20,38 @@ export namespace CommandDef {
     cwd: string
   }
 
-  /** A handler's full `ctx`: the parsed `input` plus the {@link Runtime} fields. */
-  export type Ctx<S> = Infer<S> & Runtime
+  /** `B` over `A`: `A`'s fields, each shadowed by `B`'s field of the same name. */
+  export type Merge<A, B> = Simplify<Omit<A, keyof B> & B>
+
+  /**
+   * What an `inherits` field accepts: a command spec (the options it passes down, its declared
+   * ancestors' included) or an inherited `input` schema itself. Type-only — ignored at runtime.
+   * Across files, prefer the schema (kept in its own module) so the action never imports the
+   * command that imports it.
+   */
+  export type Inherits = Spec<AnyType, AnyType, AnyType, AnyType> | StandardSchemaV1
+
+  /** The `ctx` fields an {@link Inherits} value provides (`EmptyType` for none). */
+  export type InheritedOf<P> =
+    P extends Spec<AnyType, AnyType, infer I, AnyType>
+      ? I
+      : P extends StandardSchemaV1
+        ? StandardSchemaV1.InferOutput<P>
+        : EmptyType
+
+  /**
+   * A handler's full `ctx`: the inherited fields `I`, shadowed by the parsed `input` (an action's
+   * own field of the same name wins, as at runtime), plus the {@link Runtime} fields.
+   */
+  export type Ctx<S, I = EmptyType> = Merge<I, Infer<S>> & Runtime
+
+  /**
+   * Type-only marker of the inherited fields a member expects from the command it sits under.
+   * Contravariant, so placing it under a command that passes down less fails to compile.
+   */
+  export interface Needs<N> {
+    readonly '~needs'?: ((have: N) => void) | undefined
+  }
 
   /** A usage example rendered under `Examples:` in help. */
   export interface Example {
@@ -50,8 +80,17 @@ export namespace CommandDef {
     default?: unknown
   }
 
-  export interface ActionConfig<S extends StandardSchemaV1 = StandardSchemaV1> {
+  export interface ActionConfig<
+    S extends StandardSchemaV1 = StandardSchemaV1,
+    P extends Inherits | undefined = undefined,
+  > {
     description?: string | undefined
+    /**
+     * The inherited options this action expects (a command spec or its inherited `input` schema):
+     * types them into `ctx` and makes placing the action under a command that does not pass them
+     * down a type error. Type-only — ignored at runtime.
+     */
+    inherits?: P | undefined
     /** Zod / standard-schema describing the parsed options+args object. */
     input?: S | undefined
     /** Manual option declarations (see {@link OptionDecl}) — overrides schema introspection. */
@@ -79,7 +118,9 @@ export namespace CommandDef {
   }
 
   /** A leaf subcommand: a handler carrying its parse metadata (mirrors server's `Action`). */
-  export type Action<S = unknown, R = unknown> = ActionMeta & ((ctx: Ctx<S>) => Operation<R>)
+  export type Action<S = unknown, R = unknown, I = EmptyType> = ActionMeta &
+    Needs<I> &
+    ((ctx: Ctx<S, I>) => Operation<R>)
 
   /**
    * Options a command declares for EVERY action below it (its own and its descendants'): the
@@ -93,17 +134,36 @@ export namespace CommandDef {
     short?: Record<string, string> | undefined
   }
 
-  /** Values allowed in a command's `actions`: leaf actions or nested command specs. */
-  export type Member = Action<AnyType, AnyType> | Spec
+  /**
+   * Values allowed in a command's `actions`: leaf actions or nested command specs, each expecting
+   * at most the inherited fields `A` the command passes down.
+   */
+  export type Member<A = AnyType> =
+    | (ActionMeta & Needs<A> & ((ctx: AnyType) => Operation<AnyType>))
+    | Spec<unknown, [], AnyType, A>
 
-  export interface Options<TContext, TArgs extends unknown[]> {
+  /** The fields a command passes down: its `inherits`' fields, shadowed by its own `input`'s. */
+  export type Available<P, S> = Merge<InheritedOf<P>, Infer<S>>
+
+  export interface Options<
+    TContext,
+    TArgs extends unknown[],
+    S extends StandardSchemaV1 | undefined = undefined,
+    P extends Inherits | undefined = undefined,
+  > {
     name: string
     version?: string | undefined
     description?: string | undefined
-    actions: Record<string, Member>
+    actions: Record<string, Member<NoInfer<Available<P, S>>>>
     setup?: (...args: TArgs) => Operation<TContext>
     /** Inherited options schema — see {@link Inherited}. */
-    input?: StandardSchemaV1 | undefined
+    input?: S | undefined
+    /**
+     * The command's own ancestors (a spec or their inherited `input` schema) when it is nested:
+     * their fields join what this command passes down, so its actions can declare
+     * `inherits: thisCommand`. Type-only — ignored at runtime.
+     */
+    inherits?: P | undefined
     /** Manual inherited option declarations (non-zod schemas) — see {@link Inherited}. */
     options?: readonly OptionDecl[] | undefined
     /** Short flags for the inherited options, e.g. `{ verbose: 'v' }`. */
@@ -116,14 +176,23 @@ export namespace CommandDef {
    * What `defineCommand` returns: a pure descriptor of the command tree — NOT a plugin. The registry
    * compiles it into a path-identified plugin tree at `register` (see internal/node) and installs
    * each level lazily as dispatch descends. Nested commands live in `subs` (keyed by the token you
-   * type), leaf actions in `leaf`.
+   * type), leaf actions in `leaf`. `I` is what it passes down to its actions (its own inherited
+   * `input` over its declared ancestors'), `N` what it expects from the command it sits under —
+   * both type-only.
    */
-  export interface Spec<TContext = unknown, TArgs extends unknown[] = []> {
+  export interface Spec<
+    TContext = unknown,
+    TArgs extends unknown[] = [],
+    I = AnyType,
+    N = AnyType,
+  > extends Needs<N> {
     _st: typeof COMMAND
+    /** Type-only carrier of the inherited fields (never set at runtime). */
+    readonly '~inherited'?: I | undefined
     name: string
     version?: string | undefined
     description?: string | undefined
-    leaf: Record<string, Action<AnyType, AnyType>>
+    leaf: Record<string, Action<AnyType, AnyType, AnyType>>
     subs: Record<string, Spec>
     setup?: ((...args: TArgs) => Operation<TContext>) | undefined
     /** The inherited options this level contributes (absent when it declares none). */

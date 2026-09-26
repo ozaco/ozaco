@@ -45,6 +45,17 @@
       },
       "source": "./src/event/index.ts"
     },
+    "./schema": {
+      "import": {
+        "types": "./dist/schema.d.ts",
+        "default": "./dist/schema.js"
+      },
+      "require": {
+        "types": "./dist/schema.d.cts",
+        "default": "./dist/schema.cjs"
+      },
+      "source": "./src/schema/index.ts"
+    },
     "./result": {
       "import": {
         "types": "./dist/result.d.ts",

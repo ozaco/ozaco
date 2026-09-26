@@ -323,8 +323,9 @@ function* paginate(
 }
 
 /** Offset pagination: page N of `pageSize` rows along the query's order (`_created_at` when it
- * declared none, `_id` closing it), plus the total and the page count. Any `skip` on the query
- * does not apply here — the page is the offset. */
+ * declared none, `_id` closing it), plus the total and the page count. `page` is clamped into
+ * `1..pages` and `pages` is at least 1. Any `skip` on the query does not apply here — the page is
+ * the offset. */
 function* paginateOffset(
   target: Helpers.QueryTarget,
   query: Helpers.QueryState,
@@ -337,8 +338,10 @@ function* paginateOffset(
     keys.map(key => key.field),
   )
   const pageSize = Math.max(1, Math.trunc(options.pageSize) || 1)
-  const page = Math.max(1, Math.trunc(options.page) || 1)
   const total = yield* count(target, query)
+  // an empty result is still one (empty) page; a page past the end reads the last one
+  const pages = Math.max(1, Math.ceil(total / pageSize))
+  const page = Math.min(pages, Math.max(1, Math.trunc(options.page) || 1))
 
   const rows = yield* target.state.adapter.find({
     table: target.spec,
@@ -353,7 +356,7 @@ function* paginateOffset(
     rows,
     total,
     page,
-    pages: Math.ceil(total / pageSize),
+    pages,
     pageSize,
     token: target.state.hub.version(target.spec.name),
   } as Spec.OffsetPage<AnyType>

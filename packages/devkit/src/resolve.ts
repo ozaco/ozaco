@@ -11,6 +11,7 @@ const STD_MODULES: Record<string, ModuleEntry> = {
   'std:result': { subpath: 'result', source: 'result/index.ts' },
   'std:effect': { subpath: 'effect', source: 'effect/index.ts' },
   'std:event': { subpath: 'event', source: 'event/index.ts' },
+  'std:schema': { subpath: 'schema', source: 'schema/index.ts' },
   'std:plugin': { subpath: 'plugin', source: 'plugin/index.ts' },
   'std:io': { subpath: 'io', source: 'io/index.ts' },
   'std:io/impl/bun': { subpath: 'io/impl/bun', source: 'io/impl/bun.ts' },

@@ -1,6 +1,5 @@
 import type { Result } from 'std:result'
-import { asFailure, auto } from 'std:result'
-import { lazyPromiseWithResolvers } from 'std:shared'
+import { asFailure, auto, lazyPromiseWithResolvers } from 'std:result'
 
 import type { Helpers } from '../types/helpers'
 import type { Future } from '../types/operation'

@@ -215,6 +215,14 @@
       "prettier": {
         "allowed": false
       },
+      "language_servers": [
+        "!eslint",
+        "!biome",
+        "!vtsls",
+        "!typescript-language-server",
+        "tsgo",
+        "..."
+      ],
       "code_actions_on_format": {
         "source.organizeImports": true
       },
@@ -228,6 +236,14 @@
     },
     "TSX": {
       "format_on_save": "on",
+      "language_servers": [
+        "!eslint",
+        "!biome",
+        "!vtsls",
+        "!typescript-language-server",
+        "tsgo",
+        "..."
+      ],
       "prettier": {
         "allowed": false
       },

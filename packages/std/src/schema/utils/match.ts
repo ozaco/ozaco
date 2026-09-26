@@ -1,12 +1,12 @@
 import type { Result } from 'std:result'
 import { fail, isFailure, isSuccess, succeed, unwrap } from 'std:result'
+import type { AnyType } from 'std:shared'
+import { isFunction } from 'std:shared'
 
-import { SharedErrors } from '../errors'
-import type { AnyType } from '../types/common'
+import { SchemaErrors } from '../errors'
 import type { Helpers } from '../types/helpers'
 import type { MatchBuilder } from '../types/match'
 
-import { isFunction } from './is'
 import { validateSync } from './validate'
 
 const createBuilder = <Input, Remaining, Output>(
@@ -28,7 +28,7 @@ const createBuilder = <Input, Remaining, Output>(
       }
     }
 
-    return fail(SharedErrors.NoMatch)
+    return fail(SchemaErrors.NoMatch)
   }
 
   return {
@@ -54,7 +54,7 @@ const createBuilder = <Input, Remaining, Output>(
       const result = execute()
 
       if (isFailure(result)) {
-        unwrap(fail(SharedErrors.NonExhaustive, 'no case matched the value'))
+        unwrap(fail(SchemaErrors.NonExhaustive, 'no case matched the value'))
       }
 
       return result.value

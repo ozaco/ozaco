@@ -1,6 +1,7 @@
 import { isFailure, isSuccess, unwrap } from 'std:result'
+import type { Helpers } from 'std:schema'
+import { SchemaErrors, match, validateSync } from 'std:schema'
 import type { AnyType, StandardSchemaV1 } from 'std:shared'
-import { SharedErrors, match, validateSync } from 'std:shared'
 
 import { describe, expect, it } from 'bun:test'
 
@@ -107,7 +108,7 @@ describe('validateSync', () => {
     const invalid = validateSync(numberSchema, 'nope')
     expect(isFailure(invalid)).toBe(true)
     if (isFailure(invalid)) {
-      expect(invalid.error).toBe(SharedErrors.Validation)
+      expect(invalid.error).toBe(SchemaErrors.Validation)
       expect(invalid.message).toBe('expected number')
       expect(invalid.causes).toEqual(['expected number'])
     }
@@ -115,8 +116,38 @@ describe('validateSync', () => {
     const asyncOutcome = validateSync(asyncSchema, 'later')
     expect(isFailure(asyncOutcome)).toBe(true)
     if (isFailure(asyncOutcome)) {
-      expect(asyncOutcome.error).toBe(SharedErrors.AsyncSchema)
+      expect(asyncOutcome.error).toBe(SchemaErrors.AsyncSchema)
       expect(asyncOutcome.message).toContain('async schema')
     }
+  })
+})
+
+describe('match shapes', () => {
+  it('exhaustive stays a function — callable with no argument once every case is covered', () => {
+    type Shape = 'circle' | 'square'
+    const covered = match('circle' as Shape)
+      .when(
+        (value): value is 'circle' => value === 'circle',
+        () => 'round',
+      )
+      .when(
+        (value): value is 'square' => value === 'square',
+        () => 'boxy',
+      )
+    expect(covered.exhaustive()).toBe('round')
+
+    const partial = match('square' as Shape).when(
+      (value): value is 'circle' => value === 'circle',
+      () => 'round',
+    )
+    // @ts-expect-error — a case is missing: the signature demands the unhandled remainder
+    expect(() => partial.exhaustive()).toThrow()
+    // it is still a real function at runtime, not a Failure value
+    expect(typeof partial.exhaustive).toBe('function')
+  })
+
+  it('MatchCase lives under the schema Helpers; the builder type is the public one', () => {
+    const recorded: Helpers.MatchCase = { handler: value => value, predicate: () => true }
+    expect(typeof recorded.handler).toBe('function')
   })
 })

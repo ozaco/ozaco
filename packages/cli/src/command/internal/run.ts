@@ -3,7 +3,7 @@ import { usePalette } from 'cli:palette'
 import type { Operation } from 'std:effect'
 import { scoped } from 'std:effect'
 import { fail, isFailure } from 'std:result'
-import { validateSync } from 'std:shared'
+import { validateSync } from 'std:schema'
 
 import { HELP_FLAGS, VERSION_FLAGS } from '../const'
 import type { CommandDef } from '../types/command'

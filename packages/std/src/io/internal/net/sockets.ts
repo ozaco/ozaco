@@ -1,5 +1,15 @@
 import type { Flow, Queue } from 'std:effect'
-import { action, attempt, call, createQueue, ensure, mapError, until, useScope } from 'std:effect'
+import {
+  action,
+  attempt,
+  call,
+  createQueue,
+  ensure,
+  mapError,
+  until,
+  useScope,
+  withResolvers,
+} from 'std:effect'
 import type { Result } from 'std:result'
 import { asFailure, fail } from 'std:result'
 
@@ -39,7 +49,12 @@ function* nodeWrite(socket: Socket, chunk: Uint8Array | string) {
   )
 }
 
-function* nodeClose(socket: Socket) {
+// Half-close: send FIN once every queued write is flushed. The read side stays open — the socket
+// fully closes when the peer ends too (or on `close()`).
+function* nodeEnd(socket: Socket) {
+  if (socket.writableEnded || socket.destroyed) {
+    return
+  }
   yield* attempt(
     until(
       new Promise<void>(resolve => {
@@ -51,11 +66,20 @@ function* nodeClose(socket: Socket) {
   )
 }
 
+// Tear-down: flush and FIN (as `end`), then release the socket whatever the peer does.
+function* nodeClose(socket: Socket) {
+  yield* nodeEnd(socket)
+  socket.destroy()
+}
+
 const makeHandle = (socket: Socket): IODef.TcpSocket => {
   // Attach the reader EAGERLY (at accept/connect time) and buffer into a queue, so bytes are captured
   // even when the handler does async work (e.g. connecting an upstream) before consuming `data`. A
   // lazy subscribe would drop the first bytes under Bun's node:net (it does not buffer a paused
   // accepted socket the way Node does). Trade-off: no native backpressure — a slow consumer buffers.
+  //
+  // The socket is half-open (`allowHalfOpen`): the peer's FIN (`'end'`) ends only `data` — the write
+  // side stays usable until `end()` / `close()` — while `closed` settles when the socket is gone.
   const queue = createQueue<Uint8Array, IODef.FlowClose>()
   let settled = false
   const settle = (close: IODef.FlowClose) => {
@@ -64,10 +88,18 @@ const makeHandle = (socket: Socket): IODef.TcpSocket => {
       queue.close(close)
     }
   }
+  const closed = withResolvers<IODef.FlowClose>()
+  let failure: IODef.FlowClose = true
   socket.on('data', (chunk: Buffer) => queue.add(new Uint8Array(chunk)))
   socket.on('end', () => settle(true))
-  socket.on('close', () => settle(true))
-  socket.on('error', error => settle(asFailure(error)))
+  socket.on('error', error => {
+    failure = asFailure(error)
+    settle(failure)
+  })
+  socket.on('close', () => {
+    settle(true)
+    closed.resolve(failure)
+  })
 
   return {
     remoteAddress: socket.remoteAddress ?? '',
@@ -75,14 +107,16 @@ const makeHandle = (socket: Socket): IODef.TcpSocket => {
     localPort: socket.localPort ?? 0,
     data: queueFlow(queue),
     write: chunk => nodeWrite(socket, chunk),
+    end: () => nodeEnd(socket),
     close: () => nodeClose(socket),
+    closed: closed.operation,
   }
 }
 
 export function* tcpListen(options: IODef.TcpListenOptions, onConnection: IODef.TcpHandler) {
   const scope = yield* useScope()
 
-  const server = createServer(socket => {
+  const server = createServer({ allowHalfOpen: true }, socket => {
     const handle = makeHandle(socket)
     // the task's promise side resolves a Result and never rejects (a halt at listen-scope
     // teardown included), so `finally` is the whole story: the socket goes with the handler
@@ -141,7 +175,11 @@ export function* tcpListen(options: IODef.TcpListenOptions, onConnection: IODef.
 }
 
 export function* tcpConnect(options: IODef.TcpConnectOptions) {
-  const socket = connect({ port: options.port, host: options.hostname ?? '127.0.0.1' })
+  const socket = connect({
+    port: options.port,
+    host: options.hostname ?? '127.0.0.1',
+    allowHalfOpen: true,
+  })
 
   yield* mapError(
     action<void>((resolve, reject) => {

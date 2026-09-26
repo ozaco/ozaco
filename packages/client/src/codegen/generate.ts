@@ -3,8 +3,10 @@ import { until } from 'std:effect'
 import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 
+import { HEADERS } from '../core/const'
 import { ClientErrors } from '../core/errors'
 import type { ManifestDef } from '../core/types/manifest'
+import { failureOf } from '../core/utils/failure'
 
 import { schemaToType } from './schema-to-ts'
 import type { GenerateOptions } from './types'
@@ -192,8 +194,13 @@ export function* pull(
       },
     }),
   )
+  // the server's answer, decoded like the runtime client's manifest fetch: its own tag (or
+  // `client.refused` for a bare 401/403, `http.<code>` otherwise) — never `client.network`
   if (!response.ok) {
-    return yield* fail(ClientErrors.Network, `manifest: ${response.status} at ${target}`)
+    return yield* failureOf(response, response.headers.get(HEADERS.requestId), {
+      refused: true,
+      prefix: `manifest (${target}): `,
+    })
   }
   const manifest = yield* until(response.json())
   return yield* generate(manifest, options)

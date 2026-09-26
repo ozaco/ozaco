@@ -238,10 +238,12 @@ export namespace Spec {
     /** Total rows matching the query. */
     readonly total: number
 
-    /** The 1-based page these rows are (clamped to at least 1). */
+    /** The 1-based page these rows are — the requested one clamped into `1..pages`, so a page
+     * past the end answers the last page. */
     readonly page: number
 
-    /** How many pages `total` spans at this page size (`0` when nothing matched). */
+    /** How many pages `total` spans at this page size — at least `1`: an empty result is one
+     * empty page. */
     readonly pages: number
     readonly pageSize: number
 

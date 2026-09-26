@@ -266,12 +266,20 @@ export namespace IODef {
     readonly remoteAddress: string
     readonly remotePort: number
     readonly localPort: number
-    /** Inbound bytes; the close value is `true` on a clean end or the failure that interrupted it. */
+    /** Inbound bytes. Ends with `true` when the peer half-closes (FIN) or the socket closes —
+     * the write side stays usable after a FIN, so a reply can still go out — or with the failure
+     * that interrupted it. */
     data: Flow<Uint8Array, FlowClose>
     /** Write a chunk, resolving once it has been flushed (honors backpressure). */
     write: (chunk: Uint8Array | string) => Operation<void>
-    /** Half-close the socket's write side and tear it down. */
+    /** Half-close: flush pending writes and send FIN; `data` keeps reading until the peer ends.
+     * A no-op once the write side is already ended. */
+    end: () => Operation<void>
+    /** Tear the socket down: `end()`, then release it whatever the peer does. */
     close: () => Operation<void>
+    /** Settles once the socket is fully closed (both sides ended, `close()`, or an error): `true`
+     * on a clean close, else the failure. Never fails; yield it any number of times. */
+    readonly closed: Operation<FlowClose>
   }
 
   /** A per-connection handler; runs as a child of the scope that called {@link IODef.Actions.tcpListen}. */

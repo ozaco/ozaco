@@ -1406,9 +1406,19 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
           const three = yield* byAge().paginate({ page: 3, pageSize: 2 })
           expect(names(three.rows)).toEqual(['e'])
 
+          // past the end clamps to the last page; below 1 to the first
           const beyond = yield* byAge().paginate({ page: 9, pageSize: 2 })
-          expect(beyond.rows).toEqual([])
-          expect(beyond.pages).toBe(3)
+          expect(names(beyond.rows)).toEqual(['e'])
+          expect([beyond.page, beyond.pages]).toEqual([3, 3])
+          const below = yield* byAge().paginate({ page: 0, pageSize: 2 })
+          expect([below.page, names(below.rows)]).toEqual([1, ['a', 'b']])
+
+          // nothing matched: one empty page, not zero pages
+          const empty = yield* db
+            .query('users')
+            .filter(where.gt('age', 99))
+            .paginate({ page: 4, pageSize: 2 })
+          expect([empty.rows, empty.total, empty.page, empty.pages]).toEqual([[], 0, 1, 1])
 
           const filtered = yield* db
             .query('users')

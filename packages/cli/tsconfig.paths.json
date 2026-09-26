@@ -12,6 +12,7 @@
       "cli:impl/node": ["./src/impl/node/index.ts", "./dist/impl/node.d.ts"],
 
       "std:shared": ["./node_modules/@ozaco/std/dist/shared"],
+      "std:schema": ["./node_modules/@ozaco/std/dist/schema"],
       "std:result": ["./node_modules/@ozaco/std/dist/result"],
       "std:effect": ["./node_modules/@ozaco/std/dist/effect"],
       "std:plugin": ["./node_modules/@ozaco/std/dist/plugin"],

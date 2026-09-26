@@ -1,6 +1,6 @@
 import type { StandardSchemaV1 } from 'cli:core'
 import type { Operation } from 'std:effect'
-import type { AnyType, EmptyType } from 'std:shared'
+import type { AnyType } from 'std:shared'
 
 import pkg from '../../package.json'
 
@@ -37,17 +37,23 @@ export const DefaultRegistry = Registry.implement<
  * handler's `ctx` (`StandardSchemaV1.InferOutput`, plus the runtime `'--'`/`cwd` fields); `short`
  * maps fields to short flags; `args` lists fields fillable positionally (a trailing array field is
  * variadic); `options` declares flags manually (required for non-zod schemas — see
- * internal/schema); `examples` feed help. Pure metadata-carrying handler — the runner
- * parses+validates before calling.
+ * internal/schema); `examples` feed help. `inherits` (a command spec or its inherited `input`
+ * schema) types the options a command passes down into `ctx` too — the action's own field of the
+ * same name wins — and is type-only. Pure metadata-carrying handler — the runner parses+validates
+ * before calling.
  */
-export function defineAction<S extends StandardSchemaV1, R>(
-  config: CommandDef.ActionConfig<S> & { input: S },
-  handler: (ctx: CommandDef.Ctx<S>) => Operation<R>,
-): CommandDef.Action<S, R>
-export function defineAction<R>(
-  config: Omit<CommandDef.ActionConfig, 'input'>,
-  handler: (ctx: EmptyType & CommandDef.Runtime) => Operation<R>,
-): CommandDef.Action<unknown, R>
+export function defineAction<
+  S extends StandardSchemaV1,
+  R,
+  P extends CommandDef.Inherits | undefined = undefined,
+>(
+  config: CommandDef.ActionConfig<S, P> & { input: S },
+  handler: (ctx: CommandDef.Ctx<S, CommandDef.InheritedOf<P>>) => Operation<R>,
+): CommandDef.Action<S, R, CommandDef.InheritedOf<P>>
+export function defineAction<R, P extends CommandDef.Inherits | undefined = undefined>(
+  config: Omit<CommandDef.ActionConfig<StandardSchemaV1, P>, 'input'>,
+  handler: (ctx: CommandDef.Ctx<unknown, CommandDef.InheritedOf<P>>) => Operation<R>,
+): CommandDef.Action<unknown, R, CommandDef.InheritedOf<P>>
 export function defineAction(config: AnyType, handler: AnyType): AnyType {
   return Object.assign(handler, {
     _t: ACTION,
@@ -65,19 +71,26 @@ export function defineAction(config: AnyType, handler: AnyType): AnyType {
  * path-identified plugin tree at `register`, and installs each level lazily as dispatch descends
  * into it. `actions` mixes leaf actions (`defineAction`, split into `leaf`) and nested commands
  * (`subs`). `input`/`options`/`short` declare options inherited by every action below this command
- * (see {@link CommandDef.Inherited}); `examples` feed help.
+ * (see {@link CommandDef.Inherited}); `examples` feed help. `inherits` (type-only) names a nested
+ * command's ancestors so the fields it passes down accumulate theirs; the returned spec carries
+ * them for its actions' `inherits`, and `actions` must not expect more than it passes down.
  */
-export const defineCommand = <TContext = unknown, TArgs extends unknown[] = []>(
-  options: CommandDef.Options<TContext, TArgs>,
-): CommandDef.Spec<TContext, TArgs> => {
-  const leaf: Record<string, CommandDef.Action<AnyType, AnyType>> = {}
+export const defineCommand = <
+  TContext = unknown,
+  TArgs extends unknown[] = [],
+  S extends StandardSchemaV1 | undefined = undefined,
+  P extends CommandDef.Inherits | undefined = undefined,
+>(
+  options: CommandDef.Options<TContext, TArgs, S, P>,
+): CommandDef.Spec<TContext, TArgs, CommandDef.Available<P, S>, CommandDef.InheritedOf<P>> => {
+  const leaf: Record<string, CommandDef.Action<AnyType, AnyType, AnyType>> = {}
   const subs: Record<string, CommandDef.Spec> = {}
 
   for (const [key, member] of Object.entries(options.actions)) {
     if ((member as { _st?: symbol })._st === COMMAND) {
       subs[key] = member as CommandDef.Spec
     } else {
-      leaf[key] = member as CommandDef.Action<AnyType, AnyType>
+      leaf[key] = member as CommandDef.Action<AnyType, AnyType, AnyType>
     }
   }
 
@@ -94,5 +107,5 @@ export const defineCommand = <TContext = unknown, TArgs extends unknown[] = []>(
         ? undefined
         : { input: options.input, options: options.options, short: options.short },
     examples: options.examples,
-  } as CommandDef.Spec<TContext, TArgs>
+  } as CommandDef.Spec<TContext, TArgs, CommandDef.Available<P, S>, CommandDef.InheritedOf<P>>
 }

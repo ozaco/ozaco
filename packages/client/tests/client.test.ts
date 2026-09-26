@@ -140,8 +140,10 @@ describe('client', () => {
         const manifest = yield* client.$manifest()
         expect(manifest.manifest).toBe('ozaco/2')
         // codegen's `pull` carries the same bearer
+        // …and decodes a refusal the same way as the runtime client: the server's tag, not a network error
         const pulled = yield* attempt(pull(url))
-        expect((pulled as AnyType).error).toBe(ClientErrors.Network)
+        expect((pulled as AnyType).error).toBe('server.unauthorized')
+        expect((pulled as AnyType).causes).toContain('status:401')
         expect(yield* pull(url, { token: FIXTURE_TOKEN })).toContain('export interface Api')
         // the demo actions themselves are open (no `default`), calls work as before
         expect(yield* client.demo.byId({ id: 'x' })).toEqual({ id: 'x' })

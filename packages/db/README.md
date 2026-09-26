@@ -68,9 +68,12 @@ const users = table('users', {
   .index('by_role', ['role'])
 ```
 
-`timestamp()` and `timestamp({ as: 'ms' })` are stored the same way (an integer of epoch
-millis), so switching a column between them needs no migration — `ms` just keeps the `number`
-the system fields use. `_id`, `_created_at`, `_updated_at` and `_version` are implicit on every
+`timestamp({ as: 'ms' })` keeps the `number` the system fields use: it declares an `int` column,
+where `timestamp()` declares a `timestamp` one. The bundled SQL adapters (sqlite, pg, bun-sql)
+store both as an integer of epoch millis, so switching a column between them there needs no data
+migration. An adapter with a native datetime type (e.g. SurrealDB) stores the two differently:
+switching is a kind change the adapter must support as `alter-column`, converting the existing
+values. `_id`, `_created_at`, `_updated_at` and `_version` are implicit on every
 row. Schema reconcile runs
 at install (`migrations: 'auto'`); `safe: true` skips the destructive steps.
 

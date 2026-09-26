@@ -9,6 +9,7 @@ export default defineConfig({
     shared: './src/shared/index.ts',
     effect: './src/effect/index.ts',
     event: './src/event/index.ts',
+    schema: './src/schema/index.ts',
     plugin: './src/plugin/index.ts',
     io: './src/io/index.ts',
     'io/impl/bun': './src/io/impl/bun.ts',

@@ -27,31 +27,34 @@ export const codecRegisterHandler: CodecDef.Handlers['register'] = function* (
 ) {
   const existing = yield* codecGetTransportsHandler()
 
-  let conflict = false
-  let reinstall = false
-  for (const target of existing) {
+  let conflict: CodecDef | undefined
+  let reinstall = -1
+  for (const [index, target] of existing.entries()) {
     if ((yield* useContext(target)).name !== transportCtx.name) {
       continue
     }
 
     // the SAME impl under the same name — typically a child scope re-installing a codec its parent
-    // already registered — is idempotent; only a DIFFERENT impl claiming the name conflicts
-    if (target === transport) {
-      reinstall = true
+    // already registered — is idempotent; only a DIFFERENT impl claiming the name conflicts. "The
+    // same" is the impl's `name@version` tag, not the object: a second copy of the same std
+    // release (a bundled plugin, a duplicated dependency) builds an equal but distinct object
+    if (target.tag === transport.tag) {
+      reinstall = index
     } else {
-      conflict = true
+      conflict = target
     }
   }
 
   if (conflict) {
     return yield* fail(
       CodecErrors.AlreadyRegistered,
-      `codec ${transportCtx.name} is already registered`,
+      `codec ${transportCtx.name} is already registered (${conflict.tag}, installing ${transport.tag})`,
     )
   }
 
-  // a re-install keeps its single entry but re-sorts it: the new install may carry a new priority
-  const entries = reinstall ? existing : [...existing, transport]
+  // a re-install keeps its single entry — swapped for the installing copy, whose context is the one
+  // just set up — but re-sorts it: the new install may carry a new priority
+  const entries = reinstall === -1 ? [...existing, transport] : existing.with(reinstall, transport)
   yield* CodecRegistryContext.set(yield* sortedCodecs(entries, transport, transportCtx))
 }
 

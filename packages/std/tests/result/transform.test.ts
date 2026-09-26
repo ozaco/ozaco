@@ -7,6 +7,7 @@ import {
   fail,
   isFailure,
   isSuccess,
+  ResultErrors,
   succeed,
   throwable,
   unwrap,
@@ -114,6 +115,7 @@ describe('asFailure / asFailureFrom', () => {
   it('asFailureFrom tags a foreign error `std:result.unknown` and serializes it into the message', () => {
     const wrapped = asFailureFrom(new Error('kaput'), 'loading config')
     expect(wrapped.error).toBe('std:result.unknown')
+    expect(wrapped.error).toBe(ResultErrors.Unknown)
     expect(wrapped.message).toBe('Error: kaput')
     expect(wrapped.causes).toEqual(['loading config'])
     expect(asFailureFrom('plain').message).toBe('plain')

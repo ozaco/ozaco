@@ -1,8 +1,10 @@
 import { Codec } from 'std:codec'
+import type { CodecDef } from 'std:codec'
 import {
   attempt,
   createChannel,
   each,
+  ensure,
   run,
   scoped,
   sleep,
@@ -12,7 +14,7 @@ import {
 } from 'std:effect'
 import { PluginErrors } from 'std:plugin'
 import type { Result } from 'std:result'
-import { isFailure, unwrap } from 'std:result'
+import { fail, isFailure, unwrap } from 'std:result'
 
 import { describe, expect, it } from 'bun:test'
 
@@ -22,6 +24,43 @@ import { TomlCodec } from 'std:codec/impl/toml'
 import { fakeCodec } from '../helpers/fake-codec'
 
 const encoder = new TextEncoder()
+
+/** A codec impl that registers itself under `name` — a fresh object per call, so two calls with
+ * the same `name@version` stand in for two copies of one release. */
+const registeringCodec = (name: string, version: string): CodecDef => {
+  const self: CodecDef = Codec.implement({
+    name,
+    version,
+    *setup() {
+      const context: CodecDef.Context = { name, priority: 500, ext: 'dup' }
+      yield* Codec.actions.register(self, context)
+      yield* ensure(function* () {
+        yield* Codec.actions.unregister(self)
+      })
+      return context
+    },
+  }).build({
+    *encode(value) {
+      return encoder.encode(JSON.stringify(value))
+    },
+    *decode(data) {
+      return JSON.parse(new TextDecoder().decode(data))
+    },
+    *stringify(value) {
+      return JSON.stringify(value)
+    },
+    *parse(text) {
+      return JSON.parse(text)
+    },
+    *encodeFlow() {
+      return yield* fail('not-implemented', 'encodeFlow')
+    },
+    *decodeFlow() {
+      return yield* fail('not-implemented', 'decodeFlow')
+    },
+  })
+  return self
+}
 
 describe('single-codec routing (exec with one entry)', () => {
   it('protocol-level encode/decode round-trips through the one installed codec', async () => {
@@ -121,6 +160,36 @@ describe('registry scope-locality', () => {
     })
 
     expect(unwrap(outcome)).toBe('std:codec.already-registered')
+  })
+
+  it('a second COPY of the same `name@version` impl re-installs instead of conflicting', async () => {
+    // two std copies build two distinct-but-equal codec objects; identity is the plugin tag
+    const first = registeringCodec('dup-codec', '1.0.0')
+    const copy = registeringCodec('dup-codec', '1.0.0')
+    const outcome = await run(function* () {
+      yield* first.use()
+      const again = yield* attempt(() => copy.use())
+      const listed = yield* Codec.actions.getTransports()
+
+      return { ok: !isFailure(again), count: listed.length, swapped: listed[0] === copy }
+    })
+
+    expect(unwrap(outcome)).toEqual({ ok: true, count: 1, swapped: true })
+  })
+
+  it('the same impl name at a DIFFERENT version fails `CodecErrors.AlreadyRegistered`', async () => {
+    const outcome = await run(function* () {
+      yield* registeringCodec('dup-codec', '1.0.0').use()
+      const clash = yield* attempt(() => registeringCodec('dup-codec', '2.0.0').use())
+
+      return isFailure(clash) ? { error: clash.error, message: clash.message } : 'no-failure'
+    })
+
+    expect(unwrap(outcome)).toEqual({
+      error: 'std:codec.already-registered',
+      message:
+        'codec dup-codec is already registered (dup-codec@1.0.0, installing dup-codec@2.0.0)',
+    })
   })
   it('one impl installed under two names lands in the registry twice (keyed by name)', async () => {
     const outcome = await run(function* () {

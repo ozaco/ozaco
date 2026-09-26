@@ -9,8 +9,9 @@ import { DEFAULT_TIMEOUT_MS, HEADERS } from '../const'
 import { ClientErrors } from '../errors'
 import type { ClientDef } from '../types/client'
 import type { Helpers } from '../types/helpers'
+import { failureOf } from '../utils/failure'
 
-import { decodeBody, failureOf } from './decode'
+import { decodeBody } from './decode'
 
 /** A PLAIN object (streams, blobs, class instances are not). */
 const isRecord = (value: unknown): value is Record<string, unknown> =>

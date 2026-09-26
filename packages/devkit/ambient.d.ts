@@ -12,6 +12,9 @@ declare module 'std:effect' {
 declare module 'std:event' {
   export * from '@ozaco/std/event';
 }
+declare module 'std:schema' {
+  export * from '@ozaco/std/schema';
+}
 declare module 'std:plugin' {
   export * from '@ozaco/std/plugin';
 }
