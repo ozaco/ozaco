@@ -1,30 +1,6 @@
+import { isRecord, typeOf } from '../internal/schema'
 import type { Helpers } from '../types/helpers'
 // oxlint-disable import/exports-last
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value)
-
-const typeOf = (schema: Record<string, unknown>): string | null => {
-  const type = schema['type']
-
-  if (typeof type === 'string') {
-    return type
-  }
-
-  if (Array.isArray(type)) {
-    return (type.find(entry => entry !== 'null') as string | undefined) ?? null
-  }
-
-  if ('properties' in schema) {
-    return 'object'
-  }
-
-  if ('items' in schema) {
-    return 'array'
-  }
-
-  return null
-}
 
 /** A plausible value for a schema: defaults and enums first, then the shape. */
 export const exampleOf = (schema: Helpers.Schema, depth = 0): unknown => {

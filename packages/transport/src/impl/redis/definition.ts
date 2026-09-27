@@ -1,11 +1,17 @@
 import { Codec } from 'std:codec'
 import { attempt, ensure, until } from 'std:effect'
-import { fail, isFailure } from 'std:result'
-import type { AnyType } from 'std:shared'
+import type { Result } from 'std:result'
+import { asFailure, fail, isFailure } from 'std:result'
 
 import { JsonCodec } from 'std:codec/impl/json'
 import type { TransportDef } from 'transport:core'
-import { isValidPrefix, Transport, transportActions, TransportErrors } from 'transport:core'
+import {
+  isValidPrefix,
+  Transport,
+  transportActions,
+  TransportErrors,
+  watchStatus,
+} from 'transport:core'
 
 import pkg from '../../../package.json'
 
@@ -37,16 +43,22 @@ export const RedisTransport = Transport.implement<TransportDef.Options, [options
     const impl = yield* redisImpl.expect()
     const client = impl.createClient({ ...options.client, url: options.url })
     const subscriber = client.duplicate()
-    // a client with no error listener throws on socket errors — keep them as status instead
+    // a client with no error listener throws on socket errors — keep them as status instead; the
+    // latest one (folded) names the cause when the connection-lost line is logged
+    const seen: { error?: Result.Failure<unknown> } = {}
+    const onError = (error: unknown) => {
+      seen.error = asFailure(error)
+    }
 
-    client.on('error', () => {})
-    subscriber.on('error', () => {})
+    client.on('error', onError)
+    subscriber.on('error', onError)
     const opened = yield* attempt(until(Promise.all([client.connect(), subscriber.connect()])))
 
     if (isFailure(opened)) {
       return yield* fail(
         TransportErrors.Connection,
-        `cannot connect to redis: ${String((opened.error as AnyType)?.message ?? opened.error)}`,
+        'cannot connect to redis',
+        asFailure(opened, TransportErrors),
       )
     }
 
@@ -67,6 +79,13 @@ export const RedisTransport = Transport.implement<TransportDef.Options, [options
         yield* attempt(until(subscriber.quit()))
         yield* attempt(until(client.quit()))
       }
+    })
+
+    // connection lost / back / closed → the Logger, while the install lives
+    yield* watchStatus(driver.status(), {
+      transport: 'redis',
+      prefix: options.prefix,
+      detail: () => (seen.error === undefined ? undefined : { error: seen.error }),
     })
 
     return { transport: 'redis', prefix: options.prefix, capabilities: driver.capabilities }

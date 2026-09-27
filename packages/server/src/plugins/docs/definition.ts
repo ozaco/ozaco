@@ -1,4 +1,4 @@
-import type { OptionsDef, ServerDef } from 'server:core'
+import type { EdgeDef, OptionsDef, ServerDef } from 'server:core'
 import { Server, ServerErrors } from 'server:core'
 import { OBSERVE_CONSOLE_PATH } from 'server:internal'
 // oxlint-disable-next-line no-restricted-imports
@@ -11,14 +11,15 @@ import pkg from '../../../package.json'
 import { manifestOf } from './internal/manifest'
 import { openapiOf } from './internal/openapi'
 import { PANEL_HTML } from './internal/panel.gen'
-import type { DocsDef } from './types'
+import type { DocsDef } from './types/docs'
 
 /**
  * The docs plugin: the Ozaco Manifest v1 at `<path>/manifest` (services, actions, routes,
  * planes/brands, JSON Schemas, options, errors), an OpenAPI 3.1 rendering of it at
  * `<path>/openapi.json`, and a self-contained panel at `<path>` with try-it. The client
  * consumes the manifest; nothing is fetched from a CDN. `auth` gates all three routes behind the
- * `Auth` plugin (bearer in the `authorization` header).
+ * `Auth` plugin (bearer in the `authorization` header). The routes are quiet by default
+ * (`observe: 'errors'`): a panel / manifest fetch leaves a trace only when it fails.
  */
 export const Docs = definePlugin<
   ServerDef.PluginContext & { manifest(): DocsDef.Manifest },
@@ -36,6 +37,7 @@ export const Docs = definePlugin<
     const path = (options?.path ?? '/docs').replace(/\/$/u, '')
     const title = options?.title ?? 'docs'
     const requirement: OptionsDef.Requirement = options?.auth ?? false
+    const observe: EdgeDef.Observe = options?.observe ?? 'errors'
 
     // resolved at `start`, once every plugin (Auth included) has set up
     let defaultAuth: OptionsDef.Requirement = false
@@ -70,6 +72,7 @@ export const Docs = definePlugin<
             method: 'GET',
             path: `${path}/manifest`,
             auth: requirement,
+            observe,
             *handler() {
               return Response.json(manifest())
             },
@@ -78,6 +81,7 @@ export const Docs = definePlugin<
             method: 'GET',
             path: `${path}/openapi.json`,
             auth: requirement,
+            observe,
             *handler() {
               return Response.json(openapiOf(manifest()))
             },
@@ -86,6 +90,7 @@ export const Docs = definePlugin<
             method: 'GET',
             path,
             auth: requirement,
+            observe,
             *handler() {
               return new Response(
                 PANEL_HTML.replace('<title>ozaco</title>', `<title>${title}</title>`),

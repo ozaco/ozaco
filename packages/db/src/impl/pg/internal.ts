@@ -1,10 +1,11 @@
 // oxlint-disable import/exports-last
-import { attempt, createContext, until, useContext } from 'std:effect'
-import { fail, isFailure } from 'std:result'
+import { DbErrors } from 'db:core'
+import { driverCause } from 'db:internal'
+import { createContext, until, useContext } from 'std:effect'
+import { asFailure, isFailure, succeed } from 'std:result'
 import type { AnyType } from 'std:shared'
 
-import { classifySqlState } from '../shared/dialects'
-import type { Sql } from '../shared/types'
+import type { Sql } from '../shared/types/sql'
 
 import type { Pg } from './types'
 
@@ -19,18 +20,19 @@ export const StateRef = createContext<Pg.State>('db:impl/pg')
 const TxSession = createContext<AnyType>('db:impl/pg:tx-session')
 const TxDepth = createContext<number>('db:impl/pg:tx-depth', 0)
 
-/** Classify a driver error into a `DbErrors` failure. */
-export function* raise(error: AnyType) {
-  const message = String(error?.message ?? error)
-  return yield* fail(classifySqlState(error?.code, message), message)
-}
+/** A driver rejection as its `DbErrors` failure — classified by the `DbErrors` matchers (the
+ * SQLSTATE in `code`, else the text; `db.query` for anything else), the driver's message, the
+ * driver error as `raw` and its SQLSTATE as the `sqlstate <code>` cause the db span reports as
+ * `db.response.status_code`. */
+const raise = (error: unknown) => asFailure(error, DbErrors, driverCause(error))
 
-/** Await a driver promise, classifying a rejection. */
+/** Await a driver promise. A rejection is classified where it happens — from the driver error
+ * itself, never from the effect runtime's fold of it. */
 export function* driver(promise: Promise<AnyType>) {
-  const outcome = yield* attempt(until(promise))
+  const outcome = yield* until(promise.then(value => succeed(value), raise))
 
   if (isFailure(outcome)) {
-    return yield* raise(outcome.error)
+    return yield* outcome
   }
 
   return outcome.value as AnyType

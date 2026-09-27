@@ -1,6 +1,12 @@
 import type { KvDef } from 'db:core'
 import { column, DbAdapter, Kv, KvErrors, table } from 'db:core'
-import { DEFAULT_KV_PREFIX, isValidKvPrefix, kvActions, tableSpecOf } from 'db:internal'
+import {
+  adapterIdentity,
+  DEFAULT_KV_PREFIX,
+  isValidKvPrefix,
+  kvActions,
+  tableSpecOf,
+} from 'db:internal'
 import { Codec } from 'std:codec'
 import { attempt, useContext } from 'std:effect'
 import { fail, isFailure } from 'std:result'
@@ -10,7 +16,7 @@ import { JsonCodec } from 'std:codec/impl/json'
 import pkg from '../../../package.json'
 
 import { createLock, driver, StateRef } from './internal'
-import type { TableKvDef } from './types'
+import type { TableKvDef } from './types/table-kv'
 
 const TABLE_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/u
 
@@ -45,6 +51,7 @@ export const TableKv = Kv.implement<KvDef.Options, [options?: TableKvDef.Options
       return yield* fail(
         KvErrors.Configuration,
         'no db adapter installed — install a db:impl/* adapter before TableKv',
+        adapter,
       )
     }
     const entries = tableSpecOf(
@@ -69,13 +76,17 @@ export const TableKv = Kv.implement<KvDef.Options, [options?: TableKvDef.Options
       ]),
     )
     if (isFailure(created)) {
-      return yield* fail(
-        KvErrors.Configuration,
-        `cannot create kv tables "${name}"`,
-        ...created.causes,
-      )
+      return yield* fail(KvErrors.Configuration, `cannot create kv tables "${name}"`, created)
     }
     yield* StateRef.set({ entries, tags, lock: createLock() })
-    return { store: 'table', prefix, capabilities: driver.capabilities }
+    // the store's spans are its backing database's: same system, namespace and server — the
+    // table is the collection
+    const { system, namespace, address, port } = adapterIdentity(adapter.value)
+    return {
+      store: 'table',
+      prefix,
+      capabilities: driver.capabilities,
+      telemetry: { system, namespace, collection: name, address, port },
+    }
   },
 }).build(kvActions(driver))

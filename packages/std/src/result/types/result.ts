@@ -5,6 +5,9 @@ import type { RESULT_FAILURE, RESULT_SUCCESS } from '../const'
 export type Result<T, E = unknown> = Result.Success<T> | Result.Failure<E>
 
 export namespace Result {
+  /** One cause of a failure: a domain string, or a Failure it wraps. */
+  export type Cause = string | Failure<unknown>
+
   export type Success<T> = {
     /** Discriminant tag (`RESULT_SUCCESS`); what `isSuccess` / `isResult` check. */
     readonly _t: typeof RESULT_SUCCESS
@@ -19,9 +22,15 @@ export namespace Result {
     readonly error: E
 
     readonly message: string
-    readonly causes: string[]
+    /** Why it failed, in the order given: domain cause strings, and the Failures it wraps (kept as
+     * the SAME object: identity is what std:trace's record-once keys on). */
+    readonly causes: Cause[]
     /** Creation time as a `Date.now()` epoch-millisecond stamp, set by `fail()`; diagnostic only. */
     readonly _d: number
+    /** The foreign value (a thrown JS / platform / third-party error) this failure was folded
+     * from — the caller's to inspect. Only `asFailure` sets it (and reads it back, to re-classify
+     * a `std:result.unknown` fold); std itself never renders, sends or classifies by it. */
+    readonly raw?: unknown
 
     [Symbol.iterator](): Generator<Failure<E>, never>
   }
@@ -39,13 +48,4 @@ export namespace Result {
       : never
 
   export type FromUnion<R> = R extends Result<AnyType, AnyType> ? R : Result<R, never>
-
-  // rest-args so both custom `new (error: Error)` classes and built-ins like `SyntaxError`
-  // (`new (message?: string)`) satisfy the constraint. Built-ins type-check without a cast
-  // (`throwable(cb, SyntaxError)` compiles); the `as AnyType` casts in tests/result/transform.test.ts
-  // are not required by this constraint.
-  export interface ErrorConstructor<E = Error> {
-    new (...args: AnyType[]): E
-    readonly prototype: E
-  }
 }

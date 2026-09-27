@@ -7,7 +7,7 @@ import { mirror } from '../internal/mirror'
 const StdoutExporterImpl = ObserveExporter.implement<ObserveDef.ExporterContext, []>({
   name: 'server-observe-stdout',
   version: pkg.version,
-  description: 'One stdout line per request, failure and log (dev)',
+  description: 'Every span and log record on stdout (dev)',
 
   *setup() {
     return { exporter: 'stdout' }
@@ -15,9 +15,10 @@ const StdoutExporterImpl = ObserveExporter.implement<ObserveDef.ExporterContext,
 })
 
 /**
- * The stdout mirror as an exporter — `plugins: [StdoutExporter]`: one `[oz] <requestId> …` line
- * per request, failure and log as it happens, request id first so a request's lines grep
- * together. Nothing is batched or kept.
+ * The stdout exporter (dev) — `plugins: [StdoutExporter]`: EVERY finished span (one compact line
+ * with `trace_id=` / `span_id=`, its events and links indented under it) and EVERY log record (an
+ * exception with its full cause chain indented under it) as it happens — the same records every
+ * other sink receives. Nothing is batched or kept.
  */
 export const StdoutExporter = StdoutExporterImpl.build({
   *export(event: ObserveDef.Event) {

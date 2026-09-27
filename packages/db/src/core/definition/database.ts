@@ -23,6 +23,7 @@ import {
   replayLog,
 } from '../internal/log'
 import { applyPlan, planMigration } from '../internal/migrate'
+import { traced } from '../internal/trace'
 import type { Bus } from '../types/bus'
 import type { Change } from '../types/change'
 import type { Database } from '../types/database'
@@ -30,6 +31,7 @@ import type { Helpers } from '../types/helpers'
 import type { Spec } from '../types/spec'
 import { where } from '../utils/filter'
 import { tableSpecOf } from '../utils/schema'
+import { untraced } from '../utils/telemetry'
 
 import { Db, DbAdapter } from './protocol'
 
@@ -40,6 +42,8 @@ import { Db, DbAdapter } from './protocol'
  * as the plugin context.
  * `JsonCodec` is a BASELINE dependency (`json` columns, keyset cursors and unique-index keys are
  * all (de)serialized through it) — installed here unless the scope already carries a codec.
+ * Every data-plane call of the handle is a child-only db span (`find todos`, `transaction`, …; see
+ * `internal/trace`), `options.observe` tunes them.
  */
 const DbImpl = Db.implement<Database.Context, [options: Database.Options]>({
   name: 'db-client',
@@ -66,7 +70,7 @@ const DbImpl = Db.implement<Database.Context, [options: Database.Options]>({
       return yield* fail(
         DbErrors.Configuration,
         'no db adapter installed — install a db:impl/* adapter before DbClient',
-        String(described.error),
+        described,
       )
     }
 
@@ -78,7 +82,7 @@ const DbImpl = Db.implement<Database.Context, [options: Database.Options]>({
       return yield* fail(
         DbErrors.Configuration,
         'cannot mint ids — install a std:io impl (BunIO/NodeIO) before DbClient, or pass `options.id`',
-        String(probe.error),
+        probe,
       )
     }
 
@@ -94,7 +98,7 @@ const DbImpl = Db.implement<Database.Context, [options: Database.Options]>({
       return yield* fail(
         DbErrors.Configuration,
         `invalid origin "${origin}" — 8 Crockford base32 characters expected`,
-        String(minted.error),
+        minted,
       )
     }
 
@@ -129,7 +133,8 @@ const DbImpl = Db.implement<Database.Context, [options: Database.Options]>({
       specs: new Map(tables.map(def => [def.name, tableSpecOf(def)])),
       logs: new Map(tables.filter(def => def.log).map(def => [def.name, logSpecOf(def.name)])),
       safe: options.safe ?? false,
-      adapter: adapter.actions,
+      // every data-plane call goes through its db span (child-only — see `internal/trace`)
+      adapter: traced(adapter.actions, described.value, options.observe),
       info: described.value,
       origin,
       replayWindowMs: options.replayWindowMs ?? DEFAULT_REPLAY_WINDOW_MS,
@@ -149,7 +154,8 @@ const DbImpl = Db.implement<Database.Context, [options: Database.Options]>({
       replay: (table, fromTs) => replayLog(base, table, fromTs),
       observe: token => IO.actions.observeHlc(token),
       replayWindowMs: base.replayWindowMs,
-      tables: [...base.specs.keys()],
+      // what a replay reads: the tables that keep a change log
+      tables: [...base.logs.keys()],
     })
     const state: Database.State = {
       ...base,
@@ -164,12 +170,14 @@ const DbImpl = Db.implement<Database.Context, [options: Database.Options]>({
     yield* bridgeTransports(state)
     const pollMs = options.pollMs ?? 0
     if (pollMs > 0) {
-      yield* fork(function* () {
-        for (;;) {
-          yield* sleep(pollMs)
-          yield* attempt(() => hub.sync())
-        }
-      })
+      yield* fork(() =>
+        untraced(function* () {
+          for (;;) {
+            yield* sleep(pollMs)
+            yield* attempt(() => hub.sync())
+          }
+        }),
+      )
     }
     return createHandle(state)
   },

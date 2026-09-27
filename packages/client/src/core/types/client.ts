@@ -56,6 +56,10 @@ export namespace ClientDef {
     readonly requestId: string
     readonly status: number
     readonly brand: string | null
+
+    /** the trace the call belongs to: the server's `traceresponse`, else the call's own CLIENT
+     * span's; `null` when neither exists (nothing traced, no response header). */
+    readonly traceId: string | null
   }
 
   /** The pager of a WINDOWED watch: keyset cursors + the set's total, as of the frame token. */
@@ -275,6 +279,10 @@ export namespace ClientDef {
     /** the last request id a call received. */
     readonly $lastRequestId: () => string | null
 
+    /** the trace id of the last call's reply (its `traceresponse`, else the call's own CLIENT
+     * span's) — what to look the call up by in Tempo / OpenObserve / the observe console. */
+    readonly $lastTraceId: () => string | null
+
     /** The scope the client lives in (its plugins — IO, codec, ws — are installed there). Run an
      * operation in it (`$scope.run(...)`) to `yield*` calls from a task that has none of those
      * contexts itself; its teardown ends every open stream and socket. */
@@ -289,5 +297,6 @@ export namespace ClientDef {
     readonly options: Options
     manifest: ManifestDef.Manifest | null
     lastRequestId: string | null
+    lastTraceId: string | null
   }
 }

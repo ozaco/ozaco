@@ -6,6 +6,7 @@ import { FIELDS } from '../const'
 import type { Change } from '../types/change'
 import type { Helpers } from '../types/helpers'
 import type { Spec } from '../types/spec'
+import { untraced } from '../utils/telemetry'
 
 /** A table-level touch (empty id) means "anything here may have changed" — every watcher of the
  * table re-reads. */
@@ -13,7 +14,9 @@ const isTableTouch = (event: Change.Event): boolean => event.op === 'touch' && e
 
 /**
  * Watch one document: its current value immediately, then a fresh read after every change to it
- * (events carry no documents). A `delete` yields `null` without reading.
+ * (events carry no documents). A `delete` yields `null` without reading. The first read belongs to
+ * whoever subscribed (it runs under their span); every later one runs with no span — a watch can
+ * live for hours under one long-lived span, and its re-reads are nobody's request.
  */
 export const watchDoc = (input: Helpers.DocWatch): Flow<Spec.Doc | null, never> => ({
   *[Symbol.iterator]() {
@@ -38,7 +41,7 @@ export const watchDoc = (input: Helpers.DocWatch): Flow<Spec.Doc | null, never> 
           if (event.op === 'delete') {
             return { done: false as const, value: null }
           }
-          return { done: false as const, value: yield* input.load() }
+          return { done: false as const, value: yield* untraced(input.load) }
         }
       },
     }
@@ -55,6 +58,9 @@ const isEmptyDelta = (delta: Change.Delta): boolean =>
  * - a `delete` of a row not in the result,
  * - an `update` of a row not in the result whose changed `fields` touch neither the filter nor
  *   the order columns (a `fields`-less update is "unknown" → recompute).
+ *
+ * The initial computation runs under the subscriber's span; every live recompute runs with none
+ * (see {@link watchDoc}).
  */
 export const watchQuery = (input: Helpers.QueryWatch): Flow<AnyType, never> => ({
   *[Symbol.iterator]() {
@@ -144,7 +150,7 @@ export const watchQuery = (input: Helpers.QueryWatch): Flow<AnyType, never> => (
           if (arrived <= computed || skippable(event)) {
             continue
           }
-          const result = yield* recompute()
+          const result = yield* untraced(recompute)
           if (mode === 'delta' && isEmptyDelta(result.delta)) {
             continue
           }

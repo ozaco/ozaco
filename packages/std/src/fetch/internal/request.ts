@@ -1,12 +1,23 @@
 // oxlint-disable unicorn/no-array-for-each
 import type { Context, Operation } from 'std:effect'
-import { until, useAbortSignal } from 'std:effect'
-import { asFailure, fail } from 'std:result'
+import { attempt, ensure, until, useAbortSignal } from 'std:effect'
+import type { Result } from 'std:result'
+import { asFailure, fail, isFailure } from 'std:result'
+import { traceNow } from 'std:trace'
 
 import { FetchErrors } from '../errors'
-import type { FetchDef } from '../types'
+import type { FetchDef } from '../types/fetch'
 import { fetchImpl } from '../utils/context'
-import { createFetchResponse } from '../utils/response'
+
+import { buildResponse } from './response'
+import {
+  carrierOf,
+  markResponse,
+  openClientSpan,
+  releasing,
+  sentMethod,
+  withCarrier,
+} from './trace'
 
 /**
  * Resolve a RELATIVE string input against the configured base URL (standard
@@ -52,39 +63,58 @@ const mergeHeaders = (
 }
 
 /**
- * A platform transport fault — the connection never produced a response (refused, reset, DNS,
- * TLS). Fetch rejects those with a `TypeError` (spec) and Bun adds a string `code`
- * (`ConnectionRefused`, `ECONNRESET`, …); aborts and timeouts are NOT network faults.
+ * The failure a rejected platform fetch becomes, through the `FetchErrors` matchers: a transport
+ * fault ⇒ `FetchErrors.Network` (the platform's own text the message), a deadline hit ⇒
+ * `FetchErrors.Timeout` naming the request and its deadline (the platform's fold under it),
+ * anything else `std:result.unknown`.
  */
-const isNetworkError = (
-  raw: unknown,
-): raw is { name?: string; code?: unknown; message?: string } => {
-  if (raw === null || typeof raw !== 'object') {
-    return false
-  }
+const failureOf = (
+  error: unknown,
+  target: RequestInfo | URL,
+  timeoutMs: number | undefined,
+): Result.Failure<unknown> => {
+  const failure = asFailure(error, FetchErrors)
 
-  const { name, code } = raw as { name?: unknown; code?: unknown }
-  if (name === 'AbortError' || name === 'TimeoutError') {
-    return false
-  }
-
-  return raw instanceof TypeError || (raw instanceof Error && typeof code === 'string')
+  return failure.error === FetchErrors.Timeout && timeoutMs !== undefined
+    ? fail(FetchErrors.Timeout, `${target}: timed out after ${timeoutMs}ms`, asFailure(error))
+    : failure
 }
 
-// the platform code when there is one (Bun's refused connection has an EMPTY message), else the
-// platform message, else the error name
-const networkMessage = (raw: { name?: string; code?: unknown; message?: string }): string => {
-  if (typeof raw.code === 'string' && raw.code !== '') {
-    return raw.code
-  }
+/** The platform fetch itself, bound to the calling scope (and the deadline, if any). */
+function* send(
+  target: RequestInfo | URL,
+  init: RequestInit,
+  { timeoutMs, tls }: { timeoutMs: number | undefined; tls: FetchDef.Tls | undefined },
+): Operation<Response> {
+  try {
+    const impl = yield* fetchImpl.get()
+    const scopeSignal = yield* useAbortSignal()
+    const signal =
+      timeoutMs === undefined
+        ? scopeSignal
+        : AbortSignal.any([scopeSignal, AbortSignal.timeout(timeoutMs)])
 
-  return raw.message || raw.name || 'network error'
+    const requestInit: RequestInit = { ...init, signal }
+    if (tls !== undefined) {
+      // Bun's `tls` fetch extension — not in the lib `RequestInit`; other runtimes ignore it
+      ;(requestInit as RequestInit & { tls?: FetchDef.Tls }).tls = tls
+    }
+
+    return yield* until(impl!(target, requestInit))
+  } catch (error) {
+    return yield* failureOf(error, target, timeoutMs)
+  }
 }
 
 /**
  * The raw `request` action the plugin installs: resolves the install-time defaults (base URL,
  * headers, timeout) against the per-request init, performs the fetch through `fetchImpl`, and
  * wraps the platform response. Runs INSIDE the protocol dispatch, so hooks wrap it.
+ *
+ * Traced: the request is an HTTP CLIENT span, its context injected into the request headers; it
+ * ends with the response body (see `buildResponse`), at once when there is none, with the
+ * failure when the fetch fails, cancelled when the request is halted. A body never read ends it
+ * when the calling scope closes, at the time the headers arrived.
  */
 export const createRequestAction = (context: Context<FetchDef.Context>) =>
   function* request(input: RequestInfo | URL, init?: FetchDef.Init): Operation<FetchDef.Response> {
@@ -94,6 +124,9 @@ export const createRequestAction = (context: Context<FetchDef.Context>) =>
       headers: initHeaders,
       codec: initCodec,
       tls: initTls,
+      template,
+      resendCount,
+      propagate: initPropagate,
       ...rest
     } = init ?? {}
 
@@ -101,41 +134,40 @@ export const createRequestAction = (context: Context<FetchDef.Context>) =>
     const codec = initCodec ?? options.codec
     const tls = initTls ?? options.tls
     const target = resolveInput(input, options.baseUrl)
-    const headers = mergeHeaders(options.headers, input, initHeaders)
+    const method = rest.method ?? (input instanceof Request ? input.method : 'GET')
 
-    try {
-      const impl = yield* fetchImpl.get()
-      const scopeSignal = yield* useAbortSignal()
-      const signal =
-        timeoutMs === undefined
-          ? scopeSignal
-          : AbortSignal.any([scopeSignal, AbortSignal.timeout(timeoutMs)])
+    const live = yield* openClientSpan(target, method, { template, resendCount })
+    const carrier = (initPropagate ?? options.propagate ?? true) ? yield* carrierOf(live) : {}
+    const headers = withCarrier(carrier, input, mergeHeaders(options.headers, input, initHeaders))
 
-      const requestInit: RequestInit = { ...rest, signal }
-      if (headers !== undefined) {
-        requestInit.headers = headers
-      }
-      if (tls !== undefined) {
-        // Bun's `tls` fetch extension — not in the lib `RequestInit`; other runtimes ignore it
-        ;(requestInit as RequestInit & { tls?: FetchDef.Tls }).tls = tls
-      }
-
-      const response = yield* until(impl!(target, requestInit))
-
-      return createFetchResponse(response, codec)
-    } catch (error) {
-      // `until` reifies a rejection into a Failure, so unwrap one level; matched by NAME, not
-      // `instanceof DOMException` — runtimes disagree on the constructor
-      const raw = (error as { error?: unknown } | null)?.error ?? error
-
-      if (timeoutMs !== undefined && (raw as { name?: string } | null)?.name === 'TimeoutError') {
-        return yield* fail(FetchErrors.Timeout, `${target}: timed out after ${timeoutMs}ms`)
-      }
-
-      if (isNetworkError(raw)) {
-        return yield* fail(FetchErrors.Network, networkMessage(raw))
-      }
-
-      return yield* asFailure(error)
+    const requestInit: RequestInit = { ...rest }
+    if (headers !== undefined) {
+      requestInit.headers = headers
     }
+
+    if (!live) {
+      return buildResponse(yield* send(target, requestInit, { timeoutMs, tls }), codec, null)
+    }
+
+    // the fallback end, when the calling scope closes first: mid-request ⇒ cancelled; a body never
+    // read ⇒ the request ended when its headers arrived. It lives as long as that scope, so it
+    // holds the span only until the span ends (a long-lived scope must not keep every request's)
+    const { span, fallback, end } = releasing(live)
+    yield* ensure(end)
+
+    const outcome = yield* attempt(() => send(target, requestInit, { timeoutMs, tls }))
+    if (isFailure(outcome)) {
+      yield* span.end({ failure: outcome })
+      return yield* outcome
+    }
+
+    const response = outcome.value
+    fallback.at = yield* span.run(() => traceNow())
+    markResponse(span, response.status)
+
+    if (response.body === null || sentMethod(method) === 'HEAD') {
+      yield* span.end()
+    }
+
+    return buildResponse(response, codec, span)
   }

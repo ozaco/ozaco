@@ -11,11 +11,29 @@ export const StateRef = createContext<RedisKvDef.State>('db:impl/redis-kv')
 
 const encoder = new TextEncoder()
 
-export const raise = function* (error: unknown) {
-  return yield* fail(KvErrors.Connection, String((error as AnyType)?.message ?? error))
+const REDIS_PORT = 6379
+
+/** The telemetry identity of a redis store: the database index (`db.namespace`, `0` unless the
+ * URL's path names one), the server's address and port, the prefix as the collection. */
+export const redisTelemetry = (url: string, prefix: string): KvDef.Telemetry => {
+  try {
+    const parsed = new URL(url)
+    const index = parsed.pathname.replace(/^\//u, '')
+    const address = parsed.hostname.replace(/^\[(.*)\]$/u, '$1')
+
+    return {
+      system: 'redis',
+      namespace: /^\d+$/u.test(index) ? index : '0',
+      collection: prefix,
+      ...(address ? { address, port: parsed.port ? Number(parsed.port) : REDIS_PORT } : {}),
+    }
+  } catch {
+    return { system: 'redis', namespace: '0', collection: prefix }
+  }
 }
 
-/** Await a client promise, classifying a rejection into a `kv.connection` failure. */
+/** Await a client promise; a rejection is a `kv.connection` failure over the runtime's fold of the
+ * client error (kept as its `raw`). */
 function* call<T>(promise: Promise<T>) {
   const state = yield* useContext(StateRef)
 
@@ -26,7 +44,7 @@ function* call<T>(promise: Promise<T>) {
   const outcome = yield* attempt(until(promise))
 
   if (isFailure(outcome)) {
-    return yield* raise(outcome.error)
+    return yield* fail(KvErrors.Connection, 'redis command failed', outcome)
   }
 
   return outcome.value

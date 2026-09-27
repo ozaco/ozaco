@@ -1,6 +1,7 @@
 import type { Flow, Operation } from 'std:effect'
 import type { Plugin } from 'std:plugin'
 import type { AnyType, StandardSchemaV1 } from 'std:shared'
+import type { TraceDef } from 'std:trace'
 
 import type { OptionsDef } from './options'
 import type { ServerDef } from './server'
@@ -114,7 +115,15 @@ export namespace EdgeDef {
     /** the caller the `Auth` gate verified (`null` when anonymous, or when no `Auth` is
      * installed). */
     readonly principal: OptionsDef.Principal | null
+
+    /** the request's edge span (a no-op handle when nothing is recorded) — attributes, events. */
+    readonly span: TraceDef.SpanHandle
   }
+
+  /** How much telemetry a raw route records: `'on'` every request, `'errors'` a request only
+   * when it failed (the local trace is buffered and dropped on success), `'off'` nothing (the
+   * handler runs suppressed). */
+  export type Observe = 'off' | 'errors' | 'on'
 
   export type RawHandler = (
     request: Request,
@@ -132,6 +141,9 @@ export namespace EdgeDef {
      * keeps raw routes closed too. Without `Auth` installed, anything but `false`/omitted is
      * refused (`server.unauthorized`). */
     readonly auth?: OptionsDef.Requirement | undefined
+
+    /** Default `'on'`; plugin-owned routes (health, docs, the observe console) pass `'errors'`. */
+    readonly observe?: Observe | undefined
     readonly handler: RawHandler
   }
 
@@ -155,6 +167,9 @@ export namespace EdgeDef {
 
     /** the routes' requirement — see {@link RawRoute.auth} (omitted = `Auth`'s default). */
     readonly auth?: OptionsDef.Requirement | undefined
+
+    /** see {@link RawRoute.observe}. Default `'errors'` (asset requests are noise). */
+    readonly observe?: Observe | undefined
   }
 
   export interface Actions {
@@ -199,20 +214,40 @@ export namespace EdgeDef {
     readonly onClose: (listener: (code: number, reason: string) => void) => void
   }
 
+  /**
+   * An upgrade the engine accepted. The driver then performs the RUNTIME upgrade and reports
+   * how it went through exactly one of the two callbacks — the upgrade span `GET {route}` stays
+   * open until it does (or ends cancelled if it never hears back).
+   */
+  export interface Accepted {
+    readonly kind: 'accept'
+
+    /** The runtime upgraded (101 sent): the engine drives `socket` from here. The upgrade span
+     * ends with `http.response.status_code: 101`. */
+    readonly attach: (socket: RawSocket) => void
+
+    /** The runtime could NOT complete the accepted upgrade (Bun's `upgrade()` refused it, Deno's
+     * `upgradeWebSocket` threw, `ws` aborted the handshake): `reason` is what it raised, if
+     * anything, `status` what the driver answered the client (default 500). The upgrade span
+     * ends with it — `http.response.status_code`, `error.type`, one exception record (ERROR
+     * and status error for a 5xx) — or, where tracing is off, one WARN Logger line. */
+    readonly failed: (reason?: unknown, status?: number) => void
+  }
+
   /** What the engine decides about a websocket upgrade request. */
-  export type Upgrade =
-    | { readonly kind: 'accept'; readonly attach: (socket: RawSocket) => void }
-    | { readonly kind: 'reject'; readonly response: Response }
+  export type Upgrade = Accepted | { readonly kind: 'reject'; readonly response: Response }
 
   /** The promise-land bridge a driver wires its runtime to. */
   export interface ServeHandlers {
     /** Handle one HTTP request (the response body may still be streaming when it resolves — the
-     * engine keeps the request's scope alive until the body is done). */
-    fetch(request: Request): Promise<Response>
+     * engine keeps the request's scope alive until the body is done). `peer`: the address the
+     * connection came from, when the runtime knows it (`client.address` without a proxy header). */
+    fetch(request: Request, peer?: string | undefined): Promise<Response>
 
     /** Decide an upgrade request: accept (then perform the runtime upgrade and `attach` the raw
-     * socket) or reject with a response. */
-    upgrade(request: Request): Promise<Upgrade>
+     * socket — or report `failed` when the runtime could not) or reject with a response. `peer`:
+     * see {@link fetch}. */
+    upgrade(request: Request, peer?: string | undefined): Promise<Upgrade>
 
     /** Whether a request targets a socket route (so the driver knows to try an upgrade). */
     isSocket(request: Request): boolean

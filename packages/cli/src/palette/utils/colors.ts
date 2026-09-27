@@ -1,11 +1,5 @@
-import { ansi } from 'cli:core'
-
+import { styler } from '../internal/style'
 import type { PaletteDef } from '../types'
-
-const styler =
-  (enabled: boolean) =>
-  (open: number, close: number): PaletteDef.Style =>
-    enabled ? text => `${ansi.esc}[${open}m${text}${ansi.esc}[${close}m` : text => text
 
 export const createColors = (enabled: boolean): PaletteDef.Colors => {
   const style = styler(enabled)

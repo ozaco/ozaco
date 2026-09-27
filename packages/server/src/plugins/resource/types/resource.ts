@@ -676,5 +676,15 @@ export namespace ResourceDef {
         readonly token: string
         readonly page: WindowInfo
       }
-    | { readonly t: 'error'; readonly id: string; readonly tag: string; readonly message: string }
+    | {
+        readonly t: 'error'
+        readonly id: string
+        readonly tag: string
+        readonly message: string
+
+        /** the `traceparent` of the span that RECORDED the failure (the watch span, a push's
+         * root) when this node recorded it — a subscriber whose watch went out in that trace does
+         * not record it a second time (@ozaco/client marks it `remote.recorded`). */
+        readonly recorded?: string | undefined
+      }
 }

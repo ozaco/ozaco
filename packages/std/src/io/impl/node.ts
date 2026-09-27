@@ -1,6 +1,5 @@
 // oxlint-disable unicorn/text-encoding-identifier-case
 
-import { until } from 'std:effect'
 import { IO, IO_FLAGS, toPath } from 'std:io'
 import { fail } from 'std:result'
 import { hasFlag } from 'std:shared'
@@ -24,6 +23,7 @@ import { ulidId } from '../internal/crypto/ulid'
 import { uuidId } from '../internal/crypto/uuid'
 import { readEnv } from '../internal/env'
 import { readFileFlow, writeFileFlow } from '../internal/fs/flow'
+import { fsCall } from '../internal/fs/platform'
 import { sharedFs, writeFlagOf } from '../internal/fs/shared'
 import { watchPath } from '../internal/fs/watch'
 import { tcpConnect, tcpListen, udpBind } from '../internal/net/sockets'
@@ -91,12 +91,12 @@ export const NodeIO = IO.implement({
   writeFlow: (path, source, options) => writeFileFlow(toPath(path), source, options?.flags),
 
   *read(path) {
-    const buf = yield* until(fs.readFile(toPath(path)))
+    const buf = yield* fsCall(fs.readFile(toPath(path)))
     return new Uint8Array(buf)
   },
 
   *readText(path, encoding) {
-    return yield* until(
+    return yield* fsCall(
       fs.readFile(toPath(path), { encoding: (encoding ?? 'utf-8') as BufferEncoding }),
     )
   },
@@ -104,19 +104,19 @@ export const NodeIO = IO.implement({
   *write(path, data, options) {
     const f = options?.flags ?? IO_FLAGS.none
     const flag = writeFlagOf(f)
-    yield* until(fs.writeFile(toPath(path), data, { flag }))
+    yield* fsCall(fs.writeFile(toPath(path), data, { flag }))
   },
 
   *copy(src, dest, options) {
     const mode = hasFlag(options?.flags ?? IO_FLAGS.none, IO_FLAGS.exclusive) ? 1 : 0
-    yield* until(fs.copyFile(toPath(src), toPath(dest), mode))
+    yield* fsCall(fs.copyFile(toPath(src), toPath(dest), mode))
   },
 
   *rename(src, dest, options) {
     if (hasFlag(options?.flags ?? IO_FLAGS.none, IO_FLAGS.exclusive)) {
       let destExists = false
       try {
-        yield* until(fs.access(toPath(dest)))
+        yield* fsCall(fs.access(toPath(dest)))
         destExists = true
       } catch {
         // dest doesn't exist, safe to rename
@@ -125,12 +125,12 @@ export const NodeIO = IO.implement({
         return yield* fail(IOErrors.Exists, `destination already exists: ${toPath(dest)}`)
       }
     }
-    yield* until(fs.rename(toPath(src), toPath(dest)))
+    yield* fsCall(fs.rename(toPath(src), toPath(dest)))
   },
 
   *exists(path) {
     try {
-      yield* until(fs.access(toPath(path)))
+      yield* fsCall(fs.access(toPath(path)))
       return true
     } catch {
       return false
@@ -140,11 +140,11 @@ export const NodeIO = IO.implement({
   *ensureFile(path) {
     const p = toPath(path)
     const dir = dirname(p)
-    yield* until(fs.mkdir(dir, { recursive: true }))
+    yield* fsCall(fs.mkdir(dir, { recursive: true }))
     try {
-      yield* until(fs.access(p))
+      yield* fsCall(fs.access(p))
     } catch {
-      yield* until(fs.writeFile(p, ''))
+      yield* fsCall(fs.writeFile(p, ''))
     }
   },
 

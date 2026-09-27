@@ -5,8 +5,8 @@ toolchains:
 
 tasks:
   # EVERY test task in the repo — the fast suites AND the docker-backed legs (pg, redis, nats,
-  # network, chaos, bus) — as one target: `moon run :test-all`; moon runs the deps in parallel
-  # (dependency-aware), cap with `-c/--concurrency N`.
+  # network, chaos, bus, observe) — as one target: `moon run :test-all`; moon runs the deps in
+  # parallel (dependency-aware), cap with `-c/--concurrency N`.
   test-all:
     command: noop
     deps:
@@ -24,6 +24,7 @@ tasks:
       - panel:test
       - server:test
       - server:test-network
+      - server:test-observe
       - std:test
       - transport:test
       - transport:test-nats

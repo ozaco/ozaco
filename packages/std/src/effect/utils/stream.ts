@@ -6,6 +6,7 @@ import { ensure } from '../base/ensure'
 import { fork } from '../base/spawn'
 import { withResolvers } from '../base/with-resolvers'
 import { EffectCauses } from '../errors'
+import type { Helpers } from '../types/helpers'
 import type { Flow, Operation, Subscription } from '../types/operation'
 
 import { createQueue } from './queue'
@@ -18,8 +19,7 @@ import { createQueue } from './queue'
  * closes it cleanly.
  */
 export function* toReadable<T>(flow: Flow<T, unknown>): Operation<ReadableStream<T>> {
-  type Step = IteratorResult<T, unknown>
-  const demand = createQueue<(step: Step) => void, void>()
+  const demand = createQueue<Helpers.ReadablePull<T>, void>()
   // the subscription is opened INSIDE the pump task so that cancelling the stream (halting the
   // pump) also releases whatever the Flow holds; opening failures are surfaced through `ready`
   const ready = withResolvers<void>(EffectCauses.ToReadableReady)
@@ -48,7 +48,7 @@ export function* toReadable<T>(flow: Flow<T, unknown>): Operation<ReadableStream
   yield* ready.operation
 
   const take = () =>
-    new Promise<Step>(resolve => {
+    new Promise<IteratorResult<T, unknown>>(resolve => {
       demand.add(resolve)
     })
 

@@ -1,18 +1,59 @@
 // oxlint-disable import/exports-last
 import type { CarrierDef, ServerDef, StreamDef } from 'server:core'
 import { ServerErrors, stream } from 'server:core'
-import { report } from 'server:internal'
+import { scopeOf } from 'server:internal'
 import type { Operation } from 'std:effect'
 import { attempt, createContext, fork, sleep } from 'std:effect'
+import { Logger, LogLevel } from 'std:logger'
 import type { Result } from 'std:result'
-import { fail, isFailure } from 'std:result'
+import { fail, formatFailure, isFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
+import { emitLog } from 'std:trace'
 
+import { logAttributes, severityOf } from 'std:logger/transport/trace'
 import { TransportErrors } from 'transport:core'
 
 import type { NetworkCarrierDef } from './types'
 
 export const StateRef = createContext<NetworkCarrierDef.State>('server:impl/carrier/network')
+
+/** The instrumentation scope (and `logger` binding) of this carrier's operational log lines. */
+const LOG_SCOPE = scopeOf('carrier/network')
+
+/**
+ * One operational log line of the carrier (presence changes, draining waits, version skew,
+ * abandoned lanes): through the installed std Logger (`logger` binding = this carrier's scope —
+ * it reaches the sinks through the Logger's `TraceTransport`), else straight to the Tracer as a
+ * log record. Never fails the carrier.
+ */
+export function* opLog(
+  level: 'info' | 'warn',
+  msg: string,
+  data: Readonly<Record<string, unknown>>,
+): Operation<void> {
+  yield* attempt(function* () {
+    if ((yield* Logger.context.get()) !== undefined) {
+      yield* Logger.actions.child({ logger: LOG_SCOPE.name }, () =>
+        Logger.actions[level](msg, data as Record<string, unknown>),
+      )
+      return
+    }
+
+    const severity = severityOf(level === 'warn' ? LogLevel.warn : LogLevel.info)
+
+    yield* emitLog({
+      body: msg,
+      severityNumber: severity.number,
+      severityText: severity.text,
+      attributes: logAttributes(data),
+      scope: LOG_SCOPE,
+    })
+  })
+}
+
+/** Events named `_…` (the observe cluster) are plumbing: published transient (never persisted)
+ * and delivered on the transient plane. */
+export const isInternalEvent = (name: string): boolean => name.startsWith('_')
 
 /** Topics under the transport's application prefix. */
 export const topics = {
@@ -23,23 +64,24 @@ export const topics = {
     `lane.${cid}.${direction}.${name}`,
 }
 
-/** A transport failure as the caller's fulfillment-model failure. */
+/** A transport failure as the caller's fulfillment-model failure (the transport's failure kept
+ * as a nested cause). */
 export function* raise(failure: Result.Failure<unknown>, where: string): Operation<never> {
   switch (failure.error) {
     case TransportErrors.NoResponders: {
-      return yield* fail(ServerErrors.Unavailable, `${where}: nobody serves it`, ...failure.causes)
+      return yield* fail(ServerErrors.Unavailable, `${where}: nobody serves it`, failure)
     }
 
     case TransportErrors.Timeout: {
       return yield* fail(
         ServerErrors.TimeoutPending,
         `${where}: no reply in time (the handler may still be running)`,
-        ...failure.causes,
+        failure,
       )
     }
     case TransportErrors.Closed:
     case TransportErrors.Connection: {
-      return yield* fail(ServerErrors.Unavailable, `${where}: carrier down`, ...failure.causes)
+      return yield* fail(ServerErrors.Unavailable, `${where}: carrier down`, failure)
     }
 
     default: {
@@ -62,7 +104,9 @@ export function* pipeLane(
 
   if (isFailure(outcome)) {
     // the other end never attached / went away: the stream is abandoned, not the request
-    return
+    yield* opLog('info', `lane ${topic} abandoned: ${formatFailure(outcome)}`, {
+      'ozaco.lane.topic': topic,
+    })
   }
 }
 
@@ -98,21 +142,28 @@ const heartbeatOf = (
   ts: Date.now(),
 })
 
-/** Apply one heartbeat to the members table. */
-const absorb = (presence: NetworkCarrierDef.Presence, beat: NetworkCarrierDef.Heartbeat): void => {
+/** Apply one heartbeat to the members table; resolves what changed (for the presence log). */
+const absorb = (
+  presence: NetworkCarrierDef.Presence,
+  beat: NetworkCarrierDef.Heartbeat,
+): { readonly joined: readonly string[]; readonly draining: boolean } => {
   if (beat.k === 'leave') {
+    let draining = false
+
     for (const members of presence.members.values()) {
       const member = members.get(beat.instance)
 
       if (member) {
+        draining ||= !member.draining
         members.set(beat.instance, { ...member, draining: true, seenAt: beat.ts })
       }
     }
 
-    return
+    return { joined: [], draining }
   }
 
   const names = new Set(beat.services.map(entry => entry.name))
+  const joined: string[] = []
 
   // a service this node no longer announces is gone from its row
   for (const [service, members] of presence.members) {
@@ -133,6 +184,10 @@ const absorb = (presence: NetworkCarrierDef.Presence, beat: NetworkCarrierDef.He
       presence.members.set(entry.name, members)
     }
 
+    if (!members.has(beat.instance)) {
+      joined.push(entry.name)
+    }
+
     members.set(beat.instance, {
       instance: beat.instance,
       serviceId: beat.serviceId,
@@ -141,14 +196,19 @@ const absorb = (presence: NetworkCarrierDef.Presence, beat: NetworkCarrierDef.He
       draining: beat.draining,
     })
   }
+
+  return { joined, draining: false }
 }
 
-/** Drop members unseen for longer than the ttl. */
-const sweep = (presence: NetworkCarrierDef.Presence, now: number): void => {
+/** Drop members unseen for longer than the ttl; resolves the `instance/service` pairs dropped. */
+const sweep = (presence: NetworkCarrierDef.Presence, now: number): string[] => {
+  const expired: string[] = []
+
   for (const [service, members] of presence.members) {
     for (const [instance, member] of members) {
       if (now - member.seenAt > presence.ttlMs) {
         members.delete(instance)
+        expired.push(`${instance}/${service}`)
       }
     }
 
@@ -156,6 +216,8 @@ const sweep = (presence: NetworkCarrierDef.Presence, now: number): void => {
       presence.members.delete(service)
     }
   }
+
+  return expired
 }
 
 /** Every known member of a service: this node first when it serves it, then the peers. */
@@ -213,17 +275,16 @@ function* warnVersions(
 
     warned.add(key)
 
-    yield* report(kernel, {
-      t: 'log',
-      row: {
-        request_id: null,
-        span_id: null,
-        level: 'warn',
-        msg: `presence: ${entry.name} runs ${entry.version} on ${beat.instance}, ${local} here`,
-        data: { service: entry.name, instance: beat.instance, theirs: entry.version, ours: local },
-        ts: Date.now(),
+    yield* opLog(
+      'warn',
+      `presence: ${entry.name} runs ${entry.version} on ${beat.instance}, ${local} here`,
+      {
+        'ozaco.presence.service': entry.name,
+        'ozaco.presence.instance': beat.instance,
+        'ozaco.presence.version': entry.version,
+        'ozaco.presence.version.local': local,
       },
-    })
+    )
   }
 }
 
@@ -231,6 +292,12 @@ function* warnVersions(
  * The presence loop: subscribe to every node's heartbeats (answering `hello` with an immediate
  * re-announce so a newcomer learns the cluster at once), heartbeat on the period, sweep the
  * expired. Runs as a task of the carrier's scope.
+ *
+ * The subscription is LIVE before the `hello` goes out: plain pub/sub keeps nothing for a late
+ * subscriber, so a `hello` sent first would miss every peer still subscribing (and this node
+ * the answers) — nodes starting together would then know nobody until the next heartbeat. With
+ * subscribe-then-hello, of any two nodes the one subscribed later says `hello` to one already
+ * listening, and hears its answer.
  */
 export function* runPresence(
   kernel: ServerDef.Context,
@@ -239,11 +306,12 @@ export function* runPresence(
   const presence = state.presence!
   const warned = new Set<string>()
 
+  // bound to this task's scope (the loop below only reads it)
+  const subscription = yield* state.actions.subscribe<NetworkCarrierDef.Heartbeat>(PRESENCE_TOPIC, {
+    transient: true,
+  })
+
   yield* fork(function* () {
-    const subscription = yield* state.actions.subscribe<NetworkCarrierDef.Heartbeat>(
-      PRESENCE_TOPIC,
-      { transient: true },
-    )
     for (;;) {
       const step = yield* subscription.next()
       if (step.done) {
@@ -253,7 +321,21 @@ export function* runPresence(
       if (!beat || beat.instance === kernel.instance) {
         continue
       }
-      absorb(presence, beat)
+      const changed = absorb(presence, beat)
+
+      if (changed.joined.length > 0) {
+        yield* opLog('info', `presence: ${beat.instance} serves ${changed.joined.join(', ')}`, {
+          'ozaco.presence.instance': beat.instance,
+          'ozaco.presence.services': changed.joined,
+        })
+      }
+
+      if (changed.draining) {
+        yield* opLog('info', `presence: ${beat.instance} is draining`, {
+          'ozaco.presence.instance': beat.instance,
+        })
+      }
+
       yield* warnVersions(kernel, beat, warned)
       if (beat.k === 'hello') {
         yield* announce(kernel, state, 'presence')
@@ -264,7 +346,14 @@ export function* runPresence(
 
   for (;;) {
     yield* sleep(presence.heartbeatMs)
-    sweep(presence, Date.now())
+    const expired = sweep(presence, Date.now())
+
+    if (expired.length > 0) {
+      yield* opLog('info', `presence: ${expired.join(', ')} expired`, {
+        'ozaco.presence.expired': expired,
+      })
+    }
+
     yield* announce(kernel, state, 'presence')
   }
 }
@@ -281,6 +370,7 @@ export function* ensureMember(state: NetworkCarrierDef.State, service: string): 
   }
 
   const deadline = Date.now() + presence.waitMs
+  let waiting = false
 
   for (;;) {
     const members = membersOf(state, service)
@@ -297,7 +387,19 @@ export function* ensureMember(state: NetworkCarrierDef.State, service: string): 
     }
 
     if (Date.now() >= deadline) {
+      yield* opLog('warn', `${service}: no live member after ${presence.waitMs}ms`, {
+        'ozaco.presence.service': service,
+        'ozaco.presence.draining': members.length,
+      })
       return
+    }
+
+    if (!waiting) {
+      waiting = true
+      yield* opLog('info', `${service}: only draining members, waiting for a live one`, {
+        'ozaco.presence.service': service,
+        'ozaco.presence.draining': members.length,
+      })
     }
 
     yield* sleep(50)

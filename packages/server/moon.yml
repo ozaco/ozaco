@@ -58,3 +58,15 @@ tasks:
       - scripts/test-network.sh
     options:
       cache: false
+  # the observe leg against REAL backends (otel-lgtm: Tempo, Loki, Prometheus, Grafana — and
+  # OpenObserve): the script starts both containers unless the SERVER_TEST_*_URL are set
+  test-observe:
+    command: bash scripts/test-observe.sh
+    deps:
+      - server:build
+    inputs:
+      - src/**/*
+      - tests/observe/**/*
+      - scripts/test-observe.sh
+    options:
+      cache: false

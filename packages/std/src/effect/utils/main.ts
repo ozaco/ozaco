@@ -1,4 +1,4 @@
-import { isSuccess } from 'std:result'
+import { asFailure, formatFailure, isSuccess } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import { call, callcc } from '../base/call'
@@ -111,8 +111,9 @@ export async function main(body: (args: string[]) => Operation<void>): Promise<v
     }
   }
 
+  // the whole cause chain, Java style (a foreign throw folded by `asFailure`)
   if (result.error) {
-    console.error(result.error)
+    console.error(formatFailure(asFailure(result.error), { chain: true }))
   }
 
   hardexit(result.status)

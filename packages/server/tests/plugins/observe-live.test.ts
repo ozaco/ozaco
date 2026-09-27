@@ -89,8 +89,8 @@ describe('observe — the live feed under socket churn', () => {
           }
         })
 
-        const canaries = (): number =>
-          seen.filter(row => row.method === 'GET' && row.path === '/todos').length
+        // the live feed carries ROOT span rows: the list request is its `GET /todos` edge span
+        const canaries = (): number => seen.filter(row => row.name === 'GET /todos').length
 
         for (let cycle = 0; cycle < CYCLES; cycle += 1) {
           // clean cycle: watch → sync → close
@@ -156,8 +156,8 @@ describe('observe — the live feed under socket churn', () => {
         expect(canaries()).toBeGreaterThan(before)
 
         // the store itself must still answer too
-        const page = yield* Observe.actions.query({})
-        expect(page.requests.length).toBeGreaterThan(0)
+        const page = yield* Observe.actions.traces({})
+        expect(page.traces.length).toBeGreaterThan(0)
 
         yield* until(reader.cancel().catch(() => {}))
         yield* server.stop()

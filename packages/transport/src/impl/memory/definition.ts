@@ -4,7 +4,13 @@ import { fail } from 'std:result'
 
 import { JsonCodec } from 'std:codec/impl/json'
 import type { TransportDef } from 'transport:core'
-import { isValidPrefix, Transport, transportActions, TransportErrors } from 'transport:core'
+import {
+  isValidPrefix,
+  Transport,
+  transportActions,
+  TransportErrors,
+  watchStatus,
+} from 'transport:core'
 
 import pkg from '../../../package.json'
 
@@ -49,6 +55,8 @@ export const MemoryTransport = Transport.implement<TransportDef.Options, [option
         link.states.delete(state)
       })
       yield* StateRef.set(state)
+      // link outages (`setStatus`) → the Logger, like a real backend's reconnects
+      yield* watchStatus(driver.status(), { transport: 'memory', prefix: options.prefix })
 
       return {
         transport: 'memory',

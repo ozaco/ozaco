@@ -48,12 +48,7 @@ export const textOf = (message: Helpers.Message): string =>
  * ```
  */
 export const accumulateToolCalls = (): Helpers.ToolCallAccumulator => {
-  interface Slot {
-    id: string
-    name: string
-    arguments: string
-  }
-  const slots = new Map<number, Slot>()
+  const slots = new Map<number, Helpers.ToolCallSlot>()
 
   return {
     add(fragments) {

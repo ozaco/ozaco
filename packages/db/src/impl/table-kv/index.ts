@@ -1,3 +1,4 @@
 export * from './definition'
 
-export type * from './types'
+export type * from './types/helpers'
+export type * from './types/table-kv'

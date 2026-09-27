@@ -224,7 +224,7 @@ export function* validateOptions(
         return yield* fail(
           ServerErrors.Configuration,
           `action "${key}" option "${option}" is invalid`,
-          ...verdict.causes,
+          verdict,
         )
       }
     }

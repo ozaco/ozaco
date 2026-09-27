@@ -93,6 +93,26 @@ function* probe(ctx: ServerDef.Ctx): Operation<void> {
   // ctx.auth is the principal, not `unknown`
   const who: string | undefined = ctx.auth?.sub
   void who
+
+  // the telemetry surface: ids, spans (options form), events
+  const ids: { traceId: string; spanId: string; requestId: string } = ctx.trace
+  void ids
+  const inner: number = yield* ctx.span(
+    'work',
+    function* (span) {
+      span.setAttribute('work.size', 3)
+      return 3
+    },
+    { kind: 'client', attributes: { 'work.kind': 'x' }, links: [] },
+  )
+  void inner
+  yield* ctx.event('work.done', { 'work.size': 3 }, { time: Date.now() })
+
+  // @ts-expect-error the bare-attributes third argument is gone — pass `{ attributes }`
+  yield* ctx.span('work', function* () {}, { 'work.kind': 'x' })
+
+  // @ts-expect-error not a span kind
+  yield* ctx.span('work', function* () {}, { kind: 'custom' })
 }
 
 void probe

@@ -7,6 +7,7 @@ import { attempt, ensure, until } from 'std:effect'
 import pkg from '../../../package.json'
 import { sqlActions } from '../shared/actions'
 import { postgresDialect } from '../shared/dialects'
+import { postgresTelemetry } from '../shared/telemetry'
 import { runSqlTransaction } from '../shared/transaction'
 
 import { exec, SqlClient, StateRef, transactional } from './internal'
@@ -31,6 +32,7 @@ export const BunSqlAdapter = DbAdapter.implement<Adapter.Options, [options: BunS
     return {
       adapter: 'bun-sql',
       capabilities: { transactions: true, raw: true, alterColumn: true },
+      telemetry: postgresTelemetry(options.url),
     }
   },
 }).build({

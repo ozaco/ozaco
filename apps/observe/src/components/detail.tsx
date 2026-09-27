@@ -1,21 +1,28 @@
+// oxlint-disable import/exports-last
 /**
- * One request: the span waterfall (rows expand into their attrs/meta), then what actually went
- * through — headers, input and output bodies (data · stream · flow · parts) — and failures,
- * logs, events.
+ * One trace: its failures (the exception records, each with its cause chain), then the span
+ * waterfall — indented by parent, a service badge per span, span events and the span's log
+ * records inline under it; a span expands into its attributes, links (same trace ⇒ scroll to the
+ * span, another trace ⇒ open it) and resource.
  */
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
-import type { BodySnapshot, EventRow, RequestView, SpanRow } from '../lib/api'
-import { base } from '../lib/api'
+import type { Attributes, Link, LogRow, SpanEvent, SpanRow, TraceView } from '../lib/api'
+import { isExceptionLog } from '../lib/api'
+import {
+  fmtMs,
+  fmtTime,
+  fmtValue,
+  outcomeColor,
+  serviceColor,
+  severityColor,
+  severityOf,
+  statusText,
+} from '../lib/format'
+import type { Placed } from '../lib/trace'
+import { inlineEvents, treeOf } from '../lib/trace'
 
-import { nameOf } from './list'
-
-const fmtBytes = (size: number): string =>
-  size < 1024
-    ? `${size} B`
-    : size < 1024 * 1024
-      ? `${(size / 1024).toFixed(1)} KB`
-      : `${(size / 1024 / 1024).toFixed(2)} MB`
+import { ServiceBadge } from './list'
 
 const Heading = ({ children }: { children: string }) => (
   <h3 className='mt-4 mb-1.5 text-[12px] tracking-wider uppercase' style={{ color: 'var(--dim)' }}>
@@ -23,163 +30,308 @@ const Heading = ({ children }: { children: string }) => (
   </h3>
 )
 
-const Pretty = ({ value }: { value: unknown }) => (
+const Pre = ({ children }: { children: string }) => (
   <pre
     className='my-1 overflow-auto rounded border p-2 whitespace-pre-wrap'
-    style={{ background: 'var(--panel)', borderColor: 'var(--line)' }}>
-    {typeof value === 'string' ? value : JSON.stringify(value, null, 2)}
+    style={{ background: 'var(--bg)', borderColor: 'var(--line)' }}>
+    {children}
   </pre>
 )
 
-/** One body snapshot: data pretty-printed, streams/flows/parts as their shape. */
-const Body = ({ label, body }: { label: string; body: BodySnapshot }) => (
-  <div>
-    <Heading>{label}</Heading>
-    <div className='mb-1'>
-      <span className='tag'>{body.kind}</span>
-      {typeof body.brand === 'string' && <span className='tag'>{body.brand}</span>}
-      {body.truncated === true && (
-        <span style={{ color: 'var(--warn)' }}>
-          truncated · {body.size} bytes total, first 8 KB kept
-        </span>
-      )}
-    </div>
-    {body.kind === 'data' && <Pretty value={body.data} />}
-    {body.kind === 'parts' && (
-      <>
-        <Pretty value={body.fields} />
-        {body.streams &&
-          Object.entries(body.streams).map(([name, brand]) => (
-            <div key={name}>
-              <span className='tag'>stream</span>
-              {name} <span style={{ color: 'var(--dim)' }}>{brand}</span>
-            </div>
-          ))}
-      </>
-    )}
-    {(body.kind === 'stream' || body.kind === 'flow') && (
-      <div style={{ color: 'var(--dim)' }}>
-        a {body.kind} —{' '}
-        {typeof body.size === 'number' ? `${fmtBytes(body.size)} streamed` : 'still streaming'};
-        items pass through untouched, only the shape and the size are recorded
-      </div>
-    )}
-  </div>
-)
+/** Attributes as a key / value grid (`exception.*` keys are the exception block's). */
+const AttrTable = ({ attributes, skip }: { attributes: Attributes; skip?: RegExp }) => {
+  const entries = Object.entries(attributes).filter(([key]) => !skip?.test(key))
 
-const SpanMeta = ({ span }: { span: SpanRow }) => (
-  <div
-    className='mb-1 rounded border p-2'
-    style={{ background: 'var(--panel)', borderColor: 'var(--line)' }}>
-    <div style={{ color: 'var(--dim)' }}>
-      span {span.span_id}
-      {span.parent_span_id ? ` · parent ${span.parent_span_id}` : ''} · {span.service_id} ·{' '}
-      {span.instance}
-      {span.action_id ? ` · ${span.action_id}` : ''}
-      {span.transport ? ` · via ${span.transport}` : ''}
-    </div>
-    {span.attrs && Object.keys(span.attrs).length > 0 ? (
-      <Pretty value={span.attrs} />
-    ) : (
-      <div style={{ color: 'var(--dim)' }}>no attributes</div>
-    )}
-  </div>
-)
-
-/** The captured socket exchange: every frame's payload, and a client-side REPLAY — the
- * inbound (`socket-in`) frames are re-sent to the live socket in their original order. */
-const Frames = ({ socket, frames }: { socket: string; frames: readonly EventRow[] }) => {
-  const [log, setLog] = useState<readonly string[]>([])
-  const [busy, setBusy] = useState(false)
-
-  const replay = () => {
-    const inbound = frames.filter(frame => frame.kind === 'socket-in' && frame.data !== undefined)
-    const url = `${base().replace(/^http/u, 'ws')}${socket}`
-    const ws = new WebSocket(url)
-    setBusy(true)
-    setLog([`connect ${url}`])
-
-    ws.addEventListener('open', () => {
-      // oxlint-disable-next-line array-callback-return
-      inbound.map((frame, index) => {
-        setTimeout(() => {
-          const payload = typeof frame.data === 'string' ? frame.data : JSON.stringify(frame.data)
-          ws.send(payload)
-          setLog(prior => [...prior, `→ ${payload.slice(0, 200)}`])
-
-          if (index === inbound.length - 1) {
-            setTimeout(() => {
-              ws.close()
-            }, 500)
-          }
-        }, index * 50)
-      })
-
-      if (inbound.length === 0) {
-        ws.close()
-      }
-    })
-
-    ws.addEventListener('message', event => {
-      setLog(prior => [...prior, `← ${String(event.data).slice(0, 200)}`])
-    })
-
-    ws.addEventListener('close', () => {
-      setLog(prior => [...prior, 'closed'])
-      setBusy(false)
-    })
-
-    ws.addEventListener('error', () => {
-      setLog(prior => [...prior, 'socket error'])
-      setBusy(false)
-    })
+  if (entries.length === 0) {
+    return null
   }
 
   return (
-    <>
-      <Heading>frames</Heading>
-      <div className='mb-1'>
-        <button className='btn' disabled={busy} onClick={replay}>
-          ▶ replay {frames.filter(frame => frame.kind === 'socket-in').length} inbound frame(s)
-        </button>
-      </div>
-      {frames.map((frame, index) => (
-        <div key={index} className='grid grid-cols-[46px_1fr] items-start gap-2 py-[2px]'>
-          <span
-            className='text-right'
-            style={{ color: frame.kind === 'socket-in' ? 'var(--ok)' : 'var(--accent)' }}>
-            {frame.kind === 'socket-in' ? '→ in' : '← out'}
+    <div className='grid grid-cols-[minmax(160px,auto)_1fr] gap-x-3 gap-y-0.5'>
+      {entries.map(([key, value]) => (
+        <div key={key} className='contents'>
+          <span className='truncate' style={{ color: 'var(--dim)' }}>
+            {key}
           </span>
-          <span className='break-all'>
-            {frame.data === undefined
-              ? `(payload not captured${frame.size === null ? '' : ` · ${fmtBytes(frame.size)}`})`
-              : typeof frame.data === 'string'
-                ? frame.data
-                : JSON.stringify(frame.data)}
-          </span>
+          <span className='break-all whitespace-pre-wrap'>{fmtValue(value)}</span>
         </div>
       ))}
-      {log.length > 0 && (
-        <>
-          <Heading>replay</Heading>
-          {log.map((line, index) => (
-            <div key={index} className='break-all' style={{ color: 'var(--dim)' }}>
-              {line}
-            </div>
-          ))}
-        </>
-      )}
-    </>
+    </div>
   )
 }
 
-export const RequestDetail = ({ view }: { view: RequestView }) => {
-  const { request, spans, logs, failures, events } = view
-  const start = request.started_at
-  const total = Math.max(1, (request.ended_at ?? Date.now()) - start)
-  const [open, setOpen] = useState<ReadonlySet<string>>(new Set())
+/**
+ * An exception: `type: message`, then the cause chain — the record's body (the failure rendered
+ * with its whole chain) and, when it says more, the budgeted `exception.stacktrace`.
+ */
+const ExceptionBlock = ({
+  title,
+  attributes,
+  body,
+  color,
+}: {
+  title: string
+  attributes: Attributes
+  body?: string
+  color: string
+}) => {
+  const stack = attributes['exception.stacktrace']
+  const chain = attributes['ozaco.failure.chain']
 
-  const toggle = (spanId: string) => {
+  return (
+    <div
+      className='my-1 rounded border p-2'
+      style={{ background: 'var(--panel)', borderColor: color }}>
+      <div>
+        <b style={{ color }}>{fmtValue(attributes['exception.type']) || title}</b>{' '}
+        {fmtValue(attributes['exception.message'])}{' '}
+        <span style={{ color: 'var(--dim)' }}>{title}</span>
+      </div>
+      {body !== undefined && body.length > 0 && <Pre>{body}</Pre>}
+      {body === undefined && Array.isArray(chain) && chain.length > 1 && (
+        <Pre>{(chain as readonly string[]).join('\ncaused by ')}</Pre>
+      )}
+      {typeof stack === 'string' && stack !== body && (
+        <details>
+          <summary className='cursor-pointer' style={{ color: 'var(--dim)' }}>
+            stacktrace
+          </summary>
+          <Pre>{stack}</Pre>
+        </details>
+      )}
+    </div>
+  )
+}
+
+/** A span event, inline under its span: offset from the span's start + its attributes. */
+const EventLine = ({ event, span }: { event: SpanEvent; span: SpanRow }) =>
+  event.name === 'exception' ? (
+    <ExceptionBlock
+      title={`event +${fmtMs(event.time - span.start)}`}
+      attributes={event.attributes ?? {}}
+      color='var(--bad)'
+    />
+  ) : (
+    <div className='flex gap-2'>
+      <span style={{ color: 'var(--accent)' }}>◆</span>
+      <span>{event.name}</span>
+      <span style={{ color: 'var(--dim)' }}>+{fmtMs(event.time - span.start)}</span>
+      <span className='truncate' style={{ color: 'var(--dim)' }}>
+        {Object.entries(event.attributes ?? {})
+          .map(([key, value]) => `${key}=${fmtValue(value)}`)
+          .join(' ')}
+      </span>
+    </div>
+  )
+
+/**
+ * A log record, inline under its span: time, severity, body. An exception record is ONE line
+ * here (`type: message`) — its whole chain is its block in the failures list, shown once.
+ */
+const LogLine = ({ log }: { log: LogRow }) => {
+  const severity = log.severity_text ?? severityOf(log.severity_number)
+  const color = severityColor(log.severity_number)
+
+  if (isExceptionLog(log)) {
+    return (
+      <div className='flex gap-2'>
+        <span style={{ color: 'var(--dim)' }}>{fmtTime(log.time)}</span>
+        <span className='tag' style={{ color }}>
+          {severity}
+        </span>
+        <span className='truncate'>
+          <span style={{ color: 'var(--accent)' }}>{log.event_name} </span>
+          <b style={{ color }}>{fmtValue(log.attributes['exception.type'])}</b>{' '}
+          {fmtValue(log.attributes['exception.message'])}
+        </span>
+      </div>
+    )
+  }
+
+  const data = Object.entries(log.attributes)
+
+  return (
+    <div className='flex gap-2'>
+      <span style={{ color: 'var(--dim)' }}>{fmtTime(log.time)}</span>
+      <span className='tag' style={{ color }}>
+        {severity}
+      </span>
+      <span className='break-all whitespace-pre-wrap'>
+        {log.event_name ? <span style={{ color: 'var(--accent)' }}>{log.event_name} </span> : null}
+        {log.body}
+        {data.length > 0 && (
+          <span style={{ color: 'var(--dim)' }}>
+            {'  '}
+            {data.map(([key, value]) => `${key}=${fmtValue(value)}`).join(' ')}
+          </span>
+        )}
+      </span>
+    </div>
+  )
+}
+
+interface SpanNodeProps {
+  readonly placed: Placed
+  readonly logs: readonly LogRow[]
+  readonly range: { readonly start: number; readonly total: number }
+  readonly traceId: string
+  readonly open: boolean
+  readonly several: boolean
+  readonly onToggle: () => void
+  readonly onLink: (link: Link) => void
+}
+
+const SpanNode = ({
+  placed,
+  logs,
+  range,
+  traceId,
+  open,
+  several,
+  onToggle,
+  onLink,
+}: SpanNodeProps) => {
+  const { span, depth } = placed
+  const events = inlineEvents(span, logs)
+  const left = ((span.start - range.start) / range.total) * 100
+  const width = Math.max(0.4, (span.duration_ms / range.total) * 100)
+  const indent = { paddingLeft: `${depth * 14}px` }
+
+  return (
+    <div id={`span-${span.span_id}`}>
+      <div
+        className='row-hover grid cursor-pointer grid-cols-[minmax(260px,2fr)_3fr_70px] items-center gap-2 py-[3px]'
+        onClick={onToggle}>
+        <span className='truncate' style={indent}>
+          <span style={{ color: 'var(--dim)' }}>{open ? '▾' : '▸'}</span>{' '}
+          <span className='tag'>{span.kind}</span>
+          <ServiceBadge span={span} instance={several} />
+          <span style={{ color: span.error_type === null ? undefined : outcomeColor(span) }}>
+            {span.name}
+          </span>
+          {span.links.length > 0 && <span style={{ color: 'var(--accent)' }}> ↗</span>}
+        </span>
+        <div className='relative h-2.5 rounded-[3px]' style={{ background: '#222735' }}>
+          <i
+            className='absolute top-0 h-2.5 rounded-[3px]'
+            style={{
+              left: `${left.toFixed(2)}%`,
+              width: `${Math.min(width, 100 - left).toFixed(2)}%`,
+              background:
+                span.status_code === 'error' ? 'var(--bad)' : serviceColor(span.service_name),
+            }}
+          />
+          {span.events.map((event, index) => (
+            <i
+              key={index}
+              className='absolute top-[-2px] h-3.5 w-[2px]'
+              title={event.name}
+              style={{
+                left: `${(((event.time - range.start) / range.total) * 100).toFixed(2)}%`,
+                background: event.name === 'exception' ? 'var(--bad)' : 'var(--fg)',
+              }}
+            />
+          ))}
+        </div>
+        <span className='text-right' style={{ color: 'var(--dim)' }}>
+          {fmtMs(span.duration_ms)}
+        </span>
+      </div>
+
+      {(events.length > 0 || logs.length > 0) && (
+        <div className='mb-1' style={{ paddingLeft: `${depth * 14 + 18}px` }}>
+          {events.map((event, index) => (
+            <EventLine key={`e${index}`} event={event} span={span} />
+          ))}
+          {logs.map((log, index) => (
+            <LogLine key={`l${index}`} log={log} />
+          ))}
+        </div>
+      )}
+
+      {open && (
+        <div
+          className='mb-2 rounded border p-2'
+          style={{
+            marginLeft: `${depth * 14 + 18}px`,
+            background: 'var(--panel)',
+            borderColor: 'var(--line)',
+          }}>
+          <div className='mb-1' style={{ color: 'var(--dim)' }}>
+            span {span.span_id}
+            {span.parent_span_id ? ` · parent ${span.parent_span_id}` : ''} · {span.service_name} @{' '}
+            {span.service_instance_id} · {span.scope}
+            {span.scope_version ? `@${span.scope_version}` : ''}
+            {span.status_message ? ` · ${span.status_code}: ${span.status_message}` : ''}
+          </div>
+          <AttrTable attributes={span.attributes} />
+          {span.links.length > 0 && (
+            <>
+              <Heading>links</Heading>
+              {span.links.map((link, index) => (
+                <div key={index} className='flex gap-2'>
+                  <button className='btn' onClick={() => onLink(link)}>
+                    {link.context.traceId === traceId ? 'this trace' : 'open trace'} ·{' '}
+                    {link.context.spanId.slice(0, 8)}
+                  </button>
+                  <span style={{ color: 'var(--dim)' }}>
+                    {Object.entries(link.attributes ?? {})
+                      .map(([key, value]) => `${key}=${fmtValue(value)}`)
+                      .join(' ')}
+                  </span>
+                </div>
+              ))}
+            </>
+          )}
+          <Heading>resource</Heading>
+          <AttrTable attributes={span.resource} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+interface Props {
+  readonly view: TraceView
+  readonly focus: string | null
+  readonly onOpenTrace: (traceId: string, spanId: string | null) => void
+}
+
+export const TraceDetail = ({ view, focus, onOpenTrace }: Props) => {
+  const [open, setOpen] = useState<ReadonlySet<string>>(new Set())
+  const placed = useMemo(() => treeOf(view.spans), [view])
+  const spanIds = useMemo(() => new Set(view.spans.map(span => span.span_id)), [view])
+  const instances = new Set(view.spans.map(span => span.service_instance_id))
+  const root = placed[0]?.span ?? null
+  const start = Math.min(...view.spans.map(span => span.start), ...view.logs.map(log => log.time))
+  const end = Math.max(...view.spans.map(span => span.end), start + 1)
+  const range = { start, total: Math.max(1, end - start) }
+  const failures = view.logs.filter(log => isExceptionLog(log))
+  const orphans = view.logs.filter(log => log.span_id === null || !spanIds.has(log.span_id))
+  const requestId = view.spans.find(span => span.request_id !== null)?.request_id ?? null
+  const services = [...new Set(view.spans.map(span => span.service_name))]
+
+  const logsOf = (spanId: string): readonly LogRow[] =>
+    view.logs.filter(log => log.span_id === spanId)
+
+  const reveal = (spanId: string): void => {
+    setOpen(prior => new Set([...prior, spanId]))
+    requestAnimationFrame(() => {
+      document.querySelector(`#span-${spanId}`)?.scrollIntoView({ block: 'center' })
+    })
+  }
+
+  // a trace opened from a link elsewhere lands on the linked span
+  useEffect(() => {
+    setOpen(new Set())
+
+    if (focus !== null && spanIds.has(focus)) {
+      reveal(focus)
+    }
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- once per opened trace
+  }, [view, focus])
+
+  const toggle = (spanId: string): void => {
     setOpen(prior => {
       const next = new Set(prior)
 
@@ -193,151 +345,85 @@ export const RequestDetail = ({ view }: { view: RequestView }) => {
     })
   }
 
+  const onLink = (link: Link): void => {
+    if (link.context.traceId === view.trace_id) {
+      reveal(link.context.spanId)
+    } else {
+      onOpenTrace(link.context.traceId, link.context.spanId)
+    }
+  }
+
   return (
     <div className='p-4'>
-      <h2 className='m-0 text-[14px] font-semibold'>
-        {nameOf(request)}{' '}
-        <span style={{ color: request.error ? 'var(--bad)' : 'var(--ok)' }}>
-          {request.status ?? ''}
-        </span>{' '}
-        <span style={{ color: 'var(--dim)' }}>
-          {request.duration_ms === null ? '' : `${request.duration_ms}ms`}
-        </span>
-      </h2>
+      {root && (
+        <h2 className='m-0 text-[14px] font-semibold'>
+          {root.name} <span style={{ color: outcomeColor(root) }}>{statusText(root)}</span>{' '}
+          <span style={{ color: 'var(--dim)' }}>{fmtMs(root.duration_ms)}</span>
+        </h2>
+      )}
       <div style={{ color: 'var(--dim)' }}>
-        request {request.request_id} · lane {request.lane || '—'} · {request.service_id}
-        {request.error && (
-          <>
-            {' · '}
-            <span style={{ color: 'var(--bad)' }}>{request.error}</span>
-          </>
-        )}
+        trace {view.trace_id}
+        {requestId ? ` · request ${requestId}` : ''} · {view.spans.length} spans ·{' '}
+        {view.logs.length} records
+        {root ? ` · ${new Date(root.start).toLocaleString()}` : ''}
       </div>
-
-      <Heading>spans</Heading>
-      <div className='mb-1' style={{ color: 'var(--dim)' }}>
-        click a span for its attributes
+      <div className='mt-1'>
+        {services.map(service => (
+          <span key={service} className='tag' style={{ color: serviceColor(service) }}>
+            {service}
+          </span>
+        ))}
       </div>
-      {spans.map(span => {
-        const left = (((span.started_at - start) / total) * 100).toFixed(1)
-        const width = Math.max(0.5, ((span.ended_at - span.started_at) / total) * 100).toFixed(1)
-
-        return (
-          <div key={span.span_id}>
-            <div
-              className='row-hover grid cursor-pointer grid-cols-[220px_1fr_70px] items-center gap-2 py-[3px]'
-              onClick={() => toggle(span.span_id)}>
-              <span className='truncate'>
-                <span style={{ color: 'var(--dim)' }}>{open.has(span.span_id) ? '▾' : '▸'}</span>{' '}
-                <span className='tag'>{span.kind}</span>
-                {span.name}
-              </span>
-              <div className='relative h-2.5 rounded-[3px]' style={{ background: '#222735' }}>
-                <i
-                  className='absolute top-0 h-2.5 rounded-[3px]'
-                  style={{
-                    left: `${left}%`,
-                    width: `${width}%`,
-                    background:
-                      span.status === 'failed'
-                        ? 'var(--bad)'
-                        : span.status === 'cancelled'
-                          ? 'var(--warn)'
-                          : 'var(--accent)',
-                  }}
-                />
-              </div>
-              <span className='text-right' style={{ color: 'var(--dim)' }}>
-                {span.ended_at - span.started_at}ms
-              </span>
-            </div>
-            {open.has(span.span_id) && <SpanMeta span={span} />}
-          </div>
-        )
-      })}
-
-      {request.headers && Object.keys(request.headers).length > 0 && (
-        <>
-          <Heading>headers</Heading>
-          <div
-            className='grid grid-cols-[220px_1fr] gap-x-3 gap-y-0.5 rounded border p-2'
-            style={{ background: 'var(--panel)', borderColor: 'var(--line)' }}>
-            {Object.entries(request.headers).map(([name, value]) => (
-              <div key={name} className='contents'>
-                <span className='truncate' style={{ color: 'var(--dim)' }}>
-                  {name}
-                </span>
-                <span className='break-all'>{value}</span>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
-
-      {request.input && <Body label='input' body={request.input} />}
-      {request.output && <Body label='output' body={request.output} />}
-
-      {request.attrs && Object.keys(request.attrs).length > 0 && (
-        <>
-          <Heading>attributes</Heading>
-          <Pretty value={request.attrs} />
-        </>
-      )}
 
       {failures.length > 0 && (
         <>
           <Heading>failures</Heading>
-          {failures.map((failure, index) => (
-            <pre
-              key={index}
-              className='my-1 overflow-auto rounded border p-2 whitespace-pre-wrap'
-              style={{ background: 'var(--panel)', borderColor: 'var(--line)' }}>
-              <b style={{ color: 'var(--bad)' }}>{failure.tag}</b> {failure.message}
-              {'\n'}
-              <span style={{ color: 'var(--dim)' }}>at {failure.where}</span>
-              {failure.causes.length > 0 ? `\n${failure.causes.join('\n')}` : ''}
-            </pre>
-          ))}
-        </>
-      )}
+          {failures.map((log, index) => {
+            const at = view.spans.find(span => span.span_id === log.span_id)
 
-      {logs.length > 0 && (
-        <>
-          <Heading>logs</Heading>
-          {logs.map((log, index) => (
-            <pre
-              key={index}
-              className='my-1 overflow-auto rounded border p-2 whitespace-pre-wrap'
-              style={{ background: 'var(--panel)', borderColor: 'var(--line)' }}>
-              <span className='tag'>{log.level}</span>
-              {log.msg}
-              {log.data ? `  ${JSON.stringify(log.data)}` : ''}
-            </pre>
-          ))}
-        </>
-      )}
-
-      {request.socket &&
-        events.some(event => event.kind === 'socket-in' || event.kind === 'socket-out') && (
-          <Frames
-            socket={request.socket}
-            frames={events.filter(
-              event => event.kind === 'socket-in' || event.kind === 'socket-out',
-            )}
-          />
-        )}
-
-      {events.some(event => event.kind !== 'socket-in' && event.kind !== 'socket-out') && (
-        <>
-          <Heading>events</Heading>
-          {events
-            .filter(event => event.kind !== 'socket-in' && event.kind !== 'socket-out')
-            .map((event, index) => (
+            return (
               <div key={index}>
-                <span className='tag'>{event.kind}</span>
-                {event.name}
+                <ExceptionBlock
+                  title={`${severityOf(log.severity_number)} ${log.event_name}`}
+                  attributes={log.attributes}
+                  body={log.body}
+                  color={severityColor(log.severity_number)}
+                />
+                {at && (
+                  <button className='btn mb-2' onClick={() => reveal(at.span_id)}>
+                    at {at.name} · {at.service_name}
+                  </button>
+                )}
               </div>
-            ))}
+            )
+          })}
+        </>
+      )}
+
+      <Heading>spans</Heading>
+      <div className='mb-1' style={{ color: 'var(--dim)' }}>
+        click a span for its attributes, links and resource
+      </div>
+      {placed.map(entry => (
+        <SpanNode
+          key={entry.span.span_id}
+          placed={entry}
+          logs={logsOf(entry.span.span_id)}
+          range={range}
+          traceId={view.trace_id}
+          open={open.has(entry.span.span_id)}
+          several={instances.size > 1}
+          onToggle={() => toggle(entry.span.span_id)}
+          onLink={onLink}
+        />
+      ))}
+
+      {orphans.length > 0 && (
+        <>
+          <Heading>other records of this trace</Heading>
+          {orphans.map((log, index) => (
+            <LogLine key={index} log={log} />
+          ))}
         </>
       )}
     </div>

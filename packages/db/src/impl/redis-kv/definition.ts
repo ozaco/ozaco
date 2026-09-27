@@ -4,14 +4,13 @@ import { DEFAULT_KV_PREFIX, isValidKvPrefix, kvActions } from 'db:internal'
 import { Codec } from 'std:codec'
 import { attempt, ensure, until } from 'std:effect'
 import { fail, isFailure } from 'std:result'
-import type { AnyType } from 'std:shared'
 
 import { RESP_TYPES } from 'redis'
 import { JsonCodec } from 'std:codec/impl/json'
 
 import pkg from '../../../package.json'
 
-import { driver, StateRef } from './internal'
+import { driver, redisTelemetry, StateRef } from './internal'
 import type { RedisKvDef } from './types'
 import { redisKvImpl } from './utils'
 
@@ -40,10 +39,8 @@ export const RedisKv = Kv.implement<KvDef.Options, [options: RedisKvDef.Options]
     client.on('error', () => {})
     const opened = yield* attempt(until(client.connect()))
     if (isFailure(opened)) {
-      return yield* fail(
-        KvErrors.Connection,
-        `cannot connect to redis: ${String((opened.error as AnyType)?.message ?? opened.error)}`,
-      )
+      // the runtime's fold of the client error (its `raw`) one level under
+      return yield* fail(KvErrors.Connection, 'cannot connect to redis', opened)
     }
     const state: RedisKvDef.State = {
       client,
@@ -55,6 +52,11 @@ export const RedisKv = Kv.implement<KvDef.Options, [options: RedisKvDef.Options]
       state.closed = true
       yield* attempt(until(client.quit()))
     })
-    return { store: 'redis', prefix, capabilities: driver.capabilities }
+    return {
+      store: 'redis',
+      prefix,
+      capabilities: driver.capabilities,
+      telemetry: redisTelemetry(options.url, prefix),
+    }
   },
 }).build(kvActions(driver))

@@ -12,7 +12,7 @@ import { JsonCodec } from 'std:codec/impl/json'
 import { createLink } from 'transport:impl/memory'
 
 import type { DemoOptions } from '../src'
-import { createDemo } from '../src'
+import { createDemo, OBSERVE_TOKEN } from '../src'
 
 // Real WebRTC through the demo's `/rtc/:room` signaling relay: two peers join the room over
 // plain websockets, take the role the relay assigns, and negotiate an actual loopback
@@ -25,11 +25,121 @@ const polyfill = await import(polyfillSpecifier).catch(() => undefined)
 // the loopback polyfill) is answered with a restart offer instead of ending the session.
 const RESILIENT = { iceRestart: {}, reconnect: { retries: 3, delayMs: 200 } } as const
 
+/** The observe console's API answers the ops bearer (`ObservePlugin.use({ auth })`). */
+const OBSERVE_AUTH = { authorization: `Bearer ${OBSERVE_TOKEN}` }
+
 interface RelayFrame {
   t?: string
   polite?: boolean
   epoch?: number
 }
+
+/** One protobuf field: its number and raw value — just enough of the wire format to read the
+ * OTLP an exporter shipped back. */
+interface ProtoField {
+  readonly field: number
+  readonly int: bigint
+  readonly bytes: Uint8Array
+}
+
+const protoFields = (bytes: Uint8Array): ProtoField[] => {
+  const fields: ProtoField[] = []
+  let at = 0
+  const varint = () => {
+    let value = 0n
+    for (let shift = 0n; ; shift += 7n) {
+      const byte = bytes[at++] ?? 0
+      value |= BigInt(byte & 0x7f) << shift
+      if ((byte & 0x80) === 0) {
+        return value
+      }
+    }
+  }
+  while (at < bytes.length) {
+    const key = Number(varint())
+    const wire = key & 7
+    if (![0, 1, 2, 5].includes(wire)) {
+      throw new Error(`unexpected protobuf wire type ${wire}`)
+    }
+    const size = wire === 1 ? 8 : wire === 5 ? 4 : wire === 2 ? Number(varint()) : 0
+    const int = wire === 0 ? varint() : 0n
+    fields.push({ field: key >>> 3, int, bytes: bytes.subarray(at, at + size) })
+    at += size
+  }
+  return fields
+}
+
+const repeated = (fields: readonly ProtoField[], field: number) =>
+  fields.filter(entry => entry.field === field)
+const single = (fields: readonly ProtoField[], field: number) =>
+  repeated(fields, field)[0]?.bytes ?? new Uint8Array()
+const utf8 = (bytes: Uint8Array) => new TextDecoder().decode(bytes)
+const hex = (bytes: Uint8Array) =>
+  [...bytes].map(byte => byte.toString(16).padStart(2, '0')).join('')
+
+/** An OTLP `AnyValue`: string, bool, int64, double or an array of those. */
+const anyValue = (bytes: Uint8Array): unknown => {
+  const [value] = protoFields(bytes)
+  if (value?.field === 1) {
+    return utf8(value.bytes)
+  }
+  if (value?.field === 2) {
+    return value.int !== 0n
+  }
+  if (value?.field === 3) {
+    return Number(BigInt.asIntN(64, value.int))
+  }
+  if (value?.field === 4) {
+    return new DataView(value.bytes.buffer, value.bytes.byteOffset, 8).getFloat64(0, true)
+  }
+  if (value?.field === 5) {
+    return repeated(protoFields(value.bytes), 1).map(entry => anyValue(entry.bytes))
+  }
+  return null
+}
+
+const attributesOf = (fields: readonly ProtoField[], field: number) =>
+  Object.fromEntries(
+    repeated(fields, field).map(entry => {
+      const pair = protoFields(entry.bytes)
+      return [utf8(single(pair, 1)), anyValue(single(pair, 2))]
+    }),
+  )
+
+interface ShippedSpan {
+  readonly traceId: string
+  readonly name: string
+  readonly events: readonly { name: string; attributes: Record<string, unknown> }[]
+}
+
+/** The spans of an `ExportTraceServiceRequest` (resource → scope → span). */
+const otlpSpans = (body: Uint8Array): ShippedSpan[] =>
+  repeated(protoFields(body), 1).flatMap(resource =>
+    repeated(protoFields(resource.bytes), 2).flatMap(scope =>
+      repeated(protoFields(scope.bytes), 2).map(entry => {
+        const span = protoFields(entry.bytes)
+        return {
+          traceId: hex(single(span, 1)),
+          name: utf8(single(span, 5)),
+          events: repeated(span, 11).map(raw => {
+            const event = protoFields(raw.bytes)
+            return { name: utf8(single(event, 2)), attributes: attributesOf(event, 3) }
+          }),
+        }
+      }),
+    ),
+  )
+
+/** The log records of an `ExportLogsServiceRequest` (resource → scope → record). */
+const otlpLogs = (body: Uint8Array): { traceId: string; body: unknown }[] =>
+  repeated(protoFields(body), 1).flatMap(resource =>
+    repeated(protoFields(resource.bytes), 2).flatMap(scope =>
+      repeated(protoFields(scope.bytes), 2).map(entry => {
+        const record = protoFields(entry.bytes)
+        return { traceId: hex(single(record, 9)), body: anyValue(single(record, 5)) }
+      }),
+    ),
+  )
 
 /** On a failed `channel()`, surface both peers' timelines — the negotiation is right there. */
 const openOrExplain = function* (
@@ -328,36 +438,26 @@ describe.skipIf(!polyfill)('webrtc over the demo signaling relay', () => {
     )
   }, 30_000)
 
-  it('a peer report becomes observe rows, spans and events — and ships to OpenObserve', async () => {
-    // one stand-in OpenObserve for BOTH ingestion paths of the one exporter: the bulk
-    // streams (`/api/<org>/<stream>/_json`) and its embedded OTLP leg (`/api/<org>/v1/traces`)
-    const captured: { stream: string; rows: AnyType[] }[] = []
-    const otlpSpans: AnyType[] = []
+  it('a peer report becomes span events + log records — the console and OpenObserve hold the same', async () => {
+    // a stand-in OpenObserve: its OTLP/HTTP endpoints (`/api/<org>/v1/{traces,logs,metrics}`),
+    // protobuf — what the one exporter ships
+    const received: { path: string; type: string | null; auth: string | null; body: Uint8Array }[] =
+      []
     const collector = Bun.serve({
       port: 0,
       async fetch(request) {
-        const path = new URL(request.url).pathname
-        if (path.endsWith('/v1/traces')) {
-          const body = (await request.json()) as AnyType
-          for (const resource of body.resourceSpans ?? []) {
-            for (const scope of resource.scopeSpans ?? []) {
-              otlpSpans.push(...(scope.spans ?? []))
-            }
-          }
-          return Response.json({})
-        }
-        const match = /\/api\/(?<org>[^/]+)\/(?<stream>[^/]+)\/_json$/u.exec(path)
-        if (!match?.groups) {
-          return new Response(null, { status: 204 }) // v1/logs, v1/metrics — accepted, unread
-        }
-        captured.push({
-          stream: match.groups['stream']!,
-          rows: (await request.json()) as AnyType[],
+        const raw = new Uint8Array(await request.arrayBuffer())
+        received.push({
+          path: new URL(request.url).pathname,
+          type: request.headers.get('content-type'),
+          auth: request.headers.get('authorization'),
+          body: request.headers.get('content-encoding') === 'gzip' ? Bun.gunzipSync(raw) : raw,
         })
-        return Response.json({ status: 'ok' })
+        return new Response(null, { status: 200 })
       },
     })
 
+    let stored: AnyType
     try {
       unwrap(
         await run(function* () {
@@ -366,7 +466,10 @@ describe.skipIf(!polyfill)('webrtc over the demo signaling relay', () => {
 
           const app = yield* createDemo({
             instance: 'rtc-observe',
-            openobserve: { url: `http://127.0.0.1:${collector.port}` },
+            openobserve: {
+              url: `http://127.0.0.1:${collector.port}`,
+              auth: { user: 'ops', pass: 's3cret' },
+            },
           })
           const info = yield* app.start()
           const base = (info.url as string).replace('http', 'ws')
@@ -420,10 +523,30 @@ describe.skipIf(!polyfill)('webrtc over the demo signaling relay', () => {
                   kind: 'stats',
                   data: { state: 'connected', rttMs: 12, route: 'host/srflx', framesDecoded: 42 },
                 },
+                // a client kind is untrusted input: it becomes a bounded, well-formed event name
+                { at: at + 15, generation: 1, kind: 'ICE-restart (network changed)' },
               ],
             },
           })
-          yield* sleep(200) // let the dispatch land in the observe collector
+
+          // the console reads the node's own store (behind the ops bearer): find the trace the
+          // report landed in
+          const json = function* (path: string) {
+            const response = yield* until(
+              fetch(`${info.url as string}${path}`, { headers: OBSERVE_AUTH }),
+            )
+            return (yield* until(response.json())) as AnyType
+          }
+          for (let tries = 0; tries < 60 && !stored; tries += 1) {
+            yield* sleep(50)
+            const page = yield* json('/_observe/api/traces?limit=50')
+            for (const root of page.traces ?? []) {
+              const view = yield* json(`/_observe/api/trace/${root.trace_id}`)
+              if (view.spans?.some((span: AnyType) => span.name === 'rtc.report')) {
+                stored = view
+              }
+            }
+          }
 
           yield* app.stop() // stop() flushes every exporter sink
         }),
@@ -432,21 +555,33 @@ describe.skipIf(!polyfill)('webrtc over the demo signaling relay', () => {
       collector.stop(true)
     }
 
-    const rowsOf = (stream: string) =>
-      captured.filter(hit => hit.stream === stream).flatMap(hit => hit.rows)
+    // the report ran as a real dispatch INSIDE the signaling frame's trace: the frame is a root
+    // span of its own on the socket's route, linked to the socket's upgrade
+    expect(stored).toBeDefined()
+    const frame = stored.spans.find((span: AnyType) => span.root)
+    expect(frame).toMatchObject({ name: 'WS /rtc/:room', kind: 'server' })
+    expect(frame.attributes).toMatchObject({ 'ozaco.ws.message.type': 'rtc:report' })
+    expect(frame.links.map((link: AnyType) => link.attributes?.['ozaco.link.reason'])).toContain(
+      'ws.session',
+    )
+    const dispatch = stored.spans.find((span: AnyType) => span.name === 'rtc.report')
+    expect(dispatch).toMatchObject({
+      parent_span_id: frame.span_id,
+      service_name: 'rtc',
+      status_code: 'unset',
+      error_type: null,
+    })
 
-    // the report ran as a real dispatch: its span tree hangs under the SIGNALING SOCKET's
-    // request, so one call leg reads as one tree in the console
-    const spans = rowsOf('spans')
-    const dispatch = spans.find(row => row.name === 'rtc.report' && row.kind === 'dispatch')
-    expect(dispatch?.status).toBe('ok')
-    const request = rowsOf('requests').find(row => row.request_id === dispatch.request_id)
-    expect(request?.socket).toBe('/rtc/:room')
-
-    // one span per client event, carrying the CLIENT's own timing and numbers
-    const offer = spans.find(row => row.name === 'rtc.offer')
-    expect(offer?.parent_span_id).toBe(dispatch.span_id)
-    expect(offer?.attrs).toEqual(
+    // one span EVENT per client event, at the CLIENT's own time, carrying its numbers — no
+    // zero-length spans
+    const events = new Map<string, AnyType>(
+      dispatch.events.map((event: AnyType) => [event.name, event]),
+    )
+    expect([...events.keys()]).toEqual(
+      expect.arrayContaining(['rtc.offer', 'rtc.state', 'rtc.stats', 'rtc.metrics']),
+    )
+    expect(stored.spans.some((span: AnyType) => span.name === 'rtc.offer')).toBe(false)
+    expect(events.get('rtc.offer').attributes).toEqual(
       expect.objectContaining({
         'rtc.detail': 'out:channel',
         'rtc.duration_ms': 12,
@@ -454,13 +589,9 @@ describe.skipIf(!polyfill)('webrtc over the demo signaling relay', () => {
         'rtc.peer': 'rtc_test0001',
       }),
     )
-    const sample = spans.find(row => row.name === 'rtc.stats')
-    expect(sample?.attrs).toEqual(
+    expect(events.get('rtc.stats').attributes).toEqual(
       expect.objectContaining({ rttMs: 12, route: 'host/srflx', framesDecoded: 42 }),
     )
-
-    // the counters: span attributes (what OTLP ships), a name-only event row on the cluster
-    // plane, and a log line carrying the same numbers for the console
     const counters = {
       'rtc.room': 'telemetry',
       'rtc.peer': 'rtc_test0001',
@@ -469,24 +600,55 @@ describe.skipIf(!polyfill)('webrtc over the demo signaling relay', () => {
       'rtc.connected_ms': 420,
       'rtc.rttMs': 12,
     }
-    expect(spans.find(row => row.name === 'rtc.metrics')?.attrs).toEqual(
+    expect(events.get('rtc.metrics').attributes).toEqual(expect.objectContaining(counters))
+    // the counters are the dispatch span's own attributes too (a trace search finds the call)
+    expect(dispatch.attributes).toEqual(expect.objectContaining(counters))
+    // every event name stays within Grafana's 20 characters, `[a-z0-9_]` after the prefix
+    expect([...events.keys()]).toContain('rtc.ice_restart_netw')
+    for (const name of events.keys()) {
+      expect(name).toMatch(/^rtc\.[a-z0-9_]{1,16}$/u)
+    }
+
+    // each event is also a log record on the dispatch span, and the handler's `ctx.log` line
+    // carries the counters too
+    const logs = stored.logs.filter((log: AnyType) => log.span_id === dispatch.span_id)
+    expect(logs.map((log: AnyType) => log.event_name)).toEqual(
+      expect.arrayContaining(['rtc.offer', 'rtc.state', 'rtc.stats', 'rtc.metrics']),
+    )
+    const line = logs.find((log: AnyType) => log.body.startsWith('rtc session ended'))
+    expect(line).toMatchObject({ severity_number: 9, body: 'rtc session ended telemetry#1' })
+    expect(line.attributes).toEqual(expect.objectContaining(counters))
+
+    // …and OpenObserve got exactly those records over OTLP (protobuf, basic auth)
+    const signal = (name: string) => received.filter(hit => hit.path === `/api/default/v1/${name}`)
+    expect(signal('traces').length).toBeGreaterThan(0)
+    expect(signal('logs').length).toBeGreaterThan(0)
+    for (const hit of received) {
+      expect(hit.type).toBe('application/x-protobuf')
+      expect(hit.auth).toBe(`Basic ${btoa('ops:s3cret')}`)
+    }
+    const shippedSpans = signal('traces').flatMap(hit => otlpSpans(hit.body))
+    const shipped = shippedSpans.filter(span => span.traceId === stored.trace_id)
+    expect(shipped.map(span => span.name).toSorted()).toEqual(
+      stored.spans.map((span: AnyType) => span.name).toSorted(),
+    )
+    const shippedDispatch = shipped.find(span => span.name === 'rtc.report')!
+    expect(shippedDispatch.events.map(event => event.name)).toEqual(
+      dispatch.events.map((event: AnyType) => event.name),
+    )
+    expect(shippedDispatch.events.find(event => event.name === 'rtc.metrics')?.attributes).toEqual(
       expect.objectContaining(counters),
     )
-    expect(rowsOf('events').some(row => row.name === 'rtc.metrics')).toBe(true)
-    const log = rowsOf('logs').find(row => String(row.msg).startsWith('rtc session ended'))
-    expect(log?.data).toEqual(expect.objectContaining(counters))
+    const shippedLogs = signal('logs')
+      .flatMap(hit => otlpLogs(hit.body))
+      .filter(log => log.traceId === stored.trace_id)
+    expect(shippedLogs.map(log => log.body).toSorted()).toEqual(
+      stored.logs.map((log: AnyType) => log.body).toSorted(),
+    )
 
-    // …and the same spans leave over the embedded OTLP leg, attributes intact
-    const exported = otlpSpans.find(span => span.name === 'rtc.metrics')
-    expect(exported).toBeDefined()
-    const attrOf = (span: AnyType, key: string) =>
-      span.attributes?.find((attribute: AnyType) => attribute.key === key)?.value
-    expect(attrOf(exported, 'rtc.peer')).toEqual({ stringValue: 'rtc_test0001' })
-    expect(attrOf(exported, 'rtc.reconnects')).toEqual({ intValue: '1' })
-    expect(otlpSpans.some(span => span.name === 'rtc.offer')).toBe(true)
-
-    // the relay's own lifecycle is observable too (a peer can die before it ever reports)
-    expect(rowsOf('events').some(row => row.name === 'rtc.pair')).toBe(true)
+    // the relay's own lifecycle is observable too (a peer can die before it ever reports): the
+    // pairing is published on the carrier's event plane
+    expect(shippedSpans.some(span => span.name === 'publish rtc.pair')).toBe(true)
   }, 30_000)
 
   it('GET /rtc serves the browser call page with the bundled std client', async () => {

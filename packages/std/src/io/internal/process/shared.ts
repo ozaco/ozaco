@@ -13,10 +13,6 @@ const encoder = new TextEncoder()
 export const toBytes = (input: Uint8Array | string): Uint8Array =>
   typeof input === 'string' ? encoder.encode(input) : input
 
-/** Pull a human-readable message out of an unknown thrown/rejected value. */
-export const errorMessage = (error: unknown): string =>
-  error instanceof Error ? error.message : String(error)
-
 /**
  * Build the child environment by layering the caller's overrides over the parent's `process.env`,
  * dropping any `undefined` entries (the platform spawn APIs reject them). Returns `undefined` when

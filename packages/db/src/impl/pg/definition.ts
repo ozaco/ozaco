@@ -9,6 +9,7 @@ import { Pool } from 'pg'
 import pkg from '../../../package.json'
 import { sqlActions } from '../shared/actions'
 import { postgresDialect } from '../shared/dialects'
+import { postgresTelemetry } from '../shared/telemetry'
 import { runSqlTransaction } from '../shared/transaction'
 
 import { exec, MIGRATE_LOCK, StateRef, transactional } from './internal'
@@ -37,7 +38,11 @@ export const PgAdapter = DbAdapter.implement<Adapter.Options, [options: Pg.Optio
     yield* ensure(function* () {
       yield* attempt(until(pool.end() as Promise<void>))
     })
-    return { adapter: 'pg', capabilities: { transactions: true, raw: true, alterColumn: true } }
+    return {
+      adapter: 'pg',
+      capabilities: { transactions: true, raw: true, alterColumn: true },
+      telemetry: postgresTelemetry(options.url),
+    }
   },
 }).build({
   ...adapterDefaults('pg'),

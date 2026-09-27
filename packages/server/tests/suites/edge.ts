@@ -1,11 +1,12 @@
 // oxlint-disable import/exports-last
 import type { ServerDef } from 'server:core'
-import { action, createServer, Edge, HEADERS, Observe, service, stream } from 'server:core'
-import { ObservePlugin } from 'server:plugins'
+import { action, createServer, Edge, HEADERS, service, stream } from 'server:core'
 import type { Operation } from 'std:effect'
 import { run, sleep, until } from 'std:effect'
+import { definePlugin } from 'std:plugin'
 import { fail, unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
+import type { TraceDef } from 'std:trace'
 
 import { describe, expect, it } from 'bun:test'
 
@@ -98,7 +99,35 @@ const media = service('media', {
   ),
 })
 
+/** Every span the kernel reports (an observe hook — the sinks' contract), per boot. */
+const spans: TraceDef.SpanData[] = []
+
+const Spy = definePlugin<ServerDef.PluginContext, []>({
+  name: 'edge-suite-spy',
+  version: '0',
+  description: 'collects the spans the edge suite asserts on',
+  *setup() {
+    const hooks: ServerDef.Hooks = {
+      name: 'edge-suite-spy',
+      *observe(event) {
+        if (event.t === 'span') {
+          spans.push(event.span)
+        }
+      },
+    }
+    return { hooks }
+  },
+}).build()
+
+/** The edge (server) span of the ONE request to `path`. */
+const edgeOf = (path: string): TraceDef.SpanData | undefined => {
+  const found = spans.filter(span => span.kind === 'server' && span.attributes['url.path'] === path)
+  expect(found).toHaveLength(1)
+  return found[0]
+}
+
 const boot = function* (target: EdgeTarget): Operation<ServerDef.Handle<AnyType>> {
+  spans.length = 0
   yield* storage()
   if (target.use) {
     yield* target.use()
@@ -106,7 +135,7 @@ const boot = function* (target: EdgeTarget): Operation<ServerDef.Handle<AnyType>
   return yield* createServer({
     services: [todos, media],
     edge: target.edge,
-    plugins: [ObservePlugin.use({ batch: { waitMs: 5 } })],
+    plugins: [Spy.use()],
   })
 }
 
@@ -171,12 +200,20 @@ export const runEdgeSuite = (target: EdgeTarget): void => {
             error: 'todo.kaput',
             message: 'boom todo.kaput',
           })
-          // the request row knows the edge: method, path, status, error tag
+          // the edge span knows the route, the status and the failure's tag; the reply points
+          // back at it (`traceresponse`)
           yield* sleep(30)
-          const page = yield* Observe.actions.query({ status: 'failed' })
-          expect(
-            page.requests.map(row => `${row.method} ${row.path} ${row.status} ${row.error}`),
-          ).toContain('GET /todos/explode 500 todo.kaput')
+          const exploded = edgeOf('/todos/explode')!
+          expect(exploded.name).toBe('GET /todos/explode')
+          expect(exploded.attributes).toMatchObject({
+            'http.response.status_code': 500,
+            'error.type': 'todo.kaput',
+          })
+          expect(exploded.status.code).toBe('error')
+          expect(custom.headers.get(HEADERS.traceresponse)).toBe(
+            `00-${exploded.context.traceId}-${exploded.context.spanId}-03`,
+          )
+          expect(custom.body.error.traceId).toBe(exploded.context.traceId)
         }),
       )
     })
@@ -286,11 +323,15 @@ export const runEdgeSuite = (target: EdgeTarget): void => {
             expect(response.status).toBe(200)
             expect(yield* until(response.json())).toEqual([])
 
-            // a streamed body over the wire keeps pumping after the response headers went out
+            // a streamed body over the wire keeps pumping after the response headers went out —
+            // and its edge span lasts until the body is done
             const ticks = yield* until(fetch(`${info.url}/media/ticks?n=3`))
+            const headersAt = Date.now()
             expect(yield* until(ticks.text())).toBe(
               ': ok\n\ndata: {"i":0}\n\ndata: {"i":1}\n\ndata: {"i":2}\n\n',
             )
+            yield* sleep(20)
+            expect(edgeOf('/media/ticks')!.end).toBeGreaterThanOrEqual(headersAt)
 
             const wsUrl = info.url!.replace('http', 'ws')
             const denied = yield* until(
@@ -320,6 +361,17 @@ export const runEdgeSuite = (target: EdgeTarget): void => {
             )
             expect(frames).toEqual([{ hello: 'lobby' }, { echo: { n: 1 } }])
             expect(heard).toEqual([{ n: 1 }])
+
+            // a crash while answering is still an answer: a 500 carrying the request id
+            yield* Edge.actions.decorate(function* () {
+              throw new Error('the decorator broke')
+            })
+            const crashed = yield* until(
+              fetch(`${info.url}/todos/list`, { headers: { [HEADERS.requestId]: 'req-crash' } }),
+            )
+            expect(crashed.status).toBe(500)
+            expect(crashed.headers.get(HEADERS.requestId)).toBe('req-crash')
+            expect(((yield* until(crashed.json())) as AnyType).error.error).toBe('server.internal')
             yield* server.stop()
           }),
         )

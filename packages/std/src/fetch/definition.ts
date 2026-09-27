@@ -4,7 +4,7 @@ import { defineProtocol } from 'std:plugin'
 import pkg from '../../package.json'
 
 import { createRequestAction } from './internal/request'
-import type { FetchDef } from './types'
+import type { FetchDef } from './types/fetch'
 
 /**
  * The fetch protocol handle: the routed `Fetch.actions.*` dispatch plus the hook surface. Usage is
@@ -14,6 +14,12 @@ import type { FetchDef } from './types'
  * middleware still wraps the actual network call no matter which method was used. Install
  * {@link FetchClient} to provide the implementation; without it any dispatch fails with
  * `missing-action`.
+ *
+ * Traced (`std:trace` on where the request runs): every request is one HTTP CLIENT span
+ * (`{METHOD}` / `{METHOD} {template}`, scope `@ozaco/std/fetch`) that ends once the response body
+ * was read to the end (or its read failed / was cancelled) — at once when there is no body — and
+ * the request carries that span's `traceparent` / `tracestate` (`ozaco=1`). Tracing off: no span,
+ * but an ambient pass-through context is still forwarded.
  */
 export const Fetch = defineProtocol<FetchDef.Context, FetchDef.Contract>({
   name: 'std/fetch',
@@ -45,6 +51,7 @@ const FetchClientImpl = Fetch.implement<FetchDef.Context, [options?: FetchDef.Op
       timeoutMs: options?.timeoutMs,
       codec: options?.codec,
       tls: options?.tls,
+      propagate: options?.propagate,
     }
   },
 })

@@ -1,5 +1,7 @@
 import type { OptionsDef } from 'server:core'
 import type { Operation } from 'std:effect'
+import type { Result } from 'std:result'
+import type { TraceDef } from 'std:trace'
 
 export namespace AuthDef {
   /** re-exported from core: the option shapes live next to the action config that carries them. */
@@ -25,8 +27,11 @@ export namespace AuthDef {
   /**
    * What every `AuthStrategy` impl may answer. `undefined` means "not mine — ask the next
    * strategy" (a static-token store handed a JWT, a JWT verifier handed an opaque key, a
-   * verify-only strategy asked to `login`); a FAILURE is decisive and stops the chain (an expired
-   * token, wrong credentials). Several strategies run side by side; the first answer wins.
+   * verify-only strategy asked to `login`); a FAILURE is this strategy's verdict (an expired
+   * token, wrong credentials) — the next strategy is still asked, and the first failure is the
+   * answer only when nobody succeeds (a failure a later success overrides shows as an
+   * `ozaco.auth.skip` event on the active span). Several strategies run side by side; the first
+   * SUCCESSFUL answer wins.
    */
   export interface Strategy {
     verify(token: string): Operation<Principal | undefined>
@@ -36,8 +41,50 @@ export namespace AuthDef {
   }
 
   export interface StrategyContext {
-    /** `jwt`, `static`, … — what `describe`-style diagnostics name. */
+    /** `jwt`, `static`, … — what diagnostics name (`ozaco.auth.strategy` on the guarded span). */
     readonly strategy: string
+  }
+
+  // --- telemetry -------------------------------------------------------------------------------
+
+  /** How one auth gate decided — `ozaco.auth.outcome` on the guarded span: a verified principal
+   * met the requirement (`granted`), nobody was identified and nothing was required
+   * (`anonymous`), or the call was refused (`denied`: 401 / 403). */
+  export type Outcome = 'granted' | 'anonymous' | 'denied'
+
+  /** What kind of requirement guarded a call — `ozaco.auth.requirement`, low-cardinality (never
+   * the roles themselves); the vocabulary the docs manifest summarizes a requirement with. */
+  export type RequirementKind =
+    | 'open'
+    | 'authenticated'
+    | 'user'
+    | 'service'
+    | 'roles'
+    | 'requirements'
+    | 'predicate'
+
+  /** One gate's verdict, as the guarded span is told it. */
+  export interface Verdict {
+    readonly outcome: Outcome
+    readonly requirement: Requirement
+
+    /** the strategy that decided the bearer: the one that recognized it, else the one whose
+     * failure is the answer — `null` without a bearer, or when nobody recognized it. */
+    readonly strategy: string | null
+    readonly principal: Principal | null
+  }
+
+  /** What one bearer resolution learns on its way through the strategy chain (filled by the
+   * chain and the strategies while `verify` runs): who decided, and the first reason a strategy
+   * gave for "not mine" (a jose verification error) — the cause of the `no auth strategy
+   * recognizes this token` failure. */
+  export interface Resolution {
+    strategy: string | null
+    rejection: Result.Failure<unknown> | undefined
+
+    /** the span the gate guards — where the chain's `ozaco.auth.skip` events land (the DISPATCH
+     * span of an action, even under a plugin span wrapping it); absent ⇒ the active span. */
+    readonly span?: TraceDef.SpanHandle | undefined
   }
 
   // --- the coordinator ---------------------------------------------------------------------------

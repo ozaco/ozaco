@@ -1,34 +1,33 @@
 // oxlint-disable import/exports-last
 import type { Database } from 'db:core'
 import { where } from 'db:core'
+import { dbLog, TELEMETRY_SCOPE, untraced } from 'db:internal'
 import type { Operation, Task } from 'std:effect'
 import { all, attempt, fork, race, sleep } from 'std:effect'
-import { fail, isFailure } from 'std:result'
+import type { Result } from 'std:result'
+import { fail, formatFailure, isFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
+import type { TraceDef } from 'std:trace'
+import { extract, inject, span } from 'std:trace'
 
 import { QueueErrors } from '../errors'
-import type { QueueDef } from '../types'
+import type { Helpers } from '../types/helpers'
+import type { QueueDef } from '../types/queue'
 
 import {
   CLAIMABLE,
+  DEAD_EVENT,
+  DEAD_STATUS,
   DEFAULT_BACKOFF,
   DEFAULT_LEASE_MS,
   DEFAULT_MAX_ATTEMPTS,
   DEFAULT_POLL_MS,
   ERROR_LIMIT,
+  MESSAGING_SYSTEM,
+  PROCESS_EXCEPTION_EVENT,
+  RETRY_STATUS,
   SWEEP_BATCH,
 } from './const'
-
-type Row = QueueDef.Row<AnyType>
-
-interface Settings {
-  readonly batch: number
-  readonly backoff: QueueDef.Backoff
-  readonly maxAttempts: number
-  readonly pollMs: number
-  readonly leaseMs: number
-  readonly sweepMs: number
-}
 
 const isCount = (value: unknown, min: number): value is number =>
   typeof value === 'number' && Number.isSafeInteger(value) && value >= min
@@ -37,7 +36,7 @@ const isCount = (value: unknown, min: number): value is number =>
 export function* settingsOf(options: QueueDef.WorkOptions | undefined) {
   const leaseMs = options?.leaseMs ?? DEFAULT_LEASE_MS
 
-  const settings: Settings = {
+  const settings: Helpers.Settings = {
     batch: options?.batch ?? 1,
     backoff: options?.backoff ?? DEFAULT_BACKOFF,
     maxAttempts: options?.maxAttempts ?? DEFAULT_MAX_ATTEMPTS,
@@ -82,12 +81,42 @@ export const delayOf = (backoff: QueueDef.Backoff, failed: number): number => {
   return Math.max(0, Math.min(cap, raw))
 }
 
-const describe = (failure: { readonly error: unknown; readonly message: string }): string =>
-  `${String(failure.error)}: ${failure.message}`.slice(0, ERROR_LIMIT)
+/** What `last_error` keeps of a failed attempt: its whole cause chain, budgeted. */
+const describe = (failure: Result.Failure<unknown>): string =>
+  formatFailure(failure, { chain: true, maxBytes: ERROR_LIMIT })
+
+/** A stored W3C context (the row's `traceparent` / `tracestate` columns), or `null`. */
+const storedContext = (
+  traceparent: string | null | undefined,
+  tracestate?: string | null,
+): TraceDef.SpanContext | null =>
+  traceparent
+    ? extract(name =>
+        name === 'traceparent' ? traceparent : name === 'tracestate' ? (tracestate ?? null) : null,
+      )
+    : null
+
+/** An attempt's links: the enqueue (`creation`) and — once an attempt ran before, a retry, a
+ * handback or a manual `retry()` — the previous attempt (`queue.retry`). */
+const linksOf = (row: Helpers.Row): TraceDef.LinkInput[] => {
+  const links: TraceDef.LinkInput[] = []
+  const creation = storedContext(row.traceparent, row.tracestate)
+  const previous = storedContext(row.last_traceparent)
+
+  if (creation) {
+    links.push({ context: creation, attributes: { 'ozaco.link.reason': 'creation' } })
+  }
+
+  if (previous) {
+    links.push({ context: previous, attributes: { 'ozaco.link.reason': 'queue.retry' } })
+  }
+
+  return links
+}
 
 /** What a failed attempt turns the job into: another try later, or the dead letter. */
 // oxlint-disable-next-line max-params
-const failedPatch = (row: Row, settings: Settings, reason: string, now: number) =>
+const failedPatch = (row: Helpers.Row, settings: Helpers.Settings, reason: string, now: number) =>
   row.attempts >= (row.max_attempts ?? settings.maxAttempts)
     ? {
         state: 'dead',
@@ -118,23 +147,36 @@ export function* startWorker(
     readonly table: string
     readonly id: string
     readonly handlers: QueueDef.Handlers
+
+    /** the table carries the trace-context columns */
+    readonly traced: boolean
+
+    /** the service every attempt span runs as (`service.name`) */
+    readonly service: string
   },
-  settings: Settings,
+  settings: Helpers.Settings,
 ) {
-  const { table, id, handlers } = input
+  const { table, id, handlers, traced, service } = input
   const db = input.db as AnyType
   const kinds = Object.keys(handlers)
   const stats = { claimed: 0, done: 0, retried: 0, dead: 0, swept: 0, errors: 0 }
 
-  /** Run one claimed job to its next state. Halted mid-run, it hands the job back. */
-  const run = function* (row: Row) {
+  /**
+   * Run one claimed job to its next state, in the attempt's own ROOT consumer span `process
+   * {table}` — run as the worker's `service` — linking the enqueue and the previous attempt. A
+   * failure with attempts left settles
+   * as handled (WARN, `error.type`); a dead letter as an error (ERROR, `ozaco.queue.dead`). Halted
+   * mid-run, it hands the job back.
+   */
+  const run = function* (row: Helpers.Row) {
     // every write that settles THIS attempt: the job is still ours, at this attempt
     const ours = where.and(
       where.eq('state', 'running'),
       where.eq('worker', id),
       where.eq('attempts', row.attempts),
     )
-    let settled = false
+    let failed: Result.Failure<unknown> | undefined
+    let dead = false
 
     const heartbeat = function* (): Operation<never> {
       for (;;) {
@@ -145,56 +187,101 @@ export function* startWorker(
       }
     }
 
-    try {
-      const job: QueueDef.Job = {
-        id: row._id,
-        kind: row.kind,
-        payload: row.payload,
-        attempt: row.attempts,
-        maxAttempts: row.max_attempts ?? settings.maxAttempts,
-        dedupeKey: row.dedupe_key,
-        row,
-      }
+    yield* span(
+      `process ${table}`,
+      {
+        kind: 'consumer',
+        // every attempt is a trace of its own, LINKED to the enqueue and the previous attempt —
+        // a root belongs to no caller's service: it runs as the worker's
+        parent: null,
+        service,
+        scope: TELEMETRY_SCOPE,
+        links: linksOf(row),
+        attributes: {
+          'messaging.system': MESSAGING_SYSTEM,
+          'messaging.operation.type': 'process',
+          'messaging.operation.name': 'work',
+          'messaging.destination.name': table,
+          'messaging.message.id': row._id,
+          'ozaco.queue.kind': row.kind,
+          'ozaco.queue.attempt': row.attempts,
+        },
+        failure: {
+          eventName: PROCESS_EXCEPTION_EVENT,
+          status: failure => (failure === failed && !dead ? RETRY_STATUS : DEAD_STATUS),
+        },
+      },
+      function* (handle) {
+        // this attempt's context rides the row: the next attempt links it
+        const trail = traced ? { last_traceparent: (yield* inject()).traceparent ?? null } : {}
+        let settled = false
 
-      const outcome = (yield* race([
-        attempt(() => handlers[row.kind]!(job)),
-        heartbeat(),
-      ])) as Awaited<ReturnType<typeof attempt>>
-      const now = Date.now()
+        try {
+          const job: QueueDef.Job = {
+            id: row._id,
+            kind: row.kind,
+            payload: row.payload,
+            attempt: row.attempts,
+            maxAttempts: row.max_attempts ?? settings.maxAttempts,
+            dedupeKey: row.dedupe_key,
+            row,
+          }
 
-      if (isFailure(outcome)) {
-        const next = failedPatch(row, settings, describe(outcome), now)
-        yield* db.patch(table, row._id, next, { scope: ours })
+          const outcome = (yield* race([
+            attempt(() => handlers[row.kind]!(job)),
+            untraced(heartbeat),
+          ])) as Awaited<ReturnType<typeof attempt>>
+          const now = Date.now()
 
-        if (next.state === 'dead') {
-          stats.dead += 1
-        } else {
-          stats.retried += 1
-        }
-      } else {
-        yield* db.patch(
-          table,
-          row._id,
-          { state: 'done', lease_until: null, last_error: null, finished_at: now },
-          { scope: ours },
-        )
-        stats.done += 1
-      }
+          if (isFailure(outcome)) {
+            const next = failedPatch(row, settings, describe(outcome), now)
+            yield* db.patch(table, row._id, { ...next, ...trail }, { scope: ours })
+            failed = outcome
+            dead = next.state === 'dead'
+            settled = true
 
-      settled = true
-    } finally {
-      if (!settled) {
-        // halted (or the settle write failed): hand the job back, this attempt uncounted
-        yield* attempt(
-          db.patch(
+            if (dead) {
+              stats.dead += 1
+              handle.addEvent(DEAD_EVENT)
+            } else {
+              stats.retried += 1
+            }
+
+            // the attempt's failure ends its span (and settles by `failure.status` above)
+            return outcome
+          }
+
+          yield* db.patch(
             table,
             row._id,
-            { state: 'queued', attempts: row.attempts - 1, lease_until: null, worker: null },
+            { state: 'done', lease_until: null, last_error: null, finished_at: now, ...trail },
             { scope: ours },
-          ),
-        )
-      }
-    }
+          )
+          stats.done += 1
+          settled = true
+
+          return undefined
+        } finally {
+          if (!settled) {
+            // halted (or the settle write failed): hand the job back, this attempt uncounted
+            yield* attempt(
+              db.patch(
+                table,
+                row._id,
+                {
+                  state: 'queued',
+                  attempts: row.attempts - 1,
+                  lease_until: null,
+                  worker: null,
+                  ...trail,
+                },
+                { scope: ours },
+              ),
+            )
+          }
+        }
+      },
+    )
   }
 
   /** Claim up to `batch` due jobs and run them concurrently; answers how many were claimed. */
@@ -205,8 +292,8 @@ export function* startWorker(
       .filter(where.oneOf('state', CLAIMABLE), where.lte('run_at', now), where.oneOf('kind', kinds))
       .order('priority', 'desc')
       .order('run_at')
-      .take(settings.batch)) as readonly Row[]
-    const claimed: Row[] = []
+      .take(settings.batch)) as readonly Helpers.Row[]
+    const claimed: Helpers.Row[] = []
 
     for (const row of ready) {
       const next = (yield* db.patch(
@@ -220,7 +307,7 @@ export function* startWorker(
         },
         // lost the race to another worker → the guarded UPDATE misses (null), no conflict
         { scope: where.and(where.eq('_version', row._version), where.oneOf('state', CLAIMABLE)) },
-      )) as Row | null
+      )) as Helpers.Row | null
 
       if (next) {
         claimed.push(next)
@@ -242,7 +329,7 @@ export function* startWorker(
       .query(table)
       .filter(where.oneOf('state', CLAIMABLE), where.oneOf('kind', kinds))
       .order('run_at')
-      .first()) as Row | null
+      .first()) as Helpers.Row | null
 
     return next === null
       ? settings.pollMs
@@ -255,25 +342,32 @@ export function* startWorker(
     const lapsed = (yield* db
       .query(table)
       .filter(where.eq('state', 'running'), where.lt('lease_until', now))
-      .take(SWEEP_BATCH)) as readonly Row[]
+      .take(SWEEP_BATCH)) as readonly Helpers.Row[]
 
     for (const row of lapsed) {
-      const next = yield* db.patch(
-        table,
-        row._id,
-        failedPatch(row, settings, 'lease expired', now),
-        {
-          scope: where.and(where.eq('_version', row._version), where.eq('state', 'running')),
-        },
-      )
+      const patch = failedPatch(row, settings, 'lease expired', now)
+      const next = yield* db.patch(table, row._id, patch, {
+        scope: where.and(where.eq('_version', row._version), where.eq('state', 'running')),
+      })
 
       if (next) {
         stats.swept += 1
+        // the keys of the attempt's own span: one key per concept across spans and logs
+        yield* dbLog('warn', 'db queue: a lease expired — its worker is gone', {
+          'messaging.destination.name': table,
+          'messaging.message.id': row._id,
+          'ozaco.queue.kind': row.kind,
+          'ozaco.queue.attempt': row.attempts,
+          'ozaco.queue.worker': row.worker,
+          'ozaco.queue.state': patch.state,
+        })
       }
     }
   }
 
-  const task: Task<void> = yield* fork(function* () {
+  // the loops belong to no request: no span over their claims and sweeps (each attempt opens its
+  // own root span)
+  const loop = function* () {
     yield* fork(function* () {
       for (;;) {
         if (isFailure(yield* attempt(sweep))) {
@@ -302,7 +396,8 @@ export function* startWorker(
       // at least a tick: a due job someone else just took must not spin this loop hot
       yield* race([changes.next(), sleep(Math.max(1, wait))])
     }
-  })
+  }
+  const task: Task<void> = yield* fork(() => untraced(loop))
 
   return {
     id,

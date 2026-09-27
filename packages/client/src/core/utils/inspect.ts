@@ -9,13 +9,12 @@ import type { FutureFlow } from 'std:effect'
 import { isFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
 
+import { handleOf } from '../internal/inspect'
 import type { ClientDef } from '../types/client'
 import type { Helpers } from '../types/helpers'
 import type { ManifestDef } from '../types/manifest'
 
 import { wireFailureOf } from './failure'
-
-const handleOf = (client: Helpers.HandleLike): Promise<ClientDef.Statics> => Promise.resolve(client)
 
 /** The manifest, or a thrown {@link Helpers.WireFailure}. */
 export const loadManifest = async (client: Helpers.HandleLike): Promise<ManifestDef.Manifest> => {

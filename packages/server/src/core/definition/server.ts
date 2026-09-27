@@ -4,43 +4,49 @@ import { createEvent } from 'std:event'
 import { IO } from 'std:io'
 import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
+import { newSpanId, newTraceId, suppressed } from 'std:trace'
 
 import pkg from '../../../package.json'
 import { DEFAULT_TIMEOUT_MS, serviceIdOf } from '../const'
-import { TraceRef } from '../context'
+import { ActiveRequest, RequestRef } from '../context'
 import { ServerErrors } from '../errors'
-import { roleOf } from '../internal/app'
+import { env, roleOf } from '../internal/app'
 import { parseCall } from '../internal/call'
 import { callLocal, runDispatch } from '../internal/dispatch'
-import {
-  actionsOf,
-  asRequest,
-  callRemote,
-  carrierOf,
-  serverFor,
-  traceFor,
-} from '../internal/kernel'
+import { domainRecord } from '../internal/handler'
+import { actionsOf, asRequest, callRemote, carrierOf, serverFor } from '../internal/kernel'
 import { buildRegistry, manifestOf, reloadRegistry, socketInfoOf } from '../internal/registry'
+import {
+  eventItemOf,
+  isInternalEvent,
+  processSpan,
+  publishSpan,
+  userSpanOf,
+} from '../internal/spans'
 import type { ServerDef } from '../types/server'
 import type { ServiceDef } from '../types/service'
-import { childTrace, report, rootTrace, toWire, withSpan } from '../utils/trace'
+import { settingsOf, wireTrace } from '../utils/trace'
 
 import { Server } from './protocol'
 
-/** One call, TraceRef already decided: local when hosted here, over the carrier otherwise. */
+/** One call, `RequestRef` already set: local when hosted here, over the carrier otherwise. The
+ * carrier correlation id is minted here — never a span id (it exists with tracing off). */
 function* performCall(
   kernel: ServerDef.Context,
   target: { readonly service: string; readonly action: string },
   rest: readonly [unknown?, ServerDef.CallOptions?],
 ): Operation<unknown> {
   const [input, options] = rest
-  const trace = yield* traceFor(kernel, target.service, target.action)
+  const request = (yield* RequestRef.get()) ?? new ActiveRequest(yield* newTraceId(), 'internal')
+  const cid = yield* newSpanId()
   const timeoutMs = options?.timeoutMs ?? kernel.timeoutMs
 
   if (kernel.hosted.has(target.service)) {
     return yield* callLocal({
       kernel,
-      trace,
+      cid,
+      requestId: request.requestId,
+      origin: request.origin,
       service: target.service,
       action: target.action,
       input,
@@ -54,7 +60,8 @@ function* performCall(
 
   // remote: the carrier finds whoever serves it
   return yield* callRemote(kernel, {
-    trace,
+    cid,
+    requestId: request.requestId,
     service: target.service,
     action: target.action,
     input,
@@ -89,10 +96,14 @@ const ServerImpl = Server.implement<ServerDef.Context, [options: ServerDef.Optio
       edge: null,
       outcomes: null,
       exporting: false,
+      observing: false,
+      ...settingsOf(options, { name, version }, env),
       role: roleOf(options),
       hosted: new Set(options.hosted ?? registry.services.keys()),
       pluginServices: new Set(),
+      selfTraced: new Set(),
       inflight: 0,
+      active: new Map(),
 
       routes: [],
       sockets: registry.sockets.map(socketInfoOf),
@@ -105,19 +116,23 @@ export const ServerClient: ServerDef.Client = ServerImpl.build({
     const kernel = yield* Server.context.expect()
     if (!kernel.hosted.has(call.service) && kernel.registry.services.has(call.service)) {
       // a gateway: the edge's call goes over the carrier to whoever hosts the service
-      return yield* TraceRef.with(call.trace, () =>
+      return yield* RequestRef.with(new ActiveRequest(call.requestId, call.origin), () =>
         callRemote(kernel, {
-          trace: call.trace,
+          cid: call.cid,
+          requestId: call.requestId,
           service: call.service,
           action: call.action,
           input: call.input,
           deadline: call.deadline,
           idempotencyKey: call.idempotencyKey,
           meta: call.headers,
+
+          // the owner's `ctx.reply` (status, `Location`, …) shapes THIS edge's response
+          reply: call.reply,
         }),
       )
     }
-    return yield* runDispatch(kernel, call, actionsOf(kernel))
+    return yield* runDispatch(kernel, call, { actions: actionsOf(kernel) })
   },
 
   *call(service: ServiceDef.Service, action: string, ...rest: [unknown?, ServerDef.CallOptions?]) {
@@ -135,41 +150,46 @@ export const ServerClient: ServerDef.Client = ServerImpl.build({
     const target = { service: parsed.service, action: parsed.action }
     const tail = [parsed.input, parsed.options] as [unknown?, ServerDef.CallOptions?]
     const kernel = yield* Server.context.expect()
-    const isRoot = (yield* TraceRef.get()) === undefined
-    if (isRoot) {
+
+    if ((yield* RequestRef.get()) === undefined) {
       // a call from outside any dispatch is a request of its own (origin: internal)
-      const trace = yield* traceFor(kernel, target.service, target.action)
       return (yield* asRequest({
         kernel,
-        trace,
+        request: new ActiveRequest(yield* newTraceId(), 'internal'),
         target,
         body: () => performCall(kernel, target, tail),
       })) as AnyType
     }
+
     return (yield* performCall(kernel, target, tail)) as AnyType
   },
 
   *emit(name, payload) {
     const kernel = yield* Server.context.expect()
     const carrier = yield* carrierOf(kernel)
-    const trace = yield* TraceRef.get()
-    yield* carrier.actions.emit({
-      k: 'event',
-      name,
-      payload,
-      origin: kernel.serviceId,
-      trace: trace ? toWire(trace) : undefined,
-    })
-    yield* report(kernel, {
-      t: 'event',
-      row: {
-        request_id: trace?.request_id ?? null,
-        span_id: trace?.span_id ?? null,
-        kind: 'emit',
+
+    // one id per envelope: the producer's and every consumer's `messaging.message.id`
+    const id = yield* newTraceId()
+
+    // the kernel's own plumbing (`_…`, the observe cluster) is never traced
+    if (isInternalEvent(name)) {
+      yield* suppressed(() =>
+        carrier.actions.emit({ k: 'event', id, name, payload, origin: kernel.serviceId }),
+      )
+      return
+    }
+
+    const requestId = (yield* RequestRef.get())?.requestId ?? ''
+
+    yield* publishSpan(name, id, function* () {
+      yield* carrier.actions.emit({
+        k: 'event',
+        id,
         name,
-        size: null,
-        ts: Date.now(),
-      },
+        payload,
+        origin: kernel.serviceId,
+        trace: yield* wireTrace(requestId),
+      })
     })
   },
 
@@ -182,17 +202,24 @@ export const ServerClient: ServerDef.Client = ServerImpl.build({
         *next() {
           for (;;) {
             const step = yield* subscription.next()
+            // the carrier's subscription ended (its scope / the transport closed): so does this
+            // flow — pulling a finished subscription again would only spin
             if (step.done) {
+              return step
+            }
+            if (isInternalEvent(step.value.name)) {
               continue
             }
             if (name === undefined || step.value.name === name) {
-              return { done: false as const, value: step.value }
+              return { done: false as const, value: yield* eventItemOf(step.value) }
             }
           }
         },
       }
     },
   }),
+
+  process: (item, body) => processSpan(item, body),
 
   *manifest() {
     return manifestOf(yield* Server.context.expect())
@@ -240,19 +267,13 @@ export const ServerClient: ServerDef.Client = ServerImpl.build({
     return changed
   },
 
-  *report(event) {
-    yield* report(yield* Server.context.expect(), event)
+  *report(record) {
+    yield* domainRecord(record)
   },
 
   *span(name, body, options) {
     const kernel = yield* Server.context.expect()
-    const parent = options?.parent ?? (yield* TraceRef.get())
-    const trace = parent
-      ? yield* childTrace(parent)
-      : yield* rootTrace(kernel.serviceId, options?.origin ?? 'internal', options?.requestId)
-    return yield* withSpan(
-      { kernel, trace, kind: options?.kind ?? 'custom', name, attrs: options?.attrs },
-      () => body(trace),
-    )
+
+    return yield* userSpanOf(kernel, true)(name, body, options)
   },
 })

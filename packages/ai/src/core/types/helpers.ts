@@ -180,6 +180,13 @@ export namespace Helpers {
     collect(): readonly ToolCall[]
   }
 
+  /** One tool call being accumulated by {@link ToolCallAccumulator}, keyed by its stream index. */
+  export interface ToolCallSlot {
+    id: string
+    name: string
+    arguments: string
+  }
+
   /** A normalized embedding response — one vector per {@link EmbedSpec.input} entry, in order. */
   export interface EmbedResult {
     readonly vectors: readonly (readonly number[])[]

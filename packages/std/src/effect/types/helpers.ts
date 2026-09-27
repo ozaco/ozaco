@@ -151,6 +151,24 @@ export namespace Helpers {
     readonly reject: (error: unknown) => void
   }
 
+  /** The async iterator's pending `next()` a {@link Rendezvous} settles. */
+  export interface RendezvousWaiter<T> {
+    resolve: (step: IteratorResult<T, undefined>) => void
+    reject: (error: unknown) => void
+  }
+
+  /** One queued item (`createQueue`): a value, or the close value. */
+  export type QueueItem<T, TClose> = IteratorResult<T, TClose>
+
+  /** A pull `toReadable` parks until the pump has the Flow's next step. */
+  export type ReadablePull<T> = (step: IteratorResult<T, unknown>) => void
+
+  /** One waiter of `createSemaphore`: `granted` once a released permit moved to it. */
+  export interface Ticket {
+    granted: boolean
+    wake?: (() => void) | undefined
+  }
+
   export interface ToFutureOptions<T> {
     /** Abort the AWAITED task (settles `fail(EffectErrors.Halted)`); a `yield*`ed operation needs no
      * signal — it is cancelled with the caller's task. */

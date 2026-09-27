@@ -1,5 +1,5 @@
 import { until } from 'std:effect'
-import { fail } from 'std:result'
+import { asFailure, fail } from 'std:result'
 
 import { IOErrors } from '../../errors'
 import type { IODef } from '../../types/io'
@@ -7,7 +7,6 @@ import { fromReadable } from '../stream/from-readable'
 
 import {
   emptyByteFlow,
-  errorMessage,
   inheritedStdinWrite,
   makeStatus,
   normalizeSpawn,
@@ -32,7 +31,11 @@ export function* bunExec(cmd: string, args?: readonly string[], options?: IODef.
       stderr: 'pipe',
     })
   } catch (error) {
-    return yield* fail(IOErrors.ExecSpawnFailed, `failed to spawn "${cmd}": ${errorMessage(error)}`)
+    return yield* fail(
+      IOErrors.ExecSpawnFailed,
+      `failed to spawn "${cmd}"`,
+      asFailure(error, IOErrors),
+    )
   }
 
   try {
@@ -50,7 +53,7 @@ export function* bunExec(cmd: string, args?: readonly string[], options?: IODef.
     }
     return result
   } catch (error) {
-    return yield* fail(IOErrors.ExecFailed, `command "${cmd}" failed: ${errorMessage(error)}`)
+    return yield* fail(IOErrors.ExecFailed, `command "${cmd}" failed`, asFailure(error, IOErrors))
   }
 }
 
@@ -72,7 +75,7 @@ export function* bunSpawn(cmd: string, args?: readonly string[], options?: IODef
       stderr: stdio.stderr,
     })
   } catch (error) {
-    return yield* fail(IOErrors.SpawnFailed, `failed to spawn "${cmd}": ${errorMessage(error)}`)
+    return yield* fail(IOErrors.SpawnFailed, `failed to spawn "${cmd}"`, asFailure(error, IOErrors))
   }
 
   const exited = function* () {
@@ -94,7 +97,11 @@ export function* bunSpawn(cmd: string, args?: readonly string[], options?: IODef
       stdin.write(toBytes(chunk))
       yield* until(Promise.resolve(stdin.flush()))
     } catch (error) {
-      return yield* fail(IOErrors.StdinWriteFailed, `failed to write stdin: ${errorMessage(error)}`)
+      return yield* fail(
+        IOErrors.StdinWriteFailed,
+        `failed to write stdin`,
+        asFailure(error, IOErrors),
+      )
     }
   }
 
@@ -111,7 +118,8 @@ export function* bunSpawn(cmd: string, args?: readonly string[], options?: IODef
     } catch (error) {
       return yield* fail(
         IOErrors.KillFailed,
-        `failed to kill pid ${proc.pid}: ${errorMessage(error)}`,
+        `failed to kill pid ${proc.pid}`,
+        asFailure(error, IOErrors),
       )
     }
   }

@@ -4,6 +4,8 @@ import { IO } from 'std:io'
 import type { Result } from 'std:result'
 import { fail, isFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
+import type { TraceDef } from 'std:trace'
+import { inject, parseTraceparent } from 'std:trace'
 import type { WsDef } from 'std:ws'
 import { Ws } from 'std:ws'
 
@@ -12,7 +14,9 @@ import { ClientErrors } from '../errors'
 import type { ClientDef } from '../types/client'
 import type { Helpers } from '../types/helpers'
 
+import { RECONNECT_FIELD } from './const'
 import { manifestOf } from './manifest'
+import { markRemote, remoteCause, withCarrier } from './trace'
 
 const RECONNECT_POLL_MS = 100
 
@@ -63,10 +67,58 @@ const socketUrl = (ctx: ClientDef.Context, path: string): string => {
   return url.toString()
 }
 
+/** The trace the watch went out in, when the span a server names as the failure's recorder
+ * (`recorded`, a `traceparent`) lives in it — and is not the sender's context itself. */
+const recordedIn = (
+  recorder: TraceDef.SpanContext | null,
+  sent: string | undefined,
+): string | undefined => {
+  const sender = parseTraceparent(sent ?? null)
+
+  return recorder !== null &&
+    sender !== null &&
+    recorder.traceId === sender.traceId &&
+    recorder.spanId !== sender.spanId
+    ? sender.traceId
+    : undefined
+}
+
+/**
+ * The server's verdict on a watch (an `error` frame) as a failure: a REMOTE one — its tag and
+ * message, then `remote: watch @ <resource> span <id8>` (the span that recorded it) — marked
+ * recorded in the watch's own trace when the server recorded it there.
+ */
+const verdictOf = (
+  frame: Extract<Helpers.Frame, { t: 'error' }>,
+  resource: string,
+  sent: string | undefined,
+): Result.Failure<unknown> => {
+  const recorder = parseTraceparent(typeof frame.recorded === 'string' ? frame.recorded : null)
+  const remote: Helpers.Remote = {
+    service: resource,
+    operation: 'watch',
+    recordedIn: recordedIn(recorder, sent),
+  }
+  const failure = fail(frame.tag, frame.message, remoteCause(remote, recorder?.spanId))
+
+  markRemote(failure, remote)
+
+  return failure
+}
+
 /**
  * A resource watch as a Flow of `sync` / `delta` frames over the realtime socket. The socket
  * reconnects by itself; after every reopen the watch is re-sent with `since: <last token>` so the
  * consumer sees one continuous sequence. `error` frames close the flow with that failure.
+ *
+ * Trace context: the caller's (its active span — `ozaco=1` while it records — or a pass-through
+ * one) rides the upgrade headers (where the platform can set them) and, as `traceparent` /
+ * `tracestate` fields, the `{ t: 'auth' }` frame and every call frame — the server parents each
+ * frame's span to it. The frames re-sent after a reconnect carry `reconnect` instead: the
+ * `traceparent` the watch opened with, which the server LINKS (`ws.reconnect`) to the fresh root
+ * span of the redial. An `error` frame is a remote failure (`remote: watch @ <resource> …`); one
+ * naming the span that recorded it (`recorded`) in the watch's own trace is marked recorded
+ * there: the consumer's spans then carry only its status.
  */
 // oxlint-disable-next-line max-params -- ctx · resource · options · pager hooks
 export const watch = <TRow>(
@@ -79,13 +131,17 @@ export const watch = <TRow>(
     const id = yield* IO.actions.uuid()
     const path = yield* socketPath(ctx, resource, options?.path)
     const token = typeof ctx.options.token === 'function' ? ctx.options.token() : ctx.options.token
+    const opening = yield* inject({ ozaco: true })
     const connection = yield* Ws.actions.connect(socketUrl(ctx, path), {
-      headers: {
-        ...ctx.options.headers,
-        ...(token ? { authorization: `Bearer ${token}` } : {}),
-      },
+      headers: withCarrier(
+        { ...ctx.options.headers, ...(token ? { authorization: `Bearer ${token}` } : {}) },
+        opening,
+      ),
       reconnect: { retries: 10, delayMs: 100, backoff: 2, maxDelayMs: 5000 },
     })
+    // the `traceparent` the last watch frame went out with (an error frame's `recorded` is
+    // weighed against it)
+    let sent = opening.traceparent
     let since = options?.since
     let cursor = options?.cursor
     let back = options?.back === true
@@ -134,15 +190,28 @@ export const watch = <TRow>(
       }
     }
 
-    const subscribe = function* (): Operation<void> {
+    /**
+     * (Re)send the watch — auth first. Both frames carry the sender's trace context (the server
+     * parents their spans to it). A re-subscription after a RECONNECT carries only `reconnect`:
+     * the context the watch opened with, which the server LINKS (`ws.reconnect`) to a fresh root
+     * — a redial minutes later is its own unit of work, related to the opening, not a late child
+     * of it (and never a link to its own parent).
+     */
+    const subscribe = function* (reconnect = false): Operation<void> {
       guardRefusal()
+
+      const carrier = reconnect ? null : yield* inject({ ozaco: true })
+      const trace =
+        carrier ??
+        (opening.traceparent === undefined ? {} : { [RECONNECT_FIELD]: opening.traceparent })
+      sent = carrier?.traceparent
 
       // in-band auth FIRST on every (re)connect — the server settles it before the watch
       const bearer =
         typeof ctx.options.token === 'function' ? ctx.options.token() : ctx.options.token
 
       if (bearer) {
-        yield* connection.send({ t: 'auth', token: bearer })
+        yield* connection.send({ t: 'auth', token: bearer, ...trace })
       }
 
       yield* connection.send({
@@ -152,6 +221,7 @@ export const watch = <TRow>(
         order: options?.order,
         ...(options?.limit === undefined ? {} : { limit: options.limit, cursor, back }),
         since,
+        ...trace,
       })
     }
     yield* subscribe()
@@ -171,7 +241,7 @@ export const watch = <TRow>(
           cursor = step.value.cursor ?? undefined
           back = step.value.back
           since = undefined
-          yield* attempt(subscribe)
+          yield* attempt(() => subscribe())
         }
       })
 
@@ -203,14 +273,14 @@ export const watch = <TRow>(
       yield* refusal.operation
       yield* attempt(() => connection.close())
     })
-    // re-subscribe after every reconnect, resuming from the last token
+    // re-subscribe after every reconnect, resuming from the last token — linked to the opening
     yield* fork(function* () {
       let seen = connection.reconnects
       for (;;) {
         yield* sleep(RECONNECT_POLL_MS)
         if (connection.reconnects !== seen) {
           seen = connection.reconnects
-          yield* attempt(subscribe)
+          yield* attempt(() => subscribe(true))
         }
       }
     })
@@ -224,18 +294,17 @@ export const watch = <TRow>(
           if (refused !== null) {
             return yield* refused
           }
+          // the socket's own failure stays a nested cause (a rewrap, never a stringified copy)
           if (step.value && isFailure(step.value)) {
-            return yield* fail(
-              ClientErrors.Closed,
-              'realtime socket closed',
-              String(step.value.error),
-            )
+            return yield* fail(ClientErrors.Closed, 'realtime socket closed', step.value)
           }
           return { done: true, value: undefined }
         }
         const frame = step.value
+        // the server's verdict on the watch, decoded like any wire failure (a remote one) —
+        // recorded when the server recorded it in the trace this watch was sent in
         if (frame.t === 'error') {
-          return yield* fail(frame.tag, frame.message)
+          return yield* verdictOf(frame, resource, sent)
         }
         since = frame.token
         hooks?.onPage?.((frame as AnyType).page ?? null)

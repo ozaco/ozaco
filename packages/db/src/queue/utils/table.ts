@@ -4,7 +4,9 @@ import { column, table } from 'db:core'
  * Declare a job-queue table — add it to the `DbClient` schema and name it in
  * `Queue.use({ table })`: `defineSchema({ …, jobs: queueTable('jobs') })`. The dedupe key is a
  * unique index (what makes `enqueue(…, { dedupeKey })` race-free); `(state, run_at)` indexes
- * the claim.
+ * the claim. `traceparent` / `tracestate` keep the trace context the job was enqueued in and
+ * `last_traceparent` its latest attempt's, so every attempt's span links both (a table declared
+ * without them still works — untraced).
  */
 export const queueTable = <const TName extends string>(name: TName) =>
   table(name, {
@@ -20,6 +22,9 @@ export const queueTable = <const TName extends string>(name: TName) =>
     worker: column.text().optional(),
     last_error: column.text().optional(),
     finished_at: column.timestamp({ as: 'ms' }).optional(),
+    traceparent: column.text().optional(),
+    tracestate: column.text().optional(),
+    last_traceparent: column.text().optional(),
   })
     .unique('by_dedupe', ['dedupe_key'])
     .index('by_ready', ['state', 'run_at'])

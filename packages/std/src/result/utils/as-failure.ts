@@ -1,28 +1,26 @@
 import type { AnyType } from 'std:shared'
-import { serializeError } from 'std:shared'
 
-import { ResultErrors } from '../errors'
+import { foldOf } from '../internal/failure'
+import { isTagSet } from '../internal/match'
 import type { ResultDef } from '../types/def'
 
 import { appendCauses } from './append-causes'
-import { fail } from './fail'
-import { isFailure } from './is'
 
-// an `Error` carries its own text: surface it as the failure's `message` instead of leaving it
-// empty (the Error itself stays the `error` / the serialized string, per variant)
-const messageOf = (error: unknown): string => (error instanceof Error ? error.message : '')
+/**
+ * Any value as a Failure. A Failure passes through; a foreign value — a thrown JS / platform /
+ * third-party error, anything that is not a Failure — is folded, the value kept as `raw`:
+ *
+ * - into the first tag of `tags` (a `createTags` bundle) whose matcher recognizes it — the message
+ *   a function matcher named, else the value's own `message` (else `code`):
+ *   `asFailure(error, IOErrors)` → `std:io.not-found` for an `ENOENT`;
+ * - else into `ResultErrors.Unknown` (`std:result.unknown`), its `serializeError` text the
+ *   message (`TypeError: boom`).
+ *
+ * A `std:result.unknown` fold given with `tags` (what the effect runtime made of a throw) is
+ * re-classified the same way. `causes` are appended, normalized as `fail` does.
+ */
+export const asFailure: ResultDef.AsFailure = (error: unknown, ...rest: AnyType[]): AnyType => {
+  const tags = isTagSet(rest[0]) ? rest[0] : undefined
 
-export const asFailure: ResultDef.AsFailure = (error: unknown, ...causes: string[]): AnyType => {
-  const failure = isFailure(error) ? error : fail(error, messageOf(error))
-
-  return appendCauses(failure, ...causes)
-}
-
-export const asFailureFrom: ResultDef.AsFailure = (
-  error: unknown,
-  ...causes: string[]
-): AnyType => {
-  const failure = isFailure(error) ? error : fail(ResultErrors.Unknown, serializeError(error))
-
-  return appendCauses(failure, ...causes)
+  return appendCauses(foldOf(error, tags), ...(tags ? rest.slice(1) : rest))
 }

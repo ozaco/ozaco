@@ -67,6 +67,17 @@
       },
       "source": "./src/result/index.ts"
     },
+    "./trace": {
+      "import": {
+        "types": "./dist/trace.d.ts",
+        "default": "./dist/trace.js"
+      },
+      "require": {
+        "types": "./dist/trace.d.cts",
+        "default": "./dist/trace.cjs"
+      },
+      "source": "./src/trace/index.ts"
+    },
     "./io": {
       "import": {
         "types": "./dist/io.d.ts",
@@ -242,6 +253,17 @@
         "default": "./dist/logger/transport/file.cjs"
       },
       "source": "./src/logger/transport/file/index.ts"
+    },
+    "./logger/transport/trace": {
+      "import": {
+        "types": "./dist/logger/transport/trace.d.ts",
+        "default": "./dist/logger/transport/trace.js"
+      },
+      "require": {
+        "types": "./dist/logger/transport/trace.d.cts",
+        "default": "./dist/logger/transport/trace.cjs"
+      },
+      "source": "./src/logger/transport/trace/index.ts"
     },
     "./config": {
       "import": {

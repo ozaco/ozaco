@@ -126,7 +126,7 @@ export const transportActions = (backend: TransportDef.Driver): TransportDef.Act
     },
     *serve(topic, handler, options) {
       const { group } = yield* check({ group: options?.group, prefix: options?.prefix })
-      return yield* servePackage(runtime, { topic, handler, group })
+      return yield* servePackage(runtime, { topic, handler, group, origin: options?.origin })
     },
 
     status: () => driver.status(),

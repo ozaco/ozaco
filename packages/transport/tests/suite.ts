@@ -12,7 +12,8 @@ import {
   until,
   useContext,
 } from 'std:effect'
-import { fail, isFailure, unwrap } from 'std:result'
+import type { Result } from 'std:result'
+import { asFailure, fail, isFailure, ResultErrors, unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import { describe, expect, it } from 'bun:test'
@@ -20,9 +21,11 @@ import { describe, expect, it } from 'bun:test'
 import { BunIO } from 'std:io/impl/bun'
 import { Transport, TransportErrors } from 'transport:core'
 
+import pkg from '../package.json'
+
 /** One backend under end-to-end test. */
 export interface TransportTarget {
-  /** Must equal the impl's `info.transport`. */
+  /** Must equal the impl's `info.transport` (the impl itself is named `transport-<label>`). */
   readonly label: string
   /** false → the whole suite is skipped (e.g. no live server configured). */
   readonly enabled: boolean
@@ -269,8 +272,37 @@ export const runTransportSuite = (target: TransportTarget): void => {
           expect(isFailure(failed)).toBe(true)
           expect((failed as AnyType).error).toBe('math.divide-by-zero')
           expect((failed as AnyType).message).toBe('b must not be 0')
-          // the responder's causes come first; the dispatch breadcrumbs std appends follow
-          expect((failed as AnyType).causes[0]).toBe('a=1')
+          // the responder's causes, where it was answered, then the labels std's plugin runtime
+          // appends as the failure leaves the caller's `request` (the impl's action, then the
+          // protocol's dispatch)
+          expect((failed as AnyType).causes).toEqual([
+            'a=1',
+            `remote: ${topic}`,
+            'request',
+            `transport-${target.label}@${pkg.version}`,
+            'dispatch',
+            `transport@${pkg.version}`,
+          ])
+
+          // a wrapped failure crosses with its nested failures, a fold as its tag + message —
+          // the folded value itself (`raw`) never leaves the answering side
+          const chained = unique('rpc.chain')
+          yield* Transport.actions.serve(chained, function* () {
+            const folded = asFailure(new TypeError('b is not a number'))
+            return yield* fail('math.failed', 'no', fail('math.parse', 'bad b', folded))
+          })
+          const wrapped = (yield* attempt(
+            Transport.actions.request<number>(chained, {}),
+          )) as Result.Failure<unknown>
+          expect(wrapped.error).toBe('math.failed')
+          const parse = wrapped.causes[0] as Result.Failure<unknown>
+          expect(isFailure(parse)).toBe(true)
+          expect(parse.error).toBe('math.parse')
+          const fold = parse.causes[0] as Result.Failure<unknown>
+          expect(isFailure(fold)).toBe(true)
+          expect(fold.error).toBe(ResultErrors.Unknown)
+          expect(fold.message).toBe('TypeError: b is not a number')
+          expect('raw' in fold).toBe(false)
         }),
       )
     })

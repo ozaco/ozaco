@@ -100,13 +100,16 @@ export interface Queue<T, TClose> extends Subscription<T, TClose> {
   close(value: TClose): void
 }
 
-export type Middleware<TArgs extends unknown[], TReturn> = (
+export type Middleware<TArgs extends readonly unknown[], TReturn> = (
   args: TArgs,
   next: (...args: TArgs) => TReturn,
 ) => TReturn
 
+// `infer TArgs extends readonly unknown[]`: a bare `infer` in a rest position is constrained to a
+// MUTABLE array, so a member with a readonly rest (`del(...keys: readonly string[])`) matched no
+// branch and was typed as a value member (`Middleware<[], A[K]>`)
 export type Around<A> = {
-  [K in keyof A]: A[K] extends (...args: infer TArgs) => infer TReturn
+  [K in keyof A]: A[K] extends (...args: infer TArgs extends readonly unknown[]) => infer TReturn
     ? Middleware<TArgs, TReturn>
     : Middleware<[], A[K]>
 }
@@ -122,7 +125,7 @@ export interface Api<A> {
   actions: {
     [K in keyof A]: A[K] extends Operation<unknown>
       ? A[K]
-      : A[K] extends (...args: infer TArgs) => infer TReturn
+      : A[K] extends (...args: infer TArgs extends readonly unknown[]) => infer TReturn
         ? TReturn extends Operation<unknown>
           ? A[K]
           : (...args: TArgs) => Operation<TReturn>

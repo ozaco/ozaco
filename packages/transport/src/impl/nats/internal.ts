@@ -1,6 +1,7 @@
 // oxlint-disable import/exports-last
+import type { Operation } from 'std:effect'
 import { attempt, createContext, createQueue, ensure, fork, until, useContext } from 'std:effect'
-import { fail, isFailure } from 'std:result'
+import { asFailure, fail, isFailure, ResultErrors } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import type { Consumer, ConsumerConfig, JsMsg } from '@nats-io/jetstream'
@@ -12,15 +13,9 @@ import {
   StorageType,
 } from '@nats-io/jetstream'
 import type { Msg, MsgHdrs } from '@nats-io/nats-core'
-import {
-  nanos,
-  headers as natsHeaders,
-  NoRespondersError,
-  RequestError,
-  TimeoutError,
-} from '@nats-io/nats-core'
+import { nanos, headers as natsHeaders } from '@nats-io/nats-core'
 import type { TransportDef } from 'transport:core'
-import { HEADERS, prefixed, TransportErrors, unprefixed } from 'transport:core'
+import { HEADERS, logTransport, prefixed, TransportErrors, unprefixed } from 'transport:core'
 
 import type { Nats } from './types'
 
@@ -41,6 +36,33 @@ export const streamNameOf = (prefix: string): string =>
 const consumerNameOf = (name: string): string => name.replaceAll(/[.*>\s/\\]/gu, '_')
 
 const rpcSubject = (prefix: string, topic: string): string => `${RPC_ROOT}.${prefix}.${topic}`
+
+/**
+ * A pump as a raw subscription that says, ONCE, why the client ended it — a WARN line through
+ * the Logger when the end was a failure (a teardown or `stop()` is no failure). Logged by whoever
+ * reads the end, in their scope.
+ */
+const reporting = (topic: string, pump: Nats.Pump): TransportDef.RawSubscription => {
+  const { queue, ending } = pump
+  let told = false
+
+  return {
+    *next() {
+      const step = yield* queue.next()
+
+      if (step.done && ending.error !== undefined && !told) {
+        told = true
+        yield* logTransport('warn', 'transport subscription failed', {
+          'messaging.system': 'nats',
+          'messaging.destination.name': topic,
+          error: ending.error,
+        })
+      }
+
+      return step
+    },
+  }
+}
 
 const toNatsHeaders = (headers: TransportDef.Headers): MsgHdrs => {
   const out = natsHeaders()
@@ -98,25 +120,16 @@ const toJsRaw = (prefix: string, msg: JsMsg, durable: boolean): TransportDef.Raw
   }
 }
 
-/** Classify a thrown client error into a transport failure. */
-export const raise = function* (error: unknown) {
-  const cause = error instanceof RequestError ? (error.cause ?? error) : error
+/** A caught client error (thrown, or a rejection `attempt` folded) as a transport failure: one
+ * `TransportErrors` recognizes (`no-responders`, `timeout`) is that fold itself, the client error
+ * its `raw`; any other fails `transport.connection` — `context` says what was being done — over
+ * its fold. */
+export const raise = function* (caught: unknown, context: string) {
+  const failure = asFailure(caught, TransportErrors)
 
-  if (
-    cause instanceof NoRespondersError ||
-    (error instanceof RequestError && error.isNoResponders())
-  ) {
-    return yield* fail(
-      TransportErrors.NoResponders,
-      `no responders on "${(cause as AnyType).subject ?? ''}"`,
-    )
-  }
-
-  if (cause instanceof TimeoutError) {
-    return yield* fail(TransportErrors.Timeout, 'nats request timed out')
-  }
-
-  return yield* fail(TransportErrors.Connection, String((error as AnyType)?.message ?? error))
+  return yield* failure.error === ResultErrors.Unknown
+    ? fail(TransportErrors.Connection, context, failure)
+    : failure
 }
 
 /** Create-or-update the application's stream: `add` wins on first boot and on identical config;
@@ -133,7 +146,8 @@ export function* ensureStream(state: Pick<Nats.State, 'jsm'>, spec: Nats.StreamS
   if (isFailure(updated)) {
     return yield* fail(
       TransportErrors.Configuration,
-      `stream "${spec.name}" could not be provisioned: ${String((updated.error as AnyType)?.message ?? updated.error)}`,
+      `stream "${spec.name}" could not be provisioned`,
+      asFailure(updated, TransportErrors),
     )
   }
 }
@@ -172,18 +186,24 @@ function* ensureConsumer(state: Nats.State, config: Partial<ConsumerConfig>) {
   if (isFailure(updated)) {
     return yield* fail(
       TransportErrors.Configuration,
-      `consumer "${name}" could not be ensured: ${String((updated.error as AnyType)?.message ?? updated.error)}`,
+      `consumer "${name}" could not be ensured`,
+      asFailure(updated, TransportErrors),
     )
   }
 }
 
 /** Pump a JetStream consumer into a scope-bound raw queue. */
-function* consumeInto(state: Nats.State, consumer: Consumer, durable: boolean) {
+function* consumeInto(
+  state: Nats.State,
+  consumer: Consumer,
+  durable: boolean,
+): Operation<Nats.Pump> {
   const queue = createQueue<TransportDef.Raw, void>()
+  const ending: Nats.Pump['ending'] = {}
   const started = yield* attempt(until(consumer.consume({ max_messages: PREFETCH })))
 
   if (isFailure(started)) {
-    return yield* raise(started.error)
+    return yield* raise(started, `cannot consume from "${state.stream}"`)
   }
 
   const messages = started.value
@@ -193,6 +213,9 @@ function* consumeInto(state: Nats.State, consumer: Consumer, durable: boolean) {
     for (;;) {
       const step = yield* attempt(until(iterator.next() as Promise<IteratorResult<JsMsg>>))
       if (isFailure(step) || step.value.done) {
+        if (isFailure(step)) {
+          ending.error = step
+        }
         queue.close(undefined)
         return
       }
@@ -205,16 +228,18 @@ function* consumeInto(state: Nats.State, consumer: Consumer, durable: boolean) {
     queue.close(undefined)
   })
 
-  return queue
+  return { queue, ending }
 }
 
 /** Transient traffic: a plain core subscription under `_rpc.<prefix>` (queue group optional). */
 function* subscribeTransient(state: Nats.State, topic: string, group: string | undefined) {
   const queue = createQueue<TransportDef.Raw, void>()
+  const ending: Nats.Pump['ending'] = {}
   const sub = state.nc.subscribe(rpcSubject(state.prefix, topic), {
     ...(group === undefined ? {} : { queue: group }),
     callback: (error, msg) => {
       if (error) {
+        ending.error = asFailure(error)
         queue.close(undefined)
         return
       }
@@ -236,7 +261,7 @@ function* subscribeTransient(state: Nats.State, topic: string, group: string | u
   // the SUB is only an intent until the server has seen it: flush so a request from another
   // connection right after `serve` resolves cannot slip past us
   yield* attempt(until(state.nc.flush()))
-  return queue
+  return reporting(topic, { queue, ending })
 }
 
 /** Guard the server's `max_payload`: NATS answers an oversize message by killing the
@@ -277,7 +302,7 @@ export const driver: TransportDef.Driver = {
           headers: toNatsHeaders(headers),
         })
       } catch (error) {
-        return yield* raise(error)
+        return yield* raise(error, `cannot publish on "${topic}"`)
       }
       return null
     }
@@ -291,7 +316,7 @@ export const driver: TransportDef.Driver = {
     )
 
     if (isFailure(published)) {
-      return yield* raise(published.error)
+      return yield* raise(published, `cannot publish on "${topic}"`)
     }
 
     return null
@@ -319,10 +344,10 @@ export const driver: TransportDef.Driver = {
       )
 
       if (isFailure(consumer)) {
-        return yield* raise(consumer.error)
+        return yield* raise(consumer, `cannot subscribe to "${topic}"`)
       }
 
-      return yield* consumeInto(state, consumer.value, false)
+      return reporting(topic, yield* consumeInto(state, consumer.value, false))
     }
 
     const durable = options.durable !== undefined
@@ -341,10 +366,10 @@ export const driver: TransportDef.Driver = {
 
     const consumer = yield* attempt(until(state.js.consumers.get(state.stream, consumerName)))
     if (isFailure(consumer)) {
-      return yield* raise(consumer.error)
+      return yield* raise(consumer, `cannot subscribe to "${topic}"`)
     }
 
-    return yield* consumeInto(state, consumer.value, durable)
+    return reporting(topic, yield* consumeInto(state, consumer.value, durable))
   },
 
   *request({ topic, data, headers, timeoutMs }) {
@@ -367,7 +392,7 @@ export const driver: TransportDef.Driver = {
     )
 
     if (isFailure(outcome)) {
-      return yield* raise(outcome.error)
+      return yield* raise(outcome, `cannot request "${topic}"`)
     }
 
     return toRaw(state.prefix, outcome.value)

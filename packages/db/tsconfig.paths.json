@@ -25,6 +25,7 @@
       "std:effect": ["./node_modules/@ozaco/std/dist/effect"],
       "std:event": ["./node_modules/@ozaco/std/dist/event"],
       "std:plugin": ["./node_modules/@ozaco/std/dist/plugin"],
+      "std:trace": ["./node_modules/@ozaco/std/dist/trace"],
       "std:io": ["./node_modules/@ozaco/std/dist/io"],
       "std:io/impl/bun": ["./node_modules/@ozaco/std/dist/io/impl/bun"],
       "std:codec": ["./node_modules/@ozaco/std/dist/codec"],

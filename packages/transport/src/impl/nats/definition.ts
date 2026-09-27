@@ -1,12 +1,18 @@
 import { Codec } from 'std:codec'
 import { attempt, ensure, until } from 'std:effect'
-import { fail, isFailure } from 'std:result'
+import { asFailure, fail, isFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import { jetstream, jetstreamManager } from '@nats-io/jetstream'
 import { JsonCodec } from 'std:codec/impl/json'
 import type { TransportDef } from 'transport:core'
-import { isValidPrefix, Transport, transportActions, TransportErrors } from 'transport:core'
+import {
+  isValidPrefix,
+  Transport,
+  transportActions,
+  TransportErrors,
+  watchStatus,
+} from 'transport:core'
 
 import pkg from '../../../package.json'
 
@@ -46,7 +52,8 @@ export const NatsTransport = Transport.implement<TransportDef.Options, [options:
     if (isFailure(opened)) {
       return yield* fail(
         TransportErrors.Connection,
-        `cannot connect to nats: ${String((opened.error as AnyType)?.message ?? opened.error)}`,
+        'cannot connect to nats',
+        asFailure(opened, TransportErrors),
       )
     }
 
@@ -57,7 +64,8 @@ export const NatsTransport = Transport.implement<TransportDef.Options, [options:
       yield* attempt(until(nc.close()))
       return yield* fail(
         TransportErrors.Configuration,
-        `jetstream is not available on this server: ${String((manager.error as AnyType)?.message ?? manager.error)}`,
+        'jetstream is not available on this server',
+        asFailure(manager, TransportErrors),
       )
     }
 
@@ -94,6 +102,9 @@ export const NatsTransport = Transport.implement<TransportDef.Options, [options:
         replicas: options.replicas ?? 1,
       }),
     )
+
+    // connection lost / back / closed → the Logger, while the install lives
+    yield* watchStatus(driver.status(), { transport: 'nats', prefix: options.prefix })
 
     return {
       transport: 'nats',

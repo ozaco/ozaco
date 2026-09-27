@@ -67,6 +67,31 @@ describe('createBreaker', () => {
     expect(isFailure(breaker.reason) && breaker.reason.error).toBe('breaker-test.boom')
   })
 
+  it("names the open reason by its fold's message — a thrown or tripped Error's `Name: message`", async () => {
+    const breaker = createBreaker({ failures: 1, name: 'db' })
+
+    const outcome = await run(function* () {
+      yield* attempt(() =>
+        breaker.run(function* (): Operation<never> {
+          throw new TypeError('socket hang up')
+        }),
+      )
+      const open = yield* attempt(() => breaker.run(ok))
+      breaker.trip(new RangeError('disk full'))
+      const tripped = yield* attempt(() => breaker.run(ok))
+
+      return {
+        open: isFailure(open) ? open.message : null,
+        tripped: isFailure(tripped) ? tripped.message : null,
+      }
+    })
+
+    expect(unwrap(outcome)).toEqual({
+      open: 'db: circuit open (TypeError: socket hang up)',
+      tripped: 'db: circuit open (RangeError: disk full)',
+    })
+  })
+
   it('a success resets the consecutive failure count', async () => {
     const breaker = createBreaker({ failures: 2 })
 

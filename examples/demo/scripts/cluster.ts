@@ -7,7 +7,7 @@
  * Variations are CONSTS here, not environment variables — `GATEWAYS = 2` adds a second edge on
  * :3001 (a WebRTC call whose two tabs land on DIFFERENT gateways is the case the `rtc` relay
  * coordinates over the carrier: open `/rtc#room` on :3000 and on :3001). For a cluster that
- * ships to OpenObserve, run `scripts/openobserve.ts` instead.
+ * ships its telemetry, run `scripts/lgtm.ts` (Grafana + OpenObserve) or `scripts/openobserve.ts`.
  */
 import { createQueue, ensure, fork, main, scoped, suspend } from 'std:effect'
 
@@ -17,18 +17,24 @@ import { dirname } from 'node:path'
 import { createLink } from 'transport:impl/memory'
 
 import type { DemoOptions } from '../src'
-import { createDemo } from '../src'
+import { createDemo, HOSTNAME, OBSERVE_TOKEN } from '../src'
 
 const GATEWAYS = 1
 const PORT = 3000
 const DB_PATH = 'local/demo.sqlite'
 
-/** Boot the whole cluster; `shared` rides into every node (`scripts/openobserve.ts`). */
-export const runCluster = (shared: Pick<DemoOptions, 'openobserve'> = {}): Promise<void> =>
+/** Boot the whole cluster; `shared` rides into every node (`scripts/lgtm.ts`,
+ * `scripts/openobserve.ts`), the first gateway listens on `port`; `ready` runs once every node
+ * is up, with the first gateway's url. */
+export const runCluster = (
+  shared: Pick<DemoOptions, 'otlp' | 'openobserve' | 'capture'> = {},
+  port = PORT,
+  ready: (url: string) => void = () => {},
+): Promise<void> =>
   main(function* () {
     mkdirSync(dirname(DB_PATH), { recursive: true })
     const link = createLink()
-    const ready = createQueue<void, void>()
+    const booted = createQueue<void, void>()
 
     const node = (options: DemoOptions) =>
       fork(() =>
@@ -39,7 +45,7 @@ export const runCluster = (shared: Pick<DemoOptions, 'openobserve'> = {}): Promi
           console.log(
             `[${options.instance}] ${info.role} hosted=${info.hosted.join(',') || '-'} ${info.url ?? ''}`,
           )
-          ready.add(undefined)
+          booted.add(undefined)
           yield* suspend()
         }),
       )
@@ -53,7 +59,7 @@ export const runCluster = (shared: Pick<DemoOptions, 'openobserve'> = {}): Promi
       observe: 'forward',
       port: 0,
     })
-    yield* ready.next()
+    yield* booted.next()
     yield* node({
       role: 'service',
       hosted: ['feed', 'reports', 'jobs', 'live', 'rtc', 'cluster'],
@@ -61,22 +67,24 @@ export const runCluster = (shared: Pick<DemoOptions, 'openobserve'> = {}): Promi
       observe: 'forward',
       port: 0,
     })
-    yield* ready.next()
+    yield* booted.next()
 
     // the first gateway collects the observe rows the others forward
     for (let index = 0; index < GATEWAYS; index += 1) {
       yield* node({
         role: 'gateway',
         instance: GATEWAYS > 1 ? `gw-${index + 1}` : 'gw',
-        port: PORT + index,
+        port: port + index,
         observe: index === 0 ? 'collect' : 'forward',
       })
-      yield* ready.next()
+      yield* booted.next()
     }
 
+    const url = `http://${HOSTNAME}:${port}`
     console.log(
-      `[cluster] gateways=${GATEWAYS} — docs http://127.0.0.1:${PORT}/docs · observe http://127.0.0.1:${PORT}/_observe`,
+      `[cluster] gateways=${GATEWAYS} — docs ${url}/docs · observe ${url}/_observe (bearer: ${OBSERVE_TOKEN} or an admin's JWT)`,
     )
+    ready(url)
     yield* suspend()
   })
 

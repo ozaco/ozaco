@@ -12,6 +12,8 @@ import type { AnyType } from 'std:shared'
 
 import { describe, expect, it } from 'bun:test'
 
+import serverPkg from '../../server/package.json'
+
 import type { Api } from './fixture'
 import { boot, probeState } from './fixture'
 
@@ -101,6 +103,9 @@ describe('e2e — calls and options', () => {
         expect(value.meta.status).toBe(200)
         expect(value.meta.brand).toBeNull()
         expect(value.meta.requestId).toBe(client.$lastRequestId()!)
+        // nothing traced on either side (no Tracer here, the node does not observe): no trace id
+        expect(value.meta.traceId).toBeNull()
+        expect(client.$lastTraceId()).toBeNull()
 
         const streamed = yield* client.$callWithMeta('demo.count', { n: 1 })
 
@@ -175,7 +180,7 @@ describe('e2e — manifest lifecycle', () => {
 })
 
 describe('e2e — failure fidelity', () => {
-  it('keeps tag, message and causes, and appends req + status breadcrumbs', async () => {
+  it('keeps tag, message and causes, names it remote, appends req + status breadcrumbs LAST', async () => {
     unwrap(
       await run(function* () {
         const { url } = yield* boot()
@@ -187,9 +192,23 @@ describe('e2e — failure fidelity', () => {
         const failure = failed as AnyType
         expect(failure.error).toBe('probe.caused')
         expect(failure.message).toBe('root problem')
-        expect(failure.causes.slice(0, 2)).toEqual(['cause:one', 'cause:two'])
-        expect(failure.causes.some((cause: string) => cause.startsWith('req:'))).toBe(true)
-        expect(failure.causes).toContain('status:500')
+        const requestId = client.$lastRequestId()
+        expect(requestId).toBeTruthy()
+        // the handler's own causes, the server's on its way out (the kernel's breadcrumb, then
+        // the plugin runtime's labels, inner hop first), where it came from (a remote failure of
+        // the called action), then the client's breadcrumbs LAST
+        expect(failure.causes).toEqual([
+          'cause:one',
+          'cause:two',
+          `action:probe.caused req:${requestId}`,
+          'dispatch',
+          `server-kernel@${serverPkg.version}`,
+          'dispatch',
+          `server@${serverPkg.version}`,
+          'remote: probe.caused @ probe',
+          `req:${requestId}`,
+          'status:500',
+        ])
       }),
     )
   })
@@ -359,6 +378,8 @@ describe('e2e — realtime', () => {
           expect(isFailure(failed)).toBe(true)
           expect(String(failed.error)).toBe('db.validation')
           expect(String(failed.message)).toContain('password')
+          // the server's verdict, decoded as a remote failure of the watched resource
+          expect(failed.causes).toEqual(['remote: watch @ notes'])
         })
       }),
     )
@@ -436,8 +457,10 @@ describe('e2e — observe console bootstrap', () => {
 
         const stats = (yield* client.observe!.stats!()) as AnyType
         expect(typeof stats.recorded).toBe('number')
-        const page = (yield* client.observe!.requests!({})) as AnyType
-        expect(Array.isArray(page.requests)).toBe(true)
+        // the trace list: one root span row per trace
+        const page = (yield* client.observe!.traces!({})) as AnyType
+        expect(Array.isArray(page.traces)).toBe(true)
+        expect(page.cursor === null || typeof page.cursor === 'string').toBe(true)
       }),
     )
   })

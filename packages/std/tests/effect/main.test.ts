@@ -15,9 +15,11 @@ import { join, resolve } from 'node:path'
  */
 
 const EFFECT_ENTRY = resolve(import.meta.dir, '../../src/effect/index.ts')
+const RESULT_ENTRY = resolve(import.meta.dir, '../../src/result/index.ts')
 
 const program = `
 import { main, sleep, suspend } from ${JSON.stringify(EFFECT_ENTRY)}
+import { fail } from ${JSON.stringify(RESULT_ENTRY)}
 
 process.on('exit', () => {
   process.stdout.write(
@@ -29,6 +31,16 @@ process.on('exit', () => {
 await main(function* (args) {
   if (args[0] === 'exit-now') {
     return
+  }
+  if (args[0] === 'fail') {
+    const inner = fail('app.inner', 'inner boom')
+    return yield* fail('app.failed', 'the app failed', 'booting', inner)
+  }
+  if (args[0] === 'throw') {
+    throw new RangeError('raw boom')
+  }
+  if (args[0] === 'throw-value') {
+    throw 'plain boom'
   }
   try {
     process.stdout.write('running\\n')
@@ -91,6 +103,17 @@ const launch = (...args: string[]) => {
 
 const skip = process.platform === 'win32'
 
+/** Run the program to completion with stderr captured. */
+const runCaptured = async (...args: string[]) => {
+  const proc = Bun.spawn([process.execPath, 'run', script, ...args], {
+    stdout: 'pipe',
+    stderr: 'pipe',
+    cwd: dir,
+  })
+  const [status, stderr] = await Promise.all([proc.exited, new Response(proc.stderr).text()])
+  return { status, stderr }
+}
+
 describe('main signal wiring', () => {
   it.skipIf(skip)('SIGTERM shuts the body down gracefully and exits 143', async () => {
     const { proc, running, finish } = launch()
@@ -131,5 +154,30 @@ describe('main signal wiring', () => {
     const { output } = await finish()
 
     expect(output).toContain('listeners SIGINT=0 SIGTERM=0')
+  })
+
+  it.skipIf(skip)('a failing body exits 1 and prints the whole cause chain to stderr', async () => {
+    const { status, stderr } = await runCaptured('fail')
+
+    expect(status).toBe(1)
+    expect(stderr.trimEnd().split('\n')).toEqual([
+      'app.failed: the app failed',
+      '    at booting',
+      'Caused by: app.inner: inner boom',
+    ])
+  })
+
+  it.skipIf(skip)('a thrown Error prints as its asFailure fold — no JS stack', async () => {
+    const { status, stderr } = await runCaptured('throw')
+
+    expect(status).toBe(1)
+    expect(stderr.trimEnd()).toBe('std:result.unknown: RangeError: raw boom')
+  })
+
+  it.skipIf(skip)('a thrown non-Error value prints as its fold too', async () => {
+    const { status, stderr } = await runCaptured('throw-value')
+
+    expect(status).toBe(1)
+    expect(stderr.trimEnd()).toBe('std:result.unknown: plain boom')
   })
 })

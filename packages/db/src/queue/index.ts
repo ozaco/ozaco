@@ -7,4 +7,5 @@ export { Queue } from './definition'
 export { QueueErrors } from './errors'
 export { queueTable } from './utils/table'
 
-export type * from './types'
+export type * from './types/helpers'
+export type * from './types/queue'

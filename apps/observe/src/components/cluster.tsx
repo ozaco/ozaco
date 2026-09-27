@@ -1,5 +1,6 @@
 /** The cluster pane: who serves what, and per-instance span stats over the window. */
 import type { ClusterView } from '../lib/api'
+import { fmtMs, serviceColor } from '../lib/format'
 
 export const ClusterPane = ({ view }: { view: ClusterView }) => (
   <div className='p-4'>
@@ -13,7 +14,9 @@ export const ClusterPane = ({ view }: { view: ClusterView }) => (
     </h3>
     {Object.entries(view.members).map(([service, members]) => (
       <div key={service} className='py-[2px]'>
-        <span className='tag'>{service}</span>
+        <span className='tag' style={{ color: serviceColor(service) }}>
+          {service}
+        </span>
         {members.length === 0 && <span style={{ color: 'var(--bad)' }}>nobody</span>}
         {members.map((member, index) => (
           <span key={member.instance}>
@@ -35,15 +38,26 @@ export const ClusterPane = ({ view }: { view: ClusterView }) => (
       style={{ color: 'var(--dim)' }}>
       instances
     </h3>
-    <div className='grid grid-cols-[220px_1fr_70px] gap-2 py-[3px]' style={{ color: 'var(--dim)' }}>
+    <div
+      className='grid grid-cols-[160px_1fr_110px_70px] gap-2 py-[3px]'
+      style={{ color: 'var(--dim)' }}>
       <span>instance</span>
-      <span>spans · failed</span>
+      <span>services</span>
+      <span>spans · errors</span>
       <span className='text-right'>p95</span>
     </div>
     {view.instances.map(instance => (
-      <div key={instance.instance} className='grid grid-cols-[220px_1fr_70px] gap-2 py-[3px]'>
+      <div
+        key={instance.instance}
+        className='grid grid-cols-[160px_1fr_110px_70px] gap-2 py-[3px]'
+        title={`last seen ${new Date(instance.last_seen).toLocaleTimeString()}`}>
+        <span className='truncate'>{instance.instance}</span>
         <span className='truncate'>
-          {instance.instance} <span style={{ color: 'var(--dim)' }}>{instance.service_id}</span>
+          {instance.services.map(service => (
+            <span key={service} className='tag' style={{ color: serviceColor(service) }}>
+              {service}
+            </span>
+          ))}
         </span>
         <span>
           {instance.spans} ·{' '}
@@ -52,7 +66,7 @@ export const ClusterPane = ({ view }: { view: ClusterView }) => (
           </span>
         </span>
         <span className='text-right' style={{ color: 'var(--dim)' }}>
-          {instance.p95_ms === null ? '' : `${instance.p95_ms}ms`}
+          {instance.p95_ms === null ? '' : fmtMs(instance.p95_ms)}
         </span>
       </div>
     ))}

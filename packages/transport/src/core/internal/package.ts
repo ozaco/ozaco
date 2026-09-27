@@ -1,7 +1,8 @@
 import type { Operation, Task } from 'std:effect'
 import { attempt, ensure, fork, race, scoped, sleep, withResolvers } from 'std:effect'
 import { IO } from 'std:io'
-import { fail, isFailure } from 'std:result'
+import { fail, isFailure, throwable } from 'std:result'
+import { extract, inject, isRecorded } from 'std:trace'
 
 import {
   CANCEL_PREFIX,
@@ -14,6 +15,7 @@ import {
 import { TransportErrors } from '../errors'
 import type { Helpers } from '../types/helpers'
 import type { TransportDef } from '../types/transport'
+import { logTransport } from '../utils/log'
 
 import { decodeFailure, decodeValue, empty, encodeFailure, encodeValue, toMessage } from './codec'
 import { parcelThreshold, parcelTopic, readParcel, sendParcel, waitOf } from './parcel'
@@ -22,7 +24,8 @@ import { parcelThreshold, parcelTopic, readParcel, sendParcel, waitOf } from './
  * The package plane: request/reply carrying a Result. A backend with native request/reply
  * (NATS) answers through the driver; everywhere else core emulates it with a per-request inbox
  * topic (`$inbox.<cid>`) named in the `oz-reply` header. Replies carry `oz-result: ok | fail`;
- * a `fail` reply re-raises on the caller with the responder's tag/message/causes.
+ * a `fail` reply re-raises on the caller with the responder's failure — tag, message, causes and
+ * its nested failures — and a `remote: …` cause naming where it was answered (see `originOf`).
  *
  * A payload of ANY size travels: what does not fit one backend message rides the parcel
  * sideband (`internal/parcel.ts`) — the message itself then carries only `oz-parcel: <bytes>`
@@ -54,6 +57,44 @@ function* whole(
   const { [HEADERS.parcel]: _omit, ...headers } = raw.headers
 
   return { ...raw, data: yield* readParcel(runtime, parcelTopic(cid, direction), size), headers }
+}
+
+/** A request's headers with the caller's active trace context (`traceparent` / `tracestate`), so
+ * the serving side knows the trace its answer belongs to. A caller-set `traceparent` wins, and
+ * then nothing is added; a stray caller-set `tracestate` never rides a context not its own. */
+function* outbound(headers: TransportDef.Headers | undefined): Operation<TransportDef.Headers> {
+  if (headers?.traceparent !== undefined) {
+    return headers
+  }
+
+  const { tracestate: _stale, ...rest } = headers ?? {}
+
+  return { ...rest, ...(yield* inject()) }
+}
+
+/**
+ * Where a failed request was answered, for its reply: the topic, the trace it came in with and
+ * whether THIS side already recorded the failure in that trace (the caller then records it no
+ * second time) — then whatever the service's own `origin` names (it wins; a throwing one is
+ * ignored).
+ */
+const originOf = <TArgs>(
+  service: Helpers.Service<TArgs, unknown>,
+  failed: Helpers.Failed<TArgs>,
+): TransportDef.Origin => {
+  const { raw, failure, request } = failed
+  const inbound = extract(name => raw.headers[name])
+  const recorded = inbound !== null && isRecorded(failure, inbound.traceId)
+  const named =
+    request && service.origin ? throwable(() => service.origin?.(failure, request)) : undefined
+  const own = named && !isFailure(named) ? named.value : undefined
+
+  return {
+    operation: raw.topic,
+    ...(inbound === null ? {} : { traceId: inbound.traceId }),
+    ...(recorded ? { recorded } : {}),
+    ...own,
+  }
 }
 
 /** Parse a reply message into the caller's outcome. */
@@ -123,7 +164,7 @@ export function* requestPackage<TResult, TArgs>(
   const timeoutMs = given?.timeoutMs ?? DEFAULT_TIMEOUT_MS
   const cid = yield* IO.actions.uuid()
   const encoded = yield* encodeValue(args, {
-    ...given?.headers,
+    ...(yield* outbound(given?.headers)),
     [HEADERS.cid]: cid,
     // the owner holds an oversize reply open for this long and no longer
     [HEADERS.wait]: String(timeoutMs),
@@ -257,16 +298,18 @@ export function* servePackage<TArgs, TResult>(
     const cid = raw.headers[HEADERS.cid]
     const reply: Helpers.Reply = { topic: replyTo, cid, waitMs: waitOf(raw.headers[HEADERS.wait]) }
 
+    let request: TransportDef.Message<TArgs> | undefined
     const outcome = yield* attempt(function* () {
       // a parcelled request is collected here, inside the answer: a failure to receive it is
       // reported to the caller like any other, instead of leaving it waiting
       const message = yield* toMessage<TArgs>(yield* whole(runtime, { cid, direction: 'in' }, raw))
+      request = message
       return yield* handler(message.value, message)
     })
 
     if (isFailure(outcome)) {
       yield* respond(runtime, reply, {
-        data: yield* encodeFailure(outcome),
+        data: yield* encodeFailure(outcome, originOf(service, { raw, failure: outcome, request })),
         headers: { [HEADERS.kind]: KINDS.value, [HEADERS.result]: 'fail' },
       })
       return
@@ -306,6 +349,11 @@ export function* servePackage<TArgs, TResult>(
     for (;;) {
       const step = yield* requests.next()
       if (step.done) {
+        // the backend ended the subscription (drained, or it failed): nothing is served here
+        // any more — a halt (`stop()`, scope teardown) never gets this far
+        yield* logTransport('info', 'transport stopped serving: its subscription closed', {
+          'messaging.destination.name': topic,
+        })
         return
       }
 
@@ -315,8 +363,14 @@ export function* servePackage<TArgs, TResult>(
       const running = yield* fork(function* () {
         // the answer itself may fail to LEAVE (the caller went away while its oversize reply
         // was still crossing the sideband, the backend drained): that is this exchange's
-        // problem, never the serving loop's
-        yield* attempt(() => answer(step.value))
+        // problem, never the serving loop's — the caller is left to its timeout, so say so
+        const sent = yield* attempt(() => answer(step.value))
+        if (isFailure(sent)) {
+          yield* logTransport('warn', 'transport reply failed', {
+            'messaging.destination.name': step.value.topic,
+            error: sent,
+          })
+        }
         if (cid !== undefined) {
           inflight.delete(cid)
         }

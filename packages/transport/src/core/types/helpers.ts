@@ -20,6 +20,9 @@ export namespace Helpers {
     readonly ready?: (() => Operation<void>) | undefined
   }
 
+  /** One pull of a byte lane as `readableLane` hands it to its stream: a chunk, or the close. */
+  export type ByteStep = IteratorResult<Uint8Array, TransportDef.LaneClose<unknown>>
+
   /** A lane frame as decoded from a raw message. */
   export type Frame =
     | { readonly kind: 'data'; readonly seq: number; readonly raw: TransportDef.Raw }
@@ -78,6 +81,29 @@ export namespace Helpers {
     readonly topic: string
     readonly handler: TransportDef.Handler<TArgs, TResult>
     readonly group?: string | undefined
+    /** see {@link TransportDef.ServeOptions.origin} */
+    readonly origin?: TransportDef.ServeOptions<TArgs>['origin']
+  }
+
+  /** A request the serving side failed to answer with a value: what its failure's
+   * {@link TransportDef.Origin} is named from. */
+  export interface Failed<TArgs> {
+    readonly raw: TransportDef.Raw
+    readonly failure: Result.Failure<unknown>
+    /** the decoded request — absent when it never decoded (the handler did not run). */
+    readonly request: TransportDef.Message<TArgs> | undefined
+  }
+
+  /**
+   * A failure on the wire (a `fail` reply / lane frame): its own fields — the `{ error, message,
+   * causes }` every peer, an older one too, reads — with JsonCodec carrying its nested failures
+   * in their tagged form (tag, message, causes; never a fold's `raw`), plus where it was answered.
+   */
+  export interface WireFailure {
+    readonly error: unknown
+    readonly message: string
+    readonly causes: readonly Result.Cause[]
+    readonly origin?: TransportDef.Origin | undefined
   }
 
   /** One lane publication as the flow plane receives it. */

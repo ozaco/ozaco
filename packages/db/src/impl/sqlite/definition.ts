@@ -11,7 +11,7 @@ import { sqlActions } from '../shared/actions'
 import { sqliteDialect } from '../shared/dialects'
 import { runSqlTransaction } from '../shared/transaction'
 
-import { createLock, exec, StateRef, transactional } from './internal'
+import { createLock, exec, namespaceOf, StateRef, transactional } from './internal'
 import type { Sqlite } from './types'
 
 /**
@@ -25,7 +25,8 @@ export const SqliteAdapter = DbAdapter.implement<Adapter.Options, [options?: Sql
   description: 'SQLite adapter over bun:sqlite',
 
   *setup(options) {
-    const db = new Database(options?.path ?? ':memory:')
+    const path = options?.path ?? ':memory:'
+    const db = new Database(path)
 
     // writes WAIT for a competing connection instead of failing on the spot…
     db.exec(`PRAGMA busy_timeout = ${Math.max(0, Math.trunc(options?.busyTimeoutMs ?? 5000))}`)
@@ -44,6 +45,7 @@ export const SqliteAdapter = DbAdapter.implement<Adapter.Options, [options?: Sql
     return {
       adapter: 'sqlite',
       capabilities: { transactions: true, raw: true, alterColumn: false },
+      telemetry: { system: 'sqlite', namespace: namespaceOf(path) },
     }
   },
 }).build({

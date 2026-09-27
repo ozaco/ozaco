@@ -9,7 +9,7 @@ import { parse, stringify } from 'smol-toml'
 import pkg from '../../../package.json'
 import { Codec } from '../definition'
 import { CodecErrors } from '../errors'
-import type { CodecDef } from '../types'
+import type { CodecDef } from '../types/codec'
 
 const encoder = new TextEncoder()
 const decoder = new TextDecoder()
@@ -51,7 +51,7 @@ export const TomlCodec = Codec.implement({
 
       return encoder.encode(result)
     } catch (error) {
-      return yield* fail(CodecErrors.Encode, error instanceof Error ? error.message : String(error))
+      return yield* fail(CodecErrors.Encode, 'cannot encode the value as TOML', asFailure(error))
     }
   },
 
@@ -62,7 +62,7 @@ export const TomlCodec = Codec.implement({
         integersAsBigInt: false,
       }) as AnyType
     } catch (error) {
-      return yield* fail(CodecErrors.Decode, error instanceof Error ? error.message : String(error))
+      return yield* fail(CodecErrors.Decode, 'cannot decode the bytes as TOML', asFailure(error))
     }
   },
 
@@ -75,7 +75,8 @@ export const TomlCodec = Codec.implement({
     } catch (error) {
       return yield* fail(
         CodecErrors.Stringify,
-        error instanceof Error ? error.message : String(error),
+        'cannot stringify the value as TOML',
+        asFailure(error),
       )
     }
   },
@@ -87,7 +88,7 @@ export const TomlCodec = Codec.implement({
         integersAsBigInt: false,
       }) as AnyType
     } catch (error) {
-      return yield* fail(CodecErrors.Parse, error instanceof Error ? error.message : String(error))
+      return yield* fail(CodecErrors.Parse, 'cannot parse the text as TOML', asFailure(error))
     }
   },
 
@@ -109,7 +110,8 @@ export const TomlCodec = Codec.implement({
           } catch (error) {
             close = fail(
               CodecErrors.Encode,
-              error instanceof Error ? error.message : String(error),
+              'cannot encode the value as TOML',
+              asFailure(error),
             ) as Result.Failure<unknown>
             break
           }
@@ -170,10 +172,7 @@ export const TomlCodec = Codec.implement({
       } catch (error) {
         close = asFailure(error)
 
-        return yield* fail(
-          CodecErrors.Decode,
-          error instanceof Error ? error.message : String(error),
-        )
+        return yield* fail(CodecErrors.Decode, 'cannot decode the bytes as TOML', asFailure(error))
       } finally {
         yield* channel.close(close)
       }

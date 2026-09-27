@@ -7,7 +7,11 @@ import { fail } from 'std:result'
 import { MemoryAdapter } from 'db:impl/memory'
 import { MemoryKv } from 'db:impl/memory-kv'
 import { BunIO } from 'std:io/impl/bun'
+import { Transport } from 'transport:core'
+import { MemoryTransport } from 'transport:impl/memory'
 import { z } from 'zod'
+
+import pkg from '../package.json'
 
 export const Todo = z.object({ id: z.string(), title: z.string(), done: z.boolean() })
 export type Todo = z.infer<typeof Todo>
@@ -94,3 +98,24 @@ export function* storage(db?: { replayWindowMs?: number }): Operation<void> {
   yield* DbClient.use({ schema: testSchema, ...db })
   yield* MemoryKv.use()
 }
+
+/**
+ * The labels the std plugin runtime appends IN PLACE to a failure crossing its guards, inner hop
+ * first: an impl action's `<key>`, `<impl>@<version>`, then its protocol's `dispatch`,
+ * `<protocol>@<version>`.
+ */
+export const LABELS = {
+  /** `Server.actions.dispatch` — an edge request, a gateway's forwarded call. */
+  dispatch: ['dispatch', `server-kernel@${pkg.version}`, 'dispatch', `server@${pkg.version}`],
+  /** `Server.actions.call` — `server.call`, `ctx.call`. */
+  call: ['call', `server-kernel@${pkg.version}`, 'dispatch', `server@${pkg.version}`],
+  /** A MemoryTransport `request` — the caller's side of a carrier hop, under its `send`. */
+  transport: ['request', MemoryTransport.tag, 'dispatch', Transport.tag],
+  /** A NetworkCarrier `send` — the caller's side of a carrier hop. */
+  carrier: [
+    'send',
+    `server-carrier-network@${pkg.version}`,
+    'dispatch',
+    `server-carrier@${pkg.version}`,
+  ],
+} as const

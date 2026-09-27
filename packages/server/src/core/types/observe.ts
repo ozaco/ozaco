@@ -1,156 +1,189 @@
 import type { Flow, Operation } from 'std:effect'
 import type { Plugin } from 'std:plugin'
 import type { AnyType } from 'std:shared'
+import type { TraceDef } from 'std:trace'
 
 import type { CarrierDef } from './carrier'
 import type { ServerDef } from './server'
-import type { TraceDef } from './trace'
 
 /** A built observe-store plugin (`ObservePlugin`) — install options are the impl's own, so the
  * argument list stays open. */
 export type ObserveDef = Plugin<ObserveDef.Context, AnyType[], ObserveDef.Actions>
 
 /**
- * What the kernel reports and what the observe store answers. The store is a db: every event
- * becomes a row in `_ob_*` tables, queryable and watchable with the db's own tools.
+ * What the kernel reports and what the observe store answers. The kernel → sink contract is ONE
+ * union of two records ({@link Event}): a finished span or a log record, each with the resource
+ * it belongs to — every sink (the store, every exporter) receives exactly the same events.
  */
 export namespace ObserveDef {
-  export type Level = 'debug' | 'info' | 'warn' | 'error'
+  // --- the kernel → sink contract ----------------------------------------------------------------
 
-  export interface RequestRow {
-    readonly request_id: string
-    readonly origin: TraceDef.Origin
-
-    /** the root action (`service.action`) when the request entered through one. */
-    readonly service: string | null
-    readonly action: string | null
-    readonly edge: string | null
-    readonly method: string | null
-    readonly path: string | null
-    readonly socket: string | null
-    readonly status: number | null
-    readonly service_id: string
-
-    /** the node that answered. */
-    readonly instance: string
-    readonly lane: string
-    readonly started_at: number
-    readonly ended_at: number | null
-    readonly duration_ms: number | null
-    readonly error: string | null
-    readonly attrs: Readonly<Record<string, unknown>> | null
-
-    /** Captured only while an observer is installed: the request headers, secrets redacted. */
-    readonly headers: Readonly<Record<string, string>> | null
-
-    /** What went in / came out — `{ kind: 'data'|'stream'|'flow'|'parts', brand?, contentType?,
-     * data?, size?, truncated?, streams? }`; `data` is capped, big bodies keep only the size. */
-    readonly input: Readonly<Record<string, unknown>> | null
-    readonly output: Readonly<Record<string, unknown>> | null
+  /**
+   * The resource a record belongs to: `service.name` (the record's `service` — the ozaco service
+   * of the dispatch it ran under in the default `serviceName: 'service'` mode — else the node's
+   * name), `service.instance.id` (the node), plus the node-level attributes the kernel holds
+   * (`service.namespace`, `service.version`, `deployment.environment.name`, `telemetry.sdk.*`,
+   * `ozaco.carrier.name`). Built by `resourceOf(kernel, service)` — one shared object per name.
+   */
+  export interface Resource {
+    readonly 'service.name': string
+    readonly 'service.instance.id': string
+    readonly [key: string]: TraceDef.AttrValue
   }
 
-  export interface LogRow {
-    readonly request_id: string | null
-    readonly span_id: string | null
-    readonly level: Level
-    readonly msg: string
-    readonly data: Readonly<Record<string, unknown>> | null
-    readonly ts: number
-  }
+  /** One thing the kernel observed: a finished span or a log record (exceptions, events, logs,
+   * domain records are all log records). Nothing else is reported. */
+  export type Event =
+    | { readonly t: 'span'; readonly span: TraceDef.SpanData; readonly resource: Resource }
+    | { readonly t: 'log'; readonly log: TraceDef.LogData; readonly resource: Resource }
 
-  export interface FailureRow {
-    readonly request_id: string | null
-    readonly span_id: string | null
-    readonly tag: string
-    readonly message: string
-    readonly causes: readonly string[]
-    readonly status: number | null
-    readonly where: string
-    readonly ts: number
-  }
-
-  export type EventKind = 'emit' | 'socket-in' | 'socket-out' | 'lane-open' | 'lane-close'
-
-  export interface EventRow {
-    readonly request_id: string | null
-
-    /** the span this happened UNDER — a socket session, the dispatch that emitted. Exporters
-     * hang the event off it so it lands on the trace waterfall where it belongs. */
-    readonly span_id: string | null
-    readonly kind: EventKind
-    readonly name: string
-    readonly size: number | null
-    readonly ts: number
-
-    /** socket frames keep their FULL payload (captured while observing) — replayable. */
-    readonly data?: unknown
-  }
-
-  /** A DOMAIN record (audit trails, business events): free-form fields under a logical
-   * `stream` name. Shipped by exporters (`OpenObserveExporter.use({ streams: { domain: … } })`),
-   * NOT stored by the observe db — `report(kernel, { t: 'domain', row: { stream: 'audit', … } })`. */
-  export interface DomainRow {
+  /**
+   * A DOMAIN record (audit trails, business events) — `Server.actions.report({ stream: 'audit',
+   * … })`: ONE log record with `eventName: 'ozaco.domain'`, `ozaco.domain.stream` and the fields
+   * flattened into attributes, correlated to the active span.
+   */
+  export interface DomainRecord {
+    /** the logical stream (`audit`, `billing`, …). */
     readonly stream: string
-    readonly ts?: number | undefined
-    readonly request_id?: string | null | undefined
+
+    /** epoch ms; default: now on the active span's clock. */
+    readonly time?: number | undefined
     readonly [field: string]: unknown
   }
 
-  /** A streamed body finished AFTER its request row went out: the final size and duration. */
-  export interface RequestUpdate {
-    readonly request_id: string
+  // --- the store -----------------------------------------------------------------------------------
+  // `ObservePlugin` keeps exactly the two record kinds, one row each (`_ob2_spans` / `_ob2_logs`),
+  // with the resource they belong to — the same data every exporter ships.
 
-    readonly patch: {
-      readonly input?: Readonly<Record<string, unknown>> | null
-      readonly output?: Readonly<Record<string, unknown>> | null
-      readonly duration_ms?: number
-      readonly ended_at?: number
-    }
+  /**
+   * One stored span (`_ob2_spans`): the SpanData, its hot fields as columns (what the console
+   * filters and sorts on) and the rest as json, plus its resource. `root` marks a LOCAL root —
+   * no parent, or a remote one (the trace entered this service here): what the trace list shows.
+   */
+  export interface SpanRow {
+    readonly trace_id: string
+    readonly span_id: string
+    readonly parent_span_id: string | null
+    readonly name: string
+    readonly kind: TraceDef.SpanKind
+
+    /** the instrumentation scope name (`@ozaco/server`, `@ozaco/db`, …) and version. */
+    readonly scope: string
+    readonly scope_version: string | null
+
+    /** the resource: `service.name` / `service.instance.id` (the rest in {@link resource}). */
+    readonly service_name: string
+    readonly service_instance_id: string
+
+    /** epoch ms (sub-ms fraction kept). */
+    readonly start: number
+    readonly end: number
+    readonly duration_ms: number
+    readonly status_code: TraceDef.Status['code']
+    readonly status_message: string | null
+
+    /** `error.type` — set on every span a failure escaped (4xx included, status unset). */
+    readonly error_type: string | null
+    readonly root: boolean
+
+    /** `http.route` / `http.response.status_code` of an HTTP span. */
+    readonly http_route: string | null
+    readonly http_status: number | null
+
+    /** `ozaco.request.id` — the request id when it is not the trace id (an inbound
+     * `x-request-id`, or the fresh id of a request that continued a caller's trace). */
+    readonly request_id: string | null
+
+    /** W3C trace flags + tracestate of the span's own context. */
+    readonly flags: number
+    readonly trace_state: string | null
+    readonly attributes: TraceDef.Attributes
+    readonly events: readonly TraceDef.SpanEvent[]
+    readonly links: readonly TraceDef.Link[]
+    readonly dropped_attributes: number
+    readonly dropped_events: number
+    readonly dropped_links: number
+
+    /** the node-level resource attributes besides the two columns (`service.namespace`, …). */
+    readonly resource: Readonly<Record<string, TraceDef.AttrValue>>
   }
 
-  /** One thing the kernel observed. */
-  export type Event =
-    | { readonly t: 'request'; readonly row: RequestRow }
-    | { readonly t: 'request-update'; readonly update: RequestUpdate }
-    | { readonly t: 'span'; readonly row: TraceDef.Span }
-    | { readonly t: 'log'; readonly row: LogRow }
-    | { readonly t: 'failure'; readonly row: FailureRow }
-    | { readonly t: 'event'; readonly row: EventRow }
-    | { readonly t: 'domain'; readonly row: DomainRow }
+  /** One stored log record (`_ob2_logs`): Logger lines, `ctx.log`, exceptions (an exception
+   * `event_name`), events, domain records — correlated to their span by `trace_id` / `span_id`. */
+  export interface LogRow {
+    readonly trace_id: string | null
+    readonly span_id: string | null
+    readonly flags: number | null
 
-  /** A request with everything that happened under it. */
-  export interface RequestView {
-    readonly request: RequestRow
-    readonly spans: readonly TraceDef.Span[]
+    /** epoch ms (sub-ms fraction kept). */
+    readonly time: number
+    readonly observed_time: number
+    readonly severity_number: number
+    readonly severity_text: string | null
+    readonly body: string
+    readonly event_name: string | null
+    readonly service_name: string
+    readonly service_instance_id: string
+    readonly scope: string
+    readonly scope_version: string | null
+    readonly attributes: TraceDef.Attributes
+    readonly dropped_attributes: number
+    readonly resource: Readonly<Record<string, TraceDef.AttrValue>>
+  }
+
+  /** One trace as the store holds it: every span (start order, parents first) and every log. */
+  export interface TraceView {
+    readonly trace_id: string
+    readonly spans: readonly SpanRow[]
     readonly logs: readonly LogRow[]
-    readonly failures: readonly FailureRow[]
-    readonly events: readonly EventRow[]
   }
 
-  export interface Query {
-    readonly service?: string | undefined
-    readonly action?: string | undefined
-    readonly status?: 'ok' | 'failed' | undefined
-    readonly tag?: string | undefined
+  /** Which ROOT spans `traces()` lists (newest first). Every filter is exact. */
+  export interface TracesQuery {
+    /** the root span's name (`GET /todos/:id`, `todos.create`). */
+    readonly name?: string | undefined
 
-    /** only requests slower than this many ms. */
+    /** the root span's `http.route`. */
+    readonly route?: string | undefined
+
+    /** the root span's `service.name`. */
+    readonly service?: string | undefined
+
+    /** `'ok'`: no failure escaped the root; `'failed'`: one did (`error.type` set, a 4xx
+     * included); `'error'`: the root's status is error (5xx). */
+    readonly status?: 'ok' | 'failed' | 'error' | undefined
+
+    /** the root's `error.type` (`todo.kaput`, `server.validation`, `500`). */
+    readonly errorType?: string | undefined
+
+    /** only roots slower than this many ms. */
     readonly slowerThan?: number | undefined
 
-    /** only requests started at/after this epoch ms. */
+    /** only roots started at/after this epoch ms. */
     readonly since?: number | undefined
     readonly limit?: number | undefined
     readonly cursor?: string | undefined
   }
 
-  export interface Page {
-    readonly requests: readonly RequestRow[]
+  /** A page of root spans — one per trace. A trace with several stored roots is listed by the one
+   * with no parent, else one whose parent is not stored, else one whose parent is; ties go to the
+   * earliest start, then the lower span id. */
+  export interface TracesPage {
+    readonly traces: readonly SpanRow[]
     readonly cursor: string | null
   }
 
   export interface Stats {
+    /** records queued for the store / dropped on overflow / waiting now. */
     readonly recorded: number
     readonly dropped: number
     readonly pending: number
+
+    /** cluster mode: records forwarded to / received from the collector, written locally as the
+     * fallback. */
+    readonly forwarded: number
+    readonly received: number
+    readonly fellBack: number
   }
 
   export interface Options extends ServerDef.PluginContext {
@@ -159,6 +192,58 @@ export namespace ObserveDef {
 
   /** What the install resolves is exactly {@link Options} here. */
   export type Context = Options
+
+  /** One node as the store has seen it lately: its server / client spans and local roots in the
+   * window, grouped by `service.instance.id`. */
+  export interface InstanceStats {
+    readonly instance: string
+
+    /** every `service.name` those spans carried. */
+    readonly services: readonly string[]
+    readonly spans: number
+
+    /** spans whose status is error. */
+    readonly failed: number
+    readonly p95_ms: number | null
+    readonly last_seen: number
+  }
+
+  /** The cluster as observed: presence members per service + per-instance span stats. */
+  export interface ClusterView {
+    readonly members: Readonly<Record<string, readonly CarrierDef.Member[]>>
+    readonly instances: readonly InstanceStats[]
+
+    /** the stats window (epoch ms). */
+    readonly since: number
+  }
+
+  /** The store's query surface. */
+  export interface Actions {
+    /** Keep one observed record (what the kernel's `observe` hook does). */
+    record(event: Event): Operation<void>
+
+    /** Root spans, newest first — cursor-paged. */
+    traces(query?: TracesQuery): Operation<TracesPage>
+
+    /** One trace: its spans + logs; `null` when the store holds nothing of it. */
+    trace(traceId: string): Operation<TraceView | null>
+
+    /** The trace a request id belongs to (`ozaco.request.id`, else the id as a trace id). */
+    request(id: string): Operation<TraceView | null>
+
+    /** New root spans as they are stored (matching `query`). */
+    watch(query?: TracesQuery): Flow<readonly SpanRow[], never>
+
+    /** Delete rows older than `before` (epoch ms); resolves how many went. */
+    prune(before: number): Operation<number>
+    stats(): Operation<Stats>
+
+    /** Presence members + per-instance stats over the last `windowMs` (default 15 min). */
+    cluster(windowMs?: number): Operation<ClusterView>
+
+    /** Write whatever is still queued. */
+    flush(): Operation<void>
+  }
 
   // --- exporters -------------------------------------------------------------------------------
 
@@ -171,51 +256,14 @@ export namespace ObserveDef {
   /**
    * The exporter contract — a place the kernel's observations are SHIPPED to (an OTLP collector,
    * OpenObserve, stdout). Several run side by side: the kernel fans every event out to all of
-   * them (`ObserveExporter` is cloneable; `exec` runs every install), starts them with the node
-   * and flushes them at stop. An exporter never fails the thing it observes — deliveries are
-   * counted, not raised.
+   * them (`ObserveExporter` is cloneable; `exec` runs every install, each suppressed), starts them
+   * with the node and flushes them at stop. Options are TRANSPORT ONLY — every sink ships the
+   * same content. An exporter never fails the thing it observes: deliveries are counted, not
+   * raised.
    */
   export interface ExporterActions {
     export(event: Event): Operation<void>
     start(): Operation<void>
-    flush(): Operation<void>
-  }
-
-  /** One node as the store has seen it lately: its edge/dispatch/carrier spans in the window. */
-  export interface InstanceStats {
-    readonly instance: string
-    readonly service_id: string
-    readonly spans: number
-    readonly failed: number
-    readonly p95_ms: number | null
-    readonly last_seen: number
-  }
-
-  /** The cluster as observed: presence members per service + per-instance request stats. */
-  export interface ClusterView {
-    readonly members: Readonly<Record<string, readonly CarrierDef.Member[]>>
-    readonly instances: readonly InstanceStats[]
-
-    /** the stats window (epoch ms). */
-    readonly since: number
-  }
-
-  export interface Actions {
-    record(event: Event): Operation<void>
-
-    /** Presence members + per-instance stats over the last `windowMs` (default 15 min). */
-    cluster(windowMs?: number): Operation<ClusterView>
-    request(requestId: string): Operation<RequestView | null>
-    query(query?: Query): Operation<Page>
-
-    /** Live requests as they finish (delta-mode watch on the requests table). */
-    watch(query?: Query): Flow<readonly RequestRow[], never>
-
-    /** Delete rows older than `before` (epoch ms); resolves how many went. */
-    prune(before: number): Operation<number>
-    stats(): Operation<Stats>
-
-    /** Flush whatever the collector still holds. */
     flush(): Operation<void>
   }
 }

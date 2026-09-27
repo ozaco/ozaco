@@ -10,7 +10,6 @@ import {
   useScope,
   withResolvers,
 } from 'std:effect'
-import type { Result } from 'std:result'
 import { asFailure, fail } from 'std:result'
 
 import { createSocket } from 'node:dgram'
@@ -19,7 +18,7 @@ import { connect, createServer } from 'node:net'
 
 import { IOErrors } from '../../errors'
 import type { IODef } from '../../types/io'
-import { errorMessage, toBytes } from '../process/shared'
+import { toBytes } from '../process/shared'
 
 const queueFlow = <T, TClose>(queue: Queue<T, TClose>): Flow<T, TClose> => ({
   *[Symbol.iterator]() {
@@ -40,12 +39,7 @@ function* nodeWrite(socket: Socket, chunk: Uint8Array | string) {
         })
       }),
     ),
-    failure =>
-      fail(
-        IOErrors.TcpWriteFailed,
-        errorMessage(failure.error),
-        ...failure.causes,
-      ) as Result.Failure<unknown>,
+    failure => fail(IOErrors.TcpWriteFailed, 'tcp write failed', asFailure(failure, IOErrors)),
   )
 }
 
@@ -93,7 +87,7 @@ const makeHandle = (socket: Socket): IODef.TcpSocket => {
   socket.on('data', (chunk: Buffer) => queue.add(new Uint8Array(chunk)))
   socket.on('end', () => settle(true))
   socket.on('error', error => {
-    failure = asFailure(error)
+    failure = asFailure(error, IOErrors)
     settle(failure)
   })
   socket.on('close', () => {
@@ -146,9 +140,9 @@ export function* tcpListen(options: IODef.TcpListenOptions, onConnection: IODef.
     failure =>
       fail(
         IOErrors.TcpListenFailed,
-        errorMessage(failure.error),
-        ...failure.causes,
-      ) as Result.Failure<unknown>,
+        `tcp listen on ${options.hostname ?? '0.0.0.0'}:${options.port} failed`,
+        asFailure(failure, IOErrors),
+      ),
   )
 
   const address = server.address()
@@ -194,9 +188,9 @@ export function* tcpConnect(options: IODef.TcpConnectOptions) {
       socket.destroy()
       return fail(
         IOErrors.TcpConnectFailed,
-        errorMessage(failure.error),
-        ...failure.causes,
-      ) as Result.Failure<unknown>
+        `tcp connect to ${options.hostname ?? '127.0.0.1'}:${options.port} failed`,
+        asFailure(failure, IOErrors),
+      )
     },
   )
 
@@ -227,17 +221,13 @@ export function* udpBind(options?: IODef.UdpBindOptions) {
     }),
     failure => {
       socket.close()
-      return fail(
-        IOErrors.UdpBindFailed,
-        errorMessage(failure.error),
-        ...failure.causes,
-      ) as Result.Failure<unknown>
+      return fail(IOErrors.UdpBindFailed, 'udp bind failed', asFailure(failure, IOErrors))
     },
   )
 
   // runtime errors after bind close the message stream instead of crashing the process
   socket.on('error', error => {
-    queue.close(asFailure(error))
+    queue.close(asFailure(error, IOErrors))
   })
 
   // Close at most once: `close()` and the scope-teardown `ensure` share this guard, otherwise the
@@ -278,9 +268,9 @@ export function* udpBind(options?: IODef.UdpBindOptions) {
       failure =>
         fail(
           IOErrors.UdpSendFailed,
-          errorMessage(failure.error),
-          ...failure.causes,
-        ) as Result.Failure<unknown>,
+          `udp send to ${address}:${port} failed`,
+          asFailure(failure, IOErrors),
+        ),
     )
   }
 

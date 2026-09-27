@@ -1,3 +1,5 @@
+import pkg from '../../package.json'
+
 /** HLC version tokens are 22 Crockford chars (see std:io `hlc`). */
 const TOKEN_LENGTH = 22
 
@@ -49,6 +51,12 @@ export const DEFAULT_REPLAY_WINDOW_MS = 5000
 /** Outbox defaults. */
 export const DEFAULT_MAX_PENDING = 4096
 export const DEFAULT_DRAIN_TIMEOUT_MS = 1000
+
+/** The instrumentation scope of every span and log record `@ozaco/db` emits (db, kv, queue). */
+export const TELEMETRY_SCOPE: Readonly<{ name: string; version: string }> = Object.freeze({
+  name: '@ozaco/db',
+  version: pkg.version,
+})
 
 /** Declared TABLE names: snake_case, one optional leading underscore (framework tables). */
 export const TABLE_NAME = /^_?[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/u

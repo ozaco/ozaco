@@ -1,6 +1,6 @@
 import { createQueue } from 'std:effect'
 import type { Result } from 'std:result'
-import { fail } from 'std:result'
+import { asFailure, fail } from 'std:result'
 
 import { RtcErrors } from '../errors'
 import type { Helpers } from '../types/helpers'
@@ -150,9 +150,8 @@ const readdTracks = (session: Helpers.Session, pc: RtcDef.PeerLike) => {
   return live
 }
 
-/** The message of a thrown value, for failure texts. */
-export const messageOf = (error: unknown) =>
-  error instanceof Error ? error.message : String(error)
+/** The message of a thrown value (folded by `asFailure`), for failure texts. */
+const messageOf = (error: unknown) => asFailure(error).message
 
 /**
  * Dial ONE generation: construct, wire, adopt as current, recreate every local channel and

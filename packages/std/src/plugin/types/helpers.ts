@@ -1,4 +1,5 @@
 import type { Operation } from 'std:effect'
+import type { Result } from 'std:result'
 import type { AnyType, EmptyType, ExplicitObject } from 'std:shared'
 
 import type { Plugin } from './plugin'
@@ -68,7 +69,7 @@ export namespace Helpers {
    */
   export type Extras<T, TBase = EmptyType> = {
     [K in keyof T as K extends keyof TBase ? never : K]: T[K] extends (
-      ...args: infer A
+      ...args: infer A extends readonly unknown[]
     ) => Operation<infer R>
       ? (...args: A) => Operation<R>
       : T[K] extends (...args: AnyType[]) => AnyType
@@ -78,20 +79,29 @@ export namespace Helpers {
     ? { [K in keyof O]: O[K] }
     : never
 
-  export type AroundFn<T> = T extends (...args: infer A) => infer R
+  // every hook shape infers its args as `infer A extends readonly unknown[]`: a bare `infer A` in
+  // a rest position is constrained to a MUTABLE array, so a readonly rest member
+  // (`invalidate(...tags: readonly string[])`) matched no branch and its hook was typed `never`
+  export type AroundFn<T> = T extends (...args: infer A extends readonly unknown[]) => infer R
     ? (args: A, next: (...args: A) => R) => R
     : never
 
-  export type BeforeFn<T> = T extends (...args: infer A) => Operation<unknown>
+  export type BeforeFn<T> = T extends (
+    ...args: infer A extends readonly unknown[]
+  ) => Operation<unknown>
     ? (args: A) => Operation<void>
     : never
 
-  export type AfterFn<T> = T extends (...args: infer A) => Operation<infer R>
+  export type AfterFn<T> = T extends (
+    ...args: infer A extends readonly unknown[]
+  ) => Operation<infer R>
     ? (result: R, args: A) => Operation<R | void>
     : never
 
-  export type ErrorFn<T> = T extends (...args: infer A) => Operation<unknown>
-    ? (error: unknown, args: A) => Operation<void>
+  export type ErrorFn<T> = T extends (
+    ...args: infer A extends readonly unknown[]
+  ) => Operation<unknown>
+    ? (failure: Result.Failure<unknown>, args: A) => Operation<void>
     : never
 
   export type Around<T, TE = ExplicitObject<T>> = {

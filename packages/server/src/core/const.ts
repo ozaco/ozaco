@@ -19,10 +19,12 @@ export const STREAM_BRAND = Symbol.for('server:stream-brand')
 export enum HEADERS {
   cid = 'oz-cid',
   requestId = 'x-request-id',
-  span = 'oz-span',
-  parent = 'oz-parent',
+
+  /** W3C trace context in (every edge request, every client call) and back out (W3C draft
+   * `traceresponse`: the edge span's context, `00-<trace>-<span>-<flags>`). */
   traceparent = 'traceparent',
-  lane = 'oz-lane',
+  tracestate = 'tracestate',
+  traceresponse = 'traceresponse',
 
   /** server → client: the brand of a streamed body. */
   brand = 'oz-brand',
@@ -45,10 +47,41 @@ export const OBSERVE_CONSOLE_PATH = '/_observe'
 export const serviceIdOf = (name: string, version: string, instance: string): string =>
   `${name}@${version}#${instance}`
 
-/** `gw>todos>ai` — the hops of a request tree, rendered. */
-export const laneOf = (hops: readonly { readonly service: string }[]): string =>
-  hops.map(hop => hop.service).join('>')
+/** The instrumentation scope name of every kernel span / record; a plugin's is
+ * `@ozaco/server/<plugin>` (`scopeOf(plugin)`). */
+export const TRACE_SCOPE = '@ozaco/server'
+
+/**
+ * The exception log record's `eventName` by where a failure ORIGINATES (design §6.2) — the span
+ * option `failure.eventName` of each server span kind.
+ */
+export const EXCEPTION_EVENT_NAME = {
+  /** the HTTP / WS edge span (edge-originated failures: unrouted, decode, paused, guard, …). */
+  edge: 'http.server.request.exception',
+
+  /** an in-process dispatch span (`internal`). */
+  action: 'ozaco.action.exception',
+
+  /** a dispatch received over a carrier (`server`). */
+  rpcServer: 'rpc.server.call.exception',
+
+  /** the caller-side carrier span (`client`). */
+  rpcClient: 'rpc.client.call.exception',
+
+  /** `emit` (`producer`). */
+  send: 'messaging.send.exception',
+
+  /** an event handler (`consumer`). */
+  process: 'messaging.process.exception',
+} as const
 
 /** How long an accepted socket may wait for its first `{ t: 'auth' }` frame before the
  * missing authorization closes it (browsers cannot set WS headers — tokens arrive in-band). */
 export const SOCKET_AUTH_GRACE_MS = 2000
+
+/** The per-record log attribute budget the kernel applies ONCE, before any sink sees a record
+ * (every sink holds the same data): what every log backend ingests — Loki refuses a line with
+ * more than 128 structured-metadata entries (its own ~15 and the resource's included) or 64 KiB
+ * of them. */
+export const LOG_MAX_ATTRIBUTES = 96
+export const LOG_MAX_ATTRIBUTE_BYTES = 48 * 1024

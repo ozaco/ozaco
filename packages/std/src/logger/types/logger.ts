@@ -11,6 +11,8 @@ export namespace LoggerDef {
     level?: LogLevel | undefined
     bindings?: Record<string, unknown> | undefined
     msgKey?: string | undefined
+    /** The record key of the entry's error (default `err`); an object payload's `Error` / Failure
+     * under this key (or `err` / `error`) is the entry's failure, not a data field. */
     errorKey?: string | undefined
     timestamp?: (() => number) | undefined
   }
@@ -24,18 +26,37 @@ export namespace LoggerDef {
 
   export type Payload =
     | string
+    | Error
     | Record<string, unknown>
     | Result<unknown, unknown>
     | undefined
     | null
 
+  /** The span an entry was logged in: W3C hex ids and trace flags. */
+  export interface Trace {
+    readonly traceId: string
+    readonly spanId: string
+    readonly flags: number
+  }
+
   export interface Entry {
     level: LogLevel
     time: number
     msg: string
+    /** `formatFailure(failures[0])` — the one-line form of the first failure; `''` without one. */
     error: string
+    /**
+     * Every failure the payload carried, in payload order: Failure / `Error` payloads (an `Error`
+     * folded by `asFailure`, kept as its `raw`), an object payload's `err` / `error` / error-key value,
+     * and the `Error`s / Failures nested deeper in object payloads (those also stay in `data`,
+     * rendered by `formatFailure`).
+     */
+    failures: readonly Result.Failure<unknown>[]
     bindings: Record<string, unknown>
     data: Record<string, unknown> | undefined
+    /** The active span when the entry was logged (recording, non-recording or a pass-through
+     * inbound context); absent outside of any. */
+    trace?: Trace
   }
 
   export interface Actions {

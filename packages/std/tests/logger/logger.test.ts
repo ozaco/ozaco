@@ -25,6 +25,7 @@ describe('logger creation + record shape', () => {
       time: 1111,
       msg: 'hello world',
       error: '',
+      failures: [],
       bindings: {},
       data: { a: 1 },
     })

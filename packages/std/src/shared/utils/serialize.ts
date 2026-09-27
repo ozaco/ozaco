@@ -5,10 +5,15 @@ export const serializeError = (error: unknown): string => {
     return error
   }
   if (error instanceof Error) {
-    const code = (error as AnyType).code
-    return code
-      ? `${error.name}: ${error.message} (${String(code)})`
-      : `${error.name}: ${error.message}`
+    // a foreign Error's getters may throw: rendering an error never does
+    try {
+      const code = (error as AnyType).code
+      return code
+        ? `${error.name}: ${error.message} (${String(code)})`
+        : `${error.name}: ${error.message}`
+    } catch {
+      return Object.prototype.toString.call(error)
+    }
   }
   if (error === null || error === undefined) {
     return String(error)

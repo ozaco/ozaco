@@ -1,12 +1,13 @@
 // oxlint-disable import/exports-last
-import { attempt, createContext, until, useContext } from 'std:effect'
-import { fail, isFailure } from 'std:result'
+import { DbErrors } from 'db:core'
+import { driverCause } from 'db:internal'
+import { createContext, until, useContext } from 'std:effect'
+import { asFailure, isFailure, succeed } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import { SQL } from 'bun'
 
-import { classifySqlState } from '../shared/dialects'
-import type { Sql } from '../shared/types'
+import type { Sql } from '../shared/types/sql'
 
 import type { BunSql } from './types'
 
@@ -16,21 +17,19 @@ export const StateRef = createContext<BunSql.State>('db:impl/bun-sql')
 const TxSession = createContext<AnyType>('db:impl/bun-sql:tx-session')
 const TxDepth = createContext<number>('db:impl/bun-sql:tx-depth', 0)
 
-/** Await a driver promise, classifying a rejection into a `DbErrors` failure. */
+/** A driver rejection as its `DbErrors` failure — classified by the `DbErrors` matchers (Bun SQL
+ * puts the SQLSTATE in `errno`, its `code` is the generic `ERR_POSTGRES_SERVER_ERROR`; else the
+ * text; `db.query` for anything else), the driver's message, the driver error as `raw` and its
+ * SQLSTATE as the `sqlstate <code>` cause the db span reports as `db.response.status_code`. */
+const raise = (error: unknown) => asFailure(error, DbErrors, driverCause(error))
+
+/** Await a driver promise. A rejection is classified where it happens — from the driver error
+ * itself, never from the effect runtime's fold of it. */
 export function* driver(promise: Promise<AnyType>) {
-  const outcome = yield* attempt(until(promise))
+  const outcome = yield* until(promise.then(value => succeed(value), raise))
 
   if (isFailure(outcome)) {
-    const error = outcome.error as AnyType
-    const message = String(error?.message ?? error)
-
-    // Bun SQL puts the SQLSTATE in `errno` (`code` is the generic ERR_POSTGRES_SERVER_ERROR);
-    // node-postgres puts it in `code` — look for the five-character state in either
-    const state = [error?.errno, error?.code].find(
-      value => typeof value === 'string' && value.length === 5,
-    )
-
-    return yield* fail(classifySqlState(state, message), message)
+    return yield* outcome
   }
 
   return outcome.value as AnyType

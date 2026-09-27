@@ -1,6 +1,7 @@
 import { column, defineSchema, table } from 'db:core'
+import { queueTable } from 'db:queue'
 
-/** The demo's tables: a crud resource (todos), users for auth, a log of uploads. */
+/** The demo's tables: a crud resource (todos), users for auth, a log of uploads, the job queue. */
 export const todosTable = table('todos', {
   title: column.text(),
   done: column.boolean().default(() => false),
@@ -28,6 +29,16 @@ export const uploadChunksTable = table('upload_chunks', {
   data: column.blob(),
 })
 
+/** The durable job queue (`@ozaco/db/queue`): one row per job — its state, attempts, the last
+ * failure's whole chain and the trace context it was enqueued in. */
+export const jobsTable = queueTable('jobs')
+
 /** The ONE schema declaration: the install takes it, `useDb(schema)` resolves the typed
  * handle anywhere — no call site re-lists the tables. */
-export const schema = defineSchema({ todosTable, usersTable, uploadsTable, uploadChunksTable })
+export const schema = defineSchema({
+  todosTable,
+  usersTable,
+  uploadsTable,
+  uploadChunksTable,
+  jobsTable,
+})

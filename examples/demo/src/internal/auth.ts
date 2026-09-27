@@ -19,6 +19,14 @@ export const SEED_USERS = [
 
 const refreshRecords = new Map<string, AuthDef.RefreshRecord>()
 
+/** The role the `OBSERVE_TOKEN` static bearer carries. */
+export const OBSERVE_ROLE = 'observe'
+
+/** Who may read the telemetry — `/_observe/api/*`, what the console shows
+ * (`ObservePlugin.use({ auth })`): an admin user, or a principal holding the `observe` role. */
+export const canObserve = (principal: AuthDef.Principal): boolean =>
+  principal.roles.includes('admin') || principal.roles.includes(OBSERVE_ROLE)
+
 const rolesOf = (roles: unknown): readonly string[] => (Array.isArray(roles) ? roles : [])
 
 export const authProvider = (): AuthDef.Provider => ({

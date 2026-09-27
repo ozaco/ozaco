@@ -1,47 +1,48 @@
-import type { Helpers, ObserveDef } from 'server:core'
+import type { ObserveDef } from 'server:core'
 import { ObserveExporter, Server, ServerErrors } from 'server:core'
-import { createSink } from 'server:internal'
 import { fail } from 'std:result'
-import type { AnyType } from 'std:shared'
+import { toBase64 } from 'std:shared'
 
 import pkg from '../../../../../package.json'
-import { OtlpExporter } from '../otlp'
+import { createOtlpPipeline } from '../otlp'
+import type { OtlpDef } from '../otlp'
 
-import {
-  ooDomain,
-  ooEvent,
-  ooFailure,
-  ooLog,
-  ooRequest,
-  ooRequestUpdate,
-  ooSpan,
-  post,
-} from './internal'
 import type { OpenObserveDef } from './types'
 
-const KINDS: readonly OpenObserveDef.StreamKey[] = [
-  'requests',
-  'spans',
-  'logs',
-  'failures',
-  'events',
-  'domain',
-]
+/** `{ token }` → Bearer, `{ user, pass }` → Basic over the UTF-8 bytes (RFC 7617): `btoa`
+ * alone throws on anything past Latin-1 — a `ş` in a password would fail the install. */
+const authorization = (auth: OpenObserveDef.Options['auth']): Record<string, string> => {
+  if (!auth) {
+    return {}
+  }
 
-const ZERO = { sent: 0, dropped: 0, failed: 0 }
+  return {
+    authorization:
+      'token' in auth
+        ? `Bearer ${auth.token}`
+        : `Basic ${toBase64(new TextEncoder().encode(`${auth.user}:${auth.pass}`))}`,
+  }
+}
+
+const streamHeaders = (
+  stream: OpenObserveDef.Options['stream'],
+): Partial<Record<OtlpDef.Signal, Record<string, string>>> => {
+  const traces = typeof stream === 'string' ? stream : stream?.traces
+  const logs = typeof stream === 'string' ? stream : stream?.logs
+
+  return {
+    ...(traces ? { traces: { 'stream-name': traces } } : {}),
+    ...(logs ? { logs: { 'stream-name': logs } } : {}),
+  }
+}
 
 /**
- * OpenObserve exporter of what the kernel observes — BOTH ingestion paths, so one install is
- * the whole OpenObserve story:
- *
- * - the raw `_json` streams (`/api/<org>/<stream>/_json`): every request, span, log line,
- *   failure and socket/emit event as flat records stamped with `_timestamp` (µs),
- *   `service_name` and the node's instance — the `_ob_*` spine, queryable under Logs → Streams;
- * - an embedded `OtlpExporter` against `/api/<org>` (same auth): spans, logs and metrics via
- *   OTLP — what lights up the Traces, Logs and Metrics PANELS. `otlp: false` turns it off when
- *   a separate collector already ingests OTLP.
- *
- * Batched in memory; delivery failures are counted (`stats()`), never raised into requests.
+ * OpenObserve exporter: the OTLP pipeline of `OtlpExporter` (the same encoder, content and
+ * transport — protobuf by default) against OpenObserve's OTLP/HTTP endpoints
+ * `/api/<org>/v1/{traces,logs,metrics}`, with Basic (`{ user, pass }`) or Bearer (`{ token }`)
+ * auth and the `stream-name` header. What lands is exactly what every other sink holds — the
+ * Traces, Logs and Metrics panels light up from it; there are no `_json` side streams. It runs
+ * side by side with an `OtlpExporter` of its own (a collector next to OpenObserve).
  */
 const OpenObserveExporterImpl = ObserveExporter.implement<
   OpenObserveDef.Context,
@@ -49,7 +50,7 @@ const OpenObserveExporterImpl = ObserveExporter.implement<
 >({
   name: 'server-observe-openobserve',
   version: pkg.version,
-  description: 'OpenObserve exporter of requests, spans, logs, failures and events',
+  description: 'OpenObserve exporter (its OTLP endpoints) of spans, log records and metrics',
 
   *setup(options) {
     const kernel = yield* Server.context.get()
@@ -65,138 +66,23 @@ const OpenObserveExporterImpl = ObserveExporter.implement<
       return yield* fail(ServerErrors.Configuration, 'OpenObserveExporter needs a base url')
     }
 
-    const base = options.url.replace(/\/$/u, '')
+    const base = options.url.replace(/\/+$/u, '')
     const org = options.org ?? 'default'
-    const doFetch = options.fetch ?? fetch
-    const headers: Record<string, string> = { ...options.headers }
 
-    if (options.auth && 'token' in options.auth) {
-      headers['authorization'] = `Bearer ${options.auth.token}`
-    } else if (options.auth) {
-      headers['authorization'] = `Basic ${btoa(`${options.auth.user}:${options.auth.pass}`)}`
-    }
+    const pipeline = yield* createOtlpPipeline(kernel, {
+      url: `${base}/api/${encodeURIComponent(org)}`,
+      headers: { ...options.headers, ...authorization(options.auth) },
+      signalHeaders: streamHeaders(options.stream),
+      encoding: options.encoding ?? 'protobuf',
+      gzip: options.gzip,
+      timeoutMs: options.timeoutMs,
+      retry: options.retry,
+      batch: options.batch,
+      metrics: options.metrics,
+      fetch: options.fetch,
+    })
 
-    // stamped on every record — one place to slice multi-node data in OpenObserve
-    const stamp = {
-      service_name: options.serviceName ?? kernel.name,
-      service_version: kernel.version,
-      service_instance: kernel.instance,
-      ...options.resource,
-    }
-
-    const sinks = new Map<OpenObserveDef.StreamKey, Helpers.Sink<Record<string, unknown>>>()
-    const bodies = options.bodies === true
-
-    // the PANELS leg: the plain OtlpExporter, installed here against the same OpenObserve
-    // (its `/api/<org>` OTLP endpoints, same auth). It registers as an exporter of its own —
-    // the kernel fans events out to it directly, nothing to relay
-    const otlpOptions = typeof options.otlp === 'object' ? options.otlp : undefined
-    const otlp =
-      options.otlp === false
-        ? null
-        : yield* OtlpExporter.use({
-            url: `${base}/api/${org}`,
-            headers,
-            serviceName: options.serviceName,
-            resource: options.resource,
-            logs: otlpOptions?.logs,
-            events: otlpOptions?.events,
-            metrics: otlpOptions?.metrics,
-            batch: options.batch,
-            fetch: doFetch,
-          })
-
-    for (const kind of KINDS) {
-      const stream = options.streams?.[kind] ?? kind
-
-      if (stream === false) {
-        continue
-      }
-
-      sinks.set(
-        kind,
-        createSink({
-          ...options.batch,
-          onError: failure =>
-            console.warn(
-              `[openobserve] ${kind} delivery failing: ${String((failure as AnyType)?.message ?? failure)}`,
-            ),
-          *send(rows) {
-            yield* post(
-              { url: `${base}/api/${org}/${stream}/_json`, headers, fetch: doFetch },
-              rows.map(row => ({ ...stamp, ...row })),
-            )
-          },
-        }),
-      )
-    }
-
-    const handle: ObserveDef.ExporterActions = {
-      *export(event) {
-        switch (event.t) {
-          case 'request': {
-            sinks.get('requests')?.push(ooRequest(event.row, bodies))
-            break
-          }
-
-          case 'request-update': {
-            sinks.get('requests')?.push(ooRequestUpdate(event.update, bodies))
-            break
-          }
-
-          case 'span': {
-            sinks.get('spans')?.push(ooSpan(event.row))
-            break
-          }
-
-          case 'log': {
-            sinks.get('logs')?.push(ooLog(event.row))
-            break
-          }
-
-          case 'failure': {
-            sinks.get('failures')?.push(ooFailure(event.row))
-            break
-          }
-
-          case 'event': {
-            sinks.get('events')?.push(ooEvent(event.row))
-            break
-          }
-
-          case 'domain': {
-            sinks.get('domain')?.push(ooDomain(event.row))
-            break
-          }
-
-          default: {
-            break
-          }
-        }
-      },
-      *start() {
-        for (const sink of sinks.values()) {
-          yield* sink.start()
-        }
-      },
-      *flush() {
-        for (const sink of sinks.values()) {
-          yield* sink.flush()
-        }
-      },
-    }
-
-    return {
-      exporter: 'openobserve',
-      url: base,
-      org,
-      stats: () =>
-        ({
-          ...Object.fromEntries(KINDS.map(kind => [kind, sinks.get(kind)?.stats ?? { ...ZERO }])),
-          otlp: otlp ? otlp.stats() : null,
-        }) as AnyType,
-      handle,
-    }
+    return { exporter: 'openobserve', ...pipeline, url: base, org }
   },
 })
 

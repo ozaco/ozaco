@@ -1,4 +1,5 @@
 import type { Adapter, Spec } from 'db:core'
+import { noteQuery } from 'db:internal'
 
 import {
   compileAggregate,
@@ -10,7 +11,7 @@ import {
 } from './compile'
 import { compileStep } from './ddl'
 import { decodeRows, encodeRawParams } from './dialects'
-import type { Sql } from './types'
+import type { Sql } from './types/sql'
 
 /** The contract members every SQL adapter shares verbatim (only the executor and dialect differ). */
 
@@ -36,8 +37,15 @@ export const sqlActions = ({
   | 'migrate'
   | 'raw'
 > => {
+  /** Run one compiled data-plane statement — its (parameterized) text noted for the db span in
+   * progress, `db.query.text`. */
+  const run = function* (statement: Sql.Statement) {
+    yield* noteQuery(statement.text)
+    return yield* exec(statement.text, statement.params)
+  }
+
   const decoded = function* (table: Spec.Table, statement: Sql.Statement) {
-    const result = yield* exec(statement.text, statement.params)
+    const result = yield* run(statement)
     return yield* decodeRows(dialect, table, result.rows)
   }
 
@@ -47,15 +55,13 @@ export const sqlActions = ({
     },
 
     *count(spec: Spec.Count) {
-      const statement = yield* compileCount(dialect, spec)
-      const result = yield* exec(statement.text, statement.params)
+      const result = yield* run(yield* compileCount(dialect, spec))
 
       return Number(result.rows[0]?.count ?? 0)
     },
 
     *aggregate(spec: Spec.Aggregate) {
-      const statement = yield* compileAggregate(dialect, spec)
-      const result = yield* exec(statement.text, statement.params)
+      const result = yield* run(yield* compileAggregate(dialect, spec))
 
       // the answer's columns are the grouped ones (their own kinds) plus the aliases: `min`/`max`
       // carry the SOURCE column's kind so a timestamp comes back a Date, counts/sums are numbers

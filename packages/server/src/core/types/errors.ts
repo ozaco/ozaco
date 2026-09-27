@@ -1,4 +1,5 @@
 import type { Operation } from 'std:effect'
+import type { ResultDef } from 'std:result'
 
 /** The shapes {@link serviceErrors} builds — a service's failure taxonomy declared once. */
 export namespace ErrorsDef {
@@ -8,9 +9,10 @@ export namespace ErrorsDef {
     : S
 
   /** One failure: call it to raise, read `.tag` where a tag string is wanted (`retry.when`,
-   * `cache.tags`, a comparison against `failure.error`). */
+   * `cache.tags`, a comparison against `failure.error`). Its causes are `fail`'s: strings, and
+   * the failures it wraps (nested as they are; a foreign error goes in as `asFailure(error)`). */
   export interface Failer<TTag extends string> {
-    (message?: string, ...causes: string[]): Operation<never>
+    (message?: string, ...causes: ResultDef.CauseInput[]): Operation<never>
     readonly tag: TTag
   }
 

@@ -1,6 +1,7 @@
 import type { ServerDef, ServiceDef } from 'server:core'
 import type { Operation } from 'std:effect'
 import type { Result } from 'std:result'
+import type { TraceDef } from 'std:trace'
 
 export namespace HotReloadDef {
   export interface Options {
@@ -28,11 +29,12 @@ export namespace HotReloadDef {
      * test). The watcher still drives WHEN. */
     readonly load?: (() => Operation<readonly ServiceDef.Service[]>) | undefined
 
-    /** Called after every successful reload with what changed. */
+    /** Called after every successful reload with what changed. A failure it raises is logged
+     * (WARN) — never raised into the reload. */
     readonly onReload?: ((report: ServerDef.ReloadReport) => Operation<void>) | undefined
 
     /** Called when a reload fails (a syntax error, a duplicate service, an unknown option);
-     * the previous declarations keep serving. */
+     * the previous declarations keep serving. A failure it raises is logged (WARN) too. */
     readonly onError?: ((failure: Result.Failure<unknown>) => Operation<void>) | undefined
   }
 
@@ -44,6 +46,9 @@ export namespace HotReloadDef {
     readonly generation: number
     readonly watching: boolean
     readonly lastReloadAt: number | null
+
+    /** the last failed reload as one line (`formatFailure`: `tag: message: causes`); `null`
+     * once a reload succeeds again. */
     readonly lastError: string | null
   }
 
@@ -58,6 +63,13 @@ export namespace HotReloadDef {
     watching: boolean
     lastReloadAt: number | null
     lastError: string | null
+
+    /** the paths the watcher saw change since the last generation took them (the next one's
+     * `ozaco.reload.triggers`). */
+    readonly triggers: Set<string>
+
+    /** the span of the last recorded generation — the next one LINKS it (`reload.previous`). */
+    previous: TraceDef.SpanContext | null
   }
 
   export interface Context extends ServerDef.PluginContext {

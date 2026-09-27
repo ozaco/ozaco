@@ -1,34 +1,18 @@
+// oxlint-disable import/exports-last
 import type { ObserveDef } from 'server:core'
 import { Server } from 'server:core'
 import type { Operation } from 'std:effect'
 import { ensure, fork, race, sleep, withResolvers } from 'std:effect'
+import { suppressed } from 'std:trace'
 
-import type { ObservePluginDef } from '../types'
+import type { ObservePluginDef } from '../types/observe'
 
 import { collectorAlive, forwardBatch } from './cluster'
-import { exec, writeBatch } from './store'
+import { writeLocal } from './store'
 
-/** The store table each event kind lands in — `domain` rows are exporter-only and pass
- * through untouched (the store skips them at write time anyway). */
-const STORE_KIND: Record<ObserveDef.Event['t'], keyof ObservePluginDef.ResolvedStore | null> = {
-  request: 'requests',
-  'request-update': 'requests',
-  span: 'spans',
-  log: 'logs',
-  failure: 'failures',
-  event: 'events',
-  domain: null,
-}
-
-/** Queue one event the store keeps; drop the oldest when the buffer overflows (never block
- * the server). A kind turned off in `store` is skipped before it ever queues. */
+/** Queue one observed record — EVERY one the kernel reports (the store holds exactly what every
+ * exporter receives); drop the oldest when the buffer overflows (never block the server). */
 export const enqueue = (state: ObservePluginDef.State, event: ObserveDef.Event): void => {
-  const kind = STORE_KIND[event.t]
-
-  if (kind !== null && !state.store[kind]) {
-    return
-  }
-
   if (state.pending.length >= state.batch.maxPending) {
     state.pending.shift()
     state.stats.dropped += 1
@@ -43,8 +27,19 @@ export const enqueue = (state: ObservePluginDef.State, event: ObserveDef.Event):
 }
 
 /** Write everything pending now: locally, to the cluster's collector, or both — and locally
- * as the fallback when forwarding finds no collector (unless `fallback: 'drop'`). */
+ * as the fallback what forwarding could not deliver (no collector alive, a message the carrier
+ * refused) unless `fallback: 'drop'`. */
 export function* flush(state: ObservePluginDef.State): Operation<void> {
+  if (state.pending.length === 0) {
+    return
+  }
+
+  // writing / forwarding telemetry is never telemetry itself (flush also runs inside the
+  // observe service's own handlers)
+  yield* suppressed(() => flushNow(state))
+}
+
+function* flushNow(state: ObservePluginDef.State): Operation<void> {
   if (state.pending.length === 0) {
     return
   }
@@ -52,21 +47,22 @@ export function* flush(state: ObservePluginDef.State): Operation<void> {
   const batch = state.pending.splice(0)
 
   if (state.forward === false) {
-    yield* exec(state, db => writeBatch(db, batch))
+    yield* writeLocal(state, batch)
     return
   }
 
   const kernel = yield* Server.context.expect()
-  const forwarded = collectorAlive(state) && (yield* forwardBatch(kernel, state, batch))
+  // what did NOT reach a collector: all of it without one, else the messages the carrier refused
+  const unsent = collectorAlive(state) ? yield* forwardBatch(kernel, state, batch) : batch
 
   if (state.forward === 'both') {
-    yield* exec(state, db => writeBatch(db, batch))
+    yield* writeLocal(state, batch)
     return
   }
 
-  if (!forwarded && state.fallback === 'local') {
-    state.cluster.fellBack += batch.length
-    yield* exec(state, db => writeBatch(db, batch))
+  if (unsent.length > 0 && state.fallback === 'local') {
+    state.cluster.fellBack += unsent.length
+    yield* writeLocal(state, unsent)
   }
 }
 
@@ -91,14 +87,16 @@ export function* startFlusher(state: ObservePluginDef.State): Operation<void> {
     yield* flush(state)
   }
 
-  const task = yield* fork(function* () {
-    for (;;) {
-      yield* tick()
-      if (gate.closing && state.pending.length === 0) {
-        return
+  const task = yield* fork(() =>
+    suppressed(function* () {
+      for (;;) {
+        yield* tick()
+        if (gate.closing && state.pending.length === 0) {
+          return
+        }
       }
-    }
-  })
+    }),
+  )
   state.flusher = task
 
   yield* ensure(function* () {

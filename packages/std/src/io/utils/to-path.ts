@@ -1,10 +1,5 @@
+import { fileUrlToPath } from '../internal/path/url'
 import type { IODef } from '../types/io'
-
-// strips the literal `file:///` only — see `toPath` for what that leaves out
-const fileUrlToPath = (url: string): string => {
-  const stripped = url.replace(/^file:\/\/\//u, '/')
-  return decodeURIComponent(stripped)
-}
 
 /**
  * Turn a {@link IODef.PathLike} into a plain path string: strings pass through, a `file:///…` URL

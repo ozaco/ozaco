@@ -25,11 +25,11 @@ import { appendCauses } from 'std:result'
 import { z } from 'zod'
 
 import { todosErrors } from '../../errors'
-import type { Todo } from '../../types/internal'
+import type { Helpers } from '../../types/helpers'
 import { todosTable, schema } from '../../utils/tables'
 
 /** the read projection: high-priority rows shout. */
-const shout = (row: Todo): Todo =>
+const shout = (row: Helpers.Todo): Helpers.Todo =>
   row.priority === 'high' ? { ...row, title: row.title.toUpperCase() } : row
 
 export const todos = crud(todosTable, {
@@ -130,16 +130,13 @@ export const todos = crud(todosTable, {
         return yield* todosErrors.protected('protected todo — remove [keep] from the title first')
       }
       const out = yield* next(input)
-      // a DOMAIN record: free-form audit shipped by exporters (OpenObserve `streams.domain`),
-      // never stored in the observe db — `ctx.auth` says who did it (socket or http alike)
+      // a DOMAIN record: free-form audit, one LogData (`eventName: 'ozaco.domain'`) on the active
+      // span, shipped to every sink alike — `ctx.auth` says who did it (socket or http alike)
       yield* Server.actions.report({
-        t: 'domain',
-        row: {
-          stream: 'audit',
-          verb: 'todo.removed',
-          id: call.input.id,
-          actor: ctx.auth?.sub ?? null,
-        },
+        stream: 'audit',
+        verb: 'todo.removed',
+        id: call.input.id,
+        actor: ctx.auth?.sub ?? null,
       })
       return out
     }

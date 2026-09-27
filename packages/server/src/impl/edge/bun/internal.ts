@@ -20,8 +20,11 @@ export const driver: EdgeDef.Driver = {
       // 15s, so anything above that keeps live feeds and sockets healthy
       idleTimeout: 120,
       async fetch(request, bunServer) {
+        // the peer the connection came from (`client.address` when no proxy header says more)
+        const peer = bunServer.requestIP(request)?.address
+
         if (handlers.isSocket(request)) {
-          const decision = await handlers.upgrade(request)
+          const decision = await handlers.upgrade(request, peer)
           if (decision.kind === 'reject') {
             return decision.response
           }
@@ -29,11 +32,16 @@ export const driver: EdgeDef.Driver = {
             listeners: { message: [], close: [] },
             attach: decision.attach,
           }
-          return bunServer.upgrade(request, { data })
-            ? (undefined as AnyType)
-            : new Response('upgrade failed', { status: 500 })
+          if (bunServer.upgrade(request, { data })) {
+            return undefined as AnyType
+          }
+
+          // accepted by the engine, refused by the runtime (not a websocket handshake after
+          // all): the upgrade span ends with the 500 the client gets (the engine records it)
+          decision.failed(undefined, 500)
+          return new Response('upgrade failed', { status: 500 })
         }
-        return handlers.fetch(request)
+        return handlers.fetch(request, peer)
       },
       websocket: {
         open(ws) {

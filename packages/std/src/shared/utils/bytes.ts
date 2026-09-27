@@ -1,7 +1,4 @@
-const HEX = '0123456789abcdef'
-
-// `String.fromCodePoint(...chunk)` spreads onto the stack: bounded chunks keep a large buffer safe
-const CHUNK = 0x80_00
+import { CHUNK, HEX } from '../internal/const'
 
 /** Lowercase hex of `bytes` (two chars per byte). */
 export const toHex = (bytes: Uint8Array): string => {

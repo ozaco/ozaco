@@ -1,15 +1,27 @@
 import type { ServerDef } from 'server:core'
 import { CtxRef, Server, ServerErrors } from 'server:core'
+import { dispatchSpan } from 'server:internal'
 import type { Operation } from 'std:effect'
 import { attempt } from 'std:effect'
 import { definePlugin, defineProtocol } from 'std:plugin'
 import type { Result } from 'std:result'
 import { fail, isFailure } from 'std:result'
+import type { TraceDef } from 'std:trace'
+import { current } from 'std:trace'
 
 import pkg from '../../../package.json'
 
 import { AuthCauses, AuthErrors } from './errors'
-import { authorize, bearerOf, headerRecord, options } from './internal'
+import {
+  annotate,
+  authorize,
+  bearerOf,
+  headerRecord,
+  options,
+  ResolutionRef,
+  skipped,
+  strategyOf,
+} from './internal'
 import type { AuthDef } from './types'
 
 const AUTH_STRATEGY = Symbol.for('server:auth-strategy')
@@ -22,7 +34,10 @@ const AUTH_STRATEGY = Symbol.for('server:auth-strategy')
  * next strategy (an expired JWT does not stop a static token from being tried). When nobody
  * succeeds, the first failure met is the answer — the most specific reason there is — and with
  * no failure at all the call resolves `undefined` (nobody knew the credential). A strategy
- * implements only what it supports and answers `undefined` for the rest.
+ * implements only what it supports and answers `undefined` for the rest. A strategy that FAILED
+ * before a later one answered leaves an `ozaco.auth.skip` event (`ozaco.auth.strategy`,
+ * `error.type`) on the guarded span (a bearer resolution's `span`, else the active one); a bearer
+ * resolution notes which strategy decided.
  */
 const AuthStrategyProtocol = defineProtocol<AuthDef.StrategyContext, AuthDef.Strategy>({
   name: 'server/auth-strategy',
@@ -47,39 +62,97 @@ const AuthStrategyProtocol = defineProtocol<AuthDef.StrategyContext, AuthDef.Str
   },
 
   *exec(entries, run) {
-    let failure: Result.Failure<unknown> | null = null
+    // set only around a bearer resolution (`resolve`): who decided is noted there
+    const resolution = yield* ResolutionRef.get()
+    const failed: (readonly [strategy: string, failure: Result.Failure<unknown>])[] = []
 
     for (const entry of entries) {
       const answer = yield* attempt(() => run(entry))
 
       if (isFailure(answer)) {
-        failure ??= answer
+        failed.push([strategyOf(entry), answer])
         continue
       }
 
       if (answer.value !== undefined) {
+        if (resolution) {
+          resolution.strategy = strategyOf(entry)
+        }
+
+        yield* skipped(failed, resolution?.span)
         return answer.value
       }
     }
 
-    return failure ? yield* failure : undefined
+    const first = failed[0]
+
+    if (!first) {
+      return undefined
+    }
+
+    if (resolution) {
+      resolution.strategy = first[0]
+    }
+
+    return yield* first[1]
   },
 })
 
-/** A presented bearer → its principal, through the strategy chain; nobody recognizing it is
- * `server.unauthorized`. */
-function* resolve(token: string): Operation<AuthDef.Principal> {
-  const principal = yield* AuthStrategyProtocol.actions.verify(token)
+/** A presented bearer → its principal, through the strategy chain (`into` learns who decided);
+ * nobody recognizing it is `server.unauthorized` — caused by the first reason a strategy gave for
+ * "not mine" (jose's verification error), when one did. */
+function* resolve(token: string, into?: AuthDef.Resolution): Operation<AuthDef.Principal> {
+  const resolution = into ?? { strategy: null, rejection: undefined }
+  const principal = yield* ResolutionRef.with(resolution, () =>
+    AuthStrategyProtocol.actions.verify(token),
+  )
 
   if (!principal) {
     return yield* fail(
       ServerErrors.Unauthorized,
       'no auth strategy recognizes this token',
       AuthErrors.InvalidToken,
+      resolution.rejection,
     )
   }
 
   return principal
+}
+
+/**
+ * One auth gate: a presented bearer is ALWAYS verified, then the requirement checks the
+ * principal — and the verdict (and every skipped strategy) is said on the guarded span `at`
+ * (`annotate`; default the active span). `lenient`: a bearer nobody accepts is served anonymously
+ * instead (a public raw route never fails on a stale token). A denial raises the verdict's own
+ * failure (401 / 403).
+ */
+function* gate(
+  requirement: AuthDef.Requirement,
+  token: string | null,
+  how: { readonly lenient?: boolean; readonly at?: TraceDef.SpanHandle } = {},
+): Operation<AuthDef.Principal | null> {
+  const lenient = how.lenient === true
+  const at = how.at ?? (yield* current())
+  const resolution: AuthDef.Resolution = { strategy: null, rejection: undefined, span: at }
+  const resolved = token === null ? null : yield* attempt(() => resolve(token, resolution))
+  const principal = resolved === null || isFailure(resolved) ? null : resolved.value
+
+  const verdict =
+    resolved !== null && isFailure(resolved) && !lenient
+      ? resolved
+      : yield* attempt(() => authorize(principal ?? undefined, requirement))
+
+  yield* annotate(
+    {
+      outcome: isFailure(verdict) ? 'denied' : principal ? 'granted' : 'anonymous',
+      requirement,
+      strategy: resolution.strategy,
+      principal,
+    },
+    at,
+  )
+
+  return isFailure(verdict) ? yield* verdict : principal
 }
 
 /** A requirement against request headers: a presented bearer is always verified. */
@@ -87,11 +160,7 @@ function* authorizeHeaders(
   requirement: AuthDef.Requirement,
   headers: AuthDef.HeadersLike,
 ): Operation<AuthDef.Principal | null> {
-  const token = bearerOf(headerRecord(headers))
-  const principal = token ? yield* resolve(token) : undefined
-  yield* authorize(principal, requirement)
-
-  return principal ?? null
+  return yield* gate(requirement, bearerOf(headerRecord(headers)))
 }
 
 const AuthImpl = definePlugin<
@@ -120,30 +189,28 @@ const AuthImpl = definePlugin<
       options,
       hooks: {
         name: 'auth',
+        // the verdict lands on the span each gate guards: the DISPATCH span of an action —
+        // never a plugin span wrapping the chain (a Cache installed before Auth)
         *dispatch(call, ctx, next) {
           // an action's own `auth` wins (a service-level one is already stamped on it); an
           // action that says nothing gets the install's `default`
           const own = (ctx.meta.options as { auth?: AuthDef.Requirement }).auth
           const requirement = own ?? context.default
-          const token = bearerOf(call.headers)
-          const principal = token ? yield* resolve(token) : undefined
-          yield* authorize(principal, requirement)
-          return yield* next(call, { ...ctx, auth: principal ?? null })
+          const principal = yield* gate(requirement, bearerOf(call.headers), {
+            at: yield* dispatchSpan(),
+          })
+          return yield* next(call, { ...ctx, auth: principal })
         },
+        // …and the edge span of a raw route
         *guard(route, request) {
           // a raw route's own `auth` wins; one that says nothing is as closed as the install
           const requirement = route.auth ?? context.default
 
-          if (requirement !== false) {
-            return yield* authorizeHeaders(requirement, request.headers)
-          }
-
           // a public route (health, docs, static files) never fails on a stale bearer — it is
           // simply served anonymously
-          const token = bearerOf(headerRecord(request.headers))
-          const known = token ? yield* attempt(() => resolve(token)) : null
-
-          return known && !isFailure(known) ? known.value : null
+          return yield* gate(requirement, bearerOf(headerRecord(request.headers)), {
+            lenient: requirement === false,
+          })
         },
       },
     }
@@ -159,6 +226,10 @@ const AuthImpl = definePlugin<
  * `default` for every action that says nothing (`'authenticated'` = fail-closed) — and for every
  * raw edge route that says nothing (`Edge.actions.raw({ auth })`).
  * `Auth.actions.login/refresh/verify/signService` route to the first strategy that answers.
+ * Every gate (a dispatch, a raw route, `authorize` / `check`) says its verdict on the span it
+ * guards: `ozaco.auth.outcome` (granted | anonymous | denied), `ozaco.auth.requirement` (its
+ * kind), `ozaco.auth.strategy` and — only with `createServer({ observe: { capture: { enduser } } })`
+ * — `enduser.id`; a denial stays the call's own 401 / 403 failure.
  */
 /** The strategy protocol — see the definition above; exported here so the exports stay last. */
 export const AuthStrategy = AuthStrategyProtocol

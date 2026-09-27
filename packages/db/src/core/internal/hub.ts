@@ -2,17 +2,61 @@
 import type { Flow, Operation, Subscription } from 'std:effect'
 import { fork } from 'std:effect'
 import { createEvent, useBufferedEvent } from 'std:event'
+import type { AnyType } from 'std:shared'
 
 import { VERSION_ZERO } from '../const'
 import type { Bus } from '../types/bus'
 import type { Change } from '../types/change'
 import type { Helpers } from '../types/helpers'
+import { dbLog, untraced } from '../utils/telemetry'
 
+import { BUS_ANNOUNCED, BUS_EXPECTED_SEQ, BUS_ORIGIN, BUS_REJECTED, BUS_SEQ } from './const'
 import { BusMeta, TxBuffer } from './context'
 
 /** Dedupe state per peer origin: last envelope seq + when it was seen (aged out by `PEER_TTL`). */
 const PEER_TTL_MS = 60 * 60 * 1000
 const PEER_MAX = 10_000
+
+/** When THIS PROCESS announced each peer (origin → epoch ms) — one record on `globalThis` for
+ * every hub in the process: the nodes of an in-process cluster and a second client over the same
+ * bus each meet a new peer, but it is announced once. */
+const announced = (): Map<string, number> => ((globalThis as AnyType)[BUS_ANNOUNCED] ??= new Map())
+
+/** Take the right to announce `origin`: `false` while an announcement of it is younger than
+ * `PEER_TTL_MS` (a peer silent for longer is news again, as it is to a hub's own peer table). */
+const claimPeer = (origin: string, now: number): boolean => {
+  const peers = announced()
+  const at = peers.get(origin)
+
+  if (at !== undefined && now - at <= PEER_TTL_MS) {
+    return false
+  }
+
+  peers.delete(origin)
+
+  if (peers.size >= PEER_MAX) {
+    // the oldest announcement gives way (insertion order is announcement order)
+    const [oldest] = peers.keys()
+    peers.delete(oldest!)
+  }
+
+  peers.set(origin, now)
+
+  return true
+}
+
+/** The string entries of a writer's correlation data — what a {@link Change.Event} carries. */
+const eventMetaOf = (meta: unknown): Readonly<Record<string, string>> | undefined => {
+  if (typeof meta !== 'object' || meta === null) {
+    return undefined
+  }
+
+  const entries = Object.entries(meta).filter(
+    (entry): entry is [string, string] => typeof entry[1] === 'string',
+  )
+
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined
+}
 
 /**
  * Build the per-install change hub over the node's local bus. Every announced write gets an
@@ -56,6 +100,10 @@ export const createHub = (options: Helpers.HubOptions): Helpers.Hub => {
 
   const floorOf = (table: string): number => (applied.get(table)?.at ?? 0) - replayWindowMs
 
+  /** A hub without change logs (every table `log: false` — an exporter's store) has nothing to
+   * replay: a gap or a new peer means nothing to it, and it says nothing about them. */
+  const replayable = options.tables.length > 0
+
   const prune = (table: string): void => {
     const floor = floorOf(table)
 
@@ -66,7 +114,13 @@ export const createHub = (options: Helpers.HubOptions): Helpers.Hub => {
     }
   }
 
-  const apply = (write: Change.Write, token: string, source: Change.Source): void => {
+  // oxlint-disable-next-line max-params
+  const apply = (
+    write: Change.Write,
+    token: string,
+    source: Change.Source,
+    meta?: Readonly<Record<string, string>>,
+  ): void => {
     const now = Date.now()
     const before = applied.get(write.table)
     applied.set(write.table, { token, at: Math.max(before?.at ?? 0, now) })
@@ -74,18 +128,26 @@ export const createHub = (options: Helpers.HubOptions): Helpers.Hub => {
     arrivals.set(write.table, (arrivals.get(write.table) ?? 0) + 1)
     recent.set(token, { table: write.table, at: now })
     prune(write.table)
-    emitter.emit('change', { ...write, token, source })
+    emitter.emit('change', { ...write, token, source, ...(meta ? { meta } : {}) })
   }
 
-  /** Emit one recorded write and return its wire form. */
-  const emit = (write: Helpers.Tokened): Change.BusEvent => {
-    apply(write, write.token, 'local')
+  /** Emit one recorded write (with the writer's correlation data) and return its wire form. */
+  const emit = (
+    write: Helpers.Tokened,
+    meta: Readonly<Record<string, string>> | undefined,
+  ): Change.BusEvent => {
+    apply(write, write.token, 'local', meta)
     return write
   }
 
-  const ship = function* (events: readonly Change.BusEvent[], tx: string) {
-    seq += 1
+  /** Fan locally committed writes out to the watchers, then queue them for the peers as ONE
+   * envelope — both carrying the correlation data the writes ran under (`withBusMeta`). */
+  const ship = function* (writes: readonly Helpers.Tokened[], tx: string) {
     const meta = yield* BusMeta.get()
+    const eventMeta = eventMetaOf(meta)
+    const events = writes.map(write => emit(write, eventMeta))
+
+    seq += 1
     yield* bus.publish({ origin: bus.origin, seq, tx, events, ...(meta ? { meta } : {}) })
   }
 
@@ -108,7 +170,7 @@ export const createHub = (options: Helpers.HubOptions): Helpers.Hub => {
       return
     }
 
-    yield* ship([emit(write)], write.token)
+    yield* ship([write], write.token)
   }
 
   const publish = function* (write: Change.Write) {
@@ -127,10 +189,7 @@ export const createHub = (options: Helpers.HubOptions): Helpers.Hub => {
       return
     }
 
-    yield* ship(
-      writes.map(write => emit(write as Helpers.Tokened)),
-      tx,
-    )
+    yield* ship(writes as readonly Helpers.Tokened[], tx)
   }
 
   /** Apply the change-log rows of a table newer than its replay floor (minus the window). */
@@ -195,8 +254,30 @@ export const createHub = (options: Helpers.HubOptions): Helpers.Hub => {
     // table first — what was lost may concern any of them, not only the ones this envelope names
     if (!peer || envelope.seq > peer.seq + 1) {
       counters.gaps += 1
-      yield* sync()
+
+      // a hub without change logs has nothing to replay — and nothing to say about it. A new
+      // peer is INFO once per PROCESS: claimed only by a hub that writes the line (a Logger
+      // here, work not suppressed)
+      if (replayable) {
+        yield* peer
+          ? dbLog('warn', 'db bus: envelopes lost — replaying the change logs', {
+              [BUS_ORIGIN]: envelope.origin,
+              [BUS_EXPECTED_SEQ]: peer.seq + 1,
+              [BUS_SEQ]: envelope.seq,
+            })
+          : dbLog(
+              'info',
+              'db bus: first envelope from a peer — replaying the change logs',
+              { [BUS_ORIGIN]: envelope.origin, [BUS_SEQ]: envelope.seq },
+              () => claimPeer(envelope.origin, now),
+            )
+
+        yield* sync()
+      }
     }
+
+    const meta = eventMetaOf(envelope.meta)
+    let drifted = 0
 
     for (const event of envelope.events) {
       if (recent.has(event.token)) {
@@ -205,10 +286,18 @@ export const createHub = (options: Helpers.HubOptions): Helpers.Hub => {
 
       if (!(yield* observe(event.token))) {
         counters.driftRejected += 1
+        drifted += 1
       }
 
       const { token, ...write } = event
-      apply(write, token, 'bus')
+      apply(write, token, 'bus', meta)
+    }
+
+    if (drifted > 0) {
+      yield* dbLog('warn', "db bus: peer tokens too far ahead — this node's clock kept its own", {
+        [BUS_ORIGIN]: envelope.origin,
+        [BUS_REJECTED]: drifted,
+      })
     }
   }
 
@@ -283,7 +372,10 @@ const pumpBus = function* (
  * drain — a forked subscribe would race the first send. */
 export const attachBus = function* (hub: Change.Hub, bus: Change.Bus) {
   const subscription = yield* useBufferedEvent(bus.events, 'change')
-  yield* fork(() => pumpBus(subscription, bus.origin, envelope => hub.feedBus(envelope)))
+  // the pump (and the replays it triggers) belong to no request: no span over them
+  yield* fork(() =>
+    untraced(() => pumpBus(subscription, bus.origin, envelope => hub.feedBus(envelope))),
+  )
 }
 
 /** Forward the bus plugin's incoming envelopes onto the local bus. */
@@ -291,8 +383,10 @@ export const attachTransport = function* (bus: Change.Bus, endpoint: Bus.Context
   const subscription = yield* useBufferedEvent(endpoint.events, 'change')
 
   yield* fork(() =>
-    pumpBus(subscription, bus.origin, function* (envelope) {
-      bus.events.emit('change', envelope)
-    }),
+    untraced(() =>
+      pumpBus(subscription, bus.origin, function* (envelope) {
+        bus.events.emit('change', envelope)
+      }),
+    ),
   )
 }

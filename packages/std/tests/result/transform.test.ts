@@ -1,7 +1,6 @@
 import {
   appendCauses,
   asFailure,
-  asFailureFrom,
   formatFailure,
   auto,
   fail,
@@ -13,6 +12,7 @@ import {
   unwrap,
 } from 'std:result'
 import type { AnyType } from 'std:shared'
+import { createTags } from 'std:shared'
 
 import { describe, expect, it } from 'bun:test'
 
@@ -88,40 +88,32 @@ describe('appendCauses', () => {
   })
 })
 
-describe('asFailure / asFailureFrom', () => {
-  it('reuses an existing failure and wraps anything else', () => {
+describe('asFailure', () => {
+  it('reuses an existing failure and tags anything else `std:result.unknown`', () => {
     const original = fail('root')
     const decorated = asFailure(original as AnyType, 'while retrying')
     expect(decorated).toBe(original as AnyType)
     expect(decorated.causes).toEqual(['while retrying'])
 
+    // a non-Error value is serialized into the message, nothing nested
     const wrapped = asFailure('raw-error')
     expect(isFailure(wrapped)).toBe(true)
-    expect(wrapped.error).toBe('raw-error')
-    expect(wrapped.message).toBe('')
+    expect(wrapped.error).toBe(ResultErrors.Unknown)
+    expect(wrapped.message).toBe('raw-error')
+    expect(wrapped.causes).toEqual([])
+    expect(asFailure({ code: 1 }).message).toBe('{"code":1}')
+    expect(asFailure({ code: 1 }).causes).toEqual([])
   })
 
-  it('asFailure keeps an Error in the error slot and copies its text into message', () => {
+  it('tags a foreign Error `std:result.unknown`, serializes it into the message, keeps it as raw', () => {
     const error = new TypeError('denied')
     const wrapped = asFailure(error, 'opening socket')
-    expect(wrapped.error).toBe(error)
-    expect(wrapped.message).toBe('denied')
-    expect(wrapped.causes).toEqual(['opening socket'])
-
-    // a non-Error keeps the empty message
-    expect(asFailure({ code: 1 }).message).toBe('')
-  })
-
-  it('asFailureFrom tags a foreign error `std:result.unknown` and serializes it into the message', () => {
-    const wrapped = asFailureFrom(new Error('kaput'), 'loading config')
     expect(wrapped.error).toBe('std:result.unknown')
     expect(wrapped.error).toBe(ResultErrors.Unknown)
-    expect(wrapped.message).toBe('Error: kaput')
-    expect(wrapped.causes).toEqual(['loading config'])
-    expect(asFailureFrom('plain').message).toBe('plain')
-
-    const existing = fail('typed')
-    expect(asFailureFrom(existing as AnyType)).toBe(existing as AnyType)
+    expect(wrapped.message).toBe('TypeError: denied')
+    // the Error itself is the caller's to inspect, never a cause
+    expect(wrapped.raw).toBe(error)
+    expect(wrapped.causes).toEqual(['opening socket'])
   })
 })
 
@@ -161,37 +153,36 @@ describe('throwable', () => {
     expect(throwable(() => existing)).toBe(existing as AnyType)
   })
 
-  it('captures a thrown error with the marker message and causes', () => {
-    const outcome = throwable(() => JSON.parse('{oops'), SyntaxError, 'parsing config')
+  it('folds a throw with asFailure, the causes appended', () => {
+    const outcome = throwable(() => JSON.parse('{oops'), 'parsing config')
 
     expect(isFailure(outcome)).toBe(true)
     if (isFailure(outcome)) {
-      expect(outcome.error).toBeInstanceOf(SyntaxError)
-      expect(outcome.message).toBe('from throwable')
+      expect(outcome.error).toBe(ResultErrors.Unknown)
+      expect(outcome.message).toStartWith('SyntaxError: ')
+      expect(outcome.raw).toBeInstanceOf(SyntaxError)
       expect(outcome.causes).toEqual(['parsing config'])
     }
 
-    // a throw that is not an instance of the requested class gets wrapped into it
-    const foreign = throwable(() => {
-      throw new TypeError('raw reason')
-    }, RangeError)
+    // a bundle first: its matchers classify the throw
+    const Parsing = createTags('config', ['syntax', { name: 'SyntaxError' }])
+    const tagged = throwable(() => JSON.parse('{oops'), Parsing, 'parsing config')
 
-    expect(isFailure(foreign)).toBe(true)
-    if (isFailure(foreign)) {
-      expect(foreign.error).toBeInstanceOf(RangeError)
-      expect((foreign.error as RangeError).message).toContain('raw reason')
-    }
+    expect(isFailure(tagged) && tagged.error).toBe(Parsing.Syntax)
+    expect(isFailure(tagged) && tagged.causes).toEqual(['parsing config'])
   })
 
   it('settles async callbacks into results', async () => {
     const ok = await (throwable(() => Promise.resolve('done')) as AnyType)
     expect(unwrap(ok) as string).toBe('done')
 
-    const bad = await (throwable(() => Promise.reject(new Error('kaput'))) as AnyType)
+    const kaput = new Error('kaput')
+    const bad = await (throwable(() => Promise.reject(kaput)) as AnyType)
     expect(isFailure(bad)).toBe(true)
     if (isFailure(bad)) {
-      expect(bad.error).toBeInstanceOf(Error)
-      expect(bad.message).toBe('from throwable')
+      expect(bad.error).toBe(ResultErrors.Unknown)
+      expect(bad.message).toBe('Error: kaput')
+      expect(bad.raw).toBe(kaput)
     }
   })
 })
@@ -210,13 +201,13 @@ describe('formatFailure', () => {
     expect(formatFailure(fail(new TypeError('denied'), 'while dialing'))).toBe(
       'TypeError: denied: while dialing',
     )
-    expect(formatFailure(asFailure(new Error('kaput'), 'loading'))).toBe('Error: kaput: loading')
-    expect(formatFailure(asFailureFrom(new Error('kaput'), 'loading'))).toBe(
+    // asFailure keeps the Error as `raw` only: the line is the tag, its serialized text, the causes
+    expect(formatFailure(asFailure(new Error('kaput'), 'loading'))).toBe(
       'std:result.unknown: Error: kaput: loading',
     )
 
     const coded = Object.assign(new Error('refused'), { code: 'ECONNREFUSED' })
-    expect(formatFailure(asFailureFrom(coded))).toBe(
+    expect(formatFailure(asFailure(coded))).toBe(
       'std:result.unknown: Error: refused (ECONNREFUSED)',
     )
   })

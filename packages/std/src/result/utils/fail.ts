@@ -1,21 +1,12 @@
 import type { AnyType } from 'std:shared'
 
-import { RESULT_FAILURE } from '../const'
+import { causesOf, createFailure } from '../internal/failure'
 import type { ResultDef } from '../types/def'
-import type { Result } from '../types/result'
 
-// every field the type declares is present, `error` included (undefined for the bare `fail()`)
+/**
+ * A Failure: `error` (a tag), `message`, and `causes` — each normalized: a string stays, a Failure
+ * (a failed Result) is nested as the SAME object, a Success / `null` / `undefined` is dropped.
+ * Wrapping is `fail(Tag, message, inner)`; a foreign value is folded with `asFailure` first.
+ */
 export const fail: ResultDef.Fail = (...args: AnyType[]) =>
-  ({
-    _t: RESULT_FAILURE,
-    _d: Date.now(),
-    error: args[0],
-    message: args[1] ?? '',
-    causes: args.slice(2),
-
-    *[Symbol.iterator]() {
-      // oxlint-disable-next-line no-this-alias
-      const self = this
-      yield self
-    },
-  }) as Result.Failure<AnyType> as AnyType
+  createFailure(args[0], args[1] ?? '', causesOf(args.slice(2))) as AnyType

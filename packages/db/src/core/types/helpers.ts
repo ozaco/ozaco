@@ -28,6 +28,8 @@ export namespace Helpers {
     /** the HLC receive rule (`false` = drift-rejected). */
     readonly observe: (token: string) => Operation<boolean>
     readonly replayWindowMs: number
+
+    /** the tables with a change log — what a replay reads (none: nothing to replay). */
     readonly tables: readonly string[]
   }
 
@@ -151,6 +153,61 @@ export namespace Helpers {
   /** The `$date` marker a `Date` cursor boundary travels as. */
   export interface WireDate {
     readonly $date: string
+  }
+
+  /** A backend's telemetry identity, resolved (`adapterIdentity`): the attributes every db / kv
+   * span over it carries, and the span kind (`internal` for an in-process store). */
+  export interface DbIdentity {
+    readonly system: string
+    readonly namespace: string
+    readonly kind: 'client' | 'internal'
+    readonly address?: string | undefined
+    readonly port?: number | undefined
+  }
+
+  /** The code a driver error carries and the family it comes from: a SQLSTATE (pg, bun-sql) or a
+   * `SQLITE_*` result code (sqlite). */
+  export interface DriverCode {
+    readonly family: 'sqlstate' | 'sqlite'
+    readonly code: string
+  }
+
+  /** The `DbErrors` name a driver error is classified as (the `DbErrors` matchers). */
+  export type DriverKind =
+    | 'unique'
+    | 'foreign-key'
+    | 'not-null'
+    | 'check'
+    | 'conflict'
+    | 'connection'
+    | 'query'
+
+  /** One traced adapter call: its operation, target and what its span records. */
+  export interface DbCall<T> {
+    /** `db.operation.name` (`find`, `insert`, `delete`, `transaction`, `raw`, …). */
+    readonly op: string
+
+    /** `db.collection.name` — the span is named `{op} {table}` (just `{op}` without one). */
+    readonly table?: string | undefined
+
+    /** rows written in one call (`db.operation.batch.size` when above 1). */
+    readonly batch?: number | undefined
+
+    /** the statement text when the caller already has it (a parameterized `raw`). */
+    readonly text?: string | undefined
+
+    /** collect the SQL text the shared SQL layer notes while the call runs (`noteQuery`). */
+    readonly collect: boolean
+
+    /** the returned row count (`db.response.returned_rows`, opt-in). */
+    readonly rows?: ((value: T) => number) | undefined
+  }
+
+  /** The loose write options every internal path works with (the typed generics live on the
+   * public {@link Database.Handle} alone). */
+  export interface WriteOptions {
+    readonly ifVersion?: string | undefined
+    readonly scope?: Spec.Filter | undefined
   }
 
   /** The mutable budget/policy of one `sanitizeFilter` walk. */

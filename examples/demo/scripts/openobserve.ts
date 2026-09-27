@@ -1,17 +1,22 @@
 /**
  * `bun run scripts/openobserve.ts` — the same cluster as `scripts/cluster.ts`, every node
- * shipping to OpenObserve: the raw per-kind streams AND the Traces/Logs/Metrics panels, all
- * from the one exporter. Point the consts at your deployment
- * (`docker run -p 5080:5080 public.ecr.aws/zinclabs/openobserve:latest` for a local one).
+ * shipping its spans, log records and metrics to OpenObserve's OTLP endpoints (the
+ * Traces/Logs/Metrics panels) — exactly what the `/_observe` console holds. The deployment comes
+ * from `OO_URL` / `OO_ORG` / `OO_USER` / `OO_PASS` (`scripts/targets.ts`; defaults: a local one,
+ * `root@ozaco.dev` / `Ozaco-pass1!`):
+ *
+ *   docker run -d --name oz-openobserve -p 5080:5080 \
+ *     -e ZO_ROOT_USER_EMAIL=root@ozaco.dev -e ZO_ROOT_USER_PASSWORD='Ozaco-pass1!' \
+ *     public.ecr.aws/zinclabs/openobserve:latest
+ *
+ * OpenObserve refuses to boot without a strong root password (8+ characters, upper, lower, digit
+ * and a symbol). `scripts/lgtm.ts` ships to Grafana's stack AND OpenObserve at once.
  */
 import { runCluster } from './cluster'
+import { openObserveTarget } from './targets'
 
 await runCluster({
-  openobserve: {
-    url: 'http://localhost:5080',
-    // `user:pass` → HTTP basic, anything else → a bearer token
-    auth: 'root@example.com:Complexpass#123',
-    // request bodies + WS frame / emit payloads ride into the streams and traces
-    bodies: true,
-  },
+  openobserve: openObserveTarget(),
+  // request/response bodies + WS frame bodies ride into the telemetry — every sink alike
+  capture: true,
 })

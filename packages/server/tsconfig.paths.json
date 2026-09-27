@@ -25,6 +25,7 @@
       "std:effect": ["./node_modules/@ozaco/std/dist/effect"],
       "std:event": ["./node_modules/@ozaco/std/dist/event"],
       "std:plugin": ["./node_modules/@ozaco/std/dist/plugin"],
+      "std:trace": ["./node_modules/@ozaco/std/dist/trace"],
       "std:io": ["./node_modules/@ozaco/std/dist/io"],
       "std:io/impl/bun": ["./node_modules/@ozaco/std/dist/io/impl/bun"],
       "std:io/impl/node": ["./node_modules/@ozaco/std/dist/io/impl/node"],
@@ -32,6 +33,7 @@
       "std:codec/impl/json": ["./node_modules/@ozaco/std/dist/codec/impl/json"],
       "std:logger": ["./node_modules/@ozaco/std/dist/logger"],
       "std:logger/transport/console": ["./node_modules/@ozaco/std/dist/logger/transport/console"],
+      "std:logger/transport/trace": ["./node_modules/@ozaco/std/dist/logger/transport/trace"],
       "std:fetch": ["./node_modules/@ozaco/std/dist/fetch"],
       "std:ws": ["./node_modules/@ozaco/std/dist/ws"],
       "std:config": ["./node_modules/@ozaco/std/dist/config"],
@@ -47,7 +49,8 @@
       "db:impl/bun-sql": ["./node_modules/@ozaco/db/dist/impl/bun-sql"],
       "db:impl/memory-kv": ["./node_modules/@ozaco/db/dist/impl/memory-kv"],
       "db:impl/redis-kv": ["./node_modules/@ozaco/db/dist/impl/redis-kv"],
-      "db:impl/table-kv": ["./node_modules/@ozaco/db/dist/impl/table-kv"]
+      "db:impl/table-kv": ["./node_modules/@ozaco/db/dist/impl/table-kv"],
+      "db:queue": ["./node_modules/@ozaco/db/dist/queue"]
     }
   }
 }

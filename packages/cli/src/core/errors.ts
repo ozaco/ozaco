@@ -1,5 +1,7 @@
 import { createTags } from 'std:shared'
 
+import { parseArgsFault } from './internal/parse'
+
 /**
  * The single cli error taxonomy — every failure surfaced by a cli module (terminal impls, prompts,
  * spinners, tables, the command runner) is a Result failure carrying one of these tags (nothing
@@ -10,7 +12,9 @@ import { createTags } from 'std:shared'
  * - `cancelled` — the user cancelled (ctrl+c / esc inside a prompt, SIGINT inside a session)
  * - `not-interactive` — an interactive feature was invoked on a non-interactive terminal
  * - `busy` — the live region is already leased (`renderer()` without `{ wait: true }`)
- * - `parse` — argv did not parse/validate against the action's input schema
+ * - `parse` — argv did not parse/validate against the action's input schema; a `util.parseArgs`
+ *   rejection (`ERR_PARSE_ARGS_*`) is folded into it (`asFailure(error, CliErrors)`), its first
+ *   sentence the message, the parser's error kept as `raw`
  * - `unknown` — an unregistered command was requested
  * - `validation` — a value failed a cli-side validation outside argv parsing
  */
@@ -21,7 +25,7 @@ export const CliErrors = createTags(
   'cancelled',
   'not-interactive',
   'busy',
-  'parse',
+  ['parse', parseArgsFault],
   'unknown',
   'validation',
 )

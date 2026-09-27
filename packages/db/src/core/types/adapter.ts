@@ -30,10 +30,30 @@ export namespace Adapter {
     readonly alterColumn: boolean
   }
 
+  /**
+   * How the backend shows up in telemetry — the identity attributes of every db CLIENT span a
+   * `DbClient` records over this adapter (and of a `TableKv` over it). Every field is optional:
+   * `system` defaults from the adapter name (`pg` / `bun-sql` ⇒ `postgresql`, `sqlite`, `memory`
+   * ⇒ `ozaco.memory`, anything else as named), `namespace` to the adapter name.
+   */
+  export interface Telemetry {
+    /** `db.system.name` (`postgresql`, `sqlite`, `ozaco.memory`, …). */
+    readonly system?: string | undefined
+
+    /** `db.namespace`: the database name (pg), the file's basename (sqlite), `memory`. Tempo
+     * draws a service-graph database node only for spans that carry it. */
+    readonly namespace?: string | undefined
+
+    /** `server.address` / `server.port` of a networked backend. */
+    readonly address?: string | undefined
+    readonly port?: number | undefined
+  }
+
   /** The adapter protocol context — what an adapter's `setup()` resolves. */
   export interface Options {
     readonly adapter: string
     readonly capabilities: Capabilities
+    readonly telemetry?: Telemetry | undefined
   }
 
   /** What the install resolves is exactly {@link Options} here. */

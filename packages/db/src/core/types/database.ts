@@ -421,6 +421,19 @@ export namespace Database {
      * (`IO.actions.ulid({ length: 32, window: 100 })` — time-sortable, monotonic), so an IO impl
      * (`BunIO`/`NodeIO`) must be installed before `DbClient` unless this is given. */
     readonly id?: (() => Operation<string>) | undefined
+
+    /** Telemetry of this install's db spans (see {@link ObserveOptions}). */
+    readonly observe?: ObserveOptions | undefined
+  }
+
+  /**
+   * The db CLIENT spans (`find todos`, `transaction`, …): opened by `std:trace` only under a
+   * recording parent span — a background loop never starts a trace of its own.
+   */
+  export interface ObserveOptions {
+    /** Stamp `db.response.returned_rows` on the data-plane spans (a semconv opt-in). Default
+     * false. */
+    readonly returnedRows?: boolean | undefined
   }
 
   /** The `Db` protocol context — the typed handle itself (`yield* DbClient.use(…)` and

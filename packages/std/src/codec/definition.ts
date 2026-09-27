@@ -11,7 +11,7 @@ import {
   codecRegisterHandler,
   codecUnregisterHandler,
 } from './internal/router'
-import type { CodecDef } from './types'
+import type { CodecDef } from './types/codec'
 
 export const CODEC = Symbol.for('std:codec')
 

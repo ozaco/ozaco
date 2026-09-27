@@ -1,8 +1,9 @@
 // oxlint-disable import/exports-last
-import type { Operation } from 'std:effect'
-import { ensure, until } from 'std:effect'
+import type { Flow, Operation } from 'std:effect'
+import { attempt, ensure, until } from 'std:effect'
 import { IO } from 'std:io'
-import { fail, isFailure } from 'std:result'
+import type { Result } from 'std:result'
+import { appendCauses, asFailure, fail, isFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import { DEFAULT_TIMEOUT_MS, HEADERS } from '../const'
@@ -12,6 +13,21 @@ import type { Helpers } from '../types/helpers'
 import { failureOf } from '../utils/failure'
 
 import { decodeBody } from './decode'
+import { heldReadable } from './future'
+import {
+  carrierOf,
+  echoedContext,
+  endCall,
+  endDetached,
+  endOfStream,
+  fallbackOf,
+  markResponse,
+  openCall,
+  recordedBy,
+  traceIdOf,
+  watchedFlow,
+  withCarrier,
+} from './trace'
 
 /** A PLAIN object (streams, blobs, class instances are not). */
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -62,21 +78,19 @@ const resolvePath = (
   return { path: resolved, rest: record ? Object.fromEntries(record) : input, failure }
 }
 
-/** A thrown thing as text: failures keep their message AND their causes (never `[object
- * Object]` — the reader must see WHY the wire call died). */
-const reasonOf = (error: unknown): { message: string; causes: readonly string[] } => {
-  if (isFailure(error)) {
-    return {
-      message: `${String(error.error ?? 'failure')}${error.message ? `: ${error.message}` : ''}`,
-      causes: error.causes.map(String),
-    }
-  }
+/**
+ * A rejected platform fetch as the client's answer: a transport fault IS the `client.network`
+ * failure (`ClientErrors` classifies it — the platform code or message its message, the platform
+ * error its `raw`; `operation` names the fetch in its causes, after `until`'s own); anything else
+ * the fetch rejected with (a custom `fetch`'s own failure, e.g. `std:fetch.network`) is nested
+ * under a `client.network` naming the operation. Never `until`'s `std:result.unknown` fold.
+ */
+export const networkFailure = (error: unknown, operation: string): Result.Failure<unknown> => {
+  const fault = asFailure(error, ClientErrors)
 
-  if (error instanceof Error) {
-    return { message: error.message || error.name, causes: [] }
-  }
-
-  return { message: String(error), causes: [] }
+  return fault.error === ClientErrors.Network
+    ? appendCauses(fault, operation)
+    : fail(ClientErrors.Network, operation, fault)
 }
 
 /** The `authorization` header value of this client's token, if any (a value or a resolver). */
@@ -207,14 +221,23 @@ function* prepare(
   return { url: url.toString(), init }
 }
 
-/** One HTTP call: prepared by the manifest's route, deadline + scope cancellation, decoded by
- * brand, failures rebuilt from the wire. */
-export function* request(
+/** A streamed reply's brand: its values come as a Flow (`decodeBody`). */
+const isFlowBrand = (brand: string | null): boolean => brand === 'ndjson' || brand === 'sse'
+
+/**
+ * The exchange itself: deadline + scope cancellation, the reply's ids (`x-request-id`,
+ * `traceresponse` → `$lastTraceId`), decoded by brand, failures rebuilt from the wire. `traced`
+ * is the call's CLIENT span (or `null`): it gets the response status, and a failure the server
+ * recorded in the call's trace is marked recorded there (the caller's spans then only carry its
+ * status).
+ */
+function* exchange(
   call: Helpers.CallInput,
+  target: Helpers.Prepared & { readonly requestId: string },
+  traced: Helpers.CallSpan | null,
 ): Operation<{ readonly value: unknown; readonly meta: ClientDef.Meta }> {
   const { ctx, action, options } = call
-  const requestId = options?.requestId ?? (yield* IO.actions.uuid())
-  const { url, init } = yield* prepare(call, requestId)
+  const { url, init, requestId } = target
   const controller = new AbortController()
   const timeoutMs = options?.timeoutMs ?? ctx.options.timeoutMs ?? DEFAULT_TIMEOUT_MS
   const timer = setTimeout(() => controller.abort(ClientErrors.Timeout), timeoutMs)
@@ -239,16 +262,23 @@ export function* request(
       return yield* fail(ClientErrors.Timeout, `${action.id} exceeded ${timeoutMs}ms`)
     }
 
-    const reason = reasonOf(error)
-    return yield* fail(ClientErrors.Network, `${action.id}: ${reason.message}`, ...reason.causes)
+    return yield* networkFailure(error, action.id)
   }
   const echoed = response.headers.get(HEADERS.requestId) ?? requestId
+  const trace = echoedContext(response)
+
+  if (traced) {
+    yield* markResponse(traced, response)
+  }
+
   ctx.lastRequestId = echoed
+  ctx.lastTraceId = traceIdOf(traced, trace)
 
   const meta: ClientDef.Meta = {
     requestId: echoed,
     status: response.status,
     brand: response.headers.get(HEADERS.brand),
+    traceId: ctx.lastTraceId,
   }
 
   // a failure is what the server SAYS is one: the `oz-error` header rides every failure reply,
@@ -257,7 +287,13 @@ export function* request(
     settled = true
     clearTimeout(timer)
 
-    return yield* failureOf(response, echoed)
+    return yield* failureOf(response, echoed, {
+      remote: {
+        service: action.service,
+        operation: action.id,
+        recordedIn: recordedBy(traced, trace),
+      },
+    })
   }
 
   const value = yield* decodeBody(response)
@@ -274,4 +310,71 @@ export function* request(
   }
 
   return { value, meta }
+}
+
+/**
+ * One HTTP call: prepared by the manifest's route, then exchanged. When tracing is enabled where
+ * the call runs it is ONE CLIENT span `{METHOD} {route}` (scope `@ozaco/client`) whose context
+ * rides the request (`traceparent` + `tracestate` `ozaco=1`); it ends once the reply is decoded,
+ * or — for a streamed reply — with the stream (its end, its failure, or cancelled when abandoned);
+ * a reply never consumed ends it, when the calling scope closes, at the time its headers arrived.
+ * Tracing off: no span, the caller's ambient context (a pass-through one) is carried as it is.
+ */
+export function* request(
+  call: Helpers.CallInput,
+): Operation<{ readonly value: unknown; readonly meta: ClientDef.Meta }> {
+  const { options, action } = call
+  const requestId = options?.requestId ?? (yield* IO.actions.uuid())
+  const prepared = yield* prepare(call, requestId)
+  const traced = yield* openCall(
+    prepared.init.method ?? action.route.method,
+    action.route.path,
+    new URL(prepared.url),
+  )
+  const headers = withCarrier(
+    prepared.init.headers as Record<string, string>,
+    yield* carrierOf(traced),
+  )
+  const target = { ...prepared, init: { ...prepared.init, headers }, requestId }
+
+  if (!traced) {
+    return yield* exchange(call, target, null)
+  }
+
+  yield* ensure(fallbackOf(traced))
+  let ended = false
+
+  try {
+    const outcome = yield* attempt(() => exchange(call, target, traced))
+    ended = true
+
+    if (isFailure(outcome)) {
+      yield* endCall(traced, { failure: outcome })
+      return yield* outcome
+    }
+
+    const { value, meta } = outcome.value
+
+    if (isFlowBrand(meta.brand) && typeof value === 'object' && value !== null) {
+      return { value: watchedFlow(traced, value as Flow<unknown, void>), meta }
+    }
+
+    if (isReadable(value)) {
+      const stream = heldReadable(value as ReadableStream<Uint8Array>, {
+        start: () => {
+          traced.consuming = true
+        },
+        settle: settled => endDetached(traced, endOfStream(settled)),
+      })
+
+      return { value: stream, meta }
+    }
+
+    yield* endCall(traced)
+    return outcome.value
+  } finally {
+    if (!ended) {
+      yield* endCall(traced, { cancelled: true })
+    }
+  }
 }

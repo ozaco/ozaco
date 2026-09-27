@@ -84,7 +84,7 @@ describe('kernel — reload', () => {
         expect(boom.status).toBe(500)
         expect(JSON.parse(boom.body).error).toMatchObject({
           error: ServerErrors.Internal,
-          message: 'page build exploded',
+          message: 'Error: page build exploded',
         })
         expect(yield* server.call(extra, 'ping')).toBe('pong')
         expect((yield* server.members('extra')).length).toBe(1)

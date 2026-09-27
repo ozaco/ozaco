@@ -21,6 +21,7 @@ export {
   KV_STORE,
   TABLE,
   TABLE_NAME,
+  TELEMETRY_SCOPE,
 } from './core/const'
 export { adapterDefaults } from './core/utils/adapter'
 export { aggregateDocs } from './core/utils/aggregate'
@@ -29,5 +30,13 @@ export { filterFields, filterPaths, isPathSegment } from './core/utils/filter'
 export { isDestructive, isSystemField, isTable } from './core/utils/is'
 export { isValidKvPrefix, kvActions } from './core/utils/kv'
 export { tableSpecOf } from './core/utils/schema'
+export {
+  adapterIdentity,
+  dbLog,
+  dbSystemOf,
+  driverCause,
+  noteQuery,
+  untraced,
+} from './core/utils/telemetry'
 
 export type * from './core/types/helpers'

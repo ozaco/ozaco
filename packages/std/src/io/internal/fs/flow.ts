@@ -5,7 +5,7 @@ import { appendCauses, asFailure } from 'std:result'
 
 import { createReadStream, createWriteStream } from 'node:fs'
 
-import { IOCauses } from '../../errors'
+import { IOCauses, IOErrors } from '../../errors'
 import type { IODef } from '../../types/io'
 import { fromReadable } from '../stream/from-readable'
 
@@ -19,7 +19,7 @@ const waitForFinish = (writable: IODef.WritableLike): ReturnType<typeof action<v
     }
     const onError = (error: unknown) => {
       cleanup()
-      reject(appendCauses(asFailure(error), IOCauses.Stream))
+      reject(appendCauses(asFailure(error, IOErrors), IOCauses.Stream))
     }
     const cleanup = () => {
       writable.off('finish', onFinish)
@@ -38,7 +38,7 @@ const waitForDrain = (writable: IODef.WritableLike): ReturnType<typeof action<vo
     }
     const onError = (error: unknown) => {
       cleanup()
-      reject(appendCauses(asFailure(error), IOCauses.Stream))
+      reject(appendCauses(asFailure(error, IOErrors), IOCauses.Stream))
     }
     const cleanup = () => {
       writable.off('drain', onDrain)
@@ -75,7 +75,7 @@ export const writeFileFlow = guard(function* (
     // truncated upstream can never be sealed into the file as success
     for (const chunk of yield* each(source)) {
       if (streamError !== undefined) {
-        yield* asFailure(streamError)
+        yield* asFailure(streamError, IOErrors)
       }
       const ok = writable.write(chunk)
       if (!ok) {
@@ -89,8 +89,9 @@ export const writeFileFlow = guard(function* (
     writable.end()
     yield* waitForFinish(writable)
   } catch (error) {
-    writable.destroy?.(error instanceof Error ? error : new Error(String(error)))
+    // the failure is raised here: the stream is only torn down (no 'error' event to carry it)
+    writable.destroy?.()
 
-    yield* appendCauses(asFailure(error), IOCauses.WriteStream)
+    yield* appendCauses(asFailure(error, IOErrors), IOCauses.WriteStream)
   }
 }, IOCauses.WriteStream)

@@ -2,11 +2,19 @@
 
 import type { Operation } from 'std:effect'
 import { map } from 'std:effect'
+import { formatFailure } from 'std:result'
 
 import { JsonCodec } from 'std:codec/impl/json'
 
 import { LogLevel } from '../../const'
+import { visibleBindings } from '../../internal/serialize'
 import type { LoggerDef } from '../../types/logger'
+
+/** How much of the trace id the pretty line shows (`trace=<8 hex>`). */
+export const TRACE_PREFIX = 8
+
+/** The indent of a failure chain block under the pretty line. */
+export const CHAIN_INDENT = '  '
 
 export const ANSI = {
   reset: '\x1B[0m',
@@ -90,13 +98,40 @@ export const formatBindings = function* (
   return ` ${parts.join(' ')}`
 }
 
+/** ` trace=<first 8 hex of the trace id>` inside a span, else nothing. */
+export const formatTrace = (trace: LoggerDef.Trace | undefined, color: boolean): string =>
+  trace ? ` ${paint(color, ANSI.gray, `trace=${trace.traceId.slice(0, TRACE_PREFIX)}`)}` : ''
+
+/** Failure chains (`formatFailure(f, { chain: true })`) as indented blocks below the pretty line. */
+export const formatChains = (chains: readonly string[], color: boolean): string =>
+  chains
+    .flatMap(chain => chain.split('\n'))
+    .map(line => `\n${CHAIN_INDENT}${paint(color, ANSI.red, line)}`)
+    .join('')
+
+/**
+ * `[iso-time] LABEL bindings trace=<8>: msg data err="<one line>"`, then the failure chains
+ * indented below it. Every failure prints ONCE: the first one as the line's `err=` when its chain
+ * is one line, else as its chain block alone (causes, stack frames, `Caused by:` levels); every
+ * further failure as its block. `trace=` is the span the entry was logged in (an exception record
+ * forwarded to the Logger is logged in its own span's context).
+ */
 export const prettyFormat = function* (entry: LoggerDef.Entry, color: boolean): Operation<string> {
   const time = paint(color, ANSI.dim, `[${new Date(entry.time).toISOString()}]`)
   const label = paint(color, colorOf(entry.level), labelOf(entry.level))
-  const bindings = yield* formatBindings(entry.bindings, color)
+  const bindings = yield* formatBindings(visibleBindings(entry.bindings), color)
+  const trace = formatTrace(entry.trace, color)
   const data = entry.data ? ` ${yield* JsonCodec.actions.stringify(entry.data)}` : ''
-  const error = entry.error
-    ? ` ${paint(color, ANSI.red, `err=${yield* JsonCodec.actions.stringify(entry.error)}`)}`
-    : ''
-  return `${time} ${label}${bindings}: ${entry.msg}${data}${error}`
+
+  const [head, ...rest] = entry.failures
+  const lead = head === undefined ? '' : formatFailure(head, { chain: true })
+  const block = lead.includes('\n')
+  const chains = [...(block ? [lead] : []), ...rest.map(f => formatFailure(f, { chain: true }))]
+
+  const error =
+    entry.error && !block
+      ? ` ${paint(color, ANSI.red, `err=${yield* JsonCodec.actions.stringify(entry.error)}`)}`
+      : ''
+
+  return `${time} ${label}${bindings}${trace}: ${entry.msg}${data}${error}${formatChains(chains, color)}`
 }

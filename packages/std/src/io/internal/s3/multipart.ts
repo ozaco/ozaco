@@ -72,15 +72,8 @@ const initiate = async (transport: Helpers.S3Transport, key: string): Promise<st
   return uploadId
 }
 
-/** One in-flight multipart upload: the transport plus the object and upload it belongs to. */
-interface Upload {
-  readonly transport: Helpers.S3Transport
-  readonly key: string
-  readonly uploadId: string
-}
-
 const uploadPart = async (
-  upload: Upload,
+  upload: Helpers.S3Upload,
   partNumber: number,
   body: Uint8Array,
 ): Promise<Helpers.S3Part> => {
@@ -95,7 +88,10 @@ const uploadPart = async (
   return { partNumber, etag: response.headers.get('etag') ?? '' }
 }
 
-const complete = async (upload: Upload, uploaded: readonly Helpers.S3Part[]): Promise<void> => {
+const complete = async (
+  upload: Helpers.S3Upload,
+  uploaded: readonly Helpers.S3Part[],
+): Promise<void> => {
   const { transport, key, uploadId } = upload
   const url = transport.objectUrl(key)
   url.searchParams.set('uploadId', uploadId)
@@ -109,7 +105,7 @@ const complete = async (upload: Upload, uploaded: readonly Helpers.S3Part[]): Pr
   ensureOk(response, key)
 }
 
-const abort = async ({ transport, key, uploadId }: Upload) => {
+const abort = async ({ transport, key, uploadId }: Helpers.S3Upload) => {
   const url = transport.objectUrl(key)
   url.searchParams.set('uploadId', uploadId)
 
@@ -125,7 +121,7 @@ export const uploadStream = async (
   key: string,
   source: ReadableStream<Uint8Array>,
 ): Promise<number> => {
-  const upload: Upload = { transport, key, uploadId: await initiate(transport, key) }
+  const upload: Helpers.S3Upload = { transport, key, uploadId: await initiate(transport, key) }
   const uploaded: Helpers.S3Part[] = []
   let written = 0
 

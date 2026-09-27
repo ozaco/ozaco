@@ -1,14 +1,11 @@
 import { CliErrors, Terminal, useTerminal } from 'cli:core'
-import type { Key } from 'cli:core'
 import { usePalette } from 'cli:palette'
 import type { Operation } from 'std:effect'
 import { each } from 'std:effect'
 import { fail } from 'std:result'
 
+import { isCancelKey } from './internal/keys'
 import type { PromptContext, PromptSpec } from './types/prompt'
-
-const isCancelKey = (key: Key): boolean =>
-  key.name === 'escape' || (key.ctrl && (key.name === 'c' || key.name === 'd'))
 
 /**
  * Run one prompt to completion: a raw-mode `session` around a render-lease loop over the decoded

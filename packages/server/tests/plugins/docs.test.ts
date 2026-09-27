@@ -1,14 +1,84 @@
-import { createServer, Edge, ServerErrors } from 'server:core'
+import { action, createServer, Edge, ServerErrors, service } from 'server:core'
+import type { DocsDef } from 'server:plugins'
 import { Auth, Docs, manifestSchema, ObservePlugin, Resilience, StaticAuth } from 'server:plugins'
-import { attempt, run, until } from 'std:effect'
-import { unwrap } from 'std:result'
+import type { Operation } from 'std:effect'
+import { attempt, run, sleep, until } from 'std:effect'
+import { fail, unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
+import type { TraceDef } from 'std:trace'
+import { enableTracing, Tracer } from 'std:trace'
 
 import { describe, expect, it } from 'bun:test'
 
 import { BunEdge } from 'server:impl/edge/bun'
 
 import { storage, todos } from '../helpers'
+
+let installs = 0
+
+/** An in-memory std:trace `Tracer` installed around the server: every exported span. */
+const memoryTracer = () => {
+  installs += 1
+  const spans: TraceDef.SpanData[] = []
+
+  const plugin = Tracer.implement({
+    name: `test/docs-tracer-${installs}`,
+    version: '1.0.0',
+    *setup() {
+      yield* enableTracing()
+      return {}
+    },
+  }).build({
+    *export(data: TraceDef.SpanData) {
+      spans.push(data)
+    },
+    *emit() {},
+  })
+
+  /** the exported edge spans of the requests to `path`. */
+  const edgesOf = (path: string): TraceDef.SpanData[] =>
+    spans.filter(data => data.kind === 'server' && data.attributes['url.path'] === path)
+
+  return { plugin, spans, edgesOf }
+}
+
+/** The docs routes fetched under the in-memory tracer: each with and without a bearer. */
+const tracedDocs = async (options: DocsDef.Options) => {
+  const memory = memoryTracer()
+  const statuses: Record<string, number> = {}
+
+  const fetchDocs = function* (path: string, headers: Record<string, string>): Operation<void> {
+    const response = yield* Edge.actions.handle(new Request(`http://edge${path}`, { headers }))
+    yield* until(response.text())
+    // a raw route's span ends with its body, from the edge's scope: let that run
+    yield* sleep(5)
+    statuses[`${path} ${headers.authorization ? 'bearer' : 'anonymous'}`] = response.status
+  }
+
+  unwrap(
+    await run(function* () {
+      yield* storage()
+      yield* memory.plugin.use()
+      const server = yield* createServer({
+        services: [todos],
+        edge: BunEdge,
+        plugins: [
+          StaticAuth.use({ tokens: { 'tok-docs': { sub: 'docs' } } }),
+          Auth,
+          Docs.use({ auth: 'authenticated', ...options }),
+        ],
+      })
+      yield* server.start()
+      for (const path of ['/docs', '/docs/manifest', '/docs/openapi.json']) {
+        yield* fetchDocs(path, { authorization: 'Bearer tok-docs' })
+        yield* fetchDocs(path, {})
+      }
+      yield* server.stop()
+    }),
+  )
+
+  return { memory, statuses }
+}
 
 describe('docs', () => {
   it('serves the manifest (schemas, planes, brands, options) and a CDN-free panel', async () => {
@@ -80,8 +150,57 @@ describe('docs', () => {
         // the observe console is mounted too
         const console = yield* Edge.actions.handle(new Request('http://edge/_observe'))
         expect(console.status).toBe(200)
-        const live = yield* Edge.actions.handle(new Request('http://edge/_observe/api/requests'))
+        const live = yield* Edge.actions.handle(new Request('http://edge/_observe/api/traces'))
         expect(live.status).toBe(200)
+        yield* server.stop()
+      }),
+    )
+  })
+
+  it('a failure response documents the REAL failure body: `{ error: { … } }`, causes strings or nested failures', async () => {
+    const shop = service('shop', {
+      gone: action.query(
+        { route: { method: 'GET', path: '/shop/gone' }, errors: { 'shop.gone': 410 } },
+        function* () {
+          return yield* fail('shop.gone', 'sold out', 'shop:stock', fail('shop.db', 'no rows'))
+        },
+      ),
+    })
+
+    unwrap(
+      await run(function* () {
+        yield* storage()
+        const server = yield* createServer({
+          services: [shop],
+          edge: BunEdge,
+          plugins: [Docs.use({ path: '/docs' })],
+        })
+        yield* server.start()
+        const openapi = yield* Edge.actions.handle(new Request('http://edge/docs/openapi.json'))
+        const oas = (yield* until(openapi.json())) as AnyType
+        const schema =
+          oas.paths['/shop/gone'].get.responses['410'].content['application/json'].schema
+        expect(schema.required).toEqual(['error'])
+        const envelope = schema.properties.error
+        expect(envelope.properties.causes.items.oneOf.map((item: AnyType) => item.type)).toEqual([
+          'string',
+          'object',
+        ])
+
+        // the body the edge really answers has every field the schema requires
+        const failed = yield* Edge.actions.handle(new Request('http://edge/shop/gone'))
+        expect(failed.status).toBe(410)
+        const body = (yield* until(failed.json())) as AnyType
+        expect(Object.keys(body)).toEqual(['error'])
+        for (const key of envelope.required) {
+          expect(body.error).toHaveProperty(key)
+        }
+        // a cause is a string — or a nested failure of the documented shape (chain exposed)
+        for (const cause of body.error.causes as unknown[]) {
+          if (typeof cause !== 'string') {
+            expect(cause).toMatchObject({ _t: 'std:result:failure' })
+          }
+        }
         yield* server.stop()
       }),
     )
@@ -138,5 +257,35 @@ describe('docs', () => {
         expect((started as AnyType).error).toBe(ServerErrors.Configuration)
       }),
     )
+  })
+
+  it("its routes are quiet by default (`observe: 'errors'`): only a failing fetch is traced", async () => {
+    const { memory, statuses } = await tracedDocs({})
+
+    for (const path of ['/docs', '/docs/manifest', '/docs/openapi.json']) {
+      expect(statuses[`${path} bearer`]).toBe(200)
+      expect(statuses[`${path} anonymous`]).toBe(401)
+      // the successful fetch left nothing; the refused one kept its span, the failure on it
+      const [refused, ...more] = memory.edgesOf(path)
+      expect(more).toEqual([])
+      expect(refused!.name).toBe(`GET ${path}`)
+      expect(refused!.attributes['http.response.status_code']).toBe(401)
+      expect(refused!.attributes['error.type']).toBe(ServerErrors.Unauthorized)
+    }
+  })
+
+  it("`observe: 'on'` traces every fetch; `'off'` none — not even a failing one", async () => {
+    const loud = await tracedDocs({ observe: 'on' })
+
+    for (const path of ['/docs', '/docs/manifest', '/docs/openapi.json']) {
+      expect(
+        loud.memory.edgesOf(path).map(data => data.attributes['http.response.status_code']),
+      ).toEqual([200, 401])
+    }
+
+    const off = await tracedDocs({ observe: 'off' })
+
+    expect(off.statuses['/docs/manifest anonymous']).toBe(401)
+    expect(off.memory.spans).toEqual([])
   })
 })

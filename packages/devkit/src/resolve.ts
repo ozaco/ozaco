@@ -13,6 +13,7 @@ const STD_MODULES: Record<string, ModuleEntry> = {
   'std:event': { subpath: 'event', source: 'event/index.ts' },
   'std:schema': { subpath: 'schema', source: 'schema/index.ts' },
   'std:plugin': { subpath: 'plugin', source: 'plugin/index.ts' },
+  'std:trace': { subpath: 'trace', source: 'trace/index.ts' },
   'std:io': { subpath: 'io', source: 'io/index.ts' },
   'std:io/impl/bun': { subpath: 'io/impl/bun', source: 'io/impl/bun.ts' },
   'std:io/impl/node': { subpath: 'io/impl/node', source: 'io/impl/node.ts' },
@@ -33,6 +34,10 @@ const STD_MODULES: Record<string, ModuleEntry> = {
   'std:logger/transport/file': {
     subpath: 'logger/transport/file',
     source: 'logger/transport/file/index.ts',
+  },
+  'std:logger/transport/trace': {
+    subpath: 'logger/transport/trace',
+    source: 'logger/transport/trace/index.ts',
   },
   'std:config': { subpath: 'config', source: 'config/index.ts' },
 }

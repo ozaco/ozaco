@@ -1,3 +1,6 @@
+import type { Queue } from 'std:effect'
+import type { Result } from 'std:result'
+
 import type { JetStreamClient, JetStreamManager, StreamConfig } from '@nats-io/jetstream'
 import type { ConnectionOptions, NatsConnection } from '@nats-io/nats-core'
 import type { TransportDef } from 'transport:core'
@@ -47,5 +50,13 @@ export namespace Nats {
     readonly maxDeliver: number
     readonly inactiveThresholdMs: number
     drained: boolean
+  }
+
+  /** A client subscription pumped into a queue, plus why the client ended it on its own (set
+   * by the pump that saw it fail, the client error folded; a teardown or `stop()` is no
+   * failure). */
+  export interface Pump {
+    readonly queue: Queue<TransportDef.Raw, void>
+    readonly ending: { error?: Result.Failure<unknown> }
   }
 }

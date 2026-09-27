@@ -2,8 +2,12 @@ import { createTags } from 'std:shared'
 
 /**
  * The server error taxonomy — every failure crossing a boundary (edge, carrier, plugin, handler)
- * is a Result failure carrying one of these tags (or a service-defined tag) plus breadcrumb
- * causes (`action:… req:… span:… where:…`); nothing throws.
+ * is a Result failure carrying one of these tags (or a service-defined tag); nothing throws. On
+ * its way out it gains location causes: the std plugin runtime's labels at every guard it
+ * crosses (`<action>`, `<impl>@<version>`, `dispatch`, `<protocol>@<version>`) and the kernel's
+ * breadcrumbs (`action:<service>.<action> span:<id> req:<id>`, `local span:<id> req:<id>` on
+ * `timeout-pending`); a wrapped failure keeps the one it wraps as a nested cause
+ * (`fail(tag, message, inner)`).
  *
  * Fulfillment model:
  * - `timeout-unreached` — nobody took the dispatch (no responder / never acknowledged). Safe to

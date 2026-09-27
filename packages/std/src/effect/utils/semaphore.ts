@@ -1,12 +1,8 @@
 import { action } from '../base/action'
 import { EffectCauses } from '../errors'
+import type { Helpers } from '../types/helpers'
 import type { Operation } from '../types/operation'
 import type { Utils } from '../types/utils'
-
-interface Ticket {
-  granted: boolean
-  wake?: (() => void) | undefined
-}
 
 /**
  * A counting semaphore with `permits` slots (floored, at least 1). `run(op)` takes a permit —
@@ -17,7 +13,7 @@ interface Ticket {
  */
 export const createSemaphore = (permits: number): Utils.Semaphore => {
   let free = Math.max(1, Math.floor(permits))
-  const queue: Ticket[] = []
+  const queue: Helpers.Ticket[] = []
 
   const release = () => {
     const next = queue.shift()
@@ -33,7 +29,7 @@ export const createSemaphore = (permits: number): Utils.Semaphore => {
     next.wake?.()
   }
 
-  const park = (ticket: Ticket): Operation<void> =>
+  const park = (ticket: Helpers.Ticket): Operation<void> =>
     action<void>(resolve => {
       if (ticket.granted) {
         resolve()
@@ -47,7 +43,7 @@ export const createSemaphore = (permits: number): Utils.Semaphore => {
     }, EffectCauses.SemaphoreAcquire)
 
   function* run<T>(op: () => Operation<T>): Operation<T> {
-    const ticket: Ticket = { granted: false }
+    const ticket: Helpers.Ticket = { granted: false }
 
     if (free > 0 && queue.length === 0) {
       free -= 1

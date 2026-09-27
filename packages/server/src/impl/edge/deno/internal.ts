@@ -38,17 +38,27 @@ export const driver: EdgeDef.Driver = {
       new Promise<{ port: number; hostname: string }>(resolve => {
         const server = runtime.serve(
           { port: options.port ?? 0, hostname, onListen: addr => resolve(addr) },
-          async request => {
+          async (request, info) => {
+            // the peer the connection came from (`client.address` when no proxy header says more)
+            const peer = info?.remoteAddr?.hostname
+
             if (handlers.isSocket(request)) {
-              const decision = await handlers.upgrade(request)
+              const decision = await handlers.upgrade(request, peer)
               if (decision.kind === 'reject') {
                 return decision.response
               }
-              const { socket, response } = runtime.upgradeWebSocket(request)
-              socket.addEventListener('open', () => decision.attach(rawOf(socket)))
-              return response
+              try {
+                const { socket, response } = runtime.upgradeWebSocket(request)
+                socket.addEventListener('open', () => decision.attach(rawOf(socket)))
+                return response
+              } catch (error) {
+                // accepted by the engine, refused by the runtime: the upgrade span ends with the
+                // 500 the client gets and what the runtime threw (the engine records it)
+                decision.failed(error, 500)
+                return new Response('upgrade failed', { status: 500 })
+              }
             }
-            return handlers.fetch(request)
+            return handlers.fetch(request, peer)
           },
         )
         state.server = server

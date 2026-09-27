@@ -1,6 +1,6 @@
 import type { CarrierDef, WireDef } from 'server:core'
 import { Carrier, Server, ServerErrors } from 'server:core'
-import type { Operation } from 'std:effect'
+import { answeredBy } from 'server:internal'
 import { attempt, createQueue, ensure, fork, useContext } from 'std:effect'
 import { fail, isFailure } from 'std:result'
 
@@ -12,6 +12,7 @@ import {
   announce,
   attachLane,
   ensureMember,
+  isInternalEvent,
   membersOf,
   pipeLane,
   raise,
@@ -43,7 +44,7 @@ export const NetworkCarrier = Carrier.implement<
       return yield* fail(
         ServerErrors.Configuration,
         'NetworkCarrier needs a transport installed before it (MemoryTransport, NatsTransport, …)',
-        ...described.causes,
+        described,
       )
     }
     const kernel = yield* Server.context.get()
@@ -158,9 +159,27 @@ export const NetworkCarrier = Carrier.implement<
           cid: dispatch.cid,
           value: served.value,
           outputs: served.outputs.map(lane => ({ name: lane.name, brand: lane.brand })),
+
+          // the handler's `ctx.reply` (status, `Location`, …) for the caller's edge
+          ...(served.http ? { http: served.http } : {}),
         }
       },
-      { group: service },
+      {
+        group: service,
+
+        // a failure answered here names where — this node, the action it dispatched and, when
+        // it was recorded, the SERVER span that answered it: the caller's decoder appends it as
+        // the `remote: <operation> @ <service> span <id8>` cause
+        origin: (failure, request) => {
+          const spanId = answeredBy(failure)
+
+          return {
+            service: state.kernel?.serviceId ?? service,
+            operation: `${service}.${request.value.action}`,
+            ...(spanId ? { spanId } : {}),
+          }
+        },
+      },
     )
     state.serving.set(service, stop)
     const kernel = yield* Server.context.get()
@@ -191,24 +210,59 @@ export const NetworkCarrier = Carrier.implement<
 
   *emit(event) {
     const state = yield* useContext(StateRef)
-    yield* state.actions.publish(topics.event(event.name), event)
+    // plumbing (`_…`, the observe cluster) is never persisted: the transient plane
+    yield* state.actions.publish(
+      topics.event(event.name),
+      event,
+      isInternalEvent(event.name) ? { transient: true } : {},
+    )
   },
 
   events: () => ({
     *[Symbol.iterator]() {
       const state = yield* useContext(StateRef)
-      const subscription = yield* state.actions.subscribe<WireDef.Event>(topics.events)
-      return {
-        *next(): Operation<IteratorResult<WireDef.Event, never>> {
-          for (;;) {
-            const step = yield* subscription.next()
-            if (step.done) {
-              continue
-            }
-            return { done: false, value: step.value.value }
-          }
+      // application events on the event plane, plumbing (`_…`) on the transient one — a backend
+      // without persistence delivers every publish to both subscriptions: each keeps its own
+      const planes = [
+        {
+          internal: false,
+          subscription: yield* state.actions.subscribe<WireDef.Event>(topics.events),
         },
+        {
+          internal: true,
+          subscription: yield* state.actions.subscribe<WireDef.Event>(topics.events, {
+            transient: true,
+          }),
+        },
+      ]
+      const merged = createQueue<WireDef.Event, never>()
+      // the flow ends once BOTH planes did (the transport closed them): a consumer's `next()`
+      // then answers `done` instead of waiting forever on a queue nothing feeds any more
+      let open = planes.length
+      const ended = (): void => {
+        open -= 1
+        if (open === 0) {
+          merged.close(undefined as never)
+        }
       }
+
+      for (const plane of planes) {
+        yield* fork(function* () {
+          for (;;) {
+            const step = yield* plane.subscription.next()
+            if (step.done) {
+              ended()
+              return
+            }
+            const event = step.value.value
+            if (event && isInternalEvent(event.name) === plane.internal) {
+              merged.add(event)
+            }
+          }
+        })
+      }
+
+      return merged
     },
   }),
 

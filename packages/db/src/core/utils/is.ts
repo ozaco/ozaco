@@ -1,8 +1,7 @@
-import { FIELDS, TABLE } from '../const'
+import { TABLE } from '../const'
+import { SYSTEM_FIELDS } from '../internal/const'
 import type { Schema } from '../types/schema'
 import type { Spec } from '../types/spec'
-
-const SYSTEM_FIELDS: ReadonlySet<string> = new Set(Object.values(FIELDS))
 
 /** Whether a runtime value is a `column.*` declaration. */
 /** Whether a runtime value is a `table()` declaration. */

@@ -1,32 +1,25 @@
+/**
+ * `OpenObserveExporter`: the OTLP encoder + transport against OpenObserve's OTLP endpoints
+ * (`/api/<org>/v1/{traces,logs,metrics}`), Basic / Bearer auth, the `stream-name` header — and
+ * nothing else: no `_json` side streams, the same records every sink holds.
+ */
 import { createServer, Server } from 'server:core'
-import { report } from 'server:internal'
-import { attempt, run, sleep, until, useContext } from 'std:effect'
+import { attempt, run, sleep } from 'std:effect'
 import { unwrap } from 'std:result'
-import type { AnyType } from 'std:shared'
 
 import { describe, expect, it } from 'bun:test'
 
-import { BunEdge } from 'server:impl/edge/bun'
 import { OpenObserveExporter } from 'server:plugins/observe/openobserve'
 
 import { storage, todos } from '../helpers'
 
+import { attrOf, attrsOf, fakeCollector } from './otlp-wire'
+
 describe('observe/openobserve', () => {
-  it('ships requests, spans, logs and failures to per-kind streams; outages never surface', async () => {
-    const received: { url: string; auth: string | undefined; body: AnyType }[] = []
-    let failing = false
-    const fakeFetch = ((url: AnyType, init: AnyType) => {
-      if (failing) {
-        return Promise.resolve(new Response('nope', { status: 503 }))
-      }
-      received.push({
-        url: String(url),
-        auth: init.headers['authorization'],
-        body: JSON.parse(init.body),
-      })
-      return Promise.resolve(new Response('{"status":[]}', { status: 200 }))
-    }) as typeof fetch
-    unwrap(
+  it('ships spans, logs and metrics over OTLP/protobuf to /api/<org>/v1/* with basic auth + stream-name', async () => {
+    const collector = fakeCollector()
+
+    const stats = unwrap(
       await run(function* () {
         yield* storage()
         const server = yield* createServer({
@@ -37,189 +30,130 @@ describe('observe/openobserve', () => {
               url: 'http://openobserve:5080/',
               org: 'dev',
               auth: { user: 'root@local', pass: 'secret' },
-              otlp: { metrics: { intervalMs: 30 } },
-              fetch: fakeFetch,
+              stream: { traces: 'app_traces', logs: 'app_logs' },
+              fetch: collector.fetch,
               batch: { waitMs: 20 },
-              resource: { environment: 'test' },
+              metrics: { intervalMs: 60_000 },
             }),
           ],
         })
         yield* server.start()
         yield* server.call(todos, 'create', { title: 'observed' })
         yield* attempt(server.call(todos, 'explode', { code: 'x.y' }))
-        yield* sleep(80)
-
-        // every payload hits the org's bulk `_json` endpoint with basic auth
-        const basic = `Basic ${btoa('root@local:secret')}`
-        for (const entry of received) {
-          expect(entry.url).toMatch(
-            /^http:\/\/openobserve:5080\/api\/dev\/(\w+\/_json|v1\/(traces|logs|metrics))$/u,
-          )
-          expect(entry.auth).toBe(basic)
-        }
-
-        const streamOf = (name: string) =>
-          received
-            .filter(entry => entry.url.endsWith(`/api/dev/${name}/_json`))
-            .flatMap(entry => entry.body)
-        const spans = streamOf('spans')
-        const create = spans.find((row: AnyType) => row.name === 'todos.create')
-        expect(create).toMatchObject({
-          kind: 'dispatch',
-          status: 'ok',
-          service_name: 'oo-demo',
-          environment: 'test',
-        })
-        expect(typeof create._timestamp).toBe('number')
-        expect(create.duration_ms).toBeGreaterThanOrEqual(0)
-        const explode = spans.find((row: AnyType) => row.name === 'todos.explode')
-        expect(explode.status).toBe('failed')
-
-        const requests = streamOf('requests')
-        expect(requests.some((row: AnyType) => row.action === 'create')).toBe(true)
-
-        const logs = streamOf('logs')
-        const creating = logs.find((row: AnyType) => row.msg === 'creating')
-        expect(creating.level).toBe('info')
-        expect(creating.request_id).toBeDefined()
-        expect(creating.request_id).toBe(create.request_id)
-
-        const failures = streamOf('failures')
-        expect(failures.find((row: AnyType) => row.tag === 'x.y')).toBeDefined()
-
-        // an event carries the span it happened under — the link a trace needs to place it
-        yield* server.call(todos, 'nested', { title: 'emitted' })
-        yield* sleep(80)
-        const emitted = streamOf('events').find((row: AnyType) => row.name === 'todo.created')
-        expect(emitted).toMatchObject({ kind: 'emit' })
-        const nested = streamOf('spans').find((row: AnyType) => row.name === 'todos.nested')
-        expect(emitted.span_id).toBe(nested.span_id)
-
-        // the embedded OtlpExporter feeds the PANELS from the same install: OTLP spans (the
-        // emit projected in), log records and the metrics beat, all under /api/dev/v1/*
-        const otlpSpans = received
-          .filter(entry => entry.url.endsWith('/v1/traces'))
-          .flatMap(entry => entry.body.resourceSpans[0].scopeSpans[0].spans)
-        const otlpCreate = otlpSpans.find((span: AnyType) => span.name === 'todos.create')
-        expect(otlpCreate.traceId).toMatch(/^[0-9a-f]{32}$/u)
-        expect(otlpSpans.some((span: AnyType) => span.name === 'emit todo.created')).toBe(true)
-        const otlpLogs = received
-          .filter(entry => entry.url.endsWith('/v1/logs'))
-          .flatMap(entry => entry.body.resourceLogs[0].scopeLogs[0].logRecords)
-        expect(otlpLogs.some((record: AnyType) => record.body.stringValue === 'creating')).toBe(
-          true,
-        )
-        expect(received.some(entry => entry.url.endsWith('/v1/metrics'))).toBe(true)
-
-        // an OpenObserve outage is counted, never raised into the caller
-        failing = true
-        const sent = received.length
-        const made = yield* server.call(todos, 'create', { title: 'unsent' })
-        expect(made.title).toBe('unsent')
-        yield* sleep(80)
-        expect(received.length).toBe(sent)
+        yield* sleep(60)
         yield* server.stop()
+
+        return (yield* OpenObserveExporter.context.expect()).stats()
       }),
     )
+
+    const basic = `Basic ${btoa('root@local:secret')}`
+
+    expect(collector.received.length).toBeGreaterThan(0)
+
+    for (const entry of collector.received) {
+      // OTLP only — no `_json` stream is ever written
+      expect(entry.url).toMatch(/^http:\/\/openobserve:5080\/api\/dev\/v1\/(traces|logs|metrics)$/u)
+      expect(entry.headers['authorization']).toBe(basic)
+      expect(entry.headers['content-type']).toBe('application/x-protobuf')
+    }
+
+    expect(collector.of('/v1/traces')[0]!.headers['stream-name']).toBe('app_traces')
+    expect(collector.of('/v1/logs')[0]!.headers['stream-name']).toBe('app_logs')
+    expect(collector.of('/v1/metrics')[0]!.headers['stream-name']).toBeUndefined()
+
+    const spans = collector.spans()
+    const create = spans.find(span => span.name === 'todos.create')
+    expect(create).toMatchObject({ $service: 'todos', kind: 1 })
+    const explode = spans.find(span => span.name === 'todos.explode')
+    expect(explode.status).toEqual({ code: 2, message: 'boom x.y' })
+
+    const logs = collector.logs()
+    const creating = logs.find(record => record.body.stringValue === 'creating')
+    expect(creating.traceId).toBe(create.traceId)
+    expect(creating.spanId).toBe(create.spanId)
+    // OpenObserve keeps EventName (o2_event_name) — and every sink has `otel.event.name` too
+    const exception = logs.find(record => record.eventName === 'ozaco.action.exception')
+    expect(attrOf(exception, 'otel.event.name')).toBe('ozaco.action.exception')
+
+    expect(collector.metrics().some(metric => metric.name === 'ozaco.action.duration')).toBe(true)
+    expect(stats.spans.sent).toBeGreaterThan(0)
+    expect(stats.spans.failed).toBe(0)
   })
 
-  it('bodies: request records carry headers/input/output — success included', async () => {
-    const received: AnyType[] = []
-    let sawOtlpTraces = false
-    const fakeFetch = ((url: AnyType, init: AnyType) => {
-      if (String(url).endsWith('/requests/_json')) {
-        received.push(...JSON.parse(init.body))
-      }
-      if (String(url).endsWith('/v1/traces')) {
-        sawOtlpTraces = true
-      }
-      return Promise.resolve(new Response('{"status":[]}', { status: 200 }))
-    }) as typeof fetch
+  it('bearer auth, one stream name for both signals, OTLP/JSON on request', async () => {
+    const collector = fakeCollector()
+
     unwrap(
       await run(function* () {
         yield* storage()
         const server = yield* createServer({
           services: [todos],
-          name: 'oo-bodies',
-          edge: BunEdge,
-          plugins: [
-            OpenObserveExporter.use({
-              url: 'http://oo:5080',
-              bodies: true,
-              fetch: fakeFetch,
-              batch: { waitMs: 20 },
-            }),
-          ],
-        })
-        const info = yield* server.start({ port: 0 })
-        yield* until(
-          fetch(`${info.url!}/todos/create`, {
-            method: 'POST',
-            headers: { 'content-type': 'application/json', authorization: 'Bearer secret' },
-            body: JSON.stringify({ title: 'carried' }),
-          }),
-        )
-        yield* sleep(80)
-
-        const row = received.find(entry => entry.action === 'create' && entry.input)
-        expect(row).toBeDefined()
-        expect(row.input).toMatchObject({ kind: 'data', data: { title: 'carried' } })
-        expect(row.output.kind).toBe('data')
-        // secrets never leave: the authorization header ships redacted
-        expect(row.headers.authorization).not.toContain('secret')
-        // no `otlp` option given — the OTLP leg is on by default
-        expect(sawOtlpTraces).toBe(true)
-        yield* server.stop()
-      }),
-    )
-  })
-
-  it('bearer auth, renamed and disabled streams', async () => {
-    const received: { url: string; auth: string | undefined }[] = []
-    const fakeFetch = ((url: AnyType, init: AnyType) => {
-      received.push({ url: String(url), auth: init.headers['authorization'] })
-      return Promise.resolve(new Response('{"status":[]}', { status: 200 }))
-    }) as typeof fetch
-    unwrap(
-      await run(function* () {
-        yield* storage()
-        const server = yield* createServer({
-          services: [todos],
-          name: 'oo-demo',
           plugins: [
             OpenObserveExporter.use({
               url: 'http://openobserve:5080',
               auth: { token: 'tkn' },
-              otlp: false,
-              streams: { spans: 'app_spans', logs: false, events: false },
-              fetch: fakeFetch,
+              stream: 'app',
+              encoding: 'json',
+              fetch: collector.fetch,
               batch: { waitMs: 20 },
+              metrics: false,
             }),
           ],
         })
         yield* server.start()
         yield* server.call(todos, 'create', { title: 'renamed' })
-        yield* sleep(80)
-
-        expect(received.length).toBeGreaterThan(0)
-        expect(received.every(entry => entry.auth === 'Bearer tkn')).toBe(true)
-        expect(received.some(entry => entry.url.endsWith('/api/default/app_spans/_json'))).toBe(
-          true,
-        )
-        expect(received.some(entry => entry.url.includes('/logs/'))).toBe(false)
-        // otlp: false — nothing touches the OTLP endpoints
-        expect(received.some(entry => entry.url.includes('/v1/'))).toBe(false)
         yield* server.stop()
       }),
     )
+
+    expect(collector.received.length).toBeGreaterThan(0)
+
+    for (const entry of collector.received) {
+      expect(entry.url).toMatch(/^http:\/\/openobserve:5080\/api\/default\/v1\/(traces|logs)$/u)
+      expect(entry.headers['authorization']).toBe('Bearer tkn')
+      expect(entry.headers['stream-name']).toBe('app')
+      expect(entry.headers['content-type']).toBe('application/json')
+    }
+
+    expect(collector.spans().some(span => span.name === 'todos.create')).toBe(true)
   })
 
-  it('domain records ship to the `domain` stream (renameable), free-form fields intact', async () => {
-    const received: { url: string; body: AnyType }[] = []
-    const fakeFetch = ((url: AnyType, init: AnyType) => {
-      received.push({ url: String(url), body: JSON.parse(init.body) })
-      return Promise.resolve(new Response('{"status":[]}', { status: 200 }))
-    }) as typeof fetch
+  it('basic auth credentials are UTF-8 (a non-Latin-1 password never fails the install)', async () => {
+    const collector = fakeCollector()
+
+    unwrap(
+      await run(function* () {
+        yield* storage()
+        const server = yield* createServer({
+          services: [todos],
+          plugins: [
+            OpenObserveExporter.use({
+              url: 'http://openobserve:5080',
+              auth: { user: 'kök@ozaco.dev', pass: 'şifre-Ğ1!' },
+              fetch: collector.fetch,
+              batch: { waitMs: 10 },
+              metrics: false,
+            }),
+          ],
+        })
+        yield* server.start()
+        yield* server.call(todos, 'create', { title: 'utf8' })
+        yield* server.stop()
+      }),
+    )
+
+    const header = collector.received[0]!.headers['authorization']!
+    expect(header.startsWith('Basic ')).toBe(true)
+    const decoded = new TextDecoder().decode(
+      Uint8Array.from(atob(header.slice('Basic '.length)), char => char.codePointAt(0)!),
+    )
+    expect(decoded).toBe('kök@ozaco.dev:şifre-Ğ1!')
+  })
+
+  it('a domain record is a log record (eventName ozaco.domain) like in every other sink', async () => {
+    const collector = fakeCollector()
+
     unwrap(
       await run(function* () {
         yield* storage()
@@ -230,35 +164,61 @@ describe('observe/openobserve', () => {
             OpenObserveExporter.use({
               url: 'http://openobserve:5080',
               org: 'dev',
-              streams: { domain: 'clarvia_audit' },
-              fetch: fakeFetch,
+              fetch: collector.fetch,
               batch: { waitMs: 20 },
+              metrics: false,
             }),
           ],
         })
         yield* server.start()
-        const kernel = yield* useContext(Server)
-        yield* report(kernel, {
-          t: 'domain',
-          row: { stream: 'audit', actor: 'u-ada', verb: 'document.signed', document: 'd-1' },
-        })
-        yield* sleep(80)
-        const rows = received
-          .filter(entry => entry.url.endsWith('/api/dev/clarvia_audit/_json'))
-          .flatMap(entry => entry.body)
-        expect(rows).toHaveLength(1)
-        expect(rows[0]).toMatchObject({
+        yield* Server.actions.report({
           stream: 'audit',
           actor: 'u-ada',
           verb: 'document.signed',
           document: 'd-1',
-          service_name: 'oo-domain',
         })
-        expect(typeof rows[0]._timestamp).toBe('number')
-
-        // the observe db never stores domain rows — they are exporter-bound
         yield* server.stop()
       }),
     )
+
+    const domain = collector.logs().find(record => record.eventName === 'ozaco.domain')
+    expect(domain).toBeDefined()
+    expect(attrsOf(domain)).toMatchObject({
+      'ozaco.domain.stream': 'audit',
+      'otel.event.name': 'ozaco.domain',
+    })
+    expect(domain.$service).toBe('oo-domain')
+  })
+
+  it('an OpenObserve outage is counted, never raised into the caller', async () => {
+    const collector = fakeCollector(() => new Response('nope', { status: 503 }))
+
+    const stats = unwrap(
+      await run(function* () {
+        yield* storage()
+        const server = yield* createServer({
+          services: [todos],
+          plugins: [
+            OpenObserveExporter.use({
+              url: 'http://openobserve:5080',
+              fetch: collector.fetch,
+              batch: { waitMs: 10 },
+              retry: { attempts: 2, initialMs: 1, maxMs: 1 },
+              metrics: false,
+            }),
+          ],
+        })
+        yield* server.start()
+        const made = yield* server.call(todos, 'create', { title: 'unsent' })
+        expect(made.title).toBe('unsent')
+        yield* server.stop()
+
+        return (yield* OpenObserveExporter.context.expect()).stats()
+      }),
+    )
+
+    expect(stats.spans.failed).toBeGreaterThan(0)
+    expect(stats.spans.retried).toBeGreaterThan(0)
+    expect(stats.spans.lastError).toContain('503')
   })
 })

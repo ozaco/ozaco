@@ -9,7 +9,7 @@ import { dump, load } from 'js-yaml'
 import pkg from '../../../package.json'
 import { Codec } from '../definition'
 import { CodecErrors } from '../errors'
-import type { CodecDef } from '../types'
+import type { CodecDef } from '../types/codec'
 
 const encoder = new TextEncoder()
 const decoder = new TextDecoder()
@@ -58,7 +58,7 @@ export const YamlCodec = Codec.implement({
 
       return encoder.encode(result)
     } catch (error) {
-      return yield* fail(CodecErrors.Encode, error instanceof Error ? error.message : String(error))
+      return yield* fail(CodecErrors.Encode, 'cannot encode the value as YAML', asFailure(error))
     }
   },
 
@@ -66,7 +66,7 @@ export const YamlCodec = Codec.implement({
     try {
       return load(decoder.decode(data), decodeOptions) as AnyType
     } catch (error) {
-      return yield* fail(CodecErrors.Decode, error instanceof Error ? error.message : String(error))
+      return yield* fail(CodecErrors.Decode, 'cannot decode the bytes as YAML', asFailure(error))
     }
   },
 
@@ -76,7 +76,8 @@ export const YamlCodec = Codec.implement({
     } catch (error) {
       return yield* fail(
         CodecErrors.Stringify,
-        error instanceof Error ? error.message : String(error),
+        'cannot stringify the value as YAML',
+        asFailure(error),
       )
     }
   },
@@ -85,7 +86,7 @@ export const YamlCodec = Codec.implement({
     try {
       return load(text, decodeOptions) as AnyType
     } catch (error) {
-      return yield* fail(CodecErrors.Parse, error instanceof Error ? error.message : String(error))
+      return yield* fail(CodecErrors.Parse, 'cannot parse the text as YAML', asFailure(error))
     }
   },
 
@@ -102,7 +103,8 @@ export const YamlCodec = Codec.implement({
           } catch (error) {
             close = fail(
               CodecErrors.Encode,
-              error instanceof Error ? error.message : String(error),
+              'cannot encode the value as YAML',
+              asFailure(error),
             ) as Result.Failure<unknown>
             break
           }
@@ -160,10 +162,7 @@ export const YamlCodec = Codec.implement({
       } catch (error) {
         close = asFailure(error)
 
-        return yield* fail(
-          CodecErrors.Decode,
-          error instanceof Error ? error.message : String(error),
-        )
+        return yield* fail(CodecErrors.Decode, 'cannot decode the bytes as YAML', asFailure(error))
       } finally {
         yield* channel.close(close)
       }

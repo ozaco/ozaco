@@ -7,7 +7,6 @@
 import type { Result, ResultDef } from 'std:result'
 import {
   asFailure,
-  asFailureFrom,
   auto,
   fail,
   isFailure,
@@ -24,18 +23,18 @@ import { describe, expect, it } from 'bun:test'
 
 describe('result — declared shapes vs runtime', () => {
   it('throwable over an async callback is typed Promise<Result> — no cast needed', async () => {
-    const ok: Promise<Result<number, Error>> = throwable(() => Promise.resolve(21))
+    const ok: Promise<Result<number, unknown>> = throwable(() => Promise.resolve(21))
     expect(unwrap(await ok)).toBe(21)
 
-    const failed = await throwable(() => Promise.reject(new RangeError('async boom')), RangeError)
+    const failed = await throwable(() => Promise.reject(new RangeError('async boom')))
     expect(isFailure(failed)).toBe(true)
     if (isFailure(failed)) {
-      expect(failed.error).toBeInstanceOf(RangeError)
-      expect(failed.message).toBe('from throwable')
+      expect(failed.error).toBe('std:result.unknown')
+      expect(failed.message).toBe('RangeError: async boom')
     }
 
     // the sync overload is untouched
-    const sync: Result<number, Error> = throwable(() => 2)
+    const sync: Result<number, unknown> = throwable(() => 2)
     expect(unwrap(sync)).toBe(2)
   })
 
@@ -46,15 +45,19 @@ describe('result — declared shapes vs runtime', () => {
     expect(await unwrap(Promise.resolve(fail('late')) as AnyType, 'fallback')).toBe('fallback')
   })
 
-  it('asFailure / asFailureFrom append every cause given', () => {
+  it('asFailure appends every cause given', () => {
     const decorated = asFailure(fail('base', 'msg', 'first'), 'second', 'third')
     expect(decorated.causes).toEqual(['first', 'second', 'third'])
 
-    const folded = asFailureFrom(new Error('thrown'), 'a', 'b')
+    const thrown = new Error('thrown')
+    const folded = asFailure(thrown, 'a', 'b')
     expect(isFailure(folded)).toBe(true)
+    // the foreign Error is the fold's `raw`, the causes are the ones given
+    expect(folded.raw).toBe(thrown)
     expect(folded.causes).toEqual(['a', 'b'])
 
     // no cause appends nothing — not an `undefined` entry
+    expect(asFailure('x').causes).toEqual([])
     expect(asFailure(new Error('x')).causes).toEqual([])
   })
 

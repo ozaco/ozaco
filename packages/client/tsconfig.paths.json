@@ -9,6 +9,7 @@
       "std:result": ["./node_modules/@ozaco/std/dist/result"],
       "std:effect": ["./node_modules/@ozaco/std/dist/effect"],
       "std:plugin": ["./node_modules/@ozaco/std/dist/plugin"],
+      "std:trace": ["./node_modules/@ozaco/std/dist/trace"],
       "std:fetch": ["./node_modules/@ozaco/std/dist/fetch"],
       "std:ws": ["./node_modules/@ozaco/std/dist/ws"],
       "std:io": ["./node_modules/@ozaco/std/dist/io"],

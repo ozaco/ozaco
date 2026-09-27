@@ -93,4 +93,27 @@ export namespace Helpers {
     write(chunk: Uint8Array): number | Promise<number>
     end(): number | Promise<number>
   }
+
+  /** One in-flight multipart upload: the transport plus the object and upload it belongs to. */
+  export interface S3Upload {
+    readonly transport: S3Transport
+    readonly key: string
+    readonly uploadId: string
+  }
+
+  /** The fs actions `node:fs/promises` gives every runtime alike (Bun / Node share them). */
+  export type SharedFs = Pick<
+    IODef.Actions,
+    | 'append'
+    | 'rm'
+    | 'stat'
+    | 'lstat'
+    | 'readdir'
+    | 'ensureDir'
+    | 'emptyDir'
+    | 'walk'
+    | 'chmod'
+    | 'symlink'
+    | 'readlink'
+  >
 }

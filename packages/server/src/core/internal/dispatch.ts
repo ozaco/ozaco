@@ -1,23 +1,29 @@
 // oxlint-disable import/exports-last
+import { withBusMeta } from 'db:core'
 import type { Flow, Operation } from 'std:effect'
 import { attempt, ensure, flowOf, fork, race, sleep, until, withResolvers } from 'std:effect'
 import type { Result } from 'std:result'
 import { appendCauses, fail, isFailure, isResult } from 'std:result'
 import type { AnyType } from 'std:shared'
+import type { TraceDef } from 'std:trace'
+import { current, event, inject, newSpanId } from 'std:trace'
 
-import { CtxRef } from '../context'
+import { ActiveRequest, CtxRef, RequestRef } from '../context'
 import { ServerErrors } from '../errors'
 import type { Helpers } from '../types/helpers'
 import type { ServerDef } from '../types/server'
 import type { ServiceDef } from '../types/service'
-import { breadcrumb } from '../utils/failure'
+import { breadcrumb, statusOf, tagOf } from '../utils/failure'
 import { isSchema } from '../utils/service'
 import { brandStream, isBranded, isStreamDecl, stream } from '../utils/stream'
-import { childTrace, report, withSpan } from '../utils/trace'
+import { traceOf, withDispatchSpan } from '../utils/trace'
 import { validate } from '../utils/validation'
 
 import { parseCall } from './call'
+import { handlerLog } from './handler'
 import { actionKey } from './registry'
+import { noteAnswered, userSpanOf, withInbound } from './spans'
+import { isDeferred } from './stream'
 
 /** Everything a stream handler may answer with, as ONE Flow: a Flow passes through, an array
  * and an async iterable are pulled into one. Anything else is not a stream. */
@@ -53,6 +59,12 @@ const flowFrom = (value: unknown): Flow<unknown, unknown> | null => {
   return Symbol.iterator in value ? (value as Flow<unknown, unknown>) : null
 }
 
+/**
+ * The handler context of one dispatch — built INSIDE the dispatch span: `ctx.spanId` /
+ * `ctx.trace` are that span's ids (`''` when nothing is traced and no inbound context arrived),
+ * while `ctx.log` / `ctx.span` / `ctx.event` follow the span active at EACH call (a `ctx.log`
+ * inside a `ctx.span` lands on that span).
+ */
 function* contextOf({
   kernel,
   call,
@@ -60,26 +72,14 @@ function* contextOf({
   actions,
   auth,
 }: Helpers.ContextInput): Operation<ServerDef.Ctx> {
-  const { trace } = call
+  const trace = traceOf(yield* current(), call.requestId)
 
-  const log = (level: 'debug' | 'info' | 'warn' | 'error') =>
-    function* (msg: string, data?: Record<string, unknown>) {
-      yield* report(kernel, {
-        t: 'log',
-        row: {
-          request_id: trace.request_id,
-          span_id: trace.span_id,
-          level,
-          msg,
-          data: data ?? null,
-          ts: Date.now(),
-        },
-      })
-    }
+  const log = (level: keyof ServerDef.Log) => (msg: string, data?: Record<string, unknown>) =>
+    handlerLog(level, msg, data)
 
   return {
-    requestId: trace.request_id,
-    spanId: trace.span_id,
+    requestId: call.requestId,
+    spanId: trace.spanId,
     trace,
     service: call.service,
     action: call.action,
@@ -115,35 +115,25 @@ function* contextOf({
     reply: reply => {
       call.reply?.(reply)
     },
-    *span(name, body, attrs) {
-      return yield* withSpan(
-        { kernel, trace: yield* childTrace(trace), kind: 'custom', name, attrs },
-        body,
-      )
-    },
+    span: userSpanOf(kernel),
+    event: (name, attributes, options) => event(name, attributes, { time: options?.time }),
   }
 }
 
-export const isDeferred = (value: unknown): value is Helpers.DeferredStream =>
-  typeof value === 'object' &&
-  value !== null &&
-  (value as Helpers.DeferredStream)._t === 'deferred-stream'
+export { isDeferred } from './stream'
 
 /** Turn a deferred stream into a branded platform stream in the CALLING scope. */
 export function* materialize(value: unknown): Operation<unknown> {
   return isDeferred(value) ? yield* stream.of(value.flow, value.brand) : value
 }
 
-/** A handler context outside a dispatch (socket routes, raw routes): same log/call/span surface,
- * bound to the given trace. */
+/** A handler context outside a dispatch (socket routes): the same log / call / span / event
+ * surface; `ctx.spanId` / `ctx.trace` are the span ACTIVE when it is built (the per-frame span),
+ * `ctx.service` the service that declared the socket (`$edge` for a route of the edge's own),
+ * `ctx.action` the route. */
 export function* contextFor(
   kernel: ServerDef.Context,
-  call: Pick<ServerDef.Call, 'trace' | 'headers' | 'signal'> & {
-    readonly name: string
-
-    /** the handshake's verified principal (socket routes) — lands as `ctx.auth`. */
-    readonly auth?: unknown
-  },
+  input: Helpers.ContextForInput,
   actions: Pick<ServerDef.Actions, 'call' | 'emit'>,
 ): Operation<ServerDef.Ctx> {
   const meta: ServiceDef.Meta = {
@@ -154,7 +144,7 @@ export function* contextFor(
     output: null,
     inputPlane: 'none',
     outputPlane: 'none',
-    route: { method: 'GET', path: call.name },
+    route: { method: 'GET', path: input.name },
     onDisconnect: 'cancel',
     outcome: false,
     errors: {},
@@ -168,20 +158,21 @@ export function* contextFor(
   return yield* contextOf({
     kernel,
     call: {
-      cid: call.trace.span_id,
-      service: '$edge',
-      action: call.name,
+      cid: yield* newSpanId(),
+      service: input.service ?? '$edge',
+      action: input.name,
       input: undefined,
-      trace: call.trace,
-      headers: call.headers,
+      requestId: input.requestId,
+      origin: input.origin,
+      headers: input.headers,
       deadline: Number.POSITIVE_INFINITY,
       idempotencyKey: undefined,
       transport: 'edge',
-      signal: call.signal,
+      signal: input.signal,
     },
     meta,
     actions,
-    auth: call.auth,
+    auth: input.auth,
   })
 }
 
@@ -255,7 +246,7 @@ const invoke = (kernel: ServerDef.Context, def: ServiceDef.Action) =>
       // a handler answering outside its declared output is the SERVER's bug (500), never the
       // caller's (`server.validation` is a 400)
       if (isFailure(checked)) {
-        return yield* fail(ServerErrors.Output, checked.message, ...checked.causes)
+        return yield* fail(ServerErrors.Output, checked.message, checked)
       }
 
       return checked.value
@@ -331,16 +322,38 @@ const chainOf = (kernel: ServerDef.Context, def: ServiceDef.Action): ServerDef.D
   return next
 }
 
+/** Run the chain with the dispatch span's context as the db bus meta while it records: every
+ * write the handler makes ships its writer's `traceparent` / `tracestate` (`Change.Event.meta`),
+ * so a change-feed consumer (cache invalidation, crud realtime) can link the write. */
+function* writing<T>(handle: TraceDef.SpanHandle, body: () => Operation<T>): Operation<T> {
+  if (!handle.recording) {
+    return yield* body()
+  }
+
+  const carrier = yield* inject()
+
+  return yield* carrier.traceparent ? withBusMeta({ ...carrier }, body) : body()
+}
+
+/** The dispatch span's kind: received over a network carrier ⇒ SERVER; in-process (the edge, a
+ * local call, the same-process `LocalCarrier`) ⇒ INTERNAL. */
+const kindOf = (call: ServerDef.Call): 'internal' | 'server' =>
+  call.transport === 'edge' || call.transport === 'local' ? 'internal' : 'server'
+
 /**
- * Run one dispatch on this node end to end: resolve the action, build the context, run the
- * plugin chain around the handler inside a `dispatch` span, and fold the outcome into a Result
- * (carriers and the edge encode failures, they never catch). The deadline and the caller's
- * signal abort the handler's `ctx.signal`.
+ * Run one dispatch on this node end to end: resolve the action, open its span (INTERNAL
+ * in-process, SERVER when received over a carrier — `call.parent` / the active span as parent),
+ * build the context INSIDE it, run the plugin chain around the handler, and fold the outcome into
+ * a Result (carriers and the edge encode failures, they never catch). `RequestRef` carries the
+ * request for everything the handler does. The deadline and the caller's signal abort the
+ * handler's `ctx.signal`. A failure gains the breadcrumb `action:<service>.<action>` with the
+ * span it ran in and the request id (`span:<id> req:<id>`, a missing one left out) — the span id
+ * is also written to `seen` once known, for a caller that times out first.
  */
 export function* runDispatch(
   kernel: ServerDef.Context,
   call: ServerDef.Call,
-  actions: Pick<ServerDef.Actions, 'call' | 'emit'>,
+  { actions, seen }: Helpers.DispatchWith,
 ): Operation<Result<unknown>> {
   const def = kernel.registry.actions.get(actionKey(call.service, call.action))
 
@@ -348,40 +361,79 @@ export function* runDispatch(
     return fail(ServerErrors.NotFound, `no action "${call.service}.${call.action}" here`) as AnyType
   }
 
-  const ctx = yield* contextOf({ kernel, call, meta: def.meta, actions })
   const chain = chainOf(kernel, def)
+  const kind = kindOf(call)
+
+  // the status the handler answered with (`ctx.reply`) — a carrier carries it back to the edge
+  let replied: number | undefined
+  const served: ServerDef.Call = call.reply
+    ? {
+        ...call,
+        reply: reply => {
+          replied = reply.status ?? replied
+          call.reply?.(reply)
+        },
+      }
+    : call
+
   kernel.inflight += 1
-  let outcome: Result<unknown>
+  // the id of the span the dispatch runs in (its own, else a passed-through context's) for the
+  // breadcrumb — `''`, left out, when there is none
+  let spanId = ''
+  let result: Result<unknown>
 
   try {
-    outcome = yield* attempt(() =>
-      withSpan(
-        {
-          kernel,
-          trace: call.trace,
-          kind: 'dispatch',
-          name: `${call.service}.${call.action}`,
-          actionId: `${call.service}.${call.action}`,
-          transport: call.transport,
-        },
-        () => chain(call, ctx),
+    result = yield* attempt(() =>
+      RequestRef.with(new ActiveRequest(call.requestId, call.origin), () =>
+        withInbound(call.parent, () =>
+          withDispatchSpan({ kernel, call, meta: def.meta, kind }, function* (handle) {
+            spanId = traceOf(handle, call.requestId).spanId
+            if (seen) {
+              seen.spanId = spanId
+            }
+            const ctx = yield* contextOf({ kernel, call: served, meta: def.meta, actions })
+            const outcome = yield* attempt(() => writing(handle, () => chain(served, ctx)))
+
+            if (kind === 'server') {
+              // the status the reply stands for: the failure's, else the handler's `ctx.reply`,
+              // else the action's declared one (`jobs.submit` answers 202)
+              handle.setAttribute(
+                'rpc.response.status_code',
+                String(
+                  isFailure(outcome)
+                    ? statusOf(outcome, def.meta)
+                    : (replied ?? def.meta.status ?? 200),
+                ),
+              )
+
+              // the carrier names this span in the failure's wire origin (the caller's
+              // `remote: … span <id8>` cause)
+              if (isFailure(outcome) && handle.recording) {
+                noteAnswered(outcome, handle.context.spanId)
+              }
+            }
+
+            if (isFailure(outcome)) {
+              return yield* outcome
+            }
+
+            return outcome.value
+          }),
+        ),
       ),
     )
   } finally {
     kernel.inflight -= 1
   }
 
-  if (isFailure(outcome)) {
+  if (isFailure(result)) {
     return appendCauses(
-      outcome,
-      breadcrumb(`action:${call.service}.${call.action}`, {
-        requestId: call.trace.request_id,
-        spanId: call.trace.span_id,
-      }),
+      result,
+      breadcrumb(`action:${call.service}.${call.action}`, { requestId: call.requestId, spanId }),
     ) as AnyType
   }
 
-  return outcome
+  return result
 }
 
 /**
@@ -398,14 +450,16 @@ export function* callLocal(local: Helpers.LocalCall): Operation<unknown> {
   }
 
   const controller = new AbortController()
-  const cid = local.trace.span_id
+  const { cid } = local
 
+  // parent omitted: the dispatch span nests under the caller's active span
   const call: ServerDef.Call = {
     cid,
     service: local.service,
     action: local.action,
     input: local.input,
-    trace: local.trace,
+    requestId: local.requestId,
+    origin: local.origin,
     headers: local.headers,
     deadline: Date.now() + local.timeoutMs,
     idempotencyKey: local.idempotencyKey,
@@ -421,18 +475,20 @@ export function* callLocal(local: Helpers.LocalCall): Operation<unknown> {
     }
   })
   const state = { timedOut: false }
+  // the span the dispatch runs in, known once it opened — the `local` breadcrumb's
+  const seen = { spanId: '' }
 
   // the dispatch is a task of the caller's scope: racing its RESULT (not the task) lets a
   // detached handler outlive the caller's patience and record its outcome
   const task = yield* fork(function* () {
-    const outcome = yield* runDispatch(kernel, call, local.actions)
+    const outcome = yield* runDispatch(kernel, call, { actions: local.actions, seen })
     if (state.timedOut) {
       yield* local.actions.outcome({
         cid,
         state: isFailure(outcome) ? 'failed' : 'fulfilled',
         service_id: kernel.serviceId,
         action_id: `${call.service}.${call.action}`,
-        error: isFailure(outcome) ? String(outcome.error) : null,
+        error: isFailure(outcome) ? tagOf(outcome) : null,
         ts: Date.now(),
       })
     }
@@ -469,7 +525,7 @@ export function* callLocal(local: Helpers.LocalCall): Operation<unknown> {
     return yield* fail(
       ServerErrors.TimeoutPending,
       `${local.service}.${local.action} did not reply within ${local.timeoutMs}ms`,
-      breadcrumb('local', { requestId: local.trace.request_id, spanId: local.trace.span_id }),
+      breadcrumb('local', { requestId: local.requestId, spanId: seen.spanId }),
     )
   }
 

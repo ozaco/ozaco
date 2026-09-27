@@ -1,25 +1,13 @@
 import type { Result } from 'std:result'
 
 import { ServerErrors, STATUS_OF } from '../errors'
+import { isThrown } from '../internal/thrown'
 import type { ServiceDef } from '../types/service'
 
-/** The tag of a failure: a string tag as-is; a thrown non-Result error is `server.internal`. */
+/** The tag of a failure: a string tag as-is; a thrown non-Result error — `asFailure`'s fold
+ * (`std:result.unknown`), or an error object in the `error` slot — is `server.internal`. */
 export const tagOf = (failure: Result.Failure<unknown>): string =>
-  typeof failure.error === 'string' ? failure.error : ServerErrors.Internal
-
-/** The message of a failure: its own, else — for a thrown non-Result error folded into
- * `server.internal` — the error's, so the wire says WHAT went wrong, not just that it did. */
-export const messageOf = (failure: Result.Failure<unknown>): string => {
-  if (failure.message) {
-    return failure.message
-  }
-
-  if (typeof failure.error === 'string') {
-    return ''
-  }
-
-  return failure.error instanceof Error ? failure.error.message : String(failure.error)
-}
+  isThrown(failure) ? ServerErrors.Internal : (failure.error as string)
 
 /** The HTTP status of a failure: the action's override, then the core table, then 500. */
 export const statusOf = (

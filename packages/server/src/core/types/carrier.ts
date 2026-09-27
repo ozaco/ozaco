@@ -52,6 +52,9 @@ export namespace CarrierDef {
   export interface Served {
     readonly value: unknown
     readonly outputs: readonly OutputLane[]
+
+    /** the handler's `ctx.reply` (status / headers), carried back as the reply's `http`. */
+    readonly http?: WireDef.HttpReply | undefined
   }
 
   export type Server = (

@@ -22,8 +22,18 @@ export const ACCESS_TTL_MS = 15 * 60 * 1000
 /** A pre-shared SERVICE bearer (`StaticAuth.use({ tokens })`): another system (an MCP host, a cron)
  * calls `auth: 'service'` actions with it — no login, no JWT. A DEMO value. */
 export const MCP_TOKEN = 'demo-mcp-token'
+
+/** A pre-shared OPS bearer (`StaticAuth.use({ tokens })`, role `observe`) for the observe API
+ * (`ObservePlugin.use({ auth })` — what the `/_observe` console shows; the console asks for it):
+ * the telemetry holds captured bodies and failure chains, so it is never public — an admin
+ * user's JWT gets in too. A DEMO value. */
+export const OBSERVE_TOKEN = 'demo-observe-token'
 export const READY_TIMEOUT_MS = 30_000
 export const HOSTNAME = '127.0.0.1'
+
+/** Where `otlp: {}` ships when it names no url: a local OTLP/HTTP collector
+ * (`grafana/otel-lgtm`'s `:4318`). */
+export const OTLP_URL = 'http://localhost:4318'
 
 /** every service of the demo — a monolith hosts them all, the cluster splits them up. */
 export const services = [account, todos, feed, media, reports, jobs, live, rtc, cluster] as const

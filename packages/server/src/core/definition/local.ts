@@ -1,6 +1,5 @@
 import type { Operation } from 'std:effect'
-import { createSignal, useContext } from 'std:effect'
-import { useBufferedEvent } from 'std:event'
+import { createQueue, createSignal, ensure, useContext } from 'std:effect'
 import { fail } from 'std:result'
 
 import pkg from '../../../package.json'
@@ -71,6 +70,7 @@ export const LocalCarrier = Carrier.implement<CarrierDef.Options, []>({
         cid: dispatch.cid,
         value: served.value,
         outputs: served.outputs.map(lane => ({ name: lane.name, brand: lane.brand })),
+        ...(served.http ? { http: served.http } : {}),
       },
       *lane(name) {
         const output = outputs.get(name)
@@ -94,26 +94,38 @@ export const LocalCarrier = Carrier.implement<CarrierDef.Options, []>({
 
   *emit(event) {
     const kernel = yield* Server.context.expect()
-    kernel.events.emit('event', event.name, event.payload, event.trace)
+    kernel.events.emit('event', event)
   },
 
+  /** The node's emits as they happen, from the kernel's event stream. The flow ENDS with the
+   * scope that subscribed (its listener is gone): a `next()` pulled after that answers `done` at
+   * once — never a wait on a queue nothing feeds any more, never a spin. */
   events: () => ({
     *[Symbol.iterator]() {
       const kernel = yield* Server.context.expect()
-      const subscription = yield* useBufferedEvent(kernel.events, 'event')
+      const queue = createQueue<WireDef.Event, never>()
+      const listener = (event: WireDef.Event) => {
+        queue.add({ ...event, origin: kernel.serviceId })
+      }
+      let ended = false
+
+      kernel.events.on('event', listener)
+
+      yield* ensure(() => {
+        kernel.events.off('event', listener)
+        queue.close(undefined as never)
+      })
+
       return {
         *next(): Operation<IteratorResult<WireDef.Event, never>> {
-          for (;;) {
-            const step = yield* subscription.next()
-            if (step.done) {
-              continue
-            }
-            const [name, payload, trace] = step.value
-            return {
-              done: false,
-              value: { k: 'event', name, payload, origin: kernel.serviceId, trace },
-            }
+          if (ended) {
+            return { done: true, value: undefined as never }
           }
+
+          const step = yield* queue.next()
+          ended = step.done === true
+
+          return step
         },
       }
     },

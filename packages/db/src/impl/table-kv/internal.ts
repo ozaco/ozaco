@@ -5,7 +5,8 @@ import type { Operation } from 'std:effect'
 import { createContext, until, useContext } from 'std:effect'
 import type { AnyType } from 'std:shared'
 
-import type { TableKvDef } from './types'
+import type { Helpers } from './types/helpers'
+import type { TableKvDef } from './types/table-kv'
 
 export const StateRef = createContext<TableKvDef.State>('db:impl/table-kv')
 
@@ -77,13 +78,6 @@ const fromBase64 = (text: string): Uint8Array => {
 
 // --- rows --------------------------------------------------------------------------------------
 
-interface Row {
-  readonly _id: string
-  readonly data: string
-  readonly expires_at: number | null
-  readonly tags: readonly string[]
-}
-
 const now = (): number => Date.now()
 
 /** A stored row is live while it has no deadline or the deadline is ahead. */
@@ -112,9 +106,9 @@ function* find(table: Spec.Table, filter: Spec.Filter, limit: number | null = nu
   })) as readonly AnyType[]
 }
 
-function* rowOf(state: TableKvDef.State, key: string): Operation<Row | null> {
+function* rowOf(state: TableKvDef.State, key: string): Operation<Helpers.Row | null> {
   const rows = yield* find(state.entries, where.eq(FIELDS.id, key), 1)
-  const row = rows[0] as Row | undefined
+  const row = rows[0] as Helpers.Row | undefined
 
   if (!row) {
     return null
@@ -142,7 +136,7 @@ function* dropKeys(state: TableKvDef.State, keys: readonly string[]): Operation<
 
   const tagIds: string[] = []
 
-  for (const row of removed as unknown as readonly Row[]) {
+  for (const row of removed as unknown as readonly Helpers.Row[]) {
     for (const tag of row.tags ?? []) {
       tagIds.push(`${tag}${SEPARATOR}${row._id}`)
     }
@@ -165,7 +159,7 @@ function* put(state: TableKvDef.State, entry: KvDef.RawSet): Operation<void> {
 
   yield* DbAdapter.actions.transaction(function* () {
     const existing = (yield* find(state.entries, where.eq(FIELDS.id, entry.key), 1))[0] as
-      | Row
+      | Helpers.Row
       | undefined
 
     if (existing) {
@@ -283,7 +277,7 @@ export const driver: KvDef.Driver = {
 
     // one row past the page tells whether a next page exists
     const page = yield* find(state.entries, where.and(...bounds), options.limit + 1)
-    const keys = page.slice(0, options.limit).map((row: Row) => row._id)
+    const keys = page.slice(0, options.limit).map((row: Helpers.Row) => row._id)
     const last = keys.at(-1)
 
     return { keys, cursor: page.length > options.limit && last !== undefined ? last : null }
@@ -310,7 +304,7 @@ export const driver: KvDef.Driver = {
 
     return yield* dropKeys(
       state,
-      rows.map((row: Row) => row._id),
+      rows.map((row: Helpers.Row) => row._id),
     )
   },
 }

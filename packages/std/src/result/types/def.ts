@@ -1,11 +1,16 @@
-import type { AnyType, IsPromiseStrict } from 'std:shared'
+import type { AnyType, Helpers, IsPromiseStrict } from 'std:shared'
 
 import type { Maybe } from './maybe'
 import type { Result } from './result'
 
-/** The function shapes of the result module: what `succeed`, `fail`, `auto`, `throwable`,
- * `appendCauses`, `unwrap`, `just`, `nothing` and `asFailure*` are typed as. */
+/** The function shapes of the result module — what `succeed`, `fail`, `auto`, `throwable`,
+ * `appendCauses`, `unwrap`, `just`, `nothing` and `asFailure` are typed as — and the shapes the
+ * chain rendering of `formatFailure` lays out (`Level`, `Block`). */
 export namespace ResultDef {
+  /** What `fail` / `appendCauses` take as a cause: a string stays, a Failure (a failed Result) is
+   * nested as the SAME object, a Success / `null` / `undefined` is dropped. */
+  export type CauseInput = string | Result<unknown, unknown> | null | undefined
+
   export interface Succeed {
     (): Result.Success<void>
 
@@ -17,7 +22,7 @@ export namespace ResultDef {
     (): Result.Failure<never>
 
     <E extends `${string}`>(error: E): Result.Failure<E>
-    <const E>(error: E, message?: string, ...causes: string[]): Result.Failure<E>
+    <const E>(error: E, message?: string, ...causes: CauseInput[]): Result.Failure<E>
   }
 
   export interface Auto {
@@ -35,24 +40,32 @@ export namespace ResultDef {
     <const T>(value: T): Result.FromUnion<T>
   }
 
+  /** `cb`'s value as a Result; a throw (a rejection) folded by `asFailure` — through `tags`'
+   * matchers when a bundle is given — with `causes` appended. */
   export interface Throwable {
-    /** an async callback: the promise settles to a `Result` — the rejection becomes the Failure. */
-    <T, E extends Result.ErrorConstructor = Result.ErrorConstructor>(
+    <T>(
       cb: () => Promise<T>,
-      errorClass?: E,
+      tags: Helpers.TagMatchers,
       ...causes: string[]
-    ): Promise<Result.FromUnion<T | Result.Failure<E['prototype']>>>
+    ): Promise<Result.FromUnion<T | Result.Failure<unknown>>>
+    <T>(
+      cb: () => Promise<T>,
+      ...causes: string[]
+    ): Promise<Result.FromUnion<T | Result.Failure<unknown>>>
 
-    <R, E extends Result.ErrorConstructor = Result.ErrorConstructor>(
+    <R>(
       cb: () => R,
-      errorClass?: E,
+      tags: Helpers.TagMatchers,
       ...causes: string[]
-    ): Result.FromUnion<R | Result.Failure<E['prototype']>>
+    ): Result.FromUnion<R | Result.Failure<unknown>>
+    <R>(cb: () => R, ...causes: string[]): Result.FromUnion<R | Result.Failure<unknown>>
   }
 
+  /** Append `causes` (normalized as `fail` does) to a Failure IN PLACE — the same object comes
+   * back; a Success passes through untouched. */
   export type AppendCauses = <T extends Result<AnyType, AnyType>>(
     result: T,
-    ...causes: string[]
+    ...causes: CauseInput[]
   ) => T
 
   export interface Unwrap {
@@ -79,8 +92,45 @@ export namespace ResultDef {
 
   export type Nothing = <T = void>() => Maybe<T>
 
+  /**
+   * A Failure as is; any other value folded, the value kept as `raw`: into the first tag of
+   * `tags` whose matcher recognizes it (the message a function matcher named, else the value's
+   * own `message`, else `code`), else into `ResultErrors.Unknown` (`std:result.unknown`, its
+   * `serializeError` text the message). A `std:result.unknown` fold given with `tags` is
+   * re-classified the same way. `causes` are appended (normalized as `fail` does).
+   */
   export interface AsFailure {
-    <E>(error: Result.Failure<E>, ...causes: string[]): Result.Failure<E>
-    (error: unknown, ...causes: string[]): Result.Failure<unknown>
+    <E, M extends Helpers.TagMatchers>(
+      error: Result.Failure<E>,
+      tags: M,
+      ...causes: CauseInput[]
+    ): Result.Failure<E | Helpers.MatchedTag<M>>
+    (error: unknown, tags: Helpers.TagMatchers, ...causes: CauseInput[]): Result.Failure<unknown>
+    <E>(error: Result.Failure<E>, ...causes: CauseInput[]): Result.Failure<E>
+    (error: unknown, ...causes: CauseInput[]): Result.Failure<unknown>
+  }
+
+  export interface FormatOptions {
+    /** Render the whole cause chain, Java style, over several lines. */
+    chain?: boolean
+    /** The UTF-8 byte budget of the chain rendering (default 16384); every level's header line is
+     * kept (type / message cut to 200 bytes under a budget), the `at` lines fill what is left,
+     * innermost level first. */
+    maxBytes?: number
+  }
+
+  /** One failure of a chain as the rendering reads it. */
+  export interface Level {
+    /** The tag (a non-string `error` as its `serializeError` text). */
+    readonly type: string
+    readonly message: string
+    /** Its domain (string) causes, in stored order. */
+    readonly causes: readonly string[]
+  }
+
+  /** A level laid out: its header line and its `at` lines. */
+  export interface Block {
+    header: string
+    lines: string[]
   }
 }

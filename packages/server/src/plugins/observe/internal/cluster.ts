@@ -1,70 +1,222 @@
 // oxlint-disable import/exports-last
-import type { CarrierDef, ObserveDef, ServerDef, TraceDef, WireDef } from 'server:core'
-import { rootTrace, toWire } from 'server:internal'
+import type { CarrierDef, ObserveDef, ServerDef, WireDef } from 'server:core'
 import type { Operation } from 'std:effect'
 import { attempt, fork, sleep } from 'std:effect'
 import { isFailure } from 'std:result'
+import type { AnyType } from 'std:shared'
+import { suppressed } from 'std:trace'
 
-import type { ObservePluginDef } from '../types'
+import type { Helpers } from '../types/helpers'
+import type { ObservePluginDef } from '../types/observe'
 
-import { exec, writeBatch } from './store'
+import { MAX_FORWARD_BYTES } from './context'
+import { writeLocal } from './store'
 
-/** Event names on the carrier's event plane (never user events: the `_` prefix). */
-const ROWS_EVENT = '_observe.rows'
+/**
+ * Event names on the carrier's event plane. `_`-prefixed: plumbing, never user events — the
+ * kernel never traces them, the carrier publishes them TRANSIENT, `Server.actions.events()`
+ * hides them.
+ */
+const BATCH_EVENT = '_observe.batch'
 const COLLECTOR_EVENT = '_observe.collector'
 
-/** Whether a collector announced itself recently enough to be trusted with rows. */
+/** Whether a collector announced itself recently enough to be trusted with records. */
 export const collectorAlive = (state: ObservePluginDef.State, now = Date.now()): boolean =>
   now - state.collectorSeenAt < state.collectorHeartbeatMs * 3
 
-function* eventOf(
-  kernel: ServerDef.Context,
-  name: string,
-  payload: unknown,
-): Operation<WireDef.Event> {
-  return {
-    k: 'event',
-    name,
-    payload,
-    origin: kernel.serviceId,
-    trace: toWire(yield* rootTrace(kernel.serviceId, 'internal')),
+/** A cluster envelope: no `trace` — plumbing is never part of anyone's trace. */
+const eventOf = (kernel: ServerDef.Context, name: string, payload: unknown): WireDef.Event => ({
+  k: 'event',
+  name,
+  payload,
+  origin: kernel.serviceId,
+})
+
+/** The UTF-8 size of `json` — what the carrier's JSON codec puts on the wire — without encoding
+ * it. (`JSON.stringify` escapes lone surrogates: a code point past the BMP is always a pair.) */
+const utf8Bytes = (json: string): number => {
+  let bytes = 0
+
+  for (let at = 0; at < json.length; at += 1) {
+    const code = json.codePointAt(at) ?? 0
+
+    if (code < 0x80) {
+      bytes += 1
+    } else if (code < 0x8_00) {
+      bytes += 2
+    } else if (code < 0x1_00_00) {
+      bytes += 3
+    } else {
+      // a surrogate pair: one 4-byte code point (its low half is skipped)
+      bytes += 4
+      at += 1
+    }
   }
+
+  return bytes
 }
 
-/** Forward one batch to the collector(s). Best-effort: a carrier failure is reported as a
- * fallback write by the caller. */
+/**
+ * A batch as it crosses the wire, cut into MESSAGES of at most `maxBytes` serialized (JSON) each —
+ * NATS refuses a payload over its `max_payload` (1 MB by default), so a busy node's batch must
+ * never be one message. Each message stands on its own: every record once, each resource once
+ * per message (records point at theirs by index). A single record bigger than `maxBytes` travels
+ * alone. Every message keeps the events it carries (a refused one falls back locally).
+ */
+export const packBatch = (
+  instance: string,
+  batch: readonly ObserveDef.Event[],
+  maxBytes: number = MAX_FORWARD_BYTES,
+): readonly Helpers.ForwardedChunk[] => {
+  // `{"v":2,"instance":"…","resources":[],"records":[]}`: what every message costs empty
+  const empty = utf8Bytes(JSON.stringify({ v: 2, instance, resources: [], records: [] }))
+  const sizes = new Map<ObserveDef.Resource, number>()
+  const chunks: Helpers.PackingChunk[] = []
+
+  const open = (): Helpers.PackingChunk => {
+    const chunk: Helpers.PackingChunk = {
+      resources: [],
+      index: new Map(),
+      records: [],
+      events: [],
+      bytes: empty,
+    }
+    chunks.push(chunk)
+    return chunk
+  }
+
+  /** What adding `event` (its data `dataBytes` long) costs `chunk`, and the index it would use. */
+  const costOf = (chunk: Helpers.PackingChunk, event: ObserveDef.Event, dataBytes: number) => {
+    const known = chunk.index.get(event.resource)
+    const at = known ?? chunk.resources.length
+    let resourceBytes = 0
+
+    if (known === undefined) {
+      const size = sizes.get(event.resource) ?? utf8Bytes(JSON.stringify(event.resource) ?? 'null')
+      sizes.set(event.resource, size)
+      resourceBytes = size + (chunk.resources.length > 0 ? 1 : 0)
+    }
+
+    // `[at,"t",<data>]` and the comma before it
+    const recordBytes =
+      utf8Bytes(JSON.stringify([at, event.t])) + dataBytes + 1 + (chunk.records.length > 0 ? 1 : 0)
+
+    return { at, known, bytes: resourceBytes + recordBytes }
+  }
+
+  let chunk = open()
+
+  for (const event of batch) {
+    const data = event.t === 'span' ? event.span : event.log
+    const dataBytes = utf8Bytes(JSON.stringify(data) ?? 'null')
+    let cost = costOf(chunk, event, dataBytes)
+
+    // full: this record opens the next message (a lone oversized record still travels)
+    if (chunk.records.length > 0 && chunk.bytes + cost.bytes > maxBytes) {
+      chunk = open()
+      cost = costOf(chunk, event, dataBytes)
+    }
+
+    if (cost.known === undefined) {
+      chunk.index.set(event.resource, cost.at)
+      chunk.resources.push(event.resource)
+    }
+
+    chunk.records.push([cost.at, event.t, data])
+    chunk.events.push(event)
+    chunk.bytes += cost.bytes
+  }
+
+  return chunks
+    .filter(entry => entry.records.length > 0)
+    .map(entry => ({
+      payload: { v: 2, instance, resources: entry.resources, records: entry.records },
+      events: entry.events,
+      bytes: entry.bytes,
+    }))
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null
+
+/** The events a forwarded batch carries — anything malformed (another version's payload) is
+ * skipped, never raised. */
+export const unpackBatch = (payload: unknown): readonly ObserveDef.Event[] => {
+  if (!isRecord(payload) || payload['v'] !== 2) {
+    return []
+  }
+
+  const resources: unknown[] = Array.isArray(payload['resources']) ? payload['resources'] : []
+  const records = Array.isArray(payload['records']) ? payload['records'] : []
+  const out: ObserveDef.Event[] = []
+
+  for (const record of records) {
+    if (!Array.isArray(record)) {
+      continue
+    }
+
+    const [at, t, data] = record as unknown[]
+    const resource = typeof at === 'number' ? resources[at] : undefined
+
+    if (!isRecord(resource) || !isRecord(data)) {
+      continue
+    }
+
+    if (t === 'span') {
+      out.push({ t, span: data as AnyType, resource: resource as ObserveDef.Resource })
+    } else if (t === 'log') {
+      out.push({ t, log: data as AnyType, resource: resource as ObserveDef.Resource })
+    }
+  }
+
+  return out
+}
+
+/** Forward one batch to the collector(s), as messages of at most {@link MAX_FORWARD_BYTES} each
+ * ({@link packBatch}). Best-effort, message by message: resolves the events of every message the
+ * carrier refused (the caller falls back with those — none twice). */
 export function* forwardBatch(
   kernel: ServerDef.Context,
   state: ObservePluginDef.State,
   batch: readonly ObserveDef.Event[],
-): Operation<boolean> {
+): Operation<readonly ObserveDef.Event[]> {
   const carrier = kernel.carrier
 
   if (!carrier) {
-    return false
+    return batch
   }
 
-  const event = yield* eventOf(kernel, ROWS_EVENT, { instance: kernel.instance, batch })
-  const sent = yield* attempt(() => carrier.actions.emit(event))
+  const unsent: ObserveDef.Event[] = []
 
-  if (isFailure(sent)) {
-    return false
+  for (const chunk of packBatch(kernel.instance, batch)) {
+    const event = eventOf(kernel, BATCH_EVENT, chunk.payload)
+    const sent = yield* attempt(() => suppressed(() => carrier.actions.emit(event)))
+
+    if (isFailure(sent)) {
+      unsent.push(...chunk.events)
+      continue
+    }
+
+    state.cluster.forwarded += chunk.events.length
   }
 
-  state.cluster.forwarded += batch.length
-
-  return true
+  return unsent
 }
 
 /**
  * The cluster loop of this node: listen to the carrier's events — a collector writes every
  * forwarded batch from a peer into its store and heartbeats its presence; a forwarder only
- * tracks collector heartbeats (so `flush` knows where rows should go).
+ * tracks collector heartbeats (so `flush` knows where records should go). All of it SUPPRESSED:
+ * plumbing, never telemetry.
  */
 export function* runCluster(
   kernel: ServerDef.Context,
   state: ObservePluginDef.State,
 ): Operation<void> {
+  yield* suppressed(() => clusterLoop(kernel, state))
+}
+
+function* clusterLoop(kernel: ServerDef.Context, state: ObservePluginDef.State): Operation<void> {
   const carrier = kernel.carrier
 
   if (!carrier) {
@@ -75,7 +227,7 @@ export function* runCluster(
     // the heartbeat is a child task: it lives exactly as long as this loop does
     yield* fork(function* () {
       for (;;) {
-        const beat = yield* eventOf(kernel, COLLECTOR_EVENT, { instance: kernel.instance })
+        const beat = eventOf(kernel, COLLECTOR_EVENT, { instance: kernel.instance })
         yield* attempt(() => carrier.actions.emit(beat))
         yield* sleep(state.collectorHeartbeatMs)
       }
@@ -99,39 +251,43 @@ export function* runCluster(
 
     if (event.name === COLLECTOR_EVENT) {
       state.collectorSeenAt = Date.now()
-    } else if (event.name === ROWS_EVENT && state.collect) {
-      const payload = event.payload as { batch?: readonly ObserveDef.Event[] } | null
-      const batch = payload?.batch ?? []
+    } else if (event.name === BATCH_EVENT && state.collect) {
+      const batch = unpackBatch(event.payload)
       state.cluster.received += batch.length
-      yield* attempt(() => exec(state, db => writeBatch(db, batch)))
+      yield* writeLocal(state, batch)
     }
   }
 }
 
-/** Per-instance stats over a window, from the work spans (edge / dispatch / carrier). */
+/**
+ * Per-instance stats over a window, grouped by `service.instance.id`: how many measured spans
+ * (server / client spans and local roots), how many failed (status error), their p95, when the
+ * instance was last seen and which `service.name`s it reported.
+ */
 export const instanceStats = (
-  spans: readonly TraceDef.Span[],
+  spans: readonly ObserveDef.SpanRow[],
 ): readonly ObserveDef.InstanceStats[] => {
   const grouped = new Map<
     string,
-    { serviceId: string; durations: number[]; failed: number; last: number }
+    { services: Set<string>; durations: number[]; failed: number; last: number }
   >()
 
   for (const span of spans) {
-    const entry = grouped.get(span.instance) ?? {
-      serviceId: span.service_id,
+    const entry = grouped.get(span.service_instance_id) ?? {
+      services: new Set<string>(),
       durations: [],
       failed: 0,
       last: 0,
     }
-    entry.durations.push(span.ended_at - span.started_at)
+    entry.services.add(span.service_name)
+    entry.durations.push(span.duration_ms)
 
-    if (span.status === 'failed') {
+    if (span.status_code === 'error') {
       entry.failed += 1
     }
 
-    entry.last = Math.max(entry.last, span.ended_at)
-    grouped.set(span.instance, entry)
+    entry.last = Math.max(entry.last, span.end)
+    grouped.set(span.service_instance_id, entry)
   }
 
   return [...grouped.entries()]
@@ -140,10 +296,10 @@ export const instanceStats = (
       const at = Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95))
       return {
         instance,
-        service_id: entry.serviceId,
+        services: [...entry.services].toSorted(),
         spans: sorted.length,
         failed: entry.failed,
-        p95_ms: sorted.length > 0 ? sorted[at]! : null,
+        p95_ms: sorted.length > 0 ? Math.round(sorted[at]! * 1000) / 1000 : null,
         last_seen: entry.last,
       }
     })

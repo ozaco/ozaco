@@ -1,5 +1,5 @@
 import { until } from 'std:effect'
-import { fail } from 'std:result'
+import { asFailure, fail } from 'std:result'
 
 import { spawn as childSpawn } from 'node:child_process'
 
@@ -10,7 +10,6 @@ import { fromReadable } from '../stream/from-readable'
 import {
   concatBytes,
   emptyByteFlow,
-  errorMessage,
   inheritedStdinWrite,
   makeStatus,
   normalizeSpawn,
@@ -55,7 +54,7 @@ export function* nodeExec(cmd: string, args?: readonly string[], options?: IODef
       }),
     )
   } catch (error) {
-    return yield* fail(IOErrors.ExecFailed, `command "${cmd}" failed: ${errorMessage(error)}`)
+    return yield* fail(IOErrors.ExecFailed, `command "${cmd}" failed`, asFailure(error, IOErrors))
   }
 }
 
@@ -75,7 +74,7 @@ export function* nodeSpawn(cmd: string, args?: readonly string[], options?: IODe
       stdio: [stdio.stdin, stdio.stdout, stdio.stderr],
     })
   } catch (error) {
-    return yield* fail(IOErrors.SpawnFailed, `failed to spawn "${cmd}": ${errorMessage(error)}`)
+    return yield* fail(IOErrors.SpawnFailed, `failed to spawn "${cmd}"`, asFailure(error, IOErrors))
   }
 
   // Attach the exit/error listeners eagerly: an unhandled 'error' event would otherwise crash the
@@ -96,7 +95,11 @@ export function* nodeSpawn(cmd: string, args?: readonly string[], options?: IODe
     try {
       return yield* until(exitedPromise)
     } catch (error) {
-      return yield* fail(IOErrors.ProcessError, `process "${cmd}" errored: ${errorMessage(error)}`)
+      return yield* fail(
+        IOErrors.ProcessError,
+        `process "${cmd}" errored`,
+        asFailure(error, IOErrors),
+      )
     }
   }
 

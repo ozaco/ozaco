@@ -9,7 +9,7 @@ import { describe, expect, it } from 'bun:test'
 
 import { z } from 'zod'
 
-import { storage, todos } from '../helpers'
+import { LABELS, storage, todos } from '../helpers'
 
 describe('kernel — services, dispatch, hooks', () => {
   it('routes default to /<service>/<action>; kinds fix the method; options are collected', () => {
@@ -44,14 +44,15 @@ describe('kernel — services, dispatch, hooks', () => {
           true,
         )
 
-        // a handler failure keeps its tag and gains the action breadcrumb
+        // a handler failure keeps its tag and message and gains the action breadcrumb (the
+        // request id — no span id, nothing is traced here), then the plugin runtime's labels
         const boom = yield* attempt(server.call(todos, 'explode', { code: 'todo.custom' }))
         expect((boom as AnyType).error).toBe('todo.custom')
-        expect(
-          (boom as AnyType).causes.some((cause: string) =>
-            cause.startsWith('action:todos.explode'),
-          ),
-        ).toBe(true)
+        expect((boom as AnyType).message).toBe('boom todo.custom')
+        expect((boom as AnyType).causes).toEqual([
+          expect.stringMatching(/^action:todos\.explode req:[0-9a-f]{32}$/u),
+          ...LABELS.call,
+        ])
 
         // unknown action
         const none = yield* attempt(server.call(todos as AnyType, 'nope', {}))
@@ -179,6 +180,12 @@ describe('kernel — services, dispatch, hooks', () => {
         const server = yield* createServer({ services: [todos], timeoutMs: 100 })
         const late = yield* attempt(server.call(todos, 'slowCancel', { ms: 300 }))
         expect((late as AnyType).error).toBe(ServerErrors.TimeoutPending)
+        // raised by the caller's side: the `local` breadcrumb (the request id — no span id,
+        // nothing is traced here), then the plugin runtime's labels
+        expect((late as AnyType).causes).toEqual([
+          expect.stringMatching(/^local req:[0-9a-f]{32}$/u),
+          ...LABELS.call,
+        ])
         const detached = yield* attempt(server.call(todos, 'slow', { ms: 200 }, { timeoutMs: 50 }))
         expect((detached as AnyType).error).toBe(ServerErrors.TimeoutPending)
         // the detached handler finished on its own and left an outcome behind
@@ -190,7 +197,57 @@ describe('kernel — services, dispatch, hooks', () => {
     )
   })
 
-  it('stream outputs come back branded; spans, logs and failures are reported', async () => {
+  it('OTEL_RESOURCE_ATTRIBUTES ride in the KERNEL resource — every sink sees them alike', async () => {
+    const previous = process.env['OTEL_RESOURCE_ATTRIBUTES']
+    process.env['OTEL_RESOURCE_ATTRIBUTES'] =
+      'deployment.environment.name=staging,service.namespace=from-env,team=a%20b,broken'
+    const reported: ObserveDef.Event[] = []
+    const Spy = definePlugin<ServerDef.PluginContext, []>({
+      name: 'spy',
+      version: '0.0.0',
+      *setup() {
+        return {
+          hooks: {
+            name: 'spy',
+            *observe(event) {
+              reported.push(event)
+            },
+          },
+        }
+      },
+    }).build()
+
+    try {
+      unwrap(
+        await run(function* () {
+          yield* storage()
+          const server = yield* createServer({ services: [todos], name: 'env-res', plugins: [Spy] })
+          yield* server.call(todos, 'create', { title: 'resourced' })
+        }),
+      )
+    } finally {
+      if (previous === undefined) {
+        delete process.env['OTEL_RESOURCE_ATTRIBUTES']
+      } else {
+        process.env['OTEL_RESOURCE_ATTRIBUTES'] = previous
+      }
+    }
+
+    // the observe hook (what the store keeps) gets the environment's attributes UNDER the
+    // node's own — no exporter adds anything of its own
+    const dispatch = reported.find(
+      event => event.t === 'span' && event.span.name === 'todos.create',
+    )
+    expect(dispatch?.resource).toMatchObject({
+      'service.name': 'todos',
+      'service.namespace': 'env-res',
+      'deployment.environment.name': 'staging',
+      team: 'a b',
+    })
+    expect(dispatch?.resource).not.toHaveProperty('broken')
+  })
+
+  it('stream outputs come back branded; spans and log records are reported', async () => {
     unwrap(
       await run(function* () {
         yield* storage()
@@ -242,31 +299,63 @@ describe('kernel — services, dispatch, hooks', () => {
 
         yield* server.call(todos, 'create', { title: 'logged' })
         yield* attempt(server.call(todos, 'explode', { code: 'x.y' }))
-        const spans = reported.filter(event => event.t === 'span')
-        expect(spans.map(event => (event as AnyType).row.name)).toEqual([
+
+        // every dispatch is ONE internal span (a root: called from outside any request)
+        const all = reported.flatMap(event => (event.t === 'span' ? [event] : []))
+        const spans = all.filter(event => event.span.scope.name === '@ozaco/server')
+        expect(spans.map(event => event.span.name)).toEqual([
           'todos.count',
           'todos.letters',
           'todos.create',
           'todos.explode',
         ])
-        expect(spans.map(event => (event as AnyType).row.status)).toEqual([
-          'ok',
-          'ok',
-          'ok',
-          'failed',
+        expect(spans.map(event => event.span.kind)).toEqual([
+          'internal',
+          'internal',
+          'internal',
+          'internal',
         ])
-        const log = reported.find(event => event.t === 'log') as AnyType
-        expect(log.row).toMatchObject({
-          level: 'info',
-          msg: 'creating',
-          data: { title: 'logged' },
+        expect(spans.map(event => event.span.status.code)).toEqual([
+          'unset',
+          'unset',
+          'unset',
+          'error',
+        ])
+        expect(spans.map(event => event.span.parent)).toEqual([null, null, null, null])
+        expect(spans[2]!.span.attributes['code.function.name']).toBe('todos.create')
+        expect(spans[3]!.span.attributes['error.type']).toBe('x.y')
+
+        // whatever the handler's work records (the db's own spans) nests under its dispatch
+        for (const inner of all.filter(event => event.span.scope.name !== '@ozaco/server')) {
+          expect(inner.span.parent?.spanId).toBe(spans[2]!.span.context.spanId)
+        }
+
+        // `service.name` is the ozaco service, the instance is this node
+        expect(spans[2]!.resource['service.name']).toBe('todos')
+        expect(spans[2]!.resource['service.namespace']).toBe('app')
+        expect(spans[2]!.resource['ozaco.carrier.name']).toBe('local')
+
+        // ctx.log: one record, on the dispatch span it ran in
+        const logs = reported.flatMap(event => (event.t === 'log' ? [event.log] : []))
+        const line = logs.find(log => log.body === 'creating')!
+        expect(line).toMatchObject({
+          severityNumber: 9,
+          severityText: 'INFO',
+          attributes: { title: 'logged' },
+          scope: { name: '@ozaco/server' },
         })
-        expect(log.row.requestId).toBe((spans[1] as AnyType).row.requestId)
-        const failure = reported.find(event => event.t === 'failure') as AnyType
-        expect(failure.row).toMatchObject({
-          tag: 'x.y',
-          where: 'dispatch:todos.explode',
+        expect(line.context?.spanId).toBe(spans[2]!.span.context.spanId)
+
+        // the failure: ONE exception record (ERROR — an unmapped tag is a 500) on its span
+        const exceptions = logs.filter(log => log.attributes['exception.type'] !== undefined)
+        expect(exceptions).toHaveLength(1)
+        expect(exceptions[0]).toMatchObject({
+          eventName: 'ozaco.action.exception',
+          severityNumber: 17,
+          attributes: { 'exception.type': 'x.y', 'exception.message': 'boom x.y' },
         })
+        expect(exceptions[0]!.context?.spanId).toBe(spans[3]!.span.context.spanId)
+        expect(spans[3]!.span.events.map(event => event.name)).toEqual(['exception'])
       }),
     )
   })

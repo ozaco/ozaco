@@ -21,6 +21,25 @@ export namespace KvDef {
     readonly scan: boolean
   }
 
+  /**
+   * How a store shows up in telemetry — the identity attributes of its `{op} kv` spans. Absent,
+   * the store name stands in (`memory` ⇒ `ozaco.memory`) and the prefix is the collection.
+   */
+  export interface Telemetry {
+    /** `db.system.name` of the backing store: `redis`, `sqlite`, `postgresql`, `ozaco.memory`. */
+    readonly system: string
+
+    /** `db.namespace`: the redis database index, the backing database's namespace, `memory`. */
+    readonly namespace: string
+
+    /** `db.collection.name`: the key prefix, or the backing table of a table store. */
+    readonly collection: string
+
+    /** `server.address` / `server.port` of a networked backend. */
+    readonly address?: string | undefined
+    readonly port?: number | undefined
+  }
+
   /** The protocol context — what a store's `setup()` resolves. */
   export interface Options {
     readonly store: string
@@ -28,6 +47,7 @@ export namespace KvDef {
     /** every key of this install lives under `<prefix>:` on the backend. */
     readonly prefix: string
     readonly capabilities: Capabilities
+    readonly telemetry?: Telemetry | undefined
   }
 
   /** The install options every backend shares. */
@@ -64,8 +84,17 @@ export namespace KvDef {
     readonly cursor: string | null
   }
 
+  /** Where a `wrap` answer came from: `hit` — the stored value; `miss` — THIS call computed (and
+   * stored) it; `coalesced` — it joined a computation already in flight in this process. */
+  export type Source = 'hit' | 'miss' | 'coalesced'
+
   export interface WrapOptions extends SetOptions {
     readonly ttlMs: number
+
+    /** Told synchronously as soon as `wrap` knows where the answer comes from — before a `miss`
+     * computes. Once, unless the computation a `coalesced` caller joined is halted: the caller
+     * then goes round again and is told anew (the last word wins). What it throws is ignored. */
+    readonly onSource?: ((source: Source) => void) | undefined
   }
 
   export interface Actions {
@@ -99,7 +128,9 @@ export namespace KvDef {
     invalidate(...tags: readonly string[]): Operation<number>
 
     /** Cache-aside with singleflight: the value under `key`, or `compute` it once — concurrent
-     * callers in this process share the one computation — and store it with the options. */
+     * callers in this process share the one computation — and store it with the options. A
+     * halted computation releases the callers that joined it: they go round again (the stored
+     * value, the next computation, or one of them computes). */
     wrap<T>(key: string, options: WrapOptions, compute: () => Operation<T>): Operation<T>
 
     /** Remove every key of this install's namespace; resolves how many were removed. */

@@ -68,6 +68,16 @@ tasks:
     preset: server
     options:
       runDepsInParallel: false
+  lgtm:
+    command: bun run scripts/lgtm.ts
+    deps:
+      - panel:embed
+      - observe:embed
+      - server:build
+      - client:build
+    preset: server
+    options:
+      runDepsInParallel: false
   openobserve:
     command: bun run scripts/openobserve.ts
     deps:

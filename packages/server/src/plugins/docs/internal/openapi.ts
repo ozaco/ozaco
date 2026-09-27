@@ -1,17 +1,39 @@
 import type { AnyType } from 'std:shared'
 
-import type { DocsDef } from '../types'
+import type { DocsDef } from '../types/docs'
 
-/** `{ error, message, causes, status }` — the edge's failure body. */
+/** A failure nested in `causes` — JsonCodec's shape; only with `errors.expose: 'chain'` or for a
+ * caller the node trusts (otherwise every cause is a string). */
+const NESTED_FAILURE_SCHEMA = {
+  type: 'object',
+  properties: {
+    _t: { const: 'std:result:failure' },
+    error: {},
+    message: { type: 'string' },
+    causes: { type: 'array', items: {} },
+  },
+  required: ['_t', 'message', 'causes'],
+} as const
+
+/** `{ error: { error, message, causes, status, requestId, traceId } }` — the edge's failure body
+ * (the `oz-error` header carries the tag). */
 const FAILURE_SCHEMA = {
   type: 'object',
   properties: {
-    error: { type: 'string' },
-    message: { type: 'string' },
-    causes: { type: 'array', items: { type: 'string' } },
-    status: { type: 'number' },
+    error: {
+      type: 'object',
+      properties: {
+        error: { type: 'string' },
+        message: { type: 'string' },
+        causes: { type: 'array', items: { oneOf: [{ type: 'string' }, NESTED_FAILURE_SCHEMA] } },
+        status: { type: 'number' },
+        requestId: { type: 'string' },
+        traceId: { type: 'string' },
+      },
+      required: ['error', 'message', 'causes', 'status', 'requestId', 'traceId'],
+    },
   },
-  required: ['error', 'message', 'causes', 'status'],
+  required: ['error'],
 } as const
 
 const BINARY_SCHEMA = { type: 'string', format: 'binary' } as const

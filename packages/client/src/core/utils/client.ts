@@ -9,7 +9,7 @@ import { JsonCodec } from 'std:codec/impl/json'
 import { WebIO } from 'std:io/impl/web'
 
 import { Client } from '../definition/client'
-import { heldReadable, holdOf } from '../internal/future'
+import { heldReadable, holdOf, isHeld } from '../internal/future'
 import { request } from '../internal/http'
 import { actionOf, manifestOf } from '../internal/manifest'
 import { rows, watch } from '../internal/realtime'
@@ -20,6 +20,11 @@ import type { ClientDef } from '../types/client'
  * lists — GET/DELETE inputs travel as query + path params, other methods as JSON / a stream body /
  * multipart; outputs decode by `oz-brand` (values, ndjson/sse → `FutureFlow`, text, bytes →
  * stream); server failures come back as Result failures with their own tag and `req:<id>` cause.
+ *
+ * Traced: when tracing is enabled where a call runs (std:trace — an observing node's handler, a
+ * scope with a Tracer installed) the call is one CLIENT span `{METHOD} {route}` whose context the
+ * server continues; otherwise the caller's ambient trace context rides along as it is. Realtime
+ * frames carry the caller's context too.
  *
  * Every call is a `Future`: `yield*` it (inline in the caller's task — effect semantics intact)
  * or `await` it (a detached job of the client's scope — promise semantics intact). Streams are
@@ -76,8 +81,12 @@ export function* createClient<TApi = Record<string, Record<string, ClientDef.Ref
         return { value: createFutureFlow(scope, value as AnyType), meta }
       }
 
+      // a traced call's bytes are held already (their consumption ends its span)
       if (value instanceof ReadableStream) {
-        return { value: heldReadable(value as ReadableStream<Uint8Array>), meta }
+        return {
+          value: isHeld(value) ? value : heldReadable(value as ReadableStream<Uint8Array>),
+          meta,
+        }
       }
 
       return { value, meta }
@@ -160,6 +169,7 @@ export function* createClient<TApi = Record<string, Record<string, ClientDef.Ref
       } satisfies ClientDef.Window<TRow>
     },
     $lastRequestId: () => ctx.lastRequestId,
+    $lastTraceId: () => ctx.lastTraceId,
     $scope: scope,
     $setToken: token => {
       tokenOverride = token

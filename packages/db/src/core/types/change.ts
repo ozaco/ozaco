@@ -41,6 +41,12 @@ export namespace Change {
     /** The change's HLC token (time-sortable, decodable via `IO.actions.decodeHlc`). */
     readonly token: string
     readonly source: Source
+
+    /** The writer's correlation data (`withBusMeta`), string values only: a `local` event carries
+     * what its write ran under, a `bus` event its envelope's `meta`; a `replay` has none. A server
+     * puts the writing span's `traceparent` / `tracestate` here, so a change-feed consumer can
+     * link the write that caused it. */
+    readonly meta?: Readonly<Record<string, string>> | undefined
   }
 
   /** A change as it travels between nodes. */

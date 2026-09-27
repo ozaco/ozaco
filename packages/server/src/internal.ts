@@ -1,7 +1,9 @@
 /**
  * `@ozaco/server/internal` — the kernel-level surface the first-party edges, carriers and
- * plugins are built on: brand plumbing, trace/span plumbing, the protocol defaults, the
- * declaration guards and the shared symbols.
+ * plugins are built on: brand plumbing, the kernel's std:trace spans (dispatch / carrier / edge
+ * spans, the `server-tracer`, the observe fan-out), the running dispatch's span for plugins
+ * (`dispatchSpan()`, `dispatchFailure`), the protocol defaults, the declaration guards and the
+ * shared symbols.
  *
  * Application code does not need any of it — `@ozaco/server` (service / action / stream /
  * createServer / serviceErrors) is the whole surface for writing a server. Reach in here when
@@ -11,7 +13,7 @@ export {
   ACTION,
   DEFAULT_OUTCOME_TTL_MS,
   DEFAULT_TIMEOUT_MS,
-  laneOf,
+  EXCEPTION_EVENT_NAME,
   OBSERVE_CONSOLE_PATH,
   OBSERVE_PREFIX,
   PARTS_DECL,
@@ -24,6 +26,7 @@ export {
   serviceIdOf,
   STREAM_BRAND,
   STREAM_DECL,
+  TRACE_SCOPE,
 } from './core/const'
 export { LocalCarrier } from './core/definition/local'
 export { MemoryOutcomes } from './core/definition/outcomes'
@@ -42,13 +45,25 @@ export {
   isStreamDecl,
 } from './core/utils/stream'
 export {
-  childTrace,
-  continueTrace,
+  answeredBy,
+  carrierSpan,
+  dispatchFailure,
+  dispatchSpan,
+  edgeReply,
+  edgeSpan,
+  inboundOf,
+  isRequestId,
+  markLogged,
+  replyFailure,
   report,
-  requestId,
-  rootTrace,
-  spanId,
-  toWire,
-  withSpan,
+  requestIdFor,
+  resourceOf,
+  scopeOf,
+  ServerTracer,
+  settingsOf,
+  traceOf,
+  wireParent,
+  wireTrace,
+  withDispatchSpan,
 } from './core/utils/trace'
 export { validate } from './core/utils/validation'

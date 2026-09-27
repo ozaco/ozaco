@@ -1,6 +1,9 @@
 /** Protocol subtype marker. */
 export const TRANSPORT = Symbol.for('transport:transport')
 
+/** The `logger` binding of every operational log line the transport writes (its log scope). */
+export const TRANSPORT_LOGGER = '@ozaco/transport'
+
 /** Wire header names core stamps on every message (a backend without native headers frames
  * them into the payload itself — see the redis driver). */
 export enum HEADERS {

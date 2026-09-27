@@ -10,13 +10,13 @@
  *
  * It also REPORTS itself: `peer.metrics` + the `peer.events` collected since the last report go
  * back over the signaling socket every few seconds (and once more when a session ends), where
- * the `rtc.report` action turns them into observe rows, spans and an `rtc.metrics` event — so a
- * browser-to-browser call is visible in the server console at `/_observe` and in any
- * OpenObserve exporter that is installed.
+ * the `rtc.report` action turns them into span events (at the client's own times) and an
+ * `rtc.metrics` event — so a browser-to-browser call is visible in the server console at
+ * `/_observe` and in any exporter that is installed.
  */
 import type { Queue } from 'std:effect'
 import { attempt, createQueue, fork, race, run, sleep, until } from 'std:effect'
-import { isFailure } from 'std:result'
+import { formatFailure, isFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
 import type { RtcDef } from 'std:webrtc'
 import { Rtc, RtcClient } from 'std:webrtc'
@@ -24,7 +24,7 @@ import { Ws, WsClient } from 'std:ws'
 
 import { JsonCodec } from 'std:codec/impl/json'
 
-import type { Control, Session } from '../types/internal'
+import type { Helpers } from '../types/helpers'
 
 const pick = (selector: string) => document.querySelector(selector) as AnyType
 
@@ -289,7 +289,7 @@ const outcome = run(function* () {
     return { connected, reason: String(info.reason) }
   }
 
-  let current: Session | undefined
+  let current: Helpers.Session | undefined
   /** consecutive sessions that never reached `connected` — stops a hopeless re-pair loop */
   let failures = 0
 
@@ -314,7 +314,7 @@ const outcome = run(function* () {
       const result = yield* attempt(() => call(polite, epoch, inbound))
       if (isFailure(result)) {
         ;(globalThis as AnyType).__failure = result
-        status(`session failed: ${String((result as AnyType).error ?? 'failed')}`)
+        status(`session failed: ${formatFailure(result)}`)
       }
       failures = !isFailure(result) && result.value.connected ? 0 : failures + 1
       if (failures > 6) {
@@ -339,7 +339,7 @@ const outcome = run(function* () {
       status('signaling closed — reload the page')
       return
     }
-    const frame = (step.value ?? {}) as Control
+    const frame = (step.value ?? {}) as Helpers.Control
     if (frame.t === 'rtc:room-full') {
       yield* stop()
       status('room is full — change the #room in the URL and reload')
@@ -382,5 +382,5 @@ pick('#form').addEventListener('submit', (event: AnyType) => {
 const result = await outcome
 if (isFailure(result)) {
   ;(globalThis as AnyType).__failure = result
-  status(`error: ${String((result as AnyType).error ?? 'failed')}`)
+  status(`error: ${formatFailure(result)}`)
 }

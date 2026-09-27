@@ -1,6 +1,5 @@
 // oxlint-disable import/exports-last
 import type { Spec } from 'db:core'
-import { DbErrors } from 'db:core'
 import { CodecErrors } from 'std:codec'
 import { attempt } from 'std:effect'
 import { isFailure } from 'std:result'
@@ -8,7 +7,7 @@ import { isFailure } from 'std:result'
 import { JsonCodec } from 'std:codec/impl/json'
 
 import { quoteIdent } from './compile'
-import type { Sql } from './types'
+import type { Sql } from './types/sql'
 
 function* encodeShared(kind: Spec.ColumnKind, value: unknown) {
   if (value === null || value === undefined) {
@@ -242,51 +241,4 @@ export function* encodeRawParams(dialect: Sql.Dialect, params: readonly unknown[
   }
 
   return bound
-}
-
-/** Map a Postgres SQLSTATE to the matching `DbErrors` tag (shared by pg and bun-sql). */
-export const classifySqlState = (code: unknown, message: string): string => {
-  const state = typeof code === 'string' ? code : ''
-
-  switch (state) {
-    case '23505': {
-      return DbErrors.Unique
-    }
-
-    case '23503': {
-      return DbErrors.ForeignKey
-    }
-
-    case '23502': {
-      return DbErrors.NotNull
-    }
-
-    case '23514': {
-      return DbErrors.Check
-    }
-    case '40001':
-    case '40P01': {
-      return DbErrors.Conflict
-    }
-    case '57P01':
-    case '57P02':
-    case '57P03': {
-      return DbErrors.Connection
-    }
-
-    default: {
-      break
-    }
-  }
-
-  if (state.startsWith('08')) {
-    return DbErrors.Connection
-  }
-
-  // fallback shape checks for drivers that hide the SQLSTATE
-  if (/unique|duplicate key/iu.test(message)) {
-    return DbErrors.Unique
-  }
-
-  return DbErrors.Query
 }

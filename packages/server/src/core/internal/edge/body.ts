@@ -153,7 +153,8 @@ export function* valueBody(
   const parsed = yield* attempt(() => until(Promise.resolve().then(() => JSON.parse(text))))
 
   if (isFailure(parsed)) {
-    return yield* fail(ServerErrors.BadRequest, 'request body is not valid JSON')
+    // the parser's own error (where the JSON broke) stays as the cause — its fold, one level
+    return yield* fail(ServerErrors.BadRequest, 'request body is not valid JSON', parsed)
   }
 
   const body = parsed.value

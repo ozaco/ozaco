@@ -1,4 +1,5 @@
 import type { Operation } from 'std:effect'
+import type { ResultDef } from 'std:result'
 import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 import { createTags } from 'std:shared'
@@ -27,7 +28,7 @@ export const serviceErrors = <
   statuses: TMap,
 ): ErrorsDef.Catalog<TPrefix, TMap> => {
   const out: Record<string, unknown> = { statuses: {} }
-  const tags = createTags(prefix, ...Object.keys(statuses)) as Record<string, string>
+  const tags = createTags(prefix, ...Object.keys(statuses)) as unknown as Record<string, string>
 
   for (const [key, status] of Object.entries(statuses)) {
     const tag =
@@ -40,7 +41,7 @@ export const serviceErrors = <
       letter.toUpperCase(),
     )
 
-    const failer = (message?: string, ...causes: string[]): Operation<never> =>
+    const failer = (message?: string, ...causes: ResultDef.CauseInput[]): Operation<never> =>
       fail(tag, message ?? tag, ...causes) as Operation<never>
 
     out[camel] = Object.assign(failer, { tag, toString: () => tag })

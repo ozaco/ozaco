@@ -29,9 +29,11 @@ describe('compareVersions', () => {
     expect(chain.toReversed().toSorted(compareVersions)).toEqual(chain)
   })
 
-  it('ignores build metadata and throws on a non-version', () => {
+  it('ignores build metadata and ranks a non-version below every version', () => {
     expect(compareVersions('1.0.0+a', '1.0.0+b')).toBe(0)
-    expect(() => compareVersions('1.0', '1.0.0')).toThrow(TypeError)
+    expect(compareVersions('1.0', '1.0.0')).toBe(-1)
+    expect(compareVersions('0.0.1', 'latest')).toBe(1)
+    expect(compareVersions('1.0', 'latest')).toBe(0)
   })
 })
 

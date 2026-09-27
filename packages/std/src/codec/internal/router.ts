@@ -4,7 +4,7 @@ import { fail, isSuccess } from 'std:result'
 
 import { Codec } from '../definition'
 import { CodecErrors } from '../errors'
-import type { CodecDef } from '../types'
+import type { CodecDef } from '../types/codec'
 
 import { CodecRegistryContext } from './context'
 

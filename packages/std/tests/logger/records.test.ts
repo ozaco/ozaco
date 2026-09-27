@@ -66,11 +66,16 @@ describe('payload normalization', () => {
         yield* DefaultLogger.use()
         yield* captureTransport('capture', sink).use()
 
+        yield* Logger.actions.error(fail(new TypeError('denied'), '', 'dialing'))
         yield* Logger.actions.error(asFailure(new TypeError('denied'), 'dialing'))
       }),
     )
 
-    expect(sink.entries[0]?.error).toBe('TypeError: denied: dialing')
+    expect(sink.entries.map(entry => entry.error)).toEqual([
+      'TypeError: denied: dialing',
+      // asFailure: the tag, the serialized Error; the nested Error is not repeated inline
+      'std:result.unknown: TypeError: denied: dialing',
+    ])
   })
 
   it('a failure payload does not leak its internals into entry.data', async () => {

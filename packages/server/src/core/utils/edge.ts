@@ -1,7 +1,6 @@
 // oxlint-disable import/exports-last
 import type { Operation } from 'std:effect'
-import { attempt, until } from 'std:effect'
-import { fail, isFailure } from 'std:result'
+import { fail } from 'std:result'
 
 import { addRoute } from 'rou3'
 
@@ -10,15 +9,13 @@ import { ServerClient } from '../definition/server'
 import { ServerErrors } from '../errors'
 import {
   createEdgeState,
-  decideUpgrade,
   EdgeStateRef,
   handleRequest,
-  isSocketRequest,
   mountActions,
   remountActions,
-  trackBody,
 } from '../internal/edge/engine'
 import { staticRoutes } from '../internal/edge/files'
+import { addRaw, serveHandlers } from '../internal/edge/serve'
 import type { EdgeDef } from '../types/edge'
 import type { Helpers } from '../types/helpers'
 
@@ -38,43 +35,6 @@ export function* openEdge(): Operation<Helpers.EdgeState> {
     emit: ServerClient.actions.emit,
     dispatch: ServerClient.actions.dispatch,
   })
-}
-
-/** The promise-land handlers a driver wires its runtime to — each request runs as a task of the
- * edge's scope that lives until the response body is done. */
-const serveHandlers = (state: Helpers.EdgeState): EdgeDef.ServeHandlers => ({
-  fetch: request =>
-    new Promise<Response>(resolve => {
-      void state.scope.run(function* () {
-        const outcome = yield* attempt(() => handleRequest(state, request))
-        if (isFailure(outcome)) {
-          resolve(new Response('internal error', { status: 500 }))
-          return
-        }
-        const { response, done } = trackBody(outcome.value)
-        resolve(response)
-        // keep this request's scope (and its stream pumps) alive until the body is consumed
-        yield* until(done)
-      })
-    }),
-  upgrade: request =>
-    new Promise<EdgeDef.Upgrade>(resolve => {
-      void state.scope.run(function* () {
-        const outcome = yield* attempt(() => decideUpgrade(state, request))
-        resolve(
-          isFailure(outcome)
-            ? { kind: 'reject', response: new Response('upgrade failed', { status: 500 }) }
-            : outcome.value,
-        )
-      })
-    }),
-  isSocket: request => isSocketRequest(state, request),
-})
-
-const addRaw = (state: Helpers.EdgeState, route: EdgeDef.RawRoute): void => {
-  state.raws.push(route)
-  addRoute(state.router, route.method, route.path, { kind: 'raw', route })
-  state.kernel.routes.push({ method: route.method, path: route.path })
 }
 
 /**

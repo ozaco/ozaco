@@ -77,7 +77,7 @@ export function* readStats(pc: RtcDef.PeerLike): Operation<RtcDef.Stats> {
 
   const read = yield* attempt(() => until(pc.getStats!()))
   if (!isSuccess(read)) {
-    return yield* fail(RtcErrors.Stats, 'getStats failed')
+    return yield* fail(RtcErrors.Stats, 'getStats failed', read)
   }
 
   const byId = new Map<string, AnyType>()

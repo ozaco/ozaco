@@ -116,6 +116,8 @@ export function* staticRoutes(options: EdgeDef.StaticOptions): Operation<EdgeDef
   const index = options.index ?? 'index.html'
   const dotfiles = options.dotfiles ?? false
   const followSymlinks = options.followSymlinks ?? false
+  // asset requests are noise: recorded only when they fail (design §6.2)
+  const observe = options.observe ?? 'errors'
   const root = (yield* IO.actions.isAbsolute(options.dir))
     ? yield* IO.actions.join(options.dir)
     : yield* IO.actions.join(yield* IO.actions.cwd(), options.dir)
@@ -177,6 +179,7 @@ export function* staticRoutes(options: EdgeDef.StaticOptions): Operation<EdgeDef
         method,
         path: prefix === '' ? '/' : prefix,
         auth: options.auth,
+        observe,
         *handler(request) {
           return yield* serve(request, '')
         },
@@ -185,6 +188,7 @@ export function* staticRoutes(options: EdgeDef.StaticOptions): Operation<EdgeDef
         method,
         path: `${prefix}/**:path`,
         auth: options.auth,
+        observe,
         *handler(request, params) {
           return yield* serve(request, params['path'] ?? '')
         },

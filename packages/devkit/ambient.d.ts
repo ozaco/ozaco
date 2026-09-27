@@ -18,6 +18,9 @@ declare module 'std:schema' {
 declare module 'std:plugin' {
   export * from '@ozaco/std/plugin';
 }
+declare module 'std:trace' {
+  export * from '@ozaco/std/trace';
+}
 declare module 'std:io' {
   export * from '@ozaco/std/io';
 }
@@ -41,6 +44,9 @@ declare module 'std:logger/impl/default' {
 }
 declare module 'std:logger/transport/console' {
   export * from '@ozaco/std/logger/transport/console';
+}
+declare module 'std:logger/transport/trace' {
+  export * from '@ozaco/std/logger/transport/trace';
 }
 declare module 'std:fetch' {
   export * from '@ozaco/std/fetch';

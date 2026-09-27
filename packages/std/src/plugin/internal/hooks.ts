@@ -75,14 +75,22 @@ export const createHookInstallers = (api: Api<Helpers.Dispatch>) => ({
             let failure = asFailure(error)
 
             try {
-              yield* fn(error, args)
+              yield* fn(failure, args)
             } catch (hookError) {
-              // a throwing error hook masks the running failure while keeping it in the cause chain
-              failure = appendCauses(
-                asFailure(hookError),
-                `masked: ${maskedLabel(failure)}`,
-                ...failure.causes,
-              )
+              // a throwing error hook masks the running failure: the hook's failure wins (the SAME
+              // object — a copy would be a second failure to the span tree that saw the hook's one
+              // escape, recorded twice) and names what it masked, the masked failure nested among
+              // its causes (unless the hook already wrapped it)
+              const hook = asFailure(hookError)
+
+              // a hook rethrowing what it was given masks nothing
+              if (hook !== failure) {
+                failure = appendCauses(
+                  hook,
+                  `masked: ${maskedLabel(failure)}`,
+                  ...(hook.causes.includes(failure) ? [] : [failure]),
+                )
+              }
             }
 
             yield* failure

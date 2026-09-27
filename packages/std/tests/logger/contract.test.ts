@@ -83,11 +83,13 @@ describe('logger — contract', () => {
       msg: 'items [1,2]',
       data: undefined,
       error: '',
+      failures: [],
     })
     expect(normalizePayload(['fields', { a: 1 }, { b: 2 }])).toEqual({
       msg: 'fields',
       data: { a: 1, b: 2 },
       error: '',
+      failures: [],
     })
   })
 })

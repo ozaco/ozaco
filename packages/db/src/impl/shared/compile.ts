@@ -2,7 +2,8 @@
 import type { Spec } from 'db:core'
 import type { Operation } from 'std:effect'
 
-import type { Sql } from './types'
+import type { Helpers } from './types/helpers'
+import type { Sql } from './types/sql'
 
 /** Quote a SQL identifier, doubling embedded quotes — the only injection-safe way to inline one. */
 export const quoteIdent = (name: string): string => `"${name.replaceAll('"', '""')}"`
@@ -35,15 +36,13 @@ const bindRaw = (builder: Sql.Builder, value: unknown): string => {
   return builder.dialect.placeholder(builder.params.length)
 }
 
-type PathLeaf = Exclude<Spec.Filter, { readonly op: 'and' | 'or' | 'not' }>
-
 /** A plain boolean, NOT a type guard: the false branch must keep every leaf shape. */
 const isPathLeaf = (filter: Spec.Filter): boolean =>
   filter.op !== 'and' &&
   filter.op !== 'or' &&
   filter.op !== 'not' &&
-  (filter as PathLeaf).path !== undefined &&
-  (filter as PathLeaf).path!.length > 0
+  (filter as Helpers.PathLeaf).path !== undefined &&
+  (filter as Helpers.PathLeaf).path!.length > 0
 
 /** The scalar family a compared value belongs to (a `Date` compares as epoch millis). */
 const familyOf = (value: string | number | boolean): 'number' | 'string' | 'boolean' =>
@@ -54,7 +53,7 @@ const familyOf = (value: string | number | boolean): 'number' | 'string' | 'bool
  * at the path, so a number only meets numbers (and so on) — the memory evaluator's semantics,
  * and never a cast error on Postgres. A missing key and JSON `null` are both SQL NULL.
  */
-function* jsonLeafSql(builder: Sql.Builder, filter: PathLeaf): Operation<string> {
+function* jsonLeafSql(builder: Sql.Builder, filter: Helpers.PathLeaf): Operation<string> {
   const { json } = builder.dialect
   const column = quoteIdent(filter.field)
   const segments = filter.path ?? []
@@ -134,7 +133,7 @@ function* jsonLeafSql(builder: Sql.Builder, filter: PathLeaf): Operation<string>
 
 function* filterSql(builder: Sql.Builder, filter: Spec.Filter): Operation<string> {
   if (isPathLeaf(filter)) {
-    return yield* jsonLeafSql(builder, filter as PathLeaf)
+    return yield* jsonLeafSql(builder, filter as Helpers.PathLeaf)
   }
 
   switch (filter.op) {

@@ -1,6 +1,6 @@
 import type { Flow, Operation } from 'std:effect'
 import { createQueue, fork, toReadable, until, withResolvers } from 'std:effect'
-import { fail } from 'std:result'
+import { asFailure, fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import { Busboy } from '@fastify/busboy'
@@ -36,8 +36,12 @@ export function* parseParts(
 
   try {
     busboy = new Busboy({ headers: { 'content-type': contentType } })
-  } catch {
-    return yield* fail(ServerErrors.BadRequest, 'malformed multipart content-type')
+  } catch (error) {
+    return yield* fail(
+      ServerErrors.BadRequest,
+      'malformed multipart content-type',
+      asFailure(error),
+    )
   }
 
   const fields: Record<string, unknown> = {}

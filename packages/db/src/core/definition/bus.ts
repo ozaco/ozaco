@@ -10,6 +10,7 @@ import pkg from '../../../package.json'
 import { DEFAULT_BUS_TOPIC } from '../const'
 import { DbErrors } from '../errors'
 import type { Bus } from '../types/bus'
+import { untraced } from '../utils/telemetry'
 
 const DbBusImpl = definePlugin<Bus.Context, [options?: Bus.Options]>({
   name: 'db-bus',
@@ -25,7 +26,7 @@ const DbBusImpl = definePlugin<Bus.Context, [options?: Bus.Options]>({
       return yield* fail(
         DbErrors.Configuration,
         'the bus needs a transport: install one (MemoryTransport, NatsTransport, …) before DbBus',
-        ...described.causes,
+        described,
       )
     }
 
@@ -34,15 +35,17 @@ const DbBusImpl = definePlugin<Bus.Context, [options?: Bus.Options]>({
     // is emitted as-is (the client drops its own echoes by origin)
     const subscription = yield* transport.actions.subscribe<Bus.Envelope>(topic)
 
-    yield* fork(function* () {
-      for (;;) {
-        const step = yield* subscription.next()
-        if (step.done) {
-          return
+    yield* fork(() =>
+      untraced(function* () {
+        for (;;) {
+          const step = yield* subscription.next()
+          if (step.done) {
+            return
+          }
+          events.emit('change', step.value.value)
         }
-        events.emit('change', step.value.value)
-      }
-    })
+      }),
+    )
 
     return { transport, transportName: described.value.transport, topic, events }
   },

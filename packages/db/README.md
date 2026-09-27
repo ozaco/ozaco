@@ -193,12 +193,12 @@ const worker =
   `{ op, job }`. With a `dedupeKey` there is one LIVE job per key: `skipped` while it is
   queued/running/failed, re-armed (`updated`, same row, attempts reset) once it is done/dead —
   the guarded `upsert(…, { when })`, atomic on every adapter.
-- **`work(handlers, { batch, backoff, maxAttempts, pollMs, leaseMs, sweepMs })`** starts a worker
-  in the current scope and returns `{ id, stats(), halt() }`. It claims only the kinds it has
-  handlers for, highest `priority` first; every claim is ONE guarded update (`_version` + a
-  claimable state), so any number of workers in any number of processes never run the same
-  attempt twice. It wakes on the table's change feed (local writes, and the `DbBus` across
-  nodes) and otherwise polls at most `pollMs` apart — sooner when a `runAt` comes due.
+- **`work(handlers, { batch, backoff, maxAttempts, pollMs, leaseMs, sweepMs, service })`**
+  starts a worker in the current scope and returns `{ id, stats(), halt() }`. It claims only the
+  kinds it has handlers for, highest `priority` first; every claim is ONE guarded update
+  (`_version` + a claimable state), so any number of workers in any number of processes never run
+  the same attempt twice. It wakes on the table's change feed (local writes, and the `DbBus`
+  across nodes) and otherwise polls at most `pollMs` apart — sooner when a `runAt` comes due.
 - **Leases:** a running job holds a lease (`leaseMs`, default 30s) its worker renews every
   `leaseMs / 3`; every worker sweeps lapsed leases (a crashed process) back to `failed` (or
   `dead`). The writes that settle an attempt are guarded by (worker, attempt), so a worker that
@@ -207,8 +207,60 @@ const worker =
   back to `queued` with the interrupted attempt uncounted.
 - `backoff` is `{ kind: 'exponential', baseMs?, maxMs? }`, `{ kind: 'linear', stepMs?, maxMs? }`
   or `(attempt) => ms`. Failures are tagged `QueueErrors` (`db:queue.configuration` /
-  `db:queue.validation`); a handler's failure is recorded on the job (`last_error`), never
-  surfaced.
+  `db:queue.validation`); a handler's failure is recorded on the job (`last_error` — its whole
+  cause chain, budgeted), never surfaced.
+- **Traced:** `queueTable` also declares `traceparent`, `tracestate` and `last_traceparent`.
+  `enqueue` is a PRODUCER span `send {queue}` whose context the row keeps; every attempt runs in a
+  ROOT CONSUMER span `process {queue}` of its own (`messaging.message.id` = the job id,
+  `ozaco.queue.attempt`) that LINKS the enqueue (`ozaco.link.reason = creation`) and the attempt
+  before it (`queue.retry`). A failed attempt with attempts left is recorded as a WARN, a dead
+  letter as an ERROR with the span event `ozaco.queue.dead`. A table declared without those
+  columns runs untraced. The attempt spans run outside any request, so each runs as the
+  queue's service — its `service.name`, and that of everything under it: the `service` of
+  `Queue.use`, a worker's own `work(…, { service })` over it, by default the table name.
+
+## Telemetry
+
+The database reports through `@ozaco/std/trace`, so whatever records spans around it — an
+`@ozaco/server` node that observes, a `Tracer` of your own — sees its work; with nothing
+recording it opens no spans at all.
+
+- **Spans only as children.** An operation opens a span only under a RECORDING parent (a request,
+  a job, a `span(…)` of yours) — never a trace of its own. Named `{operation} {table}`
+  (`find todos`, `insert todos`), `transaction` or `raw`; kind CLIENT (INTERNAL on the memory
+  adapter); scope `@ozaco/db`.
+- **Attributes.** `db.system.name` (`postgresql` / `sqlite` / `ozaco.memory`), `db.namespace`
+  (always: the pg database, the sqlite file name, `memory` — Tempo's service graph draws the
+  database node from it), `db.collection.name`, `db.operation.name`, `db.operation.batch.size`
+  (> 1), `db.query.text` (parameterized SQL only), `server.address` / `server.port` (pg); on a
+  failure `db.response.status_code` (the SQLSTATE, or the `SQLITE_*` code) and `error.type`.
+  `DbClient.use({ schema, observe: { returnedRows: true } })` adds `db.response.returned_rows`.
+- **What is left out.** The hidden `__changes_*` tables, a Kv's backing table under the Kv span,
+  and the background loops (watch re-queries, the change hub, the `DbBus` pumps, queue claiming
+  and sweeping) — those run with no active span. A transaction retried after a conflict adds the
+  span event `ozaco.db.tx.retry` (`ozaco.db.transaction.attempt`).
+- **Kv.** Every op is a child span `{op} kv` (`db.system.name` `redis` / `sqlite` /
+  `postgresql` / `ozaco.memory`, `db.namespace`, `db.collection.name` = the prefix or table).
+  `Kv.actions.wrap(key, { …, onSource })` tells a caller whether it got a `hit`, a `miss` it
+  computed, or a `coalesced` wait on someone else's computation; a halted computation releases the
+  callers that joined it.
+- **Change meta.** Writes made inside `withBusMeta(data, body)` carry `data` on their changes —
+  `Change.Event.meta` locally and across the `DbBus`. `@ozaco/server` puts the writing dispatch's
+  `traceparent` there, which is how a cache invalidation or a crud push links the write that caused
+  it.
+- **Failures keep their cause.** A driver error (pg, bun-sql, sqlite) is classified by VALUE —
+  the `DbErrors` matchers read its SQLSTATE / `SQLITE_*` code, else its text, `db.query` when
+  nothing more specific fits (`asFailure(error, DbErrors, driverCause(error))`): one level, the
+  driver's message, the driver error kept as the failure's `raw`, its code the `sqlstate <code>` /
+  `sqlite <code>` cause `db.response.status_code` is read from. A redis client error, or an
+  `Error` a codec, the IO impl or an `id` minter throws, sits one level under its `kv.*` /
+  `db.*` tag as the runtime's `std:result.unknown` fold of it (the `Error` its `raw`).
+- **Operational lines** (a new bus peer, an envelope gap, a peer clock running ahead, an expired
+  queue lease) go through the std Logger under `logger: '@ozaco/db'`, with the span keys
+  (`messaging.destination.name`, `ozaco.queue.*`, `ozaco.db.bus.*`). A new peer is announced once
+  per process, however many clients meet it; a client without change logs (every table
+  `log: false`) has nothing to replay and says nothing, and work whose telemetry is suppressed (an
+  exporter's own store) logs nothing — no line reaches the console that the sinks do not get.
 
 ## Untrusted input
 

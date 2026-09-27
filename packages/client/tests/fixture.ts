@@ -5,7 +5,7 @@ import { action, createServer, service, stream } from 'server:core'
 import { Auth, crud, Docs, ObservePlugin, StaticAuth } from 'server:plugins'
 import type { Operation } from 'std:effect'
 import { sleep, until } from 'std:effect'
-import { fail } from 'std:result'
+import { asFailure, fail } from 'std:result'
 
 import { MemoryAdapter } from 'db:impl/memory'
 import { MemoryKv } from 'db:impl/memory-kv'
@@ -161,7 +161,8 @@ export const probeState = {
   pumped: new Map<string, number>(),
 }
 
-/** Edge cases: headers, custom statuses, cause fidelity, deadlines, aborts, DELETE/array query. */
+/** Edge cases: headers, custom statuses, cause fidelity (flat + nested), deadlines, aborts,
+ * DELETE/array query. */
 export const probe = service(
   'probe',
   {
@@ -173,6 +174,14 @@ export const probe = service(
     }),
     caused: action.query({}, function* () {
       return yield* fail('probe.caused', 'root problem', 'cause:one', 'cause:two')
+    }),
+    // a wrap over a platform error's fold: the nested chain a trusted (tracing) caller gets back
+    wrapped: action.query({}, function* () {
+      return yield* fail(
+        'probe.wrapped',
+        'outer wrap',
+        asFailure(new TypeError('inner type error')),
+      )
     }),
     sluggish: action.query(
       { input: z.object({ id: z.string(), ms: z.number() }) },
@@ -236,6 +245,10 @@ export function* boot(options?: {
 
   /** gate the docs routes behind a static token (`FIXTURE_TOKEN`). */
   auth?: boolean
+
+  /** trust every caller (`trace.trust`): their sampled flag is honoured and a failed reply
+   * carries the nested cause chain — a self-asserted `ozaco=1` alone never gets it. */
+  trust?: boolean
 }): Operation<{
   url: string
   server: ServerDef.Handle<[typeof demo, typeof probe, typeof notes, typeof wall]>
@@ -259,6 +272,7 @@ export function* boot(options?: {
     ],
     name: 'client-fixture',
     version: '1.0.0',
+    ...(options?.trust ? { trace: { trust: () => true } } : {}),
   })
   const info = yield* server.start({ port: 0 })
   return { url: info.url ?? `http://127.0.0.1:${info.port}`, server }

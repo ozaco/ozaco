@@ -2,10 +2,12 @@
 /**
  * The console's data layer: ONE `@ozaco/client` over the REAL `observe` service. The client
  * bootstraps from the service's OWN manifest (`GET /_observe/api/manifest`), so the console
- * works with or without the docs plugin — and there is no schema to keep in sync here.
+ * works with or without the docs plugin — and there is no schema to keep in sync here. An API
+ * gated by `ObservePlugin.use({ auth })` refuses a call without a fitting bearer token: the
+ * console asks for one (`isRefused`), keeps it for this tab only and sends it on every call.
  */
 import type { ClientDef } from 'client:core'
-import { connectClient } from 'client:core'
+import { connectClient, wireFailureOf } from 'client:core'
 import type { FutureFlow } from 'std:effect'
 import { unwrap } from 'std:result'
 
@@ -17,89 +19,89 @@ declare global {
 
 export { wireFailureOf as failureOf } from 'client:core'
 
-// --- the rows as the store writes them ---------------------------------------------------------
+// --- the rows as the store writes them (`_ob2_spans` / `_ob2_logs`) ------------------------------
 
-export interface RequestRow {
-  readonly request_id: string
-  readonly service: string | null
-  readonly action: string | null
-  readonly method: string | null
-  readonly path: string | null
-  readonly socket: string | null
-  readonly status: number | null
-  readonly service_id: string
-  readonly instance: string
-  readonly lane: string
-  readonly started_at: number
-  readonly ended_at: number | null
-  readonly duration_ms: number | null
-  readonly error: string | null
-  readonly attrs: Readonly<Record<string, unknown>> | null
+export type AttrValue =
+  | string
+  | number
+  | boolean
+  | readonly string[]
+  | readonly number[]
+  | readonly boolean[]
 
-  /** captured while observing: redacted request headers + the in/out body snapshots. */
-  readonly headers: Readonly<Record<string, string>> | null
-  readonly input: BodySnapshot | null
-  readonly output: BodySnapshot | null
+export type Attributes = Readonly<Record<string, AttrValue>>
+
+export interface SpanContext {
+  readonly traceId: string
+  readonly spanId: string
+  readonly flags: number
 }
 
-/** What went through one plane: capped data, or a stream/flow/parts descriptor. */
-export interface BodySnapshot {
-  readonly kind: 'data' | 'stream' | 'flow' | 'parts'
-  readonly brand?: string | null
-  readonly data?: unknown
-  readonly fields?: unknown
-  readonly streams?: Readonly<Record<string, string>>
-  readonly size?: number | null
-  readonly truncated?: boolean
+export interface Link {
+  readonly context: SpanContext
+  readonly attributes?: Attributes
 }
 
+export interface SpanEvent {
+  readonly name: string
+  readonly time: number
+  readonly attributes?: Attributes
+}
+
+export type SpanKind = 'internal' | 'server' | 'client' | 'producer' | 'consumer'
+
+/** One finished span, with the resource it belongs to. `root` = a LOCAL root (no parent, or a
+ * remote one). */
 export interface SpanRow {
+  readonly trace_id: string
   readonly span_id: string
   readonly parent_span_id: string | null
   readonly name: string
-  readonly kind: string
-  readonly service_id: string
-  readonly instance: string
-  readonly action_id: string | null
-  readonly transport: string | null
-  readonly started_at: number
-  readonly ended_at: number
-  readonly status: string
-  readonly attrs: Readonly<Record<string, unknown>> | null
+  readonly kind: SpanKind
+  readonly scope: string
+  readonly scope_version: string | null
+  readonly service_name: string
+  readonly service_instance_id: string
+  readonly start: number
+  readonly end: number
+  readonly duration_ms: number
+  readonly status_code: 'unset' | 'error'
+  readonly status_message: string | null
+  readonly error_type: string | null
+  readonly root: boolean
+  readonly http_route: string | null
+  readonly http_status: number | null
+  readonly request_id: string | null
+  readonly attributes: Attributes
+  readonly events: readonly SpanEvent[]
+  readonly links: readonly Link[]
+  readonly resource: Attributes
 }
 
+/** One log record: a log line, an exception (an `…exception` event name), an event, a domain
+ * record. */
 export interface LogRow {
-  readonly level: string
-  readonly msg: string
-  readonly data: Readonly<Record<string, unknown>> | null
+  readonly trace_id: string | null
+  readonly span_id: string | null
+  readonly time: number
+  readonly severity_number: number
+  readonly severity_text: string | null
+  readonly body: string
+  readonly event_name: string | null
+  readonly service_name: string
+  readonly service_instance_id: string
+  readonly scope: string
+  readonly attributes: Attributes
 }
 
-export interface FailureRow {
-  readonly tag: string
-  readonly message: string
-  readonly causes: readonly string[]
-  readonly where: string
-}
-
-export interface EventRow {
-  readonly kind: string
-  readonly name: string
-  readonly size: number | null
-
-  /** socket frames carry their FULL payload while observing — replayable. */
-  readonly data?: unknown
-}
-
-export interface RequestView {
-  readonly request: RequestRow
+export interface TraceView {
+  readonly trace_id: string
   readonly spans: readonly SpanRow[]
   readonly logs: readonly LogRow[]
-  readonly failures: readonly FailureRow[]
-  readonly events: readonly EventRow[]
 }
 
-export interface Page {
-  readonly requests: readonly RequestRow[]
+export interface TracesPage {
+  readonly traces: readonly SpanRow[]
   readonly cursor: string | null
 }
 
@@ -107,6 +109,9 @@ export interface Stats {
   readonly recorded: number
   readonly dropped: number
   readonly pending: number
+  readonly forwarded?: number
+  readonly received?: number
+  readonly fellBack?: number
 }
 
 export interface Member {
@@ -117,10 +122,11 @@ export interface Member {
 
 export interface InstanceStat {
   readonly instance: string
-  readonly service_id: string
+  readonly services: readonly string[]
   readonly spans: number
   readonly failed: number
   readonly p95_ms: number | null
+  readonly last_seen: number
 }
 
 export interface ClusterView {
@@ -128,6 +134,10 @@ export interface ClusterView {
   readonly instances: readonly InstanceStat[]
   readonly since: number
 }
+
+/** Whether a log record is an EXCEPTION record (the failures list). */
+export const isExceptionLog = (log: LogRow): boolean =>
+  log.event_name !== null && /(?:^|\.)exception$/u.test(log.event_name)
 
 // --- the client ---------------------------------------------------------------------------------
 
@@ -138,26 +148,77 @@ let opened: Promise<
   ClientDef.ConnectedHandle<Record<string, Record<string, ClientDef.Ref>>>
 > | null = null
 
-const client = () => (opened ??= connectClient({ url: base(), docsPath: '/_observe/api' }))
+/** Where the bearer token the API asked for is kept: this tab only (`sessionStorage`) — never
+ * the url, never a cookie. */
+const TOKEN_KEY = 'ozaco.observe.token'
+
+/** The token the client sends (`authorization: Bearer …`), read at every call. */
+export const storedToken = (): string | undefined => {
+  try {
+    return window.sessionStorage.getItem(TOKEN_KEY) ?? undefined
+  } catch {
+    return undefined
+  }
+}
+
+/** Keep `token` for the calls from here on — `null` (or blank) forgets it. */
+export const setToken = (token: string | null): void => {
+  const value = token?.trim() ?? ''
+
+  try {
+    if (value) {
+      window.sessionStorage.setItem(TOKEN_KEY, value)
+    } else {
+      window.sessionStorage.removeItem(TOKEN_KEY)
+    }
+  } catch {
+    // no storage (a private window): the token lives as long as this page does
+  }
+}
+
+/** Whether the API refused a call for WHO asked (401 / 403): the console asks for a token. */
+export const isRefused = (error: unknown): boolean => {
+  const { status, tag } = wireFailureOf(error)
+
+  return (
+    status === 401 ||
+    status === 403 ||
+    tag === 'client.refused' ||
+    tag === 'server.unauthorized' ||
+    tag === 'server.forbidden'
+  )
+}
+
+const client = () =>
+  (opened ??= connectClient({ url: base(), docsPath: '/_observe/api', token: storedToken }).catch(
+    (error: unknown) => {
+      // a refused manifest (no token yet) must not stick: the next call connects again
+      opened = null
+      throw error
+    },
+  ))
 
 const call = async <T>(target: string, input?: unknown): Promise<T> => {
   const handle = await client()
   return unwrap(await handle.$call(target, input)) as T
 }
 
-export interface RequestsQuery {
+export interface TracesQuery {
   readonly limit?: number
   readonly cursor?: string
 }
 
-export const fetchRequests = (query: RequestsQuery): Promise<Page> =>
-  call('observe.requests', query)
+export const fetchTraces = (query: TracesQuery): Promise<TracesPage> =>
+  call('observe.traces', query)
 
-export const fetchRequest = (id: string): Promise<RequestView> => call('observe.request', { id })
+export const fetchTrace = (id: string): Promise<TraceView> => call('observe.trace', { id })
+
+/** A request id (`x-request-id`) — or a trace id — to its trace. */
+export const fetchRequest = (id: string): Promise<TraceView> => call('observe.request', { id })
 
 export const fetchStats = (): Promise<Stats> => call('observe.stats')
 
 export const fetchCluster = (): Promise<ClusterView> => call('observe.cluster', {})
 
-/** The live feed: one batch of freshly finished requests per iteration. */
-export const liveBatches = (): Promise<FutureFlow<readonly RequestRow[]>> => call('observe.live')
+/** The live feed: one batch of freshly stored root spans per iteration. */
+export const liveBatches = (): Promise<FutureFlow<readonly SpanRow[]>> => call('observe.live')

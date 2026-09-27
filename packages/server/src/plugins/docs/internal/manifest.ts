@@ -4,7 +4,8 @@ import { isPartsDecl, isSocketAction, isStreamDecl } from 'server:internal'
 
 import { z } from 'zod'
 
-import type { DocsDef } from '../types'
+import type { DocsDef } from '../types/docs'
+import type { Helpers } from '../types/helpers'
 
 const isZod = (value: unknown): value is z.ZodType =>
   typeof value === 'object' && value !== null && '_zod' in value
@@ -184,16 +185,10 @@ export const serviceDocOf = (
   }
 }
 
-/** What the plugin resolved about its install: the mount path, whether the observe console is
- * mounted, and the `Auth` install's `default` requirement (an action that sets no `auth` of its
- * own is documented as THAT, not as open). */
-export interface ManifestOptions {
-  readonly path: string
-  readonly console: boolean
-  readonly defaultAuth: unknown
-}
-
-export const manifestOf = (kernel: ServerDef.Context, docs: ManifestOptions): DocsDef.Manifest => {
+export const manifestOf = (
+  kernel: ServerDef.Context,
+  docs: Helpers.ManifestOptions,
+): DocsDef.Manifest => {
   const services: DocsDef.ServiceDoc[] = []
 
   for (const def of kernel.registry.services.values()) {

@@ -31,19 +31,22 @@
  * TELEMETRY: a browser peer also sends `{ t: 'rtc:report', … }` every few seconds (and once more
  * when its session ends) carrying `peer.metrics` plus the `peer.events` it collected since the
  * last one. The relay hands those to the `rtc.report` ACTION, so a call that happens entirely
- * between two browsers still lands in the server's observe pipeline — one request row per report,
- * one span per timeline entry, one `rtc.metrics` event row — and therefore in the console at
- * `/_observe` and in whatever OpenObserve exporter is installed.
+ * between two browsers still lands in the server's telemetry — the report is a dispatch span
+ * inside the signaling frame's trace carrying the counters as attributes, each timeline entry a
+ * span EVENT `rtc.<kind>` at the client's own time (plus its log record), the counters once more
+ * as one `rtc.metrics` event — and therefore in the console at `/_observe` and in whatever
+ * exporter is installed (every sink holds the same records).
  */
 import { action, Server, service, stream } from 'server:core'
 import type { Flow, Operation } from 'std:effect'
 import { attempt, flowOf, until } from 'std:effect'
 import type { AnyType } from 'std:shared'
+import { current } from 'std:trace'
 
 import { z } from 'zod'
 
 import { rtcErrors } from '../../errors'
-import type { Member, Pairing, RelayEvent, ReportInput, Room } from '../../types/internal'
+import type { Helpers } from '../../types/helpers'
 
 /** This process — a node ignores the echo of its own broadcasts (`events()` includes them). */
 const NODE =
@@ -53,35 +56,39 @@ const NODE =
 const RELAY = 'rtc.relay'
 
 /** The room view of THIS node: every member of every room it takes part in. */
-const rooms = new Map<string, Room>()
+const rooms = new Map<string, Helpers.Room>()
 
-const roomOf = (name: string): Room => {
-  const room = rooms.get(name) ?? { members: new Map<string, Member>(), epoch: 0 }
+const roomOf = (name: string): Helpers.Room => {
+  const room = rooms.get(name) ?? { members: new Map<string, Helpers.Member>(), epoch: 0 }
   rooms.set(name, room)
   return room
 }
 
-const forget = (name: string, room: Room) => {
+const forget = (name: string, room: Helpers.Room) => {
   if (room.members.size === 0) {
     rooms.delete(name)
   }
 }
 
 /** Is the other member somewhere else? (Then a frame has to cross the carrier.) */
-const hasRemote = (room: Room, except: string): boolean =>
+const hasRemote = (room: Helpers.Room, except: string): boolean =>
   [...room.members.values()].some(member => member.id !== except && !member.socket)
 
 /** Derived, never negotiated: the smaller member id offers (impolite), the other yields. */
-const pairingOf = (room: Room): Pairing => {
+const pairingOf = (room: Helpers.Room): Helpers.Pairing => {
   const [first, second] = [...room.members.keys()].toSorted()
   return { epoch: room.epoch + 1, roles: { [first!]: false, [second!]: true } }
 }
 
-const broadcast = (event: RelayEvent) => Server.actions.emit(RELAY, event)
+const broadcast = (event: Helpers.RelayEvent) => Server.actions.emit(RELAY, event)
 
 /** Adopt a pairing and hand every LOCAL member its role. Already at (or past) that epoch means
  * this is the other node's identical announcement — ignore it. */
-function* applyPairing(name: string, room: Room, pairing: Pairing): Operation<boolean> {
+function* applyPairing(
+  name: string,
+  room: Helpers.Room,
+  pairing: Helpers.Pairing,
+): Operation<boolean> {
   if (pairing.epoch <= room.epoch) {
     return false
   }
@@ -101,7 +108,7 @@ function* applyPairing(name: string, room: Room, pairing: Pairing): Operation<bo
 }
 
 /** Open a new session for the pair: apply it here, then tell the other nodes. */
-function* announce(name: string, room: Room): Operation<void> {
+function* announce(name: string, room: Helpers.Room): Operation<void> {
   const pairing = pairingOf(room)
   if (!(yield* applyPairing(name, room, pairing))) {
     return
@@ -116,7 +123,7 @@ function* announce(name: string, room: Room): Operation<void> {
 }
 
 /** Hand a frame to every LOCAL member of the room except its sender. */
-function* deliver(room: Room, from: string, frame: unknown): Operation<void> {
+function* deliver(room: Helpers.Room, from: string, frame: unknown): Operation<void> {
   for (const member of room.members.values()) {
     if (member.id !== from && member.socket) {
       yield* member.socket.send(frame)
@@ -125,7 +132,7 @@ function* deliver(room: Room, from: string, frame: unknown): Operation<void> {
 }
 
 /** Whoever is left ends their session and waits for the next pairing. */
-function* announceDeparture(name: string, room: Room): Operation<void> {
+function* announceDeparture(name: string, room: Helpers.Room): Operation<void> {
   for (const member of room.members.values()) {
     if (member.socket) {
       yield* member.socket.send({ t: 'rtc:peer-left', room: name, epoch: room.epoch })
@@ -133,7 +140,7 @@ function* announceDeparture(name: string, room: Room): Operation<void> {
   }
 }
 
-function* applyEvent(event: RelayEvent): Operation<void> {
+function* applyEvent(event: Helpers.RelayEvent): Operation<void> {
   if (event.t === 'frame') {
     const room = rooms.get(event.room)
     if (room) {
@@ -212,8 +219,23 @@ export const Report = z.object({
   timeline: z.array(Moment).max(128).default([]),
 })
 
-/** Flat, exporter-friendly attributes for a report's span / event row. */
-const attrsOf = (input: ReportInput) => {
+/** Span event names stay within {@link EVENT_NAME_MAX} characters — Grafana cuts longer ones. */
+const EVENT_NAME_MAX = 20
+const EVENT_PREFIX = 'rtc.'
+
+/** A timeline kind (untrusted client input) as an event name: `rtc.<kind>`, lowercase
+ * `[a-z0-9_]` (`ice-restart` → `rtc.ice_restart`), at most 20 characters. */
+const eventNameOf = (kind: string): string =>
+  `${EVENT_PREFIX}${
+    kind
+      .toLowerCase()
+      .replaceAll(/[^a-z0-9_]+/gu, '_')
+      .slice(0, EVENT_NAME_MAX - EVENT_PREFIX.length) || 'moment'
+  }`
+
+/** Flat, exporter-friendly attributes for a report: the dispatch span's attributes and the
+ * `rtc.metrics` event. */
+const attrsOf = (input: Helpers.ReportInput) => {
   const sample = input.timeline.findLast(moment => moment.kind === 'stats')?.data ?? {}
   const { metrics } = input
   return {
@@ -337,33 +359,42 @@ export const rtc = service(
     report: action.mutation(
       {
         input: Report,
-        output: z.object({ spans: z.number() }),
+        output: z.object({ events: z.number() }),
         route: { method: 'POST', path: '/rtc/report' },
         description:
           'Record a browser peer\u2019s WebRTC metrics + event timeline (the relay forwards them off the signaling socket)',
       },
       function* ({ input, ctx }) {
         const attrs = attrsOf(input)
+        const span = yield* current()
 
-        // one span per client event: the dispatch span is the parent, so a report reads as the
-        // negotiation it describes — with the CLIENT's own duration on each step
+        // the counters are the report's own attributes: the dispatch span carries them, so a
+        // trace search finds a bad call by its numbers (`{ span.rtc.failures > 0 }`)
+        span.setAttributes(attrs)
+
+        // one span EVENT per client event, placed at the CLIENT's own time (a replayed
+        // timeline, not zero-length spans): the report's dispatch span reads as the negotiation
+        // it describes, with the client's duration on each step
         for (const moment of input.timeline) {
-          yield* ctx.span(`rtc.${moment.kind}`, function* () {}, {
-            'rtc.room': input.room,
-            'rtc.peer': input.metrics.id,
-            'rtc.generation': moment.generation,
-            'rtc.at': moment.at,
-            ...(moment.detail === undefined ? {} : { 'rtc.detail': moment.detail }),
-            ...(moment.durationMs === undefined ? {} : { 'rtc.duration_ms': moment.durationMs }),
-            ...(moment.error === undefined ? {} : { 'rtc.error': moment.error }),
-            ...moment.data,
-          })
+          yield* ctx.event(
+            eventNameOf(moment.kind),
+            {
+              'rtc.room': input.room,
+              'rtc.peer': input.metrics.id,
+              'rtc.generation': moment.generation,
+              ...(moment.detail === undefined ? {} : { 'rtc.detail': moment.detail }),
+              ...(moment.durationMs === undefined ? {} : { 'rtc.duration_ms': moment.durationMs }),
+              ...(moment.error === undefined ? {} : { 'rtc.error': moment.error }),
+              ...moment.data,
+            },
+            { time: moment.at },
+          )
         }
 
-        // the counters themselves, twice on purpose: as SPAN ATTRIBUTES (the OTLP exporter ships
-        // spans, so this is what reaches an OTel collector) and as an event on the cluster plane
-        // (an `emit` row is name-only — live dashboards read the payload off `Server.events`)
-        yield* ctx.span('rtc.metrics', function* () {}, attrs)
+        // …and a snapshot of them at report time, twice on purpose: as a span event + log record
+        // (what every sink ships) and as an event on the cluster plane (live dashboards read the
+        // payload off `Server.events`)
+        yield* ctx.event('rtc.metrics', attrs)
         yield* ctx.emit('rtc.metrics', attrs)
 
         const failed = input.metrics.failures > 0 || input.timeline.some(item => item.error)
@@ -372,7 +403,7 @@ export const rtc = service(
           attrs,
         )
 
-        return { spans: input.timeline.length }
+        return { events: input.timeline.length }
       },
     ),
     signal: action.socket(
@@ -466,7 +497,7 @@ export function* startRtcRelay(): Operation<void> {
     if (step.done) {
       return
     }
-    const event = step.value.payload as RelayEvent | undefined
+    const event = step.value.payload as Helpers.RelayEvent | undefined
     if (!event || event.node === NODE) {
       continue
     }

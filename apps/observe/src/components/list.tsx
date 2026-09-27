@@ -1,33 +1,43 @@
 // oxlint-disable import/exports-last
-/** The request list: newest first, live prepends, cursor-paged infinite scroll. */
-import type { RequestRow } from '../lib/api'
+/** The trace list: one ROOT span per trace, newest first, live prepends, cursor-paged. */
+import type { SpanRow } from '../lib/api'
+import { fmtMs, outcomeColor, serviceColor, statusText } from '../lib/format'
 
-export const nameOf = (row: RequestRow): string =>
-  row.method
-    ? `${row.method} ${row.path}`
-    : row.socket
-      ? `WS ${row.socket}`
-      : row.service
-        ? `${row.service}.${row.action}`
-        : 'request'
-
-export const matches = (row: RequestRow, filter: string): boolean =>
+export const matches = (row: SpanRow, filter: string): boolean =>
   filter.length === 0 ||
-  [row.service, row.action, row.error, row.path, row.socket].some(part =>
-    (part ?? '').toLowerCase().includes(filter),
-  )
+  [
+    row.name,
+    row.service_name,
+    row.service_instance_id,
+    row.error_type,
+    row.http_route,
+    row.trace_id,
+    row.request_id,
+  ].some(part => (part ?? '').toLowerCase().includes(filter))
+
+/** A service badge: the `service.name`, colored per service; the instance on hover (or shown
+ * when asked). */
+export const ServiceBadge = ({ span, instance }: { span: SpanRow; instance?: boolean }) => (
+  <span
+    className='tag'
+    title={`${span.service_name} @ ${span.service_instance_id}`}
+    style={{ color: serviceColor(span.service_name) }}>
+    {span.service_name}
+    {instance ? `@${span.service_instance_id}` : ''}
+  </span>
+)
 
 interface Props {
-  readonly rows: readonly RequestRow[]
+  readonly rows: readonly SpanRow[]
   readonly filter: string
   readonly selected: string | null
   readonly exhausted: boolean
   readonly loading: boolean
-  readonly onOpen: (requestId: string) => void
+  readonly onOpen: (traceId: string) => void
   readonly onMore: () => void
 }
 
-export const RequestList = ({
+export const TraceList = ({
   rows,
   filter,
   selected,
@@ -50,24 +60,25 @@ export const RequestList = ({
       .filter(row => matches(row, filter))
       .map(row => (
         <div
-          key={row.request_id}
-          className='row-hover grid cursor-pointer grid-cols-[72px_1fr_60px_64px] gap-2 border-b px-3 py-1.5'
+          key={row.trace_id}
+          className='row-hover grid cursor-pointer grid-cols-[88px_1fr_56px_64px] items-center gap-2 border-b px-3 py-1.5'
           style={{
             borderColor: 'var(--line)',
-            background: selected === row.request_id ? '#1d2230' : undefined,
+            background: selected === row.trace_id ? '#1d2230' : undefined,
           }}
-          onClick={() => onOpen(row.request_id)}>
+          onClick={() => onOpen(row.trace_id)}>
           <span style={{ color: 'var(--dim)' }}>
-            {new Date(row.started_at).toLocaleTimeString()}
+            {new Date(row.start).toLocaleTimeString([], { hour12: false })}
           </span>
           <span className='truncate'>
-            {nameOf(row)} <span style={{ color: 'var(--dim)' }}>{row.lane}</span>
+            <ServiceBadge span={row} />
+            {row.name}
           </span>
-          <span className='text-right' style={{ color: row.error ? 'var(--bad)' : 'var(--ok)' }}>
-            {row.status ?? ''}
+          <span className='truncate text-right' style={{ color: outcomeColor(row) }}>
+            {statusText(row)}
           </span>
           <span className='text-right' style={{ color: 'var(--dim)' }}>
-            {row.duration_ms === null ? '' : `${row.duration_ms}ms`}
+            {fmtMs(row.duration_ms)}
           </span>
         </div>
       ))}
@@ -78,7 +89,7 @@ export const RequestList = ({
     )}
     {exhausted && rows.length === 0 && (
       <div className='p-6' style={{ color: 'var(--dim)' }}>
-        no requests yet
+        no traces yet
       </div>
     )}
   </section>

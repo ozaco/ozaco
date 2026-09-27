@@ -4,37 +4,13 @@
  */
 import type { ClientDef } from 'client:core'
 import { createClient } from 'client:core'
-import type { Flow, Operation } from 'std:effect'
+import type { Operation } from 'std:effect'
 import { attempt, scoped, sleep, until } from 'std:effect'
 import { isFailure } from 'std:result'
 
 import { MCP_TOKEN } from '../const'
+import { bytesOf, drain, JOB_POLL_MS, JOB_POLLS } from '../internal/walk'
 import type { Api, Step } from '../types/demo'
-
-function* drain<T>(flow: Flow<T, void>, max = Infinity): Operation<T[]> {
-  const out: T[] = []
-  const subscription = yield* flow
-
-  while (out.length < max) {
-    const step = yield* subscription.next()
-
-    if (step.done) {
-      break
-    }
-
-    out.push(step.value)
-  }
-
-  return out
-}
-
-const bytesOf = (size: number): ReadableStream<Uint8Array> =>
-  new ReadableStream<Uint8Array>({
-    start(controller) {
-      controller.enqueue(new Uint8Array(size).fill(1))
-      controller.close()
-    },
-  })
 
 /** Run every use case once; resolves the steps (the test asserts on them). */
 export function* walk(url: string, report: (step: Step) => void = () => {}): Operation<Step[]> {
@@ -216,37 +192,77 @@ export function* walk(url: string, report: (step: Step) => void = () => {}): Ope
   const overview = yield* client.reports.overview()
   note('nested ctx.call', overview)
 
-  // --- reply shape: 202 + location, rpc-style 200 failure -------------------------------
+  // --- the job queue: 202 + location, a worker, a dead letter; rpc-style 200 failure ------
+  /** Poll a job until the worker settled it (`done` / `dead`) — bounded. */
+  const settled = function* (id: string) {
+    for (let tries = 0; ; tries += 1) {
+      const job = yield* client.jobs.status({ id })
+
+      if (job.state === 'done' || job.state === 'dead' || tries >= JOB_POLLS) {
+        return job
+      }
+
+      yield* sleep(JOB_POLL_MS)
+    }
+  }
   const submitted = yield* client.$callWithMeta(
     { service: 'jobs', action: 'submit' },
     { kind: 'report' },
   )
-  const job = submitted.value as { id: string; state: string }
-  const status = yield* client.jobs.status({ id: job.id })
+  const job = yield* settled((submitted.value as { id: string }).id)
+  // the per-call `location` header rides the reply as the owner set it — through a gateway too
+  // (the owner's `ctx.reply` crosses the carrier with the value)
+  const plain = yield* until(
+    fetch(`${url}/jobs/submit`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${rotated.accessToken}`,
+      },
+      body: JSON.stringify({ kind: 'report' }),
+    }),
+  )
+  const plainJob = (yield* until(plain.json())) as { id: string }
   const ghostJob = yield* attempt(client.jobs.status({ id: 'nope' }))
   const pong = yield* client.jobs.rpc({ method: 'ping' })
   const soft = yield* attempt(client.jobs.rpc({ method: 'nope' }))
 
   note('jobs reply shape', {
     submitStatus: submitted.meta.status,
-    state: status.state,
+    location: plain.headers.get('location') === `/jobs/status/${plainJob.id}`,
+    state: job.state,
     missing: isFailure(ghostJob) ? ghostJob.error : 'found?!',
     rpc: pong.result,
     // a failure the action maps to 200: still a failure here, the status rides in the causes
     softFailure: isFailure(soft) ? { tag: soft.error, status: soft.causes.at(-1) } : 'value?!',
   })
 
+  // a job that fails every attempt: retried with backoff, then dead-lettered — the row keeps
+  // the last failure's whole cause chain (and each attempt is a root span linking the enqueue)
+  const doomed = yield* settled((yield* client.jobs.submit({ kind: 'fail' })).id)
+
+  note('job queue', {
+    state: doomed.state,
+    attempts: doomed.attempts,
+    chain: (doomed.lastError ?? '')
+      .split('\n')
+      .filter(line => !line.startsWith(' '))
+      .map(line => line.replace(/^Caused by: /u, '').split(':')[0]),
+  })
+
   // --- static service token: no login, `auth: 'service'` -----------------------------------
+  // a scheduled job stays queued — what `pending` lists
+  const later = yield* client.jobs.submit({ kind: 'report', delayMs: 60_000 })
   const asUser = yield* attempt(client.jobs.pending({ limit: 5 }))
   const mcp = yield* createClient<Api>({ url, token: MCP_TOKEN })
-  const pending = yield* mcp.jobs.pending({ limit: 10 })
+  const pending = yield* mcp.jobs.pending({ limit: 100 })
   const anonymousJobs = yield* attempt(
-    (yield* createClient<Api>({ url })).jobs.status({ id: job.id }),
+    (yield* createClient<Api>({ url })).jobs.status({ id: later.id }),
   )
 
   note('static service token', {
     userDenied: isFailure(asUser) ? asUser.error : 'listed?!',
-    pendingSeen: pending.ids.includes(job.id),
+    pendingSeen: pending.ids.includes(later.id),
     // the service-level `auth: 'authenticated'` covers `status` (only `rpc` opted out)
     anonymousDenied: isFailure(anonymousJobs) ? anonymousJobs.error : 'served?!',
   })

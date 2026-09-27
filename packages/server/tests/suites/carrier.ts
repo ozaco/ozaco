@@ -348,6 +348,76 @@ export const runCarrierSuite = (target: CarrierTarget): void => {
       )
     })
 
+    it('presence: three nodes started back to back learn each other at once (no heartbeat needed)', async () => {
+      // a heartbeat far beyond the test: only the `hello` / answer exchange can teach anyone —
+      // each node subscribes BEFORE it says hello, so none of them misses a peer's hello or
+      // the answers to its own
+      const presence = { heartbeatMs: 60_000 }
+      const nodes = ['c', 'b', 'a'] as const
+      const known: Record<string, string[]> = {}
+
+      unwrap(
+        await run(function* () {
+          const ready = createQueue<void, void>()
+          const learned = createQueue<void, void>()
+
+          const node = (instance: string) =>
+            fork(() =>
+              scoped(function* () {
+                yield* storage()
+                yield* target.transport()
+                const own = service(`node-${instance}`, {
+                  who: action.query({ output: z.string() }, function* () {
+                    return instance
+                  }),
+                })
+                const server = yield* createServer({
+                  services: [own],
+                  carrier: NetworkCarrier.use({ presence }),
+                  name: 'app',
+                  instance,
+                })
+                ready.add(undefined)
+
+                const peers = nodes.filter(other => other !== instance)
+                const peersKnown = function* () {
+                  const found: string[] = []
+                  for (const peer of peers) {
+                    const members = yield* server.members(`node-${peer}`)
+                    found.push(...members.map(member => member.instance))
+                  }
+                  return found.toSorted()
+                }
+
+                for (let tries = 0; tries < 100; tries += 1) {
+                  if ((yield* peersKnown()).length === peers.length) {
+                    break
+                  }
+                  yield* sleep(10)
+                }
+                known[instance] = yield* peersKnown()
+                learned.add(undefined)
+                yield* sleep(60_000)
+              }),
+            )
+
+          const tasks = []
+          for (const instance of nodes) {
+            tasks.push(yield* node(instance))
+            yield* ready.next()
+          }
+          for (const _ of nodes) {
+            yield* learned.next()
+          }
+          for (const task of tasks) {
+            yield* task.halt()
+          }
+        }),
+      )
+
+      expect(known).toEqual({ a: ['b', 'c'], b: ['a', 'c'], c: ['a', 'b'] })
+    })
+
     it('topology: a gateway-role node with no services serves the edge and forwards every call', async () => {
       unwrap(
         await run(function* () {

@@ -9,13 +9,15 @@ import { CliCauses, CliErrors, describeFailure, isReported } from 'cli:core'
 import { DefaultPalette } from 'cli:palette'
 import type { Operation } from 'std:effect'
 import { attempt, run } from 'std:effect'
-import { fail, isFailure, unwrap } from 'std:result'
+import { fail, isFailure, ResultErrors, unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import { describe, expect, it } from 'bun:test'
 
 import { createMemoryScreen, MemoryTerminal } from 'cli:impl/memory'
 import { z } from 'zod'
+
+import pkg from '../package.json'
 
 const DomainErrors = { Down: 'app.down' } as const
 
@@ -61,6 +63,9 @@ const app = defineCommand({
     }),
     broken: defineAction({ description: 'always fails' }, function* () {
       return yield* fail(DomainErrors.Down, 'the service is down', 'app.broken', 'app.broken')
+    }),
+    thrown: defineAction({ description: 'throws a platform error' }, function* () {
+      throw Object.assign(new TypeError('socket hang up'), { code: 'ECONNRESET' })
     }),
     kube: defineCommand({
       name: 'kube',
@@ -215,6 +220,40 @@ describe('cli — failure reporting', () => {
     expect(describeFailure(fail('x.tag', 'boom', 'a', 'a', CliCauses.Reported, 'b'))).toBe(
       'x.tag: boom\n  causes: a › b',
     )
+  })
+
+  it('with report, a thrown error is rendered once as its fold, never an object dump', async () => {
+    const { outcome, screen } = await cli(['app', 'thrown'], { report: true })
+
+    // the throw is an `asFailure` fold: `std:result.unknown`, the thrown Error its `raw`
+    expect(isFailure(outcome) && outcome.error).toBe(ResultErrors.Unknown)
+    expect(isFailure(outcome) && outcome.raw).toBeInstanceOf(TypeError)
+    expect(outcome.causes.filter(isFailure)).toEqual([])
+    expect(isReported(outcome)).toBe(true)
+    // each guard it crossed labels it in place: the action, the command's dispatch, then (after
+    // the report marker) the registry's `run` and its dispatch
+    expect(outcome.causes).toEqual([
+      'thrown',
+      'app@0.0.0',
+      'dispatch',
+      'app@0.0.0',
+      CliCauses.Reported,
+      'run',
+      `cli-default-registry@${pkg.version}`,
+      'dispatch',
+      `cli-registry@${pkg.version}`,
+    ])
+
+    const err = screen.plain('stderr')
+    expect(err).toBe(
+      'std:result.unknown: TypeError: socket hang up (ECONNRESET)\n' +
+        '  causes: thrown › app@0.0.0 › dispatch\n',
+    )
+    expect(err).not.toContain('[object Object]')
+    // a nested failure cause renders inline
+    expect(
+      describeFailure(fail('x.tag', 'boom', fail('io.read', 'disk gone', 'io:read'), 'a')),
+    ).toBe('x.tag: boom\n  causes: (io.read: disk gone: io:read) › a')
   })
 
   it('with report, an already-rendered parse failure is not rendered again', async () => {

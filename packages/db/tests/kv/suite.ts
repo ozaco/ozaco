@@ -2,7 +2,19 @@
 import type { KvDef } from 'db:core'
 import { Kv, KvErrors } from 'db:core'
 import type { Operation } from 'std:effect'
-import { all, attempt, createQueue, fork, run, scoped, sleep, useContext } from 'std:effect'
+import {
+  all,
+  attempt,
+  createQueue,
+  fork,
+  race,
+  run,
+  scoped,
+  sleep,
+  suspend,
+  useContext,
+  withResolvers,
+} from 'std:effect'
 import { fail, isFailure, unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
 
@@ -209,6 +221,133 @@ export const runKvSuite = (target: KvTarget): void => {
             return 'v'
           })
           expect(yield* Kv.actions.invalidate(tag)).toBe(1)
+        }),
+      )
+    })
+
+    it('wrap onSource: miss computes, a concurrent caller is coalesced, the stored value is a hit', async () => {
+      unwrap(
+        await run(function* () {
+          yield* target.use()
+          const key = unique('source')
+          const sources: string[] = []
+          const onSource = (source: KvDef.Source) => {
+            sources.push(source)
+          }
+          let computed = 0
+          const compute = function* () {
+            // what the callback said is known BEFORE a miss computes
+            expect(sources.at(-1)).toBe('miss')
+            computed += 1
+            yield* sleep(30)
+            return computed
+          }
+
+          const answers = yield* all([
+            Kv.actions.wrap(key, { ttlMs: 10_000, onSource }, compute),
+            Kv.actions.wrap(key, { ttlMs: 10_000, onSource }, compute),
+          ])
+          expect(answers).toEqual([1, 1])
+          expect(sources).toEqual(['miss', 'coalesced'])
+
+          expect(yield* Kv.actions.wrap(key, { ttlMs: 10_000, onSource }, compute)).toBe(1)
+          expect(sources).toEqual(['miss', 'coalesced', 'hit'])
+          expect(computed).toBe(1)
+
+          // a throwing callback is ignored: the answer still comes back
+          const throwing = () => {
+            throw new Error('telemetry hook')
+          }
+          expect(yield* Kv.actions.wrap(key, { ttlMs: 10_000, onSource: throwing }, compute)).toBe(
+            1,
+          )
+        }),
+      )
+    })
+
+    it('wrap: a halted leader releases the callers that joined it — one goes round and leads', async () => {
+      unwrap(
+        await run(function* () {
+          yield* target.use()
+          const key = unique('halt')
+          const sources: string[] = []
+          const onSource = (source: KvDef.Source) => {
+            sources.push(source)
+          }
+          const computing = withResolvers<void>()
+
+          const leader = yield* fork(() =>
+            Kv.actions.wrap(key, { ttlMs: 10_000 }, function* () {
+              computing.resolve()
+              yield* suspend()
+              return -1
+            }),
+          )
+          yield* computing.operation
+
+          const follower = yield* fork(() =>
+            Kv.actions.wrap(key, { ttlMs: 10_000, onSource }, function* () {
+              return 2
+            }),
+          )
+          // the follower has joined the leader's flight
+          while (sources.length === 0) {
+            yield* sleep(1)
+          }
+          expect(sources).toEqual(['coalesced'])
+
+          yield* leader.halt()
+
+          const answer = yield* race([
+            follower,
+            (function* () {
+              yield* sleep(1000)
+              return 'hung' as const
+            })(),
+          ])
+          expect(answer).toBe(2)
+          // it went round again: nothing stored, no flight left — it led itself
+          expect(sources).toEqual(['coalesced', 'miss'])
+          expect(yield* Kv.actions.get<number>(key)).toBe(2)
+
+          // no stale flight either: the next caller reads the stored value
+          expect(
+            yield* Kv.actions.wrap(key, { ttlMs: 10_000, onSource }, function* () {
+              return 3
+            }),
+          ).toBe(2)
+          expect(sources.at(-1)).toBe('hit')
+        }),
+      )
+    })
+
+    it('wrap: a leader halted with nobody waiting leaves no stale flight behind', async () => {
+      unwrap(
+        await run(function* () {
+          yield* target.use()
+          const key = unique('stale')
+          const computing = withResolvers<void>()
+
+          const leader = yield* fork(() =>
+            Kv.actions.wrap(key, { ttlMs: 10_000 }, function* () {
+              computing.resolve()
+              yield* suspend()
+              return -1
+            }),
+          )
+          yield* computing.operation
+          yield* leader.halt()
+
+          const answer = yield* race([
+            Kv.actions.wrap(key, { ttlMs: 10_000 }, function* () {
+              return 'fresh'
+            }),
+            (function* () {
+              yield* sleep(1000)
+              return 'hung' as const
+            })(),
+          ])
+          expect(answer).toBe('fresh')
         }),
       )
     })

@@ -1,4 +1,4 @@
-import { column, Db, DbClient, defineSchema, table } from 'db:core'
+import { column, Db, DbClient, DbErrors, defineSchema, table } from 'db:core'
 import type { QueueDef } from 'db:queue'
 import { Queue, QueueErrors, queueTable } from 'db:queue'
 import type { Operation } from 'std:effect'
@@ -341,8 +341,17 @@ for (const target of targets) {
           expect(isFailure(noHandlers) && noHandlers.error).toBe(QueueErrors.Validation)
           const batch = yield* attempt(Queue.actions.work({ *x() {} }, { batch: 0 }))
           expect(isFailure(batch) && batch.error).toBe(QueueErrors.Validation)
+          const service = yield* attempt(Queue.actions.work({ *x() {} }, { service: '' }))
+          expect(isFailure(service) && service.error).toBe(QueueErrors.Validation)
         }),
       )
+
+      // an empty service name
+      const unnamed = await run(function* () {
+        yield* bootstrap()
+        yield* Queue.use({ table: 'jobs', service: '' })
+      })
+      expect(isFailure(unnamed) && unnamed.error).toBe(QueueErrors.Configuration)
 
       // a table that is not a queue table
       const other = table('other', { title: column.text() })
@@ -353,6 +362,9 @@ for (const target of targets) {
         yield* Queue.use({ table: 'other' })
       })
       expect(isFailure(wiring) && wiring.error).toBe(QueueErrors.Configuration)
+      // the projection check that found it out is nested as the cause
+      const probe = isFailure(wiring) ? wiring.causes.find(isFailure) : undefined
+      expect(probe?.error).toBe(DbErrors.Validation)
 
       // no DbClient at all
       const bare = await run(function* () {

@@ -1,7 +1,6 @@
 import { DbClient, Kv } from 'db:core'
 import type { ServerDef } from 'server:core'
 import { Server, ServerErrors } from 'server:core'
-import { childTrace, withSpan } from 'server:internal'
 import { attempt, fork, useContext } from 'std:effect'
 import { definePlugin } from 'std:plugin'
 import { fail, isFailure } from 'std:result'
@@ -9,7 +8,7 @@ import type { AnyType } from 'std:shared'
 
 import pkg from '../../../package.json'
 
-import { keyOf, options } from './internal'
+import { evict, follow, lookup, options } from './internal'
 import type { CacheDef } from './types'
 
 /**
@@ -17,7 +16,14 @@ import type { CacheDef } from './types'
  * serves repeats from the store (singleflight on a miss — one computation per key), a mutation's
  * `invalidate: [tags]` drops entries once it succeeds, and every db table named as a tag is
  * invalidated automatically when that table changes (the db's change feed — cluster-wide through
- * the bus). Stream outputs are never cached. Every lookup is a `cache` span (hit/miss).
+ * the bus). Stream outputs are never cached.
+ *
+ * Telemetry (scope `@ozaco/server/cache`): every lookup is an INTERNAL `cache {service}.{action}`
+ * span (`ozaco.cache.hit` / `.coalesced` / `.key` / `.store` / `.ttl_ms`) the handler runs under on
+ * a miss; a hit links the span that computed the entry (`cache.producer`). A mutation's
+ * invalidation is an `ozaco.cache.evict` event on its span; a change-feed invalidation is a
+ * `record: 'errors'` root `cache.invalidate {table}` linking the write (`change.writer`).
+ * Swallowed failures (an invalidation, a feed) are logged through the std Logger (WARN).
  */
 export const Cache = definePlugin<ServerDef.PluginContext, [options?: CacheDef.PluginOptions]>({
   name: 'server-cache',
@@ -44,25 +50,11 @@ export const Cache = definePlugin<ServerDef.PluginContext, [options?: CacheDef.P
           const cache = (ctx.meta.options as { cache?: CacheDef.Options }).cache
           const invalidate = (ctx.meta.options as { invalidate?: readonly string[] }).invalidate
           if (cache && ctx.meta.outputPlane === 'value') {
-            const key = keyOf({ prefix, call, ctx, cache })
-            const hit = yield* Kv.actions.has(key)
-            return yield* withSpan(
-              {
-                kernel,
-                trace: yield* childTrace(call.trace),
-                kind: 'cache',
-                name: hit ? 'hit' : 'miss',
-                attrs: { key },
-              },
-              () =>
-                Kv.actions.wrap(key, { ttlMs: cache.ttlMs, tags: cache.tags }, () =>
-                  next(call, ctx),
-                ),
-            )
+            return yield* lookup({ prefix, call, ctx, cache, next })
           }
           const value = yield* next(call, ctx)
           if (invalidate) {
-            yield* Kv.actions.invalidate(...invalidate)
+            yield* evict(invalidate)
           }
           return value
         },
@@ -84,19 +76,7 @@ export const Cache = definePlugin<ServerDef.PluginContext, [options?: CacheDef.P
           }
           const tables = (given?.tables ?? [...tagged]).filter(name => tagged.has(name))
           for (const table of tables) {
-            yield* fork(function* () {
-              const feed = yield* attempt(() => (db as AnyType).changes(table))
-              if (isFailure(feed)) {
-                return
-              }
-              for (;;) {
-                const step = yield* (feed.value as AnyType).next()
-                if (step.done) {
-                  return
-                }
-                yield* attempt(() => Kv.actions.invalidate(table))
-              }
-            })
+            yield* fork(() => follow(() => (db as AnyType).changes(table), table))
           }
         },
       },

@@ -30,7 +30,12 @@ export const MemoryKv = Kv.implement<KvDef.Options, [options?: MemoryKvDef.Optio
       return yield* fail(KvErrors.Configuration, `invalid kv prefix "${prefix}"`)
     }
     yield* StateRef.set({ link: options?.link ?? createLink() })
-    return { store: 'memory', prefix, capabilities: driver.capabilities }
+    return {
+      store: 'memory',
+      prefix,
+      capabilities: driver.capabilities,
+      telemetry: { system: 'ozaco.memory', namespace: 'memory', collection: prefix },
+    }
   },
 }).build(kvActions(driver))
 

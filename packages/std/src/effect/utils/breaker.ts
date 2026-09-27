@@ -2,20 +2,9 @@ import { fail, isFailure } from 'std:result'
 
 import { attempt } from '../base/attempt'
 import { EffectCauses, EffectErrors } from '../errors'
+import { describe } from '../internal/breaker'
 import type { Operation } from '../types/operation'
 import type { Utils } from '../types/utils'
-
-const describe = (reason: unknown): string => {
-  if (reason === undefined) {
-    return ''
-  }
-
-  if (isFailure(reason)) {
-    return String(reason.message || reason.error)
-  }
-
-  return reason instanceof Error ? reason.message : String(reason)
-}
 
 /**
  * A circuit breaker for any operation. CLOSED runs `op` and counts consecutive failures (only the

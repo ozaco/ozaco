@@ -2,8 +2,8 @@ import type { PromiseWithResolvers } from 'std:shared'
 
 import type { Result } from '../types/result'
 
-import { asFailure } from './as-failure'
-import { isSuccess } from './is'
+import { fail } from './fail'
+import { isFailure, isSuccess } from './is'
 import { succeed } from './success'
 
 export const lazyPromise = <T, E>(
@@ -48,7 +48,8 @@ export const lazyPromiseWithResolvers = <T>(): PromiseWithResolvers<T> => {
 
   const resolve = ((value: T) =>
     settle(succeed(value) as Result<T, never>)) as PromiseWithResolvers<T>['resolve']
-  const reject = (error: unknown) => settle(asFailure(error))
+  // the raw rejection rides in the error slot (a Failure as is): the promise rejects with it
+  const reject = (error: unknown) => settle(isFailure(error) ? error : fail(error))
 
   const promise = lazyPromise<T, unknown>(($resolve, $reject) => {
     const record = ($result: Result<T, unknown>) => {

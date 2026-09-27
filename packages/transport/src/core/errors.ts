@@ -1,5 +1,7 @@
 import { createTags } from 'std:shared'
 
+import { noResponders, timedOut } from './internal/faults'
+
 /**
  * Transport failure tags — only for CARRYING problems. A responder's own failure travels through
  * the package plane with its original tag/message/causes and is re-raised as-is.
@@ -13,13 +15,18 @@ import { createTags } from 'std:shared'
  * - `unsupported` — the installed transport lacks the capability
  * - `configuration` — bad install wiring
  * - `encoding` — a payload could not be (de)coded / a frame was malformed
+ *
+ * `timeout` and `no-responders` also say which backend client error they stand for (a
+ * `TimeoutError`, a NATS `NoRespondersError` — see `internal/faults`): a client rejection is
+ * folded into them (`asFailure(error, TransportErrors)`), the client error kept as the failure's
+ * `raw`.
  */
 export const TransportErrors = createTags(
   'transport',
 
   'connection',
-  'timeout',
-  'no-responders',
+  ['timeout', timedOut],
+  ['no-responders', noResponders],
   'payload-too-large',
   'lane-full',
   'closed',

@@ -101,15 +101,45 @@ export namespace TransportDef {
     readonly timeoutMs?: number | undefined
   }
 
-  export interface ServeOptions {
+  export interface ServeOptions<TArgs = unknown> {
     /** The namespace of `group` (see {@link SubscribeOptions.prefix}). */
     readonly prefix?: string | undefined
     /** Load-balance requests over the members of this group. */
     readonly group?: string | undefined
+    /**
+     * Name where a failed request failed — merged into the {@link Origin} its reply carries: e.g.
+     * the `service` / `operation` / `spanId` a server carrier dispatched to, or `recorded: true`
+     * when this side recorded the failure itself. The core stamps `operation` (the topic),
+     * `traceId` (the request's inbound `traceparent`) and `recorded` (the failure was recorded in
+     * that trace here) on its own; what this returns wins. Called only for failures of a request
+     * that decoded (the handler ran).
+     */
+    readonly origin?:
+      | ((failure: Result.Failure<unknown>, request: Message<TArgs>) => Origin | undefined)
+      | undefined
+  }
+
+  /**
+   * Where a failed request was answered, as its reply names it. The caller's decoder turns it
+   * into a string cause on the re-raised failure — `remote: <operation> @ <service> span <spanId
+   * first 8>`, the parts it knows — and, when `recorded`, marks the failure recorded (remotely)
+   * in `traceId` in the std:trace registry, so no span on the calling side records it again.
+   */
+  export interface Origin {
+    readonly service?: string | undefined
+    readonly operation?: string | undefined
+    readonly spanId?: string | undefined
+    /** The trace the request came in with (its `traceparent`). */
+    readonly traceId?: string | undefined
+    /** The answering side recorded the failure in `traceId`. */
+    readonly recorded?: boolean | undefined
   }
 
   /** A request handler: args in, value out; a raised failure travels back to the caller with
-   * its tag, message and causes intact. */
+   * its tag, message and causes intact — its nested failures too — plus a `remote: …` cause
+   * naming where it was answered (see {@link Origin}). A thrown value travels as its fold:
+   * `std:result.unknown`, its text the message (the value itself, the fold's `raw`, stays on the
+   * answering side). */
   export type Handler<TArgs = unknown, TResult = unknown> = (
     args: TArgs,
     message: Message<TArgs>,
@@ -182,7 +212,9 @@ export namespace TransportDef {
 
     // --- package ------------------------------------------------------------------------------
     /** Request/reply carrying a Result: the responder's value, or its failure re-raised with
-     * tag/message/causes intact. */
+     * tag/message/causes intact, its nested failures rebuilt and a `remote: …` cause appended
+     * (see {@link Origin}). The active trace context rides the request as
+     * `traceparent` / `tracestate` headers (unless the caller sets `traceparent` itself). */
     request<TResult = unknown, TArgs = unknown>(
       topic: Topic,
       args: TArgs,
@@ -192,7 +224,7 @@ export namespace TransportDef {
     serve<TArgs = unknown, TResult = unknown>(
       topic: Topic,
       handler: Handler<TArgs, TResult>,
-      options?: ServeOptions,
+      options?: ServeOptions<TArgs>,
     ): Operation<Stop>
 
     // --- lifecycle ----------------------------------------------------------------------------
@@ -270,5 +302,21 @@ export namespace TransportDef {
     payloadLimit?(): Operation<number | null>
     status(): Flow<Status, void>
     drain(): Operation<void>
+  }
+
+  // --- operational log --------------------------------------------------------------------------
+
+  /** The levels of the transport's operational log (`logTransport`). */
+  export type LogLevel = 'info' | 'warn'
+
+  /** What `watchStatus` names in the lines it logs. */
+  export interface StatusWatch {
+    /** The backend (`memory`, `nats`, `redis`, …) — logged as `messaging.system`. */
+    readonly transport: string
+    /** The application prefix — logged as `ozaco.prefix`. */
+    readonly prefix: string
+    /** Backend facts added to a connection-lost line (e.g. `{ error }`: the client's last
+     * socket error, folded — `asFailure`). */
+    readonly detail?: (() => Record<string, unknown> | undefined) | undefined
   }
 }

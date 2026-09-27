@@ -10,11 +10,18 @@ import {
   useContext,
 } from 'std:effect'
 import { IO } from 'std:io'
-import { fail, isFailure } from 'std:result'
+import { asFailure, fail, isFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import type { TransportDef } from 'transport:core'
-import { isPattern, matchTopic, prefixed, TransportErrors, unprefixed } from 'transport:core'
+import {
+  isPattern,
+  logTransport,
+  matchTopic,
+  prefixed,
+  TransportErrors,
+  unprefixed,
+} from 'transport:core'
 
 import type { Redis } from './types'
 
@@ -77,8 +84,11 @@ const globOf = (pattern: string): string => pattern.replaceAll('>', '*')
 const toBytes = (value: AnyType): Uint8Array =>
   value instanceof Uint8Array ? value : encoder.encode(String(value))
 
-export const raise = function* (error: unknown) {
-  return yield* fail(TransportErrors.Connection, String((error as AnyType)?.message ?? error))
+/** A caught client error (a rejection `attempt` folded) as a transport failure:
+ * `transport.connection` — `context` says what was being done — over its fold (the client error
+ * its `raw`). */
+export const raise = function* (caught: unknown, context: string) {
+  return yield* fail(TransportErrors.Connection, context, asFailure(caught, TransportErrors))
 }
 
 /** Consumer groups — competing (`group`) and durable (`durable`) — ride a Redis Stream per
@@ -143,6 +153,13 @@ function* subscribeGroup(
 
   const task = yield* fork(function* () {
     let sinceClaim = 0
+    /** failed reads in a row: the first one of a streak is logged, and so is the recovery */
+    let failing = 0
+    const where = {
+      'messaging.system': 'redis',
+      'messaging.destination.name': unprefixed(state.prefix, subject) ?? subject,
+      'messaging.consumer.group.name': group,
+    }
 
     for (;;) {
       if (durable && sinceClaim <= 0) {
@@ -176,8 +193,23 @@ function* subscribeGroup(
       )
 
       if (isFailure(read)) {
+        failing += 1
+        if (failing === 1) {
+          yield* logTransport('warn', 'transport group read failed, retrying', {
+            ...where,
+            error: read,
+          })
+        }
         yield* sleep(100)
         continue
+      }
+
+      if (failing > 0) {
+        yield* logTransport('info', 'transport group read recovered', {
+          ...where,
+          'ozaco.retry.count': failing,
+        })
+        failing = 0
       }
 
       for (const stream of read.value ?? []) {
@@ -222,7 +254,7 @@ export const driver: TransportDef.Driver = {
       ),
     )
     if (isFailure(published)) {
-      return yield* raise(published.error)
+      return yield* raise(published, `cannot publish on "${topic}"`)
     }
 
     const [listeners, groups] = published.value
@@ -296,7 +328,7 @@ export const driver: TransportDef.Driver = {
     )
 
     if (isFailure(opened)) {
-      return yield* raise(opened.error)
+      return yield* raise(opened, `cannot subscribe to "${topic}"`)
     }
 
     yield* ensure(function* () {

@@ -1,10 +1,11 @@
 // oxlint-disable import/exports-last
 import { DbErrors } from 'db:core'
+import { driverCause } from 'db:internal'
 import { createContext, until, useContext } from 'std:effect'
-import { fail } from 'std:result'
+import { asFailure, fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 
-import type { Sql } from '../shared/types'
+import type { Sql } from '../shared/types/sql'
 
 import type { Sqlite } from './types'
 
@@ -42,37 +43,6 @@ export const createLock = (): Sqlite.Lock => {
       return release
     },
   }
-}
-
-const classify = (error: AnyType): string => {
-  const code = typeof error?.code === 'string' ? error.code : ''
-  const message = String(error?.message ?? error)
-
-  if (code.includes('CONSTRAINT_UNIQUE') || code.includes('CONSTRAINT_PRIMARYKEY')) {
-    return DbErrors.Unique
-  }
-
-  if (code.includes('CONSTRAINT_FOREIGNKEY')) {
-    return DbErrors.ForeignKey
-  }
-
-  if (code.includes('CONSTRAINT_NOTNULL')) {
-    return DbErrors.NotNull
-  }
-
-  if (code.includes('CONSTRAINT_CHECK')) {
-    return DbErrors.Check
-  }
-
-  if (code === 'SQLITE_BUSY' || code === 'SQLITE_LOCKED') {
-    return DbErrors.Conflict
-  }
-
-  if (/unique constraint failed/iu.test(message)) {
-    return DbErrors.Unique
-  }
-
-  return DbErrors.Query
 }
 
 /** The characters that open a run of text a `;` must NOT split on: string literals, the three
@@ -123,23 +93,26 @@ const isMultiStatement = (sql: string): boolean => {
 }
 
 /**
- * Run one statement on the shared handle, classifying any SQLiteError into a `DbErrors` failure.
- * A multi-statement SCRIPT (DDL batches, trigger definitions) runs whole through `run()` — it
- * yields no rows and cannot take bind parameters, so a script with params fails loudly instead
- * of silently binding to its first statement only.
+ * Run one statement on the shared handle; a SQLiteError is folded by the `DbErrors` matchers
+ * (its `SQLITE_*` code, else its text; `db.query` for anything else), the driver's message, the
+ * error as `raw` and its code as the `sqlite <code>` cause the db span reports as
+ * `db.response.status_code`. A multi-statement SCRIPT (DDL batches, trigger definitions) runs
+ * whole through `run()` — it yields no rows and cannot take bind parameters, so a script with
+ * params fails loudly instead of silently binding to its first statement only.
  */
 export const exec: Sql.Executor = function* (statement: string, params: readonly unknown[]) {
   const state = yield* useContext(StateRef)
+  const script = isMultiStatement(statement)
+
+  if (script && params.length > 0) {
+    return yield* fail(
+      DbErrors.Query,
+      'a multi-statement script cannot take bind parameters — run the statements one by one',
+    )
+  }
 
   try {
-    if (isMultiStatement(statement)) {
-      if (params.length > 0) {
-        return yield* fail(
-          DbErrors.Query,
-          'a multi-statement script cannot take bind parameters — run the statements one by one',
-        )
-      }
-
+    if (script) {
       const changes = state.db.run(statement)
       return { rows: [], rowCount: Number(changes.changes ?? 0) }
     }
@@ -147,9 +120,12 @@ export const exec: Sql.Executor = function* (statement: string, params: readonly
     const rows = state.db.query(statement).all(...(params as AnyType[])) as AnyType[]
     return { rows, rowCount: rows.length }
   } catch (error) {
-    return yield* fail(classify(error), String((error as AnyType)?.message ?? error))
+    return yield* asFailure(error, DbErrors, driverCause(error))
   }
 }
+
+/** The file's basename (`db.namespace`); `:memory:` for an in-process database. */
+export const namespaceOf = (path: string): string => path.split(/[\\/]/u).at(-1) || path
 
 /** The shared-transaction seam `runSqlTransaction` drives. */
 export const transactional: Sql.Transactional = {

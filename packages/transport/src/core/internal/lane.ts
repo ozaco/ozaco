@@ -2,7 +2,7 @@
 import type { Flow, Operation, Subscription } from 'std:effect'
 import { attempt, createQueue, ensure, fork, race, sleep } from 'std:effect'
 import type { Result } from 'std:result'
-import { fail, isFailure } from 'std:result'
+import { asFailure, fail, isFailure } from 'std:result'
 
 import {
   CHUNK_HEADER_ALLOWANCE,
@@ -305,8 +305,7 @@ export function* readableLane(
   given?: TransportDef.LaneOptions,
 ): Operation<ReadableStream<Uint8Array>> {
   const subscription = yield* flowLane<Uint8Array, unknown>(runtime, topic, given)
-  type Step = IteratorResult<Uint8Array, TransportDef.LaneClose<unknown>>
-  const demand = createQueue<(step: Step) => void, void>()
+  const demand = createQueue<(step: Helpers.ByteStep) => void, void>()
 
   yield* fork(function* () {
     for (;;) {
@@ -324,7 +323,7 @@ export function* readableLane(
   })
 
   const take = () =>
-    new Promise<Step>(resolve => {
+    new Promise<Helpers.ByteStep>(resolve => {
       demand.add(resolve)
     })
 
@@ -428,7 +427,17 @@ export function* writableLane(
   return new WritableStream<Uint8Array>({
     write: chunk => submit(chunk, null),
     close: () => submit(null, null),
+    // a foreign reason (a platform error, a string) is folded under the close (`raw` keeps it)
     abort: reason =>
-      submit(null, isFailure(reason) ? reason : fail(TransportErrors.Closed, String(reason))),
+      submit(
+        null,
+        isFailure(reason)
+          ? reason
+          : fail(
+              TransportErrors.Closed,
+              `writable lane "${topic}" aborted`,
+              reason === undefined ? undefined : asFailure(reason),
+            ),
+      ),
   })
 }

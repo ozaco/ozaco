@@ -1,6 +1,7 @@
 import type { Protocol } from 'std:plugin'
 import { defineProtocol } from 'std:plugin'
 import { fail } from 'std:result'
+import { suppressed } from 'std:trace'
 
 import pkg from '../../../package.json'
 import {
@@ -12,6 +13,7 @@ import {
   SERVER_OUTCOMES,
 } from '../const'
 import { ServerErrors } from '../errors'
+import { ExporterProbe, InheritedExporters } from '../internal/context'
 import type { CarrierDef } from '../types/carrier'
 import type { EdgeDef } from '../types/edge'
 import type { ObserveDef } from '../types/observe'
@@ -79,9 +81,9 @@ export const Outcomes: Protocol<OutcomesDef.Options, OutcomesDef.Actions> = defi
 })
 
 /**
- * Where "what happened" is kept: requests, spans, logs, failures and events as db rows. One
- * impl (`server:plugins` → `Observe`); without it the kernel still traces — it just has nowhere
- * to write, and every read action fails `server.unsupported`.
+ * Where "what happened" is kept: the finished spans and log records the kernel observes, as db
+ * rows. One impl (`server:plugins` → `Observe`); without it the kernel still traces (exporters
+ * ship it) — it just has nowhere to keep it, and every read action fails `server.unsupported`.
  */
 export const Observe: Protocol<ObserveDef.Options, ObserveDef.Actions> = defineProtocol<
   ObserveDef.Options,
@@ -89,23 +91,26 @@ export const Observe: Protocol<ObserveDef.Options, ObserveDef.Actions> = defineP
 >({
   name: 'server-observe',
   version: pkg.version,
-  description: 'Requests, spans, logs, failures and events as queryable rows',
+  description: 'Finished spans and log records as queryable rows',
 
   subtype: SERVER_OBSERVE,
 
   defaults: {
     *record() {},
-    *request() {
+    *traces() {
       return yield* fail(ServerErrors.Unsupported, 'no observe store is installed')
     },
-    *query() {
+    *trace() {
+      return yield* fail(ServerErrors.Unsupported, 'no observe store is installed')
+    },
+    *request() {
       return yield* fail(ServerErrors.Unsupported, 'no observe store is installed')
     },
     *prune() {
       return yield* fail(ServerErrors.Unsupported, 'no observe store is installed')
     },
     *stats() {
-      return { recorded: 0, dropped: 0, pending: 0 }
+      return { recorded: 0, dropped: 0, pending: 0, forwarded: 0, received: 0, fellBack: 0 }
     },
     *flush() {},
   },
@@ -123,7 +128,7 @@ export const ObserveExporter: Protocol<ObserveDef.ExporterContext, ObserveDef.Ex
   defineProtocol<ObserveDef.ExporterContext, ObserveDef.ExporterActions>({
     name: 'server-observe-exporter',
     version: pkg.version,
-    description: 'A destination the observed requests, spans, logs, failures and events go to',
+    description: 'A destination the observed spans and log records go to',
 
     subtype: SERVER_OBSERVE_EXPORTER,
     cloneable: true,
@@ -134,12 +139,25 @@ export const ObserveExporter: Protocol<ObserveDef.ExporterContext, ObserveDef.Ex
       *flush() {},
     },
 
-    // every exporter sees every call, in install order — SEQUENTIALLY, in the caller's scope:
-    // `start` forks age timers and beats that must outlive the call (an `all` fan-out would
-    // close its child scopes and halt them on the way out)
+    // every exporter of THIS node sees every call, in install order — SEQUENTIALLY, in the
+    // caller's scope: `start` forks age timers and beats that must outlive the call (an `all`
+    // fan-out would close its child scopes and halt them on the way out). Each runs SUPPRESSED:
+    // an exporter's own work (its fetches, the timers `start` forks) never becomes telemetry
+    // itself. An outer node's exporters (visible to a nested node's scope) are skipped
     *exec(entries, run) {
+      const probe = yield* ExporterProbe.get()
+
+      if (probe) {
+        probe.push(...entries)
+        return
+      }
+
+      const inherited = yield* InheritedExporters.get()
+
       for (const entry of entries) {
-        yield* run(entry)
+        if (!inherited?.has(entry)) {
+          yield* suppressed(() => run(entry))
+        }
       }
     },
   })

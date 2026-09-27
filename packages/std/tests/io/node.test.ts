@@ -27,10 +27,13 @@ const withTempDir = async (fn: (dir: string) => Promise<void>) => {
 const errorOf = (outcome: unknown): string =>
   isFailure(outcome) ? (outcome.error as string) : 'no-failure'
 
-// An untagged native error (e.g. an `fs` ENOENT) rides through `attempt` as the raw Error in
-// `failure.error`; its `code` is the stable thing to assert on.
+// An untagged native error (e.g. an `fs` ENOENT) rides through `attempt` folded by `asFailure`:
+// tagged by the `IOErrors` matchers or `std:result.unknown`, the platform error kept as `raw`; its
+// `code` is the stable thing to assert.
 const codeOf = (outcome: unknown): string =>
-  isFailure(outcome) ? String((outcome.error as { code?: string })?.code) : 'no-failure'
+  isFailure(outcome)
+    ? String((outcome.raw as NodeJS.ErrnoException | undefined)?.code)
+    : 'no-failure'
 
 describe('NodeIO installs', () => {
   it('registers as std/node-io and serves the shared crypto/id actions', async () => {

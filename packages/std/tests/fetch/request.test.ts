@@ -1,7 +1,7 @@
-import { attempt, run } from 'std:effect'
+import { EffectCauses, attempt, run } from 'std:effect'
 import type { FetchDef } from 'std:fetch'
 import { Fetch, FetchClient, FetchErrors, fetchImpl } from 'std:fetch'
-import { isFailure, unwrap } from 'std:result'
+import { ResultErrors, isFailure, unwrap } from 'std:result'
 
 import { afterAll, describe, expect, it } from 'bun:test'
 
@@ -251,9 +251,17 @@ describe('request-level failures', () => {
       expect(outcome.error).toBe(FetchErrors.Network)
       expect(outcome.error).toBe('std:fetch.network')
       expect(outcome.message).toBe('ConnectionRefused')
-      // the cause chain names the dispatched action and its plugin tag
-      expect(outcome.causes).toContain('request')
-      expect(outcome.causes).toContain(`std/fetch@${pkg.version}`)
+      // the runtime fold's cause (re-classified — the platform error its raw, never a cause),
+      // then the cause chain names the dispatched action and its plugin tag, the dispatch and
+      // the protocol tag
+      expect(outcome.causes).toEqual([
+        EffectCauses.Until,
+        'request',
+        `std/fetch-client@${pkg.version}`,
+        'dispatch',
+        `std/fetch@${pkg.version}`,
+      ])
+      expect(outcome.raw).toBeInstanceOf(Error)
     }
   })
 
@@ -290,7 +298,7 @@ describe('network failures and tls', () => {
     }
   })
 
-  it("a custom transport's own (non-network) throw still passes through untouched", async () => {
+  it("a custom transport's own (non-network) throw passes through unclassified, nested as is", async () => {
     const boom = new RangeError('custom transport exploded')
     const outcome = await run(function* () {
       yield* FetchClient.use()
@@ -303,7 +311,9 @@ describe('network failures and tls', () => {
 
     expect(isFailure(outcome)).toBe(true)
     if (isFailure(outcome)) {
-      expect(outcome.error).toBe(boom)
+      // folded by asFailure: no fetch tag, the thrown Error itself kept as raw
+      expect(outcome.error).toBe(ResultErrors.Unknown)
+      expect(outcome.raw).toBe(boom)
     }
   })
 

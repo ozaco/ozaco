@@ -2,7 +2,7 @@ import type { Spec } from 'db:core'
 import { FIELDS, VERSION_ZERO } from 'db:core'
 
 import { quoteIdent } from './compile'
-import type { Sql } from './types'
+import type { Sql } from './types/sql'
 
 const indexName = (table: string, index: string): string => `${table}__${index}`
 

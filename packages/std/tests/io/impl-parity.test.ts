@@ -25,9 +25,12 @@ const withTempDir = async (fn: (dir: string) => Promise<void>) => {
 const errorOf = (outcome: unknown): string =>
   isFailure(outcome) ? (outcome.error as string) : 'no-failure'
 
-// an untagged native error rides through `attempt` as the raw Error; `code` is the stable part
+// a native error rides through `attempt` folded by `asFailure` (an `IOErrors` tag or
+// `std:result.unknown`, the platform error kept as `raw`); its `code` is the stable part
 const codeOf = (outcome: unknown): string =>
-  isFailure(outcome) ? String((outcome.error as { code?: string })?.code) : 'no-failure'
+  isFailure(outcome)
+    ? String((outcome.raw as NodeJS.ErrnoException | undefined)?.code)
+    : 'no-failure'
 
 describe('BunIO fs — where it differs from NodeIO', () => {
   it('write without flags creates missing parent directories; with a flag it fails ENOENT', async () => {
@@ -134,7 +137,7 @@ describe('BunIO fs — where it differs from NodeIO', () => {
 
         return {
           latin1: yield* IO.actions.readText(join(dir, 't.txt'), 'latin1'),
-          hex: isFailure(hex) ? (hex.error as Error).name : 'no-failure',
+          hex: isFailure(hex) ? (hex.raw as Error | undefined)?.name : 'no-failure',
         }
       })
 

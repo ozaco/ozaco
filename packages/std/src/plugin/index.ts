@@ -1,6 +1,6 @@
 export * from './errors'
 
-export * from './types/helpers'
+export type * from './types/helpers'
 export * from './types/plugin'
 export * from './types/protocol'
 

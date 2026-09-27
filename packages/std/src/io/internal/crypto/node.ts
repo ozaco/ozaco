@@ -1,5 +1,4 @@
 import { mapError, until } from 'std:effect'
-import type { Result } from 'std:result'
 import { fail } from 'std:result'
 
 import {
@@ -121,8 +120,8 @@ export function* decryptSecret(data: Uint8Array, secret: string) {
       return fail(
         IOErrors.DecryptFailed,
         'decryption failed — wrong secret or corrupted data',
-        ...failure.causes,
-      ) as Result.Failure<unknown>
+        failure,
+      )
     },
   )
   return new Uint8Array(plain)
@@ -170,12 +169,7 @@ export function* signData(data: Uint8Array | string, privateKey: Uint8Array) {
         resolve(new Uint8Array(nodeSign(null, bytes, key)))
       }),
     ),
-    failure =>
-      fail(
-        IOErrors.SignFailed,
-        'signing failed — invalid private key',
-        ...failure.causes,
-      ) as Result.Failure<unknown>,
+    failure => fail(IOErrors.SignFailed, 'signing failed — invalid private key', failure),
   )
 }
 
@@ -193,11 +187,6 @@ export function* verifyData(
         resolve(nodeVerify(null, bytes, key, signature))
       }),
     ),
-    failure =>
-      fail(
-        IOErrors.VerifyFailed,
-        'verification failed — invalid public key',
-        ...failure.causes,
-      ) as Result.Failure<unknown>,
+    failure => fail(IOErrors.VerifyFailed, 'verification failed — invalid public key', failure),
   )
 }

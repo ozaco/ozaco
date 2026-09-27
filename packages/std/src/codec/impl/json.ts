@@ -9,7 +9,8 @@ import { JSONParser } from '@streamparser/json'
 import pkg from '../../../package.json'
 import { Codec } from '../definition'
 import { CodecErrors } from '../errors'
-import type { CodecDef } from '../types'
+import { parseJson, revive, stringifyJson } from '../internal/failures'
+import type { CodecDef } from '../types/codec'
 
 const encoder = new TextEncoder()
 const decoder = new TextDecoder()
@@ -35,36 +36,37 @@ export const JsonCodec = Codec.implement({
 }).build<CodecDef.JsonActions>({
   *encode(value: unknown) {
     try {
-      return encoder.encode(JSON.stringify(value))
+      return encoder.encode(stringifyJson(value))
     } catch (error) {
-      return yield* fail(CodecErrors.Encode, error instanceof Error ? error.message : String(error))
+      return yield* fail(CodecErrors.Encode, 'cannot encode the value as JSON', asFailure(error))
     }
   },
 
   *decode(data: Uint8Array) {
     try {
-      return JSON.parse(decoder.decode(data))
+      return parseJson(decoder.decode(data)) as AnyType
     } catch (error) {
-      return yield* fail(CodecErrors.Decode, error instanceof Error ? error.message : String(error))
+      return yield* fail(CodecErrors.Decode, 'cannot decode the bytes as JSON', asFailure(error))
     }
   },
 
   *stringify(value: unknown, space?: number) {
     try {
-      return JSON.stringify(value, null, space)
+      return stringifyJson(value, space)
     } catch (error) {
       return yield* fail(
         CodecErrors.Stringify,
-        error instanceof Error ? error.message : String(error),
+        'cannot stringify the value as JSON',
+        asFailure(error),
       )
     }
   },
 
   *parse(text: string) {
     try {
-      return JSON.parse(text)
+      return parseJson(text) as AnyType
     } catch (error) {
-      return yield* fail(CodecErrors.Parse, error instanceof Error ? error.message : String(error))
+      return yield* fail(CodecErrors.Parse, 'cannot parse the text as JSON', asFailure(error))
     }
   },
 
@@ -77,11 +79,12 @@ export const JsonCodec = Codec.implement({
         for (const chunk of yield* each(flow)) {
           let encoded: Uint8Array
           try {
-            encoded = encoder.encode(JSON.stringify(chunk))
+            encoded = encoder.encode(stringifyJson(chunk))
           } catch (error) {
             close = fail(
               CodecErrors.Encode,
-              error instanceof Error ? error.message : String(error),
+              'cannot encode the value as JSON',
+              asFailure(error),
             ) as Result.Failure<unknown>
             break
           }
@@ -129,7 +132,7 @@ export const JsonCodec = Codec.implement({
           if (stack.length > 0) {
             return
           }
-          pending.push(value)
+          pending.push(revive(value))
         }
       }
 

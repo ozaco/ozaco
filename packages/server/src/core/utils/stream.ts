@@ -4,15 +4,8 @@ import { fromReadable, toReadable } from 'std:effect'
 import type { AnyType, StandardSchemaV1 } from 'std:shared'
 
 import { PARTS_DECL, STREAM_BRAND, STREAM_DECL } from '../const'
+import { decl, register, registry } from '../internal/stream'
 import type { StreamDef } from '../types/stream'
-
-/** The brands core knows out of the box; `stream.brand(...)` registers more. */
-const registry = new Map<string, StreamDef.BrandSpec>()
-
-const register = (brand: string, spec: StreamDef.BrandSpec): StreamDef.BrandSpec => {
-  registry.set(brand, spec)
-  return spec
-}
 
 /** The spec of a brand, or null when unknown. `bytes:<mime>` resolves for any mime. */
 export const brandSpecOf = (brand: string): StreamDef.BrandSpec | null => {
@@ -28,12 +21,6 @@ export const brandSpecOf = (brand: string): StreamDef.BrandSpec | null => {
 
   return null
 }
-
-const decl = <B extends string, T>(brand: B, spec: StreamDef.BrandSpec): StreamDef.Decl<B, T> => ({
-  _t: STREAM_DECL,
-  brand,
-  spec: register(brand, spec),
-})
 
 /** Stamp a platform stream with a brand. */
 export const brandStream = <B extends string, T>(

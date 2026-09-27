@@ -1,7 +1,8 @@
 import type { Database, Schema, Spec } from 'db:core'
-import type { ServerDef } from 'server:core'
 import type { Operation } from 'std:effect'
+import type { Result } from 'std:result'
 import type { AnyType } from 'std:shared'
+import type { TraceDef } from 'std:trace'
 
 import type { z } from 'zod'
 
@@ -21,18 +22,23 @@ export namespace Helpers {
    * generic over its own table), so they take the loose shape `useDb()` is narrowed from. */
   export type LooseDb = Database.Handle<Record<string, Schema.Types<Spec.Doc, Spec.Doc>>>
 
-  /** What an op runs against: the (overridden) db handle, the request headers, and the ctx when
-   * one is reachable — a `db` override (a transaction's handle) works without a dispatch, the
-   * headers then default empty. */
+  /** What an op runs against: the (overridden) db handle and the request headers — a `db`
+   * override (a transaction's handle) works without a dispatch, the headers then default empty. */
   export interface OpEnv {
     readonly db: LooseDb
     readonly headers: Readonly<Record<string, string>>
-    readonly ctx: ServerDef.Ctx | null
   }
 
-  /** What one windowed watch runs with (see `windowed` in `internal.ts`). */
-  export interface WindowedArgs {
-    readonly ctx: ServerDef.Ctx
+  /** One op call: which op on which table, with the options it was given (the trusted `scope`
+   * among them — `ozaco.crud.scoped`). */
+  export interface OpCall {
+    readonly op: string
+    readonly table: Schema.Table
+    readonly options: ResourceDef.OpOptions & { readonly scope?: Spec.Filter | undefined }
+  }
+
+  /** What a watch subscribes with, both kinds (see `watch` in `internal.ts`). */
+  export interface WatchArgs {
     readonly resource: ResourceDef.RealtimeSource
     readonly frame: Extract<ResourceDef.ClientFrame, { t: 'watch' }>
     readonly query: AnyType
@@ -40,6 +46,30 @@ export namespace Helpers {
     /** the watch's (hook-aware) frame sender. */
     readonly send: (out: ResourceDef.ServerFrame) => Operation<void>
   }
+
+  /** One live push of a watch — its own `record: 'errors'` ROOT span `crud.delta {table}`,
+   * linking the watch span and `writers` (the spans whose writes it reflects). */
+  export type Push = (
+    writers: readonly TraceDef.SpanContext[],
+    body: () => Operation<void>,
+  ) => Operation<void>
+
+  /** A watch's failure as its `error` hook left it, and the span it failed in (the watch span,
+   * a push's root — the one that records it; the error frame names it as `recorded`). */
+  export interface Shaped {
+    readonly failure: Result.Failure<unknown>
+    readonly at: TraceDef.SpanHandle
+  }
+
+  /** A subscribed watch's live phase: every change it reacts to goes out through `push`. */
+  export type Live = (push: Push) => Operation<void>
+
+  /** The writers of the changes a delta push reflects — up to its token, of the rows it carries
+   * (their ids): taken once each. */
+  export type Writers = (
+    token: string,
+    rows: ReadonlySet<string>,
+  ) => Operation<readonly TraceDef.SpanContext[]>
 
   /** `crud.list` — `total: true` also counts the set, so the page carries `total`. */
   export interface ListFn {

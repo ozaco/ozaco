@@ -12,7 +12,7 @@
 
 export { HEADERS } from './const'
 export { ServerErrors, STATUS_OF } from './errors'
-export { CtxRef, TraceRef } from './context'
+export { ActiveRequest, CtxRef, RequestRef } from './context'
 
 export { DbOutcomes } from './definition/outcomes'
 export { Carrier, Edge, Observe, ObserveExporter, Outcomes, Server } from './definition/protocol'
@@ -36,5 +36,4 @@ export type * from './types/outcomes'
 export type * from './types/server'
 export type * from './types/service'
 export type * from './types/stream'
-export type * from './types/trace'
 export type * from './types/wire'

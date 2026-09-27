@@ -45,6 +45,7 @@ export const MemoryAdapter = DbAdapter.implement<Adapter.Options, []>({
     return {
       adapter: 'memory',
       capabilities: { transactions: true, raw: false, alterColumn: false },
+      telemetry: { system: 'ozaco.memory', namespace: 'memory' },
     }
   },
 }).build({

@@ -1,7 +1,7 @@
+import { CliErrors } from 'cli:core'
 import type { Operation } from 'std:effect'
 import { attempt, call } from 'std:effect'
-import { isFailure } from 'std:result'
-import { serializeError } from 'std:shared'
+import { asFailure, isFailure } from 'std:result'
 
 import { parseArgs } from 'node:util'
 
@@ -10,18 +10,6 @@ import type { Helpers } from '../types/helpers'
 
 const stringify = (value: string | boolean): string =>
   typeof value === 'boolean' ? String(value) : value
-
-/**
- * parseArgs' throw as one short line: its first sentence (`Unknown option '--bogus'`), without
- * the error name or the `-- "--bogus"` hint that follows — never a serialized object.
- */
-const describeThrow = (error: unknown): string => {
-  if (!(error instanceof Error)) {
-    return serializeError(error)
-  }
-  const [first] = error.message.split(/\.\s/u)
-  return (first ?? error.message).replace(/\.$/u, '')
-}
 
 /**
  * Tokenize argv with `util.parseArgs` (no hand-rolled parser; Bun ships the module natively). The
@@ -58,7 +46,10 @@ export function* tokenize(
     call(() => parseArgs({ args: head, options, strict: true, allowPositionals: true })),
   )
   if (isFailure(parsed)) {
-    const message = describeThrow(parsed.error)
+    // parseArgs' throw as one short line: `attempt` folds it, `CliErrors` re-classifies the fold
+    // as `cli.parse` named by the parser's first sentence (`Unknown option '--bogus'`) — never a
+    // serialized object
+    const { message } = asFailure(parsed, CliErrors)
     return { options: new Map(), positionals: [], rest, errors: [message] }
   }
 

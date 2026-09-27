@@ -18,6 +18,11 @@ export const Client = definePlugin<ClientDef.Context, [options: ClientDef.Option
     if (!options?.url) {
       return yield* fail(ClientErrors.Configuration, 'createClient needs a url')
     }
-    return { options, manifest: options.manifest ?? null, lastRequestId: null }
+    return {
+      options,
+      manifest: options.manifest ?? null,
+      lastRequestId: null,
+      lastTraceId: null,
+    }
   },
 }).build()

@@ -13,15 +13,9 @@ import { filterValues, where } from '../utils/filter'
 
 import { TxBuffer } from './context'
 import { createQuery, guardPaths } from './query'
+import { txRetry } from './trace'
 import { prepareInsert, preparePatch, systemOf } from './validate'
 import { watchDoc } from './watch'
-
-/** The loose write options every internal path works with (the typed generics live on the
- * public {@link Database.Handle} alone). */
-interface WriteOptions {
-  readonly ifVersion?: string | undefined
-  readonly scope?: Spec.Filter | undefined
-}
 
 /** The read predicate of a document addressed by id, narrowed by a trusted `scope`. */
 const readGuard = (id: string, scope: Spec.Filter | undefined): Spec.Filter =>
@@ -29,7 +23,7 @@ const readGuard = (id: string, scope: Spec.Filter | undefined): Spec.Filter =>
 
 /** The write predicate: the id and the `scope`, plus the expected `_version` under optimistic
  * concurrency. */
-const writeGuard = (id: string, options?: WriteOptions): Spec.Filter => {
+const writeGuard = (id: string, options?: Helpers.WriteOptions): Spec.Filter => {
   const guard = readGuard(id, options?.scope)
 
   return options?.ifVersion === undefined
@@ -51,7 +45,7 @@ export const createHandle = (state: Database.State, base?: Spec.Filter): Databas
   const scopeOf = (scope: Spec.Filter | undefined): Spec.Filter | undefined =>
     base === undefined ? scope : scope === undefined ? base : where.and(base, scope)
 
-  const guardOptions = (options?: WriteOptions): WriteOptions => ({
+  const guardOptions = (options?: Helpers.WriteOptions): Helpers.WriteOptions => ({
     ifVersion: options?.ifVersion,
     scope: scopeOf(options?.scope),
   })
@@ -125,7 +119,11 @@ export const createHandle = (state: Database.State, base?: Spec.Filter): Databas
   /** A guarded write matched nothing: absent doc → null result, version mismatch → conflict.
    * The re-read keeps the `scope` on, so a row OUTSIDE it reads as absent — an out-of-scope
    * write is a miss, never a conflict that would prove the row exists. */
-  const missed = function* (target: Helpers.WriteTarget, id: string, options?: WriteOptions) {
+  const missed = function* (
+    target: Helpers.WriteTarget,
+    id: string,
+    options?: Helpers.WriteOptions,
+  ) {
     if (options?.ifVersion === undefined) {
       return null
     }
@@ -144,7 +142,7 @@ export const createHandle = (state: Database.State, base?: Spec.Filter): Databas
     target: Helpers.WriteTarget,
     id: string,
     data: Spec.Doc,
-    options?: WriteOptions,
+    options?: Helpers.WriteOptions,
   ) {
     // one write, one token: the log row and the event carry the row's new version
     const change = yield* hub.record({
@@ -173,7 +171,7 @@ export const createHandle = (state: Database.State, base?: Spec.Filter): Databas
     return doc
   }
 
-  const get = function* (table: string, id: string, options?: WriteOptions) {
+  const get = function* (table: string, id: string, options?: Helpers.WriteOptions) {
     const target = yield* targetOf(table)
     return yield* loadOne(target.spec, id, scopeOf(options?.scope))
   }
@@ -222,13 +220,23 @@ export const createHandle = (state: Database.State, base?: Spec.Filter): Databas
   }
 
   // oxlint-disable-next-line max-params
-  const patch = function* (table: string, id: string, value: unknown, options?: WriteOptions) {
+  const patch = function* (
+    table: string,
+    id: string,
+    value: unknown,
+    options?: Helpers.WriteOptions,
+  ) {
     const target = yield* targetOf(table)
     return yield* write(target, id, yield* preparePatch(target.def, value), guardOptions(options))
   }
 
   // oxlint-disable-next-line max-params
-  const replace = function* (table: string, id: string, value: unknown, options?: WriteOptions) {
+  const replace = function* (
+    table: string,
+    id: string,
+    value: unknown,
+    options?: Helpers.WriteOptions,
+  ) {
     const target = yield* targetOf(table)
     // the scope's pinned values override the replacement, so a replace cannot move the row
     // out of the scope it was written under
@@ -244,7 +252,7 @@ export const createHandle = (state: Database.State, base?: Spec.Filter): Databas
     )
   }
 
-  const remove = function* (table: string, id: string, options?: WriteOptions) {
+  const remove = function* (table: string, id: string, options?: Helpers.WriteOptions) {
     const target = yield* targetOf(table)
     const merged = guardOptions(options)
     const change = yield* hub.record({ table, id, op: 'delete' })
@@ -303,6 +311,10 @@ export const createHandle = (state: Database.State, base?: Spec.Filter): Databas
       if (outcome.error !== DbErrors.Conflict || attemptIndex >= retries) {
         return yield* outcome
       }
+
+      // the attempt that just failed stays on its own `transaction` span; the retry is an event
+      // of the caller's
+      yield* txRetry(attemptIndex + 2)
     }
   }
 
@@ -316,7 +328,7 @@ export const createHandle = (state: Database.State, base?: Spec.Filter): Databas
     table: string,
     match: Record<string, unknown>,
     value: unknown,
-    options?: WriteOptions & { readonly when?: Spec.Filter | undefined },
+    options?: Helpers.WriteOptions & { readonly when?: Spec.Filter | undefined },
   ) {
     return yield* transaction(function* (tx) {
       const loose = tx as AnyType
@@ -362,7 +374,7 @@ export const createHandle = (state: Database.State, base?: Spec.Filter): Databas
     table: string,
     match: Record<string, unknown>,
     value: unknown,
-    options?: WriteOptions & { readonly when?: Spec.Filter | undefined },
+    options?: Helpers.WriteOptions & { readonly when?: Spec.Filter | undefined },
   ) {
     // a concurrent upsert may insert the same key between our lookup and our insert: its row is
     // there now, so ONE retry takes the update branch (another unique violation surfaces)
@@ -441,7 +453,7 @@ export const createHandle = (state: Database.State, base?: Spec.Filter): Databas
       // a scoped handle's queries START narrowed — `filter` stacks, so refiners AND onto it
       return base === undefined ? built : built.filter(base as AnyType)
     },
-    watch: (table: string, id: string, options?: WriteOptions) =>
+    watch: (table: string, id: string, options?: Helpers.WriteOptions) =>
       watchDoc({ hub, table, id, load: () => get(table, id, options) }),
     changes: (table?: string) => hub.changes(table),
     transaction,

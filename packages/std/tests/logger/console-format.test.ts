@@ -21,6 +21,7 @@ const entry = (overrides: Partial<LoggerDef.Entry> = {}): LoggerDef.Entry => ({
   time: 0,
   msg: 'hello',
   error: '',
+  failures: [],
   bindings: {},
   data: undefined,
   ...overrides,

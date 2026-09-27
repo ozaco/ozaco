@@ -3,7 +3,7 @@ import { attempt } from 'std:effect'
 import { isFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
 
-import type { Sql } from './types'
+import type { Sql } from './types/sql'
 
 /**
  * Run `body` atomically on a SQL backend. A top-level call pins a session (`runtime.session`)

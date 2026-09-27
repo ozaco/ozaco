@@ -15,6 +15,14 @@ import type { HotReloadDef } from './types'
  * the carrier keep their sessions, only the routes and handlers change (`server.reload`). A
  * broken save is reported and the last good declarations keep serving. Dev only: production
  * nodes ship declarations, they do not watch them.
+ *
+ * Telemetry: every reload is a generation — a ROOT span `hot-reload` (`ozaco.reload.generation`,
+ * the changed paths as `ozaco.reload.triggers`, `ozaco.reload.services.added|removed|replaced`)
+ * linking the previous one (`reload.previous`), its steps `hot-reload.bundle`,
+ * `hot-reload.import` and `server.reload` as children. A failure is recorded once (WARN) with its
+ * chain — what the module threw (or what the bundler said) as the cause — and logged through the
+ * std `Logger` (`logger: '@ozaco/server/hot-reload'`; the console without one), as are failing
+ * `onReload` / `onError` hooks.
  */
 const HotReloadPlugin = definePlugin<HotReloadDef.Context, [options: HotReloadDef.Options]>({
   name: 'server-hot-reload',

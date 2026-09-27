@@ -1,6 +1,6 @@
 import type { Operation } from 'std:effect'
 import { attempt, guard, lift, race, resource, sleep, until } from 'std:effect'
-import { fail, isSuccess } from 'std:result'
+import { asFailure, fail, isSuccess } from 'std:result'
 
 import { RtcCauses, RtcErrors } from '../errors'
 import type { Helpers } from '../types/helpers'
@@ -8,7 +8,6 @@ import type { RtcDef } from '../types/rtc'
 
 import { initOf, wrapChannel } from './channel'
 import { CHANNEL_DEFAULTS } from './const'
-import { messageOf } from './generation'
 
 /** The losing arm of `awaitOpen`: fails `rtc.timeout` once `timeoutMs` passed. */
 function* openDeadline(label: string, timeoutMs: number): Operation<void> {
@@ -43,7 +42,7 @@ export const openChannel = (
     try {
       native = generation.pc.createDataChannel(label, initOf(merged))
     } catch (error) {
-      return yield* fail(RtcErrors.Channel, `createDataChannel failed: ${messageOf(error)}`)
+      return yield* fail(RtcErrors.Channel, 'createDataChannel failed', asFailure(error))
     }
 
     const entry = wrapChannel(native, merged, {
@@ -100,7 +99,7 @@ export const openTrack = (
     try {
       sender = pc.addTrack(track, ...streams)
     } catch (error) {
-      return yield* fail(RtcErrors.Track, `addTrack failed: ${messageOf(error)}`)
+      return yield* fail(RtcErrors.Track, 'addTrack failed', asFailure(error))
     }
 
     const record: Helpers.TrackRecord = { track, streams: [...streams], sender, removed: false }
@@ -170,7 +169,7 @@ export const openTrack = (
           until(active.replaceTrack?.(next) ?? Promise.resolve()),
         )
         if (!isSuccess(swapped)) {
-          return yield* fail(RtcErrors.Track, 'replaceTrack failed')
+          return yield* fail(RtcErrors.Track, 'replaceTrack failed', swapped)
         }
       }, RtcCauses.ReplaceTrack),
 

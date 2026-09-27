@@ -1,9 +1,8 @@
+import { segments } from '../internal/path'
 import type { AnyType } from '../types/common'
 import type { Helpers } from '../types/helpers'
 
 import { isObject } from './is'
-
-const segments = (path: string): string[] => path.split('.').filter(Boolean)
 
 /** Read a dotted key (`a.b.c`) from a nested object; `undefined` if any segment is missing. */
 export const getPath = <T = unknown>(obj: Record<string, AnyType>, path: string): T | undefined => {

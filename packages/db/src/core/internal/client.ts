@@ -10,6 +10,7 @@ import type { Change } from '../types/change'
 import type { Database } from '../types/database'
 import type { Helpers } from '../types/helpers'
 import { isSystemField } from '../utils/is'
+import { untraced } from '../utils/telemetry'
 
 import { StateRef } from './context'
 import { attachTransport } from './hub'
@@ -130,7 +131,8 @@ export function* createBus(origin: string, options: Bus.OutboxOptions | undefine
       }
     }
   }
-  const task = yield* fork(pump)
+  // the pump outlives whatever span the install ran under: it ships with none
+  const task = yield* fork(() => untraced(pump))
 
   yield* ensure(function* () {
     closing = true

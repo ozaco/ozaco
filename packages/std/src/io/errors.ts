@@ -1,10 +1,17 @@
 import { createTags } from 'std:shared'
 
+/**
+ * The io failure tags. `not-found` / `exists` / `access-denied` also say which platform error they
+ * stand for (its `code`): a filesystem rejection is folded into them (`asFailure(error, IOErrors)`),
+ * the platform error kept as the failure's `raw`.
+ */
 export const IOErrors = createTags(
   'std:io',
 
   'unsupported',
-  'exists',
+  ['not-found', { code: 'ENOENT' }],
+  ['exists', { code: 'EEXIST' }],
+  ['access-denied', { code: ['EACCES', 'EPERM'] }],
   'missing-env',
 
   'exec-failed',

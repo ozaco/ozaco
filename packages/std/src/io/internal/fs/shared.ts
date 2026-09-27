@@ -1,28 +1,14 @@
-import { until } from 'std:effect'
 import { IO_FLAGS, toPath } from 'std:io'
 import { hasFlag } from 'std:shared'
 
 import fs from 'node:fs/promises'
 import { join } from 'node:path'
 
+import type { Helpers } from '../../types/helpers'
 import type { IODef } from '../../types/io'
 
+import { fsCall } from './platform'
 import { mapStat, walkRecursive } from './walk'
-
-type SharedFs = Pick<
-  IODef.Actions,
-  | 'append'
-  | 'rm'
-  | 'stat'
-  | 'lstat'
-  | 'readdir'
-  | 'ensureDir'
-  | 'emptyDir'
-  | 'walk'
-  | 'chmod'
-  | 'symlink'
-  | 'readlink'
->
 
 /** The `node:fs` open flag for a write under `IO_FLAGS.append` / `IO_FLAGS.exclusive`. */
 export const writeFlagOf = (flags: number) => {
@@ -35,37 +21,37 @@ export const writeFlagOf = (flags: number) => {
 
 /** The fs handlers that need nothing but `node:fs` — `BunIO` and `NodeIO` both spread them, so the
  * two impls cannot drift apart on these. */
-export const sharedFs: SharedFs = {
+export const sharedFs: Helpers.SharedFs = {
   *append(path, data) {
-    yield* until(fs.appendFile(toPath(path), data))
+    yield* fsCall(fs.appendFile(toPath(path), data))
   },
 
   *rm(path, options) {
-    yield* until(fs.rm(toPath(path), options))
+    yield* fsCall(fs.rm(toPath(path), options))
   },
 
   *stat(path) {
-    return mapStat(yield* until(fs.stat(toPath(path))))
+    return mapStat(yield* fsCall(fs.stat(toPath(path))))
   },
 
   *lstat(path) {
-    return mapStat(yield* until(fs.lstat(toPath(path))))
+    return mapStat(yield* fsCall(fs.lstat(toPath(path))))
   },
 
   *readdir(path, options) {
-    return yield* until(fs.readdir(toPath(path), options))
+    return yield* fsCall(fs.readdir(toPath(path), options))
   },
 
   *ensureDir(path) {
-    yield* until(fs.mkdir(toPath(path), { recursive: true }))
+    yield* fsCall(fs.mkdir(toPath(path), { recursive: true }))
   },
 
   *emptyDir(path) {
     const p = toPath(path)
-    yield* until(fs.mkdir(p, { recursive: true }))
-    const entries = yield* until(fs.readdir(p))
+    yield* fsCall(fs.mkdir(p, { recursive: true }))
+    const entries = yield* fsCall(fs.readdir(p))
     for (const entry of entries) {
-      yield* until(fs.rm(join(p, entry), { recursive: true, force: true }))
+      yield* fsCall(fs.rm(join(p, entry), { recursive: true, force: true }))
     }
   },
 
@@ -86,14 +72,14 @@ export const sharedFs: SharedFs = {
   },
 
   *chmod(path, mode) {
-    yield* until(fs.chmod(toPath(path), mode))
+    yield* fsCall(fs.chmod(toPath(path), mode))
   },
 
   *symlink(target, path, type) {
-    yield* until(fs.symlink(toPath(target), toPath(path), type))
+    yield* fsCall(fs.symlink(toPath(target), toPath(path), type))
   },
 
   *readlink(path) {
-    return yield* until(fs.readlink(toPath(path)))
+    return yield* fsCall(fs.readlink(toPath(path)))
   },
 }

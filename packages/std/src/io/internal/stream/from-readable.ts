@@ -3,6 +3,7 @@ import { createSignal, fork, resource, until } from 'std:effect'
 import { asFailure } from 'std:result'
 import { isBoolean } from 'std:shared'
 
+import { IOErrors } from '../../errors'
 import type { IODef } from '../../types/io'
 
 const isNodeReadable = (target: IODef.ReadableLike): target is IODef.NodeReadableLike =>
@@ -46,7 +47,7 @@ export const fromReadable = (
 
       const onEnd = () => settle(true)
       const onClose = () => settle(true)
-      const onError = (error: unknown) => settle(asFailure(error))
+      const onError = (error: unknown) => settle(asFailure(error, IOErrors))
 
       target.on('data', onData)
       target.on('end', onEnd)
@@ -81,7 +82,7 @@ export const fromReadable = (
           }
         }
       } catch (error) {
-        close = asFailure(error)
+        close = asFailure(error, IOErrors)
         throw error
       } finally {
         signal.close(close)

@@ -28,7 +28,9 @@ describe('cors', () => {
         )
         expect(allowed.headers.get('access-control-allow-origin')).toBe('https://app.test')
         expect(allowed.headers.get('access-control-allow-credentials')).toBe('true')
+        // the browser may read the request id and the trace the call landed in
         expect(allowed.headers.get('access-control-expose-headers')).toContain('x-request-id')
+        expect(allowed.headers.get('access-control-expose-headers')).toContain('traceresponse')
         // errors are decorated too
         const missing = yield* Edge.actions.handle(
           new Request('http://edge/nope', { headers: { origin: 'https://app.test' } }),
@@ -50,6 +52,24 @@ describe('cors', () => {
         expect(preflight.status).toBe(204)
         expect(preflight.headers.get('access-control-allow-methods')).toContain('POST')
         expect(preflight.headers.get('access-control-max-age')).toBe('600')
+        // W3C trace context may travel in by default (a traced browser call continues)
+        expect(preflight.headers.get('access-control-allow-headers')?.split(', ')).toEqual([
+          'content-type',
+          'authorization',
+          'x-request-id',
+          'idempotency-key',
+          'traceparent',
+          'tracestate',
+        ])
+        // a foreign preflight is not answered: the edge's 404, without allow headers
+        const refused = yield* Edge.actions.handle(
+          new Request('http://edge/todos/create', {
+            method: 'OPTIONS',
+            headers: { origin: 'https://evil.test', 'access-control-request-method': 'POST' },
+          }),
+        )
+        expect(refused.status).toBe(404)
+        expect(refused.headers.get('access-control-allow-origin')).toBeNull()
         yield* server.stop()
       }),
     )

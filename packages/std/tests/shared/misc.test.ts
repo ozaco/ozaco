@@ -43,11 +43,11 @@ describe('string / tags', () => {
   })
 
   it('createTags maps kebab names to pascal keys, with or without a prefix', () => {
-    expect(createTags('logger', 'file-transport', 'console')).toEqual({
+    expect(createTags('logger', 'file-transport', 'console') as unknown).toEqual({
       FileTransport: 'logger.file-transport',
       Console: 'logger.console',
     })
-    expect(createTags(null, 'raw-key')).toEqual({ RawKey: 'raw-key' })
+    expect(createTags(null, 'raw-key') as unknown).toEqual({ RawKey: 'raw-key' })
   })
 })
 
