@@ -49,6 +49,7 @@ function* nodeEnd(socket: Socket) {
   if (socket.writableEnded || socket.destroyed) {
     return
   }
+
   yield* attempt(
     until(
       new Promise<void>(resolve => {
@@ -84,6 +85,7 @@ const makeHandle = (socket: Socket): IODef.TcpSocket => {
   }
   const closed = withResolvers<IODef.FlowClose>()
   let failure: IODef.FlowClose = true
+
   socket.on('data', (chunk: Buffer) => queue.add(new Uint8Array(chunk)))
   socket.on('end', () => settle(true))
   socket.on('error', error => {
@@ -112,6 +114,7 @@ export function* tcpListen(options: IODef.TcpListenOptions, onConnection: IODef.
 
   const server = createServer({ allowHalfOpen: true }, socket => {
     const handle = makeHandle(socket)
+
     // the task's promise side resolves a Result and never rejects (a halt at listen-scope
     // teardown included), so `finally` is the whole story: the socket goes with the handler
     void scope
@@ -135,6 +138,7 @@ export function* tcpListen(options: IODef.TcpListenOptions, onConnection: IODef.
           resolve()
         },
       )
+
       return () => {}
     }),
     failure =>
@@ -155,6 +159,7 @@ export function* tcpListen(options: IODef.TcpListenOptions, onConnection: IODef.
     if (closed) {
       return
     }
+
     closed = true
     yield* attempt(
       call(() => {
@@ -182,10 +187,12 @@ export function* tcpConnect(options: IODef.TcpConnectOptions) {
         socket.off('error', reject)
         resolve()
       })
+
       return () => {}
     }),
     failure => {
       socket.destroy()
+
       return fail(
         IOErrors.TcpConnectFailed,
         `tcp connect to ${options.hostname ?? '127.0.0.1'}:${options.port} failed`,
@@ -212,15 +219,18 @@ export function* udpBind(options?: IODef.UdpBindOptions) {
   yield* mapError(
     action<void>((resolve, reject) => {
       const onError = (error: unknown) => reject(error)
+
       socket.once('error', onError)
       socket.bind(options?.port, options?.hostname, () => {
         socket.off('error', onError)
         resolve()
       })
+
       return () => socket.off('error', onError)
     }),
     failure => {
       socket.close()
+
       return fail(IOErrors.UdpBindFailed, 'udp bind failed', asFailure(failure, IOErrors))
     },
   )
@@ -237,6 +247,7 @@ export function* udpBind(options?: IODef.UdpBindOptions) {
     if (closed) {
       return
     }
+
     closed = true
     yield* attempt(
       until(

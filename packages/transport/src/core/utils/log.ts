@@ -62,18 +62,21 @@ export function* watchStatus(
 
       for (;;) {
         const step = yield* changes.next()
+
         if (step.done) {
           return
         }
 
         const next = step.value
         const previous = last
+
         last = next
 
         if (previous === undefined || next === previous) {
           if (next === 'reconnecting') {
             lostAt = Date.now()
           }
+
           continue
         }
 
@@ -84,6 +87,7 @@ export function* watchStatus(
               ...identity,
               ...watch.detail?.(),
             })
+
             break
           }
           case 'connected': {
@@ -91,6 +95,7 @@ export function* watchStatus(
               ...identity,
               'ozaco.connection.down_ms': Date.now() - lostAt,
             })
+
             break
           }
           default: {

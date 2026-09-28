@@ -23,7 +23,9 @@ export const MemoryOutcomes = Outcomes.implement<
 
   *setup(options) {
     const ttlMs = options?.ttlMs ?? DEFAULT_OUTCOME_TTL_MS
+
     yield* OutcomesMemoryRef.set({ rows: new Map(), ttlMs })
+
     return { store: 'memory', ttlMs }
   },
 }).build({
@@ -33,25 +35,31 @@ export const MemoryOutcomes = Outcomes.implement<
   *get(cid) {
     const state = yield* useContext(OutcomesMemoryRef)
     const row = state.rows.get(cid)
+
     if (!row) {
       return null
     }
+
     if (Date.now() - row.ts > state.ttlMs) {
       state.rows.delete(cid)
+
       return null
     }
+
     return row
   },
   *prune() {
     const state = yield* useContext(OutcomesMemoryRef)
     const floor = Date.now() - state.ttlMs
     let removed = 0
+
     for (const [cid, row] of state.rows) {
       if (row.ts < floor) {
         state.rows.delete(cid)
         removed += 1
       }
     }
+
     return removed
   },
 })
@@ -68,14 +76,18 @@ export const DbOutcomes = Outcomes.implement<
 
   *setup(options) {
     const db = yield* DbClient.context.get()
+
     if (!db) {
       return yield* fail(
         ServerErrors.Configuration,
         'DbOutcomes needs a DbClient (declaring `outcomesTable`) installed before it',
       )
     }
+
     const ttlMs = options?.ttlMs ?? DEFAULT_OUTCOME_TTL_MS
+
     yield* OutcomesDbRef.set({ ttlMs })
+
     return { store: 'db', ttlMs }
   },
 }).build({
@@ -85,14 +97,17 @@ export const DbOutcomes = Outcomes.implement<
       .query(outcomesTable.name)
       .filter(where.eq('cid', outcome.cid))
       .first()
+
     if (existing) {
       yield* db.patch(outcomesTable.name, String(existing._id), {
         state: outcome.state,
         error: outcome.error ?? undefined,
         ts: outcome.ts,
       })
+
       return
     }
+
     yield* db.insert(outcomesTable.name, {
       cid: outcome.cid,
       state: outcome.state,
@@ -106,9 +121,11 @@ export const DbOutcomes = Outcomes.implement<
     const db = (yield* DbClient.context.expect()) as AnyType
     const state = yield* useContext(OutcomesDbRef)
     const row = yield* db.query(outcomesTable.name).filter(where.eq('cid', cid)).first()
+
     if (!row || Date.now() - Number(row.ts) > state.ttlMs) {
       return null
     }
+
     return {
       cid: String(row.cid),
       state: row.state,
@@ -125,9 +142,11 @@ export const DbOutcomes = Outcomes.implement<
       .query(outcomesTable.name)
       .filter(where.lt('ts', Date.now() - state.ttlMs))
       .collect()
+
     for (const row of stale) {
       yield* db.delete(outcomesTable.name, String(row._id))
     }
+
     return stale.length
   },
 })

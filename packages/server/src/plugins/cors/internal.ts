@@ -75,7 +75,7 @@ const reasonOf = (
 }
 
 /** The span event a refused cross-origin request leaves on the edge span (≤ 20 chars). */
-export const REJECT_EVENT = 'ozaco.cors.reject'
+export const REJECT_EVENT = 'cors.reject'
 
 /** The origin to echo for a request, or null when it is not allowed. */
 export const allowed = (config: CorsDef.Config, origin: string | null): string | null => {

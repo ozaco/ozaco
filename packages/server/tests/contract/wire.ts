@@ -523,6 +523,7 @@ const readMessage = (
       }
 
       const byte = bytes[at] as number
+
       at += 1
       value |= BigInt(byte & 0x7f) << shift
       shift += 7n
@@ -539,6 +540,7 @@ const readMessage = (
     }
 
     const chunk = bytes.subarray(at, at + size)
+
     at += size
 
     return chunk
@@ -895,6 +897,7 @@ const tokensFrom = (line: string, from: number): Map<string, string> | null => {
     }
 
     const value = tokenAt(line, at + head[0].length)
+
     tokens.set(head[1]!, value.text)
     at = value.end
   }
@@ -1079,6 +1082,7 @@ const underSpan = (open: OpenSpan, line: string): void => {
     }
 
     open.events.push({ name: event[1]!, attributes: tokens, block: [] })
+
     return
   }
 
@@ -1086,6 +1090,7 @@ const underSpan = (open: OpenSpan, line: string): void => {
 
   if (line.startsWith(BLOCK) && last && open.links.length === 0) {
     last.block.push(line.slice(BLOCK.length))
+
     return
   }
 
@@ -1099,6 +1104,7 @@ const underSpan = (open: OpenSpan, line: string): void => {
     }
 
     open.links.push({ traceId: link[1]!, spanId: link[2]!, attributes: pairsOf(tokens) })
+
     return
   }
 
@@ -1106,6 +1112,7 @@ const underSpan = (open: OpenSpan, line: string): void => {
 
   if (dropped) {
     open.dropped = dropped[1]!
+
     return
   }
 
@@ -1154,16 +1161,19 @@ export const fromStdout = (lines: readonly string[]): Records<TextSpan, TextLog>
     } else if (open) {
       logs.push(closeLog(open.log))
     }
+
     open = null
   }
 
   for (const line of lines) {
     if (line.startsWith('[oz] ')) {
       close()
+
       const span = SPAN_LINE.exec(line)
 
       if (span) {
         open = { span: spanFrom(line, span) }
+
         continue
       }
 
@@ -1174,6 +1184,7 @@ export const fromStdout = (lines: readonly string[]): Records<TextSpan, TextLog>
       }
 
       open = { log: logFrom(line, log) }
+
       continue
     }
 
@@ -1185,6 +1196,7 @@ export const fromStdout = (lines: readonly string[]): Records<TextSpan, TextLog>
       } else {
         current.log.body.push(line.slice(INDENT.length))
       }
+
       continue
     }
 

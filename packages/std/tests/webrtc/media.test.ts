@@ -64,13 +64,17 @@ describe('typed media surface', () => {
       const [signalA, signalB] = createSignalPair()
       const peerA = yield* Rtc.actions.connect(signalA)
       const peerB = yield* Rtc.actions.connect(signalB, { polite: true })
+
       void peerB
 
       const sender = yield* peerA.addTrack(mic('mic-1'))
+
       yield* sender.replace(mic('mic-2'))
+
       const swapped = (sender.native as FakeSender).track?.id
 
       yield* sender.replace(null)
+
       const muted = (sender.native as FakeSender).track
 
       return { swapped, muted, handleTrack: sender.track }
@@ -89,10 +93,13 @@ describe('typed media surface', () => {
       const [signalA, signalB] = createSignalPair()
       const peerA = yield* Rtc.actions.connect(signalA)
       const peerB = yield* Rtc.actions.connect(signalB, { polite: true })
+
       void peerB
 
       const explicit = yield* peerA.addTrack(mic('mic-1'))
+
       yield* explicit.remove()
+
       const afterRemove = yield* attempt(() => explicit.replace(mic('mic-2')))
 
       // a sender opened in a nested scope is removed when that scope closes
@@ -101,6 +108,7 @@ describe('typed media surface', () => {
       })
 
       const native = fake.hub.peers[0] as FakePeer
+
       return {
         removeFlags: native.senders.map(sender => sender.removed),
         replaceAfterRemove: isFailure(afterRemove) ? String(afterRemove.error) : 'worked',
@@ -123,9 +131,11 @@ describe('typed media surface', () => {
       const [signalA, signalB] = createSignalPair()
       const peerA = yield* Rtc.actions.connect(signalA)
       const peerB = yield* Rtc.actions.connect(signalB, { polite: true })
+
       void peerB
 
       const result = yield* attempt(() => peerA.addTrack(mic('mic-1')))
+
       return isFailure(result) ? String(result.error) : 'added'
     })
 
@@ -151,6 +161,7 @@ describe('typed media surface', () => {
       sever(fake.hub)
 
       const second = yield* tracksB.next() // the redialed generation re-announces
+
       yield* sleep(30) // let the reconnect supervisor's grace window confirm the recovery
 
       return {

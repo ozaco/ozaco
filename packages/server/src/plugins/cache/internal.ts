@@ -9,16 +9,7 @@ import type { Result } from 'std:result'
 import { formatFailure, isFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
 import type { TraceDef } from 'std:trace'
-import {
-  canEmit,
-  current,
-  emitLog,
-  extract,
-  parseTraceparent,
-  recordFailure,
-  span,
-  traceparentOf,
-} from 'std:trace'
+import { Trace } from 'std:trace'
 
 import { logAttributes, severityOf } from 'std:logger/transport/trace'
 import { z } from 'zod'
@@ -29,7 +20,7 @@ import type { CacheDef } from './types'
 export const CACHE_SCOPE = scopeOf('cache')
 
 /** The span event a mutation's `invalidate` leaves on the writer's span (≤ 20 chars). */
-const EVICT_EVENT = 'ozaco.cache.evict'
+const EVICT_EVENT = 'cache.evict'
 
 /** The action options this plugin owns (validated by the kernel at createServer). */
 export const options = {
@@ -77,10 +68,15 @@ export const isEntry = (value: unknown): value is CacheDef.Entry =>
   (value as { $oz?: unknown }).$oz === 1
 
 /** The envelope a miss stores: the answer and — when the computing span records — its context. */
-export const entryOf = (value: unknown, producer: TraceDef.SpanHandle): CacheDef.Entry =>
-  producer.recording
-    ? { $oz: 1, v: value, tp: traceparentOf(producer.context) }
-    : { $oz: 1, v: value }
+export function* entryOf(value: unknown, producer: TraceDef.SpanHandle): Operation<CacheDef.Entry> {
+  if (!producer.recording) {
+    return { $oz: 1, v: value }
+  }
+
+  const { traceparent } = yield* Trace.actions.inject({ context: producer.context })
+
+  return { $oz: 1, v: value, tp: traceparent }
+}
 
 // --- logging ----------------------------------------------------------------------------------
 
@@ -114,9 +110,9 @@ export function* cacheWarn(
     const record = () =>
       at
         ? at.recordFailure(failure, { severity: severity.number })
-        : recordFailure(failure, { severity: severity.number })
+        : Trace.actions.recordFailure(failure, { severity: severity.number })
 
-    if (at && at.context.spanId !== (yield* current()).context.spanId) {
+    if (at && at.context.spanId !== (yield* Trace.actions.current()).context.spanId) {
       yield* record()
     }
 
@@ -125,20 +121,21 @@ export function* cacheWarn(
         Logger.actions.warn(msg, { ...fields, error: failure }),
       )
       yield* record()
+
       return
     }
 
     yield* record()
 
-    if (!(yield* canEmit())) {
+    if (!(yield* Trace.actions.canEmit())) {
       return
     }
 
-    yield* emitLog({
+    yield* Trace.actions.emitLog({
       body: msg || formatFailure(failure),
       severityNumber: severity.number,
       severityText: severity.text,
-      attributes: logAttributes(fields),
+      attributes: yield* logAttributes(fields),
       scope: CACHE_SCOPE,
     })
   })
@@ -159,7 +156,7 @@ export function* lookup(input: CacheDef.LookupInput): Operation<unknown> {
   const key = keyOf(input)
   const store = (yield* Kv.context.get())?.store
 
-  return yield* span(
+  return yield* Trace.actions.span(
     `cache ${call.service}.${call.action}`,
     {
       kind: 'internal',
@@ -189,7 +186,7 @@ export function* lookup(input: CacheDef.LookupInput): Operation<unknown> {
           },
         },
         function* () {
-          return entryOf(yield* next(call, ctx), handle)
+          return yield* entryOf(yield* next(call, ctx), handle)
         },
       )
 
@@ -197,7 +194,10 @@ export function* lookup(input: CacheDef.LookupInput): Operation<unknown> {
         return stored
       }
 
-      const producer = source === 'miss' || !stored.tp ? null : parseTraceparent(stored.tp)
+      const producer =
+        source === 'miss' || !stored.tp
+          ? null
+          : yield* Trace.actions.extract({ traceparent: stored.tp })
 
       if (producer) {
         handle.addLink(producer, { 'ozaco.link.reason': 'cache.producer' })
@@ -211,7 +211,7 @@ export function* lookup(input: CacheDef.LookupInput): Operation<unknown> {
 // --- invalidation -----------------------------------------------------------------------------
 
 /**
- * A mutation's `invalidate` once it succeeded: the tags dropped and an `ozaco.cache.evict`
+ * A mutation's `invalidate` once it succeeded: the tags dropped and an `cache.evict`
  * `{ ozaco.cache.tags }` span event on the writer's span — the mutation's DISPATCH span
  * (`dispatchSpan()`), whatever plugin span is active around this hook. A failed invalidation
  * never fails the committed mutation — it is logged (WARN, the failure recorded once, on that
@@ -226,6 +226,7 @@ export function* evict(tags: readonly string[]): Operation<void> {
       fields: { 'ozaco.cache.tags': [...tags] },
       at: writer,
     })
+
     return
   }
 
@@ -239,11 +240,11 @@ export function* evict(tags: readonly string[]): Operation<void> {
  * meta). A failure is logged (WARN, correlated to that span) and fails the span; the feed goes on.
  */
 export function* invalidateOn(table: string, change: CacheDef.FeedEvent): Operation<void> {
-  const writer = extract(name => change.meta?.[name] ?? null)
+  const writer = yield* Trace.actions.extract(name => change.meta?.[name] ?? null)
   const store = (yield* Kv.context.get())?.store
 
   yield* attempt(() =>
-    span(
+    Trace.actions.span(
       `cache.invalidate ${table}`,
       {
         kind: 'internal',
@@ -264,7 +265,8 @@ export function* invalidateOn(table: string, change: CacheDef.FeedEvent): Operat
           })
         }
 
-        // a returned failure fails the span (kept by `record: 'errors'`) without raising
+        // a returned failure fails the span (kept by `record: 'errors'`); the runtime raises it and
+        // the `attempt` around the span takes it back
         return isFailure(dropped) ? dropped : undefined
       },
     ),
@@ -283,6 +285,7 @@ export function* follow(open: () => Operation<CacheDef.Feed>, table: string): Op
     yield* cacheWarn(`cache cannot follow the ${table} change feed`, feed, {
       fields: { 'ozaco.cache.tags': [table] },
     })
+
     return
   }
 

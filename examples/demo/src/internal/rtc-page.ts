@@ -34,6 +34,7 @@ const status = (text: string) => {
 
 const say = (from: 'you' | 'them', text: string) => {
   const line = document.createElement('li')
+
   line.dataset['from'] = from
   line.textContent = `${from === 'you' ? '▸' : '◂'} ${text}`
   pick('#log').append(line)
@@ -64,6 +65,7 @@ const showMetrics = (metrics: RtcDef.Metrics, sample?: RtcDef.Event['data']) => 
       ? []
       : [`frames ${String(sample['framesDecoded'])}`]),
   ]
+
   pick('#metrics').textContent = `metrics: ${parts.join(' · ')}`
 }
 
@@ -80,6 +82,7 @@ const outcome = run(function* () {
   yield* RtcClient.use()
 
   const room = location.hash.slice(1) || 'demo'
+
   pick('#room').textContent = `#${room}`
   status('joining the room…')
 
@@ -104,6 +107,7 @@ const outcome = run(function* () {
   const media = yield* until(
     navigator.mediaDevices.getUserMedia({ video: true, audio: true }).catch(() => undefined),
   )
+
   if (media) {
     pick('#local').srcObject = media
   } else {
@@ -117,6 +121,7 @@ const outcome = run(function* () {
     const signal: RtcDef.SignalLike = {
       send: (data: unknown) => {
         debug.sigOut.push(tag(data))
+
         return socket.send({ ...(data as object), epoch })
       },
       messages: {
@@ -142,17 +147,23 @@ const outcome = run(function* () {
     // lossy by design, so a reader must hold what it wants to keep)
     const pending: RtcDef.Event[] = []
     let sample: RtcDef.Event['data']
+
     yield* fork(function* () {
       const events = yield* peer.events
+
       for (;;) {
         const step = yield* events.next()
+
         if (step.done) {
           return
         }
+
         pending.push(step.value)
+
         if (pending.length > 256) {
           pending.shift() // a report will never carry more than the action accepts
         }
+
         if (step.value.kind === 'stats') {
           sample = step.value.data
           showMetrics(peer.metrics, sample)
@@ -162,6 +173,7 @@ const outcome = run(function* () {
 
     const report = function* (final: boolean) {
       const timeline = pending.splice(0, 128)
+
       yield* attempt(() =>
         socket.send({
           t: 'rtc:report',
@@ -181,13 +193,17 @@ const outcome = run(function* () {
 
     // connection-state transitions → the status line
     let connected = false
+
     yield* fork(function* () {
       const states = yield* peer.states
+
       for (;;) {
         const step = yield* states.next()
+
         if (step.done) {
           return
         }
+
         connected ||= step.value === 'connected'
         status(String(step.value))
       }
@@ -199,15 +215,19 @@ const outcome = run(function* () {
     const remoteTrackArrived = new Promise<void>(resolve => {
       sawRemoteTrack = resolve
     })
+
     yield* fork(function* () {
       const remote = new MediaStream()
       const video = pick('#remote')
       const tracks = yield* peer.tracks
+
       for (;;) {
         const step = yield* tracks.next()
+
         if (step.done) {
           return
         }
+
         remote.addTrack(step.value.track as AnyType)
         sawRemoteTrack()
         // force a FRESH load on every arrival: re-assigning the same stream object is a no-op,
@@ -224,23 +244,31 @@ const outcome = run(function* () {
     const inboundChannelArrived = new Promise<void>(resolve => {
       sawInboundChannel = resolve
     })
+
     yield* fork(function* () {
       const channels = yield* peer.channels
+
       for (;;) {
         const step = yield* channels.next()
+
         if (step.done) {
           return
         }
+
         const remoteChannel = step.value
+
         debug.inboundChannels += 1
         sawInboundChannel()
         yield* fork(function* () {
           const messages = yield* remoteChannel.messages
+
           for (;;) {
             const item = yield* messages.next()
+
             if (item.done) {
               return
             }
+
             debug.inboundMessages += 1
             say('them', String(item.value))
           }
@@ -255,14 +283,19 @@ const outcome = run(function* () {
     if (polite) {
       yield* race([until(inboundChannelArrived), sleep(8000)])
     }
+
     const chat = yield* peer.channel('chat', { openTimeoutMs: 15_000 })
+
     yield* fork(function* () {
       for (;;) {
         const step = yield* outgoing.next()
+
         if (step.done) {
           return
         }
+
         const sent = yield* attempt(() => chat.send(step.value))
+
         if (isFailure(sent)) {
           debug.sendErrors += 1
         } else {
@@ -279,13 +312,16 @@ const outcome = run(function* () {
         // back offer can orphan its senders in some browsers
         yield* race([until(remoteTrackArrived), sleep(2500)])
       }
+
       for (const track of media.getTracks()) {
         yield* peer.addTrack(track as AnyType, media as AnyType)
       }
     }
 
     const info = yield* peer.closed // bye, a dead signal, or exhausted redials end the session
+
     yield* report(true) // the last word on this session, timeline and all
+
     return { connected, reason: String(info.reason) }
   }
 
@@ -296,9 +332,11 @@ const outcome = run(function* () {
   /** End the running session (its peer teardown says `rtc:bye` on the way out). */
   const stop = function* () {
     const session = current
+
     if (!session) {
       return
     }
+
     current = undefined
     pick('#remote').srcObject = null
     yield* session.task.halt()
@@ -309,56 +347,76 @@ const outcome = run(function* () {
     yield* stop()
     debug.epoch = epoch
     debug.sessions += 1
+
     const inbound = createQueue<unknown, void>()
     const task = yield* fork(function* () {
       const result = yield* attempt(() => call(polite, epoch, inbound))
+
       if (isFailure(result)) {
         ;(globalThis as AnyType).__failure = result
         status(`session failed: ${formatFailure(result)}`)
       }
+
       failures = !isFailure(result) && result.value.connected ? 0 : failures + 1
+
       if (failures > 6) {
         status('gave up re-pairing — reload the page')
+
         return
       }
+
       // the partner may still be sitting in the room: the relay bumps the epoch once and hands
       // BOTH sides a fresh role, which restarts this loop with a clean peer on either end
       yield* sleep(Math.min(300 * failures, 3000))
       yield* attempt(() => socket.send({ t: 'rtc:restart', epoch }))
     })
+
     current = { epoch, inbound, task }
   }
 
   // Control loop: the relay drives the session, everything else is signaling for the current
   // pairing. Frames stamped with an older epoch belong to a session that is already gone.
   const frames = yield* socket.messages
+
   for (;;) {
     const step = yield* frames.next()
+
     if (step.done) {
       yield* stop()
       status('signaling closed — reload the page')
+
       return
     }
+
     const frame = (step.value ?? {}) as Helpers.Control
+
     if (frame.t === 'rtc:room-full') {
       yield* stop()
       status('room is full — change the #room in the URL and reload')
+
       return
     }
+
     if (frame.t === 'rtc:role') {
       yield* start(frame.polite === true, Number(frame.epoch ?? 0))
+
       continue
     }
+
     if (frame.t === 'rtc:waiting') {
       yield* stop()
       status('waiting for someone to join this room…')
+
       continue
     }
+
     if (frame.t === 'rtc:peer-left') {
       yield* stop()
       status('the other side left — waiting for them to come back…')
+
       continue
     }
+
     if (current && frame.epoch === current.epoch) {
       debug.sigIn.push(tag(frame))
       current.inbound.add(frame)
@@ -368,11 +426,14 @@ const outcome = run(function* () {
 
 pick('#form').addEventListener('submit', (event: AnyType) => {
   event.preventDefault()
+
   const box = pick('#box')
   const text = String(box.value ?? '').trim()
+
   if (!text) {
     return
   }
+
   box.value = ''
   say('you', text)
   outgoing.add(text)
@@ -380,6 +441,7 @@ pick('#form').addEventListener('submit', (event: AnyType) => {
 
 // the page lives until the room says otherwise (full, or the signaling socket gave up)
 const result = await outcome
+
 if (isFailure(result)) {
   ;(globalThis as AnyType).__failure = result
   status(`error: ${formatFailure(result)}`)

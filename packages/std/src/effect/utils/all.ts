@@ -13,22 +13,28 @@ export function* all<T extends readonly Operation<unknown>[] | []>(
   ops: T,
 ): Operation<Utils.All<T>> {
   const tasks: Task<unknown>[] = []
+
   try {
     return yield* trap(function* (): Operation<Utils.All<T>> {
       for (const operation of ops) {
         const member = () => operation
+
         tasks.push(yield* spawn(member))
       }
+
       const results: unknown[] = []
+
       for (const task of tasks) {
         results.push(yield* task)
       }
+
       return results as Utils.All<T>
     })
   } catch (error) {
     for (const task of tasks) {
       yield* task.halt()
     }
+
     throw asFailure(error)
   }
 }

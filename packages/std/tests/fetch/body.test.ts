@@ -44,6 +44,7 @@ describe('platform body readers', () => {
       yield* FetchClient.use()
 
       const response = yield* Fetch.actions.get(`${base}/json`)
+
       return yield* response.json<typeof JSON_BODY>()
     })
 
@@ -55,6 +56,7 @@ describe('platform body readers', () => {
       yield* FetchClient.use()
 
       const response = yield* Fetch.actions.get(`${base}/text`)
+
       return yield* response.text()
     })
 
@@ -81,6 +83,7 @@ describe('platform body readers', () => {
     })
 
     const expected = encoder.encode(TEXT_BODY)
+
     expect(unwrap(outcome)).toEqual({
       bytes: expected,
       bufferLength: expected.byteLength,
@@ -97,6 +100,7 @@ describe('codec-backed body()', () => {
       yield* JsonCodec.use()
 
       const response = yield* Fetch.actions.get(`${base}/json`)
+
       return yield* response.body<typeof JSON_BODY>()
     })
 
@@ -108,10 +112,12 @@ describe('codec-backed body()', () => {
       yield* FetchClient.use()
 
       const response = yield* Fetch.actions.get(`${base}/json`)
+
       return yield* response.body()
     })
 
     expect(isFailure(outcome)).toBe(true)
+
     if (isFailure(outcome)) {
       expect(outcome.error).toBe('std:plugin.missing-action')
     }
@@ -139,6 +145,7 @@ describe('empty bodies', () => {
       yield* FetchClient.use()
 
       const response = yield* Fetch.actions.get(`${base}/empty`)
+
       return yield* response.json()
     })
 

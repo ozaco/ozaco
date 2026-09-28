@@ -4,15 +4,7 @@ import { redactUrl } from 'std:fetch'
 import type { Result } from 'std:result'
 import { asFailure, isFailure } from 'std:result'
 import type { TraceDef } from 'std:trace'
-import {
-  inject,
-  isTracing,
-  isValidContext,
-  markRecorded,
-  parseTraceparent,
-  startSpan,
-  traceNow,
-} from 'std:trace'
+import { Trace } from 'std:trace'
 
 import { HEADERS } from '../const'
 import { ClientErrors } from '../errors'
@@ -67,14 +59,14 @@ export function* openCall(
   route: string,
   url: URL,
 ): Operation<Helpers.CallSpan | null> {
-  if (!(yield* isTracing())) {
+  if (!(yield* Trace.actions.isTracing())) {
     return null
   }
 
   const upper = method.toUpperCase()
   const known = KNOWN_METHODS.has(upper)
 
-  const live = yield* startSpan(`${known ? upper : 'HTTP'} ${route}`, {
+  const live = yield* Trace.actions.startSpan(`${known ? upper : 'HTTP'} ${route}`, {
     kind: 'client',
     scope: TRACE_SCOPE,
     failure: { status: answeredStatus, eventName: EXCEPTION_EVENT },
@@ -91,6 +83,7 @@ export function* openCall(
   return {
     live,
     context: live.context,
+    valid: live.valid,
     recording: live.recording,
     scope: yield* useScope(),
     headersAt: undefined,
@@ -106,10 +99,10 @@ export function* openCall(
  */
 export function* carrierOf(call: Helpers.CallSpan | null): Operation<TraceDef.Carrier> {
   if (call?.live) {
-    return yield* call.live.run(() => inject({ ozaco: true }))
+    return yield* call.live.run(() => Trace.actions.inject({ ozaco: true }))
   }
 
-  return yield* inject()
+  return yield* Trace.actions.inject()
 }
 
 /**
@@ -138,8 +131,11 @@ export const withCarrier = (
 }
 
 /** The server's `traceresponse` (its edge span's context), or `null`. */
-export const echoedContext = (response: Response): TraceDef.SpanContext | null =>
-  parseTraceparent(response.headers.get(HEADERS.traceresponse))
+export function* echoedContext(response: Response): Operation<TraceDef.SpanContext | null> {
+  const traceparent = response.headers.get(HEADERS.traceresponse)
+
+  return traceparent ? yield* Trace.actions.extract({ traceparent }) : null
+}
 
 /** The reply's headers arrived: `http.response.status_code`, and the time a body that is never
  * consumed ends the span at. */
@@ -150,7 +146,7 @@ export function* markResponse(call: Helpers.CallSpan, response: Response): Opera
     return
   }
 
-  call.headersAt = yield* live.run(() => traceNow())
+  call.headersAt = yield* live.run(() => Trace.actions.traceNow())
 
   if (response.status > 0) {
     live.setAttribute('http.response.status_code', response.status)
@@ -195,9 +191,12 @@ export const remoteCause = (remote: Helpers.Remote, spanId?: string): string | u
  * recorded there as a REMOTE one — the caller's spans carry only its status and
  * `ozaco.failure.remote`, the one exception stays the sender's.
  */
-export const markRemote = (failure: Result.Failure<unknown>, remote: Helpers.Remote): void => {
+export function* markRemote(
+  failure: Result.Failure<unknown>,
+  remote: Helpers.Remote,
+): Operation<void> {
   if (remote.recordedIn) {
-    markRecorded(failure, remote.recordedIn, { remote: true })
+    yield* Trace.actions.markRecorded(failure, remote.recordedIn, { remote: true })
   }
 }
 
@@ -210,12 +209,12 @@ export const traceIdOf = (
     return echoed.traceId
   }
 
-  return call && isValidContext(call.context) ? call.context.traceId : null
+  return call?.valid ? call.context.traceId : null
 }
 
 /**
  * End the call's span (idempotent). Where it started, directly; from any other scope (a stream
- * consumed by `for await` in the client's scope), inside the scope it started in — its Tracer is
+ * consumed by `for await` in the client's scope), inside the scope it started in — its Trace sinks is
  * visible there. A span whose scope is already gone was ended by that scope's fallback.
  */
 export function* endCall(
@@ -232,6 +231,7 @@ export function* endCall(
 
   if ((yield* useScope()) === call.scope) {
     yield* live.end(options)
+
     return
   }
 
@@ -286,6 +286,7 @@ export const watchedFlow = <T>(call: Helpers.CallSpan, source: Flow<T, void>): F
 
     if (isFailure(opened)) {
       yield* endCall(call, { failure: opened })
+
       return yield* opened
     }
 
@@ -297,6 +298,7 @@ export const watchedFlow = <T>(call: Helpers.CallSpan, source: Flow<T, void>): F
 
         if (isFailure(step)) {
           yield* endCall(call, { failure: step })
+
           return yield* step
         }
 

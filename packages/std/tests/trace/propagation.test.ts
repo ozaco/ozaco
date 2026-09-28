@@ -1,22 +1,18 @@
 import { run } from 'std:effect'
 import { unwrap } from 'std:result'
+import { Trace } from 'std:trace'
+
+import { describe, expect, it } from 'bun:test'
+
 import {
-  ActiveSpan,
   extract,
   formatTracestate,
-  getTracestate,
-  inject,
   isValidContext,
   parseTraceparent,
   parseTracestate,
-  passThrough,
   setTracestate,
-  span,
-  suppressed,
   traceparentOf,
-} from 'std:trace'
-
-import { describe, expect, it } from 'bun:test'
+} from '../../src/trace/internal/propagation'
 
 import { traced } from './helpers'
 
@@ -143,6 +139,7 @@ describe('tracestate', () => {
     expect(parseTracestate(`k=${'v'.repeat(257)}`)).toBeNull()
 
     const many = Array.from({ length: 33 }, (_, at) => `k${at}=v`).join(',')
+
     expect(parseTracestate(many)).toBeNull()
     expect(parseTracestate(many.split(',').slice(0, 32).join(','))).toHaveLength(32)
   })
@@ -155,9 +152,6 @@ describe('tracestate', () => {
       ]),
     ).toBe('a=1,b=2')
     expect(formatTracestate([])).toBeUndefined()
-    expect(getTracestate('a=1,ozaco=1', 'ozaco')).toBe('1')
-    expect(getTracestate('a=1', 'ozaco')).toBeUndefined()
-    expect(getTracestate(undefined, 'a')).toBeUndefined()
 
     expect(setTracestate('a=1,ozaco=0,b=2', 'ozaco', '1')).toBe('ozaco=1,a=1,b=2')
     expect(setTracestate(undefined, 'ozaco', '1')).toBe('ozaco=1')
@@ -167,6 +161,7 @@ describe('tracestate', () => {
 
     const full = Array.from({ length: 32 }, (_, at) => `k${at}=v`).join(',')
     const set = setTracestate(full, 'ozaco', '1')!
+
     expect(set.split(',')).toHaveLength(32)
     expect(set.startsWith('ozaco=1,k0=v')).toBe(true)
     expect(set.includes('k31=v')).toBe(false)
@@ -184,16 +179,24 @@ describe('extract', () => {
     })
   })
 
+  it('marks a context whose tracestate carries ozaco=1', () => {
+    expect(extract(headers({ traceparent: VALID, tracestate: 'a=1,ozaco=1' }))?.ozaco).toBe(true)
+    expect(extract(headers({ traceparent: VALID, tracestate: 'ozaco=0' }))?.ozaco).toBeUndefined()
+  })
+
   it('works over a Headers object (case-insensitive names)', () => {
     const inbound = new Headers({ TraceParent: VALID, TRACESTATE: 'rojo=1' })
+
     expect(extract(name => inbound.get(name))?.state).toBe('rojo=1')
   })
 
   it('treats duplicate traceparent headers as invalid', () => {
     expect(extract(headers({ traceparent: [VALID, VALID] }))).toBeNull()
     expect(extract(headers({ traceparent: [] }))).toBeNull()
+
     // `Headers.get` joins duplicates with ", " — invalid by length
     const inbound = new Headers()
+
     inbound.append('traceparent', VALID)
     inbound.append('traceparent', `00-${TRACE}-${'1'.repeat(16)}-01`)
     expect(extract(name => inbound.get(name))).toBeNull()
@@ -208,6 +211,7 @@ describe('extract', () => {
 
   it('drops an invalid tracestate but keeps the context', () => {
     const context = extract(headers({ traceparent: VALID, tracestate: 'a=1,a=2' }))
+
     expect(context?.traceId).toBe(TRACE)
     expect(context?.state).toBeUndefined()
     expect(extract(headers({ traceparent: VALID, tracestate: '' }))?.state).toBeUndefined()
@@ -218,10 +222,13 @@ describe('extract', () => {
     const context = extract(name => {
       if (name === 'tracestate') {
         asked = true
+
         return 'a=1'
       }
+
       return 'garbage'
     })
+
     expect(context).toBeNull()
     expect(asked).toBe(false)
   })
@@ -238,7 +245,7 @@ describe('extract', () => {
 
 describe('inject', () => {
   it('is empty without an active span', async () => {
-    expect(unwrap(await run(() => inject()))).toEqual({})
+    expect(unwrap(await run(() => Trace.actions.inject()))).toEqual({})
   })
 
   it('forwards a pass-through context unchanged while tracing is off', async () => {
@@ -246,9 +253,9 @@ describe('inject', () => {
 
     const carrier = unwrap(
       await run(() =>
-        ActiveSpan.with(passThrough(inbound), function* () {
+        Trace.actions.passThrough(inbound, function* () {
           // tracing is off: span() does not touch the active context
-          return yield* span('ignored', () => inject({ ozaco: true }))
+          return yield* Trace.actions.span('ignored', () => Trace.actions.inject({ ozaco: true }))
         }),
       ),
     )
@@ -258,11 +265,11 @@ describe('inject', () => {
 
   it('injects the active recording span, marking ozaco callers on request', async () => {
     const { value } = await traced(function* () {
-      return yield* span('call', function* (handle) {
+      return yield* Trace.actions.span('call', function* (handle) {
         return {
           handle: handle.context,
-          plain: yield* inject(),
-          marked: yield* inject({ ozaco: true }),
+          plain: yield* Trace.actions.inject(),
+          marked: yield* Trace.actions.inject({ ozaco: true }),
         }
       })
     })
@@ -276,8 +283,8 @@ describe('inject', () => {
     const inbound = extract(headers({ traceparent: VALID, tracestate: 'rojo=1' }))!
 
     const { value } = await traced(function* () {
-      return yield* span('handler', { parent: inbound }, function* () {
-        return yield* inject({ ozaco: true })
+      return yield* Trace.actions.span('handler', { parent: inbound }, function* () {
+        return yield* Trace.actions.inject({ ozaco: true })
       })
     })
 
@@ -290,7 +297,9 @@ describe('inject', () => {
 
   it('sends suppressed code unsampled (the random bit kept), and no ozaco mark', async () => {
     const { value } = await traced(function* () {
-      return yield* span('call', () => suppressed(() => inject({ ozaco: true })))
+      return yield* Trace.actions.span('call', () =>
+        Trace.actions.suppressed(() => Trace.actions.inject({ ozaco: true })),
+      )
     })
 
     // a trace id minted here carries the random bit: it stays, only the sampled bit clears
@@ -300,8 +309,10 @@ describe('inject', () => {
 
   it('suppressed under an inbound context without the random bit sends flags 00', async () => {
     const { value } = await traced(function* () {
-      return yield* span('call', { parent: parseTraceparent(`00-${TRACE}-${SPAN}-01`)! }, () =>
-        suppressed(() => inject()),
+      return yield* Trace.actions.span(
+        'call',
+        { parent: parseTraceparent(`00-${TRACE}-${SPAN}-01`)! },
+        () => Trace.actions.suppressed(() => Trace.actions.inject()),
       )
     })
 

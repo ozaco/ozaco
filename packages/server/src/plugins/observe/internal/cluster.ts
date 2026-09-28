@@ -4,7 +4,8 @@ import type { Operation } from 'std:effect'
 import { attempt, fork, sleep } from 'std:effect'
 import { isFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
-import { suppressed } from 'std:trace'
+import { utf8Length } from 'std:shared'
+import { Trace } from 'std:trace'
 
 import type { Helpers } from '../types/helpers'
 import type { ObservePluginDef } from '../types/observe'
@@ -32,30 +33,6 @@ const eventOf = (kernel: ServerDef.Context, name: string, payload: unknown): Wir
   origin: kernel.serviceId,
 })
 
-/** The UTF-8 size of `json` — what the carrier's JSON codec puts on the wire — without encoding
- * it. (`JSON.stringify` escapes lone surrogates: a code point past the BMP is always a pair.) */
-const utf8Bytes = (json: string): number => {
-  let bytes = 0
-
-  for (let at = 0; at < json.length; at += 1) {
-    const code = json.codePointAt(at) ?? 0
-
-    if (code < 0x80) {
-      bytes += 1
-    } else if (code < 0x8_00) {
-      bytes += 2
-    } else if (code < 0x1_00_00) {
-      bytes += 3
-    } else {
-      // a surrogate pair: one 4-byte code point (its low half is skipped)
-      bytes += 4
-      at += 1
-    }
-  }
-
-  return bytes
-}
-
 /**
  * A batch as it crosses the wire, cut into MESSAGES of at most `maxBytes` serialized (JSON) each —
  * NATS refuses a payload over its `max_payload` (1 MB by default), so a busy node's batch must
@@ -69,7 +46,7 @@ export const packBatch = (
   maxBytes: number = MAX_FORWARD_BYTES,
 ): readonly Helpers.ForwardedChunk[] => {
   // `{"v":2,"instance":"…","resources":[],"records":[]}`: what every message costs empty
-  const empty = utf8Bytes(JSON.stringify({ v: 2, instance, resources: [], records: [] }))
+  const empty = utf8Length(JSON.stringify({ v: 2, instance, resources: [], records: [] }))
   const sizes = new Map<ObserveDef.Resource, number>()
   const chunks: Helpers.PackingChunk[] = []
 
@@ -81,7 +58,9 @@ export const packBatch = (
       events: [],
       bytes: empty,
     }
+
     chunks.push(chunk)
+
     return chunk
   }
 
@@ -92,14 +71,15 @@ export const packBatch = (
     let resourceBytes = 0
 
     if (known === undefined) {
-      const size = sizes.get(event.resource) ?? utf8Bytes(JSON.stringify(event.resource) ?? 'null')
+      const size = sizes.get(event.resource) ?? utf8Length(JSON.stringify(event.resource) ?? 'null')
+
       sizes.set(event.resource, size)
       resourceBytes = size + (chunk.resources.length > 0 ? 1 : 0)
     }
 
     // `[at,"t",<data>]` and the comma before it
     const recordBytes =
-      utf8Bytes(JSON.stringify([at, event.t])) + dataBytes + 1 + (chunk.records.length > 0 ? 1 : 0)
+      utf8Length(JSON.stringify([at, event.t])) + dataBytes + 1 + (chunk.records.length > 0 ? 1 : 0)
 
     return { at, known, bytes: resourceBytes + recordBytes }
   }
@@ -108,7 +88,7 @@ export const packBatch = (
 
   for (const event of batch) {
     const data = event.t === 'span' ? event.span : event.log
-    const dataBytes = utf8Bytes(JSON.stringify(data) ?? 'null')
+    const dataBytes = utf8Length(JSON.stringify(data) ?? 'null')
     let cost = costOf(chunk, event, dataBytes)
 
     // full: this record opens the next message (a lone oversized record still travels)
@@ -190,10 +170,11 @@ export function* forwardBatch(
 
   for (const chunk of packBatch(kernel.instance, batch)) {
     const event = eventOf(kernel, BATCH_EVENT, chunk.payload)
-    const sent = yield* attempt(() => suppressed(() => carrier.actions.emit(event)))
+    const sent = yield* attempt(() => Trace.actions.suppressed(() => carrier.actions.emit(event)))
 
     if (isFailure(sent)) {
       unsent.push(...chunk.events)
+
       continue
     }
 
@@ -213,7 +194,7 @@ export function* runCluster(
   kernel: ServerDef.Context,
   state: ObservePluginDef.State,
 ): Operation<void> {
-  yield* suppressed(() => clusterLoop(kernel, state))
+  yield* Trace.actions.suppressed(() => clusterLoop(kernel, state))
 }
 
 function* clusterLoop(kernel: ServerDef.Context, state: ObservePluginDef.State): Operation<void> {
@@ -228,6 +209,7 @@ function* clusterLoop(kernel: ServerDef.Context, state: ObservePluginDef.State):
     yield* fork(function* () {
       for (;;) {
         const beat = eventOf(kernel, COLLECTOR_EVENT, { instance: kernel.instance })
+
         yield* attempt(() => carrier.actions.emit(beat))
         yield* sleep(state.collectorHeartbeatMs)
       }
@@ -253,6 +235,7 @@ function* clusterLoop(kernel: ServerDef.Context, state: ObservePluginDef.State):
       state.collectorSeenAt = Date.now()
     } else if (event.name === BATCH_EVENT && state.collect) {
       const batch = unpackBatch(event.payload)
+
       state.cluster.received += batch.length
       yield* writeLocal(state, batch)
     }
@@ -279,6 +262,7 @@ export const instanceStats = (
       failed: 0,
       last: 0,
     }
+
     entry.services.add(span.service_name)
     entry.durations.push(span.duration_ms)
 
@@ -294,6 +278,7 @@ export const instanceStats = (
     .map(([instance, entry]) => {
       const sorted = entry.durations.toSorted((left, right) => left - right)
       const at = Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95))
+
       return {
         instance,
         services: [...entry.services].toSorted(),
@@ -314,6 +299,7 @@ export function* membersView(
 
   for (const name of kernel.registry.services.keys()) {
     const members = yield* attempt(() => kernel.carrier!.actions.members(name))
+
     out[name] = isFailure(members) ? [] : members.value
   }
 

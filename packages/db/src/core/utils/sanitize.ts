@@ -22,5 +22,6 @@ export function* sanitizeFilter(input: unknown, policy: Database.FilterPolicy) {
 /** Clamp an untrusted page size into `[1, max]`. */
 export const clampLimit = (value: unknown, max: number): number => {
   const parsed = typeof value === 'number' && Number.isFinite(value) ? Math.trunc(value) : 1
+
   return Math.max(1, Math.min(parsed, Math.max(1, Math.trunc(max))))
 }

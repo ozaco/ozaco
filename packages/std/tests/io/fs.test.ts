@@ -15,6 +15,7 @@ const decoder = new TextDecoder()
 
 const withTempDir = async (fn: (dir: string) => Promise<void>) => {
   const dir = await mkdtemp(join(tmpdir(), 'ozaco-io-'))
+
   try {
     await fn(dir)
   } finally {
@@ -29,6 +30,7 @@ describe('files', () => {
         yield* BunIO.use()
 
         const file = join(dir, 'notes.txt')
+
         yield* IO.actions.write(file, 'hello world — café')
 
         const bytes = yield* IO.actions.read(file)
@@ -66,6 +68,7 @@ describe('files', () => {
         yield* BunIO.use()
 
         const file = join(dir, 'log.txt')
+
         yield* IO.actions.write(file, 'one')
         yield* IO.actions.write(file, '-two', { flags: IO_FLAGS.append })
         yield* IO.actions.append(file, encoder.encode('-three'))
@@ -75,6 +78,7 @@ describe('files', () => {
         )
 
         const fresh = join(dir, 'fresh.txt')
+
         yield* IO.actions.write(fresh, 'new', { flags: IO_FLAGS.exclusive })
 
         return {
@@ -98,15 +102,19 @@ describe('files', () => {
         yield* BunIO.use()
 
         const src = join(dir, 'src.txt')
+
         yield* IO.actions.write(src, 'payload')
 
         const copied = join(dir, 'copy.txt')
+
         yield* IO.actions.copy(src, copied)
 
         const renamed = join(dir, 'renamed.txt')
+
         yield* IO.actions.rename(copied, renamed)
 
         const blocker = join(dir, 'blocker.txt')
+
         yield* IO.actions.write(blocker, 'keep')
 
         const renameClash = yield* attempt(() =>
@@ -141,11 +149,13 @@ describe('files', () => {
         yield* BunIO.use()
 
         const nested = join(dir, 'a', 'b')
+
         yield* IO.actions.ensureDir(nested)
         yield* IO.actions.write(join(nested, 'f.txt'), 'x')
         yield* IO.actions.rm(join(dir, 'a'), { recursive: true })
 
         yield* IO.actions.rm(join(dir, 'missing'), { force: true })
+
         const strict = yield* attempt(() => IO.actions.rm(join(dir, 'missing-too')))
 
         return {
@@ -168,6 +178,7 @@ describe('files', () => {
         yield* IO.actions.write(target, 'data')
 
         const link = join(dir, 'link.txt')
+
         yield* IO.actions.symlink(target, link)
 
         const followed = yield* IO.actions.stat(link)
@@ -194,6 +205,7 @@ describe('files', () => {
       })
 
       const targetInfo = await nodeStat(target)
+
       expect(targetInfo.mode & 0o777).toBe(0o400)
     })
   })
@@ -211,14 +223,18 @@ describe('files', () => {
         const recursive = (yield* IO.actions.readdir(dir, { recursive: true })).toSorted()
 
         const kept = join(dir, 'kept.txt')
+
         yield* IO.actions.write(kept, 'keep')
         yield* IO.actions.ensureFile(kept)
 
         const made = join(dir, 'deep', 'made.txt')
+
         yield* IO.actions.ensureFile(made)
 
         yield* IO.actions.emptyDir(join(dir, 'sub'))
+
         const brandNew = join(dir, 'brand-new')
+
         yield* IO.actions.emptyDir(brandNew)
 
         return {
@@ -336,6 +352,7 @@ describe('paths', () => {
         yield* BunIO.use()
 
         const file = join(dir, 'via-url.txt')
+
         yield* IO.actions.write(pathToFileURL(file), 'through a URL')
 
         return {

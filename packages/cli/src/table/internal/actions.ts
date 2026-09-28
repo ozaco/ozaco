@@ -47,29 +47,37 @@ const edits = (
   return {
     *row(row: TableDef.Row) {
       const index = state.rows.push(clone(row)) - 1
+
       yield* refresh()
+
       return index
     },
     *rows(rows: TableDef.Row[]) {
       const start = state.rows.length
+
       for (const row of rows) {
         state.rows.push(clone(row))
       }
+
       yield* refresh()
+
       return Array.from(rows.keys(), offset => start + offset)
     },
     *update(index: number, row: TableDef.Row) {
       if (state.ended || state.rows[index] === undefined) {
         return
       }
+
       state.rows[index] = clone(row)
       yield* refresh()
     },
     *set(index: number, column: string | number, value: TableDef.Cell) {
       const cells = state.rows[index]
+
       if (state.ended || cells === undefined) {
         return
       }
+
       setCell(cells, column, value)
       yield* refresh()
     },
@@ -77,6 +85,7 @@ const edits = (
       if (state.ended || state.rows[index] === undefined) {
         return
       }
+
       state.rows.splice(index, 1)
       yield* refresh()
     },
@@ -84,6 +93,7 @@ const edits = (
       if (state.ended) {
         return
       }
+
       state.rows = rows.map(clone)
       yield* refresh()
     },
@@ -116,6 +126,7 @@ export function* table(options: TableDef.Options) {
         palette,
         termColumns: size.columns,
       })
+
       yield* lease.render(frame({ layout, rows: state.rows, maxBody }).text)
     }
 
@@ -123,13 +134,16 @@ export function* table(options: TableDef.Options) {
       if (state.ended) {
         return
       }
+
       state.ended = true
+
       const layout = makeLayout({
         options: opts,
         rows: state.rows,
         palette,
         termColumns: size.columns,
       })
+
       yield* lease.done(frame({ layout, rows: state.rows }).text)
     }
 
@@ -152,9 +166,12 @@ export function* table(options: TableDef.Options) {
     if (state.ended) {
       return
     }
+
     state.ended = true
+
     const layout = makeLayout({ options: opts, rows: state.rows, palette, termColumns })
     const text = frame({ layout, rows: state.rows }).text
+
     if (text !== '') {
       yield* Terminal.actions.write(`${text}\n`)
     }

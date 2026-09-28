@@ -56,6 +56,7 @@ export const FileTransport = FileTransportImpl.build({
     }
 
     ctx.buffer.push(yield* ctx.format(entry))
+
     if (ctx.buffer.length >= ctx.limit) {
       yield* drain(ctx)
     }

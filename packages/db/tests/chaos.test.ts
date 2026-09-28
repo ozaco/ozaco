@@ -33,11 +33,15 @@ const REPLAY_WINDOW_MS = 2000
 
 const mulberry32 = (seed: number): (() => number) => {
   let state = seed >>> 0
+
   return () => {
     state = (state + 0x6d_2b_79_f5) >>> 0
+
     let mixed = state
+
     mixed = Math.imul(mixed ^ (mixed >>> 15), mixed | 1)
     mixed ^= mixed + Math.imul(mixed ^ (mixed >>> 7), mixed | 61)
+
     return ((mixed ^ (mixed >>> 14)) >>> 0) / 4_294_967_296
   }
 }
@@ -74,33 +78,43 @@ function* spawnNode(origin: string, path: string, link: Memory.Link): Operation<
       yield* BunIO.use()
       yield* MemoryTransport.use({ prefix: 'chaos', link })
       yield* DbBus.use()
+
       const db = yield* DbClient.use({
         tables: [users],
         origin,
         pollMs: POLL_MS,
         replayWindowMs: REPLAY_WINDOW_MS,
       })
+
       yield* fork(function* () {
         const feed = yield* db.changes('users')
+
         for (;;) {
           const next = yield* feed.next()
+
           events.push(next.value)
         }
       })
       yield* fork(function* () {
         const snapshots = yield* db.query('users').watch()
+
         for (;;) {
           const next = yield* snapshots.next()
+
           last = (next.value as Change.Snapshot).rows
         }
       })
       ready.resolve()
+
       for (;;) {
         const item = yield* tasks.next()
+
         if (item.done) {
           return
         }
+
         const outcome = yield* attempt(() => item.value.body(db))
+
         if (isFailure(outcome)) {
           item.value.reject(outcome)
         } else {
@@ -118,11 +132,13 @@ function* spawnNode(origin: string, path: string, link: Memory.Link): Operation<
     stop: () => tasks.close(undefined),
     *exec<T>(body: (db: Handle) => Operation<T>) {
       const settled = withResolvers<T>()
+
       tasks.add({
         body,
         resolve: value => settled.resolve(value as T),
         reject: error => settled.reject(error),
       })
+
       return yield* settled.operation
     },
   }
@@ -144,58 +160,75 @@ function* step(world: World, label: string): Operation<void> {
   const pick = (): string | undefined => ids[Math.floor(random() * ids.length)]
   const op = ids.length === 0 ? 'insert' : OPS[Math.floor(random() * OPS.length)]!
   const age = Math.floor(random() * 100)
+
   switch (op) {
     case 'insert': {
       const doc = yield* node.exec(db => db.insert('users', { name: `u-${label}`, age }))
+
       ids.push(String(doc._id))
+
       return
     }
     case 'patch': {
       yield* node.exec(db => db.patch('users', pick()!, { age }))
+
       return
     }
     case 'delete': {
       const id = pick()!
+
       yield* node.exec(db => db.delete('users', id))
       ids.splice(ids.indexOf(id), 1)
+
       return
     }
     case 'tx': {
       const doc = yield* node.exec(db =>
         db.transaction(function* (tx) {
           const inserted = yield* tx.insert('users', { name: `t-${label}`, age })
+
           yield* tx.patch('users', pick()!, { age: age + 1 })
+
           return inserted
         }),
       )
+
       ids.push(String(doc._id))
+
       return
     }
     case 'touch': {
       const id = pick()!
+
       yield* node.exec(() => Db.actions.touch('users', id))
+
       return
     }
     case 'raw': {
       const id = pick()!
+
       yield* node.exec(() =>
         Db.actions.raw('UPDATE "users" SET "age" = ? WHERE "_id" = ? RETURNING "_id"', [age, id], {
           table: 'users',
           emit: { op: 'update', fields: ['age'] },
         }),
       )
+
       return
     }
     case 'publish': {
       const id = pick()!
+
       yield* node.exec(() =>
         Db.actions.publish([{ table: 'users', id, op: 'update', fields: ['age'] }]),
       )
+
       return
     }
     case 'compact': {
       // a sane compaction never reaches into the replay horizon peers may still need
       yield* node.exec(() => Db.actions.compact('users', { before: new Date(Date.now() - 60_000) }))
+
       return
     }
     default: {
@@ -212,19 +245,25 @@ function* chaos(seed: number): Operation<void> {
   const path = join(dir, 'shared.sqlite')
   const link = createLink({ chaos: { seed, maxDelayMs: MAX_DELAY_MS } })
   const random = mulberry32(seed * 7919 + 17)
+
   try {
     yield* scoped(function* () {
       const nodes: Node[] = []
+
       for (const origin of ORIGINS) {
         nodes.push(yield* spawnNode(origin, path, link))
       }
+
       const world: World = { random, nodes, ids: [] }
+
       for (let index = 0; index < STEPS; index += 1) {
         yield* step(world, `${seed}-${index}`)
+
         if (random() < 0.3) {
           yield* sleep(Math.floor(random() * 10))
         }
       }
+
       // the network settles: in-flight deliveries land, the last poll heals whatever was dropped
       yield* sleep(MAX_DELAY_MS + POLL_MS * 3 + 50)
 
@@ -239,8 +278,10 @@ function* chaos(seed: number): Operation<void> {
       expect(network.dropped + network.duplicated, `${seed}: no chaos`).toBeGreaterThan(0)
       // every write was minted exactly once, somewhere
       expect(local.length, `${seed}: one token per write`).toBe(every.size)
+
       for (const node of nodes) {
         const tokens = node.events.map(event => event.token)
+
         // no change applied twice: envelope, duplicate, replay and poll all dedupe
         expect(
           new Set(tokens).size,
@@ -254,12 +295,15 @@ function* chaos(seed: number): Operation<void> {
         expect(byId(node.last()), `${node.origin} snapshot ≠ db ${JSON.stringify(detail)}`).toEqual(
           truth,
         )
+
         // version(table) is the last token the node applied
         const version = yield* node.exec(function* (db) {
           return db.version('users')
         })
+
         expect(version).toBe(tokens.at(-1)!)
       }
+
       // every live row's version was announced (raw emit stamps, touch re-versions, …)
       for (const row of truth) {
         expect(
@@ -267,26 +311,35 @@ function* chaos(seed: number): Operation<void> {
           `${seed}: row ${row._id} carries an unannounced version`,
         ).toBe(true)
       }
+
       // the change log holds exactly the announced writes (nothing compacted in this horizon)
       const log = yield* nodes[0]!.exec(() => Db.actions.log('users', { limit: 10_000 }))
+
       expect(new Set(log.map(entry => entry.token))).toEqual(every)
+
       // the counters hang together
       for (const node of nodes) {
         const counters = yield* node.exec(() => Db.actions.busStats())
+
         expect(counters.received).toBeGreaterThanOrEqual(counters.deduped + counters.gaps)
         expect(counters.failed).toBe(0)
         expect(counters.driftRejected).toBe(0)
       }
+
       // `since: token` never skips a change that happened after it
       const olderThanLast = local.at(-2)
+
       if (olderThanLast) {
         const resumed = yield* nodes[1]!.exec(function* (db) {
           const flow = yield* db.query('users').watch({ since: olderThanLast.token })
           const first = yield* flow.next()
+
           return (first.value as Change.Snapshot).rows
         })
+
         expect(byId(resumed)).toEqual(truth)
       }
+
       for (const node of nodes) {
         node.stop()
       }

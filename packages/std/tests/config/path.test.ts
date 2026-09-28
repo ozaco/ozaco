@@ -22,6 +22,7 @@ describe('config path (single file)', () => {
     const root = await makeRoot()
     const inner = join(root, 'inner')
     const previous = process.env.CFGSPEC_FROM_ENV
+
     try {
       await mkdir(join(inner, '.cfgspec'), { recursive: true })
       // what discovery WOULD merge: a parent base file, a sibling base file, a variant, a dir file
@@ -59,14 +60,17 @@ describe('config path (single file)', () => {
       } else {
         process.env.CFGSPEC_FROM_ENV = previous
       }
+
       await rm(root, { recursive: true, force: true })
     }
   })
 
   it('open({ path, codec }) edits and saves that file; its own extends still resolve', async () => {
     const root = await makeRoot()
+
     try {
       const file = join(root, 'settings.json')
+
       await writeFile(join(root, 'base.json'), jsonText({ inherited: 1 }))
       await writeFile(file, jsonText({ extends: './base.json', own: 1 }))
 
@@ -76,7 +80,9 @@ describe('config path (single file)', () => {
         yield* Config.use({ codec: JsonCodec })
 
         const config = yield* Config.actions.open({ path: file, codec: JsonCodec })
+
         yield* config.load()
+
         const before = yield* config.get()
 
         yield* config.set('added', true)
@@ -98,6 +104,7 @@ describe('config path (single file)', () => {
 
   it('a missing file loads empty and the first save creates it', async () => {
     const root = await makeRoot()
+
     try {
       const file = join(root, 'nested', 'fresh.json')
 
@@ -107,7 +114,9 @@ describe('config path (single file)', () => {
         yield* Config.use({ codec: JsonCodec })
 
         const config = yield* Config.actions.open({ path: file, codec: JsonCodec })
+
         yield* config.load()
+
         const empty = yield* config.get()
         const tree = yield* config.tree()
 

@@ -5,7 +5,7 @@ import type { Result } from './result'
 
 /** The function shapes of the result module — what `succeed`, `fail`, `auto`, `throwable`,
  * `appendCauses`, `unwrap`, `just`, `nothing` and `asFailure` are typed as — and the shapes the
- * chain rendering of `formatFailure` lays out (`Level`, `Block`). */
+ * chain rendering of `formatFailure` reads (`Level`). */
 export namespace ResultDef {
   /** What `fail` / `appendCauses` take as a cause: a string stays, a Failure (a failed Result) is
    * nested as the SAME object, a Success / `null` / `undefined` is dropped. */
@@ -113,10 +113,6 @@ export namespace ResultDef {
   export interface FormatOptions {
     /** Render the whole cause chain, Java style, over several lines. */
     chain?: boolean
-    /** The UTF-8 byte budget of the chain rendering (default 16384); every level's header line is
-     * kept (type / message cut to 200 bytes under a budget), the `at` lines fill what is left,
-     * innermost level first. */
-    maxBytes?: number
   }
 
   /** One failure of a chain as the rendering reads it. */
@@ -126,11 +122,5 @@ export namespace ResultDef {
     readonly message: string
     /** Its domain (string) causes, in stored order. */
     readonly causes: readonly string[]
-  }
-
-  /** A level laid out: its header line and its `at` lines. */
-  export interface Block {
-    header: string
-    lines: string[]
   }
 }

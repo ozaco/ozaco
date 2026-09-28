@@ -18,5 +18,6 @@ export function* allSettled<T extends readonly Operation<unknown>[] | []>(
       [P in keyof T]: Operation<Result<Utils.Yielded<T[P]>>>
     },
   )
+
   return results as Utils.AllSettled<T>
 }

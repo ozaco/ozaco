@@ -4,7 +4,7 @@ import { Logger } from 'std:logger'
 import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 import type { TraceDef } from 'std:trace'
-import { registerFallback, suppressed, Tracer } from 'std:trace'
+import { Trace } from 'std:trace'
 
 import { TraceTransport } from 'std:logger/transport/trace'
 
@@ -47,12 +47,13 @@ export function* handOver(kernel: ServerDef.Context, log: TraceDef.LogData): Ope
   }
 
   hold(owner, { log, own: true })
+
   return true
 }
 
 /**
  * The node's claim on the PROCESS's log records (`observe.processLogs`, on by default for an
- * observing node): a std:trace fallback sink that hands every record emitted where no Tracer
+ * observing node): a std:trace fallback sink that hands every record emitted where no Trace sink
  * records to this node's Tracers — inside `scope` (the node's own contexts: its server-tracer, its
  * exporters and store), suppressed — so it becomes one observe event with the node's resource
  * (`service.name` = the node's, unless the record names a span service). `take()` queues the
@@ -63,7 +64,7 @@ export const processLogs = (
   kernel: ServerDef.Context,
   options: ServerDef.Options,
   scope: Scope,
-): { readonly wanted: boolean; take(): void; release(): void } => {
+): { readonly wanted: boolean; take(): Operation<void>; release(): void } => {
   const wanted = kernel.observing && options.observe?.processLogs !== false
   let unregister: (() => void) | undefined
 
@@ -74,15 +75,15 @@ export const processLogs = (
         return
       }
 
-      yield* within(scope, () => suppressed(() => Tracer.actions.emit(log)))
+      yield* within(scope, () => Trace.actions.suppressed(() => Trace.actions.emit(log)))
     },
   }
 
   return {
     wanted,
-    take() {
+    *take() {
       if (wanted && unregister === undefined) {
-        unregister = registerFallback(sink)
+        unregister = yield* Trace.actions.registerFallback(sink)
       }
     },
     release() {
@@ -103,8 +104,8 @@ export const processLogs = (
 export const bootLogs = (
   kernel: ServerDef.Context,
   tracer: ServerDef.TracerContext,
-): (() => void) =>
-  registerFallback({
+): Operation<() => void> =>
+  Trace.actions.registerFallback({
     id: `${kernel.serviceId}#boot`,
     *emit(log) {
       if (!(yield* handOver(kernel, log))) {
@@ -121,6 +122,7 @@ export function* releaseBoot(
   claims: boolean,
 ): Operation<void> {
   const held = tracer.boot ?? []
+
   tracer.boot = null
 
   if (!kernel.observing) {
@@ -129,7 +131,7 @@ export function* releaseBoot(
 
   for (const { log, own } of held) {
     if (own || claims) {
-      yield* attempt(() => suppressed(() => Tracer.actions.emit(log)))
+      yield* attempt(() => Trace.actions.suppressed(() => Trace.actions.emit(log)))
     }
   }
 }
@@ -156,6 +158,7 @@ export function* buildNode<const TServices extends readonly ServiceDef.Service[]
   // what exported BEFORE this node's plugins (an outer server's exporters) is not this node's:
   // its fan-out (export / start / flush) skips them
   const inherited = new Set(yield* exporterEntries())
+
   yield* InheritedExporters.set(inherited)
 
   for (const entry of options.plugins ?? []) {
@@ -230,7 +233,8 @@ export function* buildNode<const TServices extends readonly ServiceDef.Service[]
   // the process's untraced log records — claimed only now, once nothing above can fail (a node
   // that never came up must not swallow them); given back at `stop()` or when the scope ends
   const claim = processLogs(kernel, options as ServerDef.Options, yield* useScope())
-  claim.take()
+
+  yield* claim.take()
   yield* ensure(() => claim.release())
 
   // decided: what was held while coming up goes to this node's sinks (or nowhere) — the claim
@@ -277,7 +281,7 @@ export function* buildNode<const TServices extends readonly ServiceDef.Service[]
 
       // started again after a `stop()`: claim the process's log records again (queued behind
       // whoever took them meanwhile)
-      claim.take()
+      yield* claim.take()
 
       if (kernel.edge && health !== false) {
         yield* kernel.edge.actions.raw({
@@ -292,6 +296,7 @@ export function* buildNode<const TServices extends readonly ServiceDef.Service[]
 
           *handler() {
             const body = yield* healthOf(state, kernel, members)
+
             return Response.json(body, { status: body.ready ? 200 : 503 })
           },
         })
@@ -309,7 +314,9 @@ export function* buildNode<const TServices extends readonly ServiceDef.Service[]
 
       if (kernel.edge) {
         yield* kernel.edge.actions.mount()
+
         const info = yield* kernel.edge.actions.listen(listen ?? options.listen ?? {})
+
         state.url = info.url
         state.port = info.port
       }

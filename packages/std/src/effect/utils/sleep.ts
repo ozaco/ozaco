@@ -5,5 +5,6 @@ import type { Operation } from '../types/operation'
 export const sleep = (duration: number): Operation<void> =>
   action(resolve => {
     const timeoutId = setTimeout(resolve, duration)
+
     return () => clearTimeout(timeoutId)
   }, `sleep(${duration})`)

@@ -6,12 +6,16 @@ import { describe, expect, it } from 'bun:test'
 describe('results as generator instructions', () => {
   it('a success iterator returns its value immediately; a failure yields itself', () => {
     const successStep = succeed('done')[Symbol.iterator]().next()
+
     expect(successStep).toEqual({ done: true, value: 'done' })
 
     const failure = fail('nope')
+
     expect(isFailure(failure)).toBe(true)
+
     if (isFailure(failure)) {
       const failureStep = failure[Symbol.iterator]().next()
+
       expect(failureStep.done).toBe(false)
       expect(failureStep.value).toBe(failure)
     }
@@ -36,6 +40,7 @@ describe('results as generator instructions', () => {
     })
 
     expect(isFailure(outcome)).toBe(true)
+
     if (isFailure(outcome)) {
       expect(outcome.error).toBe('exploded')
     }
@@ -45,10 +50,12 @@ describe('results as generator instructions', () => {
 describe('succeed passes iterators through as values', () => {
   it('a generator handed to succeed is returned uniterated', async () => {
     let advanced = false
+
     function* source() {
       advanced = true
       yield 1
     }
+
     const generator = source()
 
     const outcome = await run(function* () {

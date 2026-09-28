@@ -34,7 +34,9 @@ describe('peer observability', () => {
 
       yield* chatA.send('one')
       yield* chatA.send('two')
+
       const messagesB = yield* chatB!.messages
+
       yield* messagesB.next()
       yield* messagesB.next()
 
@@ -72,7 +74,9 @@ describe('peer observability', () => {
     )
     expect(detailsOf(timeline, 'channel')).toEqual(['out:chat'])
     expect(detailsOf(timeline, 'state')).toContain('connected')
+
     const answer = timeline.find(item => item.kind === 'answer')
+
     expect(answer?.detail).toBe('in')
   })
 
@@ -86,16 +90,21 @@ describe('peer observability', () => {
       const [signalA, signalB] = createSignalPair()
       // keep only the last 3 entries — the flow still sees every one of them
       const peerA = yield* Rtc.actions.connect(signalA, { observe: { timeline: 3 } })
+
       yield* Rtc.actions.connect(signalB, { polite: true })
 
       const seen: RtcDef.Event[] = []
+
       yield* fork(function* () {
         const events = yield* peerA.events
+
         for (;;) {
           const step = yield* events.next()
+
           if (step.done) {
             return
           }
+
           seen.push(step.value)
         }
       })
@@ -107,6 +116,7 @@ describe('peer observability', () => {
     })
 
     const { seen, kept, last } = unwrap(outcome)
+
     expect(seen).toEqual(expect.arrayContaining(['offer', 'answer', 'state', 'channel']))
     expect(kept).toBe(3)
     expect(last).toBe('channel')
@@ -121,15 +131,18 @@ describe('peer observability', () => {
 
       const [signalA, signalB] = createSignalPair()
       const peerA = yield* Rtc.actions.connect(signalA)
+
       yield* Rtc.actions.connect(signalB, { polite: true })
 
       const chat = yield* peerA.channel('chat')
+
       yield* chat.send('hello')
 
       return yield* peerA.stats()
     })
 
     const stats = unwrap(outcome)
+
     expect(stats.state).toBe('connected')
     expect(stats.pair).toEqual({
       local: 'host',
@@ -175,10 +188,12 @@ describe('peer observability', () => {
 
       const [signalA, signalB] = createSignalPair()
       const peerA = yield* Rtc.actions.connect(signalA)
+
       yield* Rtc.actions.connect(signalB, { polite: true })
       yield* peerA.channel('chat')
 
       const result = yield* attempt(() => peerA.stats())
+
       // a Result RETURNED from a run body collapses into the run's own outcome — fold it here
       return { tag: isFailure(result) ? String(result.error) : 'ok' }
     })
@@ -195,6 +210,7 @@ describe('peer observability', () => {
 
       const [signalA, signalB] = createSignalPair()
       const peerA = yield* Rtc.actions.connect(signalA, { observe: { sampleMs: 15 } })
+
       yield* Rtc.actions.connect(signalB, { polite: true })
       yield* peerA.channel('chat')
       yield* sleep(50)
@@ -203,6 +219,7 @@ describe('peer observability', () => {
     })
 
     const samples = unwrap(outcome)
+
     expect(samples.length).toBeGreaterThan(0)
     expect(samples[0]?.data).toEqual(
       expect.objectContaining({ state: 'connected', rttMs: 12, route: 'host/srflx' }),
@@ -220,6 +237,7 @@ describe('peer observability', () => {
       const budget = { retries: 4, delayMs: 10 } // both sides redial on the same clock
       const peerA = yield* Rtc.actions.connect(signalA, { reconnect: budget })
       const peerB = yield* Rtc.actions.connect(signalB, { polite: true, reconnect: budget })
+
       yield* peerA.channel('chat')
       void peerB
 
@@ -230,6 +248,7 @@ describe('peer observability', () => {
     })
 
     const { metrics, timeline } = unwrap(outcome)
+
     // one dial per ATTEMPT (the fake relinks only once both sides have redialed), one recovery
     expect(metrics.generations).toBeGreaterThanOrEqual(2)
     expect(metrics.reconnects).toBe(1)

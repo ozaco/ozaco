@@ -46,6 +46,7 @@ const spy = () => {
           }
         },
       }
+
       return { hooks }
     },
   }).build()
@@ -53,7 +54,9 @@ const spy = () => {
   /** the ONE upgrade span of `/live`. */
   const upgrade = (): TraceDef.SpanData => {
     const found = spans.filter(span => span.name === 'GET /live')
+
     expect(found).toHaveLength(1)
+
     return found[0]!
   }
 
@@ -95,6 +98,7 @@ const BAD_KEY = `${KEYLESS}Sec-WebSocket-Key: nope\r\n`
 const greet = (url: string): Promise<unknown> =>
   new Promise((resolve, reject) => {
     const ws = new WebSocket(url)
+
     ws.addEventListener('message', event => {
       resolve(JSON.parse(String(event.data)))
       ws.close()
@@ -115,16 +119,22 @@ const withEdge = async (
       if (options.before) {
         yield* options.before()
       }
+
       const server = yield* createServer({ services: [empty], edge, plugins: options.plugins })
+
       yield* Edge.actions.socket({
         path: '/live',
         *handler(socket) {
           yield* socket.send({ t: 'hello' })
+
           const messages = yield* socket.messages
+
           yield* messages.next()
         },
       })
+
       const info = yield* server.start({ port: 0 })
+
       yield* body({ url: info.url!, port: info.port! })
       // the span of a refused upgrade ends from the edge's scope: let that run
       yield* sleep(50)
@@ -146,7 +156,9 @@ const throwingDeno = () => ({
       fetch: request => handler(request),
     })
     const addr = { port: Number(server.port), hostname: String(server.hostname) }
+
     options.onListen?.(addr)
+
     return { addr, shutdown: () => Promise.resolve(server.stop(true)) }
   },
   upgradeWebSocket(): never {
@@ -166,6 +178,7 @@ describe('edge — an accepted upgrade the runtime could not complete', () => {
     expect(answer.startsWith('HTTP/1.1 500')).toBe(true)
 
     const upgrade = seen.upgrade()
+
     expect(upgrade.attributes).toMatchObject({
       'http.response.status_code': 500,
       'error.type': 'server.internal',
@@ -173,6 +186,7 @@ describe('edge — an accepted upgrade the runtime could not complete', () => {
     expect(upgrade.status.code).toBe('error')
 
     const recorded = seen.exceptionsIn(upgrade.context.traceId)
+
     expect(recorded).toHaveLength(1)
     expect(recorded[0]!.severityNumber).toBe(17)
     expect(recorded[0]!.context?.spanId).toBe(upgrade.context.spanId)
@@ -186,6 +200,7 @@ describe('edge — an accepted upgrade the runtime could not complete', () => {
     })
 
     const upgrade = seen.upgrade()
+
     expect(upgrade.attributes['http.response.status_code']).toBe(101)
     expect(upgrade.attributes['error.type']).toBeUndefined()
     expect(upgrade.status.code).toBe('unset')
@@ -215,6 +230,7 @@ describe('edge — an accepted upgrade the runtime could not complete', () => {
     expect(refused!.status.code).toBe('unset')
 
     const recorded = seen.exceptionsIn(refused!.context.traceId)
+
     expect(recorded).toHaveLength(1)
     expect(recorded[0]!.severityNumber).toBe(5)
 
@@ -241,6 +257,7 @@ describe('edge — an accepted upgrade the runtime could not complete', () => {
     expect(answer.startsWith('HTTP/1.1 500')).toBe(true)
 
     const upgrade = seen.upgrade()
+
     expect(upgrade.attributes).toMatchObject({
       'http.response.status_code': 500,
       'error.type': 'server.internal',
@@ -248,6 +265,7 @@ describe('edge — an accepted upgrade the runtime could not complete', () => {
     expect(upgrade.status.code).toBe('error')
 
     const recorded = seen.exceptionsIn(upgrade.context.traceId)
+
     expect(recorded).toHaveLength(1)
     expect(recorded[0]!.attributes['ozaco.failure.chain']).toEqual([
       'server.internal: the runtime could not complete the websocket upgrade',
@@ -285,6 +303,7 @@ describe('edge — an accepted upgrade the runtime could not complete', () => {
     )
 
     const lines = entries.filter(entry => entry.msg === 'edge upgrade failed')
+
     expect(lines).toHaveLength(1)
     expect(lines[0]!.level).toBe(LogLevel.warn)
     expect(lines[0]!.bindings['logger']).toBe('@ozaco/server')

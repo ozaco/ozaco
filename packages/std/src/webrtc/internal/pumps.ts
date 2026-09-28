@@ -38,22 +38,26 @@ export const pumpSignal = guard(function* (session: Helpers.Session) {
     }
 
     const frame = frameOf(item.value)
+
     if (!frame) {
       continue
     }
 
     if (frame.t === 'rtc:bye') {
       session.settle(true, { state: session.stateOf(), reason: 'bye' }) // deliberate hang-up
+
       return
     }
 
     const generation = yield* session.awaitGeneration()
+
     if (!generation) {
       return
     }
 
     if (frame.t === 'rtc:candidate') {
       yield* handleCandidate(session, generation, frame.candidate)
+
       continue
     }
 
@@ -70,6 +74,7 @@ export const pumpCandidates = guard(function* (session: Helpers.Session) {
   yield* session.eachGeneration(function* (generation) {
     while (true) {
       const item = yield* generation.candidatesOut.next()
+
       if (item.done) {
         return
       }
@@ -95,6 +100,7 @@ export const pumpIncoming = guard(function* (session: Helpers.Session) {
   yield* session.eachGeneration(function* (generation) {
     while (true) {
       const item = yield* generation.incoming.next()
+
       if (item.done) {
         return
       }
@@ -103,12 +109,15 @@ export const pumpIncoming = guard(function* (session: Helpers.Session) {
         ...(options.codec === undefined ? {} : { codec: options.codec }),
         observe,
       })
+
       remoteEntries.add(entry)
 
       const opened = yield* attempt(() => entry.opened)
+
       if (!isSuccess(opened) || session.ended || !remoteEntries.has(entry)) {
         remoteEntries.delete(entry)
         entry.end(true)
+
         continue
       }
 
@@ -128,11 +137,13 @@ export const sampleStats = guard(function* (session: Helpers.Session, everyMs: n
     yield* sleep(everyMs)
 
     const generation = session.generation
+
     if (session.ended || !generation?.alive) {
       continue
     }
 
     const snapshot = yield* attempt(() => readStats(generation.pc))
+
     if (isSuccess(snapshot)) {
       session.observe.record('stats', undefined, { data: flatten(snapshot.value) })
     }

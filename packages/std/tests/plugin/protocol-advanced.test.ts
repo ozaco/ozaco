@@ -60,10 +60,12 @@ const makeStore = (options?: { exec?: Protocol.Exec; defaults?: boolean }) => {
     }).build({
       *get(key) {
         const ctx = yield* Store.context.expect()
+
         return ctx.rows.get(key)
       },
       *label() {
         const ctx = yield* Store.context.expect()
+
         return ctx.label
       },
     })
@@ -116,6 +118,7 @@ describe('custom exec: priority selection over Install.value', () => {
     let observed = -1
     const spyingSelect: Protocol.Exec = function* (entries, dispatch) {
       observed = entries.length
+
       return yield* dispatch(entries.at(-1))
     }
 
@@ -132,9 +135,11 @@ describe('custom exec: priority selection over Install.value', () => {
   it('a fan-out exec runs every impl while hooks fire ONCE around the whole dispatch', async () => {
     const fanout: Protocol.Exec = function* (entries, dispatch) {
       const results: unknown[] = []
+
       for (const entry of entries) {
         results.push(yield* dispatch(entry))
       }
+
       return results
     }
 
@@ -195,6 +200,7 @@ describe('dispatch resolution edge cases', () => {
 
     const outcome = await run(function* () {
       yield* Impl.use()
+
       return yield* Dual.actions.info()
     })
 
@@ -243,6 +249,7 @@ describe('dispatch resolution edge cases', () => {
     let seen = -1
     const countingExec: Protocol.Exec = function* (entries, dispatch) {
       seen = entries.length
+
       return yield* dispatch(entries.at(-1))
     }
 
@@ -323,6 +330,7 @@ describe('dispatch resolution edge cases', () => {
       }).build({
         *who() {
           const ctx = yield* Combo.context.expect()
+
           return ctx.label
         },
         *viaProtocol() {
@@ -416,6 +424,7 @@ describe('cloneable contexts + metadata', () => {
 
     const outcome = await run(function* () {
       yield* Impl.use()
+
       return [yield* Meta.actions.work(), yield* Meta.actions.fallback!()]
     })
 
@@ -461,6 +470,7 @@ describe('cloneable contexts + metadata', () => {
 
     const outcome = await run(function* () {
       yield* Impl.use()
+
       return [
         yield* Keyed.actions.work(),
         yield* Keyed.actions.handled!(),
@@ -552,6 +562,7 @@ describe('hook layering', () => {
       fs: {
         *read(path: string) {
           const ctx = yield* Tree.context.expect()
+
           return `${ctx.prefix}${path}`
         },
       },
@@ -573,6 +584,7 @@ describe('hook layering', () => {
         fs: {
           *read(result) {
             trace.push(`after:${result}`)
+
             return `${result}!`
           },
         },
@@ -608,6 +620,7 @@ describe('hook layering', () => {
       })
 
       yield* Store.actions.get('k')
+
       return trace
     })
 

@@ -57,11 +57,13 @@ describe('edge — raw routes under Auth', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({
           services: [todos],
           edge: BunEdge,
           plugins: [tokens, Auth.use({ default: 'authenticated' }), Docs],
         })
+
         yield* server.start()
         yield* Edge.actions.raw({ method: 'GET', path: '/private', handler: whoami })
         yield* Edge.actions.raw({ method: 'GET', path: '/public', auth: false, handler: whoami })
@@ -69,7 +71,9 @@ describe('edge — raw routes under Auth', () => {
 
         // an action and a raw route agree: no bearer → 401
         expect((yield* get('/todos/list')).status).toBe(401)
+
         const closed = yield* get('/private')
+
         expect(closed.status).toBe(401)
         expect(closed.headers.get(HEADERS.error)).toBe(ServerErrors.Unauthorized)
         expect(yield* until((yield* get('/private', bearer('tok-ui'))).json())).toEqual({
@@ -102,11 +106,13 @@ describe('edge — raw routes under Auth', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({
           services: [todos],
           edge: BunEdge,
           plugins: [tokens, Auth, Docs.use({ auth: ['admin'] })],
         })
+
         yield* server.start()
         expect((yield* get('/docs/manifest')).status).toBe(401)
         expect((yield* get('/docs/manifest', bearer('tok-guest'))).status).toBe(403)
@@ -120,7 +126,9 @@ describe('edge — raw routes under Auth', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({ services: [todos], edge: BunEdge })
+
         yield* server.start()
         yield* Edge.actions.raw({ method: 'GET', path: '/open', handler: whoami })
         yield* Edge.actions.raw({
@@ -151,17 +159,24 @@ describe('edge — output contract', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({ services: [broken], edge: BunEdge })
+
         yield* server.start()
+
         const failed = yield* attempt(server.call(broken, 'lie'))
+
         expect((failed as AnyType).error).toBe(ServerErrors.Output)
         expect((failed as AnyType).error).toBe('server.output')
+
         const response = yield* get('/broken/lie')
+
         expect(response.status).toBe(500)
         expect(response.headers.get(HEADERS.error)).toBe('server.output')
 
         // the input side is still the caller's fault
         const invalid = yield* get('/broken/strict?n=abc')
+
         expect(invalid.status).toBe(400)
         expect(invalid.headers.get(HEADERS.error)).toBe(ServerErrors.Validation)
         yield* server.stop()
@@ -175,16 +190,21 @@ describe('edge — static directories', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({ services: [todos], edge: BunEdge })
+
         yield* server.start()
         yield* Edge.actions.static({ path: '/assets/**', dir: site })
 
         const js = yield* get('/assets/app.js')
+
         expect(js.status).toBe(200)
         expect(js.headers.get('content-type')).toBe('text/javascript; charset=utf-8')
         expect(yield* until(js.text())).toBe('console.log(1)')
         expect((yield* get('/assets/style.css')).headers.get('content-type')).toContain('text/css')
+
         const bin = yield* get('/assets/data.bin')
+
         expect(bin.headers.get('content-type')).toBe('application/octet-stream')
         expect(bin.headers.get('content-length')).toBe('3')
         expect([...new Uint8Array(yield* until(bin.arrayBuffer()))]).toEqual([1, 2, 3])
@@ -198,12 +218,14 @@ describe('edge — static directories', () => {
 
         // HEAD: the headers, no body
         const head = yield* get('/assets/app.js', {}, 'HEAD')
+
         expect(head.status).toBe(200)
         expect(head.headers.get('content-length')).toBe('14')
         expect(yield* until(head.text())).toBe('')
 
         // escapes: plain, percent-encoded, encoded slashes, backslashes, absolute — all 404
         const outside = `../${secret.split('/').pop()}/key.txt`
+
         for (const path of [
           `/assets/${outside}`,
           `/assets/%2e%2e/${outside}`,
@@ -212,6 +234,7 @@ describe('edge — static directories', () => {
           `/assets/%2f${secret.slice(1)}/key.txt`,
         ]) {
           const escaped = yield* get(path)
+
           expect(escaped.status).toBe(404)
           expect(yield* until(escaped.text())).not.toContain('top secret')
         }
@@ -222,9 +245,11 @@ describe('edge — static directories', () => {
         // symlinks under `dir` may point outside it — refused unless `followSymlinks`
         for (const path of ['/assets/linked/key.txt', '/assets/key.txt']) {
           const linked = yield* get(path)
+
           expect(linked.status).toBe(404)
           expect(yield* until(linked.text())).not.toContain('top secret')
         }
+
         yield* Edge.actions.static({
           path: '/followed',
           dir: site,
@@ -241,11 +266,13 @@ describe('edge — static directories', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({
           services: [todos],
           edge: BunEdge,
           plugins: [tokens, Auth.use({ default: 'authenticated' })],
         })
+
         yield* server.start()
         yield* Edge.actions.static({ path: '/private', dir: site })
         yield* Edge.actions.static({ path: '/', dir: site, auth: false, index: false })

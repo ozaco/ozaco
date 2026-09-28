@@ -19,8 +19,10 @@ const SRC = join(import.meta.dir, '../../src')
  * the only way to observe bytes that went to the REAL terminal streams. */
 const runScript = async (body: string) => {
   const dir = await mkdtemp(join(tmpdir(), 'ozaco-stdio-'))
+
   try {
     const file = join(dir, 'script.ts')
+
     await writeFile(
       file,
       [
@@ -37,9 +39,11 @@ const runScript = async (body: string) => {
 
     const outcome = await run(function* () {
       yield* BunIO.use()
+
       return yield* IO.actions.exec(process.execPath, [file])
     })
     const result = unwrap(outcome)
+
     return {
       stdout: decoder.decode(result.stdout),
       stderr: decoder.decode(result.stderr),
@@ -54,9 +58,11 @@ const runScript = async (body: string) => {
 const splitBytes = (text: string, size: number): Uint8Array[] => {
   const bytes = new TextEncoder().encode(text)
   const chunks: Uint8Array[] = []
+
   for (let at = 0; at < bytes.length; at += size) {
     chunks.push(bytes.slice(at, at + size))
   }
+
   return chunks
 }
 
@@ -65,6 +71,7 @@ const bytesFlow = (chunks: Uint8Array[]): Flow<Uint8Array, true> =>
     for (const chunk of chunks) {
       yield* emit(chunk)
     }
+
     return true
   })
 
@@ -96,7 +103,9 @@ describe('spawn stdio', () => {
       const errFirst = yield* err.next()
 
       const written = yield* attempt(() => handle.write('nope'))
+
       yield* handle.closeStdin()
+
       const status = yield* handle.exited()
 
       return {
@@ -129,21 +138,26 @@ describe('spawn stdio', () => {
           stdio: { stdout: 'inherit' },
         },
       )
+
       yield* handle.write('piped\n')
       yield* handle.closeStdin()
 
       const err = yield* handle.stderr
       let text = ''
+
       while (true) {
         const item = yield* err.next()
+
         if (item.done) {
           break
         }
+
         text += decoder.decode(item.value)
       }
 
       const out = yield* handle.stdout
       const outFirst = yield* out.next()
+
       yield* handle.exited()
 
       return { stderr: text, stdoutEmpty: outFirst.done === true }
@@ -159,11 +173,14 @@ describe('decodeText', () => {
     const outcome = await run(function* () {
       const subscription = yield* decodeText(bytesFlow(splitBytes(text, 1)))
       let decoded = ''
+
       while (true) {
         const item = yield* subscription.next()
+
         if (item.done) {
           return { decoded, close: item.value }
         }
+
         decoded += item.value
       }
     })
@@ -191,15 +208,20 @@ describe('toTerminal', () => {
   it('raises the failure a source closes with, after writing what came before', async () => {
     const outcome = await run(function* () {
       yield* WebIO.use()
+
       const logged: string[] = []
       const original = console.log
+
       console.log = (line: string) => logged.push(line)
+
       try {
         const failing = flowOf<Uint8Array, never>(function* (emit) {
           yield* emit(new TextEncoder().encode('partial'))
+
           throw new Error('source broke')
         })
         const result = yield* attempt(() => IO.actions.toTerminal(failing))
+
         return { failed: isFailure(result), logged }
       } finally {
         console.log = original
@@ -212,9 +234,12 @@ describe('toTerminal', () => {
   it('WebIO logs whole decoded lines, flushing the trailing partial line', async () => {
     const outcome = await run(function* () {
       yield* WebIO.use()
+
       const logged: string[] = []
       const original = console.error
+
       console.error = (line: string) => logged.push(line)
+
       try {
         yield* IO.actions.toTerminal(bytesFlow(splitBytes('first ü\nsecond 🎉\nlast', 1)), {
           stream: 'stderr',
@@ -222,6 +247,7 @@ describe('toTerminal', () => {
       } finally {
         console.error = original
       }
+
       return logged
     })
 

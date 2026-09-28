@@ -56,6 +56,7 @@ export const account = service(
       },
       function* ({ ctx }) {
         const principal = ctx.auth as AuthDef.Principal
+
         return { sub: principal.sub, roles: [...principal.roles], type: principal.type }
       },
     ),
@@ -80,6 +81,7 @@ export const account = service(
         }
 
         const roles = new Set([...(Array.isArray(user.roles) ? user.roles : []), 'admin'])
+
         yield* db.patch('users', user._id, { roles: [...roles] })
 
         return { ok: true }

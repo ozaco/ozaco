@@ -28,6 +28,7 @@ let installs = 0
 /** Every observed event of the node it is installed on, with the time it was exported. */
 const memoryExporter = () => {
   installs += 1
+
   const events: { event: ObserveDef.Event; at: number }[] = []
 
   const plugin = ObserveExporter.implement<ObserveDef.ExporterContext, []>({
@@ -50,9 +51,11 @@ const memoryExporter = () => {
     events.flatMap(({ event }) => (event.t === 'log' ? [event.log] : []))
   const span = (name: string): TraceDef.SpanData => {
     const found = spans().filter(data => data.name === name)
+
     if (found.length !== 1) {
       throw new Error(`expected one span "${name}", got ${found.length}`)
     }
+
     return found[0]!
   }
   const exceptions = (): TraceDef.LogData[] =>
@@ -78,6 +81,7 @@ const feed = service('feed', {
     return flowOf<string>(function* (emit) {
       yield* emit('first')
       yield* sleep(STEP_MS)
+
       return yield* fail('feed.broke', 'the feed broke')
     })
   }),
@@ -97,8 +101,10 @@ const feed = service('feed', {
       async pull(controller) {
         if (sent === 3) {
           controller.close()
+
           return
         }
+
         sent += 1
         await new Promise(resolve => {
           setTimeout(resolve, STEP_MS)
@@ -116,9 +122,11 @@ function* drain(out: unknown, limit = Number.POSITIVE_INFINITY): Operation<unkno
 
   while (values.length < limit) {
     const step = yield* flow.next()
+
     if (step.done) {
       break
     }
+
     values.push(step.value)
   }
 
@@ -133,7 +141,9 @@ const local = async (
   unwrap(
     await run(function* () {
       yield* storage()
+
       const server = yield* createServer({ services: [feed], plugins: [sink.plugin] })
+
       yield* body(server as AnyType)
     }),
   )
@@ -150,6 +160,7 @@ describe('stream spans — the dispatch span covers its stream output', () => {
     await local(function* (server) {
       yield* scoped(function* () {
         const out = yield* server.call(feed, 'words')
+
         unread = sink.spans().map(data => data.name)
         expect(yield* drain(out)).toEqual(['a', 'b', 'c'])
         drainedAt = Date.now()
@@ -160,6 +171,7 @@ describe('stream spans — the dispatch span covers its stream output', () => {
     expect(unread).not.toContain('feed.words')
 
     const words = sink.span('feed.words')
+
     expect(words).toMatchObject({ kind: 'internal', status: { code: 'unset' } })
     expect(words.end - words.start).toBeGreaterThanOrEqual(STEP_MS * 3 - 2)
     // ended with the drain — not whenever the node went down (wall clocks: a ms of slack)
@@ -167,7 +179,9 @@ describe('stream spans — the dispatch span covers its stream output', () => {
 
     // produced under the dispatch span: every line of the feed correlates to it, inside it
     const lines = sink.logs().filter(log => log.body === 'word')
+
     expect(lines).toHaveLength(3)
+
     for (const line of lines) {
       expect(line.context?.spanId).toBe(words.context.spanId)
       expect(line.time).toBeLessThanOrEqual(words.end)
@@ -180,6 +194,7 @@ describe('stream spans — the dispatch span covers its stream output', () => {
     const sink = await local(function* (server) {
       yield* scoped(function* () {
         const out = yield* server.call(feed, 'broken')
+
         failed = yield* attempt(() => drain(out))
       })
     })
@@ -187,10 +202,12 @@ describe('stream spans — the dispatch span covers its stream output', () => {
     expect(isFailure(failed)).toBe(true)
 
     const broken = sink.span('feed.broken')
+
     expect(broken.status).toEqual({ code: 'error', message: 'the feed broke' })
     expect(broken.attributes['error.type']).toBe('feed.broke')
 
     const records = sink.exceptions()
+
     expect(records).toHaveLength(1)
     expect(records[0]).toMatchObject({ eventName: 'ozaco.action.exception', severityNumber: 17 })
     expect(records[0]!.context?.spanId).toBe(broken.context.spanId)
@@ -200,12 +217,14 @@ describe('stream spans — the dispatch span covers its stream output', () => {
     const sink = await local(function* (server) {
       yield* scoped(function* () {
         const out = yield* server.call(feed, 'endless')
+
         expect(yield* drain(out, 2)).toEqual([0, 1])
       })
       yield* sleep(10)
     })
 
     const endless = sink.span('feed.endless')
+
     expect(endless.status.code).toBe('unset')
     expect(endless.attributes['ozaco.cancelled']).toBe(true)
     expect(sink.exceptions()).toEqual([])
@@ -218,6 +237,7 @@ describe('stream spans — the dispatch span covers its stream output', () => {
       yield* scoped(function* () {
         const out = yield* server.call(feed, 'file')
         const chunks = (yield* drain(out)) as Uint8Array[]
+
         text = chunks.map(chunk => new TextDecoder().decode(chunk)).join('')
       })
       // the span ends in the node's scope, a moment after the last chunk
@@ -227,6 +247,7 @@ describe('stream spans — the dispatch span covers its stream output', () => {
     expect(text).toBe('chunk 1\nchunk 2\nchunk 3\n')
 
     const file = sink.span('feed.file')
+
     expect(file.status.code).toBe('unset')
     expect(file.end - file.start).toBeGreaterThanOrEqual(STEP_MS * 3 - 2)
   })
@@ -255,6 +276,7 @@ describe('stream spans — the dispatch span covers its stream output', () => {
             yield* sleep(60_000)
           }),
         )
+
         yield* ready.next()
         yield* scoped(function* () {
           yield* storage()
@@ -272,6 +294,7 @@ describe('stream spans — the dispatch span covers its stream output', () => {
           yield* sleep(50)
           yield* scoped(function* () {
             const out = yield* Server.actions.call(feed, 'words')
+
             expect(yield* drain(out)).toEqual(['a', 'b', 'c'])
             drainedAt = Date.now()
           })
@@ -283,6 +306,7 @@ describe('stream spans — the dispatch span covers its stream output', () => {
 
     const server = owner.span('feed.words')
     const client = caller.span('feed.words')
+
     expect(server).toMatchObject({ kind: 'server', status: { code: 'unset' } })
     expect(server.parent?.spanId).toBe(client.context.spanId)
     expect(server.end - server.start).toBeGreaterThanOrEqual(STEP_MS * 3 - 2)
@@ -290,7 +314,9 @@ describe('stream spans — the dispatch span covers its stream output', () => {
 
     // the feed's lines on the owner correlate to its SERVER span
     const lines = owner.logs().filter(log => log.body === 'word')
+
     expect(lines).toHaveLength(3)
+
     for (const line of lines) {
       expect(line.context?.spanId).toBe(server.context.spanId)
     }

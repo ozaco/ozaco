@@ -97,6 +97,7 @@ export const stream = {
     brand: B | StreamDef.Decl<B, T>,
   ): Operation<StreamDef.Branded<B, T>> {
     const name = typeof brand === 'string' ? brand : brand.brand
+
     return brandStream(yield* toReadable(flow), name)
   },
 

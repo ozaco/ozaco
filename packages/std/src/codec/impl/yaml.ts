@@ -1,14 +1,14 @@
 import type { Flow } from 'std:effect'
 import { createChannel, each, ensure, fork } from 'std:effect'
 import type { Result } from 'std:result'
-import { asFailure, fail } from 'std:result'
+import { asFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
 
 import { dump, load } from 'js-yaml'
 
 import pkg from '../../../package.json'
 import { Codec } from '../definition'
-import { CodecErrors } from '../errors'
+import { DECODE_FOLD, ENCODE_FOLD, PARSE_FOLD, STRINGIFY_FOLD } from '../internal/const'
 import type { CodecDef } from '../types/codec'
 
 const encoder = new TextEncoder()
@@ -58,7 +58,7 @@ export const YamlCodec = Codec.implement({
 
       return encoder.encode(result)
     } catch (error) {
-      return yield* fail(CodecErrors.Encode, 'cannot encode the value as YAML', asFailure(error))
+      return yield* asFailure(error, ENCODE_FOLD)
     }
   },
 
@@ -66,7 +66,7 @@ export const YamlCodec = Codec.implement({
     try {
       return load(decoder.decode(data), decodeOptions) as AnyType
     } catch (error) {
-      return yield* fail(CodecErrors.Decode, 'cannot decode the bytes as YAML', asFailure(error))
+      return yield* asFailure(error, DECODE_FOLD)
     }
   },
 
@@ -74,11 +74,7 @@ export const YamlCodec = Codec.implement({
     try {
       return dump(value, encodeOptions)
     } catch (error) {
-      return yield* fail(
-        CodecErrors.Stringify,
-        'cannot stringify the value as YAML',
-        asFailure(error),
-      )
+      return yield* asFailure(error, STRINGIFY_FOLD)
     }
   },
 
@@ -86,7 +82,7 @@ export const YamlCodec = Codec.implement({
     try {
       return load(text, decodeOptions) as AnyType
     } catch (error) {
-      return yield* fail(CodecErrors.Parse, 'cannot parse the text as YAML', asFailure(error))
+      return yield* asFailure(error, PARSE_FOLD)
     }
   },
 
@@ -95,17 +91,16 @@ export const YamlCodec = Codec.implement({
 
     yield* fork(function* () {
       let close: true | Result.Failure<unknown> = true
+
       try {
         for (const chunk of yield* each(flow)) {
           let encoded: Uint8Array
+
           try {
             encoded = encoder.encode(dump(chunk, encodeOptions))
           } catch (error) {
-            close = fail(
-              CodecErrors.Encode,
-              'cannot encode the value as YAML',
-              asFailure(error),
-            ) as Result.Failure<unknown>
+            close = asFailure(error, ENCODE_FOLD)
+
             break
           }
 
@@ -146,13 +141,17 @@ export const YamlCodec = Codec.implement({
       let close: true | Result.Failure<unknown> = true
 
       const subscription = yield* flow
+
       for (;;) {
         const next = yield* subscription.next()
+
         if (next.done) {
           break
         }
+
         parts.push(streamDecoder.decode(next.value, { stream: true }))
       }
+
       parts.push(streamDecoder.decode())
 
       try {
@@ -160,9 +159,9 @@ export const YamlCodec = Codec.implement({
 
         yield* channel.send(result)
       } catch (error) {
-        close = asFailure(error)
+        close = asFailure(error, DECODE_FOLD)
 
-        return yield* fail(CodecErrors.Decode, 'cannot decode the bytes as YAML', asFailure(error))
+        return yield* close
       } finally {
         yield* channel.close(close)
       }

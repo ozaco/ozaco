@@ -17,6 +17,7 @@ function* readEnv() {
  * string where the runtime has no home (the browser) ⇒ discovery walks to the fs root. */
 export function* homeOrRoot() {
   const home = yield* attempt(() => IO.actions.homeDir())
+
   return isSuccess(home) ? home.value : ''
 }
 
@@ -27,11 +28,13 @@ export function* readVariant(ctx: ConfigDef.Context) {
   if (ctx.variantOption) {
     return ctx.variantOption
   }
+
   if (!hasFlag(ctx.features, Features.ENV)) {
     return undefined
   }
 
   const env = yield* readEnv()
+
   return env[VARIANT_ENV_KEY] || undefined
 }
 
@@ -48,17 +51,20 @@ export function* buildEnvOverlay(ctx: ConfigDef.Context) {
   const env = yield* readEnv()
 
   let overlay: ConfigDef.Object = {}
+
   for (const key of Object.keys(env)) {
     if (!key.startsWith(prefix)) {
       continue
     }
 
     const value = env[key]
+
     if (value === undefined) {
       continue
     }
 
     const path = key.slice(prefix.length).toLowerCase().split('_').filter(Boolean).join('.')
+
     if (path) {
       overlay = setPath(overlay, path, coerce(value))
     }

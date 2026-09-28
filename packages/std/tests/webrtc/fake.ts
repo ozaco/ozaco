@@ -15,10 +15,13 @@ import { createPeer } from '../../src/webrtc/internal/peer'
 
 const openPair = (owner: FakePeer, channel: FakeChannel) => {
   const other = owner.linked
+
   if (!other || channel.twin) {
     return
   }
+
   const twin = new FakeChannel(channel.label)
+
   channel.twin = twin
   twin.twin = channel
   queueMicrotask(() => {
@@ -55,18 +58,23 @@ export class FakeChannel implements RtcDef.ChannelLike {
     if (this.readyState !== 'open') {
       throw new Error(`fake channel "${this.label}" is not open`)
     }
+
     this.messagesSent += 1
     this.bytesSent += typeof data === 'string' ? data.length : (data as ArrayBuffer).byteLength
+
     const twin = this.twin
+
     queueMicrotask(() => twin?.onmessage?.({ data }))
   }
 
   close(): void {
     const twin = this.twin
+
     if (this.readyState !== 'closed') {
       this.readyState = 'closed'
       queueMicrotask(() => this.onclose?.({}))
     }
+
     if (twin && twin.readyState !== 'closed') {
       twin.readyState = 'closed'
       queueMicrotask(() => twin.onclose?.({}))
@@ -97,6 +105,7 @@ export class FakeSender implements RtcDef.SenderLike {
 
   replaceTrack(track: RtcDef.TrackLike | null): Promise<void> {
     this.track = track
+
     return Promise.resolve()
   }
 }
@@ -143,9 +152,11 @@ export class FakePeer implements RtcDef.PeerLike {
 
   createOffer(options?: { iceRestart?: boolean }): Promise<RtcDef.DescriptionLike> {
     void options
+
     if (this.faults.offer) {
       return Promise.reject(this.faults.offer)
     }
+
     return Promise.resolve({ type: 'offer', sdp: this.mintSdp('offer', this.id) })
   }
 
@@ -153,6 +164,7 @@ export class FakePeer implements RtcDef.PeerLike {
     if (this.faults.answer) {
       return Promise.reject(this.faults.answer)
     }
+
     return Promise.resolve({ type: 'answer', sdp: this.mintSdp('answer', this.id) })
   }
 
@@ -160,8 +172,10 @@ export class FakePeer implements RtcDef.PeerLike {
     if (description?.type === 'rollback') {
       this.localDescription = null
       this.signalingState = 'stable'
+
       return Promise.resolve()
     }
+
     this.localDescription = description ?? null
     this.signalingState = description?.type === 'offer' ? 'have-local-offer' : 'stable'
     // trickle one candidate + end-of-candidates after every local description, like a real stack
@@ -170,6 +184,7 @@ export class FakePeer implements RtcDef.PeerLike {
       this.onicecandidate?.({ candidate: null })
     })
     this.tryLink()
+
     return Promise.resolve()
   }
 
@@ -177,6 +192,7 @@ export class FakePeer implements RtcDef.PeerLike {
     this.remoteDescription = description
     this.signalingState = description.type === 'offer' ? 'have-remote-offer' : 'stable'
     this.tryLink()
+
     return Promise.resolve()
   }
 
@@ -185,21 +201,27 @@ export class FakePeer implements RtcDef.PeerLike {
       // the plugin must buffer candidates until a remote description is applied
       return Promise.reject(new Error('addIceCandidate before setRemoteDescription'))
     }
+
     this.candidates.push(candidate ?? undefined)
+
     return Promise.resolve()
   }
 
   addTrack(track: RtcDef.TrackLike, ...streams: RtcDef.StreamLike[]): RtcDef.SenderLike {
     const sender = new FakeSender(track, streams)
+
     this.senders.push(sender)
+
     if (this.connectionState === 'connected') {
       this.announce(this) // in-band on an established link (the plugin still renegotiates)
     }
+
     return sender
   }
 
   removeTrack(sender: RtcDef.SenderLike): void {
     const fake = this.senders.find(candidate => candidate === sender)
+
     if (fake) {
       fake.removed = true
     }
@@ -207,14 +229,19 @@ export class FakePeer implements RtcDef.PeerLike {
 
   createDataChannel(label: string, options?: RtcDef.ChannelInit): RtcDef.ChannelLike {
     void options
+
     if (this.faults.channel) {
       throw this.faults.channel
     }
+
     const channel = new FakeChannel(label)
+
     this.channels.push(channel)
+
     if (this.connectionState === 'connected') {
       openPair(this, channel) // in-band: no renegotiation needed once linked
     }
+
     return channel
   }
 
@@ -230,6 +257,7 @@ export class FakePeer implements RtcDef.PeerLike {
     if (this.faults.stats) {
       return Promise.reject(this.faults.stats)
     }
+
     const bytesSent = this.channels.reduce((total, channel) => total + channel.bytesSent, 0)
     const report = new Map<string, AnyType>([
       [
@@ -304,6 +332,7 @@ export class FakePeer implements RtcDef.PeerLike {
           ] as const,
       ),
     ])
+
     return Promise.resolve(report)
   }
 }
@@ -321,16 +350,21 @@ export const createFakeRtc = (options?: { media?: boolean; stats?: boolean }) =>
   /** Deliver every not-yet-announced live sender of `peer` to its linked counterpart. */
   const announce = (peer: FakePeer) => {
     const other = peer.linked
+
     if (!other) {
       return
     }
+
     for (const sender of peer.senders) {
       if (sender.announced || sender.removed || !sender.track) {
         continue
       }
+
       sender.announced = true
+
       const track = sender.track
       const streams = sender.streams
+
       queueMicrotask(() => other.ontrack?.({ track, streams }))
     }
   }
@@ -339,11 +373,13 @@ export const createFakeRtc = (options?: { media?: boolean; stats?: boolean }) =>
     if (hub.dead) {
       return
     }
+
     for (const x of hub.peers) {
       for (const y of hub.peers) {
         if (x === y || (x.connectionState === 'connected' && x.linked === y)) {
           continue
         }
+
         if (
           x.localDescription &&
           y.localDescription &&
@@ -360,10 +396,12 @@ export const createFakeRtc = (options?: { media?: boolean; stats?: boolean }) =>
             x.onconnectionstatechange?.()
             y.onconnectionstatechange?.()
           })
+
           for (const peer of [x, y]) {
             for (const channel of peer.channels) {
               openPair(peer, channel)
             }
+
             announce(peer)
           }
         }
@@ -373,13 +411,17 @@ export const createFakeRtc = (options?: { media?: boolean; stats?: boolean }) =>
 
   const impl = function (this: unknown, configuration?: RtcDef.Configuration) {
     void configuration
+
     const peer = new FakePeer({ hub, id: (peerCounter += 1), mintSdp, tryLink, announce })
+
     if (options?.media === false) {
       ;(peer as AnyType).addTrack = undefined // an implementation without a media surface
     }
+
     if (options?.stats === false) {
       ;(peer as AnyType).getStats = undefined // an implementation with no statistics surface
     }
+
     return peer
   } as unknown as RtcDef.ImplLike
 
@@ -391,15 +433,18 @@ export const createFakeRtc = (options?: { media?: boolean; stats?: boolean }) =>
  * subset for a ONE-SIDED outage (only that side observes `failed`). */
 export const sever = (hub: FakeHub, peers?: FakePeer[]) => {
   const affected = peers ?? hub.peers
+
   for (const peer of hub.peers) {
     peer.linked = undefined
     peer.localDescription = null
     peer.remoteDescription = null
     peer.signalingState = 'stable'
   }
+
   for (const peer of affected) {
     peer.connectionState = 'failed'
   }
+
   for (const peer of affected) {
     queueMicrotask(() => peer.onconnectionstatechange?.())
   }

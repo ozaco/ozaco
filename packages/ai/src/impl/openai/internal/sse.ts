@@ -13,6 +13,7 @@ export const SSE_DONE = '[DONE]'
 const splitEvents = (buffer: string): { events: string[]; rest: string } => {
   const parts = buffer.split(/\r?\n\r?\n/u)
   const rest = parts.pop() ?? ''
+
   return { events: parts, rest }
 }
 
@@ -39,33 +40,47 @@ function* pump<T>(input: Own.PumpInput<T>): Operation<void> {
   const decoder = new TextDecoder()
   let buffer = ''
   let close: Helpers.StreamClose = true
+
   try {
     for (;;) {
       const step = yield* input.subscription.next()
+
       if (step.done) {
         break
       }
+
       buffer += decoder.decode(step.value, { stream: true })
+
       const { events, rest } = splitEvents(buffer)
+
       buffer = rest
+
       for (const event of events) {
         const data = eventData(event)
+
         // a comment/keep-alive event has no `data:` payload — skip it, never conflate the empty
         // payload with the `[DONE]` sentinel (that would truncate the stream mid-flight)
         if (data.length === 0) {
           continue
         }
+
         const value = yield* input.parse(data)
+
         if (value === undefined) {
           return
         }
+
         input.queue.add(value)
       }
     }
+
     buffer += decoder.decode()
+
     const tail = eventData(buffer)
+
     if (tail.length > 0) {
       const value = yield* input.parse(tail)
+
       if (value !== undefined) {
         input.queue.add(value)
       }
@@ -93,18 +108,23 @@ export function* sseFlow<T>(
 ): Operation<Flow<T, Helpers.StreamClose>> {
   const subscription = yield* raw
   const queue = createQueue<T, Helpers.StreamClose>()
+
   yield* fork(() => pump({ subscription, queue, parse }))
+
   return asFlow(queue)
 }
 
 function* copy(input: Own.CopyInput): Operation<void> {
   let close: Helpers.StreamClose = true
+
   try {
     for (;;) {
       const step = yield* input.subscription.next()
+
       if (step.done) {
         break
       }
+
       input.queue.add(step.value)
     }
   } catch (error) {
@@ -124,6 +144,8 @@ export function* byteFlow(
 ): Operation<Flow<Uint8Array, Helpers.StreamClose>> {
   const subscription = yield* raw
   const queue = createQueue<Uint8Array, Helpers.StreamClose>()
+
   yield* fork(() => copy({ subscription, queue }))
+
   return asFlow(queue)
 }

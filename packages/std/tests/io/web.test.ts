@@ -17,7 +17,9 @@ describe('WebIO path helpers (POSIX)', () => {
   it('join normalizes `.`/`..`/empty segments and duplicate separators', async () => {
     const outcome = await run(function* () {
       yield* WebIO.use()
+
       const joinPath = IO.actions.join
+
       return {
         plain: yield* joinPath('a', 'b', 'c'),
         dotdot: yield* joinPath('a', 'b', '..', 'c'),
@@ -53,7 +55,9 @@ describe('WebIO path helpers (POSIX)', () => {
   it('dirname / basename / extname / isAbsolute edge cases', async () => {
     const outcome = await run(function* () {
       yield* WebIO.use()
+
       const { dirname, basename, extname, isAbsolute } = IO.actions
+
       return {
         dirNested: yield* dirname('/a/b/c'),
         dirRootChild: yield* dirname('/a'),
@@ -147,8 +151,10 @@ describe('WebIO unsupported actions', () => {
   it.each(UNSUPPORTED_ACTIONS)('%s fails std:io.unsupported', async name => {
     const outcome = await run(function* () {
       yield* WebIO.use()
+
       const action = (IO.actions as AnyType)[name] as (...args: AnyType[]) => AnyType
       const result = yield* attempt(() => action('/x', '/y'))
+
       return isFailure(result) ? [result.error, result.message] : 'no-failure'
     })
 
@@ -161,8 +167,10 @@ describe('WebIO unsupported actions', () => {
   it.each(UNSUPPORTED_FLOWS)('%s fails std:io.unsupported on subscribe', async name => {
     const outcome = await run(function* () {
       yield* WebIO.use()
+
       const flowOf = (IO.actions as AnyType)[name] as (...args: AnyType[]) => AnyType
       const result = yield* attempt(() => flowOf('/x'))
+
       return isFailure(result) ? result.error : 'no-failure'
     })
 
@@ -176,6 +184,7 @@ describe('WebIO unsupported actions', () => {
     const flows = [...source.matchAll(/^\s+(\w+): \(\) => unsupportedFlow\('(\w+)'\)/gmu)].map(
       m => m[2],
     )
+
     expect(wired.toSorted()).toEqual([...UNSUPPORTED_ACTIONS].toSorted())
     expect(flows.toSorted()).toEqual([...UNSUPPORTED_FLOWS].toSorted())
   })

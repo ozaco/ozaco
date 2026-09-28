@@ -20,9 +20,12 @@ describe('config watch', () => {
   it('a TOML-backed config watches with JsonCodec installed as the required baseline', async () => {
     const root = await makeRoot()
     const previousWatchman = process.env.STD_WATCHMAN
+
     process.env.STD_WATCHMAN = 'off'
+
     try {
       const base = join(root, '.cfgspec.toml')
+
       await writeFile(base, 'count = 1\n')
 
       const outcome = await run(function* () {
@@ -43,6 +46,7 @@ describe('config watch', () => {
         yield* IO.actions.write(base, 'count = 2\n')
 
         const merged = yield* changed.operation
+
         yield* task.halt()
 
         return merged
@@ -55,6 +59,7 @@ describe('config watch', () => {
       } else {
         process.env.STD_WATCHMAN = previousWatchman
       }
+
       await rm(root, { recursive: true, force: true })
     }
   })
@@ -63,9 +68,12 @@ describe('config watch', () => {
     const root = await makeRoot()
     // force the fs.watch fallback: hermetic, no Watchman daemon involved
     const previousWatchman = process.env.STD_WATCHMAN
+
     process.env.STD_WATCHMAN = 'off'
+
     try {
       const base = join(root, '.cfgspec.json')
+
       await writeFile(base, jsonText({ count: 1 }))
 
       const outcome = await run(function* () {
@@ -87,6 +95,7 @@ describe('config watch', () => {
 
         const merged = yield* changed.operation
         const live = yield* Config.actions.get('count')
+
         yield* task.halt()
 
         return { initial, merged, live }
@@ -99,6 +108,7 @@ describe('config watch', () => {
       } else {
         process.env.STD_WATCHMAN = previousWatchman
       }
+
       await rm(root, { recursive: true, force: true })
     }
   })

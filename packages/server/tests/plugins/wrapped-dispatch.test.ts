@@ -1,12 +1,12 @@
 /**
  * Dispatch-level plugin telemetry lands on the DISPATCH span (`dispatchSpan()`), never on a plugin
  * span that wraps the chain: with `Cache` installed first, every later plugin's dispatch hook runs
- * inside the `cache {service}.{action}` span — yet `ozaco.auth.*` (+ the `ozaco.auth.skip`
+ * inside the `cache {service}.{action}` span — yet `ozaco.auth.*` (+ the `auth.skip`
  * events), `ozaco.resilience.*` (timeout, rate limit, singleflight + its follower link, fallback,
  * the retried attempt's WARN record, the breaker's events + its `breaker.trip` link) and
  * `ozaco.crud.scoped` / `ozaco.crud.recovered` (+ the hook event and the swallowed failure's record)
  * all belong to the dispatch span; the cache span keeps only its own `ozaco.cache.*` keys and its
- * producer link. The same holds for Cache's own `ozaco.cache.evict` under a plugin span wrapping
+ * producer link. The same holds for Cache's own `cache.evict` under a plugin span wrapping
  * IT (a Resilience retry attempt).
  */
 import { where } from 'db:core'
@@ -19,7 +19,7 @@ import { all, attempt, run, sleep } from 'std:effect'
 import { fail, unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
 import type { TraceDef } from 'std:trace'
-import { enableTracing, Tracer } from 'std:trace'
+import { Trace } from 'std:trace'
 
 import { describe, expect, it } from 'bun:test'
 
@@ -29,17 +29,19 @@ import { storage, todosTable } from '../helpers'
 
 let installs = 0
 
-/** An in-memory std:trace `Tracer` installed around the server: every span and log record. */
+/** An in-memory std:trace `Trace` sink installed around the server: every span and log record. */
 const memoryTracer = () => {
   installs += 1
+
   const spans: TraceDef.SpanData[] = []
   const logs: TraceDef.LogData[] = []
 
-  const plugin = Tracer.implement({
+  const plugin = Trace.implement({
     name: `test/wrapped-tracer-${installs}`,
     version: '1.0.0',
     *setup() {
-      yield* enableTracing()
+      yield* Trace.actions.enableTracing()
+
       return {}
     },
   }).build({
@@ -59,7 +61,9 @@ const memoryTracer = () => {
       data =>
         data.name === `cache ${dispatch.name}` && data.parent?.spanId === dispatch.context.spanId,
     )
+
     expect(found).toHaveLength(1)
+
     return found[0]!
   }
 
@@ -75,7 +79,7 @@ const keysOf = (data: TraceDef.SpanData, prefix: string): string[] =>
 
 const reasonOf = (link: TraceDef.Link): unknown => link.attributes?.['ozaco.link.reason']
 
-/** A strategy that FAILS on `tok-ui` before StaticAuth answers it (→ `ozaco.auth.skip`). */
+/** A strategy that FAILS on `tok-ui` before StaticAuth answers it (→ `auth.skip`). */
 const Flaky = AuthStrategy.implement<AuthDef.StrategyContext, []>({
   name: 'test-wrapped-flaky',
   version: '0.0.0',
@@ -116,7 +120,9 @@ const withServer = async (
     await run(function* () {
       yield* storage()
       yield* tracer.plugin.use()
+
       const server = yield* createServer({ services: [...services], plugins: [...plugins] })
+
       yield* body(server as ServerDef.Handle<AnyType>)
     }),
   )
@@ -140,6 +146,7 @@ describe('dispatch-level telemetry under a wrapping cache span', () => {
         },
         function* ({ input }) {
           yield* sleep(30)
+
           return input.id
         },
       ),
@@ -153,18 +160,22 @@ describe('dispatch-level telemetry under a wrapping cache span', () => {
           server.call(svc, 'shared', { id: 'a' }, as('1')),
           server.call(svc, 'shared', { id: 'a' }, as('2')),
         ])
+
         expect(both).toEqual(['a', 'a'])
       },
     )
 
     const dispatches = tracer.named('w.shared')
+
     expect(dispatches).toHaveLength(2)
+
     const leader = dispatches.find(
       data => data.attributes['ozaco.resilience.singleflight'] === 'leader',
     )!
     const follower = dispatches.find(
       data => data.attributes['ozaco.resilience.singleflight'] === 'follower',
     )!
+
     expect(leader).toBeDefined()
     expect(follower).toBeDefined()
 
@@ -177,10 +188,11 @@ describe('dispatch-level telemetry under a wrapping cache span', () => {
         'ozaco.resilience.rate_limit.remaining': expect.any(Number),
       })
       // the strategy that failed before StaticAuth answered: on the guarded (dispatch) span
-      expect(dispatch.events.filter(item => item.name === 'ozaco.auth.skip')).toHaveLength(1)
+      expect(dispatch.events.filter(item => item.name === 'auth.skip')).toHaveLength(1)
 
       // the cache span keeps ONLY its own keys — nothing of the plugins it wraps
       const cached = tracer.cacheOf(dispatch)
+
       expect(keysOf(cached, 'ozaco.auth.')).toEqual([])
       expect(keysOf(cached, 'ozaco.resilience.')).toEqual([])
       expect(cached.events.map(item => item.name)).toEqual([])
@@ -196,6 +208,7 @@ describe('dispatch-level telemetry under a wrapping cache span', () => {
 
     // the follower LINKS the leader's DISPATCH span (not its cache span)
     const joined = follower.links.filter(link => reasonOf(link) === 'singleflight')
+
     expect(joined).toHaveLength(1)
     expect(joined[0]!.context.spanId).toBe(leader.context.spanId)
   })
@@ -214,6 +227,7 @@ describe('dispatch-level telemetry under a wrapping cache span', () => {
         },
         function* () {
           calls += 1
+
           return yield* fail(ServerErrors.Unavailable, `down #${calls}`)
         },
       ),
@@ -238,11 +252,13 @@ describe('dispatch-level telemetry under a wrapping cache span', () => {
 
     // fallback: the flag on the dispatch span, never the cache span
     const [flaky] = tracer.named('w.flaky')
+
     expect(flaky!.attributes['ozaco.resilience.fallback']).toBe(true)
     expect(keysOf(tracer.cacheOf(flaky!), 'ozaco.resilience.')).toEqual([])
 
     // attempt 1 (retried): its failure recorded handled (WARN) on the dispatch span
     const first = tracer.exceptions().filter(log => log.body.includes('down #1'))
+
     expect(first).toHaveLength(1)
     expect(first[0]!.severityNumber).toBe(13)
     expect(first[0]!.context?.spanId).toBe(flaky!.context.spanId)
@@ -250,16 +266,20 @@ describe('dispatch-level telemetry under a wrapping cache span', () => {
     // breaker: the transition event on the tripping call's dispatch span; the fail-fast call's
     // dispatch span LINKS that dispatch span
     const [tripping, rejected] = tracer.named('w.brittle')
-    expect(tripping!.events.map(item => item.name)).toContain('ozaco.breaker')
+
+    expect(tripping!.events.map(item => item.name)).toContain('breaker')
     // (the failure's own `exception` event sits where it first escaped: the cache span)
-    expect(tracer.cacheOf(tripping!).events.map(item => item.name)).not.toContain('ozaco.breaker')
+    expect(tracer.cacheOf(tripping!).events.map(item => item.name)).not.toContain('breaker')
+
     const trips = rejected!.links.filter(link => reasonOf(link) === 'breaker.trip')
+
     expect(trips).toHaveLength(1)
     expect(trips[0]!.context.spanId).toBe(tripping!.context.spanId)
     expect(tracer.cacheOf(rejected!).links).toEqual([])
 
     // the transition's record is correlated to the dispatch span too
-    const opened = tracer.logs.find(log => log.eventName === 'ozaco.breaker')
+    const opened = tracer.logs.find(log => log.eventName === 'breaker')
+
     expect(opened?.context?.spanId).toBe(tripping!.context.spanId)
   })
 
@@ -272,6 +292,7 @@ describe('dispatch-level telemetry under a wrapping cache span', () => {
       *error({ op, input }) {
         if (op === 'get') {
           const now = new Date().toISOString()
+
           return {
             _id: String((input as AnyType).id),
             _created_at: now,
@@ -291,13 +312,17 @@ describe('dispatch-level telemetry under a wrapping cache span', () => {
     })
 
     const [list] = tracer.named('todos.list')
+
     expect(list!.attributes['ozaco.crud.scoped']).toBe(true)
     expect(keysOf(tracer.cacheOf(list!), 'ozaco.crud.')).toEqual([])
 
     const [get] = tracer.named('todos.get')
+
     expect(get!.attributes['ozaco.crud.recovered']).toBe(true)
-    expect(get!.events.map(item => item.name)).toContain('ozaco.crud.hook')
+    expect(get!.events.map(item => item.name)).toContain('crud.hook')
+
     const cached = tracer.cacheOf(get!)
+
     expect(keysOf(cached, 'ozaco.crud.')).toEqual([])
     expect(cached.events.map(item => item.name)).toEqual([])
 
@@ -305,18 +330,20 @@ describe('dispatch-level telemetry under a wrapping cache span', () => {
     const misses = tracer
       .exceptions()
       .filter(log => log.attributes['exception.type'] === ServerErrors.NotFound)
+
     expect(misses.map(log => [log.severityNumber, log.context?.spanId])).toEqual([
       [13, get!.context.spanId],
     ])
   })
 
-  it('cache: a mutation`s ozaco.cache.evict lands on its dispatch span under a retry attempt span', async () => {
+  it('cache: a mutation`s cache.evict lands on its dispatch span under a retry attempt span', async () => {
     let calls = 0
     const svc = service('w', {
       bump: action.mutation(
         { invalidate: ['todos'], retry: { times: 1, delayMs: 1 } },
         function* () {
           calls += 1
+
           if (calls === 1) {
             return yield* fail(ServerErrors.Unavailable, 'not yet')
           }
@@ -331,8 +358,9 @@ describe('dispatch-level telemetry under a wrapping cache span', () => {
 
     const [bump] = tracer.named('w.bump')
     const [retried] = tracer.named('resilience.attempt')
+
     expect(retried!.parent?.spanId).toBe(bump!.context.spanId)
-    expect(bump!.events.map(item => item.name)).toContain('ozaco.cache.evict')
-    expect(retried!.events.map(item => item.name)).not.toContain('ozaco.cache.evict')
+    expect(bump!.events.map(item => item.name)).toContain('cache.evict')
+    expect(retried!.events.map(item => item.name)).not.toContain('cache.evict')
   })
 })

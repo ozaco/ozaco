@@ -13,6 +13,7 @@ export const visibleBindings = (bindings: Record<string, unknown>): Record<strin
   }
 
   const { [TELEMETRY_BINDING]: _marker, ...rest } = bindings
+
   return rest
 }
 

@@ -7,6 +7,7 @@ import type { RegistryDef } from '../types/registry'
 // Pad the left column on its plain width, then paint it (keeps ANSI from breaking alignment).
 const section = (entries: [string, string][], paint: (text: string) => string): string[] => {
   const width = entries.reduce((max, [left]) => Math.max(max, left.length), 0)
+
   return entries.map(([left, right]) => `  ${paint(left.padEnd(width))}  ${right}`.trimEnd())
 }
 
@@ -19,6 +20,7 @@ const flagsFor = (info: CommandDef.OptionInfo, short: Record<string, string>): s
       : info.array
         ? ' <value...>'
         : ` <${info.type === 'number' ? 'number' : 'value'}>`
+
   return `${lead}${hint}`
 }
 
@@ -26,9 +28,11 @@ const showDefault = (value: unknown): string => {
   if (typeof value === 'string') {
     return JSON.stringify(value)
   }
+
   if (Array.isArray(value) && value.length === 0) {
     return '[]'
   }
+
   return Array.isArray(value) ? value.map(showDefault).join(', ') : String(value)
 }
 
@@ -40,16 +44,21 @@ const detailsFor = (
   if (info === undefined) {
     return ''
   }
+
   const notes: string[] = []
+
   if (info.enum !== undefined) {
     notes.push(`choices: ${info.enum.join('|')}`)
   }
+
   if (info.hasDefault) {
     notes.push(`default: ${showDefault(info.default)}`)
   } else if (info.required) {
     notes.push('required')
   }
+
   const meta = notes.length === 0 ? '' : palette.colors.muted(`(${notes.join(', ')})`)
+
   return [info.description ?? '', meta].filter(part => part !== '').join(' ')
 }
 
@@ -60,6 +69,7 @@ const argLabel = (
   variadic: boolean,
 ): string => {
   const label = variadic ? `${name}...` : name
+
   return info !== undefined && info.required && !info.hasDefault ? `<${label}>` : `[${label}]`
 }
 
@@ -103,12 +113,15 @@ export const renderActionHelp = (
 
   const labels = action.args.map((arg, index) => {
     const info = byName.get(arg)
+
     return argLabel(arg, info, info?.array === true && index === action.args.length - 1)
   })
   const usage = [...action.path]
+
   if (flags.length > 0) {
     usage.push('[options]')
   }
+
   usage.push(...labels)
   out.push(`${colors.bold('Usage:')} ${usage.join(' ')}`)
 
@@ -152,6 +165,7 @@ export const renderCommandHelp = (
   if (node.description !== undefined) {
     out.push(node.description, '')
   }
+
   out.push(`${colors.bold('Usage:')} ${path.join(' ')} <command> [options]`)
 
   const names = [
@@ -168,6 +182,7 @@ export const renderCommandHelp = (
           const child = node.children[name]
           const meta = child === undefined ? command.getMeta(name) : undefined
           const description = child?.description ?? (meta?.description as string | undefined) ?? ''
+
           return [name, description]
         }),
         colors.accent,
@@ -191,11 +206,13 @@ export const renderProgramHelp = (
   if (ctx.description !== undefined) {
     out.push(ctx.description, '')
   }
+
   out.push(`${colors.bold('Usage:')} ${ctx.name} <command> [options]`)
 
   const entries = [...ctx.commands.values()].map(
     command => [command.name, command.description ?? ''] as [string, string],
   )
+
   if (entries.length > 0) {
     out.push('', colors.bold('Commands:'), ...section(entries, colors.accent))
   }

@@ -12,6 +12,7 @@ export function createSignal<T, TClose = never>(): Signal<T, TClose> {
   const subscribe = resource<Subscription<T, TClose>>(function* (provide) {
     const newQueue = yield* SignalQueueFactoryContext.expect()
     const queue = newQueue<T, TClose>()
+
     subscribers.add(queue)
 
     try {

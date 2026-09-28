@@ -113,10 +113,12 @@ export function* createOtlpPipeline(
     }
 
     failing[key] = false
+
     const { rejected, message } = outcome.value
 
     if (rejected === 0 && message === null) {
       rejecting[key] = false
+
       return
     }
 
@@ -203,6 +205,7 @@ export function* createOtlpPipeline(
     *flush() {
       // the node stops: no beat reports it after this (a halted beat's POST is aborted)
       const running = beat
+
       beat = null
 
       if (running) {

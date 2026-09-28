@@ -11,13 +11,16 @@ export class Tier<T> {
   shift(): T | undefined {
     if (this.head < this.items.length) {
       const item = this.items[this.head]
+
       this.items[this.head] = undefined
       this.head++
+
       // maybe compact
       if (this.head > this.maxDeadSlots) {
         this.items = this.items.slice(this.head)
         this.head = 0
       }
+
       return item
     }
   }

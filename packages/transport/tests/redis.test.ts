@@ -45,6 +45,7 @@ const fakeRedis = (connect: () => Promise<void>, exec: () => Promise<unknown>) =
 /** `outcome` as the failure it must be. */
 const failureOf = (outcome: unknown): Result.Failure<unknown> => {
   expect(isFailure(outcome)).toBe(true)
+
   return outcome as Result.Failure<unknown>
 }
 
@@ -67,6 +68,7 @@ describe('transport — redis: client errors (fake client)', () => {
             () => Promise.resolve([0, 0]),
           ),
         )
+
         return {
           outcome: yield* attempt(RedisTransport.use({ prefix: 'dial', url: 'redis://x:1' })),
         }
@@ -97,6 +99,7 @@ describe('transport — redis: client errors (fake client)', () => {
           ),
         )
         yield* RedisTransport.use({ prefix: 'cmd', url: 'redis://x:1' })
+
         return { outcome: yield* attempt(Transport.actions.publish('some.topic', 'hello')) }
       }),
     )

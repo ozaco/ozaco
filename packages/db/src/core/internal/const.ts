@@ -15,7 +15,7 @@ export const MEMORY_SYSTEM = 'ozaco.memory'
 export const DB_EXCEPTION_EVENT = 'db.client.operation.exception'
 
 /** The span event a transaction retried after a conflict leaves on the caller's span. */
-export const TX_RETRY_EVENT = 'ozaco.db.tx.retry'
+export const TX_RETRY_EVENT = 'db.tx.retry'
 
 /** The `logger` binding (the telemetry scope) of the operational log lines. */
 export const LOGGER_NAME = '@ozaco/db'

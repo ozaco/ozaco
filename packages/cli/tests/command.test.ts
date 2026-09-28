@@ -94,8 +94,11 @@ const boot = <T>(
 
 const cli = async (argv: string[], options?: RegistryDef.RunOptions) => {
   const screen = createMemoryScreen({ capabilities: { interactive: false } })
+
   seen.ctx = undefined
+
   const outcome = await boot(screen, () => attempt(() => Registry.actions.run(argv, options)))
+
   return { outcome, screen, ctx: seen.ctx }
 }
 
@@ -168,9 +171,11 @@ describe('cli — inherited options and cwd', () => {
 
   it('provides the runtime cwd, read when the command runs', async () => {
     const { ctx } = await cli(['app', 'exec', 'x'])
+
     expect(ctx.cwd).toBe(process.cwd())
 
     const custom = await cli(['app', 'exec', 'x'], { cwd: '/srv/app' })
+
     expect(custom.ctx.cwd).toBe('/srv/app')
   })
 })
@@ -184,6 +189,7 @@ describe('cli — failure reporting', () => {
     expect(isReported(outcome)).toBe(true)
 
     const err = screen.plain('stderr')
+
     expect(err.startsWith("Unknown option '--bogus'\n")).toBe(true)
     expect(err.match(/Unknown option/gu)).toHaveLength(1)
     expect(err).not.toContain('{')
@@ -211,7 +217,9 @@ describe('cli — failure reporting', () => {
 
     expect(isFailure(outcome) && outcome.error).toBe(DomainErrors.Down)
     expect(isReported(outcome)).toBe(true)
+
     const err = screen.plain('stderr')
+
     expect(err.startsWith('app.down: the service is down\n  causes: app.broken › ')).toBe(true)
     expect(err.match(/app\.down/gu)).toHaveLength(1)
     expect(err.match(/app\.broken/gu)).toHaveLength(1)
@@ -245,6 +253,7 @@ describe('cli — failure reporting', () => {
     ])
 
     const err = screen.plain('stderr')
+
     expect(err).toBe(
       'std:result.unknown: TypeError: socket hang up (ECONNRESET)\n' +
         '  causes: thrown › app@0.0.0 › dispatch\n',

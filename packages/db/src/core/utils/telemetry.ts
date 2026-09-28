@@ -1,7 +1,7 @@
 import type { Operation } from 'std:effect'
 import { attempt } from 'std:effect'
 import { Logger } from 'std:logger'
-import { ActiveSpan, Suppressed } from 'std:trace'
+import { Trace } from 'std:trace'
 
 import { DB_SYSTEMS, LOGGER_NAME, MAX_QUERY_TEXTS, MEMORY_SYSTEM } from '../internal/const'
 import { QueryText } from '../internal/context'
@@ -41,7 +41,7 @@ export const driverCause = (error: unknown): string | undefined => {
  * loop happened to be started under never grows with it.
  */
 export const untraced = <T>(body: () => Operation<T>): Operation<T> =>
-  ActiveSpan.with(null, () => body())
+  Trace.actions.detached(() => body())
 
 /** The `db.system.name` an adapter name stands for (`pg` / `bun-sql` ⇒ `postgresql`). */
 export const dbSystemOf = (adapter: string): string => DB_SYSTEMS[adapter] ?? adapter
@@ -78,7 +78,7 @@ export function* dbLog(
   once?: () => boolean,
 ): Operation<void> {
   yield* attempt(function* () {
-    if ((yield* Suppressed.get()) === true || !(yield* Logger.context.get())) {
+    if ((yield* Trace.actions.isSuppressed()) || !(yield* Logger.context.get())) {
       return
     }
 

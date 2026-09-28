@@ -80,6 +80,7 @@ export const media = service(
 
         function* flush() {
           const data = concat(pending, pendingSize)
+
           pending = []
           pendingSize = 0
           yield* db.insert('upload_chunks', { upload_id: id, seq: seq++, data })
@@ -107,6 +108,7 @@ export const media = service(
 
         yield* db.patch('uploads', id, { size })
         yield* ctx.emit('media.uploaded', { id, name: input.fields.name, size })
+
         return { id, name: input.fields.name, size, mime: input.fields.mime }
       },
     ),

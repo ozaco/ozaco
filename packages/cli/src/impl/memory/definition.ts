@@ -12,6 +12,7 @@ const bindings = new WeakMap<MemoryTerminalDef.Screen, Driver.Binding>()
 
 const open = (options: MemoryTerminalDef.ScreenOptions): MemoryTerminalDef.Screen => {
   const { screen, handle, capabilities } = openScreen(options)
+
   bindings.set(screen, { terminal: 'memory', capabilities, handle })
 
   return screen

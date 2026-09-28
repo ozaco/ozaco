@@ -29,6 +29,7 @@ const entry = (overrides: Partial<LoggerDef.Entry> = {}): LoggerDef.Entry => ({
 
 const withEnv = <T>(vars: Record<string, string | undefined>, body: () => T): T => {
   const previous = new Map(Object.keys(vars).map(key => [key, process.env[key]] as const))
+
   for (const [key, value] of Object.entries(vars)) {
     if (value === undefined) {
       Reflect.deleteProperty(process.env, key)
@@ -36,6 +37,7 @@ const withEnv = <T>(vars: Record<string, string | undefined>, body: () => T): T 
       process.env[key] = value
     }
   }
+
   try {
     return body()
   } finally {
@@ -105,6 +107,7 @@ describe('detectColor', () => {
 
   it('otherwise follows whether stdout is a TTY', () => {
     const expected = Boolean(process.stdout && process.stdout.isTTY)
+
     expect(withEnv({ NO_COLOR: undefined, FORCE_COLOR: undefined }, detectColor)).toBe(expected)
   })
 })
@@ -113,6 +116,7 @@ describe('formatBindings', () => {
   it('returns an empty string for no bindings', async () => {
     const outcome = await run(function* () {
       yield* JsonCodec.use()
+
       return yield* formatBindings({}, false)
     })
 
@@ -122,6 +126,7 @@ describe('formatBindings', () => {
   it('renders ` key=json` pairs, JSON-encoding each value', async () => {
     const outcome = await run(function* () {
       yield* JsonCodec.use()
+
       return yield* formatBindings({ req: 'abc', n: 1, nested: { a: [1] } }, false)
     })
 
@@ -131,6 +136,7 @@ describe('formatBindings', () => {
   it('paints only the key when color is on', async () => {
     const outcome = await run(function* () {
       yield* JsonCodec.use()
+
       return yield* formatBindings({ req: 'abc' }, true)
     })
 
@@ -142,6 +148,7 @@ describe('prettyFormat', () => {
   it('lays out `[iso-time] LABEL bindings: msg data err=…` without color', async () => {
     const outcome = await run(function* () {
       yield* JsonCodec.use()
+
       return {
         bare: yield* prettyFormat(entry(), false),
         full: yield* prettyFormat(
@@ -167,6 +174,7 @@ describe('prettyFormat', () => {
   it('omits the data and error segments when absent', async () => {
     const outcome = await run(function* () {
       yield* JsonCodec.use()
+
       return yield* prettyFormat(entry({ level: LogLevel.warn, bindings: { a: 1 } }), false)
     })
 
@@ -176,6 +184,7 @@ describe('prettyFormat', () => {
   it('paints the time dim, the label by level, and the error red when color is on', async () => {
     const outcome = await run(function* () {
       yield* JsonCodec.use()
+
       return yield* prettyFormat(entry({ level: LogLevel.error, error: 'boom' }), true)
     })
 

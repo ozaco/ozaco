@@ -3,16 +3,7 @@ import { attempt, ensure } from 'std:effect'
 import type { Result } from 'std:result'
 import { asFailure, isFailure } from 'std:result'
 import type { TraceDef } from 'std:trace'
-import {
-  ActiveSpan,
-  activeContext,
-  current,
-  isTracing,
-  isValidContext,
-  newTraceId,
-  passThrough,
-  span,
-} from 'std:trace'
+import { Trace } from 'std:trace'
 
 import { EXCEPTION_EVENT_NAME } from '../const'
 import { ActiveRequest, RequestRef } from '../context'
@@ -75,6 +66,7 @@ export const dispatchFlow = (
     if (isFailure(opened)) {
       noteFailure(opened)
       yield* end({ failure: opened })
+
       return yield* opened
     }
 
@@ -87,6 +79,7 @@ export const dispatchFlow = (
         if (isFailure(step)) {
           noteFailure(step)
           yield* end({ failure: step })
+
           return yield* step
         }
 
@@ -146,6 +139,7 @@ export const endsWith = (
         if (step.done) {
           controller.close()
           end({})
+
           return
         }
 
@@ -186,7 +180,7 @@ export const userSpanOf = (kernel: Pick<ServerDef.Context, 'name' | 'version'>, 
     const scope = explicit ??
       (yield* DispatchScope.get()) ?? { name: kernel.name, version: kernel.version }
 
-    return yield* span(
+    return yield* Trace.actions.span(
       name,
       {
         kind: options.kind ?? 'internal',
@@ -210,8 +204,8 @@ export function* withInbound<T>(
   parent: TraceDef.SpanContext | null | undefined,
   body: () => Operation<T>,
 ): Operation<T> {
-  if (parent && isValidContext(parent) && !(yield* isTracing())) {
-    return yield* ActiveSpan.with(passThrough(parent), body)
+  if (parent && !(yield* Trace.actions.isTracing())) {
+    return yield* Trace.actions.passThrough(parent, body)
   }
 
   return yield* body()
@@ -243,7 +237,7 @@ export const messaging = (
  * (`messaging.message.id`) — `body` injects the wire trace inside it (`wireTrace`), so every
  * consumer links back here. */
 export const publishSpan = <T>(name: string, id: string, body: Helpers.SpanBody<T>): Operation<T> =>
-  span(
+  Trace.actions.span(
     `publish ${name}`,
     {
       kind: 'producer',
@@ -265,8 +259,8 @@ export function* processSpan<T>(
   item: ServerDef.EventItem,
   body: Helpers.SpanBody<T>,
 ): Operation<T> {
-  const ambient = yield* activeContext()
-  const creation = item.trace && isValidContext(item.trace) ? item.trace : null
+  const ambient = yield* Trace.actions.activeContext()
+  const creation = item.trace ?? null
 
   const options: TraceDef.SpanOptions = {
     kind: 'consumer',
@@ -281,25 +275,25 @@ export function* processSpan<T>(
   // as a pass-through where tracing is off, so a non-observing consumer still forwards it
   const run = (): Operation<T> =>
     ambient
-      ? span(`process ${item.name}`, options, body)
-      : withInbound(creation, () => span(`process ${item.name}`, options, body))
+      ? Trace.actions.span(`process ${item.name}`, options, body)
+      : withInbound(creation, () => Trace.actions.span(`process ${item.name}`, options, body))
 
   if ((yield* RequestRef.get()) !== undefined) {
     return yield* run()
   }
 
-  const requestId = item.requestId || (yield* newTraceId())
+  const requestId = item.requestId || (yield* Trace.actions.newTraceId())
 
   return yield* RequestRef.with(new ActiveRequest(requestId, 'internal'), run)
 }
 
 /** The event item a wire envelope becomes — its producer context (`trace`) and request id; the
- * ambient recording span (if any) gets an `ozaco.event.recv` span event (the destination and
+ * ambient recording span (if any) gets an `event.recv` span event (the destination and
  * `messaging.message.id`) and — its first {@link RECV_LINKS} items — a LINK to the item's
  * creation context (`ozaco.link.reason = 'creation'`, as a consumer span links it). */
 export function* eventItemOf(event: WireDef.Event): Operation<ServerDef.EventItem> {
-  const handle = yield* current()
-  const trace = wireParent(event.trace)
+  const handle = yield* Trace.actions.current()
+  const trace = yield* wireParent(event.trace)
 
   if (handle.recording) {
     handle.addEvent(EVENT_RECV, {

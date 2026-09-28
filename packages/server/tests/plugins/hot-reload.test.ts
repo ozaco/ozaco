@@ -33,9 +33,12 @@ type Hot = ServiceDef.Service<
  * split in two files so a change in the DEPENDENCY proves the subgraph is re-evaluated. */
 function* scaffold(name: string): Operation<{ dir: string; entry: string; dep: string }> {
   const dir = yield* IO.actions.join(import.meta.dirname, '..', '..', '.ozaco', 'hot-reload', name)
+
   yield* IO.actions.emptyDir(dir)
+
   const entry = yield* IO.actions.join(dir, 'services.ts')
   const dep = yield* IO.actions.join(dir, 'greeting.ts')
+
   yield* IO.actions.write(
     entry,
     [
@@ -60,6 +63,7 @@ function* scaffold(name: string): Operation<{ dir: string; entry: string; dep: s
     ].join('\n'),
   )
   yield* setGreeting(dep, 'hello')
+
   return { dir, entry, dep }
 }
 
@@ -72,6 +76,7 @@ describe('plugins — hot reload', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const files = yield* scaffold('manual')
 
         const server = yield* createServer({
@@ -82,6 +87,7 @@ describe('plugins — hot reload', () => {
 
         // the first reload brings the declarations in
         const first = yield* HotReload.actions.reload()
+
         expect(first.added).toEqual(['hot'])
         expect(yield* server.call(greet, { name: 'a' })).toBe('hello, a')
         expect((yield* HotReload.actions.status()).generation).toBe(1)
@@ -89,17 +95,22 @@ describe('plugins — hot reload', () => {
         // a bundled module keeps ITS OWN location: a handler reading a sibling file by
         // `import.meta` must not look into the temp bundle's directory
         const where = yield* server.call(refs<Hot>('hot').where)
+
         expect(where).toEqual({ url: `file://${files.entry}`, dir: files.dir })
 
         // a change in the DEPENDENCY reaches the handler: the subgraph was re-evaluated
         yield* setGreeting(files.dep, 'hi')
+
         const second = yield* HotReload.actions.reload()
+
         expect(second.replaced).toEqual(['hot'])
         expect(yield* server.call(greet, { name: 'a' })).toBe('hi, a')
 
         // a broken save: the reload fails, the last good declarations keep serving
         yield* IO.actions.write(files.dep, `export const GREETING = = 'broken'\n`)
+
         const broken = yield* attempt(HotReload.actions.reload())
+
         expect((broken as AnyType).error).toBe(HotReloadErrors.Load)
         expect((yield* HotReload.actions.status()).lastError).toContain(HotReloadErrors.Load)
         expect(yield* server.call(greet, { name: 'a' })).toBe('hi, a')
@@ -112,7 +123,9 @@ describe('plugins — hot reload', () => {
 
         // a module that does not export the declarations is a configuration failure
         yield* IO.actions.write(files.entry, `export const nothing = 1\n`)
+
         const none = yield* attempt(HotReload.actions.reload())
+
         expect((none as AnyType).error).toBe('server.configuration')
         expect(yield* server.call(greet, { name: 'a' })).toBe('hey, a')
 
@@ -123,9 +136,11 @@ describe('plugins — hot reload', () => {
 
   it('watches the roots: a save becomes a reload on its own', async () => {
     const seen: string[][] = []
+
     unwrap(
       await run(function* () {
         yield* storage()
+
         const files = yield* scaffold('watched')
         const server = yield* createServer({
           services: [],
@@ -140,8 +155,11 @@ describe('plugins — hot reload', () => {
             }),
           ],
         })
+
         yield* server.start()
+
         const greet = refs<Hot>('hot').greet
+
         yield* HotReload.actions.reload()
         expect(yield* server.call(greet, { name: 'a' })).toBe('hello, a')
         expect((yield* HotReload.actions.status()).watching).toBe(true)
@@ -152,10 +170,12 @@ describe('plugins — hot reload', () => {
 
         const deadline = Date.now() + 5000
         let answer = ''
+
         while (answer !== 'watched, a' && Date.now() < deadline) {
           yield* sleep(50)
           answer = yield* server.call(greet, { name: 'a' })
         }
+
         expect(answer).toBe('watched, a')
         expect(seen.at(-1)).toEqual(['hot'])
 
@@ -170,6 +190,7 @@ describe('plugins — hot reload', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         let greeting = 'one'
         const server = yield* createServer({
           services: [],
@@ -192,6 +213,7 @@ describe('plugins — hot reload', () => {
           refs<ServiceDef.Service<'hot', { greet: ServiceDef.Action<undefined, z.ZodString> }>>(
             'hot',
           ).greet
+
         yield* HotReload.actions.reload()
         expect(yield* server.call(greet)).toBe('one')
         greeting = 'two'

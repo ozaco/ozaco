@@ -102,10 +102,12 @@ export function* readParcel(
     const winner = yield* race([
       (function* () {
         const step = yield* subscription.next()
+
         return { step }
       })(),
       (function* () {
         yield* sleep(PARCEL_IDLE_MS)
+
         return { timeout: true as const }
       })(),
     ])
@@ -121,6 +123,7 @@ export function* readParcel(
       if (isFailure(winner.step.value)) {
         return yield* winner.step.value
       }
+
       break
     }
 

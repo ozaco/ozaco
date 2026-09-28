@@ -46,7 +46,10 @@ function* fetchManifest(
     return yield* failureOf(response, response.headers.get(HEADERS.requestId), {
       refused: true,
       prefix: `manifest (${url}): `,
-      remote: { operation: 'manifest', recordedIn: recordedBy(traced, echoedContext(response)) },
+      remote: {
+        operation: 'manifest',
+        recordedIn: recordedBy(traced, yield* echoedContext(response)),
+      },
     })
   }
 
@@ -83,23 +86,28 @@ export function* manifestOf(ctx: ClientDef.Context): Operation<ManifestDef.Manif
 
   if (!traced) {
     ctx.manifest = yield* fetchManifest(ctx, { url, headers }, null)
+
     return ctx.manifest
   }
 
   yield* ensure(fallbackOf(traced))
+
   let ended = false
 
   try {
     const outcome = yield* attempt(() => fetchManifest(ctx, { url, headers }, traced))
+
     ended = true
 
     if (isFailure(outcome)) {
       yield* endCall(traced, { failure: outcome })
+
       return yield* outcome
     }
 
     yield* endCall(traced)
     ctx.manifest = outcome.value
+
     return outcome.value
   } finally {
     if (!ended) {

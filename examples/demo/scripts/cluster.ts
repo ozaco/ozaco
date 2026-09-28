@@ -33,6 +33,7 @@ export const runCluster = (
 ): Promise<void> =>
   main(function* () {
     mkdirSync(dirname(DB_PATH), { recursive: true })
+
     const link = createLink()
     const booted = createQueue<void, void>()
 
@@ -40,8 +41,11 @@ export const runCluster = (
       fork(() =>
         scoped(function* () {
           const app = yield* createDemo({ ...options, ...shared, link, dbPath: DB_PATH })
+
           yield* ensure(() => app.stop())
+
           const info = yield* app.start()
+
           console.log(
             `[${options.instance}] ${info.role} hosted=${info.hosted.join(',') || '-'} ${info.url ?? ''}`,
           )
@@ -81,6 +85,7 @@ export const runCluster = (
     }
 
     const url = `http://${HOSTNAME}:${port}`
+
     console.log(
       `[cluster] gateways=${GATEWAYS} — docs ${url}/docs · observe ${url}/_observe (bearer: ${OBSERVE_TOKEN} or an admin's JWT)`,
     )

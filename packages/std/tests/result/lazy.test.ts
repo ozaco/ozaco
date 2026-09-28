@@ -21,11 +21,13 @@ describe('lazyPromise', () => {
 describe('lazyPromiseWithResolvers', () => {
   it('resolves consumers whether settled before or after consumption starts', async () => {
     const early = lazyPromiseWithResolvers<string>()
+
     early.resolve('before')
     expect(await early.promise).toBe('before')
 
     const late = lazyPromiseWithResolvers<string>()
     const pending = late.promise.then(value => `got:${value}`)
+
     late.resolve('after')
     expect(await pending).toBe('got:after')
   })
@@ -33,17 +35,21 @@ describe('lazyPromiseWithResolvers', () => {
   it('rejects with the original error; the first settle wins', async () => {
     const rejected = lazyPromiseWithResolvers<never>()
     const boom = new Error('kaput')
+
     rejected.reject(boom)
 
     let caught: unknown
+
     try {
       await rejected.promise
     } catch (error) {
       caught = error
     }
+
     expect(caught).toBe(boom)
 
     const raced = lazyPromiseWithResolvers<string>()
+
     raced.resolve('first')
     raced.reject(new Error('second'))
     expect(await raced.promise).toBe('first')

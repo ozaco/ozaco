@@ -32,17 +32,21 @@ export const captureTransport = (name: string, sink: CaptureSink, level?: LogLev
   return impl.build({
     *write(entry) {
       const ctx = yield* useContext(impl.context)
+
       if (entry.level < ctx.level) {
         return
       }
+
       ctx.sink.entries.push(entry)
     },
     *flush() {
       const ctx = yield* useContext(impl.context)
+
       ctx.sink.flushes += 1
     },
     *close() {
       const ctx = yield* useContext(impl.context)
+
       ctx.sink.closes += 1
     },
   })

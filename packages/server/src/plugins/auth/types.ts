@@ -30,7 +30,7 @@ export namespace AuthDef {
    * verify-only strategy asked to `login`); a FAILURE is this strategy's verdict (an expired
    * token, wrong credentials) — the next strategy is still asked, and the first failure is the
    * answer only when nobody succeeds (a failure a later success overrides shows as an
-   * `ozaco.auth.skip` event on the active span). Several strategies run side by side; the first
+   * `auth.skip` event on the active span). Several strategies run side by side; the first
    * SUCCESSFUL answer wins.
    */
   export interface Strategy {
@@ -82,7 +82,7 @@ export namespace AuthDef {
     strategy: string | null
     rejection: Result.Failure<unknown> | undefined
 
-    /** the span the gate guards — where the chain's `ozaco.auth.skip` events land (the DISPATCH
+    /** the span the gate guards — where the chain's `auth.skip` events land (the DISPATCH
      * span of an action, even under a plugin span wrapping it); absent ⇒ the active span. */
     readonly span?: TraceDef.SpanHandle | undefined
   }

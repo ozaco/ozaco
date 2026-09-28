@@ -73,6 +73,7 @@ export const send = (
     // by the reply's brand: value streams chunk, text arrives whole, bytes collect
     if (meta.brand === 'ndjson' || meta.brand === 'sse') {
       flow = value as FutureFlow<unknown>
+
       const values: unknown[] = []
 
       for await (const item of flow) {
@@ -92,6 +93,7 @@ export const send = (
 
     if (meta.brand === 'text') {
       onChunk({ kind: 'text', text: String(value), at: performance.now() - startedAt })
+
       return { ...base, elapsedMs: elapsed(), error: null, value, bytes: null, streamed: true }
     }
 
@@ -152,10 +154,12 @@ export const watch = <TRow = unknown>(
   void (async () => {
     try {
       const handle = await handleOf(client)
+
       flow = handle.$watch<TRow>(resource, options)
 
       if (stopped) {
         await (flow.cancel() as AnyType)
+
         return
       }
 

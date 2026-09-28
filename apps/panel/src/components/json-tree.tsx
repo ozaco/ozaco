@@ -15,6 +15,7 @@ const Leaf = ({ value }: { value: unknown }) => {
         : typeof value === 'boolean'
           ? 'var(--warn)'
           : 'var(--dim)'
+
   return <span style={{ color }}>{JSON.stringify(value)}</span>
 }
 
@@ -27,6 +28,7 @@ const Node = ({ name, value, depth }: { name: string | null; value: unknown; dep
       : Object.entries(value)
     : []
   const label = name === null ? null : <span style={{ color: 'var(--fg)' }}>{name}: </span>
+
   if (!container) {
     return (
       <div style={{ paddingLeft: depth * 14 }}>
@@ -35,7 +37,9 @@ const Node = ({ name, value, depth }: { name: string | null; value: unknown; dep
       </div>
     )
   }
+
   const brackets = Array.isArray(value) ? ['[', ']'] : ['{', '}']
+
   return (
     <div>
       <div style={{ paddingLeft: depth * 14, cursor: 'pointer' }} onClick={() => setOpen(!open)}>
@@ -57,9 +61,11 @@ const Node = ({ name, value, depth }: { name: string | null; value: unknown; dep
 
 export const JsonTree = ({ value }: { value: unknown }) => {
   const text = JSON.stringify(value, null, 2) ?? 'undefined'
+
   if (text.length > LIMIT) {
     return <pre className='mono break-all whitespace-pre-wrap'>{text}</pre>
   }
+
   return (
     <div className='mono'>
       <Node name={null} value={value} depth={0} />

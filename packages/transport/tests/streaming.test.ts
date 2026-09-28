@@ -27,6 +27,7 @@ const TOTAL = Number(process.env['TRANSPORT_BIG_BYTES'] ?? 512 * MB)
 /** The source repeats this block, so every byte has a known expected value at its offset — the
  * receiver verifies with native memcmp instead of walking bytes in JS. */
 const BLOCK = new Uint8Array(MB)
+
 crypto.getRandomValues(BLOCK)
 
 /** RSS a transfer may grow by, whatever its size — generous room over the ~110-140 MB the
@@ -148,12 +149,14 @@ describe('transport — big payloads stream', () => {
       await run(function* () {
         yield* BunIO.use()
         yield* MemoryTransport.use({ prefix: 'big' })
+
         const topic = unique('stream')
         const check = verifier()
         const before = rssMb()
         const reader = yield* fork(() => drain(topic, options, check))
 
         yield* feed(topic, { ...options, total: TOTAL, writeSize: 8 * MB })
+
         const seen = yield* reader
 
         return { ...seen, total: check.total, intact: check.intact, growth: seen.peakMb - before }
@@ -179,6 +182,7 @@ describe('transport — big payloads stream', () => {
       await run(function* () {
         yield* BunIO.use()
         yield* MemoryTransport.use({ prefix: 'big' })
+
         const topic = unique('huge')
         const check = verifier()
         const reader = yield* fork(() => drain(topic, options, check))
@@ -207,6 +211,7 @@ describe('transport — big payloads stream', () => {
         // a backend as strict as NATS: a frame over the limit would have to be split by the
         // driver and reassembled WHOLE on the far side — the budget keeps the lane under it
         yield* MemoryTransport.use({ prefix: 'big', maxPayloadBytes: limit })
+
         const topic = unique('clamped')
         const check = verifier()
         const reader = yield* fork(() => drain(topic, options, check))

@@ -17,15 +17,19 @@ export const StateRef: Context<Own.OpenAIState> = createContext<Own.OpenAIState>
 
 export const createState = (options: OpenAIProviderOptions): Own.OpenAIState => {
   const headers: Record<string, string> = {}
+
   for (const [name, value] of Object.entries(options.headers ?? {})) {
     headers[name.toLowerCase()] = value
   }
+
   const auth = options.auth ?? { kind: 'bearer' }
+
   if (auth.kind === 'bearer') {
     headers.authorization = `Bearer ${options.apiKey}`
   } else {
     headers[auth.name.toLowerCase()] = options.apiKey
   }
+
   return {
     base: (options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/u, ''),
     headers,
@@ -49,7 +53,9 @@ export function* jsonInit(
 /** Init for a multipart request: `content-type` stays unset so the platform writes the boundary. */
 export const formInit = (state: Own.OpenAIState, form: FormData): FetchDef.MethodInit => {
   const headers = { ...state.headers }
+
   Reflect.deleteProperty(headers, 'content-type')
+
   return {
     headers,
     body: form,
@@ -62,21 +68,27 @@ export const formInit = (state: Own.OpenAIState, form: FormData): FetchDef.Metho
  * status decides. Also classifies mid-stream error frames (pass `status: 0`). */
 export const classifyError = (status: number, error?: Own.ProviderError | undefined): string => {
   const hint = `${error?.code ?? ''} ${error?.type ?? ''}`
+
   if (hint.includes('api_key') || hint.includes('authentication') || hint.includes('permission')) {
     return AiErrors.Auth
   }
+
   if (hint.includes('quota') || hint.includes('rate_limit')) {
     return AiErrors.RateLimit
   }
+
   if (status === 401 || status === 403) {
     return AiErrors.Auth
   }
+
   if (status === 429) {
     return AiErrors.RateLimit
   }
+
   if (status === 408) {
     return AiErrors.Timeout
   }
+
   return AiErrors.Request
 }
 
@@ -85,14 +97,19 @@ const retryAfterSeconds = (header: string | null): number | undefined => {
   if (!header) {
     return undefined
   }
+
   const numeric = Number(header)
+
   if (Number.isFinite(numeric)) {
     return Math.max(0, numeric)
   }
+
   const date = Date.parse(header)
+
   if (Number.isNaN(date)) {
     return undefined
   }
+
   return Math.max(0, Math.round((date - Date.now()) / 1000))
 }
 
@@ -100,10 +117,13 @@ const retryAfterSeconds = (header: string | null): number | undefined => {
  * `undefined` so classification falls back to the status and raw body. */
 function* decodeErrorBody(body: string): Operation<Own.ProviderError | undefined> {
   const outcome = yield* attempt(JsonCodec.actions.parse<AnyType>(body))
+
   if (isFailure(outcome)) {
     return undefined
   }
+
   const error = outcome.value?.error
+
   return error && typeof error === 'object' ? (error as Own.ProviderError) : undefined
 }
 
@@ -116,12 +136,15 @@ function* failResponse(response: FetchDef.Response): Operation<never> {
   const tag = classifyError(response.status, error)
   const detail = error?.message ?? (body || response.statusText)
   const message = `${response.url}: ${response.status} ${detail}`
+
   if (tag === AiErrors.RateLimit) {
     const seconds = retryAfterSeconds(response.headers.get('retry-after'))
+
     if (seconds !== undefined) {
       return yield* fail(tag, message, `${RETRY_AFTER_CAUSE}:${seconds}`)
     }
   }
+
   return yield* fail(tag, message)
 }
 
@@ -136,39 +159,48 @@ export function* send(
   init: FetchDef.MethodInit,
 ): Operation<FetchDef.Response> {
   const outcome = yield* attempt(Fetch.actions.post(`${state.base}/${path}`, init))
+
   if (isFailure(outcome)) {
     if (outcome.error === FetchErrors.Timeout) {
       return yield* fail(AiErrors.Timeout, outcome.message)
     }
+
     return yield* fail(
       AiErrors.Request,
       `openai request to ${path} failed: ${outcome.message || String(outcome.error)}`,
     )
   }
+
   const response = outcome.value as FetchDef.Response
+
   if (!response.ok) {
     return yield* failResponse(response)
   }
+
   return response
 }
 
 /** Read an ok response's JSON body; an unparseable 2xx body fails `ai.bad-response`. */
 export function* readJson(response: FetchDef.Response): Operation<unknown> {
   const outcome = yield* attempt(response.json<unknown>())
+
   if (isFailure(outcome)) {
     return yield* fail(
       AiErrors.BadResponse,
       `openai returned an undecodable body from ${response.url}`,
     )
   }
+
   return outcome.value
 }
 
 /** Read an ok response's bytes; a read fault classifies as `ai.request`. */
 export function* readBytes(response: FetchDef.Response): Operation<Uint8Array> {
   const outcome = yield* attempt(response.bytes())
+
   if (isFailure(outcome)) {
     return yield* fail(AiErrors.Request, `reading the response body from ${response.url} failed`)
   }
+
   return outcome.value as Uint8Array
 }

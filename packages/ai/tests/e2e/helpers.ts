@@ -67,14 +67,17 @@ function* captureSpecs(): Operation<CapturedSpecs> {
     (args: AnyType[], next: AnyType): AnyType =>
       (function* () {
         bucket.push(args[0])
+
         return yield* next(...args)
       })()
+
   yield* AiProvider.around({
     chat: capture(captured.chat),
     embed: capture(captured.embed),
     tts: capture(captured.tts),
     stt: capture(captured.stt),
   } as AnyType)
+
   return captured
 }
 
@@ -91,7 +94,9 @@ export const runProviderSuite = (target: ProviderTarget): void => {
           scoped(function* () {
             yield* target.use()
             yield* AiClient.use({ models: { chat: 'model-chat' } })
+
             const info = yield* useProvider()
+
             expect(info.provider).toBe(target.label)
             expect(info.capabilities).toEqual(target.capabilities)
           }),
@@ -105,9 +110,11 @@ export const runProviderSuite = (target: ProviderTarget): void => {
           scoped(function* () {
             yield* target.use({ chat: [{ kind: 'text', text: 'hello from the model' }] })
             yield* AiClient.use({ models: { chat: 'model-chat' } })
+
             const specs = yield* captureSpecs()
 
             const result = yield* Ai.actions.chat('hi there')
+
             expect(result.text).toBe('hello from the model')
             expect(result.message.role).toBe('assistant')
             expect(result.toolCalls).toEqual([])
@@ -136,10 +143,13 @@ export const runProviderSuite = (target: ProviderTarget): void => {
               embed: [[0.5, 0.25]],
             })
             yield* AiClient.use({ models: { chat: 'model-chat', embed: 'model-embed' } })
+
             const specs = yield* captureSpecs()
 
             yield* Ai.actions.chat('x')
+
             const embedded = yield* Ai.actions.embed('vectorize me')
+
             yield* Ai.actions.chat('y', { model: 'model-override' })
 
             expect(specs.chat[0]!.model).toBe('model-chat')
@@ -162,7 +172,9 @@ export const runProviderSuite = (target: ProviderTarget): void => {
               models: { chat: 'model-chat' },
               defaults: { temperature: 0.5, maxTokens: 128 },
             })
+
             const specs = yield* captureSpecs()
+
             yield* Ai.actions.chat('x', { temperature: 0.9, topP: 0.7 })
             expect(specs.chat[0]!.sampling).toEqual({ temperature: 0.9, topP: 0.7, maxTokens: 128 })
           }),
@@ -175,9 +187,13 @@ export const runProviderSuite = (target: ProviderTarget): void => {
         scoped(function* () {
           yield* target.use()
           yield* AiClient.use()
+
           const chat = yield* attempt(Ai.actions.chat('hi'))
+
           expect((chat as AnyType).error).toBe(AiErrors.Configuration)
+
           const embed = yield* attempt(Ai.actions.embed('hi'))
+
           expect((embed as AnyType).error).toBe(AiErrors.Configuration)
         }),
       )
@@ -197,6 +213,7 @@ export const runProviderSuite = (target: ProviderTarget): void => {
               ],
             })
             yield* AiClient.use({ models: { chat: 'model-chat' } })
+
             const specs = yield* captureSpecs()
             const seen: AnyType[] = []
 
@@ -206,6 +223,7 @@ export const runProviderSuite = (target: ProviderTarget): void => {
                 add: args =>
                   (function* () {
                     seen.push(args)
+
                     return { sum: Number(args.a) + Number(args.b) }
                   })() as Operation<unknown>,
               },
@@ -214,7 +232,9 @@ export const runProviderSuite = (target: ProviderTarget): void => {
             expect(result.text).toBe('the sum is 5')
             expect(seen).toEqual([{ a: 2, b: 3 }])
             expect(specs.chat).toHaveLength(2)
+
             const second = specs.chat[1]! as AnyType
+
             expect(second.messages).toHaveLength(3)
             expect(second.messages[1].role).toBe('assistant')
             expect(second.messages[1].toolCalls).toEqual([
@@ -239,8 +259,10 @@ export const runProviderSuite = (target: ProviderTarget): void => {
               kind: 'tool-calls',
               calls: [{ id: 'c', name: 'noop', arguments: '{}' }],
             }
+
             yield* target.use({ chat: [turn, turn] })
             yield* AiClient.use({ models: { chat: 'model-chat' } })
+
             const outcome = yield* attempt(
               Ai.actions.chat('loop', {
                 tools: [{ name: 'noop' }],
@@ -253,6 +275,7 @@ export const runProviderSuite = (target: ProviderTarget): void => {
                 },
               }),
             )
+
             expect((outcome as AnyType).error).toBe(AiErrors.Request)
           }),
         ),
@@ -269,6 +292,7 @@ export const runProviderSuite = (target: ProviderTarget): void => {
               ],
             })
             yield* AiClient.use({ models: { chat: 'model-chat' } })
+
             const outcome = yield* attempt(
               Ai.actions.chat('x', {
                 tools: [{ name: 'add' }],
@@ -280,6 +304,7 @@ export const runProviderSuite = (target: ProviderTarget): void => {
                 },
               }),
             )
+
             expect((outcome as AnyType).error).toBe(AiErrors.BadResponse)
           }),
         ),
@@ -308,13 +333,17 @@ export const runProviderSuite = (target: ProviderTarget): void => {
 
             const flow = yield* Ai.actions.chatStream('go')
             const { values, close } = yield* drain(flow)
+
             expect(close).toBe(true)
 
             expect(values.map(value => value.text ?? '').join('')).toBe('hello')
+
             const calls = accumulateToolCalls()
+
             for (const value of values) {
               calls.add(value.toolCalls)
             }
+
             expect(calls.collect()).toEqual([
               { id: 'call-9', name: 'lookup', arguments: '{"q":"x"}' },
             ])
@@ -331,7 +360,9 @@ export const runProviderSuite = (target: ProviderTarget): void => {
           scoped(function* () {
             yield* target.use({ chat: [{ kind: 'error', error: 'auth' }] })
             yield* AiClient.use({ models: { chat: 'model-chat' } })
+
             const outcome = yield* attempt(Ai.actions.chat('hi'))
+
             expect((outcome as AnyType).error).toBe(AiErrors.Auth)
           }),
         ),
@@ -346,7 +377,9 @@ export const runProviderSuite = (target: ProviderTarget): void => {
               chat: [{ kind: 'error', error: 'rate-limit', retryAfterSeconds: 7 }],
             })
             yield* AiClient.use({ models: { chat: 'model-chat' } })
+
             const outcome = yield* attempt(Ai.actions.chat('hi'))
+
             expect(isFailure(outcome)).toBe(true)
             expect((outcome as AnyType).error).toBe(AiErrors.RateLimit)
             expect((outcome as AnyType).causes).toContain('retry-after:7')
@@ -361,7 +394,9 @@ export const runProviderSuite = (target: ProviderTarget): void => {
           scoped(function* () {
             yield* target.use({ chat: [{ kind: 'error', error: 'bad-response' }] })
             yield* AiClient.use({ models: { chat: 'model-chat' } })
+
             const outcome = yield* attempt(Ai.actions.chat('hi'))
+
             expect((outcome as AnyType).error).toBe(AiErrors.BadResponse)
           }),
         ),
@@ -379,7 +414,9 @@ export const runProviderSuite = (target: ProviderTarget): void => {
               ],
             })
             yield* AiClient.use({ models: { chat: 'model-chat' } })
+
             const result = yield* Ai.actions.chat('hi', { retries: 1 })
+
             expect(result.text).toBe('recovered')
           }),
         ),
@@ -394,7 +431,9 @@ export const runProviderSuite = (target: ProviderTarget): void => {
               ],
             })
             yield* AiClient.use({ models: { chat: 'model-chat' } })
+
             const outcome = yield* attempt(Ai.actions.chat('hi'))
+
             expect((outcome as AnyType).error).toBe(AiErrors.RateLimit)
           }),
         ),
@@ -406,14 +445,17 @@ export const runProviderSuite = (target: ProviderTarget): void => {
         await run(() =>
           scoped(function* () {
             const clip = new Uint8Array([1, 2, 3, 4])
+
             yield* target.use({ tts: clip })
             yield* AiClient.use({
               models: { tts: 'model-tts' },
               defaults: { voice: 'test-voice' },
             })
+
             const specs = yield* captureSpecs()
 
             const bytes = yield* Ai.actions.tts('say this')
+
             expect([...bytes]).toEqual([1, 2, 3, 4])
             expect(specs.tts[0]!.model).toBe('model-tts')
             expect(specs.tts[0]!.voice).toBe('test-voice')
@@ -421,6 +463,7 @@ export const runProviderSuite = (target: ProviderTarget): void => {
 
             const flow = yield* Ai.actions.ttsStream('say this', { voice: 'other-voice' })
             const { values, close } = yield* drain(flow)
+
             expect(close).toBe(true)
             expect([...concat(values)]).toEqual([1, 2, 3, 4])
           }),
@@ -434,7 +477,9 @@ export const runProviderSuite = (target: ProviderTarget): void => {
           scoped(function* () {
             yield* target.use()
             yield* AiClient.use({ models: { tts: 'model-tts' } })
+
             const outcome = yield* attempt(Ai.actions.tts('say this'))
+
             expect((outcome as AnyType).error).toBe(AiErrors.Configuration)
           }),
         ),
@@ -447,12 +492,14 @@ export const runProviderSuite = (target: ProviderTarget): void => {
           scoped(function* () {
             yield* target.use({ stt: 'transcribed text' })
             yield* AiClient.use({ models: { stt: 'model-stt' } })
+
             const specs = yield* captureSpecs()
             const text = yield* Ai.actions.stt(new Uint8Array([9, 9]), {
               language: 'en',
               filename: 'clip.wav',
               contentType: 'audio/wav',
             })
+
             expect(text).toBe('transcribed text')
             expect(specs.stt[0]!.model).toBe('model-stt')
             expect(specs.stt[0]!.language).toBe('en')
@@ -473,11 +520,17 @@ export const runProviderSuite = (target: ProviderTarget): void => {
               models: { chat: 'model-chat', embed: 'model-embed', tts: 'model-tts' },
               defaults: { voice: 'v' },
             })
+
             const embed = yield* attempt(Ai.actions.embed('x'))
+
             expect((embed as AnyType).error).toBe(AiErrors.Unsupported)
+
             const tts = yield* attempt(Ai.actions.tts('x'))
+
             expect((tts as AnyType).error).toBe(AiErrors.Unsupported)
+
             const chat = yield* Ai.actions.chat('x')
+
             expect(chat.text).toBe('still works')
           }),
         ),
@@ -491,10 +544,13 @@ export const runProviderSuite = (target: ProviderTarget): void => {
             chatStream: [{ chunks: [{ text: 'first' }], hang: true }],
           })
           yield* AiClient.use({ models: { chat: 'model-chat' } })
+
           const flow = yield* Ai.actions.chatStream('stream on')
           const subscription = yield* flow
           const first = yield* subscription.next()
+
           expect((first.value as AnyType).text).toBe('first')
+
           return 'closed'
         }),
       )

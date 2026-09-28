@@ -21,6 +21,7 @@ describe('api (std:plugin/api)', () => {
     const outcome = await run(function* () {
       const rows = yield* Database.actions.query('users')
       const retries = yield* Database.actions.retries
+
       return { rows, retries }
     })
 
@@ -41,6 +42,7 @@ describe('api (std:plugin/api)', () => {
           query: ([sql], next) =>
             (function* () {
               const rows = yield* next(sql)
+
               return rows.map(row => row.toUpperCase())
             })(),
           retries: (_args, next) => next() * 10,
@@ -76,6 +78,7 @@ describe('api (std:plugin/api)', () => {
 
     const outcome = await run(function* () {
       yield* Database.around({ query: () => constant(['FAKE']) })
+
       return yield* Database.actions.query('users')
     })
 
@@ -88,16 +91,19 @@ describe('api (std:plugin/api)', () => {
 
     const outcome = await run(function* () {
       const scope = yield* useScope()
+
       scope.around(api.scope, {
         set: ([target, context, value], next) => {
           if (context.name === 'api-test.word') {
             seen.push(String(value))
           }
+
           return next(target, context, value)
         },
       })
 
       yield* Word.set('hello')
+
       return yield* Word.expect()
     })
 

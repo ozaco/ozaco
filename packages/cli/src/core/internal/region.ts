@@ -11,9 +11,11 @@ export const rowsOf = (frame: string, columns: number): number => {
   }
 
   let rows = 0
+
   for (const line of frame.split('\n')) {
     rows += Math.max(1, Math.ceil(displayWidth(line) / Math.max(1, columns)))
   }
+
   return rows
 }
 

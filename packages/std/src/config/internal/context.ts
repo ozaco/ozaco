@@ -80,6 +80,7 @@ export function* buildContext(options?: ConfigDef.Options) {
   }
 
   context.working.path = path ?? (yield* IO.actions.join(cwd, baseFile(context)))
+
   return context
 }
 
@@ -94,6 +95,7 @@ export function* rediscover(ctx: ConfigDef.Context, start: string) {
   ctx.env = yield* buildEnvOverlay(ctx)
 
   const { chain, working } = yield* discover(ctx, start)
+
   ctx.chain = chain
   ctx.working = working
   ctx.merged = merge(ctx)

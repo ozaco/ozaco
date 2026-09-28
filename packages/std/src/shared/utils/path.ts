@@ -12,6 +12,7 @@ export const getPath = <T = unknown>(obj: Record<string, AnyType>, path: string)
     if (!isObject(current)) {
       return undefined
     }
+
     current = current[segment]
   }
 
@@ -25,6 +26,7 @@ export const setPath = <T extends Record<string, AnyType>>(
   value: unknown,
 ): T => {
   const parts = segments(path)
+
   if (parts.length === 0) {
     return obj
   }
@@ -34,17 +36,20 @@ export const setPath = <T extends Record<string, AnyType>>(
 
   for (const part of parts.slice(0, -1)) {
     const child = cursor[part]
+
     cursor[part] = isObject(child) ? { ...child } : {}
     cursor = cursor[part] as Record<string, AnyType>
   }
 
   cursor[parts.at(-1)!] = value
+
   return root as T
 }
 
 /** Remove a dotted key, returning a new object; a no-op (fresh copy) if the path is absent. */
 export const unsetPath = <T extends Record<string, AnyType>>(obj: T, path: string): T => {
   const parts = segments(path)
+
   if (parts.length === 0) {
     return obj
   }
@@ -54,14 +59,17 @@ export const unsetPath = <T extends Record<string, AnyType>>(obj: T, path: strin
 
   for (const part of parts.slice(0, -1)) {
     const child = cursor[part]
+
     if (!isObject(child)) {
       return root as T
     }
+
     cursor[part] = { ...child }
     cursor = cursor[part] as Record<string, AnyType>
   }
 
   Reflect.deleteProperty(cursor, parts.at(-1)!)
+
   return root as T
 }
 

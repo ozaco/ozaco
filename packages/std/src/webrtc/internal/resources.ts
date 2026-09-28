@@ -34,11 +34,13 @@ export const openChannel = (
     const merged = { ...options.channel, ...channelOptions }
 
     const generation = yield* session.awaitGeneration() // parks through a redial gap
+
     if (!generation || session.ended) {
       return yield* fail(RtcErrors.Channel, `peer is closed: cannot open "${label}"`)
     }
 
     let native: RtcDef.ChannelLike
+
     try {
       native = generation.pc.createDataChannel(label, initOf(merged))
     } catch (error) {
@@ -51,6 +53,7 @@ export const openChannel = (
       observe,
     })
     const record: Helpers.LocalRecord = { entry, label, options: merged }
+
     localRecords.add(record)
 
     generation.kicked = true
@@ -83,11 +86,13 @@ export const openTrack = (
     const { counters, observe, trackRecords } = session
 
     const generation = yield* session.awaitGeneration() // parks through a redial gap
+
     if (!generation || session.ended) {
       return yield* fail(RtcErrors.Track, 'peer is closed: cannot add a track')
     }
 
     const { pc } = generation
+
     if (typeof pc.addTrack !== 'function') {
       return yield* fail(
         RtcErrors.Unsupported,
@@ -96,6 +101,7 @@ export const openTrack = (
     }
 
     let sender: RtcDef.SenderLike
+
     try {
       sender = pc.addTrack(track, ...streams)
     } catch (error) {
@@ -103,6 +109,7 @@ export const openTrack = (
     }
 
     const record: Helpers.TrackRecord = { track, streams: [...streams], sender, removed: false }
+
     trackRecords.add(record)
 
     counters.tracksSent += 1
@@ -121,6 +128,7 @@ export const openTrack = (
 
       const current = session.generation
       const active = record.sender
+
       record.sender = undefined
 
       if (session.ended || !current?.alive || !active) {
@@ -157,6 +165,7 @@ export const openTrack = (
         record.track = next // the next redialed generation adds THIS track
 
         const active = record.sender
+
         if (!active) {
           return // mid-redial gap — the rebind will pick the replacement up
         }
@@ -168,6 +177,7 @@ export const openTrack = (
         const swapped = yield* attempt(() =>
           until(active.replaceTrack?.(next) ?? Promise.resolve()),
         )
+
         if (!isSuccess(swapped)) {
           return yield* fail(RtcErrors.Track, 'replaceTrack failed', swapped)
         }

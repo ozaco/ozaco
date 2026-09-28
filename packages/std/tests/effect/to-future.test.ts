@@ -18,6 +18,7 @@ describe('toFuture', () => {
 
         const future = toFuture(scope, function* () {
           runs += 1
+
           return runs
         })
 
@@ -36,6 +37,7 @@ describe('toFuture', () => {
 
         const future = toFuture(scope, function* () {
           runs += 1
+
           return 'value'
         })
 
@@ -66,6 +68,7 @@ describe('toFuture', () => {
         yield* until(
           (async () => {
             const outcome = await future
+
             expect(isFailure(outcome)).toBe(true)
             expect((outcome as { error: string }).error).toBe('to-future.boom')
           })(),
@@ -93,8 +96,11 @@ describe('toFuture', () => {
         yield* until(
           (async () => {
             const pending = future.then(outcome => outcome)
+
             controller.abort()
+
             const outcome = await pending
+
             expect(isFailure(outcome)).toBe(true)
             expect((outcome as { error: string }).error).toBe('std:effect.halted')
           })(),
@@ -110,7 +116,9 @@ describe('toFuture', () => {
       await run(function* () {
         const scope = yield* useScope()
         const controller = new AbortController()
+
         controller.abort()
+
         let runs = 0
 
         const future = toFuture(
@@ -124,6 +132,7 @@ describe('toFuture', () => {
         yield* until(
           (async () => {
             const outcome = await future
+
             expect((outcome as { error: string }).error).toBe('std:effect.halted')
           })(),
         )
@@ -172,5 +181,6 @@ describe('toFuture', () => {
 
 function* sleepThen<T>(value: T) {
   yield* sleep(1)
+
   return value
 }

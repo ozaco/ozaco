@@ -47,25 +47,33 @@ const protoFields = (bytes: Uint8Array): ProtoField[] => {
   let at = 0
   const varint = () => {
     let value = 0n
+
     for (let shift = 0n; ; shift += 7n) {
       const byte = bytes[at++] ?? 0
+
       value |= BigInt(byte & 0x7f) << shift
+
       if ((byte & 0x80) === 0) {
         return value
       }
     }
   }
+
   while (at < bytes.length) {
     const key = Number(varint())
     const wire = key & 7
+
     if (![0, 1, 2, 5].includes(wire)) {
       throw new Error(`unexpected protobuf wire type ${wire}`)
     }
+
     const size = wire === 1 ? 8 : wire === 5 ? 4 : wire === 2 ? Number(varint()) : 0
     const int = wire === 0 ? varint() : 0n
+
     fields.push({ field: key >>> 3, int, bytes: bytes.subarray(at, at + size) })
     at += size
   }
+
   return fields
 }
 
@@ -80,21 +88,27 @@ const hex = (bytes: Uint8Array) =>
 /** An OTLP `AnyValue`: string, bool, int64, double or an array of those. */
 const anyValue = (bytes: Uint8Array): unknown => {
   const [value] = protoFields(bytes)
+
   if (value?.field === 1) {
     return utf8(value.bytes)
   }
+
   if (value?.field === 2) {
     return value.int !== 0n
   }
+
   if (value?.field === 3) {
     return Number(BigInt.asIntN(64, value.int))
   }
+
   if (value?.field === 4) {
     return new DataView(value.bytes.buffer, value.bytes.byteOffset, 8).getFloat64(0, true)
   }
+
   if (value?.field === 5) {
     return repeated(protoFields(value.bytes), 1).map(entry => anyValue(entry.bytes))
   }
+
   return null
 }
 
@@ -102,6 +116,7 @@ const attributesOf = (fields: readonly ProtoField[], field: number) =>
   Object.fromEntries(
     repeated(fields, field).map(entry => {
       const pair = protoFields(entry.bytes)
+
       return [utf8(single(pair, 1)), anyValue(single(pair, 2))]
     }),
   )
@@ -118,11 +133,13 @@ const otlpSpans = (body: Uint8Array): ShippedSpan[] =>
     repeated(protoFields(resource.bytes), 2).flatMap(scope =>
       repeated(protoFields(scope.bytes), 2).map(entry => {
         const span = protoFields(entry.bytes)
+
         return {
           traceId: hex(single(span, 1)),
           name: utf8(single(span, 5)),
           events: repeated(span, 11).map(raw => {
             const event = protoFields(raw.bytes)
+
             return { name: utf8(single(event, 2)), attributes: attributesOf(event, 3) }
           }),
         }
@@ -136,6 +153,7 @@ const otlpLogs = (body: Uint8Array): { traceId: string; body: unknown }[] =>
     repeated(protoFields(resource.bytes), 2).flatMap(scope =>
       repeated(protoFields(scope.bytes), 2).map(entry => {
         const record = protoFields(entry.bytes)
+
         return { traceId: hex(single(record, 9)), body: anyValue(single(record, 5)) }
       }),
     ),
@@ -148,6 +166,7 @@ const openOrExplain = function* (
   others: readonly RtcDef.Peer[] = [],
 ) {
   const outcome = yield* attempt(() => peer.channel(label, { openTimeoutMs: 15_000 }))
+
   if (isFailure(outcome)) {
     const dump = (target: RtcDef.Peer) =>
       `${target.id} ${target.connectionState}/${target.signalingState} offers=${target.metrics.offersSent}/${target.metrics.offersReceived} cands=${target.metrics.candidatesSent}/${target.metrics.candidatesReceived} restarts=${target.metrics.restarts}: ${target.timeline
@@ -156,22 +175,28 @@ const openOrExplain = function* (
             `${event.kind}${event.detail ? `:${event.detail}` : ''}${event.error ? `!${event.error}` : ''}`,
         )
         .join(' ')}`
+
     throw new Error(
       `${String(outcome.error)} — ${outcome.message}\n${[peer, ...others].map(dump).join('\n')}`,
     )
   }
+
   return outcome.value
 }
 
 /** Pull frames until the relay PAIRS this socket and hands it a role (a lone joiner waits). */
 const roleOf = function* (socket: WsDef.Connection) {
   const messages = yield* socket.messages
+
   for (;;) {
     const step = yield* messages.next()
+
     if (step.done) {
       return { t: 'closed' } as RelayFrame
     }
+
     const frame = (step.value ?? {}) as RelayFrame
+
     if (frame.t === 'rtc:role') {
       return frame
     }
@@ -183,6 +208,7 @@ afterAll(async () => {
     // libdatachannel keeps worker threads alive — without this the test process never exits
     const nativeSpecifier = 'node-datachannel'
     const native = (await import(nativeSpecifier)) as { cleanup?: () => void }
+
     native.cleanup?.()
   }
 })
@@ -204,6 +230,7 @@ describe.skipIf(!polyfill)('webrtc over the demo signaling relay', () => {
         const socketB = yield* Ws.actions.connect(`${base}/rtc/e2e`)
         const roleA = yield* roleOf(socketA)
         const roleB = yield* roleOf(socketB)
+
         // roles are DERIVED from the member ids (so every node computes the same ones) — which
         // side ends up polite is not fixed, that they are OPPOSITE is
         expect(roleA.polite).toBe(!roleB.polite)
@@ -221,7 +248,9 @@ describe.skipIf(!polyfill)('webrtc over the demo signaling relay', () => {
         const callA = yield* openOrExplain(peerA, 'call', [peerB])
         const channelsB = yield* peerB.channels
         const emitted = yield* channelsB.next()
+
         expect(emitted.done).toBe(false)
+
         const callB = (emitted as { value: RtcDef.Channel }).value
 
         yield* callA.send({ hello: 'from a' })
@@ -231,6 +260,7 @@ describe.skipIf(!polyfill)('webrtc over the demo signaling relay', () => {
         const messagesA = yield* callA.messages
         const structured = yield* messagesB.next()
         const text = yield* messagesA.next()
+
         expect(structured.done ? 'closed' : structured.value).toEqual({ hello: 'from a' })
         expect(text.done ? 'closed' : text.value).toBe('hi back')
 
@@ -254,6 +284,7 @@ describe.skipIf(!polyfill)('webrtc over the demo signaling relay', () => {
         const caller = yield* Ws.actions.connect(`${base}/rtc/relay`)
         const callerFrames = yield* caller.messages
         const waiting = yield* callerFrames.next()
+
         expect(waiting.done ? undefined : waiting.value).toEqual({
           t: 'rtc:waiting',
           room: 'relay',
@@ -264,6 +295,7 @@ describe.skipIf(!polyfill)('webrtc over the demo signaling relay', () => {
         const calleeFrames = yield* callee.messages
         const calleeRole = (yield* calleeFrames.next()).value as RelayFrame
         const callerRole = (yield* callerFrames.next()).value as RelayFrame
+
         expect(callerRole.t).toBe('rtc:role')
         expect(callerRole.epoch).toBe(1)
         expect(calleeRole.epoch).toBe(1)
@@ -271,7 +303,9 @@ describe.skipIf(!polyfill)('webrtc over the demo signaling relay', () => {
 
         // the partner leaves: the survivor is told to end its session
         yield* callee.close()
+
         const left = yield* callerFrames.next()
+
         expect(left.done ? undefined : left.value).toEqual({
           t: 'rtc:peer-left',
           room: 'relay',
@@ -285,6 +319,7 @@ describe.skipIf(!polyfill)('webrtc over the demo signaling relay', () => {
         const rejoinFrames = yield* rejoin.messages
         const rejoinRole = (yield* rejoinFrames.next()).value as RelayFrame
         const survivorRole = (yield* callerFrames.next()).value as RelayFrame
+
         expect(survivorRole.epoch).toBe(2)
         expect(rejoinRole.epoch).toBe(2)
         expect(survivorRole.polite).toBe(!rejoinRole.polite)
@@ -294,8 +329,10 @@ describe.skipIf(!polyfill)('webrtc over the demo signaling relay', () => {
         yield* caller.send({ t: 'rtc:restart', epoch: 2 })
         yield* sleep(30)
         yield* rejoin.send({ t: 'rtc:restart', epoch: 2 })
+
         const repaired = (yield* callerFrames.next()).value as RelayFrame
         const repairedPartner = (yield* rejoinFrames.next()).value as RelayFrame
+
         expect(repaired.epoch).toBe(3)
         expect(repairedPartner.epoch).toBe(3)
         expect(repaired.polite).toBe(!repairedPartner.polite)
@@ -306,7 +343,9 @@ describe.skipIf(!polyfill)('webrtc over the demo signaling relay', () => {
           description: { type: 'offer', sdp: 'x' },
           epoch: 3,
         })
+
         const relayed = yield* rejoinFrames.next()
+
         expect(relayed.done ? undefined : relayed.value).toEqual({
           t: 'rtc:description',
           description: { type: 'offer', sdp: 'x' },
@@ -335,12 +374,14 @@ describe.skipIf(!polyfill)('webrtc over the demo signaling relay', () => {
         const a = yield* Ws.actions.connect(`${urlA}/rtc/split`)
         const framesA = yield* a.messages
         const waiting = (yield* framesA.next()).value as RelayFrame
+
         expect(waiting.t).toBe('rtc:waiting')
 
         const b = yield* Ws.actions.connect(`${urlB}/rtc/split`)
         const framesB = yield* b.messages
         const roleB = (yield* framesB.next()).value as RelayFrame
         const roleA = (yield* framesA.next()).value as RelayFrame
+
         expect(roleA.t).toBe('rtc:role')
         expect(roleB.t).toBe('rtc:role')
         expect(roleA.epoch).toBe(roleB.epoch)
@@ -348,7 +389,9 @@ describe.skipIf(!polyfill)('webrtc over the demo signaling relay', () => {
 
         // signaling crosses the carrier verbatim
         yield* a.send({ t: 'rtc:description', description: { type: 'offer', sdp: 'x' }, epoch: 1 })
+
         const relayed = yield* framesB.next()
+
         expect(relayed.done ? undefined : relayed.value).toEqual({
           t: 'rtc:description',
           description: { type: 'offer', sdp: 'x' },
@@ -357,7 +400,9 @@ describe.skipIf(!polyfill)('webrtc over the demo signaling relay', () => {
 
         // …and so does a departure: the survivor on the OTHER node ends its session
         yield* b.close()
+
         const left = (yield* framesA.next()).value as RelayFrame
+
         expect(left.t).toBe('rtc:peer-left')
 
         yield* first.stop()
@@ -379,11 +424,13 @@ describe.skipIf(!polyfill)('webrtc over the demo signaling relay', () => {
           fork(() =>
             scoped(function* () {
               const app = yield* createDemo({ ...options, link })
+
               yield* app.start()
               ready.add(undefined)
               yield* sleep(60_000)
             }),
           )
+
         yield* node({
           role: 'service',
           hosted: ['account', 'todos', 'media'],
@@ -398,6 +445,7 @@ describe.skipIf(!polyfill)('webrtc over the demo signaling relay', () => {
         })
         yield* ready.next()
         yield* ready.next()
+
         const gateway = yield* createDemo({ role: 'gateway', instance: 'gw', link })
         const info = yield* gateway.start()
         const base = (info.url as string).replace('http', 'ws')
@@ -406,17 +454,22 @@ describe.skipIf(!polyfill)('webrtc over the demo signaling relay', () => {
         // them, then the pairing negotiates over the cluster carrier
         const received = createQueue<string, void>()
         const late: RtcDef.Peer[] = []
+
         yield* fork(function* () {
           yield* sleep(400)
+
           const socketB = yield* Ws.actions.connect(`${base}/rtc/cluster-e2e`)
           const roleB = yield* roleOf(socketB)
           const peerB = yield* Rtc.actions.connect(socketB, {
             polite: roleB.polite === true,
             ...RESILIENT,
           })
+
           late.push(peerB)
+
           const channels = yield* peerB.channels
           const emitted = yield* channels.next()
+
           received.add(emitted.done ? 'closed' : emitted.value.label)
           yield* sleep(60_000) // keep the callee alive for the exchange
         })
@@ -428,8 +481,11 @@ describe.skipIf(!polyfill)('webrtc over the demo signaling relay', () => {
           ...RESILIENT,
         })
         const call = yield* openOrExplain(peerA, 'call', late)
+
         expect(call.readyState).toBe('open')
+
         const label = yield* received.next()
+
         expect(label.done ? 'closed' : label.value).toBe('call')
 
         yield* peerA.close()
@@ -447,17 +503,20 @@ describe.skipIf(!polyfill)('webrtc over the demo signaling relay', () => {
       port: 0,
       async fetch(request) {
         const raw = new Uint8Array(await request.arrayBuffer())
+
         received.push({
           path: new URL(request.url).pathname,
           type: request.headers.get('content-type'),
           auth: request.headers.get('authorization'),
           body: request.headers.get('content-encoding') === 'gzip' ? Bun.gunzipSync(raw) : raw,
         })
+
         return new Response(null, { status: 200 })
       },
     })
 
     let stored: AnyType
+
     try {
       unwrap(
         await run(function* () {
@@ -477,11 +536,13 @@ describe.skipIf(!polyfill)('webrtc over the demo signaling relay', () => {
           const caller = yield* Ws.actions.connect(`${base}/rtc/telemetry`)
           const callee = yield* Ws.actions.connect(`${base}/rtc/telemetry`)
           const role = yield* roleOf(caller)
+
           expect(role.epoch).toBe(1)
           void callee
 
           // what the browser page sends: the session counters plus the events since the last one
           const at = Date.now()
+
           yield* caller.send({
             t: 'rtc:report',
             epoch: 1,
@@ -535,13 +596,18 @@ describe.skipIf(!polyfill)('webrtc over the demo signaling relay', () => {
             const response = yield* until(
               fetch(`${info.url as string}${path}`, { headers: OBSERVE_AUTH }),
             )
+
             return (yield* until(response.json())) as AnyType
           }
+
           for (let tries = 0; tries < 60 && !stored; tries += 1) {
             yield* sleep(50)
+
             const page = yield* json('/_observe/api/traces?limit=50')
+
             for (const root of page.traces ?? []) {
               const view = yield* json(`/_observe/api/trace/${root.trace_id}`)
+
               if (view.spans?.some((span: AnyType) => span.name === 'rtc.report')) {
                 stored = view
               }
@@ -558,13 +624,17 @@ describe.skipIf(!polyfill)('webrtc over the demo signaling relay', () => {
     // the report ran as a real dispatch INSIDE the signaling frame's trace: the frame is a root
     // span of its own on the socket's route, linked to the socket's upgrade
     expect(stored).toBeDefined()
+
     const frame = stored.spans.find((span: AnyType) => span.root)
+
     expect(frame).toMatchObject({ name: 'WS /rtc/:room', kind: 'server' })
     expect(frame.attributes).toMatchObject({ 'ozaco.ws.message.type': 'rtc:report' })
     expect(frame.links.map((link: AnyType) => link.attributes?.['ozaco.link.reason'])).toContain(
       'ws.session',
     )
+
     const dispatch = stored.spans.find((span: AnyType) => span.name === 'rtc.report')
+
     expect(dispatch).toMatchObject({
       parent_span_id: frame.span_id,
       service_name: 'rtc',
@@ -577,6 +647,7 @@ describe.skipIf(!polyfill)('webrtc over the demo signaling relay', () => {
     const events = new Map<string, AnyType>(
       dispatch.events.map((event: AnyType) => [event.name, event]),
     )
+
     expect([...events.keys()]).toEqual(
       expect.arrayContaining(['rtc.offer', 'rtc.state', 'rtc.stats', 'rtc.metrics']),
     )
@@ -592,6 +663,7 @@ describe.skipIf(!polyfill)('webrtc over the demo signaling relay', () => {
     expect(events.get('rtc.stats').attributes).toEqual(
       expect.objectContaining({ rttMs: 12, route: 'host/srflx', framesDecoded: 42 }),
     )
+
     const counters = {
       'rtc.room': 'telemetry',
       'rtc.peer': 'rtc_test0001',
@@ -600,11 +672,13 @@ describe.skipIf(!polyfill)('webrtc over the demo signaling relay', () => {
       'rtc.connected_ms': 420,
       'rtc.rttMs': 12,
     }
+
     expect(events.get('rtc.metrics').attributes).toEqual(expect.objectContaining(counters))
     // the counters are the dispatch span's own attributes too (a trace search finds the call)
     expect(dispatch.attributes).toEqual(expect.objectContaining(counters))
     // every event name stays within Grafana's 20 characters, `[a-z0-9_]` after the prefix
     expect([...events.keys()]).toContain('rtc.ice_restart_netw')
+
     for (const name of events.keys()) {
       expect(name).toMatch(/^rtc\.[a-z0-9_]{1,16}$/u)
     }
@@ -612,36 +686,47 @@ describe.skipIf(!polyfill)('webrtc over the demo signaling relay', () => {
     // each event is also a log record on the dispatch span, and the handler's `ctx.log` line
     // carries the counters too
     const logs = stored.logs.filter((log: AnyType) => log.span_id === dispatch.span_id)
+
     expect(logs.map((log: AnyType) => log.event_name)).toEqual(
       expect.arrayContaining(['rtc.offer', 'rtc.state', 'rtc.stats', 'rtc.metrics']),
     )
+
     const line = logs.find((log: AnyType) => log.body.startsWith('rtc session ended'))
+
     expect(line).toMatchObject({ severity_number: 9, body: 'rtc session ended telemetry#1' })
     expect(line.attributes).toEqual(expect.objectContaining(counters))
 
     // …and OpenObserve got exactly those records over OTLP (protobuf, basic auth)
     const signal = (name: string) => received.filter(hit => hit.path === `/api/default/v1/${name}`)
+
     expect(signal('traces').length).toBeGreaterThan(0)
     expect(signal('logs').length).toBeGreaterThan(0)
+
     for (const hit of received) {
       expect(hit.type).toBe('application/x-protobuf')
       expect(hit.auth).toBe(`Basic ${btoa('ops:s3cret')}`)
     }
+
     const shippedSpans = signal('traces').flatMap(hit => otlpSpans(hit.body))
     const shipped = shippedSpans.filter(span => span.traceId === stored.trace_id)
+
     expect(shipped.map(span => span.name).toSorted()).toEqual(
       stored.spans.map((span: AnyType) => span.name).toSorted(),
     )
+
     const shippedDispatch = shipped.find(span => span.name === 'rtc.report')!
+
     expect(shippedDispatch.events.map(event => event.name)).toEqual(
       dispatch.events.map((event: AnyType) => event.name),
     )
     expect(shippedDispatch.events.find(event => event.name === 'rtc.metrics')?.attributes).toEqual(
       expect.objectContaining(counters),
     )
+
     const shippedLogs = signal('logs')
       .flatMap(hit => otlpLogs(hit.body))
       .filter(log => log.traceId === stored.trace_id)
+
     expect(shippedLogs.map(log => log.body).toSorted()).toEqual(
       stored.logs.map((log: AnyType) => log.body).toSorted(),
     )
@@ -658,10 +743,12 @@ describe.skipIf(!polyfill)('webrtc over the demo signaling relay', () => {
         const info = yield* app.start()
 
         const response = yield* until(fetch(`${info.url as string}/rtc`))
+
         expect(response.status).toBe(200)
         expect(response.headers.get('content-type')).toContain('text/html')
 
         const html = yield* until(response.text())
+
         expect(html).toContain("<video id='local'")
         expect(html).toContain('rtc:role') // the bundled std client script made it into the page
 

@@ -15,6 +15,7 @@ export const lazyPromise = <T, E>(
     if (!_promise) {
       _promise = new Promise<T>(resolver)
     }
+
     return await _promise
   }
 

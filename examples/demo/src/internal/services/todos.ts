@@ -50,9 +50,11 @@ export const todos = crud(todosTable, {
           .filter({ op: 'eq', field: 'done', value: false })
           .collect()
         const out: Record<string, number> = { low: 0, normal: 0, high: 0 }
+
         for (const row of rows) {
           out[String(row.priority)] = (out[String(row.priority)] ?? 0) + 1
         }
+
         return out
       },
     ),
@@ -126,11 +128,14 @@ export const todos = crud(todosTable, {
 
     if (call.op === 'remove') {
       const row = yield* (yield* useDb(schema)).get('todos', call.input.id)
+
       if (row && String(row.title).includes('[keep]')) {
         return yield* todosErrors.protected('protected todo — remove [keep] from the title first')
       }
+
       const out = yield* next(input)
-      // a DOMAIN record: free-form audit, one LogData (`eventName: 'ozaco.domain'`) on the active
+
+      // a DOMAIN record: free-form audit, one LogData (`eventName: 'ozaco.local'`) on the active
       // span, shipped to every sink alike — `ctx.auth` says who did it (socket or http alike)
       yield* Server.actions.report({
         stream: 'audit',
@@ -138,8 +143,10 @@ export const todos = crud(todosTable, {
         id: call.input.id,
         actor: ctx.auth?.sub ?? null,
       })
+
       return out
     }
+
     return yield* next(input)
   },
 

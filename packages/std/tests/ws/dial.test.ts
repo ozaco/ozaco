@@ -51,8 +51,10 @@ const dialWith = async (options: WsDef.Options) => {
 
   const outcome = await run(function* () {
     yield* wsMock(FakeSocket).use()
+
     const connection = yield* Ws.actions.connect('ws://fake.test/socket', options)
     const readyState = connection.readyState
+
     yield* connection.close()
 
     return readyState
@@ -122,6 +124,7 @@ describe('dial: constructor arguments', () => {
 
     globals.document = {}
     globals.window = {}
+
     try {
       const withProtocols = await dialWith({
         headers: { authorization: 'Bearer token' },
@@ -139,6 +142,7 @@ describe('dial: constructor arguments', () => {
       } else {
         delete globals.document
       }
+
       if (hadWindow) {
         globals.window = previousWindow
       } else {

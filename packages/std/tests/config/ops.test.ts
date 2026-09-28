@@ -26,20 +26,25 @@ const bootstrap = function* (options: ConfigDef.Options) {
 describe('config refresh', () => {
   it('re-reads the sources at the current cwd and drops unsaved in-memory edits', async () => {
     const root = await makeRoot()
+
     try {
       const file = join(root, '.cfgspec.json')
+
       await writeFile(file, jsonText({ version: 1, keep: 'yes' }))
 
       const outcome = await run(function* () {
         yield* bootstrap({ cwd: root, home: root })
 
         const before = yield* Config.actions.get('version')
+
         // an unsaved edit lives only in memory…
         yield* Config.actions.set('unsaved', true)
+
         const editedInMemory = yield* Config.actions.has('unsaved')
 
         // …then the file changes on disk behind the plugin's back
         yield* IO.actions.write(file, jsonText({ version: 2, keep: 'yes' }))
+
         const stale = yield* Config.actions.get('version')
 
         yield* Config.actions.refresh()
@@ -69,8 +74,10 @@ describe('config refresh', () => {
 
   it('keeps cwd where load left it (unlike load(cwd))', async () => {
     const root = await makeRoot()
+
     try {
       const app = join(root, 'app')
+
       await mkdir(app)
       await writeFile(join(root, '.cfgspec.json'), jsonText({ level: 'outer' }))
       await writeFile(join(app, '.cfgspec.json'), jsonText({ level: 'inner' }))
@@ -79,8 +86,11 @@ describe('config refresh', () => {
         yield* bootstrap({ cwd: root, home: root })
 
         const atRoot = yield* Config.actions.get('level')
+
         yield* Config.actions.load(app)
+
         const atApp = yield* Config.actions.get('level')
+
         yield* Config.actions.refresh()
 
         return {
@@ -106,14 +116,17 @@ describe('config refresh', () => {
 describe('config delete', () => {
   it('removes the working file by default and re-discovers', async () => {
     const root = await makeRoot()
+
     try {
       const file = join(root, '.cfgspec.json')
+
       await writeFile(file, jsonText({ gone: true }))
 
       const outcome = await run(function* () {
         yield* bootstrap({ cwd: root, home: root })
 
         const before = yield* Config.actions.get()
+
         yield* Config.actions.delete()
 
         return {
@@ -137,10 +150,14 @@ describe('config delete', () => {
 
   it('removes an explicit path (an outer level) and the merge drops its keys', async () => {
     const root = await makeRoot()
+
     try {
       const app = join(root, 'app')
+
       await mkdir(app)
+
       const outer = join(root, '.cfgspec.json')
+
       await writeFile(outer, jsonText({ shared: 'outer', outerOnly: 1 }))
       await writeFile(join(app, '.cfgspec.json'), jsonText({ shared: 'inner' }))
 
@@ -148,6 +165,7 @@ describe('config delete', () => {
         yield* bootstrap({ cwd: app, home: root })
 
         const before = yield* Config.actions.get()
+
         yield* Config.actions.delete(outer)
 
         return {
@@ -171,11 +189,13 @@ describe('config delete', () => {
 
   it('is a no-op on a missing file (force remove) and still re-discovers', async () => {
     const root = await makeRoot()
+
     try {
       const outcome = await run(function* () {
         // nothing on disk: the working file does not exist yet
         yield* bootstrap({ cwd: root, home: root })
         yield* Config.actions.delete()
+
         return yield* Config.actions.get()
       })
 
@@ -189,6 +209,7 @@ describe('config delete', () => {
 describe('config search', () => {
   it('matches dotted keys and stringified values case-insensitively', async () => {
     const root = await makeRoot()
+
     try {
       await writeFile(
         join(root, '.cfgspec.json'),
@@ -230,8 +251,10 @@ describe('config search', () => {
 
   it('searches the merged view, so overlays and in-memory edits are visible', async () => {
     const root = await makeRoot()
+
     try {
       const app = join(root, 'app')
+
       await mkdir(app)
       await writeFile(join(root, '.cfgspec.json'), jsonText({ shared: 'outer-value' }))
       await writeFile(join(app, '.cfgspec.json'), jsonText({ shared: 'inner-value' }))

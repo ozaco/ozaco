@@ -25,9 +25,11 @@ describe('useEvent', () => {
   it('drops events emitted before the subscription exists', async () => {
     const outcome = await run(function* () {
       const emitter = createEvent<{ ping: [string] }>()
+
       emitter.emit('ping', 'early')
 
       const subscription = yield* useEvent(emitter, 'ping')
+
       emitter.emit('ping', 'late')
 
       return (yield* subscription.next()).value
@@ -44,6 +46,7 @@ describe('useEvent', () => {
 
       const during = yield* scoped(function* () {
         yield* useEvent(emitter, 'ping')
+
         return emitter.listenerCount('ping')
       })
 
@@ -61,6 +64,7 @@ describe('useEvent', () => {
       yield* spawn(function* () {
         const subscription = yield* useEvent(emitter, 'ready')
         const [n] = (yield* subscription.next()).value
+
         got.resolve(n)
       })
 
@@ -85,11 +89,14 @@ describe('useEvent', () => {
         yield* spawn(function* () {
           for (const [n] of yield* each(useEvent(emitter, 'tick'))) {
             seen.push(n)
+
             if (n === 3) {
               break
             }
+
             yield* each.next()
           }
+
           finished.resolve()
         })
 
@@ -173,6 +180,7 @@ describe('onEvent', () => {
       })
 
       emitter.emit('log', 'after-scope') // the loop is gone — must reach nobody
+
       return emitter.listenerCount('log')
     })
 
@@ -203,14 +211,17 @@ describe('useBufferedEvent', () => {
 
   it('ignores pre-subscription events and detaches when the scope closes', async () => {
     const emitter = createEvent<{ data: [string] }>()
+
     emitter.emit('data', 'early')
 
     const outcome = await run(function* () {
       const during = yield* scoped(function* () {
         const subscription = yield* useBufferedEvent(emitter, 'data')
+
         emitter.emit('data', 'late')
 
         const first = yield* subscription.next()
+
         return { count: emitter.listenerCount('data'), first: first.value }
       })
 

@@ -50,11 +50,13 @@ const unique = (prefix: string): string => `${prefix}.${crypto.randomUUID().slic
 const arrayFlow = <T, C>(items: readonly T[], close: C): Flow<T, C> => ({
   *[Symbol.iterator]() {
     let index = 0
+
     return {
       *next() {
         if (index < items.length) {
           return { done: false as const, value: items[index++]! }
         }
+
         return { done: true as const, value: close }
       },
     }
@@ -63,12 +65,15 @@ const arrayFlow = <T, C>(items: readonly T[], close: C): Flow<T, C> => ({
 
 const bytes = (size: number): Uint8Array => {
   const out = new Uint8Array(size)
+
   crypto.getRandomValues(out)
+
   return out
 }
 
 const checksum = async (data: Uint8Array): Promise<string> => {
   const digest = await crypto.subtle.digest('SHA-256', new Uint8Array(data))
+
   return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('')
 }
 
@@ -90,7 +95,9 @@ export const runTransportSuite = (target: TransportTarget): void => {
         await run(function* () {
           yield* installIo()
           yield* target.use()
+
           const info = yield* useContext(Transport)
+
           expect(info.transport).toBe(target.label)
           expect(info.capabilities.receipts).toBe(target.expect.receipts)
           expect(info.capabilities.requestReply).toBe(target.expect.requestReply)
@@ -110,19 +117,28 @@ export const runTransportSuite = (target: TransportTarget): void => {
             scoped(function* () {
               yield* installIo()
               yield* target.use('other')
+
               const sub = yield* Transport.actions.subscribe<string>(topic)
+
               ready.add(undefined)
+
               const step = yield* sub.next()
+
               return (step as AnyType).value.value as string
             }),
           )
+
           yield* ready.next()
           yield* installIo()
           yield* target.use()
+
           const mine = yield* Transport.actions.subscribe<string>(topic)
+
           yield* sleep(50)
           yield* Transport.actions.publish(topic, 'for suite only')
+
           const step = yield* mine.next()
+
           expect((step as AnyType).value.value).toBe('for suite only')
           expect((step as AnyType).value.topic).toBe(topic)
           // the other application sees nothing of it — only its own traffic
@@ -141,6 +157,7 @@ export const runTransportSuite = (target: TransportTarget): void => {
         await run(function* () {
           yield* installIo()
           yield* target.use()
+
           const root = unique('data')
           const exact = yield* Transport.actions.subscribe<{ n: number }>(`${root}.a.b`)
           const star = yield* Transport.actions.subscribe(`${root}.*.b`)
@@ -151,7 +168,9 @@ export const runTransportSuite = (target: TransportTarget): void => {
             { n: 1 },
             { headers: { 'x-trace': 't1' } },
           )
+
           const first = yield* exact.next()
+
           expect(first.done).toBe(false)
           expect((first as AnyType).value.value).toEqual({ n: 1 })
           expect((first as AnyType).value.topic).toBe(`${root}.a.b`)
@@ -164,8 +183,11 @@ export const runTransportSuite = (target: TransportTarget): void => {
           expect(((yield* tail.next()) as AnyType).value.value).toEqual({ n: 2 })
 
           const raw = yield* Transport.actions.subscribe<Uint8Array>(`${root}.raw`)
+
           yield* Transport.actions.publish(`${root}.raw`, new Uint8Array([1, 2, 3]))
+
           const got = ((yield* raw.next()) as AnyType).value.value as Uint8Array
+
           expect(got).toBeInstanceOf(Uint8Array)
           expect([...got]).toEqual([1, 2, 3])
         }),
@@ -177,19 +199,25 @@ export const runTransportSuite = (target: TransportTarget): void => {
         await run(function* () {
           yield* installIo()
           yield* target.use()
+
           const topic = unique('transient')
           const live = yield* Transport.actions.subscribe<{ beat: number }>(`${topic}.>`, {
             transient: true,
           })
+
           yield* sleep(50)
           yield* Transport.actions.publish(`${topic}.a`, { beat: 1 }, { transient: true })
+
           const first = yield* live.next()
+
           expect((first as AnyType).value.value).toEqual({ beat: 1 })
           expect((first as AnyType).value.topic).toBe(`${topic}.a`)
+
           // a transient subscription may not be durable
           const bad = yield* attempt(() =>
             Transport.actions.subscribe(topic, { transient: true, durable: 'x' }),
           )
+
           expect(isFailure(bad)).toBe(true)
         }),
       )
@@ -202,6 +230,7 @@ export const runTransportSuite = (target: TransportTarget): void => {
           await run(function* () {
             yield* installIo()
             yield* target.use()
+
             const topic = unique('group')
             const received: number[][] = [[], []]
             const a = yield* Transport.actions.subscribe<number>(topic, { group: 'workers' })
@@ -210,19 +239,26 @@ export const runTransportSuite = (target: TransportTarget): void => {
               fork(function* () {
                 for (;;) {
                   const step = yield* sub.next()
+
                   if (step.done) {
                     return
                   }
+
                   into.push(step.value.value)
                 }
               })
+
             yield* drain(a, received[0]!)
             yield* drain(b, received[1]!)
+
             for (let i = 0; i < 10; i++) {
               yield* Transport.actions.publish(topic, i)
             }
+
             yield* sleep(200)
+
             const all = [...received[0]!, ...received[1]!].toSorted((x, y) => x - y)
+
             expect(all).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
             expect(received[0]!.length).toBeGreaterThan(0)
             expect(received[1]!.length).toBeGreaterThan(0)
@@ -236,9 +272,11 @@ export const runTransportSuite = (target: TransportTarget): void => {
         await run(function* () {
           yield* installIo()
           yield* target.use()
+
           const topic = unique('event')
           const seen: string[] = []
           const { emitter, stop } = yield* Transport.actions.events<string>(topic)
+
           emitter.on('message', message => {
             seen.push(message.value)
           })
@@ -259,16 +297,20 @@ export const runTransportSuite = (target: TransportTarget): void => {
         await run(function* () {
           yield* installIo()
           yield* target.use()
+
           const topic = unique('rpc')
+
           yield* Transport.actions.serve<{ a: number; b: number }, number>(topic, function* (args) {
             if (args.b === 0) {
               return yield* fail('math.divide-by-zero', 'b must not be 0', `a=${args.a}`)
             }
+
             return args.a / args.b
           })
           expect(yield* Transport.actions.request<number>(topic, { a: 6, b: 3 })).toBe(2)
 
           const failed = yield* attempt(Transport.actions.request<number>(topic, { a: 1, b: 0 }))
+
           expect(isFailure(failed)).toBe(true)
           expect((failed as AnyType).error).toBe('math.divide-by-zero')
           expect((failed as AnyType).message).toBe('b must not be 0')
@@ -287,18 +329,26 @@ export const runTransportSuite = (target: TransportTarget): void => {
           // a wrapped failure crosses with its nested failures, a fold as its tag + message —
           // the folded value itself (`raw`) never leaves the answering side
           const chained = unique('rpc.chain')
+
           yield* Transport.actions.serve(chained, function* () {
             const folded = asFailure(new TypeError('b is not a number'))
+
             return yield* fail('math.failed', 'no', fail('math.parse', 'bad b', folded))
           })
+
           const wrapped = (yield* attempt(
             Transport.actions.request<number>(chained, {}),
           )) as Result.Failure<unknown>
+
           expect(wrapped.error).toBe('math.failed')
+
           const parse = wrapped.causes[0] as Result.Failure<unknown>
+
           expect(isFailure(parse)).toBe(true)
           expect(parse.error).toBe('math.parse')
+
           const fold = parse.causes[0] as Result.Failure<unknown>
+
           expect(isFailure(fold)).toBe(true)
           expect(fold.error).toBe(ResultErrors.Unknown)
           expect(fold.message).toBe('TypeError: b is not a number')
@@ -314,11 +364,14 @@ export const runTransportSuite = (target: TransportTarget): void => {
           await run(function* () {
             yield* installIo()
             yield* target.use()
+
             const limit = (yield* useContext(Transport)).capabilities.maxPayloadBytes
+
             if (limit === null) {
               // nothing to sideband: this backend carries a message of any size
               return
             }
+
             const echo = unique('parcel')
             const measure = unique('parcel.value')
             const payload = bytes(limit * 3 + 777)
@@ -333,6 +386,7 @@ export const runTransportSuite = (target: TransportTarget): void => {
                 function* (args) {
                   expect(args.length).toBe(payload.length)
                   expect(member).toBeDefined()
+
                   // echoed back: the REPLY is over the limit too
                   return args
                 },
@@ -343,6 +397,7 @@ export const runTransportSuite = (target: TransportTarget): void => {
             const echoed = yield* Transport.actions.request<Uint8Array, Uint8Array>(echo, payload, {
               timeoutMs: 30_000,
             })
+
             expect(echoed.length).toBe(payload.length)
             expect(yield* until(checksum(echoed))).toBe(expected)
 
@@ -350,7 +405,9 @@ export const runTransportSuite = (target: TransportTarget): void => {
             yield* Transport.actions.serve<{ blob: string }, number>(measure, function* (args) {
               return args.blob.length
             })
+
             const blob = 'p'.repeat(limit + 1024)
+
             expect(
               yield* Transport.actions.request<number, { blob: string }>(
                 measure,
@@ -368,19 +425,27 @@ export const runTransportSuite = (target: TransportTarget): void => {
         await run(function* () {
           yield* installIo()
           yield* target.use()
+
           const slow = unique('slow')
+
           yield* Transport.actions.serve(slow, function* () {
             yield* sleep(500)
+
             return 'late'
           })
+
           const timedOut = yield* attempt(Transport.actions.request(slow, {}, { timeoutMs: 50 }))
+
           expect((timedOut as AnyType).error).toBe(TransportErrors.Timeout)
 
           const nobody = yield* attempt(
             Transport.actions.request(unique('nobody'), {}, { timeoutMs: 300 }),
           )
+
           expect(isFailure(nobody)).toBe(true)
+
           const tag = (nobody as AnyType).error
+
           expect(
             target.expect.receipts || target.expect.requestReply
               ? tag === TransportErrors.NoResponders
@@ -395,21 +460,28 @@ export const runTransportSuite = (target: TransportTarget): void => {
         await run(function* () {
           yield* installIo()
           yield* target.use()
+
           const limit = (yield* useContext(Transport)).capabilities.maxPayloadBytes
+
           if (limit === null) {
             return
           }
+
           const topic = unique('orphan')
           const big = 'o'.repeat(limit * 2)
+
           yield* Transport.actions.serve<number, string>(topic, function* (ms) {
             yield* sleep(ms)
+
             return ms > 0 ? big : 'small'
           })
+
           // the caller is long gone by the time the oversize answer is ready: nobody ever
           // attaches to its sideband, and that orphaned answer must not take the loop with it
           const gone = yield* attempt(
             Transport.actions.request<string, number>(topic, 300, { timeoutMs: 50 }),
           )
+
           expect((gone as AnyType).error).toBe(TransportErrors.Timeout)
           // …and it gives up on the caller's own patience (floored at PARCEL_MIN_WAIT_MS),
           // not on the full idle window: by now that answer has already failed on its own
@@ -424,8 +496,10 @@ export const runTransportSuite = (target: TransportTarget): void => {
         await run(function* () {
           yield* installIo()
           yield* target.use()
+
           const topic = unique('cancel')
           const seen: string[] = []
+
           yield* Transport.actions.serve<number, string>(topic, function* (ms) {
             seen.push('started')
             yield* ensure(() => {
@@ -433,9 +507,12 @@ export const runTransportSuite = (target: TransportTarget): void => {
             })
             yield* sleep(ms)
             seen.push('finished')
+
             return 'done'
           })
+
           const pending = yield* fork(() => Transport.actions.request<string>(topic, 5000))
+
           yield* sleep(150)
           expect(seen).toEqual(['started'])
           yield* pending.halt()
@@ -446,9 +523,11 @@ export const runTransportSuite = (target: TransportTarget): void => {
           expect(yield* Transport.actions.request<string>(topic, 5)).toBe('done')
           // a request that merely timed out does NOT cancel: the handler runs to completion
           seen.length = 0
+
           const late = yield* attempt(
             Transport.actions.request<string>(topic, 300, { timeoutMs: 50 }),
           )
+
           expect((late as AnyType).error).toBe(TransportErrors.Timeout)
           yield* sleep(400)
           expect(seen).toContain('finished')
@@ -461,12 +540,15 @@ export const runTransportSuite = (target: TransportTarget): void => {
         await run(function* () {
           yield* installIo()
           yield* target.use()
+
           const topic = unique('balance')
           const hits = { a: 0, b: 0 }
+
           yield* Transport.actions.serve(
             topic,
             function* () {
               hits.a += 1
+
               return 'a'
             },
             { group: 'g' },
@@ -475,14 +557,18 @@ export const runTransportSuite = (target: TransportTarget): void => {
             topic,
             function* () {
               hits.b += 1
+
               return 'b'
             },
             { group: 'g' },
           )
+
           const answers: string[] = []
+
           for (let i = 0; i < 8; i++) {
             answers.push(yield* Transport.actions.request<string>(topic, i))
           }
+
           expect(answers).toHaveLength(8)
           expect(hits.a + hits.b).toBe(8)
           expect(hits.a).toBeGreaterThan(0)
@@ -496,24 +582,31 @@ export const runTransportSuite = (target: TransportTarget): void => {
         await run(function* () {
           yield* installIo()
           yield* target.use()
+
           const topic = unique('flow')
           const items = Array.from({ length: 100 }, (_, i) => ({ i }))
           const consumer = yield* fork(function* () {
             const sub = yield* Transport.actions.flow<{ i: number }, string>(topic, { credit: 8 })
             const got: number[] = []
+
             for (;;) {
               const step = yield* sub.next()
+
               if (step.done) {
                 return { got, close: step.value }
               }
+
               got.push(step.value.i)
             }
           })
           const close = yield* Transport.actions.pipe(topic, arrayFlow(items, 'all-sent'), {
             credit: 8,
           })
+
           expect(close).toBe('all-sent')
+
           const result = yield* consumer
+
           expect(result.got).toEqual(items.map(item => item.i))
           expect(result.close).toBe('all-sent')
         }),
@@ -525,16 +618,20 @@ export const runTransportSuite = (target: TransportTarget): void => {
         await run(function* () {
           yield* installIo()
           yield* target.use()
+
           const topic = unique('flow-fail')
           const failing: Flow<number, void> = {
             *[Symbol.iterator]() {
               let n = 0
+
               return {
                 *next() {
                   n += 1
+
                   if (n > 2) {
                     return yield* fail('source.broken', 'upstream died')
                   }
+
                   return { done: false as const, value: n }
                 },
               }
@@ -543,17 +640,23 @@ export const runTransportSuite = (target: TransportTarget): void => {
           const consumer = yield* fork(function* () {
             const sub = yield* Transport.actions.flow<number, void>(topic)
             const got: number[] = []
+
             for (;;) {
               const step = yield* sub.next()
+
               if (step.done) {
                 return { got, close: step.value }
               }
+
               got.push(step.value)
             }
           })
           const outcome = yield* attempt(Transport.actions.pipe(topic, failing))
+
           expect((outcome as AnyType).error).toBe('source.broken')
+
           const result = yield* consumer
+
           expect(result.got).toEqual([1, 2])
           expect(isFailure(result.close)).toBe(true)
           expect((result.close as AnyType).error).toBe('source.broken')
@@ -561,6 +664,7 @@ export const runTransportSuite = (target: TransportTarget): void => {
           const lonely = yield* attempt(
             Transport.actions.pipe(unique('lonely'), arrayFlow([1], 'x'), { timeoutMs: 100 }),
           )
+
           expect((lonely as AnyType).error).toBe(TransportErrors.Timeout)
         }),
       )
@@ -571,11 +675,13 @@ export const runTransportSuite = (target: TransportTarget): void => {
         await run(function* () {
           yield* installIo()
           yield* target.use()
+
           const topic = unique('leave')
           const consumer = yield* fork(() =>
             scoped(function* () {
               const sub = yield* Transport.actions.flow<number, void>(topic, { credit: 2 })
               const first = yield* sub.next()
+
               return (first as AnyType).value as number
             }),
           )
@@ -586,6 +692,7 @@ export const runTransportSuite = (target: TransportTarget): void => {
               timeoutMs: 300,
             }),
           )
+
           expect(yield* consumer).toBe(1)
           expect((outcome as AnyType).error).toBe(TransportErrors.LaneFull)
         }),
@@ -597,17 +704,21 @@ export const runTransportSuite = (target: TransportTarget): void => {
         await run(function* () {
           yield* installIo()
           yield* target.use()
+
           const topic = unique('halt')
           const slow: Flow<number, string> = {
             *[Symbol.iterator]() {
               let n = 0
+
               return {
                 *next() {
                   n += 1
+
                   if (n > 2) {
                     // the third value never comes: the producer is cancelled while waiting
                     yield* sleep(10_000)
                   }
+
                   return { done: false as const, value: n }
                 },
               }
@@ -616,18 +727,24 @@ export const runTransportSuite = (target: TransportTarget): void => {
           const consumer = yield* fork(function* () {
             const sub = yield* Transport.actions.flow<number, string>(topic)
             const got: number[] = []
+
             for (;;) {
               const step = yield* sub.next()
+
               if (step.done) {
                 return { got, close: step.value }
               }
+
               got.push(step.value)
             }
           })
           const producer = yield* fork(() => Transport.actions.pipe(topic, slow))
+
           yield* sleep(300)
           yield* producer.halt()
+
           const result = yield* consumer
+
           expect(result.got).toEqual([1, 2])
           expect((result.close as AnyType).error).toBe(TransportErrors.Closed)
         }),
@@ -639,6 +756,7 @@ export const runTransportSuite = (target: TransportTarget): void => {
         await run(function* () {
           yield* installIo()
           yield* target.use()
+
           const topic = unique('credit')
           let sent = 0
           const counted: Flow<number, void> = {
@@ -648,7 +766,9 @@ export const runTransportSuite = (target: TransportTarget): void => {
                   if (sent >= 50) {
                     return { done: true as const, value: undefined }
                   }
+
                   sent += 1
+
                   return { done: false as const, value: sent }
                 },
               }
@@ -657,12 +777,15 @@ export const runTransportSuite = (target: TransportTarget): void => {
           const gate = createQueue<void, void>()
           const consumer = yield* fork(function* () {
             const sub = yield* Transport.actions.flow<number, void>(topic, { credit: 4 })
+
             // take two, then block until released
             yield* sub.next()
             yield* sub.next()
             yield* gate.next()
+
             for (;;) {
               const step = yield* sub.next()
+
               if (step.done) {
                 return
               }
@@ -671,6 +794,7 @@ export const runTransportSuite = (target: TransportTarget): void => {
           const producer = yield* fork(() =>
             Transport.actions.pipe(topic, counted, { credit: 4, timeoutMs: 2000 }),
           )
+
           yield* sleep(300)
           // 4 credits + the half-window top-up after 2 consumed + one value pulled ahead — never
           // the whole source
@@ -690,26 +814,33 @@ export const runTransportSuite = (target: TransportTarget): void => {
         await run(function* () {
           yield* installIo()
           yield* target.use()
+
           const topic = unique('stream')
           const reader = yield* fork(function* () {
             const readable = yield* Transport.actions.readable(topic, { credit: 8 })
+
             return yield* until(new Response(readable).arrayBuffer())
           })
           const writable = yield* Transport.actions.writable(topic, { credit: 8 })
+
           yield* until(
             (async () => {
               const writer = writable.getWriter()
+
               // sequential on purpose: each write resolves once its chunk is on the wire
               for (let offset = 0; offset < payload.length; offset += 16 * 1024) {
                 // oxlint-disable-next-line no-await-in-loop
                 await writer.write(payload.subarray(offset, offset + 16 * 1024))
               }
+
               await writer.close()
             })(),
           )
+
           return new Uint8Array(yield* reader)
         }),
       )
+
       expect(received.length).toBe(payload.length)
       expect(await checksum(received)).toBe(expected)
     })
@@ -724,6 +855,7 @@ export const runTransportSuite = (target: TransportTarget): void => {
         await run(function* () {
           yield* installIo()
           yield* target.use()
+
           const topic = unique('huge')
 
           const reader = yield* fork(function* () {
@@ -753,9 +885,11 @@ export const runTransportSuite = (target: TransportTarget): void => {
           })
 
           const writable = yield* Transport.actions.writable(topic, { credit: 8, frameBytes })
+
           yield* until(
             (async () => {
               const writer = writable.getWriter()
+
               await writer.write(payload)
               await writer.close()
             })(),
@@ -784,10 +918,12 @@ export const runTransportSuite = (target: TransportTarget): void => {
       'group: the same group name under two subscription prefixes is two groups',
       async () => {
         const topic = unique('gp')
+
         unwrap(
           await run(function* () {
             yield* installIo()
             yield* target.use()
+
             const billing = yield* Transport.actions.subscribe<number>(topic, {
               group: 'workers',
               prefix: 'billing',
@@ -796,6 +932,7 @@ export const runTransportSuite = (target: TransportTarget): void => {
               group: 'workers',
               prefix: 'audit',
             })
+
             yield* sleep(50)
             yield* Transport.actions.publish(topic, 7)
             // one message, one member per group — both groups see it
@@ -811,16 +948,21 @@ export const runTransportSuite = (target: TransportTarget): void => {
         await run(function* () {
           yield* installIo()
           yield* target.use()
+
           const topic = unique('mw')
           const seen: string[] = []
+
           yield* Transport.around({
             publish: ([where, value, options]: AnyType[], next: AnyType) =>
               (function* () {
                 seen.push(`${where}:${String(value)}`)
+
                 return yield* next(where, value, options)
               })(),
           })
+
           const sub = yield* Transport.actions.subscribe<string>(topic)
+
           yield* sleep(50)
           yield* Transport.actions.publish(topic, 'wrapped')
           expect(((yield* sub.next()) as AnyType).value.value).toBe('wrapped')
@@ -835,6 +977,7 @@ export const runTransportSuite = (target: TransportTarget): void => {
         const topic = unique('durable')
         const durable = unique('d')
         const ackWaitMs = target.ackWaitMs ?? 1000
+
         unwrap(
           await run(function* () {
             yield* installIo()
@@ -843,24 +986,32 @@ export const runTransportSuite = (target: TransportTarget): void => {
             yield* Transport.actions.publish(topic, 'before')
             yield* scoped(function* () {
               const sub = yield* Transport.actions.subscribe<string>(topic, { durable })
+
               yield* sleep(50)
               yield* Transport.actions.publish(topic, 'one')
+
               const first = yield* sub.next()
+
               expect((first as AnyType).value.value).toBe('one')
               yield* (first as AnyType).value.ack()
             })
             // nobody pulls: the backend holds these
             yield* Transport.actions.publish(topic, 'two')
             yield* Transport.actions.publish(topic, 'three')
+
             const got: string[] = []
+
             yield* scoped(function* () {
               const sub = yield* Transport.actions.subscribe<string>(topic, { durable })
               let naked = false
+
               // `nak` hands a message back: it is delivered again (order is the backend's)
               while (got.length < 3) {
                 const step = yield* sub.next()
                 const message = (step as AnyType).value
+
                 got.push(message.value)
+
                 if (message.value === 'two' && !naked) {
                   naked = true
                   yield* message.nak()
@@ -873,25 +1024,33 @@ export const runTransportSuite = (target: TransportTarget): void => {
             // a member that dies holding a message: the message is redelivered to the next one
             yield* scoped(function* () {
               const sub = yield* Transport.actions.subscribe<string>(topic, { durable })
+
               yield* sleep(50)
               yield* Transport.actions.publish(topic, 'four')
+
               const step = yield* sub.next()
+
               expect((step as AnyType).value.value).toBe('four')
             })
+
             const redelivered = yield* scoped(function* () {
               const sub = yield* Transport.actions.subscribe<string>(topic, { durable })
               const step = yield* race([
                 sub.next(),
                 (function* () {
                   yield* sleep(ackWaitMs * 3 + 500)
+
                   return { done: true as const, value: undefined }
                 })(),
               ])
+
               if (!(step as AnyType).done) {
                 yield* (step as AnyType).value.ack()
               }
+
               return (step as AnyType).done ? null : ((step as AnyType).value.value as string)
             })
+
             expect(redelivered).toBe('four')
           }),
         )
@@ -903,6 +1062,7 @@ export const runTransportSuite = (target: TransportTarget): void => {
       async () => {
         const topic = unique('born')
         const durable = unique('d')
+
         unwrap(
           await run(function* () {
             const ready = createQueue<void, void>()
@@ -910,13 +1070,19 @@ export const runTransportSuite = (target: TransportTarget): void => {
               scoped(function* () {
                 yield* installIo()
                 yield* target.use()
+
                 const sub = yield* Transport.actions.subscribe<string>(topic, { durable })
+
                 ready.add(undefined)
+
                 const step = yield* sub.next()
+
                 yield* (step as AnyType).value.ack()
+
                 return (step as AnyType).value.value as string
               }),
             )
+
             yield* ready.next()
             yield* scoped(function* () {
               yield* installIo()
@@ -935,24 +1101,30 @@ export const runTransportSuite = (target: TransportTarget): void => {
       async () => {
         const topic = unique('shared')
         const durable = unique('d')
+
         unwrap(
           await run(function* () {
             yield* installIo()
             yield* target.use()
+
             const left = yield* Transport.actions.subscribe<number>(topic, { durable })
             const right = yield* Transport.actions.subscribe<number>(topic, { durable })
             const audit = yield* Transport.actions.subscribe<number>(topic, {
               durable,
               prefix: 'audit',
             })
+
             yield* sleep(50)
+
             for (let n = 0; n < 6; n += 1) {
               yield* Transport.actions.publish(topic, n)
             }
+
             // the two members see every message exactly once between them
             const seen: number[] = []
             const take = function* (sub: typeof left) {
               const step = yield* sub.next()
+
               seen.push((step as AnyType).value.value)
               yield* (step as AnyType).value.ack()
             }
@@ -964,15 +1136,20 @@ export const runTransportSuite = (target: TransportTarget): void => {
               yield* take(left)
               yield* take(right)
             })
+
             yield* pulls
             expect(seen.toSorted()).toEqual([0, 1, 2, 3, 4, 5])
+
             // the audit consumer is a separate name: it gets all six too
             const audited: number[] = []
+
             for (let n = 0; n < 6; n += 1) {
               const step = yield* audit.next()
+
               audited.push((step as AnyType).value.value)
               yield* (step as AnyType).value.ack()
             }
+
             expect(audited).toEqual([0, 1, 2, 3, 4, 5])
           }),
         )
@@ -984,24 +1161,34 @@ export const runTransportSuite = (target: TransportTarget): void => {
         await run(function* () {
           yield* installIo()
           yield* target.use()
+
           const info = yield* useContext(Transport)
           const limit = info.capabilities.maxPayloadBytes
+
           if (limit === null) {
             return
           }
+
           const topic = unique('big')
           const sub = yield* Transport.actions.subscribe<Uint8Array>(topic)
           const value = yield* Transport.actions.subscribe<{ blob: string }>(`${topic}.value`)
+
           yield* sleep(50)
+
           const payload = bytes(limit * 2 + 12_345)
+
           yield* Transport.actions.publish(topic, payload, { headers: { kept: 'yes' } })
+
           const step = yield* sub.next()
           const message = (step as AnyType).value
+
           expect(message.value.length).toBe(payload.length)
           expect(yield* until(checksum(message.value))).toBe(yield* until(checksum(payload)))
           expect(message.headers.kept).toBe('yes')
+
           // codec values chunk too
           const blob = 'x'.repeat(limit + 100)
+
           yield* Transport.actions.publish(`${topic}.value`, { blob })
           expect((yield* value.next() as AnyType).value.value.blob.length).toBe(blob.length)
         }),
@@ -1013,10 +1200,14 @@ export const runTransportSuite = (target: TransportTarget): void => {
         await run(function* () {
           yield* installIo()
           yield* target.use()
+
           const status = yield* Transport.actions.status()
+
           expect(((yield* status.next()) as AnyType).value).toBe('connected')
           yield* Transport.actions.drain()
+
           const after = yield* attempt(Transport.actions.publish(unique('closed'), 1))
+
           expect((after as AnyType).error).toBe(TransportErrors.Closed)
         }),
       )
@@ -1031,12 +1222,17 @@ export const runTransportSuite = (target: TransportTarget): void => {
             scoped(function* () {
               yield* installIo()
               yield* target.use()
+
               const sub = yield* Transport.actions.subscribe<string>(topic)
+
               ready.add(undefined)
+
               const step = yield* sub.next()
+
               return (step as AnyType).value.value as string
             }),
           )
+
           yield* ready.next()
           yield* scoped(function* () {
             yield* installIo()

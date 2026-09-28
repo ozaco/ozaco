@@ -45,6 +45,7 @@ describe('task promise contract', () => {
 
     expect(rejected).toBe(false)
     expect(isFailure(outcome)).toBe(true)
+
     if (isFailure(outcome)) {
       expect(outcome.error).toBe('task.boom')
       expect(outcome.message).toBe('kaput')
@@ -70,6 +71,7 @@ describe('task promise contract', () => {
 
     expect(rejected).toBe(false)
     expect(isFailure(outcome)).toBe(true)
+
     if (isFailure(outcome)) {
       expect(outcome.error).toBe('std:effect.halted')
     }
@@ -106,6 +108,7 @@ describe('supervision', () => {
     })
 
     expect(isFailure(outcome)).toBe(true)
+
     if (isFailure(outcome)) {
       expect(outcome.error).toBe('child.boom')
     }
@@ -134,9 +137,11 @@ describe('supervision', () => {
     })
 
     expect(isSuccess(outcome)).toBe(true)
+
     if (isSuccess(outcome)) {
       expect(outcome.value.alive).toBe(true)
       expect(isFailure(outcome.value.delivered)).toBe(true)
+
       if (isFailure(outcome.value.delivered)) {
         expect(outcome.value.delivered.error).toBe('detached.boom')
       }
@@ -186,6 +191,7 @@ describe('supervision', () => {
     })
 
     expect(isFailure(outcome)).toBe(true)
+
     if (isFailure(outcome)) {
       expect(outcome.error).toBe('supervised.boom')
     }

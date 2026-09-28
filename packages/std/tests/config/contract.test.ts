@@ -35,7 +35,9 @@ describe('config — contract', () => {
     const outcome = await run(function* () {
       yield* BunIO.use()
       yield* JsonCodec.use()
+
       const ctx = yield* Config.use({ codec: JsonCodec, name: 'e' })
+
       return {
         cwd: ctx.cwd,
         home: ctx.home,
@@ -44,6 +46,7 @@ describe('config — contract', () => {
       }
     })
     const seen = unwrap(outcome)
+
     expect(seen.cwd).toBe(seen.ioCwd)
     expect(seen.home).toBe(seen.ioHome)
     expect(seen.cwd).toBe(process.cwd())
@@ -61,10 +64,13 @@ describe('config — contract', () => {
     const outcome = await run(function* () {
       yield* BunIO.use()
       yield* JsonCodec.use()
+
       const json = (yield* Config.use({ codec: JsonCodec, name: 'a' })).ext
 
       const Yml = fakeCodec('test/yml-codec')
+
       yield* Yml.use({ ext: 'yml' })
+
       const yml = (yield* Config.use({ codec: Yml, name: 'b' })).ext
       const explicit = (yield* Config.use({ codec: JsonCodec, name: 'c', ext: 'cfg' })).ext
 
@@ -77,7 +83,9 @@ describe('config — contract', () => {
   it('a codec that is not installed is a configuration failure, not a silent `.toml`', async () => {
     const outcome = await run(function* () {
       yield* BunIO.use()
+
       const failed = yield* attempt(() => Config.use({ codec: JsonCodec, name: 'd' }))
+
       return isFailure(failed) ? failed.error : 'built'
     })
 
@@ -86,18 +94,26 @@ describe('config — contract', () => {
 
   it('set is reflected at once even when the env overlay defines the key; refresh restores env', async () => {
     const root = await makeRoot()
+
     process.env['CFGSPEC_PORT'] = '9999'
+
     try {
       await writeFile(join(root, '.cfgspec.json'), jsonText({ port: 3000 }))
 
       const outcome = await run(function* () {
         yield* bootstrap({ cwd: root, home: root })
+
         const fromEnv = yield* Config.actions.get('port')
+
         yield* Config.actions.set('port', 4000)
+
         const afterSet = yield* Config.actions.get('port')
         const origin = yield* Config.actions.origin('port')
+
         yield* Config.actions.refresh()
+
         const afterRefresh = yield* Config.actions.get('port')
+
         return { fromEnv, afterSet, origin, afterRefresh }
       })
 
@@ -115,19 +131,25 @@ describe('config — contract', () => {
 
   it('save(path) exports and keeps the sources dirty; the working path persists them', async () => {
     const root = await makeRoot()
+
     try {
       await writeFile(join(root, '.cfgspec.json'), jsonText({ name: 'file' }))
 
       const outcome = await run(function* () {
         yield* bootstrap({ cwd: root, home: root })
+
         const ctx = yield* useContext(Config)
+
         yield* Config.actions.set('name', 'edited')
+
         const dirtyAfterSet = ctx.dirty.size
 
         yield* Config.actions.save(join(root, 'export.json'))
+
         const dirtyAfterExport = ctx.dirty.size
 
         yield* Config.actions.save(ctx.working.path)
+
         const dirtyAfterOwnPath = ctx.dirty.size
 
         return { dirtyAfterSet, dirtyAfterExport, dirtyAfterOwnPath }

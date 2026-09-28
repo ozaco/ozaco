@@ -186,6 +186,7 @@ export const builder = <
       },
       hooked('update', hooks, function* ({ input, ctx }) {
         const { id: rowId, ...patch } = input as AnyType
+
         return yield* builtinOps.update(table, {
           ctx,
           id: rowId,
@@ -203,6 +204,7 @@ export const builder = <
       },
       hooked('replace', hooks, function* ({ input, ctx }) {
         const { id: rowId, ...value } = input as AnyType
+
         return yield* builtinOps.replace(table, {
           ctx,
           id: rowId,

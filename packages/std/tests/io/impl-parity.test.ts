@@ -15,6 +15,7 @@ import { NodeIO } from 'std:io/impl/node'
 
 const withTempDir = async (fn: (dir: string) => Promise<void>) => {
   const dir = await mkdtemp(join(tmpdir(), 'ozaco-io-parity-'))
+
   try {
     await fn(dir)
   } finally {
@@ -152,6 +153,7 @@ describe('BunIO process — where it differs from NodeIO', () => {
       yield* BunIO.use()
 
       const child = yield* IO.actions.spawn('true')
+
       yield* child.exited()
       yield* sleep(20)
 
@@ -171,10 +173,12 @@ describe('NodeIO process — stdin after exit', () => {
       yield* NodeIO.use()
 
       const child = yield* IO.actions.spawn('true')
+
       yield* child.exited()
       yield* sleep(20)
 
       const write = yield* attempt(() => child.write('too late'))
+
       return { tagged: errorOf(write) === IOErrors.StdinWriteFailed, code: codeOf(write) }
     })
 
@@ -192,7 +196,9 @@ for (const [label, Impl] of [
         yield* Impl.use()
 
         const child = yield* IO.actions.spawn('sleep', ['5'])
+
         yield* child.kill('SIGKILL')
+
         return (yield* child.exited()).signal
       })
 
@@ -203,17 +209,22 @@ for (const [label, Impl] of [
       await withTempDir(async dir => {
         const outcome = await run(function* () {
           yield* Impl.use()
+
           const file = join(dir, 'matrix.txt')
 
           yield* IO.actions.write(file, 'a', { flags: IO_FLAGS.exclusive })
+
           const again = yield* attempt(() =>
             IO.actions.write(file, 'b', { flags: IO_FLAGS.exclusive }),
           )
+
           yield* IO.actions.write(file, 'c', { flags: IO_FLAGS.append })
+
           const both = yield* attempt(() =>
             IO.actions.write(file, 'd', { flags: IO_FLAGS.append | IO_FLAGS.exclusive }),
           )
           const appended = yield* IO.actions.readText(file)
+
           // a bit neither action knows is ignored: it truncates like a plain write
           yield* IO.actions.write(file, 'z', { flags: IO_FLAGS.files })
 
@@ -245,6 +256,7 @@ for (const [label, Impl] of [
           yield* IO.actions.copy(join(dir, 'src.txt'), join(dir, 'dest.txt'), {
             flags: IO_FLAGS.append,
           })
+
           const copied = yield* IO.actions.readText(join(dir, 'dest.txt'))
 
           const renamed = yield* attempt(() =>
@@ -264,6 +276,7 @@ for (const [label, Impl] of [
       await withTempDir(async dir => {
         const outcome = await run(function* () {
           yield* Impl.use()
+
           const file = join(dir, 'log.txt')
 
           yield* IO.actions.append(file, new TextEncoder().encode('bytes;'))
@@ -296,8 +309,11 @@ for (const [label, Impl] of [
           const target = yield* IO.actions.readlink(join(dir, 'tree/link'))
 
           yield* IO.actions.emptyDir(join(dir, 'tree/sub'))
+
           const emptied = yield* IO.actions.readdir(join(dir, 'tree/sub'))
+
           yield* IO.actions.rm(join(dir, 'tree'), { recursive: true })
+
           const missing = yield* attempt(() => IO.actions.rm(join(dir, 'tree')))
 
           return {

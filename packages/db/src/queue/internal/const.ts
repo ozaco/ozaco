@@ -38,10 +38,6 @@ export const DEFAULT_LEASE_MS = 30_000
 /** Lapsed leases handled per sweep round. */
 export const SWEEP_BATCH = 100
 
-/** `last_error` — the failure's whole chain (`formatFailure(f, { chain: true })`) — is budgeted to
- * this many UTF-8 bytes. */
-export const ERROR_LIMIT = 4096
-
 /** `messaging.system` of the queue's producer / consumer spans. */
 export const MESSAGING_SYSTEM = 'ozaco.queue'
 
@@ -50,7 +46,7 @@ export const SEND_EXCEPTION_EVENT = 'messaging.send.exception'
 export const PROCESS_EXCEPTION_EVENT = 'messaging.process.exception'
 
 /** The span event a dead-lettered attempt leaves on its consumer span. */
-export const DEAD_EVENT = 'ozaco.queue.dead'
+export const DEAD_EVENT = 'queue.dead'
 
 /** The status class an attempt's failure settles with: a dead letter is an error (ERROR record,
  * span status error); a failure with attempts left is handled by the retry (WARN, `error.type`

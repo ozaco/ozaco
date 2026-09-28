@@ -22,6 +22,7 @@ export const LocalCarrier = Carrier.implement<CarrierDef.Options, []>({
 
   *setup() {
     yield* LocalCarrierRef.set({ served: new Map() })
+
     return { carrier: 'local', transport: 'local' }
   },
 }).build({
@@ -31,10 +32,13 @@ export const LocalCarrier = Carrier.implement<CarrierDef.Options, []>({
 
   *members(service) {
     const state = yield* useContext(LocalCarrierRef)
+
     if (!state.served.has(service)) {
       return []
     }
+
     const kernel = yield* Server.context.expect()
+
     return [
       {
         instance: kernel.instance,
@@ -49,21 +53,26 @@ export const LocalCarrier = Carrier.implement<CarrierDef.Options, []>({
   *send(dispatch, inputs) {
     const state = yield* useContext(LocalCarrierRef)
     const server = state.served.get(dispatch.service)
+
     if (!server) {
       return yield* fail(
         ServerErrors.Unavailable,
         `service "${dispatch.service}" is not hosted here and no network carrier is installed`,
       )
     }
+
     const lanes = new Map(inputs.map(lane => [lane.name, lane.source]))
     const served = yield* server(dispatch, function* (name) {
       const source = lanes.get(name)
+
       if (!source) {
         return yield* fail(ServerErrors.BadRequest, `no input stream "${name}"`)
       }
+
       return source
     })
     const outputs = new Map(served.outputs.map(lane => [lane.name, lane]))
+
     return {
       reply: {
         k: 'reply',
@@ -74,9 +83,11 @@ export const LocalCarrier = Carrier.implement<CarrierDef.Options, []>({
       },
       *lane(name) {
         const output = outputs.get(name)
+
         if (!output) {
           return yield* fail(ServerErrors.Internal, `no output stream "${name}"`)
         }
+
         return yield* output.open()
       },
     }
@@ -94,6 +105,7 @@ export const LocalCarrier = Carrier.implement<CarrierDef.Options, []>({
 
   *emit(event) {
     const kernel = yield* Server.context.expect()
+
     kernel.events.emit('event', event)
   },
 
@@ -123,6 +135,7 @@ export const LocalCarrier = Carrier.implement<CarrierDef.Options, []>({
           }
 
           const step = yield* queue.next()
+
           ended = step.done === true
 
           return step
@@ -137,7 +150,9 @@ export const LocalCarrier = Carrier.implement<CarrierDef.Options, []>({
     *[Symbol.iterator]() {
       const signal = createSignal<'connected' | 'reconnecting' | 'closed', void>()
       const subscription = yield* signal
+
       signal.send('connected')
+
       return subscription
     },
   }),

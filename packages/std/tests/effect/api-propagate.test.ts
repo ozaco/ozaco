@@ -23,6 +23,7 @@ describe('api — decoration across scopes', () => {
         const child = yield* spawn(function* () {
           yield* Greeter.around(tag('C'))
           yield* sleep(5)
+
           return yield* Greeter.actions.hello('x')
         })
 
@@ -46,6 +47,7 @@ describe('api — decoration across scopes', () => {
 
         const child = yield* spawn(function* () {
           yield* sleep(5)
+
           return yield* Greeter.actions.hello('x')
         })
 
@@ -67,6 +69,7 @@ describe('api — decoration across scopes', () => {
         const child = yield* spawn(function* () {
           yield* Greeter.around(tag('c'), { at: 'min' })
           yield* sleep(5)
+
           return yield* Greeter.actions.hello('x')
         })
 
@@ -74,6 +77,7 @@ describe('api — decoration across scopes', () => {
         yield* Greeter.around(tag('m2'), { at: 'min' })
 
         const seen = yield* child
+
         expect((seen.match(/m1\(/gu) ?? []).length).toBe(1)
         expect((seen.match(/m2\(/gu) ?? []).length).toBe(1)
         expect((seen.match(/c\(/gu) ?? []).length).toBe(1)

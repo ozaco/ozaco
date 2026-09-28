@@ -15,6 +15,7 @@ import { storage, todosTable, testSchema } from '../helpers'
 const json = function* (path: string, init?: RequestInit) {
   const response = yield* Edge.actions.handle(new Request(`http://edge${path}`, init))
   const text = yield* until(response.text())
+
   return {
     status: response.status,
     body: text ? JSON.parse(text) : null,
@@ -31,6 +32,7 @@ describe('resource actions + extend', () => {
         stats: action.query({ output: z.object({ open: z.number() }) }, function* () {
           const db = yield* useDb(testSchema)
           const rows = yield* db.query('todos').collect()
+
           return { open: rows.filter(row => row.done === false).length }
         }),
       },
@@ -38,8 +40,10 @@ describe('resource actions + extend', () => {
       // hooks wrap the BUILT-INS only — `stats` must come through untouched
       *after({ op, output }) {
         const upper = (row: AnyType) => ({ ...row, title: row.title.toUpperCase() })
+
         if (op === 'list') {
           const page = output as AnyType
+
           return { ...page, data: page.data.map(upper) }
         }
       },
@@ -50,10 +54,12 @@ describe('resource actions + extend', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({
           services: [todos],
           edge: BunEdge,
         })
+
         yield* server.start()
 
         // the enabled built-ins answer
@@ -62,13 +68,17 @@ describe('resource actions + extend', () => {
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ title: 'one', done: false }),
         })
+
         expect(created.status).toBe(200)
+
         const page = yield* json('/todos')
+
         expect(page.body.data.map((row: AnyType) => row.title)).toEqual(['ONE'])
 
         // the custom action lives on the SAME service — its static route beats `/:id`,
         // and the after hook did not touch it
         const stats = yield* json('/todos/stats')
+
         expect(stats.status).toBe(200)
         expect(stats.body).toEqual({ open: 1 })
 
@@ -93,6 +103,7 @@ describe('resource actions + extend', () => {
   it('omitted actions (or true) enables everything, and the resolved set is carried', async () => {
     const everything = crud(todosTable)
     const explicit = crud(todosTable, { name: 'todos2', actions: true })
+
     expect(everything.enabled).toEqual([
       'list',
       'get',
@@ -107,6 +118,7 @@ describe('resource actions + extend', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({
           services: [everything],
           edge: BunEdge,
@@ -121,6 +133,7 @@ describe('resource actions + extend', () => {
             ws.addEventListener('error', () => resolve(false))
           }),
         )
+
         expect(opened).toBe(true)
         ws.close()
         yield* server.stop()

@@ -22,10 +22,13 @@ const bytes = (...chunks: string[]): Flow<Uint8Array, void> =>
   ({
     *[Symbol.iterator]() {
       const queue = createQueue<Uint8Array, void>()
+
       for (const chunk of chunks) {
         queue.add(encoder.encode(chunk))
       }
+
       queue.close()
+
       return queue
     },
   }) as Flow<Uint8Array, void>
@@ -51,6 +54,7 @@ describe('sseFlow close', () => {
       const flow = yield* sseFlow(bytes('data: a\n\n', 'data: b\n\n'), function* (data) {
         return data
       })
+
       return yield* drain(flow)
     })
 
@@ -62,10 +66,12 @@ describe('sseFlow close', () => {
       const flow = yield* sseFlow(bytes('data: x\n\n'), function* () {
         return yield* fail(AiErrors.BadResponse, 'garbage chunk')
       })
+
       return yield* drain(flow)
     })
 
     const { close } = unwrap(outcome)
+
     expect(isFailure(close) && close.error).toBe(AiErrors.BadResponse)
     expect((close as AnyType).message).toBe('garbage chunk')
   })
@@ -76,10 +82,12 @@ describe('sseFlow close', () => {
       const flow = yield* sseFlow(bytes('data: x\n\n'), function* () {
         throw thrown
       })
+
       return yield* drain(flow)
     })
 
     const { close } = unwrap(outcome)
+
     expect(isFailure(close) && close.error).toBe(ResultErrors.Unknown)
     expect(rawOf(close)).toBe(thrown)
   })
@@ -90,10 +98,12 @@ describe('byteFlow close', () => {
     const fault = Object.assign(new Error('socket hang up'), { code: 'ECONNRESET' })
     const outcome = await run(function* () {
       const flow = yield* byteFlow(faulty(fault))
+
       return yield* drain(flow)
     })
 
     const { values, close } = unwrap(outcome)
+
     expect(values).toEqual([])
     expect(isFailure(close) && close.error).toBe(ResultErrors.Unknown)
     expect(rawOf(close)).toBe(fault)

@@ -23,6 +23,7 @@ export const createLock = (): Memory.Lock => {
 
     if (next) {
       next() // hand the lock straight to the next waiter; it stays held
+
       return
     }
 
@@ -33,6 +34,7 @@ export const createLock = (): Memory.Lock => {
     *acquire() {
       if (!held) {
         held = true
+
         return release
       }
 
@@ -192,13 +194,16 @@ export const applySteps = (state: Memory.State, steps: readonly Spec.Step[]): vo
 
       case 'create-index': {
         const declared = state.indexes.get(step.table) ?? new Map<string, Spec.Index>()
+
         declared.set(step.index.name, step.index)
         state.indexes.set(step.table, declared)
+
         break
       }
 
       case 'drop-index': {
         state.indexes.get(step.table)?.delete(step.index)
+
         break
       }
 
@@ -206,6 +211,7 @@ export const applySteps = (state: Memory.State, steps: readonly Spec.Step[]): vo
         state.tables.delete(step.table)
         state.shapes.delete(step.table)
         state.indexes.delete(step.table)
+
         break
       }
 

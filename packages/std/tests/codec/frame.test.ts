@@ -32,6 +32,7 @@ describe('Codec.actions.encodeFrame', () => {
     })
 
     const result = unwrap(outcome)
+
     expect(result.view).toBe(view)
     expect(result.buffer).toBe(buffer)
   })
@@ -39,6 +40,7 @@ describe('Codec.actions.encodeFrame', () => {
   it('stringifies everything else through the routed codec', async () => {
     const outcome = await run(function* () {
       yield* JsonCodec.use()
+
       return {
         object: yield* Codec.actions.encodeFrame<string>({ a: 1, b: ['x'] }),
         number: yield* Codec.actions.encodeFrame<string>(42),
@@ -70,6 +72,7 @@ describe('Codec.actions.decodeFrame', () => {
   it('parses a JSON-looking string (object or array, surrounding whitespace allowed)', async () => {
     const outcome = await run(function* () {
       yield* JsonCodec.use()
+
       return {
         object: yield* Codec.actions.decodeFrame('{"a":1}'),
         array: yield* Codec.actions.decodeFrame('  [1, 2, 3]\n'),
@@ -99,6 +102,7 @@ describe('Codec.actions.decodeFrame', () => {
   it('returns a JSON-looking but invalid string as-is (parse failure is swallowed)', async () => {
     const outcome = await run(function* () {
       yield* JsonCodec.use()
+
       return {
         object: yield* Codec.actions.decodeFrame('{"broken":'),
         array: yield* Codec.actions.decodeFrame('[1, 2'),
@@ -114,6 +118,7 @@ describe('Codec.actions.decodeFrame', () => {
 
     const outcome = await run(function* () {
       yield* JsonCodec.use()
+
       return {
         bytes: yield* Codec.actions.decodeFrame<Uint8Array>(bytes),
         object: yield* Codec.actions.decodeFrame<typeof object>(object),
@@ -122,6 +127,7 @@ describe('Codec.actions.decodeFrame', () => {
     })
 
     const result = unwrap(outcome)
+
     expect(result.bytes).toBe(bytes)
     expect(result.object).toBe(object)
     expect(result.number).toBe(7)
@@ -143,6 +149,7 @@ describe('Codec.actions.decodeFrame', () => {
     })
 
     const result = unwrap(outcome)
+
     expect(result.pinned).toEqual({ n: 1 })
     expect(result.routed).not.toEqual({ n: 1 })
   })

@@ -36,6 +36,7 @@ export const RedisTransport = Transport.implement<TransportDef.Options, [options
     if (!(yield* Codec.actions.hasCodec())) {
       yield* JsonCodec.use()
     }
+
     if (!isValidPrefix(options.prefix)) {
       return yield* fail(TransportErrors.Configuration, `invalid prefix "${options.prefix}"`)
     }
@@ -52,6 +53,7 @@ export const RedisTransport = Transport.implement<TransportDef.Options, [options
 
     client.on('error', onError)
     subscriber.on('error', onError)
+
     const opened = yield* attempt(until(Promise.all([client.connect(), subscriber.connect()])))
 
     if (isFailure(opened)) {
@@ -71,6 +73,7 @@ export const RedisTransport = Transport.implement<TransportDef.Options, [options
       status: 'connected',
       drained: false,
     }
+
     yield* StateRef.set(state)
 
     yield* ensure(function* () {

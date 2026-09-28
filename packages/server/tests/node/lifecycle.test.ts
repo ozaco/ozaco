@@ -11,6 +11,7 @@ describe('app — lifecycle', () => {
       new Response(proc.stdout).text(),
       new Response(proc.stderr).text(),
     ])
+
     clearTimeout(timer)
     expect(err).toBe('')
     expect(out.trim().split('\n').slice(-2)).toEqual(['stopped', 'all-done'])

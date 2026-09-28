@@ -63,6 +63,7 @@ let installs = 0
 /** An in-memory exporter next to the store: every event the kernel reports to the sinks. */
 const memoryExporter = () => {
   installs += 1
+
   const events: ObserveDef.Event[] = []
 
   const plugin = ObserveExporter.implement<ObserveDef.ExporterContext, []>({
@@ -161,6 +162,7 @@ describe('observe — spans and log records are db rows', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({
           services: [todos],
           edge: BunEdge,
@@ -169,6 +171,7 @@ describe('observe — spans and log records are db rows', () => {
             ObservePlugin.use({ batch: { waitMs: 10 }, capture: { headers: true, bodies: true } }),
           ],
         })
+
         yield* server.start()
 
         const created = yield* Edge.actions.handle(
@@ -182,16 +185,22 @@ describe('observe — spans and log records are db rows', () => {
             body: JSON.stringify({ title: 'captured' }),
           }),
         )
+
         expect(created.status).toBe(200)
+
         const requestId = created.headers.get('x-request-id')!
 
         const streamed = yield* Edge.actions.handle(new Request('http://edge/todos/count?n=2'))
+
         yield* until(streamed.text())
         yield* sleep(30) // the edge span ends WITH the streamed body
 
         const create = (yield* Observe.actions.traces({ route: '/todos/create' })).traces
+
         expect(create).toHaveLength(1)
+
         const root = create[0]!
+
         expect(root).toMatchObject({
           name: 'POST /todos/create',
           kind: 'server',
@@ -215,18 +224,25 @@ describe('observe — spans and log records are db rows', () => {
 
         // the request id minted here IS the trace id: request() and trace() are the same view
         expect(requestId).toBe(root.trace_id)
+
         const view = yield* Observe.actions.request(requestId)
+
         expect(view).toEqual(yield* Observe.actions.trace(root.trace_id))
+
         const dispatch = view!.spans.find(span => span.name === 'todos.create')!
+
         expect(dispatch).toMatchObject({ kind: 'internal', parent_span_id: root.span_id })
         expect(dispatch.service_name).toBe('todos')
+
         // the handler's log line hangs off the dispatch span
         const creating = view!.logs.find(log => log.body === 'creating')!
+
         expect(creating).toMatchObject({ span_id: dispatch.span_id, severity_number: 9 })
         expect(creating.attributes['title']).toBe('captured')
 
         // a GET's value input is the query string — never a request body
         const count = (yield* Observe.actions.traces({ name: 'GET /todos/count' })).traces[0]!
+
         expect(count.attributes['url.query']).toBe('n=2')
         expect(count.attributes['http.request.body.content']).toBeUndefined()
         // a flow reply is its shape + the streamed SIZE, never its items
@@ -241,11 +257,16 @@ describe('observe — spans and log records are db rows', () => {
             headers: { traceparent: `00-${caller}-00f067aa0ba902b7-01`, tracestate: 'ozaco=1' },
           }),
         )
+
         yield* until(continued.text())
+
         const freshId = continued.headers.get('x-request-id')!
+
         expect(freshId).not.toBe(caller)
         yield* sleep(30)
+
         const found = yield* Observe.actions.request(freshId)
+
         expect(found?.trace_id).toBe(caller)
         expect(spanNames(found)).toContain('GET /todos/list')
 
@@ -258,15 +279,18 @@ describe('observe — spans and log records are db rows', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({
           services: [todos],
           plugins: [ObservePlugin.use({ batch: { waitMs: 10 } })],
         })
+
         yield* server.call(todos, 'create', { title: 'observed' })
         yield* attempt(server.call(todos, 'explode', { code: 'todo.kaput' }))
         yield* server.call(todos, 'nested', { title: 'deep' })
 
         const page = yield* Observe.actions.traces({})
+
         // one root per call, newest first — three calls may well start in the same millisecond
         // (a root's start is the wall clock's): those are listed by span id, never by the order
         // their rows were written in
@@ -279,6 +303,7 @@ describe('observe — spans and log records are db rows', () => {
         expect(page.cursor).toBeNull()
 
         const failed = (yield* Observe.actions.traces({ status: 'failed' })).traces
+
         expect(failed).toHaveLength(1)
         expect(failed[0]).toMatchObject({
           name: 'todos.explode',
@@ -296,25 +321,33 @@ describe('observe — spans and log records are db rows', () => {
           0,
         )
         expect((yield* Observe.actions.traces({ slowerThan: 60_000 })).traces).toHaveLength(0)
+
         // cursor paging walks the same list
         const first = yield* Observe.actions.traces({ limit: 2 })
+
         expect(first.traces).toHaveLength(2)
+
         const second = yield* Observe.actions.traces({ limit: 2, cursor: first.cursor! })
+
         expect([...first.traces, ...second.traces]).toEqual([...page.traces])
 
         // the create trace: the dispatch root, the db work under it, its log line
         const created = page.traces.find(row => row.name === 'todos.create')!
         const view = yield* Observe.actions.trace(created.trace_id)
+
         expect(view!.spans[0]).toMatchObject({ span_id: created.span_id, root: true })
+
         for (const span of view!.spans.slice(1)) {
           expect(span.root).toBe(false)
         }
+
         expect(view!.logs.map(log => log.body)).toEqual(['creating'])
         expect(view!.logs[0]!.span_id).toBe(created.span_id)
 
         // the failed trace: ONE exception span event at the origin + ONE exception log record
         const exploded = yield* Observe.actions.trace(failed[0]!.trace_id)
         const exceptions = exploded!.logs.filter(log => isExceptionLog(log))
+
         expect(exceptions).toHaveLength(1)
         expect(exceptions[0]).toMatchObject({
           event_name: 'ozaco.action.exception',
@@ -328,17 +361,23 @@ describe('observe — spans and log records are db rows', () => {
         // the nested trace: parent/child dispatches + the producer span of the emit
         const nested = page.traces.find(row => row.name === 'todos.nested')!
         const view3 = yield* Observe.actions.trace(nested.trace_id)
+
         expect(spanNames(view3)).toContain('todos.create')
         expect(spanNames(view3)).toContain('publish todo.created')
+
         const inner = view3!.spans.find(span => span.name === 'todos.create')!
         const publish = view3!.spans.find(span => span.name === 'publish todo.created')!
+
         expect(inner.parent_span_id).toBe(nested.span_id)
         expect(publish).toMatchObject({ kind: 'producer', parent_span_id: nested.span_id })
+
         // parents come before their children
         const order = view3!.spans.map(span => span.span_id)
+
         expect(order.indexOf(nested.span_id)).toBeLessThan(order.indexOf(inner.span_id))
 
         const stats = yield* Observe.actions.stats()
+
         expect(stats.recorded).toBeGreaterThanOrEqual(7)
         expect(stats).toMatchObject({ dropped: 0, pending: 0, forwarded: 0, received: 0 })
         expect(yield* Observe.actions.request('nope')).toBeNull()
@@ -353,15 +392,19 @@ describe('observe — spans and log records are db rows', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({
           services: [todos],
           edge: BunEdge,
           plugins: [ObservePlugin.use({ batch: { waitMs: 10 } }), sink.plugin],
         })
+
         yield* server.start()
         yield* server.call(todos, 'nested', { title: 'parity' })
         yield* attempt(server.call(todos, 'explode', { code: 'todo.kaput' }))
+
         const response = yield* Edge.actions.handle(new Request('http://edge/todos/list'))
+
         yield* until(response.text())
         // the store answers several reads — none of them is telemetry
         yield* Observe.actions.traces({})
@@ -373,6 +416,7 @@ describe('observe — spans and log records are db rows', () => {
 
         for (const root of traces) {
           const view = (yield* Observe.actions.trace(root.trace_id))!
+
           stored.push(...view.spans.map(eventOfSpanRow), ...view.logs.map(eventOfLogRow))
         }
 
@@ -380,6 +424,7 @@ describe('observe — spans and log records are db rows', () => {
 
         // the exporter saw no span of the store's own db work, no cluster plumbing
         const exported = sink.events
+
         for (const event of exported) {
           if (event.t === 'span') {
             expect(String(event.span.attributes['db.collection.name'] ?? '')).not.toMatch(/^_ob/u)
@@ -402,16 +447,19 @@ describe('observe — spans and log records are db rows', () => {
             .map(event => [key(event), event] as const),
         )
         const got = new Map(stored.map(event => [key(event), event] as const))
+
         expect(wanted.size).toBeGreaterThan(8)
         expect([...got.keys()].toSorted()).toEqual([...wanted.keys()].toSorted())
 
         for (const [at, event] of wanted) {
           const mine = got.get(at) as AnyType
+
           expect(mine.resource).toEqual(event.resource)
 
           if (event.t === 'span') {
             const { parent, ...rest } = event.span
             const { parent: parentOf, ...restOf } = mine.span
+
             expect(restOf).toEqual({ ...rest, service: event.resource['service.name'] })
             expect(parentOf?.spanId ?? null).toBe(parent?.spanId ?? null)
           } else {
@@ -426,6 +474,7 @@ describe('observe — spans and log records are db rows', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({
           services: [todos],
           edge: BunEdge,
@@ -436,14 +485,18 @@ describe('observe — spans and log records are db rows', () => {
         const manifest = (yield* until(
           fetch(`${info.url}/_observe/api/manifest`).then(response => response.json()),
         )) as AnyType
+
         expect(manifest.manifest).toBe('ozaco/2')
+
         const observe = manifest.services.find((entry: AnyType) => entry.name === 'observe')
         const actions = observe.actions.map((entry: AnyType) => entry.action)
+
         for (const name of ['traces', 'trace', 'request', 'stats', 'cluster', 'live']) {
           expect(actions).toContain(name)
         }
 
         const page = yield* until(fetch(`${info.url}/_observe`))
+
         expect(page.headers.get('content-type')).toContain('text/html')
         yield* until(page.text())
 
@@ -466,6 +519,7 @@ describe('observe — spans and log records are db rows', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({
           services: [todos],
           edge: BunEdge,
@@ -484,6 +538,7 @@ describe('observe — spans and log records are db rows', () => {
             Auth,
           ],
         })
+
         yield* server.start()
 
         const status = function* (path: string, token?: string) {
@@ -492,7 +547,9 @@ describe('observe — spans and log records are db rows', () => {
               headers: token ? { authorization: `Bearer ${token}` } : {},
             }),
           )
+
           yield* until(response.body?.cancel() ?? Promise.resolve())
+
           return response.status
         }
 
@@ -512,6 +569,7 @@ describe('observe — spans and log records are db rows', () => {
         // the API is the service's, in-process calls go through the same gate
         const stats = { service: 'observe', action: 'stats' } as AnyType
         const refused = yield* attempt(server.call(stats, undefined as AnyType))
+
         expect((refused as AnyType).error).toBe(ServerErrors.Unauthorized)
 
         yield* server.stop()
@@ -527,6 +585,7 @@ describe('observe — spans and log records are db rows', () => {
       unwrap(
         await run(function* () {
           yield* storage()
+
           const server = yield* createServer({
             services: [todos],
             edge: BunEdge,
@@ -537,8 +596,11 @@ describe('observe — spans and log records are db rows', () => {
               Auth.use({ default: 'authenticated' }),
             ],
           })
+
           yield* server.start()
+
           const response = yield* Edge.actions.handle(new Request('http://edge/_observe/api/stats'))
+
           yield* until(response.text())
           expect(response.status).toBe(expected)
           yield* server.stop()
@@ -572,17 +634,21 @@ describe('observe — spans and log records are db rows', () => {
       unwrap(
         await run(function* () {
           yield* storage()
+
           const server = yield* createServer({
             services: [todos],
             edge: BunEdge,
             plugins: [ObservePlugin.use({ console: true, selfTrace, batch: { waitMs: 10 } })],
           })
+
           yield* server.start()
 
           for (const path of ['/_observe', '/_observe/api/stats', '/_observe/api/trace/nope']) {
             const response = yield* Edge.actions.handle(new Request(`http://edge${path}`))
+
             yield* until(response.text())
           }
+
           yield* sleep(30)
 
           const names = (yield* Observe.actions.traces({})).traces.map(row => row.name).toSorted()
@@ -594,10 +660,14 @@ describe('observe — spans and log records are db rows', () => {
               ? ['GET /_observe', 'GET /_observe/api/stats', 'GET /_observe/api/trace/:id']
               : ['GET /_observe/api/trace/:id'],
           )
+
           const missing = (yield* Observe.actions.traces({ name: 'GET /_observe/api/trace/:id' }))
             .traces[0]!
+
           expect(missing).toMatchObject({ http_status: 404, error_type: 'observe.not-found' })
+
           const view = yield* Observe.actions.trace(missing.trace_id)
+
           expect(view!.logs.filter(log => isExceptionLog(log))).toHaveLength(1)
 
           yield* server.stop()
@@ -610,6 +680,7 @@ describe('observe — spans and log records are db rows', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({
           services: [chat],
           edge: BunEdge,
@@ -620,6 +691,7 @@ describe('observe — spans and log records are db rows', () => {
         yield* until(
           new Promise<void>((resolve, reject) => {
             const ws = new WebSocket(`${info.url!.replace('http', 'ws')}/chat/room`)
+
             ws.addEventListener('open', () => ws.send(JSON.stringify({ text: 'hi there' })))
             ws.addEventListener('message', () => {
               ws.close()
@@ -631,11 +703,15 @@ describe('observe — spans and log records are db rows', () => {
         yield* sleep(60)
 
         const upgrade = (yield* Observe.actions.traces({ name: 'GET /chat/room' })).traces[0]
+
         expect(upgrade).toMatchObject({ kind: 'server', http_status: 101, root: true })
 
         const frames = (yield* Observe.actions.traces({ name: 'WS /chat/room' })).traces
+
         expect(frames).toHaveLength(1)
+
         const frame = frames[0]!
+
         // a trace of its own, LINKED to the session's upgrade span
         expect(frame.trace_id).not.toBe(upgrade!.trace_id)
         expect(frame.links).toHaveLength(1)
@@ -645,7 +721,7 @@ describe('observe — spans and log records are db rows', () => {
           text: 'hi there',
         })
         // the echo is an event on the frame span, not a span
-        expect(frame.events.map(event => event.name)).toEqual(['ozaco.ws.send'])
+        expect(frame.events.map(event => event.name)).toEqual(['ws.send'])
 
         yield* server.stop()
       }),
@@ -658,6 +734,7 @@ describe('observe — spans and log records are db rows', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({
           services: [todos],
           plugins: [
@@ -666,17 +743,22 @@ describe('observe — spans and log records are db rows', () => {
             sink.plugin,
           ],
         })
+
         // nested → create: spans + one log line ('creating')
         yield* server.call(todos, 'nested', { title: 'kept' })
 
         const page = yield* Observe.actions.traces({})
+
         expect(page.traces).toHaveLength(1)
 
         const view = yield* Observe.actions.trace(page.traces[0]!.trace_id)
+
         expect(spanNames(view)).toContain('todos.nested')
         expect(spanNames(view)).toContain('todos.create')
+
         // the log line the exporter got is a row too
         const exported = sink.events.filter(event => event.t === 'log')
+
         expect(exported.map(event => (event as AnyType).log.body)).toContain('creating')
         expect(view!.logs.map(log => log.body)).toEqual(
           exported.map(event => (event as AnyType).log.body),
@@ -699,6 +781,7 @@ describe('observe — spans and log records are db rows', () => {
         })
 
         yield* Observe.actions.record(rootAt(`${'0'.repeat(15)}a`, tie + 1))
+
         for (const id of ids) {
           yield* Observe.actions.record(rootAt(id, tie))
         }
@@ -708,16 +791,20 @@ describe('observe — spans and log records are db rows', () => {
           `${'0'.repeat(15)}a`,
           ...ids.toSorted((left, right) => (left < right ? 1 : -1)),
         ]
+
         expect(page.traces.map(row => row.span_id)).toEqual(expected)
 
         // cursor paging walks the very same order
         const walked: string[] = []
         let cursor: string | undefined
+
         do {
           const step = yield* Observe.actions.traces({ name: 'tie.root', limit: 3, cursor })
+
           walked.push(...step.traces.map(row => row.span_id))
           cursor = step.cursor ?? undefined
         } while (cursor !== undefined)
+
         expect(walked).toEqual(expected)
       }),
     )
@@ -777,10 +864,13 @@ describe('observe — spans and log records are db rows', () => {
         )
 
         const page = yield* Observe.actions.traces({ name: 'hop' })
+
         expect(page.traces.map(row => row.span_id)).toEqual([id('api2'), id('gw')])
         expect(page.cursor).toBeNull()
+
         // a filter that only the inner root passes lists the trace by that root
         const inner = yield* Observe.actions.traces({ service: 'hop-api1' })
+
         expect(inner.traces.map(row => row.span_id)).toEqual([id('api1')])
       }),
     )
@@ -825,17 +915,21 @@ describe('observe — spans and log records are db rows', () => {
 
         const pages: string[][] = []
         let cursor: string | undefined
+
         do {
           const step = yield* Observe.actions.traces({ name: 'hop', limit: 5, cursor })
+
           pages.push(step.traces.map(row => row.span_id))
           cursor = step.cursor ?? undefined
         } while (cursor !== undefined)
 
         const expected = traces.map(entry => entry.root).toReversed()
+
         expect(pages).toEqual([expected.slice(0, 5), expected.slice(5, 10), expected.slice(10)])
 
         // a cursor the store did not hand out is a validation failure, not a silent first page
         const bad = yield* attempt(() => Observe.actions.traces({ cursor: 'nope' }))
+
         expect(isFailure(bad) && bad.error).toBe(ServerErrors.Validation)
       }),
     )
@@ -845,6 +939,7 @@ describe('observe — spans and log records are db rows', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({
           services: [todos],
           plugins: [ObservePlugin.use({ batch: { waitMs: 10 } })],
@@ -852,8 +947,10 @@ describe('observe — spans and log records are db rows', () => {
         const live = yield* Observe.actions.watch({ status: 'failed' })
         const seen = yield* fork(function* () {
           const step = yield* live.next()
+
           return step.value.map(row => row.name)
         })
+
         yield* sleep(30)
         yield* server.call(todos, 'create', { title: 'fine' })
         yield* attempt(server.call(todos, 'explode', { code: 'x' }))
@@ -861,7 +958,9 @@ describe('observe — spans and log records are db rows', () => {
 
         expect((yield* Observe.actions.traces()).traces).toHaveLength(2)
         yield* sleep(5)
+
         const removed = yield* Observe.actions.prune(Date.now() + 1)
+
         // the spans, the log line and the exception record
         expect(removed).toBeGreaterThanOrEqual(4)
         expect((yield* Observe.actions.traces()).traces).toHaveLength(0)
@@ -889,7 +988,9 @@ describe('observe — spans and log records are db rows', () => {
         await run(function* () {
           yield* BunIO.use()
           yield* SqliteAdapter.use({ path })
+
           const db = yield* DbClient.use({ tables: [legacy] })
+
           yield* db.insert('_ob_spans', {
             request_id: 'r1',
             service_id: 'old',
@@ -902,12 +1003,14 @@ describe('observe — spans and log records are db rows', () => {
       unwrap(
         await run(function* () {
           yield* storage()
+
           const server = yield* createServer({
             services: [todos],
             plugins: [
               ObservePlugin.use({ db: SqliteAdapter.use({ path }), batch: { waitMs: 10 } }),
             ],
           })
+
           yield* server.call(todos, 'create', { title: 'next to the old rows' })
           expect((yield* Observe.actions.traces({})).traces).toHaveLength(1)
           yield* server.stop()
@@ -919,9 +1022,13 @@ describe('observe — spans and log records are db rows', () => {
           yield* scoped(function* () {
             yield* BunIO.use()
             yield* SqliteAdapter.use({ path })
+
             const tables = yield* DbAdapter.actions.tables()
+
             expect(tables).toEqual(expect.arrayContaining(['_ob_spans', '_ob2_spans', '_ob2_logs']))
+
             const db = yield* DbClient.use({ tables: [legacy], safe: true })
+
             expect(yield* db.query('_ob_spans').count()).toBe(1)
           })
         }),
@@ -933,10 +1040,12 @@ describe('observe — spans and log records are db rows', () => {
 
   it('a separate database keeps observability out of the app adapter', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'ozaco-observe-'))
+
     try {
       unwrap(
         await run(function* () {
           yield* storage()
+
           const server = yield* createServer({
             services: [todos],
             plugins: [
@@ -946,21 +1055,28 @@ describe('observe — spans and log records are db rows', () => {
               }),
             ],
           })
+
           yield* server.call(todos, 'create', { title: 'elsewhere' })
           yield* attempt(server.call(todos, 'explode', { code: 'todo.kaput' }))
 
           // sqlite round trip: booleans, floats, json, nulls read back as the API shape
           const page = yield* Observe.actions.traces({})
+
           expect(page.traces).toHaveLength(2)
+
           const failed = (yield* Observe.actions.traces({ status: 'failed' })).traces[0]!
+
           expect(failed).toMatchObject({ root: true, error_type: 'todo.kaput', http_route: null })
+
           const view = yield* Observe.actions.trace(failed.trace_id)
+
           expect(view!.spans[0]!.events[0]!.name).toBe('exception')
           expect(view!.logs.filter(log => isExceptionLog(log))).toHaveLength(1)
           expect(typeof view!.spans[0]!.start).toBe('number')
 
           // the app db never saw an observe table
           const tables = yield* DbAdapter.actions.tables()
+
           expect(tables.some((name: string) => name.startsWith('_ob'))).toBe(false)
         }),
       )
@@ -983,6 +1099,7 @@ describe('observe — spans and log records are db rows', () => {
           },
           { attributes: { 'ozaco.probe.low': -Infinity, 'ozaco.probe.list': [1, Number.NaN] } },
         )
+
         return 'ok'
       }),
     })
@@ -991,6 +1108,7 @@ describe('observe — spans and log records are db rows', () => {
       unwrap(
         await run(function* () {
           yield* storage()
+
           const server = yield* createServer({
             services: [odd],
             plugins: [
@@ -1001,6 +1119,7 @@ describe('observe — spans and log records are db rows', () => {
               sink.plugin,
             ],
           })
+
           yield* server.call(odd, 'ratio', {})
 
           const [root] = (yield* Observe.actions.traces({})).traces
@@ -1020,6 +1139,7 @@ describe('observe — spans and log records are db rows', () => {
             sink.events.find(event =>
               event.t === 'span' ? event.span.name === name : event.log.body === name,
             )
+
           expect((eventOfSpanRow(inner) as AnyType).span.attributes).toEqual(
             exported('inner').span.attributes,
           )

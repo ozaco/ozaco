@@ -41,12 +41,14 @@ const AiClientImpl = AiProtocol.implement<AiDef.Context, [options?: AiDef.Option
   description: 'The spec-resolving AI client over the installed provider',
   *setup(options) {
     const info = yield* AiProvider.context.get()
+
     if (!info) {
       return yield* fail(
         AiErrors.Configuration,
         'no ai provider installed — install an ai:impl/* provider before AiClient',
       )
     }
+
     return {
       provider: info,
       models: { ...options?.models },
@@ -61,6 +63,7 @@ export const AiClient: AiDef = AiClientImpl.build({
     const state = yield* useContext(AiProtocol)
     const spec = yield* resolveChatSpec({ state, messages, options, streaming: false })
     const retries = options.retries ?? state.retries
+
     if (options.run) {
       return yield* runToolLoop({
         spec,
@@ -69,36 +72,42 @@ export const AiClient: AiDef = AiClientImpl.build({
         retries,
       })
     }
+
     return yield* withRetry(retries, () => AiProvider.actions.chat(spec))
   },
 
   *chatStream(messages: Helpers.MessagesInit, options: AiDef.ChatStreamOptions = {}) {
     const state = yield* useContext(AiProtocol)
     const spec = yield* resolveChatSpec({ state, messages, options, streaming: true })
+
     return yield* AiProvider.actions.chatStream(spec)
   },
 
   *embed(input: string | readonly string[], options: AiDef.EmbedOptions = {}) {
     const state = yield* useContext(AiProtocol)
     const spec = yield* resolveEmbedSpec({ state, input, options })
+
     return yield* withRetry(options.retries ?? state.retries, () => AiProvider.actions.embed(spec))
   },
 
   *tts(text: string, options: AiDef.SpeechOptions = {}) {
     const state = yield* useContext(AiProtocol)
     const spec = yield* resolveSpeechSpec({ state, text, options })
+
     return yield* AiProvider.actions.tts(spec)
   },
 
   *ttsStream(text: string, options: AiDef.SpeechOptions = {}) {
     const state = yield* useContext(AiProtocol)
     const spec = yield* resolveSpeechSpec({ state, text, options })
+
     return yield* AiProvider.actions.ttsStream(spec)
   },
 
   *stt(audio: Uint8Array | Blob, options: AiDef.TranscribeOptions = {}) {
     const state = yield* useContext(AiProtocol)
     const spec = yield* resolveTranscribeSpec({ state, audio, options })
+
     return yield* AiProvider.actions.stt(spec)
   },
 })

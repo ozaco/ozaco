@@ -23,7 +23,9 @@ import { describe, expect, it } from 'bun:test'
 /** The nested failure at `index` of `failure.causes` (fails the test when it is a string). */
 const nestedAt = (failure: Result.Failure<unknown>, index: number): Result.Failure<unknown> => {
   const cause = failure.causes[index]
+
   expect(isFailure(cause)).toBe(true)
+
   return cause as Result.Failure<unknown>
 }
 
@@ -68,6 +70,7 @@ describe('fail — causes', () => {
 
   it('infers the literal tag', () => {
     const outer: Result.Failure<'app.failed'> = fail('app.failed', 'msg', fail('inner'))
+
     expect(outer.error).toBe('app.failed')
   })
 
@@ -96,15 +99,18 @@ describe('appendCauses — the same normalization, in place', () => {
 
   it('leaves a Success alone and ignores Success causes (no isFailure guard needed)', () => {
     const ok = succeed(1)
+
     expect(appendCauses(ok, 'x', fail('y'))).toBe(ok)
 
     const failure = fail('a')
+
     appendCauses(failure, succeed(2))
     expect(failure.causes).toEqual([])
   })
 
   it('never makes a failure its own cause', () => {
     const failure = fail('self')
+
     appendCauses(failure, failure)
     expect(failure.causes).toEqual([])
   })
@@ -190,25 +196,28 @@ describe('the chain rendering walks the causes', () => {
     )
   })
 
-  it('follows nested failures 8 deep', () => {
+  it('follows nested failures however deep', () => {
     let failure: Result.Failure<unknown> = fail('level.0')
-    for (let index = 1; index < 12; index += 1) {
+
+    for (let index = 1; index < 40; index += 1) {
       failure = fail(`level.${index}`, '', failure)
     }
 
-    expect(headers(failure)).toHaveLength(8)
-    expect(headers(failure)[0]).toBe('level.11')
-    expect(headers(failure).at(-1)).toBe('Caused by: level.4')
+    expect(headers(failure)).toHaveLength(40)
+    expect(headers(failure)[0]).toBe('level.39')
+    expect(headers(failure).at(-1)).toBe('Caused by: level.0')
   })
 
   it('is cycle-safe, and a failure shared twice renders once', () => {
     const first = fail('first')
     const second = fail('second', '', first)
+
     appendCauses(first, second)
 
     expect(headers(second)).toEqual(['second', 'Caused by: first'])
 
     const shared = fail('shared')
+
     expect(headers(fail('outer', '', shared, fail('mid', '', shared)))).toEqual([
       'outer',
       'Caused by: shared',
@@ -221,6 +230,7 @@ describe('foreign errors with throwing getters', () => {
   /** An Error whose own `stack`, `message`, `name`, `code` and `cause` getters all throw. */
   const hostile = (): Error => {
     const error = new Error('hidden')
+
     for (const key of ['stack', 'message', 'name', 'code', 'cause']) {
       Object.defineProperty(error, key, {
         get() {
@@ -228,6 +238,7 @@ describe('foreign errors with throwing getters', () => {
         },
       })
     }
+
     return error
   }
 

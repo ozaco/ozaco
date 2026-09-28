@@ -14,20 +14,26 @@ const decoder = new TextDecoder()
 /** Subscribe to `flow`, collect every value and resolve with the values + the close value. */
 const drain = function* <T>(flow: Flow<unknown, unknown>) {
   const done = withResolvers<{ values: T[]; close: unknown }>()
+
   yield* spawn(function* () {
     const values: T[] = []
     const subscription = yield* flow
+
     for (;;) {
       const next = yield* subscription.next()
+
       if (next.done) {
         done.resolve({ values, close: next.value })
+
         return
       }
+
       values.push(next.value as T)
     }
   })
   // let the pipeline subscribe before the caller feeds it
   yield* sleep(1)
+
   return done.operation
 }
 
@@ -35,6 +41,7 @@ describe('toml codec', () => {
   it('registers as `std/toml-codec` at priority 500', async () => {
     const outcome = await run(function* () {
       const ctx = yield* TomlCodec.use()
+
       return { ctx, transports: (yield* Codec.actions.getTransports()).length }
     })
 
@@ -81,7 +88,9 @@ describe('toml codec', () => {
   it('routes through the protocol when it is the only codec installed', async () => {
     const outcome = await run(function* () {
       yield* TomlCodec.use()
+
       const text = yield* Codec.actions.stringify({ key: 'value' })
+
       return { text, back: yield* Codec.actions.parse(text) }
     })
 
@@ -91,7 +100,9 @@ describe('toml codec', () => {
   it('TOML datetimes pass through as Date instances (nothing strips them)', async () => {
     const outcome = await run(function* () {
       yield* TomlCodec.use()
+
       const parsed = yield* TomlCodec.actions.parse<{ at: Date }>('at = 1979-05-27T07:32:00Z\n')
+
       return { isDate: parsed.at instanceof Date, iso: parsed.at.toISOString() }
     })
 
@@ -147,6 +158,7 @@ describe('toml codec', () => {
         yield* source.close(true)
 
         const { values, close } = yield* collected
+
         return { texts: values.map(chunk => decoder.decode(chunk)), close }
       })
 
@@ -164,6 +176,7 @@ describe('toml codec', () => {
         // split INSIDE the two-byte 'é' (0xC3 0xA9) — the stream decoder must reassemble it
         const bytes = encoder.encode('name = "café"\n[server]\nport = 1\n')
         const splitAt = bytes.indexOf(0xc3) + 1
+
         yield* source.send(bytes.slice(0, splitAt))
         yield* source.send(bytes.slice(splitAt))
         yield* source.close(true)
@@ -235,6 +248,7 @@ describe('toml codec', () => {
       })
 
       expect(isFailure(outcome)).toBe(true)
+
       if (isFailure(outcome)) {
         expect(outcome.error).toBe(CodecErrors.Decode)
       }
@@ -252,6 +266,7 @@ describe('toml codec', () => {
         yield* source.close(fail('upstream', 'truncated') as Result.Failure<unknown>)
 
         const { values, close } = yield* collected
+
         return {
           count: values.length,
           close: isFailure(close) ? close.error : close,

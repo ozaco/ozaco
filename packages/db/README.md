@@ -208,13 +208,13 @@ const worker =
 - `backoff` is `{ kind: 'exponential', baseMs?, maxMs? }`, `{ kind: 'linear', stepMs?, maxMs? }`
   or `(attempt) => ms`. Failures are tagged `QueueErrors` (`db:queue.configuration` /
   `db:queue.validation`); a handler's failure is recorded on the job (`last_error` — its whole
-  cause chain, budgeted), never surfaced.
+  cause chain), never surfaced.
 - **Traced:** `queueTable` also declares `traceparent`, `tracestate` and `last_traceparent`.
   `enqueue` is a PRODUCER span `send {queue}` whose context the row keeps; every attempt runs in a
   ROOT CONSUMER span `process {queue}` of its own (`messaging.message.id` = the job id,
   `ozaco.queue.attempt`) that LINKS the enqueue (`ozaco.link.reason = creation`) and the attempt
   before it (`queue.retry`). A failed attempt with attempts left is recorded as a WARN, a dead
-  letter as an ERROR with the span event `ozaco.queue.dead`. A table declared without those
+  letter as an ERROR with the span event `queue.dead`. A table declared without those
   columns runs untraced. The attempt spans run outside any request, so each runs as the
   queue's service — its `service.name`, and that of everything under it: the `service` of
   `Queue.use`, a worker's own `work(…, { service })` over it, by default the table name.
@@ -222,7 +222,7 @@ const worker =
 ## Telemetry
 
 The database reports through `@ozaco/std/trace`, so whatever records spans around it — an
-`@ozaco/server` node that observes, a `Tracer` of your own — sees its work; with nothing
+`@ozaco/server` node that observes, a `Trace` impl of your own — sees its work; with nothing
 recording it opens no spans at all.
 
 - **Spans only as children.** An operation opens a span only under a RECORDING parent (a request,
@@ -238,7 +238,7 @@ recording it opens no spans at all.
 - **What is left out.** The hidden `__changes_*` tables, a Kv's backing table under the Kv span,
   and the background loops (watch re-queries, the change hub, the `DbBus` pumps, queue claiming
   and sweeping) — those run with no active span. A transaction retried after a conflict adds the
-  span event `ozaco.db.tx.retry` (`ozaco.db.transaction.attempt`).
+  span event `db.tx.retry` (`ozaco.db.transaction.attempt`).
 - **Kv.** Every op is a child span `{op} kv` (`db.system.name` `redis` / `sqlite` /
   `postgresql` / `ozaco.memory`, `db.namespace`, `db.collection.name` = the prefix or table).
   `Kv.actions.wrap(key, { …, onSource })` tells a caller whether it got a `hit`, a `miss` it

@@ -42,6 +42,7 @@ export const SqliteAdapter = DbAdapter.implement<Adapter.Options, [options?: Sql
     yield* ensure(() => {
       db.close()
     })
+
     return {
       adapter: 'sqlite',
       capabilities: { transactions: true, raw: true, alterColumn: false },

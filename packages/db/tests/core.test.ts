@@ -34,15 +34,20 @@ describe('core semantics (adapter-independent)', () => {
       { name: column.text() },
       { validate: z.object({ name: z.string().min(2) }) },
     )
+
     unwrap(
       await run(function* () {
         yield* MemoryAdapter.use()
         yield* BunIO.use()
+
         const db = yield* DbClient.use({ tables: [people] })
         const short = yield* attempt(db.insert('people', { name: 'a' }))
+
         expect(isFailure(short)).toBe(true)
         expect((short as AnyType).error).toBe(DbErrors.Validation)
+
         const ok = yield* db.insert('people', { name: 'ada' })
+
         expect((ok as AnyType).name).toBe('ada')
       }),
     )
@@ -54,11 +59,15 @@ describe('core semantics (adapter-independent)', () => {
         yield* MemoryAdapter.use()
         yield* BunIO.use()
         yield* DbClient.use({ schema })
+
         const db = yield* useDb(schema)
         const ada = yield* db.insert('users', { name: 'ada', age: 36 })
         const cleared = yield* db.patch('users', ada._id, { age: CLEAR })
+
         expect(cleared?.age).toBeNull()
+
         const denied = yield* attempt(db.patch('users', ada._id, { name: CLEAR } as AnyType))
+
         expect((denied as AnyType).error).toBe(DbErrors.Validation)
       }),
     )
@@ -70,10 +79,12 @@ describe('core semantics (adapter-independent)', () => {
         yield* MemoryAdapter.use()
         yield* BunIO.use()
         yield* DbClient.use({ schema })
+
         const db = yield* useDb(schema)
         const doc = yield* db.insert('users', { name: 'typed' })
         // compile-time: doc is the resolved row type of `users`
         const typed: Schema.Infer<typeof users> = doc
+
         expect(typed.name).toBe('typed')
         expect(db.version('users')).toBe(doc._version)
       }),
@@ -86,6 +97,7 @@ describe('scoped reads and writes', () => {
     yield* MemoryAdapter.use()
     yield* BunIO.use()
     yield* DbClient.use({ tables: [users] })
+
     return yield* useDb(schema)
   }
 
@@ -115,6 +127,7 @@ describe('scoped reads and writes', () => {
 
         // in scope, the same writes land
         const member = yield* db.insert('users', { name: 'member' })
+
         expect((yield* db.patch('users', member._id, { age: 9 }, { scope }))?.age).toBe(9)
         expect(yield* db.delete('users', member._id, { scope })).toBe(true)
       }),
@@ -132,6 +145,7 @@ describe('scoped reads and writes', () => {
         const stale = yield* attempt(
           db.patch('users', admin._id, { age: 9 }, { ifVersion: 'v:stale' }),
         )
+
         expect(isFailure(stale)).toBe(true)
         expect((stale as AnyType).error).toBe(DbErrors.Conflict)
 
@@ -139,6 +153,7 @@ describe('scoped reads and writes', () => {
         const hidden = yield* attempt(
           db.patch('users', admin._id, { age: 9 }, { ifVersion: 'v:stale', scope }),
         )
+
         expect(isFailure(hidden)).toBe(false)
         expect((hidden as AnyType).value).toBeNull()
       }),
@@ -158,6 +173,7 @@ describe('scoped handle — db.scoped(filter)', () => {
     yield* MemoryAdapter.use()
     yield* BunIO.use()
     yield* DbClient.use({ schema: scopedSchema })
+
     return yield* useDb(scopedSchema)
   }
 
@@ -170,21 +186,26 @@ describe('scoped handle — db.scoped(filter)', () => {
 
         // the scope PINS the tenant onto the insert — the value need not carry it
         const mine = yield* a.insert('tenants_rows', { tenant: 'ignored', title: 'mine' })
+
         expect(mine.tenant).toBe('a')
         yield* b.insert('tenants_rows', { tenant: 'b', title: 'theirs' })
 
         // reads: only own rows; a foreign row reads as absent
         expect((yield* a.query('tenants_rows').collect()).map(row => row.title)).toEqual(['mine'])
+
         const theirs = (yield* b.query('tenants_rows').first())!
+
         expect(yield* a.get('tenants_rows', theirs._id)).toBeNull()
         expect(yield* db.get('tenants_rows', theirs._id)).not.toBeNull()
 
         // writes: a foreign row is a MISS, never a conflict
         expect(yield* a.patch('tenants_rows', theirs._id, { title: 'stolen' })).toBeNull()
         expect(yield* a.delete('tenants_rows', theirs._id)).toBe(false)
+
         const hidden = yield* attempt(
           a.patch('tenants_rows', theirs._id, { title: 'x' }, { ifVersion: 'v:stale' }),
         )
+
         expect(isFailure(hidden)).toBe(false)
         expect((hidden as AnyType).value).toBeNull()
 
@@ -192,6 +213,7 @@ describe('scoped handle — db.scoped(filter)', () => {
         const stale = yield* attempt(
           a.patch('tenants_rows', mine._id, { title: 'x' }, { ifVersion: 'v:stale' }),
         )
+
         expect((stale as AnyType).error).toBe(DbErrors.Conflict)
 
         // replace cannot move the row out of scope — the pin overrides the value
@@ -199,6 +221,7 @@ describe('scoped handle — db.scoped(filter)', () => {
           tenant: 'b',
           title: 'kept',
         })
+
         expect(replaced?.tenant).toBe('a')
       }),
     )
@@ -212,24 +235,30 @@ describe('scoped handle — db.scoped(filter)', () => {
 
         // upsert under a scope: insert branch stamps, patch branch stays in scope
         const created = yield* a.upsert('tenants_rows', { title: 'up' }, { tenant: 'x' })
+
         expect(created.tenant).toBe('a')
+
         const updated = yield* a.upsert('tenants_rows', { title: 'up' }, { level: 5 })
+
         expect(updated._id).toBe(created._id)
         expect(updated.level).toBe(5)
 
         // chained scope ANDs — level>3 now hides the row from reads
         const narrow = a.scoped(where.gt('level', 10))
+
         expect(yield* narrow.get('tenants_rows', created._id)).toBeNull()
 
         // transactions inherit the scope
         yield* a.transaction(function* (tx) {
           const row = yield* tx.insert('tenants_rows', { tenant: 'zzz', title: 'tx' })
+
           expect(row.tenant).toBe('a')
         })
 
         // doc watch under a foreign scope reads absent
         const b = db.scoped(where.eq('tenant', 'b'))
         const feed = yield* b.watch('tenants_rows', created._id)
+
         expect((yield* feed.next()).value).toBeNull()
       }),
     )
@@ -241,6 +270,7 @@ describe('scoped handle — db.scoped(filter)', () => {
         const db = yield* bootstrap()
         const ranged = db.scoped(where.gt('level', 3))
         const denied = yield* attempt(ranged.insert('tenants_rows', { tenant: 'a', title: 'nope' }))
+
         expect(isFailure(denied)).toBe(true)
         expect((denied as AnyType).error).toBe(DbErrors.Validation)
 
@@ -264,11 +294,14 @@ describe('scoped handle — db.scoped(filter)', () => {
 
         // a miss on an absent id, a scoped miss, and a scoped delete miss: no log rows appear
         expect(yield* db.patch('tenants_rows', 'no-such-id', { title: 'x' })).toBeNull()
+
         const b = db.scoped(where.eq('tenant', 'b'))
+
         expect(yield* b.patch('tenants_rows', row._id, { title: 'x' })).toBeNull()
         expect(yield* b.delete('tenants_rows', row._id)).toBe(false)
 
         const after = yield* Db.actions.logStats('tenants_rows')
+
         expect(after.rows).toBe(before.rows)
 
         // a write that LANDS still logs
@@ -287,6 +320,7 @@ describe('wire-filter sanitizing', () => {
           '{"op":"and","filters":[{"op":"eq","field":"role","value":"admin","junk":1},{"op":"gt","field":"age","value":30}]}',
         )
         const clean = yield* sanitizeFilter(wire, { fields: ['role', 'age'] })
+
         expect(clean).toEqual({
           op: 'and',
           filters: [
@@ -310,8 +344,10 @@ describe('wire-filter sanitizing', () => {
           { op: 'raw', field: 'name', value: 1 },
           'not-an-object',
         ]
+
         for (const wire of cases) {
           const outcome = yield* attempt(sanitizeFilter(wire, { fields: ['name'] }))
+
           expect((outcome as AnyType).error).toBe(DbErrors.Validation)
         }
 
@@ -321,13 +357,17 @@ describe('wire-filter sanitizing', () => {
             { fields: ['name'], ops: ['eq'] },
           ),
         )
+
         expect((restricted as AnyType).error).toBe(DbErrors.Validation)
 
         let deep: Record<string, unknown> = { op: 'eq', field: 'name', value: 'x' }
+
         for (let index = 0; index < 12; index += 1) {
           deep = { op: 'not', filter: deep }
         }
+
         const nested = yield* attempt(sanitizeFilter(deep, { fields: ['name'] }))
+
         expect((nested as AnyType).error).toBe(DbErrors.Validation)
       }),
     )
@@ -340,6 +380,7 @@ describe('wire-filter sanitizing', () => {
           { op: 'in', field: 'role', value: ['admin', 'member'] },
           { fields: ['role'] },
         )
+
         expect(canonical).toEqual({ op: 'in', field: 'role', value: ['admin', 'member'] })
         expect(matches({ role: 'admin' }, canonical as Spec.Filter)).toBe(true)
 
@@ -347,12 +388,14 @@ describe('wire-filter sanitizing', () => {
           { op: 'not-in', field: 'role', values: ['admin'] },
           { fields: ['role'] },
         )
+
         expect(legacy).toEqual({ op: 'not-in', field: 'role', value: ['admin'] })
         expect(matches({ role: 'member' }, legacy as Spec.Filter)).toBe(true)
 
         const bad = yield* attempt(
           sanitizeFilter({ op: 'in', field: 'role', value: 'admin' }, { fields: ['role'] }),
         )
+
         expect((bad as AnyType).error).toBe(DbErrors.Validation)
       }),
     )
@@ -373,17 +416,22 @@ describe('adapter middleware', () => {
       await run(function* () {
         yield* MemoryAdapter.use()
         yield* BunIO.use()
+
         const db = yield* DbClient.use({ tables: [users] })
         const seen: string[] = []
+
         yield* DbAdapter.around({
           find: ([spec]: AnyType[], next: AnyType) =>
             (function* () {
               seen.push(`find:${spec.table.name}`)
+
               return yield* next(spec)
             })(),
         })
         yield* db.insert('users', { name: 'ada' })
+
         const rows = yield* db.query('users').filter(where.gt('age', -1)).collect()
+
         expect(rows).toHaveLength(0)
         expect(seen).toEqual(['find:users'])
       }),

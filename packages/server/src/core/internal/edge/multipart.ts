@@ -73,17 +73,24 @@ export function* parseParts(
     // oxlint-disable-next-line max-params -- busboy's signature
     (name: string, file: AnyType, _filename: string, _encoding: string, _mime: string) => {
       settle()
+
       const lane = lanes.get(name)
+
       if (!lane) {
         file.resume()
+
         return
       }
+
       lane.fed = true
+
       let pending = 0
       let paused = false
+
       file.on('data', (chunk: Uint8Array) => {
         lane.queue.add(new Uint8Array(chunk))
         pending += 1
+
         if (!paused && pending >= HIGH_WATER) {
           paused = true
           file.pause()
@@ -92,6 +99,7 @@ export function* parseParts(
       file.on('end', () => lane.queue.close(undefined))
       lane.resume = () => {
         pending -= 1
+
         if (paused && pending <= LOW_WATER) {
           paused = false
           file.resume()
@@ -102,6 +110,7 @@ export function* parseParts(
 
   busboy.on('finish', () => {
     settle()
+
     for (const lane of lanes.values()) {
       if (!lane.fed) {
         lane.queue.close(undefined)
@@ -111,6 +120,7 @@ export function* parseParts(
 
   busboy.on('error', () => {
     settle()
+
     for (const lane of lanes.values()) {
       lane.queue.close(undefined)
     }
@@ -121,10 +131,13 @@ export function* parseParts(
   yield* fork(function* () {
     for (;;) {
       const step = yield* until(reader.read())
+
       if (step.done) {
         busboy.end()
+
         return
       }
+
       if (!busboy.write(Buffer.from(step.value))) {
         yield* until(
           new Promise<void>(resolve => {
@@ -155,6 +168,7 @@ export function* parseParts(
         }
       },
     }
+
     streams[name] = brandStream(yield* toReadable(flow), decl.streams[name]!.brand)
   }
 

@@ -8,7 +8,7 @@ import type { Result } from 'std:result'
 import { fail, formatFailure, isFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
 import type { TraceDef } from 'std:trace'
-import { extract, inject, span } from 'std:trace'
+import { Trace } from 'std:trace'
 
 import { QueueErrors } from '../errors'
 import type { Helpers } from '../types/helpers'
@@ -22,7 +22,6 @@ import {
   DEFAULT_LEASE_MS,
   DEFAULT_MAX_ATTEMPTS,
   DEFAULT_POLL_MS,
-  ERROR_LIMIT,
   MESSAGING_SYSTEM,
   PROCESS_EXCEPTION_EVENT,
   RETRY_STATUS,
@@ -81,27 +80,26 @@ export const delayOf = (backoff: QueueDef.Backoff, failed: number): number => {
   return Math.max(0, Math.min(cap, raw))
 }
 
-/** What `last_error` keeps of a failed attempt: its whole cause chain, budgeted. */
+/** What `last_error` keeps of a failed attempt: its whole cause chain. */
 const describe = (failure: Result.Failure<unknown>): string =>
-  formatFailure(failure, { chain: true, maxBytes: ERROR_LIMIT })
+  formatFailure(failure, { chain: true })
 
 /** A stored W3C context (the row's `traceparent` / `tracestate` columns), or `null`. */
-const storedContext = (
+function* storedContext(
   traceparent: string | null | undefined,
   tracestate?: string | null,
-): TraceDef.SpanContext | null =>
-  traceparent
-    ? extract(name =>
-        name === 'traceparent' ? traceparent : name === 'tracestate' ? (tracestate ?? null) : null,
-      )
+): Operation<TraceDef.SpanContext | null> {
+  return traceparent
+    ? yield* Trace.actions.extract({ traceparent, ...(tracestate ? { tracestate } : {}) })
     : null
+}
 
 /** An attempt's links: the enqueue (`creation`) and — once an attempt ran before, a retry, a
  * handback or a manual `retry()` — the previous attempt (`queue.retry`). */
-const linksOf = (row: Helpers.Row): TraceDef.LinkInput[] => {
+function* linksOf(row: Helpers.Row): Operation<TraceDef.LinkInput[]> {
   const links: TraceDef.LinkInput[] = []
-  const creation = storedContext(row.traceparent, row.tracestate)
-  const previous = storedContext(row.last_traceparent)
+  const creation = yield* storedContext(row.traceparent, row.tracestate)
+  const previous = yield* storedContext(row.last_traceparent)
 
   if (creation) {
     links.push({ context: creation, attributes: { 'ozaco.link.reason': 'creation' } })
@@ -165,7 +163,7 @@ export function* startWorker(
    * Run one claimed job to its next state, in the attempt's own ROOT consumer span `process
    * {table}` — run as the worker's `service` — linking the enqueue and the previous attempt. A
    * failure with attempts left settles
-   * as handled (WARN, `error.type`); a dead letter as an error (ERROR, `ozaco.queue.dead`). Halted
+   * as handled (WARN, `error.type`); a dead letter as an error (ERROR, `queue.dead`). Halted
    * mid-run, it hands the job back.
    */
   const run = function* (row: Helpers.Row) {
@@ -187,7 +185,7 @@ export function* startWorker(
       }
     }
 
-    yield* span(
+    yield* Trace.actions.span(
       `process ${table}`,
       {
         kind: 'consumer',
@@ -196,7 +194,7 @@ export function* startWorker(
         parent: null,
         service,
         scope: TELEMETRY_SCOPE,
-        links: linksOf(row),
+        links: yield* linksOf(row),
         attributes: {
           'messaging.system': MESSAGING_SYSTEM,
           'messaging.operation.type': 'process',
@@ -213,7 +211,9 @@ export function* startWorker(
       },
       function* (handle) {
         // this attempt's context rides the row: the next attempt links it
-        const trail = traced ? { last_traceparent: (yield* inject()).traceparent ?? null } : {}
+        const trail = traced
+          ? { last_traceparent: (yield* Trace.actions.inject()).traceparent ?? null }
+          : {}
         let settled = false
 
         try {
@@ -235,6 +235,7 @@ export function* startWorker(
 
           if (isFailure(outcome)) {
             const next = failedPatch(row, settings, describe(outcome), now)
+
             yield* db.patch(table, row._id, { ...next, ...trail }, { scope: ours })
             failed = outcome
             dead = next.state === 'dead'
@@ -247,7 +248,8 @@ export function* startWorker(
               stats.retried += 1
             }
 
-            // the attempt's failure ends its span (and settles by `failure.status` above)
+            // the attempt's failure ends its span (and settles by `failure.status` above); the
+            // runtime then raises it — the caller's `attempt(() => run(row))` takes it back
             return outcome
           }
 

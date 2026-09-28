@@ -1,41 +1,12 @@
 import type { Operation } from 'std:effect'
-import type { Result } from 'std:result'
 import type { TraceDef } from 'std:trace'
-import {
-  activeContext,
-  canEmit,
-  current,
-  emitLog,
-  exceptionAttributes,
-  isRecorded,
-  markRecorded,
-  recordFailure,
-} from 'std:trace'
+import { Trace } from 'std:trace'
 
 import pkg from '../../../../package.json'
-import { LogLevel } from '../../const'
 import { TELEMETRY_BINDING, TELEMETRY_SENT } from '../../internal/const'
 import type { LoggerDef } from '../../types/logger'
 
 import { logAttributes, severityOf } from './utils'
-
-/**
- * Record the entry's first failure — logged at WARN or above inside a RECORDING span — through
- * std:trace `recordFailure` (an `exception` span event + ONE exception record, once per trace:
- * a later escape of the same failure only sets the spans' status). Whether it was recorded HERE.
- */
-function* recordOnSpan(
-  failure: Result.Failure<unknown>,
-  traceId: string,
-  severity: number,
-): Operation<boolean> {
-  if (isRecorded(failure, traceId)) {
-    return false
-  }
-
-  yield* recordFailure(failure, { severity })
-  return true
-}
 
 /** The instrumentation scope of a record whose entry has no `logger` binding. */
 export const LOGGER_SCOPE: TraceDef.InstrumentationScope = Object.freeze({
@@ -68,10 +39,9 @@ export const isSent = (entry: LoggerDef.Entry): boolean =>
  * The entry's bindings + data as log attributes ({@link logAttributes}): data wins over a binding
  * of the same key, a `logger` binding naming the scope is left out.
  */
-export const attributesOf = (
+export function* attributesOf(
   entry: LoggerDef.Entry,
-  taken?: ReadonlySet<string>,
-): Record<string, TraceDef.AttrValue> => {
+): Operation<Record<string, TraceDef.AttrValue>> {
   const fields = new Map<string, unknown>()
   const scoped = scopeName(entry.bindings) !== undefined
 
@@ -85,69 +55,38 @@ export const attributesOf = (
     fields.set(key, value)
   }
 
-  return logAttributes(Object.fromEntries(fields), taken)
+  return yield* logAttributes(Object.fromEntries(fields))
 }
 
 /**
- * Hand one entry to the Tracer as a log record (`emitLog`): correlated to the entry's span (else
- * the active one), severity by level, `severityText` the level's name, body the message (the
- * failure's one-liner when there is none), scope the `logger` binding (default
- * `@ozaco/std/logger`), attributes the flattened bindings + data.
- *
- * The entry's first failure: at WARN+ inside a RECORDING span it goes to `recordFailure` (the
- * line carries no exception attributes, and a line that would only repeat the exception — no
- * message, no data — is not emitted); otherwise the line carries its exception attributes
- * (unless the failure already has an exception record in the line's trace), and at WARN+ the
- * failure is marked recorded there (its later escape adds no second exception record).
+ * Hand one entry to the sinks as a log record (`Trace.actions.emitLog`): correlated to the entry's
+ * span (else the active one), severity by level, `severityText` the level's name, body the message
+ * (the failure's one-liner when there is none), scope the `logger` binding (default
+ * `@ozaco/std/logger`), attributes the flattened bindings + data, the entry's first failure as the
+ * record's `failure` — a line that would only repeat its exception record (no message, no data)
+ * is not emitted.
  *
  * Where tracing is OFF (never enabled — infrastructure installed outside every observing node)
- * the record still goes out, through the process FALLBACK sink (`registerFallback`: the first
- * observing server in the process): no span is written there, so a failure rides on the line as
- * exception attributes. Nothing happens while suppressed, with tracing off and no fallback
- * registered, or for an entry `ctx.log` already emitted.
+ * the record still goes out, through the process FALLBACK sink (the first observing server in the
+ * process). Nothing happens while suppressed, with tracing off and no fallback registered, or for
+ * an entry `ctx.log` already emitted.
  */
 export function* forward(entry: LoggerDef.Entry): Operation<void> {
-  if (isSent(entry) || !(yield* canEmit())) {
+  if (isSent(entry) || !(yield* Trace.actions.canEmit())) {
     return
   }
 
   const severity = severityOf(entry.level)
-  const failure = entry.failures[0]
-  let exception: TraceDef.Attributes | undefined
 
-  if (failure) {
-    const handle = yield* current()
-    const serious = entry.level >= LogLevel.warn
-
-    if (serious && handle.recording) {
-      const recorded = yield* recordOnSpan(failure, handle.context.traceId, severity.number)
-
-      if (recorded && !entry.msg && !entry.data) {
-        return
-      }
-    } else {
-      const traceId = (entry.trace ?? (yield* activeContext()))?.traceId ?? ''
-
-      // already an exception record in this trace: the line stays a plain line
-      if (!isRecorded(failure, traceId)) {
-        exception = exceptionAttributes(failure)
-
-        if (serious) {
-          markRecorded(failure, traceId)
-        }
-      }
-    }
-  }
-
-  const attributes = attributesOf(entry, new Set(exception ? Object.keys(exception) : []))
-
-  yield* emitLog({
+  yield* Trace.actions.emitLog({
     body: entry.msg || entry.error || severity.text,
     severityNumber: severity.number,
     severityText: severity.text,
-    attributes: exception ? { ...attributes, ...exception } : attributes,
+    attributes: yield* attributesOf(entry),
     time: entry.time,
     scope: scopeOf(entry.bindings),
     ...(entry.trace ? { context: entry.trace } : {}),
+    failure: entry.failures[0],
+    omitRecorded: !entry.msg && !entry.data,
   })
 }

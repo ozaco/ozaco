@@ -25,11 +25,13 @@ const nextFrame = (after: number): Promise<AnyType> =>
     const poll = () => {
       if (frames.length > after) {
         resolve(frames[after])
+
         return
       }
 
       if (Date.now() > deadline) {
         reject(new Error(`no frame ${after} — got ${JSON.stringify(frames)}`))
+
         return
       }
 
@@ -44,6 +46,7 @@ describe('resource — windowed realtime', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const todos = crud(todosTable)
         const server = yield* createServer({
           services: [todos],
@@ -60,6 +63,7 @@ describe('resource — windowed realtime', () => {
         const socketDoc = manifest.services
           .flatMap((svc: AnyType) => svc.actions)
           .find((entry: AnyType) => entry.kind === 'socket' && entry.protocol === 'resource')
+
         expect(socketDoc).toMatchObject({ path: '/todos/_realtime', defaults: { cursor: 0 } })
 
         const create = (title: string) =>
@@ -76,6 +80,7 @@ describe('resource — windowed realtime', () => {
         }
 
         const ws = new WebSocket(`${base.replace('http', 'ws')}/todos/_realtime`)
+
         ws.addEventListener('message', event => frames.push(JSON.parse(String(event.data))))
         yield* until(
           new Promise(resolve => {
@@ -87,7 +92,9 @@ describe('resource — windowed realtime', () => {
         ws.send(
           JSON.stringify({ t: 'watch', id: 'w', limit: 2, cursor: 0, order: { field: 'title' } }),
         )
+
         const sync = yield* until(nextFrame(0))
+
         expect(sync.t).toBe('sync')
         expect(sync.rows.map((row: AnyType) => row.title)).toEqual(['a', 'b'])
         expect(sync.page).toMatchObject({ prev: null, total: 5 })
@@ -96,6 +103,7 @@ describe('resource — windowed realtime', () => {
 
         // an IN-WINDOW change (order untouched) → delta.changed
         const aId = sync.rows[0]._id
+
         yield* until(
           fetch(`${base}/todos/${aId}`, {
             method: 'PATCH',
@@ -103,7 +111,9 @@ describe('resource — windowed realtime', () => {
             body: JSON.stringify({ done: true }),
           }),
         )
+
         const delta1 = yield* until(nextFrame(1))
+
         expect(delta1.t).toBe('delta')
         expect(delta1.changed.map((row: AnyType) => row.title)).toEqual(['a'])
         expect(delta1.page.total).toBe(5)
@@ -111,14 +121,18 @@ describe('resource — windowed realtime', () => {
 
         // an OUT-OF-WINDOW insert ("another client created a row past your range") → notify
         yield* create('x')
+
         const notify = yield* until(nextFrame(2))
+
         expect(notify.t).toBe('notify')
         expect(notify.page.total).toBe(6)
         expect(notify.token > delta1.token).toBe(true)
 
         // an insert that SHIFTS the window ('A' sorts first) → delta: added A, removed b
         yield* create('A')
+
         const delta2 = yield* until(nextFrame(3))
+
         expect(delta2.t).toBe('delta')
         expect(delta2.added.map((row: AnyType) => row.title)).toEqual(['A'])
         expect(delta2.removed).toHaveLength(1)
@@ -134,7 +148,9 @@ describe('resource — windowed realtime', () => {
             order: { field: 'title' },
           }),
         )
+
         const sync2 = yield* until(nextFrame(4))
+
         expect(sync2.t).toBe('sync')
         expect(sync2.rows.map((row: AnyType) => row.title)).toEqual(['b', 'c'])
         expect(sync2.page.prev).toBeTruthy()
@@ -150,21 +166,28 @@ describe('resource — windowed realtime', () => {
             order: { field: 'title' },
           }),
         )
+
         const sync3 = yield* until(nextFrame(5))
+
         expect(sync3.t).toBe('sync')
         expect(sync3.rows.map((row: AnyType) => row.title)).toEqual(['A', 'a'])
 
         // a bare row _id as cursor: the window STARTS at that row (default `_id` order)
         const all = yield* until((yield* until(fetch(`${base}/todos?order=_id`))).json())
         const third = (all as AnyType).data[2]
+
         ws.send(JSON.stringify({ t: 'watch', id: 'row', limit: 2, cursor: third._id }))
+
         const fromRow = yield* until(nextFrame(6))
+
         expect(fromRow.t).toBe('sync')
         expect(fromRow.rows[0]._id).toBe(third._id)
 
         // an unreadable cursor no longer dies silently — it comes back as an error frame
         ws.send(JSON.stringify({ t: 'watch', id: 'bad', limit: 2, cursor: '???' }))
+
         const bad = yield* until(nextFrame(7))
+
         expect(bad).toMatchObject({ t: 'error', id: 'bad', tag: 'db.cursor' })
 
         ws.close()

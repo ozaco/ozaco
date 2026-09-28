@@ -61,6 +61,7 @@ describe('attempt / recover boundaries', () => {
     })
 
     const causes = unwrap(outcome) as string[]
+
     expect(causes).toContain('stage-one')
     expect(causes).toContain('stage-two')
   })
@@ -96,6 +97,7 @@ describe('attempt / recover boundaries', () => {
       const contained = yield* attempt(function* () {
         return yield* scoped(function* () {
           yield* fail('deep-failure', 'inside two layers')
+
           return 'unreachable'
         })
       })
@@ -139,6 +141,7 @@ describe('mapError / guard() normalization', () => {
     const outcome = await run(function* () {
       const captured = yield* attempt(() => failing())
       const value = yield* succeeding()
+
       return { raised: isFailure(captured) && captured.error, value: value.value }
     })
 
@@ -152,6 +155,7 @@ describe('mapError / guard() normalization', () => {
 
     const outcome = await run(function* () {
       const result = yield* attempt(() => tagged())
+
       return isFailure(result) ? result.causes : []
     })
 
@@ -224,10 +228,12 @@ describe('teardown semantics', () => {
       scoped(function* () {
         yield* ensure(function* () {
           ran.push('first')
+
           throw fail('first-teardown')
         })
         yield* ensure(function* () {
           ran.push('second')
+
           throw fail('second-teardown')
         })
       }),
@@ -235,6 +241,7 @@ describe('teardown semantics', () => {
 
     expect(ran).toEqual(['second', 'first'])
     expect(isFailure(outcome)).toBe(true)
+
     if (isFailure(outcome)) {
       expect(['first-teardown', 'second-teardown']).toContain(outcome.error as string)
     }
@@ -268,6 +275,7 @@ describe('engine regressions', () => {
         throw new Error('task boom')
       })
       let raised = false
+
       try {
         yield* call(() => bad)
       } catch (error) {
@@ -294,7 +302,9 @@ describe('engine regressions', () => {
       })
 
       const gate = withResolvers<unknown>()
+
       gate.resolve(thenable)
+
       const gated = yield* gate.operation
 
       const task = yield* spawn(function* () {
@@ -318,6 +328,7 @@ describe('engine regressions', () => {
     const wrapped = await run(function* () {
       return { boxed: thenable }
     })
+
     expect((unwrap(wrapped) as { boxed: unknown }).boxed).toBe(thenable)
   })
 
@@ -326,6 +337,7 @@ describe('engine regressions', () => {
       const value = yield* until(Promise.resolve('async value'))
 
       let failed = false
+
       try {
         yield* until(Promise.reject(new Error('nope')))
       } catch (error) {

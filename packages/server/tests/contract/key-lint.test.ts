@@ -20,6 +20,7 @@ let plugins: Record<string, ObserveDef.Event[]> = {}
 
 beforeAll(async () => {
   const traffic = await runTraffic()
+
   plugins = await runPluginTraffic()
   emitted = [
     ...emittedOf(traffic.events, 'traffic'),
@@ -41,6 +42,7 @@ describe('contract — key lint', () => {
     }
 
     const attributes = keysAt('span attribute', 'log attribute', 'event attribute')
+
     for (const key of [
       'ozaco.auth.outcome',
       'enduser.id',
@@ -62,15 +64,16 @@ describe('contract — key lint', () => {
     }
 
     const events = keysAt('span event')
+
     for (const name of [
       'exception',
-      'ozaco.auth.skip',
-      'ozaco.cors.reject',
-      'ozaco.cache.evict',
-      'ozaco.breaker',
-      'ozaco.crud.hook',
-      'ozaco.queue.dead',
-      'ozaco.ws.send',
+      'auth.skip',
+      'cors.reject',
+      'cache.evict',
+      'breaker',
+      'crud.hook',
+      'queue.dead',
+      'ws.send',
     ]) {
       expect({ name, seen: events.has(name) }).toEqual({ name, seen: true })
     }
@@ -85,6 +88,7 @@ describe('contract — key lint', () => {
 
   it('every span event name fits what Grafana shows', () => {
     const long = [...keysAt('span event')].filter(name => name.length > EVENT_NAME_MAX)
+
     expect(long).toEqual([])
   })
 

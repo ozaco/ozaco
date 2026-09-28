@@ -2,12 +2,12 @@
  * crud telemetry (design §7): a BUILT-IN op opens no span of its own — the dispatch span IS the op
  * (`ozaco.crud.scoped`, `ozaco.crud.recovered` on it; the db child spans carry the `db.*` keys) —
  * while a RUNNABLE op inside a custom action opens `crud.{op} {table}`. A hook that replaces what
- * flows through it is an `ozaco.crud.hook` event. Realtime: `watch {table}` covers subscribe +
+ * flows through it is an `crud.hook` event. Realtime: `watch {table}` covers subscribe +
  * the initial sync only; every later push is a `record: 'errors'` ROOT `crud.delta {table}` that
  * links the watch span (`crud.watch`) and the writer of the change (`change.writer`); a failed
  * watch is recorded once as an ERROR and the subscriber's error frame is tag + message + `recorded`
  * (the traceparent of the span that recorded it — a subscriber in that trace records nothing).
- * Seen through an in-memory std:trace `Tracer`.
+ * Seen through an in-memory std:trace `Trace` sink.
  */
 import { DbClient, where } from 'db:core'
 import { action, createServer, Edge, ServerErrors, service } from 'server:core'
@@ -16,7 +16,7 @@ import { run, sleep, until } from 'std:effect'
 import { fail, ResultErrors, unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
 import type { TraceDef } from 'std:trace'
-import { enableTracing, Tracer, traceparentOf } from 'std:trace'
+import { Trace } from 'std:trace'
 
 import { describe, expect, it } from 'bun:test'
 
@@ -27,17 +27,19 @@ import { LABELS, storage, todosTable } from '../helpers'
 
 let installs = 0
 
-/** An in-memory std:trace `Tracer` installed around the server: every span and log record. */
+/** An in-memory std:trace `Trace` sink installed around the server: every span and log record. */
 const memoryTracer = () => {
   installs += 1
+
   const spans: TraceDef.SpanData[] = []
   const logs: TraceDef.LogData[] = []
 
-  const plugin = Tracer.implement({
+  const plugin = Trace.implement({
     name: `test/resource-tracer-${installs}`,
     version: '1.0.0',
     *setup() {
-      yield* enableTracing()
+      yield* Trace.actions.enableTracing()
+
       return {}
     },
   }).build({
@@ -53,9 +55,11 @@ const memoryTracer = () => {
 
   const one = (name: string): TraceDef.SpanData => {
     const found = named(name)
+
     if (found.length !== 1) {
       throw new Error(`expected one span "${name}", got ${found.length}: ${names()}`)
     }
+
     return found[0]!
   }
 
@@ -66,7 +70,7 @@ const memoryTracer = () => {
     logs.filter(log => log.attributes['exception.type'] !== undefined)
   const hookPhases = (data: TraceDef.SpanData): unknown[] =>
     data.events
-      .filter(event => event.name === 'ozaco.crud.hook')
+      .filter(event => event.name === 'crud.hook')
       .map(event => event.attributes?.['ozaco.crud.hook.phase'])
 
   return { plugin, spans, logs, named, one, names, childrenOf, exceptions, hookPhases }
@@ -75,6 +79,7 @@ const memoryTracer = () => {
 const json = function* (path: string, init?: RequestInit) {
   const response = yield* Edge.actions.handle(new Request(`http://edge${path}`, init))
   const text = yield* until(response.text())
+
   return { status: response.status, body: text ? JSON.parse(text) : null }
 }
 
@@ -89,6 +94,7 @@ const post = (path: string, body: unknown) =>
 const socketClient = (url: string) => {
   const frames: AnyType[] = []
   const ws = new WebSocket(url)
+
   ws.addEventListener('message', event => frames.push(JSON.parse(String(event.data))))
 
   const opened = until(
@@ -110,6 +116,7 @@ const socketClient = (url: string) => {
             setTimeout(poll, 10)
           }
         }
+
         poll()
       }),
     )
@@ -125,6 +132,10 @@ const expectNoDuplicateKeys = (spans: readonly TraceDef.SpanData[]): void => {
     }
   }
 }
+
+/** The `traceparent` a context is written as (`Trace.actions.inject`). */
+const traceparentOf = async (context: TraceDef.SpanContext) =>
+  unwrap(await run(() => Trace.actions.inject({ context }))).traceparent
 
 describe('resource — telemetry', () => {
   it('a built-in op is its dispatch span; a runnable op in a custom action is its own span', async () => {
@@ -161,6 +172,7 @@ describe('resource — telemetry', () => {
 
         // a runnable op with no recording parent at all (a script, a start hook) opens nothing
         const db = (yield* DbClient.context.get()) as AnyType
+
         yield* crud.count(todosTable, { db })
       }),
     )
@@ -168,6 +180,7 @@ describe('resource — telemetry', () => {
     // built-ins: no `crud.*` span; the dispatch span says whether a trusted scope applied
     const list = tracer.one('todos.list')
     const create = tracer.one('todos.create')
+
     expect(list.attributes['ozaco.crud.scoped']).toBe(true)
     expect(create.attributes['ozaco.crud.scoped']).toBe(false)
     expect(tracer.named('crud.list todos')).toHaveLength(1)
@@ -181,6 +194,7 @@ describe('resource — telemetry', () => {
     // the custom action's runnable op: its own span under the dispatch, the db span under it
     const open = tracer.one('todos.open')
     const op = tracer.one('crud.list todos')
+
     expect(op.parent?.spanId).toBe(open.context.spanId)
     expect(op.kind).toBe('internal')
     expect(op.scope.name).toBe('@ozaco/server/crud')
@@ -210,11 +224,13 @@ describe('resource — telemetry', () => {
         if (op === 'remove') {
           return { removed: false }
         }
+
         return yield* next(input)
       },
       *error({ op, input }) {
         if (op === 'get') {
           const now = new Date().toISOString()
+
           return {
             _id: String((input as AnyType).id),
             _created_at: now,
@@ -225,6 +241,7 @@ describe('resource — telemetry', () => {
             note: null,
           }
         }
+
         if (op === 'update') {
           return yield* fail(ServerErrors.BadRequest, 'update rewritten by hook')
         }
@@ -238,6 +255,7 @@ describe('resource — telemetry', () => {
         yield* createServer({ services: [todos], edge: BunEdge })
 
         const created = yield* post('/todos', { title: 'a', done: false })
+
         expect(created.body.title).toBe('a!')
         expect((yield* json(`/todos/${created.body._id}`)).body.title).toBe('seen')
         expect((yield* json('/todos')).status).toBe(200)
@@ -247,6 +265,7 @@ describe('resource — telemetry', () => {
 
         // the error hook RECOVERS a miss with a stub row
         const ghost = yield* json('/todos/nope')
+
         expect(ghost.body.title).toBe('ghost')
 
         // …and REPLACES another with its own failure
@@ -255,6 +274,7 @@ describe('resource — telemetry', () => {
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ title: 'x' }),
         })
+
         expect(rewritten.status).toBe(400)
       }),
     )
@@ -267,6 +287,7 @@ describe('resource — telemetry', () => {
     const gets = tracer.named('todos.get')
     const seen = gets.find(data => data.attributes['ozaco.crud.recovered'] === undefined)!
     const recovered = gets.find(data => data.attributes['ozaco.crud.recovered'] === true)!
+
     expect(tracer.hookPhases(seen)).toEqual(['after'])
     expect(tracer.hookPhases(recovered)).toEqual(['error'])
     expect(recovered.status.code).toBe('unset')
@@ -276,19 +297,25 @@ describe('resource — telemetry', () => {
     const misses = tracer
       .exceptions()
       .filter(log => log.attributes['exception.type'] === ServerErrors.NotFound)
+
     expect(misses).toHaveLength(2)
+
     const swallowed = misses.find(log => log.context?.spanId === recovered.context.spanId)!
+
     expect(swallowed.severityNumber).toBe(13)
     expect(swallowed.attributes['ozaco.failure.causes']).toEqual([CrudCauses.Get])
 
     // the miss an unrelated replacement hid: handled on its dispatch span, beside the replacement
     const update = tracer.one('todos.update')
     const hidden = misses.find(log => log.context?.spanId === update.context.spanId)!
+
     expect(hidden.severityNumber).toBe(13)
     expect(hidden.attributes['ozaco.failure.causes']).toEqual([CrudCauses.Update])
+
     const replacement = tracer
       .exceptions()
       .filter(log => log.attributes['exception.type'] === ServerErrors.BadRequest)
+
     expect(replacement).toHaveLength(1)
     expect(replacement[0]!.context?.spanId).toBe(update.context.spanId)
   })
@@ -319,14 +346,18 @@ describe('resource — telemetry', () => {
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ title: 'x' }),
         })
+
         expect(rewritten.status).toBe(400)
       }),
     )
 
     const update = tracer.one('todos.update')
+
     expect(tracer.hookPhases(update)).toEqual(['error'])
+
     // the miss is part of the replacement's chain — never a record of its own
     const records = tracer.exceptions().filter(log => log.context?.spanId === update.context.spanId)
+
     expect(records.map(log => log.attributes['exception.type'])).toEqual([ServerErrors.BadRequest])
     expect(records[0]!.attributes['ozaco.failure.chain']).toEqual([
       `${ServerErrors.BadRequest}: update rewritten by hook`,
@@ -351,6 +382,7 @@ describe('resource — telemetry', () => {
         yield* createServer({ services: [todos], edge: BunEdge })
 
         const missing = yield* json('/todos/nope')
+
         expect(missing.status).toBe(404)
         expect(missing.body.error.causes).toEqual(located(missing, 'get', CrudCauses.Get))
 
@@ -359,6 +391,7 @@ describe('resource — telemetry', () => {
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ title: 'x' }),
         })
+
         expect(patched.body.error.causes).toEqual(located(patched, 'update', CrudCauses.Update))
 
         const replaced = yield* json('/todos/nope', {
@@ -366,6 +399,7 @@ describe('resource — telemetry', () => {
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ title: 'x', done: false }),
         })
+
         expect(replaced.body.error.causes).toEqual(located(replaced, 'replace', CrudCauses.Replace))
       }),
     )
@@ -392,9 +426,11 @@ describe('resource — telemetry', () => {
       await run(function* () {
         yield* storage()
         yield* tracer.plugin.use()
+
         const server = yield* createServer({ services: [todos], edge: BunEdge })
         const info = yield* server.start({ port: 0 })
         const client = socketClient(`${info.url!.replace('http', 'ws')}/todos/_realtime`)
+
         yield* client.opened
 
         yield* server.call(todos, 'create', { title: 'first', done: false })
@@ -428,16 +464,18 @@ describe('resource — telemetry', () => {
     const frame = tracer
       .named('WS /todos/_realtime')
       .find(data => data.context.spanId === watch.parent?.spanId)
+
     expect(frame).toBeDefined()
     expect(watch.start).toBeGreaterThanOrEqual(frame!.start)
     expect(watch.end).toBeLessThanOrEqual(frame!.end)
     expect(watch.scope.name).toBe('@ozaco/server/crud')
     expect(watch.attributes['ozaco.crud.scoped']).toBe(false)
     expect(watch.status.code).toBe('unset')
-    expect(watch.events.map(event => event.name)).toContain('ozaco.ws.send')
+    expect(watch.events.map(event => event.name)).toContain('ws.send')
 
     // only the FAILED push was exported — a root of its own
     const [push] = tracer.named('crud.delta todos')
+
     expect(tracer.named('crud.delta todos')).toHaveLength(1)
     expect(push!.parent).toBeNull()
     expect(push!.context.traceId).not.toBe(watch.context.traceId)
@@ -450,6 +488,7 @@ describe('resource — telemetry', () => {
     const reasons = Object.fromEntries(
       push!.links.map(link => [String(link.attributes?.['ozaco.link.reason']), link.context]),
     )
+
     expect(reasons['crud.watch']?.spanId).toBe(watch.context.spanId)
     expect(reasons['change.writer']?.spanId).toBe(writer.context.spanId)
     expect(reasons['change.writer']?.traceId).toBe(writer.context.traceId)
@@ -458,11 +497,12 @@ describe('resource — telemetry', () => {
     const records = tracer
       .exceptions()
       .filter(log => log.attributes['exception.type'] === 'todos.exploded')
+
     expect(records).toHaveLength(1)
     expect(records[0]!.severityNumber).toBe(17)
     expect(records[0]!.context?.spanId).toBe(push!.context.spanId)
     // the error frame names the push that recorded it (another trace than the watch's)
-    expect(failed.recorded).toBe(traceparentOf(push!.context))
+    expect(failed.recorded).toBe(await traceparentOf(push!.context))
 
     expectNoDuplicateKeys(tracer.spans)
   })
@@ -488,9 +528,11 @@ describe('resource — telemetry', () => {
       await run(function* () {
         yield* storage()
         yield* tracer.plugin.use()
+
         const server = yield* createServer({ services: [todos], edge: BunEdge })
         const info = yield* server.start({ port: 0 })
         const client = socketClient(`${info.url!.replace('http', 'ws')}/todos/_realtime`)
+
         yield* client.opened
 
         client.send({ t: 'watch', id: 'w1' })
@@ -512,11 +554,15 @@ describe('resource — telemetry', () => {
       tag: ServerErrors.Internal,
       message: 'TypeError: the delta threw',
     })
+
     const [push] = tracer.named('crud.delta todos')
+
     expect(push!.attributes['error.type']).toBe(ServerErrors.Internal)
+
     const records = tracer
       .exceptions()
       .filter(log => log.attributes['exception.type'] === ResultErrors.Unknown)
+
     expect(records).toHaveLength(1)
     expect(records[0]!.attributes['exception.message']).toBe('TypeError: the delta threw')
   })
@@ -536,9 +582,11 @@ describe('resource — telemetry', () => {
       await run(function* () {
         yield* storage()
         yield* tracer.plugin.use()
+
         const server = yield* createServer({ services: [todos], edge: BunEdge })
         const info = yield* server.start({ port: 0 })
         const client = socketClient(`${info.url!.replace('http', 'ws')}/todos/_realtime`)
+
         yield* client.opened
 
         // two watches back to back: the second frame is taken once the first one subscribed
@@ -553,12 +601,14 @@ describe('resource — telemetry', () => {
     )
 
     const watches = tracer.named('watch todos')
+
     expect(watches).toHaveLength(2)
 
     for (const watch of watches) {
       const frame = tracer
         .named('WS /todos/_realtime')
         .find(data => data.context.spanId === watch.parent?.spanId)
+
       expect(frame).toBeDefined()
       expect(watch.start).toBeGreaterThanOrEqual(frame!.start)
       expect(watch.end).toBeLessThanOrEqual(frame!.end)
@@ -566,6 +616,7 @@ describe('resource — telemetry', () => {
 
     // …and in frame order: the second subscribe starts after the first one ended
     const [first, second] = watches.toSorted((left, right) => left.start - right.start)
+
     expect(second!.start).toBeGreaterThanOrEqual(first!.end)
   })
 
@@ -574,6 +625,7 @@ describe('resource — telemetry', () => {
     const todos = crud(todosTable, {
       *after({ op, output }) {
         const frame = output as AnyType
+
         if (op === 'watch' && frame.t === 'delta') {
           return yield* fail('todos.exploded', 'the window exploded')
         }
@@ -584,9 +636,11 @@ describe('resource — telemetry', () => {
       await run(function* () {
         yield* storage()
         yield* tracer.plugin.use()
+
         const server = yield* createServer({ services: [todos], edge: BunEdge })
         const info = yield* server.start({ port: 0 })
         const client = socketClient(`${info.url!.replace('http', 'ws')}/todos/_realtime`)
+
         yield* client.opened
 
         client.send({ t: 'watch', id: 'page', limit: 5 })
@@ -606,6 +660,7 @@ describe('resource — telemetry', () => {
     const reasons = Object.fromEntries(
       push.links.map(link => [String(link.attributes?.['ozaco.link.reason']), link.context]),
     )
+
     expect(reasons['crud.watch']?.spanId).toBe(watch.context.spanId)
     expect(reasons['change.writer']?.spanId).toBe(writer.context.spanId)
 
@@ -622,9 +677,11 @@ describe('resource — telemetry', () => {
       await run(function* () {
         yield* storage()
         yield* tracer.plugin.use()
+
         const server = yield* createServer({ services: [todos], edge: BunEdge })
         const info = yield* server.start({ port: 0 })
         const client = socketClient(`${info.url!.replace('http', 'ws')}/todos/_realtime`)
+
         yield* client.opened
 
         // a field the resource does not let clients filter on
@@ -639,20 +696,25 @@ describe('resource — telemetry', () => {
     )
 
     const watch = tracer.one('watch todos')
+
     expect(watch.status.code).toBe('error')
+
     // a failed subscribe too sits inside the frame span that asked for it
     const frame = tracer
       .named('WS /todos/_realtime')
       .find(data => data.context.spanId === watch.parent?.spanId)
+
     expect(watch.start).toBeGreaterThanOrEqual(frame!.start)
     expect(watch.end).toBeLessThanOrEqual(frame!.end)
+
     const records = tracer.exceptions()
+
     expect(records).toHaveLength(1)
     expect(records[0]!.severityNumber).toBe(17)
     expect(records[0]!.context?.spanId).toBe(watch.context.spanId)
     expect(watch.attributes['error.type']).toBe(records[0]!.attributes['exception.type'])
     // `recorded`: the watch span that recorded it, in the trace the watch frame came in
-    expect(error.recorded).toBe(traceparentOf(watch.context))
+    expect(error.recorded).toBe(await traceparentOf(watch.context))
   })
 
   it('realtime (delta): a push links only the writers of the rows it carries', async () => {
@@ -676,9 +738,11 @@ describe('resource — telemetry', () => {
       await run(function* () {
         yield* storage()
         yield* tracer.plugin.use()
+
         const server = yield* createServer({ services: [todos], edge: BunEdge })
         const info = yield* server.start({ port: 0 })
         const client = socketClient(`${info.url!.replace('http', 'ws')}/todos/_realtime`)
+
         yield* client.opened
 
         client.send({ t: 'watch', id: 'open', filter: { op: 'eq', field: 'done', value: false } })
@@ -702,6 +766,7 @@ describe('resource — telemetry', () => {
       .one('crud.delta todos')
       .links.filter(link => link.attributes?.['ozaco.link.reason'] === 'change.writer')
       .map(link => link.context.spanId)
+
     expect(writers).toEqual([carried!.context.spanId])
     expect(writers).not.toContain(outside!.context.spanId)
   })
@@ -721,9 +786,11 @@ describe('resource — telemetry', () => {
       await run(function* () {
         yield* storage()
         yield* tracer.plugin.use()
+
         const server = yield* createServer({ services: [todos], edge: BunEdge })
         const info = yield* server.start({ port: 0 })
         const client = socketClient(`${info.url!.replace('http', 'ws')}/todos/_realtime`)
+
         yield* client.opened
 
         // a field clients may not filter on: the subscribe fails, the hook replaces the failure
@@ -736,14 +803,18 @@ describe('resource — telemetry', () => {
     )
 
     const watch = tracer.one('watch todos')
+
     expect(tracer.hookPhases(watch)).toEqual(['error'])
     expect(watch.attributes['error.type']).toBe('todos.refused')
 
     // the replacement: the watch's ERROR; the failure it replaced: handled (WARN), same span
     const records = tracer.exceptions()
+
     expect(records.map(log => log.severityNumber).toSorted()).toEqual([13, 17])
+
     const replaced = records.find(log => log.severityNumber === 17)!
     const hidden = records.find(log => log.severityNumber === 13)!
+
     expect(replaced.attributes['exception.type']).toBe('todos.refused')
     expect(hidden.attributes['exception.type']).not.toBe('todos.refused')
     expect(hidden.context?.spanId).toBe(watch.context.spanId)
@@ -761,12 +832,15 @@ describe('resource — telemetry', () => {
       await run(function* () {
         yield* storage()
         yield* tracer.plugin.use()
+
         const server = yield* createServer({ services: [notes] })
+
         yield* server.call(notes, 'seed', { title: 'x' })
       }),
     )
 
     const op = tracer.one('crud.create todos')
+
     expect(op.parent?.spanId).toBe(tracer.one('notes.seed').context.spanId)
     expect(tracer.childrenOf(op).map(data => data.name)).toEqual(['insert todos'])
   })

@@ -1,7 +1,7 @@
 import type { Protocol } from 'std:plugin'
 import { defineProtocol } from 'std:plugin'
 import { fail } from 'std:result'
-import { suppressed } from 'std:trace'
+import { Trace } from 'std:trace'
 
 import pkg from '../../../package.json'
 import {
@@ -149,6 +149,7 @@ export const ObserveExporter: Protocol<ObserveDef.ExporterContext, ObserveDef.Ex
 
       if (probe) {
         probe.push(...entries)
+
         return
       }
 
@@ -156,7 +157,7 @@ export const ObserveExporter: Protocol<ObserveDef.ExporterContext, ObserveDef.Ex
 
       for (const entry of entries) {
         if (!inherited?.has(entry)) {
-          yield* suppressed(() => run(entry))
+          yield* Trace.actions.suppressed(() => run(entry))
         }
       }
     },

@@ -41,6 +41,7 @@ describe('cli — table (non-interactive)', () => {
     unwrap(
       await boot(screen, function* () {
         const table = yield* Table.actions.table({ columns: [{ key: 'id', header: 'Id' }] })
+
         yield* table.row({ id: 'x' })
         yield* table.row({ id: LONG })
         // nothing is written before `end()`
@@ -50,6 +51,7 @@ describe('cli — table (non-interactive)', () => {
     )
 
     const out = screen.plain()
+
     expect(out).toContain(`| ${LONG} |`)
     expect(out).not.toContain('...')
     expect(out.split('\n').filter(line => line.startsWith('+'))).toHaveLength(3)
@@ -62,6 +64,7 @@ describe('cli — table (non-interactive)', () => {
     unwrap(
       await boot(screen, function* () {
         const table = yield* Table.actions.table({ columns: [{ header: 'Data' }], border: 'none' })
+
         yield* table.row([wide])
         yield* table.end()
       }),
@@ -76,12 +79,14 @@ describe('cli — table (non-interactive)', () => {
     unwrap(
       await boot(screen, function* () {
         const table = yield* Table.actions.table({ columns: [{ header: 'Data' }], border: 'none' })
+
         yield* table.row(['y'.repeat(50)])
         yield* table.end()
       }),
     )
 
     const lines = screen.plain().trimEnd().split('\n')
+
     expect(lines[1]).toBe(`${'y'.repeat(17)}...`)
   })
 
@@ -95,6 +100,7 @@ describe('cli — table (non-interactive)', () => {
           border: 'none',
           head: false,
         })
+
         yield* table.rows([{ name: 'ada' }, { name: 'grace' }, { name: 'linus' }])
         yield* table.update(0, { name: 'ada lovelace' })
         yield* table.remove(1)
@@ -105,6 +111,7 @@ describe('cli — table (non-interactive)', () => {
     expect(screen.plain()).toBe('ada lovelace\nlinus       \n')
 
     const replaced = pipe()
+
     unwrap(
       await boot(replaced, function* () {
         const table = yield* Table.actions.table({
@@ -112,6 +119,7 @@ describe('cli — table (non-interactive)', () => {
           head: false,
           border: 'none',
         })
+
         yield* table.rows([{ n: 1 }, { n: 2 }])
         yield* table.replace([{ n: 9 }])
         yield* table.set(0, 'n', 10)
@@ -134,11 +142,14 @@ describe('cli — table (interactive)', () => {
           border: 'none',
           head: false,
         })
+
         yield* table.rows([{ name: 'one' }, { name: 'two' }, { name: 'three' }])
         screen.clear()
 
         yield* table.remove(1)
+
         const redraw = screen.read()
+
         // erase the 3-row frame (cursor up 2 + erase down), then draw the 2-row one
         expect(redraw).toContain(`${String.fromCodePoint(27)}[2A${String.fromCodePoint(27)}[J`)
         expect(screen.plain()).toBe('one  \nthree')

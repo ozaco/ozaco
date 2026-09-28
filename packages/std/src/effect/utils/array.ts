@@ -7,10 +7,13 @@ export function* map<T, U>(
   mapFn: (value: T, index: number) => Operation<U>,
 ): Operation<U[]> {
   const result: U[] = []
+
   for (let i = 0; i < arr.length; i++) {
     const mapped = yield* mapFn(arr[i]!, i)
+
     result.push(mapped)
   }
+
   return result
 }
 
@@ -30,6 +33,7 @@ export function* some<T>(
       return true
     }
   }
+
   return false
 }
 
@@ -38,11 +42,13 @@ export function* filter<T>(
   predicate: (value: T, index: number) => Operation<boolean>,
 ): Operation<T[]> {
   const result: T[] = []
+
   for (let i = 0; i < arr.length; i++) {
     if (yield* predicate(arr[i]!, i)) {
       result.push(arr[i]!)
     }
   }
+
   return result
 }
 
@@ -51,6 +57,7 @@ export function* filterPar<T>(
   predicate: (value: T, index: number) => Operation<boolean>,
 ): Operation<T[]> {
   const results = yield* all(arr.map((v, i) => predicate(v, i)))
+
   return arr.filter((_, i) => results[i])
 }
 
@@ -60,9 +67,11 @@ export function* reduce<T, U>(
   initial: U,
 ): Operation<U> {
   let acc = initial
+
   for (let i = 0; i < arr.length; i++) {
     acc = yield* reduceFn(acc, arr[i]!, i)
   }
+
   return acc
 }
 
@@ -78,6 +87,7 @@ export function* toSorted<T>(
 
     while (j >= 0) {
       const cmp = yield* compareFn(result[j]!, current!)
+
       if (cmp <= 0) {
         break
       }

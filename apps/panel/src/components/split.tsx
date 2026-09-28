@@ -16,27 +16,34 @@ interface Persisted {
 export const usePersistedNumber = ({ key, fallback, min, max }: Persisted) => {
   const [value, setValue] = useState(() => {
     const stored = Number(storage.get(key))
+
     return Number.isFinite(stored) && stored >= min && stored <= max ? stored : fallback
   })
   const update = useCallback(
     (next: number) => {
       const clamped = Math.min(max, Math.max(min, next))
+
       setValue(clamped)
       storage.set(key, String(clamped))
     },
     [key, min, max],
   )
+
   return [value, update, () => update(fallback)] as const
 }
 
 export const useStacked = (breakpoint = 1000): boolean => {
   const [stacked, setStacked] = useState(() => window.innerWidth <= breakpoint)
+
   useEffect(() => {
     const media = window.matchMedia(`(max-width: ${breakpoint}px)`)
     const listen = () => setStacked(media.matches)
+
     media.addEventListener('change', listen)
+
     return () => media.removeEventListener('change', listen)
   }, [breakpoint])
+
   return stacked
 }
 
@@ -57,24 +64,30 @@ export const SplitLayout = ({ left, right, storageKey }: SplitProps) => {
   const host = useRef<HTMLDivElement>(null)
   const drag = (event: React.PointerEvent<HTMLDivElement>) => {
     const element = host.current
+
     if (!element) {
       return
     }
+
     event.currentTarget.setPointerCapture(event.pointerId)
+
     const rect = element.getBoundingClientRect()
     const move = (moveEvent: PointerEvent) => {
       const ratio = stacked
         ? (moveEvent.clientY - rect.top) / rect.height
         : (moveEvent.clientX - rect.left) / rect.width
+
       setPercent(Math.round(ratio * 100))
     }
     const up = () => {
       window.removeEventListener('pointermove', move)
       window.removeEventListener('pointerup', up)
     }
+
     window.addEventListener('pointermove', move)
     window.addEventListener('pointerup', up)
   }
+
   return (
     <div
       ref={host}
@@ -116,11 +129,13 @@ export const SideResizer = ({
     onDoubleClick={onReset}
     onPointerDown={event => {
       event.currentTarget.setPointerCapture(event.pointerId)
+
       const move = (moveEvent: PointerEvent) => onResize(moveEvent.clientX)
       const up = () => {
         window.removeEventListener('pointermove', move)
         window.removeEventListener('pointerup', up)
       }
+
       window.addEventListener('pointermove', move)
       window.addEventListener('pointerup', up)
     }}

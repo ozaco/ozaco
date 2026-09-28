@@ -20,12 +20,15 @@ const SAMPLING_KEYS = [
 /** Per-call sampling over the install defaults, dropping `undefined` entries. */
 const mergeSampling = (defaults: AiDef.Defaults, options: Helpers.Sampling): Helpers.Sampling => {
   const merged: Record<string, unknown> = {}
+
   for (const key of SAMPLING_KEYS) {
     const value = options[key] ?? defaults[key]
+
     if (value !== undefined) {
       merged[key] = value
     }
   }
+
   return merged as Helpers.Sampling
 }
 
@@ -40,30 +43,38 @@ const missingModel = (modality: keyof AiDef.Models) =>
 export function* resolveChatSpec(input: Helpers.ChatInput): Operation<Helpers.ChatSpec> {
   const { state, options } = input
   const { capabilities } = state.provider
+
   if (input.streaming ? !capabilities.chatStream : !capabilities.chat) {
     return yield* fail(
       AiErrors.Unsupported,
       `the "${state.provider.provider}" provider does not support ${input.streaming ? 'chatStream' : 'chat'}`,
     )
   }
+
   const tools = options.tools ?? []
+
   if (tools.length > 0 && !capabilities.tools) {
     return yield* fail(
       AiErrors.Unsupported,
       `the "${state.provider.provider}" provider does not support tools`,
     )
   }
+
   const output = options.output ?? 'text'
+
   if (output !== 'text' && !capabilities.json) {
     return yield* fail(
       AiErrors.Unsupported,
       `the "${state.provider.provider}" provider does not support structured output`,
     )
   }
+
   const model = options.model ?? state.models.chat
+
   if (!model) {
     return yield* missingModel('chat')
   }
+
   return {
     model,
     messages: normalizeMessages(input.messages),
@@ -77,16 +88,20 @@ export function* resolveChatSpec(input: Helpers.ChatInput): Operation<Helpers.Ch
 
 export function* resolveEmbedSpec(input: Helpers.EmbedInput): Operation<Helpers.EmbedSpec> {
   const { state, options } = input
+
   if (!state.provider.capabilities.embed) {
     return yield* fail(
       AiErrors.Unsupported,
       `the "${state.provider.provider}" provider does not support embed`,
     )
   }
+
   const model = options.model ?? state.models.embed
+
   if (!model) {
     return yield* missingModel('embed')
   }
+
   return {
     model,
     input: typeof input.input === 'string' ? [input.input] : input.input,
@@ -97,23 +112,29 @@ export function* resolveEmbedSpec(input: Helpers.EmbedInput): Operation<Helpers.
 
 export function* resolveSpeechSpec(input: Helpers.SpeechInput): Operation<Helpers.SpeechSpec> {
   const { state, options } = input
+
   if (!state.provider.capabilities.tts) {
     return yield* fail(
       AiErrors.Unsupported,
       `the "${state.provider.provider}" provider does not support tts`,
     )
   }
+
   const model = options.model ?? state.models.tts
+
   if (!model) {
     return yield* missingModel('tts')
   }
+
   const voice = options.voice ?? state.defaults.voice
+
   if (!voice) {
     return yield* fail(
       AiErrors.Configuration,
       'no speech voice configured — pass options.voice or install AiClient with defaults.voice',
     )
   }
+
   return {
     model,
     voice,
@@ -128,16 +149,20 @@ export function* resolveTranscribeSpec(
   input: Helpers.TranscribeInput,
 ): Operation<Helpers.TranscribeSpec> {
   const { state, options } = input
+
   if (!state.provider.capabilities.stt) {
     return yield* fail(
       AiErrors.Unsupported,
       `the "${state.provider.provider}" provider does not support stt`,
     )
   }
+
   const model = options.model ?? state.models.stt
+
   if (!model) {
     return yield* missingModel('stt')
   }
+
   return {
     model,
     audio: input.audio,

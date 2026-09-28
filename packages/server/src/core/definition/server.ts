@@ -4,7 +4,7 @@ import { createEvent } from 'std:event'
 import { IO } from 'std:io'
 import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
-import { newSpanId, newTraceId, suppressed } from 'std:trace'
+import { Trace } from 'std:trace'
 
 import pkg from '../../../package.json'
 import { DEFAULT_TIMEOUT_MS, serviceIdOf } from '../const'
@@ -37,8 +37,9 @@ function* performCall(
   rest: readonly [unknown?, ServerDef.CallOptions?],
 ): Operation<unknown> {
   const [input, options] = rest
-  const request = (yield* RequestRef.get()) ?? new ActiveRequest(yield* newTraceId(), 'internal')
-  const cid = yield* newSpanId()
+  const request =
+    (yield* RequestRef.get()) ?? new ActiveRequest(yield* Trace.actions.newTraceId(), 'internal')
+  const cid = yield* Trace.actions.newSpanId()
   const timeoutMs = options?.timeoutMs ?? kernel.timeoutMs
 
   if (kernel.hosted.has(target.service)) {
@@ -82,6 +83,7 @@ const ServerImpl = Server.implement<ServerDef.Context, [options: ServerDef.Optio
     const version = options.version ?? '0.0.0'
     const instance = options.instance ?? (yield* IO.actions.uuid()).slice(0, 8)
     const registry = yield* buildRegistry(options.services)
+
     return {
       name,
       version,
@@ -114,6 +116,7 @@ const ServerImpl = Server.implement<ServerDef.Context, [options: ServerDef.Optio
 export const ServerClient: ServerDef.Client = ServerImpl.build({
   *dispatch(call) {
     const kernel = yield* Server.context.expect()
+
     if (!kernel.hosted.has(call.service) && kernel.registry.services.has(call.service)) {
       // a gateway: the edge's call goes over the carrier to whoever hosts the service
       return yield* RequestRef.with(new ActiveRequest(call.requestId, call.origin), () =>
@@ -132,6 +135,7 @@ export const ServerClient: ServerDef.Client = ServerImpl.build({
         }),
       )
     }
+
     return yield* runDispatch(kernel, call, { actions: actionsOf(kernel) })
   },
 
@@ -155,7 +159,7 @@ export const ServerClient: ServerDef.Client = ServerImpl.build({
       // a call from outside any dispatch is a request of its own (origin: internal)
       return (yield* asRequest({
         kernel,
-        request: new ActiveRequest(yield* newTraceId(), 'internal'),
+        request: new ActiveRequest(yield* Trace.actions.newTraceId(), 'internal'),
         target,
         body: () => performCall(kernel, target, tail),
       })) as AnyType
@@ -169,13 +173,14 @@ export const ServerClient: ServerDef.Client = ServerImpl.build({
     const carrier = yield* carrierOf(kernel)
 
     // one id per envelope: the producer's and every consumer's `messaging.message.id`
-    const id = yield* newTraceId()
+    const id = yield* Trace.actions.newTraceId()
 
     // the kernel's own plumbing (`_…`, the observe cluster) is never traced
     if (isInternalEvent(name)) {
-      yield* suppressed(() =>
+      yield* Trace.actions.suppressed(() =>
         carrier.actions.emit({ k: 'event', id, name, payload, origin: kernel.serviceId }),
       )
+
       return
     }
 
@@ -198,18 +203,22 @@ export const ServerClient: ServerDef.Client = ServerImpl.build({
       const kernel = yield* Server.context.expect()
       const carrier = yield* carrierOf(kernel)
       const subscription = yield* carrier.actions.events()
+
       return {
         *next() {
           for (;;) {
             const step = yield* subscription.next()
+
             // the carrier's subscription ended (its scope / the transport closed): so does this
             // flow — pulling a finished subscription again would only spin
             if (step.done) {
               return step
             }
+
             if (isInternalEvent(step.value.name)) {
               continue
             }
+
             if (name === undefined || step.value.name === name) {
               return { done: false as const, value: yield* eventItemOf(step.value) }
             }

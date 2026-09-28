@@ -10,6 +10,7 @@ import { describe, expect, it } from 'bun:test'
 describe('each.next()', () => {
   it('carries no extra fields and drives the loop', async () => {
     const op = each.next()
+
     expect(Object.keys(op)).toEqual([])
     expect(typeof op[Symbol.iterator]).toBe('function')
 
@@ -36,6 +37,7 @@ describe('each.next()', () => {
     unwrap(
       await run(function* () {
         const never = yield* attempt(() => each.next())
+
         expect(isFailure(never) && never.error).toBe('std:effect.missing-context')
       }),
     )

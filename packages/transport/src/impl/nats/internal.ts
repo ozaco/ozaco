@@ -66,19 +66,23 @@ const reporting = (topic: string, pump: Nats.Pump): TransportDef.RawSubscription
 
 const toNatsHeaders = (headers: TransportDef.Headers): MsgHdrs => {
   const out = natsHeaders()
+
   for (const [key, value] of Object.entries(headers)) {
     out.set(key, value)
   }
+
   return out
 }
 
 const headersOf = (source: MsgHdrs | undefined): Record<string, string> => {
   const headers: Record<string, string> = {}
+
   if (source) {
     for (const key of source.keys()) {
       headers[key] = source.last(key)
     }
   }
+
   return headers
 }
 
@@ -86,9 +90,11 @@ const headersOf = (source: MsgHdrs | undefined): Record<string, string> => {
  * `oz-reply` header so core's package plane answers it through a transient publish. */
 const toRaw = (prefix: string, msg: Msg): TransportDef.Raw => {
   const headers = headersOf(msg.headers)
+
   if (msg.reply) {
     headers[HEADERS.reply] = msg.reply
   }
+
   return {
     topic: unprefixed(`${RPC_ROOT}.${prefix}`, msg.subject) ?? msg.subject,
     data: msg.data,
@@ -105,10 +111,13 @@ const toJsRaw = (prefix: string, msg: JsMsg, durable: boolean): TransportDef.Raw
     headers: headersOf(msg.headers),
     seq: String(msg.seq),
   }
+
   if (!durable) {
     msg.ack()
+
     return base
   }
+
   return {
     ...base,
     *ack() {
@@ -212,13 +221,17 @@ function* consumeInto(
   yield* fork(function* () {
     for (;;) {
       const step = yield* attempt(until(iterator.next() as Promise<IteratorResult<JsMsg>>))
+
       if (isFailure(step) || step.value.done) {
         if (isFailure(step)) {
           ending.error = step
         }
+
         queue.close(undefined)
+
         return
       }
+
       queue.add(toJsRaw(state.prefix, step.value.value, durable))
     }
   })
@@ -241,6 +254,7 @@ function* subscribeTransient(state: Nats.State, topic: string, group: string | u
       if (error) {
         ending.error = asFailure(error)
         queue.close(undefined)
+
         return
       }
 
@@ -251,6 +265,7 @@ function* subscribeTransient(state: Nats.State, topic: string, group: string | u
   yield* ensure(function* () {
     sub.unsubscribe()
     queue.close(undefined)
+
     // …and the UNSUB likewise: once `stop()` resolves the server must already answer
     // `no-responders` for this subject, not route one more request into the void
     if (!state.nc.isClosed()) {
@@ -261,6 +276,7 @@ function* subscribeTransient(state: Nats.State, topic: string, group: string | u
   // the SUB is only an intent until the server has seen it: flush so a request from another
   // connection right after `serve` resolves cannot slip past us
   yield* attempt(until(state.nc.flush()))
+
   return reporting(topic, { queue, ending })
 }
 
@@ -288,6 +304,7 @@ export const driver: TransportDef.Driver = {
 
   *publish({ topic, data, headers, transient, reply }) {
     const state = yield* useContext(StateRef)
+
     if (state.drained || state.nc.isClosed()) {
       return yield* fail(TransportErrors.Closed, 'nats connection drained')
     }
@@ -304,6 +321,7 @@ export const driver: TransportDef.Driver = {
       } catch (error) {
         return yield* raise(error, `cannot publish on "${topic}"`)
       }
+
       return null
     }
 
@@ -324,6 +342,7 @@ export const driver: TransportDef.Driver = {
 
   *subscribe(topic, options) {
     const state = yield* useContext(StateRef)
+
     if (options.transient) {
       return yield* subscribeTransient(state, topic, options.group)
     }
@@ -365,6 +384,7 @@ export const driver: TransportDef.Driver = {
     })
 
     const consumer = yield* attempt(until(state.js.consumers.get(state.stream, consumerName)))
+
     if (isFailure(consumer)) {
       return yield* raise(consumer, `cannot subscribe to "${topic}"`)
     }
@@ -374,6 +394,7 @@ export const driver: TransportDef.Driver = {
 
   *request({ topic, data, headers, timeoutMs }) {
     const state = yield* useContext(StateRef)
+
     if (state.drained || state.nc.isClosed()) {
       return yield* fail(TransportErrors.Closed, 'nats connection drained')
     }
@@ -400,6 +421,7 @@ export const driver: TransportDef.Driver = {
 
   *payloadLimit() {
     const state = yield* useContext(StateRef)
+
     return state.nc.info?.max_payload ?? null
   },
 
@@ -409,6 +431,7 @@ export const driver: TransportDef.Driver = {
       const queue = createQueue<TransportDef.Status, void>()
 
       queue.add(state.nc.isClosed() ? 'closed' : 'connected')
+
       const iterator = state.nc.status()[Symbol.asyncIterator]()
 
       yield* fork(function* () {
@@ -417,6 +440,7 @@ export const driver: TransportDef.Driver = {
 
           if (isFailure(step) || step.value.done) {
             queue.close(undefined)
+
             return
           }
 
@@ -424,15 +448,18 @@ export const driver: TransportDef.Driver = {
             case 'disconnect':
             case 'reconnecting': {
               queue.add('reconnecting')
+
               break
             }
             case 'reconnect': {
               queue.add('connected')
+
               break
             }
             case 'close': {
               queue.add('closed')
               queue.close(undefined)
+
               return
             }
             default: {

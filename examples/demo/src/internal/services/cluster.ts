@@ -25,6 +25,7 @@ export const cluster = service(
       },
       function* () {
         const kernel = yield* useContext(Server)
+
         return { instance: kernel.instance, serviceId: kernel.serviceId, at: Date.now() }
       },
     ),
@@ -36,9 +37,11 @@ export const cluster = service(
       function* () {
         const kernel = yield* useContext(Server)
         const out: Record<string, z.infer<typeof Member>[]> = {}
+
         for (const name of kernel.registry.services.keys()) {
           out[name] = [...(yield* kernel.carrier!.actions.members(name))]
         }
+
         return out
       },
     ),

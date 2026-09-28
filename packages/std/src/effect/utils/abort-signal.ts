@@ -8,6 +8,7 @@ import type { Operation } from '../types/operation'
 export const useAbortSignal = (): Operation<AbortSignal> =>
   resource(function* (provide) {
     const controller = new AbortController()
+
     try {
       yield* provide(controller.signal)
     } finally {

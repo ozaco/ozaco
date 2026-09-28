@@ -28,6 +28,7 @@ export const createTags = <const T extends string | null, const U extends Helper
     const tag = prefix ? `${prefix}.${name}` : name
 
     result[kebabToPascal(name)] = tag
+
     if (matcher) {
       matchers.push([tag, matcher])
     }

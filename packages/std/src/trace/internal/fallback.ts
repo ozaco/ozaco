@@ -2,13 +2,12 @@ import type { Operation, Scope } from 'std:effect'
 import { attempt } from 'std:effect'
 import type { AnyType } from 'std:shared'
 
-import { Tracing } from '../definition'
 import { TraceCauses } from '../errors'
 import type { Helpers } from '../types/helpers'
 import type { TraceDef } from '../types/trace'
 
 import { FALLBACK_KEY } from './const'
-import { isSuppressed, quietFor } from './context'
+import { isSuppressed, quietFor, Tracing } from './context'
 
 const NONE: Helpers.Sinks = Object.freeze([])
 
@@ -20,6 +19,7 @@ const sinksOf = (): Helpers.Sinks =>
 
 const store = (sinks: Helpers.Sinks): void => {
   const target: AnyType = globalThis
+
   target[FALLBACK_KEY] = Object.freeze(sinks)
 }
 

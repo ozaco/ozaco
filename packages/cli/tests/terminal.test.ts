@@ -37,6 +37,7 @@ describe('cli — terminal', () => {
         expect(yield* Terminal.actions.size()).toEqual({ columns: 100, rows: 30 })
 
         const info = yield* Terminal.context.expect()
+
         expect(info.terminal).toBe('memory')
         expect(info.capabilities.interactive).toBe(true)
       }),
@@ -92,6 +93,7 @@ describe('cli — terminal', () => {
 
     const outcome = await withTerminal(screen, function* () {
       const before = yield* attempt(() => Terminal.actions.keys())
+
       expect(isFailure(before) && before.error).toBe(CliErrors.Terminal)
 
       return yield* Terminal.actions.session(function* () {
@@ -99,12 +101,14 @@ describe('cli — terminal', () => {
 
         // a Flow is subscribed with a second `yield*` (core does the same in its renderer)
         const keys = yield* yield* Terminal.actions.keys()
+
         screen.press('down', 'a', 'enter')
 
         const seen: string[] = []
 
         for (let at = 0; at < 3; at += 1) {
           const step = yield* keys.next()
+
           seen.push((step.value as { name: string }).name)
         }
 
@@ -165,6 +169,7 @@ describe('cli — terminal', () => {
       await withTerminal(screen, function* () {
         yield* Terminal.actions.session(function* () {
           const inner = yield* attempt(() => Terminal.actions.session(() => sleep(0)))
+
           expect(isFailure(inner) && inner.error).toBe(CliErrors.Busy)
         })
       }),
@@ -177,6 +182,7 @@ describe('cli — terminal', () => {
     const seen = unwrap(
       await withTerminal(live, function* () {
         const flow = yield* yield* Terminal.actions.resize()
+
         live.setSize({ columns: 42, rows: 7 })
 
         return yield* race([
@@ -198,6 +204,7 @@ describe('cli — terminal', () => {
     unwrap(
       await withTerminal(flat, function* () {
         const refused = yield* attempt(() => Terminal.actions.resize())
+
         expect(isFailure(refused) && refused.error).toBe(CliErrors.Unsupported)
       }),
     )
@@ -221,6 +228,7 @@ describe('cli — terminal', () => {
 
         // the lease is released — a second acquire succeeds instead of failing `cli.busy`
         const again = yield* attempt(() => Terminal.actions.renderer())
+
         expect(isFailure(again)).toBe(false)
       }),
     )

@@ -18,6 +18,7 @@ describe('fail', () => {
     const failure = fail()
 
     expect(isFailure(failure)).toBe(true)
+
     if (isFailure(failure)) {
       expect(failure.message).toBe('')
       expect(failure.causes).toEqual([])
@@ -29,6 +30,7 @@ describe('fail', () => {
     const failure = fail('io-error', 'disk detached', 'while flushing', 'during shutdown')
 
     expect(isFailure(failure)).toBe(true)
+
     if (isFailure(failure)) {
       expect(failure.error).toBe('io-error')
       expect(failure.message).toBe('disk detached')
@@ -53,6 +55,7 @@ describe('succeed', () => {
 
     expect(isSuccess(one)).toBe(true)
     expect(one).not.toBe(two)
+
     if (isSuccess(one)) {
       expect(one.value).toEqual({ n: 1 })
     }
@@ -68,12 +71,14 @@ describe('maybe', () => {
     expect(isNothing(none)).toBe(true)
     expect(isMaybe(some)).toBe(true)
     expect(isMaybe(none)).toBe(true)
+
     if (isJust(some)) {
       expect(some.value).toBe('here')
     }
 
     // just() without an argument is just(undefined): the property is there, as the type says
     const empty = just()
+
     expect(isJust(empty)).toBe(true)
     expect('value' in empty).toBe(true)
     expect(isJust(empty) ? empty.value : 'missing').toBeUndefined()

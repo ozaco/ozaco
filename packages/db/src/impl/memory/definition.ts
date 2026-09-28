@@ -41,7 +41,9 @@ export const MemoryAdapter = DbAdapter.implement<Adapter.Options, []>({
       indexes: new Map(),
       lock: createLock(),
     }
+
     yield* StateRef.set(state)
+
     return {
       adapter: 'memory',
       capabilities: { transactions: true, raw: false, alterColumn: false },
@@ -63,11 +65,13 @@ export const MemoryAdapter = DbAdapter.implement<Adapter.Options, []>({
 
   *count(spec: Spec.Count) {
     const state = yield* useContext(StateRef)
+
     return (yield* filtered(state, spec)).length
   },
 
   *aggregate(spec: Spec.Aggregate) {
     const state = yield* useContext(StateRef)
+
     return aggregateDocs(yield* filtered(state, spec), spec)
   },
 
@@ -76,16 +80,21 @@ export const MemoryAdapter = DbAdapter.implement<Adapter.Options, []>({
     const target = yield* tableOf(state, table.name)
     const key = keyOf(table)
     const stored: Spec.Doc[] = []
+
     for (const row of rows) {
       const id = String(row[key])
+
       if (target.has(id)) {
         return yield* fail(DbErrors.Unique, `duplicate ${key} "${id}" in "${table.name}"`)
       }
+
       const candidate = clone(row)
+
       yield* checkUnique(state, table, candidate)
       target.set(id, candidate)
       stored.push(clone(candidate))
     }
+
     return stored
   },
 
@@ -93,15 +102,19 @@ export const MemoryAdapter = DbAdapter.implement<Adapter.Options, []>({
     const state = yield* useContext(StateRef)
     const target = yield* tableOf(state, spec.table.name)
     const updated: Spec.Doc[] = []
+
     for (const [id, doc] of target) {
       if (spec.filter && !matches(doc, spec.filter)) {
         continue
       }
+
       const next: Spec.Doc = { ...doc, ...spec.set }
+
       yield* checkUnique(state, spec.table, next)
       target.set(id, next)
       updated.push(clone(next))
     }
+
     return updated
   },
 
@@ -109,23 +122,29 @@ export const MemoryAdapter = DbAdapter.implement<Adapter.Options, []>({
     const state = yield* useContext(StateRef)
     const target = yield* tableOf(state, spec.table.name)
     const removed: Spec.Doc[] = []
+
     for (const [id, doc] of target) {
       if (spec.filter && !matches(doc, spec.filter)) {
         continue
       }
+
       target.delete(id)
       removed.push(clone(doc))
     }
+
     return removed
   },
 
   *introspect(table: Spec.Table) {
     const state = yield* useContext(StateRef)
     const shape = state.shapes.get(table.name)
+
     if (!shape) {
       return null
     }
+
     const declared = new Map(table.columns.map(column => [column.name, column.kind]))
+
     return {
       columns: [...shape].map(([name, kind]) => ({
         name,
@@ -155,10 +174,13 @@ export const MemoryAdapter = DbAdapter.implement<Adapter.Options, []>({
     try {
       const snapshot = snapshotOf(state)
       const outcome = yield* attempt(() => TxDepth.with(depth + 1, body))
+
       if (isFailure(outcome)) {
         restore(state, snapshot)
+
         return yield* outcome
       }
+
       return outcome.value as AnyType
     } finally {
       release?.()

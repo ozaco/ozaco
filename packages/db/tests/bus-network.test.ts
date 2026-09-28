@@ -56,8 +56,10 @@ for (const network of networks) {
         yield* BunIO.use()
         yield* network.transport()
         yield* DbBus.use()
+
         return yield* DbClient.use({ tables: [users], origin })
       }
+
       try {
         unwrap(
           await run(function* () {
@@ -67,28 +69,37 @@ for (const network of networks) {
                 const db = yield* nodeOf('NDEB0002')
                 const feed = yield* db.changes('users')
                 const snaps = yield* db.query('users').watch()
+
                 yield* snaps.next()
                 ready.add(undefined)
+
                 const event = yield* race([
                   feed.next(),
                   (function* () {
                     yield* sleep(5000)
+
                     return { done: true as const, value: undefined }
                   })(),
                 ])
+
                 expect((event as AnyType).done).toBe(false)
                 expect(['bus', 'replay']).toContain((event as AnyType).value.source)
                 expect((event as AnyType).value.token.endsWith('NDEA0001')).toBe(true)
+
                 const snap = yield* snaps.next()
                 const stats = yield* Db.actions.busStats()
+
                 expect(stats.received).toBeGreaterThan(0)
                 expect(stats.peers.NDEA0001).toBeDefined()
+
                 return (snap.value as AnyType).rows.map((row: AnyType) => row.name)
               }),
             )
+
             yield* ready.next()
             yield* scoped(function* () {
               const db = yield* nodeOf('NDEA0001')
+
               expect((yield* useContext(DbBus)).transportName).toBe(network.label)
               yield* db.insert('users', { name: `over-${network.label}` })
               // let the outbox ship before this node's transport closes with the scope
@@ -114,18 +125,23 @@ describe.skipIf(!(nats && redis))('bus pinned to one of two installed transports
         // routed calls now hit NATS (most recent) — the bus is told to use Redis instead
         yield* DbBus.use({ transport: RedisTransport })
         expect((yield* useContext(DbBus)).transportName).toBe('redis')
+
         const onRedis = yield* RedisTransport.actions.subscribe<AnyType>('db.change')
         const onNats = yield* NatsTransport.actions.subscribe<AnyType>('db.change')
+
         yield* sleep(50)
         yield* DbBus.actions.publish({ origin: 'NDEA0001', seq: 1, tx: 'T', events: [] })
         expect(((yield* onRedis.next()) as AnyType).value.value.seq).toBe(1)
+
         const silent = yield* race([
           onNats.next(),
           (function* () {
             yield* sleep(300)
+
             return { done: true as const, value: undefined }
           })(),
         ])
+
         expect((silent as AnyType).done).toBe(true)
       }),
     )

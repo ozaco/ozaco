@@ -41,11 +41,13 @@ export const sqlActions = ({
    * progress, `db.query.text`. */
   const run = function* (statement: Sql.Statement) {
     yield* noteQuery(statement.text)
+
     return yield* exec(statement.text, statement.params)
   }
 
   const decoded = function* (table: Spec.Table, statement: Sql.Statement) {
     const result = yield* run(statement)
+
     return yield* decodeRows(dialect, table, result.rows)
   }
 
@@ -70,6 +72,7 @@ export const sqlActions = ({
       const columns: Spec.Column[] = [
         ...spec.groupBy.flatMap(field => {
           const column = kinds.get(field)
+
           return column ? [column] : []
         }),
 
@@ -128,6 +131,7 @@ export const sqlActions = ({
         columns: result.rows.map(row => {
           const name = String(row.name)
           const kind = declared.get(name)
+
           return {
             name,
             type: typeof row.type === 'string' ? row.type.toLowerCase() : null,

@@ -24,9 +24,11 @@ const bootstrap = function* (options: ConfigDef.Options) {
 
 const withEnv = async <T>(vars: Record<string, string>, body: () => Promise<T>) => {
   const previous = new Map(Object.keys(vars).map(key => [key, process.env[key]] as const))
+
   for (const [key, value] of Object.entries(vars)) {
     process.env[key] = value
   }
+
   try {
     return await body()
   } finally {
@@ -46,11 +48,13 @@ const withEnv = async <T>(vars: Record<string, string>, body: () => Promise<T>) 
  */
 const layoutAllLayers = async (root: string) => {
   const app = join(root, 'app')
+
   await mkdir(join(app, '.cfgspec'), { recursive: true })
   await writeFile(join(root, '.cfgspec.json'), jsonText({ fromChain: 1, source: 'chain' }))
   await writeFile(join(app, '.cfgspec.json'), jsonText({ fromFile: 1, source: 'file' }))
   await writeFile(join(app, '.cfgspec', 'extra.json'), jsonText({ fromDir: 1, source: 'dir' }))
   await writeFile(join(app, '.dev.cfgspec.json'), jsonText({ fromVariant: 1, source: 'variant' }))
+
   return app
 }
 
@@ -75,6 +79,7 @@ describe('Features bitflags', () => {
       expect(hasFlag(Features.ALL, layer)).toBe(true)
       expect(hasFlag(layer, layer)).toBe(true)
       expect(hasFlag(Features.NONE, layer)).toBe(false)
+
       // every OTHER layer is off when only `layer` is set
       for (const other of layers) {
         if (other !== layer) {
@@ -84,6 +89,7 @@ describe('Features bitflags', () => {
     }
 
     const some = Features.FILE | Features.DIR
+
     expect(hasFlag(some, Features.FILE)).toBe(true)
     expect(hasFlag(some, Features.DIR)).toBe(true)
     expect(hasFlag(some, Features.CHAIN)).toBe(false)
@@ -93,6 +99,7 @@ describe('Features bitflags', () => {
 
   it('Features.NONE disables every layer: load finds nothing', async () => {
     const root = await makeRoot()
+
     try {
       const app = await layoutAllLayers(root)
 
@@ -117,6 +124,7 @@ describe('Features bitflags', () => {
 
   it('Features.FILE alone discovers only the cwd base file', async () => {
     const root = await makeRoot()
+
     try {
       const app = await layoutAllLayers(root)
 
@@ -143,6 +151,7 @@ describe('Features bitflags', () => {
 
   it('Features.ALL (the default) enables every layer', async () => {
     const root = await makeRoot()
+
     try {
       const app = await layoutAllLayers(root)
 

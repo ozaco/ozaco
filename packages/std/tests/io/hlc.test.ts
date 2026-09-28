@@ -27,16 +27,21 @@ describe('hlc', () => {
     const tokens = unwrap(
       await run(function* () {
         yield* BunIO.use()
+
         const out: string[] = []
+
         for (let i = 0; i < 1000; i++) {
           out.push(yield* IO.actions.hlc({ origin: 'NDEA0001' }))
         }
+
         return out
       }),
     )
+
     for (const token of tokens) {
       expect(token).toMatch(TOKEN)
     }
+
     expect(tokens.toSorted()).toEqual(tokens)
     expect(new Set(tokens).size).toBe(tokens.length)
   })
@@ -45,12 +50,15 @@ describe('hlc', () => {
     const result = unwrap(
       await run(function* () {
         yield* WebIO.use()
+
         const before = Date.now()
         const token = yield* IO.actions.hlc({ origin: 'ndeb0002' }) // lowercase accepted, upper-cased
         const parts = yield* IO.actions.decodeHlc(token)
+
         return { before, token, parts }
       }),
     )
+
     expect(result.token.endsWith('NDEB0002')).toBe(true)
     expect(result.parts.origin).toBe('NDEB0002')
     expect(result.parts.ts).toBeGreaterThanOrEqual(result.before)
@@ -61,12 +69,15 @@ describe('hlc', () => {
     const result = unwrap(
       await run(function* () {
         yield* BunIO.use()
+
         const a1 = yield* IO.actions.decodeHlc(yield* IO.actions.hlc({ origin: 'AAAAAAAA' }))
         const b1 = yield* IO.actions.decodeHlc(yield* IO.actions.hlc({ origin: 'BBBBBBBB' }))
         const a2 = yield* IO.actions.decodeHlc(yield* IO.actions.hlc({ origin: 'AAAAAAAA' }))
+
         return { a1, b1, a2 }
       }),
     )
+
     // B's mint must not advance A's counter: A's second token is A's first + 1 (same ms) or a
     // later ms with counter 0 — never a jump caused by B
     if (result.a2.ts === result.a1.ts) {
@@ -80,15 +91,18 @@ describe('hlc', () => {
     const result = unwrap(
       await run(function* () {
         yield* BunIO.use()
+
         // a peer whose clock is 5s ahead (within the drift bound)
         const ahead = Date.now() + 5000
         const remote = encodeFake(ahead, 7, 'REMTE000')
         const adopted = yield* IO.actions.observeHlc(remote)
         const local = yield* IO.actions.hlc({ origin: 'PEER0001' })
         const parts = yield* IO.actions.decodeHlc(local)
+
         return { adopted, remote, local, parts, ahead }
       }),
     )
+
     expect(result.adopted).toBe(true)
     expect(result.local > result.remote).toBe(true)
     expect(result.parts.ts).toBeGreaterThanOrEqual(result.ahead)
@@ -98,8 +112,11 @@ describe('hlc', () => {
     const result = unwrap(
       await run(function* () {
         yield* BunIO.use()
+
         const ahead = Date.now() + 5000
+
         yield* IO.actions.observeHlc(encodeFake(ahead, 3, 'REMTE000'))
+
         const before = yield* IO.actions.decodeHlc(yield* IO.actions.hlc({ origin: 'PEER0003' }))
 
         // far in the PAST: nothing to adopt, still not drift
@@ -119,12 +136,15 @@ describe('hlc', () => {
     const result = unwrap(
       await run(function* () {
         yield* BunIO.use()
+
         const farFuture = encodeFake(Date.now() + 10 * 60_000, 0, 'DRFT0000')
         const adopted = yield* IO.actions.observeHlc(farFuture, { maxDriftMs: 60_000 })
         const local = yield* IO.actions.decodeHlc(yield* IO.actions.hlc({ origin: 'PEER0002' }))
+
         return { adopted, local, now: Date.now() }
       }),
     )
+
     expect(result.adopted).toBe(false)
     // the local clock stayed near wall time
     expect(result.local.ts - result.now).toBeLessThan(60_000)
@@ -134,11 +154,13 @@ describe('hlc', () => {
     const result = unwrap(
       await run(function* () {
         yield* BunIO.use()
+
         const badOrigin = yield* attempt(IO.actions.hlc({ origin: 'node-a' }))
         // I/L/O/U are not in the alphabet and are NOT aliased for origins (identity must be exact)
         const lookAlike = yield* attempt(IO.actions.hlc({ origin: 'NODEA000' }))
         const short = yield* attempt(IO.actions.decodeHlc('01J6'))
         const alphabet = yield* attempt(IO.actions.decodeHlc('U'.repeat(22)))
+
         return {
           badOrigin: isFailure(badOrigin) ? badOrigin.error : 'ok',
           lookAlike: isFailure(lookAlike) ? lookAlike.error : 'ok',
@@ -147,6 +169,7 @@ describe('hlc', () => {
         }
       }),
     )
+
     expect(result).toEqual({
       badOrigin: 'std:io.hlc-invalid',
       lookAlike: 'std:io.hlc-invalid',
@@ -162,11 +185,14 @@ const encodeFake = (ts: number, counter: number, origin: string): string => {
   const encode = (value: number, length: number): string => {
     let out = ''
     let rest = value
+
     for (let i = 0; i < length; i++) {
       out = alphabet[rest % 32]! + out
       rest = Math.floor(rest / 32)
     }
+
     return out
   }
+
   return encode(ts, 10) + encode(counter, 4) + (origin as AnyType)
 }

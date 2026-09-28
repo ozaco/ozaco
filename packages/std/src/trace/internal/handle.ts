@@ -1,6 +1,7 @@
 import type { TraceDef } from '../types/trace'
 
 import { INVALID_SPAN_ID, INVALID_TRACE_ID } from './const'
+import { isValidContext } from './propagation'
 import type { SpanRecorder } from './recorder'
 import { recordChecked } from './settle'
 
@@ -13,6 +14,7 @@ const INVALID_CONTEXT: TraceDef.SpanContext = Object.freeze({
 /** What a span body gets: a thin face over the recorder (the recorder itself stays internal). */
 export const handleOf = (rec: SpanRecorder): TraceDef.SpanHandle => ({
   context: rec.context,
+  valid: isValidContext(rec.context),
   recording: rec.recording,
 
   setAttributes: input => rec.setAttributes(input),
@@ -29,6 +31,7 @@ export const handleOf = (rec: SpanRecorder): TraceDef.SpanHandle => ({
  * hands it to the process fallback sink (if any) while tracing is off. */
 export const NOOP_HANDLE: TraceDef.SpanHandle = Object.freeze({
   context: INVALID_CONTEXT,
+  valid: false,
   recording: false,
 
   setAttributes() {},

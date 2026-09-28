@@ -107,7 +107,9 @@ export function* planMigration(state: Helpers.Reconciler) {
   // every declared table travels with its hidden change log
   for (const [name, spec] of state.specs) {
     const base = yield* state.adapter.introspect(spec)
+
     steps.push(...stepsFor(spec, base, alterColumn))
+
     const log = state.logs.get(name)
 
     if (!log) {

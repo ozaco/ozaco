@@ -1,26 +1,17 @@
 import type { Operation } from 'std:effect'
 import { attempt, EffectErrors, useScope } from 'std:effect'
 import type { Result } from 'std:result'
-import { formatFailure } from 'std:result'
 
-import { Tracer } from '../definition'
+import { Trace } from '../definition'
 import { TraceCauses } from '../errors'
 import type { Helpers } from '../types/helpers'
 import type { TraceDef } from '../types/trace'
-import { exceptionAttributes, exceptionType } from '../utils/exception'
 
 import { nestedIn } from './chain'
 import { clamp } from './clock'
-import {
-  EVENT_STACK_BYTES,
-  EXCEPTION_EVENT,
-  LOG_VALUE_BYTES,
-  MAX_BUFFERED,
-  MAX_PENDING,
-  SERVER_ERROR,
-  SEVERITY,
-} from './const'
+import { EXCEPTION_EVENT, MAX_BUFFERED, MAX_PENDING, SERVER_ERROR, SEVERITY } from './const'
 import { activeOf, isOn, quiet, quietFor } from './context'
+import { exceptionAttributes, exceptionType } from './exception'
 import { fallbackFor, sendFallback } from './fallback'
 import { logOf } from './log'
 import type { LocalTrace, SpanRecorder } from './recorder'
@@ -29,15 +20,15 @@ import { isBelow } from './tree'
 
 // --- delivery -----------------------------------------------------------------------------------
 
-/** Hand a span to every Tracer — suppressed (no recursion) and attempted (never fails the caller). */
+/** Hand a span to every sink — suppressed (no recursion) and attempted (never fails the caller). */
 function* sendSpan(data: TraceDef.SpanData): Operation<void> {
-  yield* attempt(() => quiet(() => Tracer.actions.export(data)), TraceCauses.Export)
+  yield* attempt(() => quiet(() => Trace.actions.export(data)), TraceCauses.Export)
 }
 
-/** Hand a log record to every Tracer — suppressed, correlated to the record's own span
+/** Hand a log record to every sink — suppressed, correlated to the record's own span
  * ({@link quietFor}), attempted (never fails the caller). */
 function* sendLog(log: TraceDef.LogData): Operation<void> {
-  yield* attempt(() => quietFor(log, () => Tracer.actions.emit(log)), TraceCauses.Emit)
+  yield* attempt(() => quietFor(log, () => Trace.actions.emit(log)), TraceCauses.Emit)
 }
 
 /** A span of `trace`, through its `record` mode: buffered while an `'errors'` trace is open. */
@@ -46,6 +37,7 @@ function* deliverSpan(trace: LocalTrace, data: TraceDef.SpanData): Operation<voi
     if (trace.spans.length < MAX_BUFFERED) {
       trace.spans.push(data)
     }
+
     return
   }
 
@@ -74,6 +66,7 @@ function* close(trace: LocalTrace): Operation<void> {
   }
 
   const keep = trace.failed || trace.spans.some(data => data.status.code === 'error')
+
   trace.decision = keep ? 'keep' : 'drop'
 
   const spans = trace.spans.splice(0)
@@ -114,17 +107,18 @@ const targetOf = (rec: SpanRecorder): SpanRecorder => {
   return rec
 }
 
-/** The ONE exception log record of `failure` recorded at `rec`: the whole chain as its body. */
+/** The ONE exception log record recorded at `rec` from the failure's `attributes`
+ * (`exceptionAttributes`, rendered once): the whole chain as its body. */
 const exceptionLog = (
   rec: SpanRecorder | null,
-  failure: Result.Failure<unknown>,
+  attributes: TraceDef.Attributes,
   how: Helpers.RecordHow,
 ): TraceDef.LogData =>
   logOf(rec, {
-    body: formatFailure(failure, { chain: true }) || exceptionType(failure),
+    body: String(attributes['exception.stacktrace'] || attributes['exception.type']),
     severityNumber: how.severity,
     eventName: how.eventName,
-    attributes: exceptionAttributes(failure, { maxBytes: LOG_VALUE_BYTES }),
+    attributes,
     time: how.time,
   })
 
@@ -148,8 +142,8 @@ const howOf = (
 }
 
 /**
- * Record `failure` at `rec` — once per (failure, trace): the `exception` span event (budgeted
- * 2000-byte stacktrace) when the span records, and ONE exception log record
+ * Record `failure` at `rec` — once per (failure, trace): the `exception` span event (its values
+ * under the span value cap) when the span records, and ONE exception log record
  * (the whole chain as its body) even when it does not.
  */
 function* recordAt(
@@ -163,17 +157,21 @@ function* recordAt(
   if (isRecordedIn(failure, traceId)) {
     return
   }
+
   markRecordedIn(failure, traceId)
 
+  // the chain rendered ONCE, for the span event and the log record both
+  const attributes = exceptionAttributes(failure)
+
   if (rec?.recording) {
-    rec.pushException(exceptionAttributes(failure, { maxBytes: EVENT_STACK_BYTES }), how.time)
+    rec.pushException(attributes, how.time)
   }
 
   if (rec?.trace) {
     rec.trace.failed = true
   }
 
-  yield* deliverLog(rec?.trace ?? null, exceptionLog(rec, failure, how))
+  yield* deliverLog(rec?.trace ?? null, exceptionLog(rec, attributes, how))
 }
 
 /**
@@ -191,9 +189,10 @@ const fallbackRecord = (
   if (isRecordedIn(failure, traceId)) {
     return null
   }
+
   markRecordedIn(failure, traceId)
 
-  return exceptionLog(rec, failure, howOf(rec, failure, options))
+  return exceptionLog(rec, exceptionAttributes(failure), howOf(rec, failure, options))
 }
 
 // --- hold-until-settled -------------------------------------------------------------------------
@@ -207,6 +206,7 @@ const statusOf = (entry: Helpers.Pending, explicit: number | undefined): number 
 
   try {
     const code = entry.status?.(entry.failure)
+
     return typeof code === 'number' && Number.isFinite(code) ? code : SERVER_ERROR
   } catch {
     return SERVER_ERROR
@@ -219,6 +219,7 @@ const typeOf = (
 ): string => {
   try {
     const type = classify?.(failure)
+
     return typeof type === 'string' && type ? type : exceptionType(failure)
   } catch {
     return exceptionType(failure)
@@ -240,6 +241,7 @@ const applyTo = (
 ): void => {
   if (isHalt(failure)) {
     rec.mark('ozaco.cancelled', true)
+
     return
   }
 
@@ -261,9 +263,11 @@ const adopt = (entry: Helpers.Pending, rec: SpanRecorder): void => {
   if (options?.status) {
     entry.status = options.status
   }
+
   if (options?.type) {
     entry.type = options.type
   }
+
   if (options?.handledSeverity !== undefined) {
     entry.handledSeverity = options.handledSeverity
   }
@@ -391,13 +395,16 @@ function* settleEntry(
         type: typeOf(inner.type ?? entry.type, inner.failure),
         handled,
       }
+
       for (const held of [...inner.held, ...inner.unwound]) {
         applyTo(held, inner.failure, own)
       }
+
       markRecordedIn(inner.failure, traceId)
       absorb(inner)
     }
   }
+
   absorb(entry)
 
   trace.failed = true
@@ -425,6 +432,7 @@ function* settleEntry(
     if (pending.some(other => waiting(other).includes(held))) {
       continue
     }
+
     held.held = false
     yield* exportRecorder(held)
   }
@@ -439,6 +447,7 @@ function* failed(
   rec.held = true
 
   let entry = trace.pending.get(failure)
+
   if (entry) {
     entry.held.push(rec)
     entry.absorbed.push(...absorbedBy(trace, failure))
@@ -456,9 +465,11 @@ function* failed(
 
   while (trace.pending.size > MAX_PENDING) {
     const oldest = trace.pending.values().next().value
+
     if (!oldest) {
       break
     }
+
     yield* settleEntry(trace, oldest, { handled: true })
   }
 }
@@ -495,6 +506,7 @@ function* endSpan(rec: SpanRecorder, outcome: Helpers.Outcome, time?: number): O
       for (const entry of unwinding) {
         entry.unwound.push(rec)
       }
+
       rec.held = true
     } else if (outcome.t === 'halted') {
       rec.mark('ozaco.cancelled', true)
@@ -507,6 +519,7 @@ function* endSpan(rec: SpanRecorder, outcome: Helpers.Outcome, time?: number): O
 
   if (boundary) {
     const rest = rec.local === null ? [...trace.pending.values()] : within(trace, rec)
+
     for (const entry of rest) {
       yield* settleEntry(trace, entry, {})
     }
@@ -529,6 +542,7 @@ export function* deliverLog(trace: LocalTrace | null, log: TraceDef.LogData): Op
     if (trace.logs.length < MAX_BUFFERED) {
       trace.logs.push(log)
     }
+
     return
   }
 
@@ -563,6 +577,7 @@ export function* recordChecked(
 
   if (isOn(scope)) {
     yield* recordOn(rec, failure, options)
+
     return
   }
 

@@ -18,12 +18,14 @@ export function* text(options: PromptDef.TextOptions) {
       if (isEnter(key)) {
         const value = state.input.value
         const error = options.validate?.(value)
+
         return error === undefined
           ? { type: 'submit', value }
           : { type: 'update', state: { ...state, error } }
       }
 
       const input = editLine(state.input, key)
+
       return input === undefined ? undefined : { type: 'update', state: { input } }
     },
     submitted: (value, _state, ctx) => submittedLine(ctx, options.message, value),

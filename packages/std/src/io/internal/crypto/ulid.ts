@@ -13,10 +13,12 @@ let lastRandom: number[] = []
 const encodeTime = (ms: number): string => {
   let out = ''
   let n = ms
+
   for (let i = 0; i < TIME_LEN; i++) {
     out = ENCODING[n % 32]! + out
     n = Math.floor(n / 32)
   }
+
   return out
 }
 
@@ -24,23 +26,31 @@ const encodeTime = (ms: number): string => {
 // is available in node/bun/web alike, so this impl is shared across every IO platform.
 const randomDigits = (count: number): number[] => {
   const bytes = new Uint8Array(count)
+
   crypto.getRandomValues(bytes)
+
   const digits: number[] = []
+
   for (let i = 0; i < count; i++) {
     digits.push(bytes[i]! % 32)
   }
+
   return digits
 }
 
 const bump = (digits: number[]): number[] => {
   const out = digits.slice()
+
   for (let i = out.length - 1; i >= 0; i--) {
     if (out[i]! < 31) {
       out[i]! += 1
+
       return out
     }
+
     out[i] = 0
   }
+
   return out // full-overflow (astronomically unlikely) wraps to a fresh window on the next call
 }
 
@@ -67,12 +77,15 @@ export function* ulidId(options?: IODef.UlidOptions) {
     win === lastWindow && lastRandom.length === randomCount
       ? bump(lastRandom)
       : randomDigits(randomCount)
+
   lastWindow = win
   lastRandom = digits
 
   let random = ''
+
   for (const d of digits) {
     random += ENCODING[d]!
   }
+
   return bucket + encodeTime(win) + random
 }

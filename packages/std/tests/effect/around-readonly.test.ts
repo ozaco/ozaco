@@ -49,6 +49,7 @@ describe('Around over a readonly rest member', () => {
         yield* Keys.around({
           del: (keys, next) => {
             seen.push(keys)
+
             return next(...keys, 'extra')
           },
         })

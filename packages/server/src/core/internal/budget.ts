@@ -1,29 +1,7 @@
+import { utf8Length } from 'std:shared'
 import type { TraceDef } from 'std:trace'
 
 import { LOG_MAX_ATTRIBUTE_BYTES, LOG_MAX_ATTRIBUTES } from '../const'
-
-/** The UTF-8 length of a string without encoding it. */
-const utf8Length = (text: string): number => {
-  let bytes = 0
-
-  for (let index = 0; index < text.length; index += 1) {
-    const code = text.codePointAt(index) ?? 0
-
-    if (code < 0x80) {
-      bytes += 1
-    } else if (code < 0x8_00) {
-      bytes += 2
-    } else if (code < 0x1_00_00) {
-      bytes += 3
-    } else {
-      // outside the BMP: ONE 4-byte code point over a surrogate pair
-      bytes += 4
-      index += 1
-    }
-  }
-
-  return bytes
-}
 
 /** What an attribute weighs on the wire (its key + its value), roughly as OTLP carries it. */
 const attributeBytes = (key: string, value: TraceDef.AttrValue): number => {

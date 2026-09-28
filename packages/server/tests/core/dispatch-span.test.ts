@@ -12,7 +12,7 @@ import { attempt, run } from 'std:effect'
 import { definePlugin } from 'std:plugin'
 import { fail, unwrap } from 'std:result'
 import type { TraceDef } from 'std:trace'
-import { current, span, suppressed } from 'std:trace'
+import { Trace } from 'std:trace'
 
 import { describe, expect, it } from 'bun:test'
 
@@ -44,13 +44,16 @@ const spy = () => {
           }
         },
       }
+
       return { hooks }
     },
   }).build()
 
   const one = (name: string): TraceDef.SpanData => {
     const found = spans.filter(data => data.name === name)
+
     expect(found).toHaveLength(1)
+
     return found[0]!
   }
 
@@ -67,13 +70,14 @@ const Wrapping = definePlugin<ServerDef.PluginContext, []>({
     const hooks: ServerDef.Hooks = {
       name: 'wrapping',
       *dispatch(call, ctx, next) {
-        return yield* span(
+        return yield* Trace.actions.span(
           `cache ${call.service}.${call.action}`,
           { scope: scopeOf('cache'), failure: dispatchFailure(call, ctx.meta) },
           () => next(call, ctx),
         )
       },
     }
+
     return { hooks }
   },
 }).build()
@@ -95,15 +99,17 @@ const Writing = definePlugin<ServerDef.PluginContext, []>({
       name: 'writing',
       *dispatch(call, ctx, next) {
         const handle = yield* dispatchSpan()
+
         handle.setAttribute('ozaco.test.dispatch_level', true)
         seenFrom.dispatch.push(handle.context.spanId)
-        seenFrom.active.push((yield* current()).context.spanId)
+        seenFrom.active.push((yield* Trace.actions.current()).context.spanId)
         // suppressed code gets the no-op handle, even inside a dispatch
-        seenFrom.muted.push((yield* suppressed(() => dispatchSpan())).recording)
+        seenFrom.muted.push((yield* Trace.actions.suppressed(() => dispatchSpan())).recording)
 
         return yield* next(call, ctx)
       },
     }
+
     return { hooks }
   },
 }).build()
@@ -117,10 +123,12 @@ describe('dispatchSpan()', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({
           services: [shop],
           plugins: [seen.plugin.use(), Wrapping.use(), Writing.use()],
         })
+
         yield* server.start()
         yield* server.call(shop, 'buy', {})
         yield* attempt(server.call(shop, 'refuse', {}))
@@ -154,10 +162,12 @@ describe('dispatchSpan()', () => {
     // the wrapping span classifies the refusal like the dispatch: a mapped 409 leaves both unset
     const refusedCache = seen.one('cache shop.refuse')
     const refusedDispatch = seen.one('shop.refuse')
+
     for (const data of [refusedCache, refusedDispatch]) {
       expect(data.status.code).toBe('unset')
       expect(data.attributes['error.type']).toBe('shop.refused')
     }
+
     expect(refusedDispatch.attributes['ozaco.test.dispatch_level']).toBe(true)
     expect(refusedCache.attributes['ozaco.test.dispatch_level']).toBeUndefined()
   })

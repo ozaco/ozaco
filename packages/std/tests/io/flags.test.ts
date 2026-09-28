@@ -15,6 +15,7 @@ import { BunIO } from 'std:io/impl/bun'
 
 const withTempDir = async (fn: (dir: string) => Promise<void>) => {
   const dir = await mkdtemp(join(tmpdir(), 'ozaco-io-flags-'))
+
   try {
     await fn(dir)
   } finally {
@@ -40,17 +41,23 @@ describe('IO_FLAGS layout', () => {
       IO_FLAGS.append,
       IO_FLAGS.exclusive,
     ]
+
     for (const bit of bits) {
       // a power of two has exactly one bit set
       expect(bit > 0 && (bit & (bit - 1)) === 0).toBe(true)
     }
+
     expect(new Set(bits).size).toBe(bits.length)
+
     const all = bits.reduce((acc, bit) => acc | bit, 0)
+
     expect(all).toBe(31)
+
     for (const bit of bits) {
       expect(hasFlag(all, bit)).toBe(true)
       expect(hasFlag(all & ~bit, bit)).toBe(false)
     }
+
     expect(hasFlag(IO_FLAGS.none, IO_FLAGS.files)).toBe(false)
   })
 })
@@ -132,9 +139,11 @@ describe('write honors APPEND / EXCLUSIVE', () => {
         yield* BunIO.use()
 
         const file = join(dir, 'log.txt')
+
         yield* IO.actions.write(file, 'one')
         yield* IO.actions.write(file, '-two', { flags: IO_FLAGS.append })
         yield* IO.actions.write(file, '-three', { flags: IO_FLAGS.append })
+
         const appended = yield* IO.actions.readText(file)
 
         const refused = yield* attempt(() =>
@@ -143,12 +152,14 @@ describe('write honors APPEND / EXCLUSIVE', () => {
         const untouched = yield* IO.actions.readText(file)
 
         const fresh = join(dir, 'fresh.txt')
+
         yield* IO.actions.write(fresh, 'new', { flags: IO_FLAGS.exclusive })
 
         const appendExclusiveExisting = yield* attempt(() =>
           IO.actions.write(file, 'x', { flags: IO_FLAGS.append | IO_FLAGS.exclusive }),
         )
         const appendExclusiveFresh = join(dir, 'fresh-append.txt')
+
         yield* IO.actions.write(appendExclusiveFresh, 'ax', {
           flags: IO_FLAGS.append | IO_FLAGS.exclusive,
         })

@@ -56,6 +56,7 @@ const makeTags = () => {
   }).build({
     *invalidate(...tags) {
       const ctx = yield* Tags.context.expect()
+
       return tags.filter(tag => ctx.tags.delete(tag)).length
     },
     *del(keys) {
@@ -98,6 +99,7 @@ describe('hooks over readonly rest members', () => {
       yield* Tags.around({
         *invalidate(args, next) {
           trace.push('around')
+
           // the rest tuple forwards as-is: `next(...args)`
           return yield* next(...args, 'c')
         },

@@ -1,6 +1,6 @@
 import type { Operation } from 'std:effect'
 import { useContext } from 'std:effect'
-import { activeContext } from 'std:trace'
+import { Trace } from 'std:trace'
 
 import type { LogLevel } from '../const'
 import { Logger, LoggerTransport } from '../definitions'
@@ -12,7 +12,7 @@ import { normalizePayload } from './normalize'
 
 /** The active span as an entry references it (ids + flags), `null` outside of any. */
 function* activeTrace(): Operation<LoggerDef.Trace | null> {
-  const context = yield* activeContext()
+  const context = yield* Trace.actions.activeContext()
 
   return context ? { traceId: context.traceId, spanId: context.spanId, flags: context.flags } : null
 }
@@ -20,12 +20,15 @@ function* activeTrace(): Operation<LoggerDef.Trace | null> {
 export const logAt = (level: LogLevel) =>
   function* (...args: LoggerDef.Payload[]): Operation<void> {
     const ctx = yield* useContext(Logger)
+
     if (level < ctx.level) {
       return
     }
+
     const bindings = (yield* LoggerBindingsContext.get()) ?? {}
     const trace = yield* activeTrace()
     const entry = buildEntry({ ctx, bindings, trace }, level, args)
+
     yield* dispatch(entry)
   }
 

@@ -114,6 +114,7 @@ export function* createBus(origin: string, options: Bus.OutboxOptions | undefine
 
         yield* wake.operation
         wake = withResolvers<void>('outbox wake')
+
         continue
       }
 

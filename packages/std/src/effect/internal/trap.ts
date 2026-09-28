@@ -21,6 +21,7 @@ export function* trap<T>(operation: () => Operation<T>): Operation<T> {
 
   try {
     const value = yield* operation()
+
     if (isNothing(boundary.outcome)) {
       boundary.outcome = just(succeed(value) as Result<T>)
     }
@@ -28,6 +29,7 @@ export function* trap<T>(operation: () => Operation<T>): Operation<T> {
     boundary.outcome = just(asFailure(error))
   } finally {
     scope.set(ErrorContext, original)
+
     // oxlint-disable-next-line no-unsafe-finally
     return (yield boundary.exit()) as T
   }
@@ -53,6 +55,7 @@ export class Trap<T> implements Helpers.ErrorBoundary {
           // nothing captured → this was a halt; keep unwinding instead of returning a value
           routine.unwind()
         }
+
         return didExit => didExit(succeed())
       },
       cause: 'exit this trap. throw if a background error was raised',

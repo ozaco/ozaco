@@ -12,15 +12,19 @@ export function* multiselect<T>(options: PromptDef.MultiSelectOptions<T>) {
 
   const check = (selected: ReadonlySet<number>): string | undefined => {
     const count = selected.size
+
     if ((options.required ?? false) && count === 0) {
       return 'Select at least one option'
     }
+
     if (options.min !== undefined && count < options.min) {
       return `Select at least ${options.min}`
     }
+
     if (options.max !== undefined && count > options.max) {
       return `Select at most ${options.max}`
     }
+
     return undefined
   }
 
@@ -45,12 +49,15 @@ export function* multiselect<T>(options: PromptDef.MultiSelectOptions<T>) {
         if (choice.disabled) {
           return `${pointer} ${box} ${colors.muted(colors.strikethrough(text))}`
         }
+
         const painted = index === state.cursor ? colors.bold(colors.primary(text)) : text
+
         return `${pointer} ${box} ${painted}${note}`
       })
 
       const head = `${activeLine(ctx, options.message)} ${hint(ctx, '(space, enter)')}`
       const body = `${head}\n${rows.join('\n')}`
+
       return state.error === undefined ? body : `${body}\n${colors.error(state.error)}`
     },
     onKey: (state, key) => {
@@ -64,6 +71,7 @@ export function* multiselect<T>(options: PromptDef.MultiSelectOptions<T>) {
           },
         }
       }
+
       if (isDown(key)) {
         return {
           type: 'update',
@@ -74,29 +82,38 @@ export function* multiselect<T>(options: PromptDef.MultiSelectOptions<T>) {
           },
         }
       }
+
       if (isSpace(key)) {
         const choice = choices[state.cursor]
+
         if (!choice || choice.disabled) {
           return undefined
         }
+
         const selected = new Set(state.selected)
+
         if (selected.has(state.cursor)) {
           selected.delete(state.cursor)
         } else {
           selected.add(state.cursor)
         }
+
         return { type: 'update', state: { ...state, selected, error: undefined } }
       }
+
       if (isEnter(key)) {
         const error = check(state.selected)
+
         return error === undefined
           ? { type: 'submit', value: indicesToValues(state.selected, choices) }
           : { type: 'update', state: { ...state, error } }
       }
+
       return undefined
     },
     submitted: (values, _state, ctx) => {
       const text = values.map(value => labelOf(value, choices)).join(', ')
+
       return submittedLine(ctx, options.message, text === '' ? 'none' : text)
     },
     cancelled: (_state, ctx) => cancelledLine(ctx, options.message),

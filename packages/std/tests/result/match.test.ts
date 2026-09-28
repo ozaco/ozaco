@@ -81,6 +81,7 @@ describe('asFailure(value, bundle)', () => {
     expect(asFailure(coded('EBUSY'), DiskErrors).error).toBe(DiskErrors.Busy)
 
     const renamed = Object.assign(coded('EBUSY'), { name: 'SystemError' })
+
     expect(asFailure(renamed, DiskErrors).error).toBe(ResultErrors.Unknown)
   })
 
@@ -91,6 +92,7 @@ describe('asFailure(value, bundle)', () => {
 
   it('a function decides by itself; a throwing one is no match', () => {
     const timeout = new DOMException('The operation timed out.', 'TimeoutError')
+
     expect(asFailure(timeout, DiskErrors).error).toBe(DiskErrors.Timeout)
 
     const Fragile = createTags('app:fragile', [
@@ -99,6 +101,7 @@ describe('asFailure(value, bundle)', () => {
         throw new Error('the matcher broke')
       },
     ])
+
     expect(asFailure(new Error('x'), Fragile).error).toBe(ResultErrors.Unknown)
   })
 
@@ -136,13 +139,16 @@ describe('asFailure(value, bundle)', () => {
 
   it('never re-classifies a tagged failure, nor an unknown one without raw', () => {
     const tagged = fail('app:x.failed', 'boom')
+
     expect(asFailure(tagged, DiskErrors)).toBe(tagged)
 
     const remote = fail(ResultErrors.Unknown, 'Error: x (ENOENT)')
+
     expect(asFailure(remote, DiskErrors)).toBe(remote)
 
     // an unmatched fold stays the same object
     const fold = asFailure(coded('EIO'))
+
     expect(asFailure(fold, DiskErrors)).toBe(fold)
   })
 

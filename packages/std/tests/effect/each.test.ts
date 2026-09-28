@@ -17,6 +17,7 @@ describe('each honors the flow close value', () => {
 
     const outcome = await run(function* () {
       const queue = createQueue<number, unknown>()
+
       queue.add(1)
       queue.add(2)
       queue.close(fail('truncated', 'source died mid-flow'))
@@ -31,6 +32,7 @@ describe('each honors the flow close value', () => {
 
     expect(seen).toEqual([1, 2])
     expect(isFailure(outcome)).toBe(true)
+
     if (isFailure(outcome)) {
       expect(String(outcome.error)).toBe('truncated')
     }
@@ -41,6 +43,7 @@ describe('each honors the flow close value', () => {
 
     const outcome = await run(function* () {
       const queue = createQueue<number, unknown>()
+
       queue.close(fail('never-opened'))
 
       for (const _ of yield* each(queueFlow(queue))) {
@@ -53,6 +56,7 @@ describe('each honors the flow close value', () => {
 
     expect(bodyRan).toBe(false)
     expect(isFailure(outcome)).toBe(true)
+
     if (isFailure(outcome)) {
       expect(String(outcome.error)).toBe('never-opened')
     }
@@ -61,10 +65,12 @@ describe('each honors the flow close value', () => {
   it('a non-failure close value still ends the loop cleanly', async () => {
     const outcome = await run(function* () {
       const queue = createQueue<number, string>()
+
       queue.add(7)
       queue.close('done-marker')
 
       const seen: number[] = []
+
       for (const value of yield* each(queueFlow(queue))) {
         seen.push(value)
         yield* each.next()
@@ -81,6 +87,7 @@ describe('each honors the flow close value', () => {
 
     const outcome = await run(function* () {
       const queue = createQueue<number, never>()
+
       queue.add(1)
       queue.add(2)
 
@@ -97,6 +104,7 @@ describe('each honors the flow close value', () => {
 
     expect(seen).toEqual([1])
     expect(isFailure(outcome)).toBe(true)
+
     if (isFailure(outcome)) {
       expect(String(outcome.error)).toBe('consumer-abort')
     }

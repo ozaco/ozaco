@@ -7,12 +7,15 @@ import { describe, expect, it } from 'bun:test'
 const counting = (count: number, close: unknown): Flow<number, unknown> => ({
   *[Symbol.iterator]() {
     let at = 0
+
     return {
       *next() {
         if (at >= count) {
           return { done: true as const, value: close }
         }
+
         yield* sleep(1)
+
         return { done: false as const, value: at++ }
       },
     }
@@ -25,17 +28,21 @@ const drainInto = <T>(reader: ReadableStreamDefaultReader<T>, into: T[]): Promis
     if (step.done) {
       return undefined
     }
+
     into.push(step.value)
+
     return drainInto(reader, into)
   })
 
 /** Drain a readable through a plain reader (promise land), collecting chunks. */
 const drain = async <T>(stream: ReadableStream<T>): Promise<T[]> => {
   const out: T[] = []
+
   // oxlint-disable-next-line no-await-in-loop -- sequential by nature: one pull at a time
   for await (const chunk of stream) {
     out.push(chunk)
   }
+
   return out
 }
 
@@ -44,9 +51,11 @@ describe('toReadable', () => {
     const got = unwrap(
       await run(function* () {
         const stream = yield* toReadable(counting(5, 'end'))
+
         return yield* until(drain(stream))
       }),
     )
+
     expect(got).toEqual([0, 1, 2, 3, 4])
   })
 
@@ -56,12 +65,15 @@ describe('toReadable', () => {
         const broken: Flow<number, unknown> = {
           *[Symbol.iterator]() {
             let n = 0
+
             return {
               *next() {
                 n += 1
+
                 if (n > 2) {
                   return { done: true as const, value: fail('source.broken', 'nope') }
                 }
+
                 return { done: false as const, value: n }
               },
             }
@@ -77,9 +89,11 @@ describe('toReadable', () => {
             (error: unknown) => error,
           ),
         )
+
         return { seen, error: result }
       }),
     )
+
     expect(outcome.seen).toEqual([1, 2])
     expect(isFailure(outcome.error)).toBe(true)
     expect((outcome.error as { error: unknown }).error).toBe('source.broken')
@@ -94,9 +108,11 @@ describe('toReadable', () => {
             yield* ensure(() => {
               cleaned = true
             })
+
             return {
               *next() {
                 yield* sleep(10_000)
+
                 return { done: false as const, value: 1 }
               },
             }
@@ -104,13 +120,16 @@ describe('toReadable', () => {
         }
         const stream = yield* toReadable(slow)
         const reader = stream.getReader()
+
         void reader.read().catch(() => {})
         yield* sleep(20)
         yield* until(reader.cancel())
         yield* sleep(20)
+
         return cleaned
       }),
     )
+
     expect(released).toBe(true)
   })
 })
@@ -128,20 +147,25 @@ describe('fromReadable', () => {
         })
         const sub = yield* fromReadable(stream)
         const out: string[] = []
+
         for (;;) {
           const step = yield* sub.next()
+
           if (step.done) {
             return out
           }
+
           out.push(step.value)
         }
       }),
     )
+
     expect(got).toEqual(['a', 'b'])
   })
 
   it('a consumer leaving mid-stream cancels the source', async () => {
     let cancelled = false
+
     unwrap(
       await run(function* () {
         const stream = new ReadableStream<number>({
@@ -152,8 +176,10 @@ describe('fromReadable', () => {
             cancelled = true
           },
         })
+
         yield* scoped(function* () {
           const sub = yield* fromReadable(stream)
+
           yield* sub.next()
         })
         yield* sleep(10)
@@ -168,15 +194,19 @@ describe('fromReadable', () => {
         const stream = yield* toReadable(counting(20, undefined))
         const sub = yield* fromReadable(stream)
         const out: number[] = []
+
         for (;;) {
           const step = yield* sub.next()
+
           if (step.done) {
             return out
           }
+
           out.push(step.value)
         }
       }),
     )
+
     expect(got).toEqual(Array.from({ length: 20 }, (_, index) => index))
   })
 })

@@ -90,10 +90,12 @@ const gateway = async (body: () => Operation<void>, trust?: (request: Request) =
           yield* sleep(60_000)
         }),
       )
+
       yield* ready.next()
       yield* scoped(function* () {
         yield* storage()
         yield* MemoryTransport.use({ prefix: 'app', link })
+
         const server = yield* createServer({
           services: [gate],
           carrier: NetworkCarrier,
@@ -103,6 +105,7 @@ const gateway = async (body: () => Operation<void>, trust?: (request: Request) =
           timeoutMs: 2000,
           ...(trust ? { trace: { trust } } : {}),
         })
+
         yield* server.start({ port: 0 })
         yield* sleep(50)
         yield* body()
@@ -163,8 +166,11 @@ describe('pass-through edge — a failure recorded behind it', () => {
 
     // the service recorded the failure ONCE, on its SERVER span in the caller's trace
     const recorded = sink.exceptions().filter(log => log.context?.traceId === TRACE)
+
     expect(recorded).toHaveLength(1)
+
     const owner = sink.spans().find(data => data.context.spanId === recorded[0]!.context?.spanId)!
+
     expect(owner).toMatchObject({ name: 'math.kaput', kind: 'server' })
     expect(owner.parent?.spanId).toBe(CALLER)
 
@@ -173,6 +179,7 @@ describe('pass-through edge — a failure recorded behind it', () => {
     const alone = sink
       .spans()
       .find(data => data.name === 'math.kaput' && data.context.traceId !== TRACE)!
+
     expect(continued!.body.error.causes).toEqual(locations(continued!, owner, `span:${CALLER} `))
     expect(stranger!.body.error.causes).toEqual(locations(stranger!, alone, ''))
 
@@ -202,6 +209,7 @@ describe('pass-through edge — a failure recorded behind it', () => {
 
     // the owner's operation, node and span (8 digits) — and still no traceresponse
     const [breadcrumb, ...rest] = locations(trusted!, owner, `span:${CALLER} `)
+
     expect(trusted!.body.error.causes).toEqual([
       breadcrumb,
       `remote: math.kaput @ app@0.0.0#b span ${owner.context.spanId.slice(0, 8)}`,

@@ -32,11 +32,13 @@ describe('createMutex', () => {
 
     const outcome = await run(function* () {
       const tasks = []
+
       for (const name of ['a', 'b', 'c', 'd']) {
         tasks.push(yield* spawn(() => mutex.run(body(name))))
       }
 
       yield* sleep(1)
+
       const snapshot = { locked: mutex.locked(), waiting: mutex.waiting() }
 
       for (const task of tasks) {
@@ -89,6 +91,7 @@ describe('createSemaphore', () => {
 
     await run(function* () {
       const tasks = []
+
       for (let index = 0; index < 6; index += 1) {
         tasks.push(yield* spawn(() => semaphore.run(body)))
       }
@@ -187,6 +190,7 @@ describe('createSemaphore', () => {
 
     // hand the permit over and halt its new owner in the same synchronous turn
     gate.resolve()
+
     // halt() is a lazy Future — `then` is what interrupts, so start it now
     const halting = granted.halt().then(outcome => outcome)
 

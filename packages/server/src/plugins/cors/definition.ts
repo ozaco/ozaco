@@ -4,7 +4,7 @@ import { rewrapResponse } from 'server:internal'
 import type { Operation } from 'std:effect'
 import { definePlugin } from 'std:plugin'
 import { fail } from 'std:result'
-import { current } from 'std:trace'
+import { Trace } from 'std:trace'
 
 import pkg from '../../../package.json'
 
@@ -14,7 +14,7 @@ import type { CorsDef } from './types'
 /**
  * Say a cross-origin request's verdict on the edge span (the decorators run inside it):
  * `ozaco.cors.preflight`, `ozaco.cors.allowed` and — for a request the browser will refuse — one
- * `ozaco.cors.reject` event `{ ozaco.cors.reason }`. The request itself is answered as before (a
+ * `cors.reject` event `{ ozaco.cors.reason }`. The request itself is answered as before (a
  * refused origin gets no allow headers; an unanswered preflight is the edge's 404).
  */
 function* note(verdict: CorsDef.Verdict): Operation<void> {
@@ -22,7 +22,7 @@ function* note(verdict: CorsDef.Verdict): Operation<void> {
     return
   }
 
-  const span = yield* current()
+  const span = yield* Trace.actions.current()
 
   span.setAttributes({
     'ozaco.cors.preflight': verdict.preflight,
@@ -48,9 +48,11 @@ export const Cors = definePlugin<ServerDef.PluginContext, [options?: CorsDef.Opt
 
   *setup(options) {
     const kernel = yield* Server.context.get()
+
     if (!kernel) {
       return yield* fail(ServerErrors.Configuration, 'Cors must be installed by createServer')
     }
+
     const config: CorsDef.Config = {
       origins: options?.origins ?? '*',
       methods: (options?.methods ?? ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']).join(
@@ -77,39 +79,50 @@ export const Cors = definePlugin<ServerDef.PluginContext, [options?: CorsDef.Opt
       credentials: options?.credentials ?? false,
       maxAgeSeconds: options?.maxAgeSeconds ?? 600,
     }
+
     return {
       hooks: {
         name: 'cors',
         *start() {
           const edge = kernel.edge
+
           if (!edge) {
             return
           }
+
           // every response passes here — a preflight's own 204 too: the ONE place the verdict
           // is said
           yield* edge.actions.decorate(function* (request, response) {
             const verdict = verdictOf(config, request)
+
             yield* note(verdict)
 
             if (verdict.origin === null) {
               return response
             }
+
             const out = rewrapResponse(response)
+
             out.headers.set('access-control-allow-origin', verdict.origin)
             out.headers.set('access-control-expose-headers', config.exposeHeaders)
+
             if (config.credentials) {
               out.headers.set('access-control-allow-credentials', 'true')
             }
+
             if (verdict.origin !== '*') {
               out.headers.append('vary', 'origin')
             }
+
             return out
           })
           yield* edge.actions.preflight(function* (request) {
             const verdict = verdictOf(config, request)
+
             if (verdict.origin === null || !verdict.preflight) {
               return null
             }
+
             return new Response(null, {
               status: 204,
               headers: {

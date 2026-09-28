@@ -157,6 +157,7 @@ const responsesOf = (action: DocsDef.ActionDoc): Record<string, unknown> => {
 
     if (status !== action.status) {
       responses[String(status)] = failure
+
       continue
     }
 
@@ -207,6 +208,7 @@ export const openapiOf = (manifest: DocsDef.Manifest): Record<string, unknown> =
       }
 
       const path = action.route.path.replaceAll(/:([A-Za-z_]\w*)/gu, '{$1}')
+
       paths[path] ??= {}
       paths[path][action.route.method.toLowerCase()] = operationOf(action)
     }

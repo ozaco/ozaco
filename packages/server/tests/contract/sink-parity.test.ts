@@ -34,7 +34,9 @@ const spansNamed = (name: string): Span[] => reference.spans.filter(span => span
 
 const only = (name: string): Span => {
   const found = spansNamed(name)
+
   expect(found.map(span => span.name)).toEqual([name])
+
   return found[0]!
 }
 
@@ -67,19 +69,25 @@ describe('contract — the traffic', () => {
     const itemDispatch = reference.spans.find(
       span => span.name === 'shop.item' && span.parentId === item.spanId,
     )!
+
     expect(itemDispatch).toBeDefined()
+
     const priced = reference.spans.find(
       span => span.name === 'price lookup' && span.parentId === itemDispatch.spanId,
     )!
+
     expect(priced.events.map(event => event.name)).toEqual(['app.priced'])
 
     // the nested ctx.call, the emit and its handler (a consumer linking its producer)
     const order = only('shop.order')
+
     expect(
       reference.spans.some(span => span.name === 'shop.item' && span.parentId === order.spanId),
     ).toBe(true)
+
     const publish = only('publish shop.ordered')
     const processed = only('process shop.ordered')
+
     expect(publish).toMatchObject({ kind: 'producer', parentId: order.spanId })
     expect(processed).toMatchObject({ kind: 'consumer', parentId: publish.spanId })
     expect(processed.links.map(link => link.spanId)).toEqual([publish.spanId])
@@ -87,9 +95,12 @@ describe('contract — the traffic', () => {
 
     // the 3-level chain: ONE exception event on the dispatch, ONE ERROR record carrying it
     const broken = only('shop.broken')
+
     expect(broken.status).toEqual({ code: 'error', message: 'order broke' })
     expect(broken.events.map(event => event.name)).toEqual(['exception'])
+
     const exceptions = reference.logs.filter(log => log.eventName === 'ozaco.action.exception')
+
     expect(exceptions).toHaveLength(1)
     expect(exceptions[0]).toMatchObject({ spanId: broken.spanId, severityNumber: 17 })
     expect(exceptions[0]!.attributes['ozaco.failure.chain']).toEqual([
@@ -100,6 +111,7 @@ describe('contract — the traffic', () => {
 
     // the 404: an unrouted edge span, its failure recorded at DEBUG
     const missing = only('GET')
+
     expect(missing.attributes).toMatchObject({
       'http.response.status_code': 404,
       'error.type': 'server.not-found',
@@ -111,19 +123,24 @@ describe('contract — the traffic', () => {
     // ctx.log and the std Logger: correlated to the dispatch span that wrote them
     for (const body of ['item looked up', 'std logger line']) {
       const lines = logsWith(body)
+
       expect(lines).toHaveLength(2)
+
       const dispatches = new Set(spansNamed('shop.item').map(span => span.spanId))
+
       expect(lines.every(line => line.spanId !== null && dispatches.has(line.spanId))).toBe(true)
     }
+
     expect(logsWith('std logger line')[0]!.scope.name).toBe('@ozaco/std/logger')
-    expect(reference.logs.some(log => log.eventName === 'ozaco.domain')).toBe(true)
+    expect(reference.logs.some(log => log.eventName === 'ozaco.local')).toBe(true)
 
     // the socket: the upgrade, one ROOT span per frame linked to it, a send event, the close
     const upgrade = only('GET /shop/live/:room')
     const frame = only('WS /shop/live/:room')
+
     expect(frame.parentId).toBeNull()
     expect(frame.links.map(link => link.spanId)).toEqual([upgrade.spanId])
-    expect(frame.events.map(event => event.name)).toEqual(['ozaco.ws.send'])
+    expect(frame.events.map(event => event.name)).toEqual(['ws.send'])
     expect(logsWith('heard')[0]!.spanId).toBe(frame.spanId)
     expect(logsWith('socket closed')[0]!.spanId).toBe(upgrade.spanId)
 
@@ -191,6 +208,7 @@ describe('contract — the comparison is not blind', () => {
     // OTLP/JSON: one span renamed
     const [first, ...rest] = traffic.json.texts('traces')
     const payload = JSON.parse(first!)
+
     payload.resourceSpans[0].scopeSpans[0].spans[0].name = 'renamed'
     expect(
       fromOtlpJson({
@@ -201,10 +219,12 @@ describe('contract — the comparison is not blind', () => {
 
     // the store: one log row missing
     const [view, ...views] = traffic.store
+
     expect(fromStore([{ ...view!, logs: view!.logs.slice(1) }, ...views])).not.toEqual(reference)
 
     // stdout: an exception event's stacktrace block missing
     const block = traffic.stdout.findIndex(line => /^ {4}· .* exception /u.test(line)) + 1
+
     expect(traffic.stdout[block]).toMatch(/^ {8}\S/u)
     expect(fromStdout(traffic.stdout.filter((_, at) => at !== block))).not.toEqual(
       textRecords(reference),
@@ -215,6 +235,7 @@ describe('contract — the comparison is not blind', () => {
     const [body, ...rest] = traffic.protobuf.bodies('traces')
     // field 99 (varint 1) appended to the ExportTraceServiceRequest
     const tampered = new Uint8Array([...body!, 0x98, 0x06, 0x01])
+
     expect(() => fromOtlpProtobuf({ traces: [tampered, ...rest], logs: [] })).toThrow(
       'field 99 is not in the OTLP schema',
     )

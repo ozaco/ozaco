@@ -25,10 +25,12 @@ export const BunSqlAdapter = DbAdapter.implement<Adapter.Options, [options: BunS
 
   *setup(options) {
     const client = new SqlClient(options.url, { max: options.max ?? 10 })
+
     yield* StateRef.set({ client })
     yield* ensure(function* () {
       yield* attempt(until((client.close?.() ?? client.end?.()) as Promise<void>))
     })
+
     return {
       adapter: 'bun-sql',
       capabilities: { transactions: true, raw: true, alterColumn: true },

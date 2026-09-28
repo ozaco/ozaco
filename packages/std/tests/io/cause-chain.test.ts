@@ -17,9 +17,11 @@ import { NodeIO } from 'std:io/impl/node'
 /** The failure and the failures nested in it, outer → inner (first nested failure each). */
 const failuresOf = (outcome: unknown): Result.Failure<unknown>[] => {
   const out: Result.Failure<unknown>[] = []
+
   for (let at: unknown = outcome; isFailure(at); at = at.causes.find(isFailure)) {
     out.push(at)
   }
+
   return out
 }
 
@@ -37,6 +39,7 @@ describe('io failures nest their platform cause', () => {
 
       const server = yield* IO.actions.tcpListen({ port: 0 }, function* () {})
       const deadPort = server.port
+
       yield* server.close()
       yield* sleep(20)
 
@@ -54,6 +57,7 @@ describe('io failures nest their platform cause', () => {
     })
 
     const seen = unwrap(outcome)
+
     expect(seen.tag).toBe('std:io.tcp-connect-failed')
     // the message says what failed; the platform's text is the level under it
     expect(seen.message).toMatch(/^tcp connect to 127\.0\.0\.1:\d+ failed$/u)
@@ -81,6 +85,7 @@ describe('io failures nest their platform cause', () => {
     })
 
     const seen = unwrap(outcome)
+
     expect(seen.decrypt[0]).toBe('std:io.decrypt-failed')
     expect(seen.decrypt).toHaveLength(2)
     expect(seen.sign[0]).toBe('std:io.sign-failed')
@@ -94,10 +99,12 @@ describe('io failures nest their platform cause', () => {
       const missing = yield* attempt(() =>
         IO.actions.exec('ozaco-no-such-command-for-the-cause-test', []),
       )
+
       return levelsOf(missing).map(level => level.type)
     })
 
     const types = unwrap(outcome)
+
     expect(types[0]).toMatch(/^std:io\.exec-(spawn-)?failed$/u)
     expect(types.length).toBeGreaterThanOrEqual(2)
   })
@@ -117,6 +124,7 @@ describe('io failures nest their platform cause', () => {
     })
 
     const seen = unwrap(outcome)
+
     expect(seen.tag).toBe('std:io.process-error')
     expect(seen.message).toBe('process "ozaco-no-such-command-for-the-cause-test" errored')
     // one level down: the runtime's fold re-classified by the IOErrors matchers (ENOENT)

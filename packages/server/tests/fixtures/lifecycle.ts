@@ -34,6 +34,7 @@ const outcome = await run(function* () {
   yield* DbClient.use({ tables: [items] })
   yield* MemoryKv.use()
   yield* MemoryTransport.use({ prefix: 'life' })
+
   const resource = crud(items)
   const app = yield* createServer({
     services: [echo, resource],
@@ -44,15 +45,20 @@ const outcome = await run(function* () {
   })
   const info = yield* app.start()
   const health = yield* until(fetch(`${info.url}/_health`))
+
   if (health.status !== 200) {
     throw new Error(`health ${health.status}`)
   }
+
   const said = yield* until(fetch(`${info.url}/echo/say?text=hi`))
+
   if ((yield* until(said.json())) !== 'hi') {
     throw new Error('echo failed')
   }
+
   // park a live socket watcher, then let everything close over it
   const ws = new WebSocket(`${info.url!.replace('http', 'ws')}/items/_realtime`)
+
   yield* until(
     new Promise<void>(resolve => {
       ws.addEventListener('open', () => resolve())
@@ -74,5 +80,6 @@ const outcome = await run(function* () {
   yield* app.stop()
   console.log('stopped')
 })
+
 unwrap(outcome)
 console.log('all-done')

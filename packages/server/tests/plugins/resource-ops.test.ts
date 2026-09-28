@@ -22,6 +22,7 @@ import { storage, todosTable, testSchema } from '../helpers'
 const json = function* (path: string, init?: RequestInit) {
   const response = yield* Edge.actions.handle(new Request(`http://edge${path}`, init))
   const text = yield* until(response.text())
+
   return {
     status: response.status,
     body: text ? JSON.parse(text) : null,
@@ -69,6 +70,7 @@ const catalogue = service('catalogue', {
     },
     function* ({ input }) {
       const row = yield* crud.get(todosTable, { id: input.id, optional: true })
+
       return { found: row !== null }
     },
   ),
@@ -170,15 +172,20 @@ describe('resource — runnable ops', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({ services: [catalogue], edge: BunEdge })
+
         yield* server.start()
 
         const a = yield* send('POST', '/catalogue', { body: { title: 'alpha' } })
+
         expect(a.status).toBe(200)
+
         const b = yield* send('POST', '/catalogue', { body: { title: 'beta' } })
 
         // `scope` is AND-ed with the client filter; `total` counts the SCOPED set
         const open = yield* json('/catalogue/open')
+
         expect(open.status).toBe(200)
         expect(open.body.data.map((row: AnyType) => row.title).toSorted()).toEqual([
           'alpha',
@@ -191,6 +198,7 @@ describe('resource — runnable ops', () => {
             JSON.stringify({ op: 'eq', field: 'title', value: 'beta' }),
           )}`,
         )
+
         expect(filtered.body.data.map((row: AnyType) => row.title)).toEqual(['beta'])
         expect(filtered.body.total).toBe(1)
 
@@ -200,6 +208,7 @@ describe('resource — runnable ops', () => {
             JSON.stringify({ op: 'eq', field: 'secret', value: 'x' }),
           )}`,
         )
+
         expect(bad.status).toBe(400)
 
         // ambient If-Match: a stale `_version` rejects with 412, the current one passes
@@ -207,12 +216,14 @@ describe('resource — runnable ops', () => {
           body: { title: 'stale' },
           headers: { 'if-match': '"v:does-not-exist"' },
         })
+
         expect(stale.status).toBe(412)
 
         const renamed = yield* send('PATCH', `/catalogue/${a.body._id}`, {
           body: { title: 'ALPHA' },
           headers: { 'if-match': `"${a.body._version}"` },
         })
+
         expect(renamed.status).toBe(200)
         expect(renamed.body.title).toBe('ALPHA')
 
@@ -221,6 +232,7 @@ describe('resource — runnable ops', () => {
         expect((yield* json('/catalogue/peek/missing')).body.found).toBe(false)
 
         const dropped = yield* send('DELETE', `/catalogue/${b.body._id}`)
+
         expect(dropped.body.removed).toBe(true)
         expect((yield* json('/catalogue/open')).body.total).toBe(1)
 
@@ -228,6 +240,7 @@ describe('resource — runnable ops', () => {
         const bulk = yield* send('POST', '/catalogue/bulk', {
           body: { titles: ['bulk-1', 'bulk-2'] },
         })
+
         expect(bulk.status).toBe(200)
         expect(bulk.body).toEqual({ created: 2, open: 3 })
 
@@ -243,6 +256,7 @@ describe('resource — runnable ops', () => {
             JSON.stringify({ op: 'eq', field: 'title', value: 'bulk-1' }),
           )}`,
         )
+
         expect(tallied.body).toEqual({ count: 1 })
 
         const refused = yield* json(
@@ -250,6 +264,7 @@ describe('resource — runnable ops', () => {
             JSON.stringify({ op: 'eq', field: 'secret', value: 'x' }),
           )}`,
         )
+
         expect(refused.status).toBe(400)
 
         yield* server.stop()
@@ -264,6 +279,7 @@ describe('resource — runnable ops', () => {
     })
 
     const entry = (shaped.actions as AnyType)._realtime
+
     expect(entry.socket.path).toBe('/todos/live')
     expect(entry.socket.protocol).toBe('resource')
     expect(entry.socket.defaults).toEqual({ cursor: 0 })
@@ -279,7 +295,9 @@ describe('resource — runnable ops', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const outcome = yield* attempt(() => crud.list(todosTable))
+
         expect(isFailure(outcome)).toBe(true)
         expect((outcome as AnyType).error).toBe(ServerErrors.Configuration)
       }),
@@ -290,6 +308,7 @@ describe('resource — runnable ops', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const db = (yield* DbClient.context.get()) as AnyType
 
         // no dispatch, no ctx anywhere — the handle alone is enough (spans simply skip)
@@ -300,6 +319,7 @@ describe('resource — runnable ops', () => {
           ],
           db,
         })) as AnyType
+
         expect(rows).toHaveLength(2)
 
         // no request → no `If-Match` → an un-pinned update passes (no version gate)
@@ -308,6 +328,7 @@ describe('resource — runnable ops', () => {
           patch: { title: 'seed-A' },
           db,
         })) as AnyType
+
         expect(renamed.title).toBe('seed-A')
 
         // an explicit `ifVersion` still gates — a stale pin conflicts even without a request
@@ -319,6 +340,7 @@ describe('resource — runnable ops', () => {
             db,
           }),
         )
+
         expect(isFailure(stale)).toBe(true)
         expect(String((stale as AnyType).error)).toBe(DbErrors.Conflict)
 
@@ -332,12 +354,14 @@ describe('resource — runnable ops', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const db = (yield* DbClient.context.get()) as AnyType
 
         const row = (yield* crud.create(todosTable, {
           value: { title: 'noted', done: false, note: 'temporary' },
           db,
         })) as AnyType
+
         expect(row.note).toBe('temporary')
 
         // compiling is the point: the typed op's patch is aligned with db's `PatchOf`
@@ -346,6 +370,7 @@ describe('resource — runnable ops', () => {
           patch: { note: CLEAR },
           db,
         })) as AnyType
+
         expect(cleared.note).toBeNull()
       }),
     )
@@ -360,14 +385,19 @@ describe('resource — runnable ops', () => {
         const poll = () => {
           if (frames.length > after) {
             resolve(frames[after])
+
             return
           }
+
           if (Date.now() > deadline) {
             reject(new Error(`no frame ${after} — got ${JSON.stringify(frames)}`))
+
             return
           }
+
           setTimeout(poll, 10)
         }
+
         poll()
       })
 
@@ -387,9 +417,11 @@ describe('resource — runnable ops', () => {
               // the after hook PROJECTS outgoing rows — here down to a shouted title
               *after({ output }) {
                 const frame = output as AnyType
+
                 if (frame.t !== 'sync') {
                   return
                 }
+
                 return {
                   ...frame,
                   rows: frame.rows.map((row: AnyType) => ({
@@ -417,6 +449,7 @@ describe('resource — runnable ops', () => {
         const socketDoc = manifest.services
           .flatMap((svc: AnyType) => svc.actions)
           .find((entry: AnyType) => entry.kind === 'socket' && entry.path === '/feed/board')
+
         expect(socketDoc).toMatchObject({
           service: 'feed',
           protocol: 'resource',
@@ -434,6 +467,7 @@ describe('resource — runnable ops', () => {
         }
 
         const ws = new WebSocket(`${base.replace('http', 'ws')}/feed/board`)
+
         ws.addEventListener('message', event => frames.push(JSON.parse(String(event.data))))
         yield* until(
           new Promise(resolve => {
@@ -442,7 +476,9 @@ describe('resource — runnable ops', () => {
         )
 
         ws.send(JSON.stringify({ t: 'watch', id: 'w' }))
+
         const sync = yield* until(nextFrame(0))
+
         expect(sync.t).toBe('sync')
         expect(sync.rows.map((row: AnyType) => row.title)).toEqual(['LIVE'])
 

@@ -2,7 +2,7 @@ import type { Operation } from 'std:effect'
 import { attempt, fork } from 'std:effect'
 import { isFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
-import { ActiveSpan, isTracing, newTraceId } from 'std:trace'
+import { Trace } from 'std:trace'
 
 import { ActiveRequest, RequestRef } from '../context'
 import { Server } from '../definition/protocol'
@@ -52,11 +52,16 @@ export const defineEvents = <const TMap extends EventsDef.Map>(
     handler: EventsDef.Handler<AnyType>,
     options: EventsDef.HandleOptions | undefined,
   ): Operation<void> {
-    const request = new ActiveRequest(item.requestId || (yield* newTraceId()), 'internal')
+    const request = new ActiveRequest(
+      item.requestId || (yield* Trace.actions.newTraceId()),
+      'internal',
+    )
 
-    const outcome = yield* RequestRef.with(request, () =>
-      ActiveSpan.with(null, () =>
-        attempt(() =>
+    // the Result comes back through `attempt` OUTSIDE the Trace action (which unwraps a
+    // returned one)
+    const outcome = yield* attempt(() =>
+      RequestRef.with(request, () =>
+        Trace.actions.detached(() =>
           Server.actions.process(item, function* (span) {
             span.setAttribute('ozaco.event.origin', item.origin)
 
@@ -69,13 +74,14 @@ export const defineEvents = <const TMap extends EventsDef.Map>(
               item.payload,
               where(item.name),
             )
+
             yield* handler(payload, { origin: item.origin, trace: item.trace })
           }),
         ),
       ),
     )
 
-    if (isFailure(outcome) && !(yield* isTracing())) {
+    if (isFailure(outcome) && !(yield* Trace.actions.isTracing())) {
       yield* unhandled(item, outcome, options)
     }
   }
@@ -87,6 +93,7 @@ export const defineEvents = <const TMap extends EventsDef.Map>(
       // validated at the SOURCE: a malformed payload is the emitter's bug, and it can still be
       // fixed here — once it is on the wire every subscriber has to cope with it
       const checked = yield* validate(map[name]!, payload, where(name))
+
       yield* Server.actions.emit(name, checked)
     },
 
@@ -116,6 +123,7 @@ export const defineEvents = <const TMap extends EventsDef.Map>(
               yield* attempt(() =>
                 Server.actions.process(item, function* (span) {
                   span.setAttribute('ozaco.event.origin', item.origin)
+
                   return yield* checked
                 }),
               )

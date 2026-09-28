@@ -12,7 +12,7 @@ import type { Operation } from 'std:effect'
 import { attempt, run, sleep } from 'std:effect'
 import { asFailure, fail, unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
-import { emitLog } from 'std:trace'
+import { Trace } from 'std:trace'
 
 import { describe, expect, it } from 'bun:test'
 
@@ -46,6 +46,7 @@ const memoryExporter = () => {
       lifecycle.flushed += 1
     },
   })
+
   return { plugin, seen, lifecycle }
 }
 
@@ -53,6 +54,7 @@ const memoryExporter = () => {
 const captureStdout = async <T>(body: () => Promise<T>): Promise<{ value: T; lines: string[] }> => {
   const lines: string[] = []
   const original = console.log
+
   console.log = (...args: unknown[]) => {
     lines.push(...args.map(String).join(' ').split('\n'))
   }
@@ -68,6 +70,7 @@ const captureStdout = async <T>(body: () => Promise<T>): Promise<{ value: T; lin
 const chain = service('chain', {
   deep: action.query({ input: z.object({}) }, function* ({ ctx }) {
     yield* ctx.log.warn('about to break', { 'ozaco.step': 3 })
+
     const inner = asFailure(new TypeError('inner type error'))
 
     return yield* fail('deep.broken', 'outer broke', fail('deep.middle', 'middle failed', inner))
@@ -167,6 +170,7 @@ describe('observe exporters', () => {
       unwrap(
         await run(function* () {
           yield* storage()
+
           const server = yield* createServer({
             services: [todos],
             plugins: [
@@ -179,6 +183,7 @@ describe('observe exporters', () => {
               }),
             ],
           })
+
           yield* server.start()
           expect(memory.lifecycle.started).toBe(1)
           yield* server.call(todos, 'create', { title: 'shipped' })
@@ -199,6 +204,7 @@ describe('observe exporters', () => {
 
     // stdout: every span a line with its ids, the outcome readable at a glance
     const create = lines.find(line => line.includes(' todos.create '))
+
     expect(create).toMatch(
       / INTERNAL todos\.create [\d.]+ms ok trace_id=[0-9a-f]{32} span_id=[0-9a-f]{16}/u,
     )
@@ -217,14 +223,18 @@ describe('observe exporters', () => {
       unwrap(
         await run(function* () {
           yield* storage()
+
           const server = yield* createServer({
             services: [todos, chain],
             name: 'stdout-demo',
             plugins: [memory.plugin, StdoutExporter],
           })
+
           yield* server.start()
           yield* attempt(server.call(chain, 'deep', {}))
+
           const first = memory.seen.find((event): event is SpanEvent => event.t === 'span')!
+
           yield* linkedRoot(first.span.context)
           yield* server.stop()
         }),
@@ -234,16 +244,20 @@ describe('observe exporters', () => {
     // the failing dispatch: status error, the exception EVENT indented under it (no stacktrace
     // there — the log record carries the chain once, in full)
     const at = lines.findIndex(line => line.includes(' chain.deep ') && line.includes('span_id='))
+
     expect(lines[at]).toContain('✗ deep.broken ERROR: outer broke')
     expect(lines[at + 1]).toMatch(/^ {4}· \S+ \+[\d.]+ms exception exception\.type=deep\.broken/u)
     expect(lines[at + 1]).not.toContain('exception.stacktrace')
 
     // the exception record: severity, event name, ids — then the chain, innermost included
     const record = lines.findIndex(line => line.includes('[ozaco.action.exception]'))
+
     expect(lines[record]).toMatch(
       / ERROR @ozaco\/server \[ozaco\.action\.exception\] deep\.broken: outer broke trace_id=[0-9a-f]{32} span_id=[0-9a-f]{16}/u,
     )
+
     const block = lines.slice(record + 1).filter(line => line.startsWith('    '))
+
     expect(block.some(line => line.includes('Caused by: deep.middle: middle failed'))).toBe(true)
     expect(
       block.some(line =>
@@ -258,6 +272,7 @@ describe('observe exporters', () => {
 
     // the linked root: its event and its link, indented
     const job = lines.findIndex(line => line.includes(' job run '))
+
     expect(lines[job + 1]).toMatch(/^ {4}· .* ozaco\.job\.step ozaco\.job\.n=1$/u)
     expect(lines[job + 2]).toMatch(
       /^ {4}↗ link trace_id=[0-9a-f]{32} span_id=[0-9a-f]{16} ozaco\.link\.reason=creation$/u,
@@ -275,6 +290,7 @@ describe('observe exporters', () => {
             'ozaco.tags': ['a b', 'c'],
           },
         })
+
         return 'ok'
       }),
     })
@@ -283,7 +299,9 @@ describe('observe exporters', () => {
       unwrap(
         await run(function* () {
           yield* storage()
+
           const server = yield* createServer({ services: [odd], plugins: [StdoutExporter] })
+
           yield* server.start()
           yield* server.call(odd, 'go', {})
           yield* server.stop()
@@ -292,6 +310,7 @@ describe('observe exporters', () => {
     )
 
     const line = lines.find(entry => entry.includes(' odd values '))
+
     // std spells non-finite numbers out as strings once, before any sink (a mixed array turns
     // into strings): stdout prints them as every other sink holds them
     expect(line).toContain('ozaco.ratio=NaN')
@@ -309,6 +328,7 @@ describe('observe exporters', () => {
       unwrap(
         await run(function* () {
           yield* storage()
+
           const server = yield* createServer({
             services: [todos, chain],
             name: 'parity',
@@ -332,6 +352,7 @@ describe('observe exporters', () => {
               }),
             ],
           })
+
           yield* server.start()
           yield* server.call(todos, 'create', { title: 'one' })
           yield* server.call(todos, 'nested', { title: 'two' })
@@ -339,8 +360,14 @@ describe('observe exporters', () => {
           yield* attempt(server.call(chain, 'deep', {}))
           yield* Server.actions.report({ stream: 'audit', verb: 'todo.checked', ratio: 0.25 })
           // a record over the log budget (> 96 attributes): cut ONCE, by the kernel
-          yield* emitLog({ body: 'wide record', severityNumber: 9, attributes: wideAttributes() })
+          yield* Trace.actions.emitLog({
+            body: 'wide record',
+            severityNumber: 9,
+            attributes: wideAttributes(),
+          })
+
           const first = memory.seen.find((event): event is SpanEvent => event.t === 'span')!
+
           yield* linkedRoot(first.span.context)
           yield* server.stop()
         }),
@@ -349,17 +376,20 @@ describe('observe exporters', () => {
 
     const spanEvents = memory.seen.filter((event): event is SpanEvent => event.t === 'span')
     const logEvents = memory.seen.filter((event): event is LogEvent => event.t === 'log')
+
     expect(spanEvents.length).toBeGreaterThan(5)
     expect(logEvents.length).toBeGreaterThan(3)
 
     // the custom exporter got the budgeted record, like every other sink
     const wide = logEvents.find(event => event.log.body === 'wide record')!.log
+
     expect(Object.keys(wide.attributes)).toHaveLength(96)
     expect(wide.droppedAttributes).toBe(150 - 96)
 
     // the log records as the KERNEL reported them (no encoder in between) vs what each OTLP
     // leg shipped: the same set — attributes, dropped counts, ids, event names, severities
     const rawLogs = logEvents.map(event => rawLogOf(event)).toSorted()
+
     expect(
       json
         .of('/v1/logs')
@@ -406,6 +436,7 @@ describe('observe exporters', () => {
 
     for (const event of logEvents) {
       const [head] = event.log.body.split('\n')
+
       expect(lines.some(line => line.includes(head!))).toBe(true)
     }
   })
@@ -417,6 +448,7 @@ describe('observe exporters', () => {
       version: '0.0.0',
       *setup() {
         yield* inner.plugin.use()
+
         return { exporter: 'outer' }
       },
     }).build({
@@ -424,10 +456,13 @@ describe('observe exporters', () => {
       *start() {},
       *flush() {},
     })
+
     unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({ services: [todos], plugins: [Outer] })
+
         yield* server.start()
         yield* server.call(todos, 'create', { title: 'nested' })
         yield* sleep(20)
@@ -443,7 +478,9 @@ describe('observe exporters', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({ services: [todos] })
+
         yield* server.start()
         expect((server as AnyType).exporting ?? false).toBe(false)
         yield* server.stop()

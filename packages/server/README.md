@@ -259,19 +259,19 @@ await main(function* () {
 ```
 
 A node observes when it has an exporter or an `observe` hook (`ObservePlugin`) of its own, or when
-tracing is already on around it (a test's in-memory `Tracer`). A node that does not observe
+tracing is already on around it (a test's in-memory `Trace` sink). A node that does not observe
 records nothing, but still forwards the trace context it would continue.
 
 ### What you get
 
-| where                                     | what you see                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Tempo / Grafana**                       | one trace per request rooted at the edge SERVER span (`POST /todos/:id`, `rootServiceName` = the node); dispatch spans under their ozaco service (`todos`); db spans (`insert todos`); CLIENT/SERVER pairs between nodes, PRODUCER/CONSUMER for events and jobs; span events (`exception`, `ozaco.ws.send`, …) in the Events accordion — Grafana 13 has no exception box, and cuts event names past 20 characters, so ozaco's stay shorter; links under References; the service graph with client→server, messaging and database (`db.namespace`) edges |
-| **Loki**                                  | every log record: `trace_id` / `span_id` as structured metadata, labels `service_name`, `service_namespace`, `service_instance_id`, `deployment_environment_name`; an exception record's line IS the cause chain; attribute keys with `.` → `_` (`exception_type`, `otel_event_name`). Loki drops the OTLP event name, which is why every event record also carries `otel.event.name`                                                                                                                                                                   |
-| **Prometheus** (through the collector)    | the metrics derived from the recorded spans: `http.server.request.duration`, `http.server.active_requests`, `rpc.server.call.duration`, `rpc.client.call.duration`, `ozaco.action.duration`, `messaging.process.duration`, `ozaco.ws.session.duration`, `ozaco.ws.messages`, `ozaco.service.up` — dots become `_` plus the unit suffix (`http_server_request_duration_seconds_bucket`, `ozaco_service_up_ratio`); Tempo adds `traces_service_graph_*` and `traces_spanmetrics_*`                                                                        |
-| **OpenObserve**                           | the same spans under Traces (`span_status`, `error_type`, the `events` / `links` JSON columns, keys lowercased with `.` → `_`, resource keys prefixed `service_`), the same records under Logs (`o2_event_name` and `otel_event_name`, the chain in `body`), metric streams                                                                                                                                                                                                                                                                             |
-| **`/_observe`** (`ObservePlugin` console) | root spans newest first; a waterfall indented by parent with a service badge per span, its events and log records inline, clickable links, the failure chain                                                                                                                                                                                                                                                                                                                                                                                            |
-| **stdout** (`StdoutExporter`)             | one line per span (time, service, kind, name, duration, `ok` / `✗ type`, `trace_id=` / `span_id=` / `parent_id=`, attributes; events and links indented under it, an `exception` event's stacktrace as a block below it) and per log record (an exception with its chain indented)                                                                                                                                                                                                                                                                      |
+| where                                     | what you see                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Tempo / Grafana**                       | one trace per request rooted at the edge SERVER span (`POST /todos/:id`, `rootServiceName` = the node); dispatch spans under their ozaco service (`todos`); db spans (`insert todos`); CLIENT/SERVER pairs between nodes, PRODUCER/CONSUMER for events and jobs; span events (`exception`, `ws.send`, …) in the Events accordion — Grafana 13 has no exception box, and cuts event names past 20 characters, so ozaco's stay shorter; links under References; the service graph with client→server, messaging and database (`db.namespace`) edges |
+| **Loki**                                  | every log record: `trace_id` / `span_id` as structured metadata, labels `service_name`, `service_namespace`, `service_instance_id`, `deployment_environment_name`; an exception record's line IS the cause chain; attribute keys with `.` → `_` (`exception_type`, `otel_event_name`). Loki drops the OTLP event name, which is why every event record also carries `otel.event.name`                                                                                                                                                             |
+| **Prometheus** (through the collector)    | the metrics derived from the recorded spans: `http.server.request.duration`, `http.server.active_requests`, `rpc.server.call.duration`, `rpc.client.call.duration`, `ozaco.action.duration`, `messaging.process.duration`, `ozaco.ws.session.duration`, `ozaco.ws.messages`, `ozaco.service.up` — dots become `_` plus the unit suffix (`http_server_request_duration_seconds_bucket`, `ozaco_service_up_ratio`); Tempo adds `traces_service_graph_*` and `traces_spanmetrics_*`                                                                  |
+| **OpenObserve**                           | the same spans under Traces (`span_status`, `error_type`, the `events` / `links` JSON columns, keys lowercased with `.` → `_`, resource keys prefixed `service_`), the same records under Logs (`o2_event_name` and `otel_event_name`, the chain in `body`), metric streams                                                                                                                                                                                                                                                                       |
+| **`/_observe`** (`ObservePlugin` console) | root spans newest first; a waterfall indented by parent with a service badge per span, its events and log records inline, clickable links, the failure chain                                                                                                                                                                                                                                                                                                                                                                                      |
+| **stdout** (`StdoutExporter`)             | one line per span (time, service, kind, name, duration, `ok` / `✗ type`, `trace_id=` / `span_id=` / `parent_id=`, attributes; events and links indented under it, an `exception` event's stacktrace as a block below it) and per log record (an exception with its chain indented)                                                                                                                                                                                                                                                                |
 
 ### Spans
 
@@ -279,10 +279,10 @@ records nothing, but still forwards the trace context it would continue.
 | ---------------------------------------------------------------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | HTTP request (edge)                                                    | server                                  | `{METHOD} {route}` — `{METHOD}` unrouted, `HTTP` for an unknown method                                                    | `http.request.method`, `http.route`, `url.path`, `url.scheme`, `url.query` (secrets redacted), `server.address`, `server.port`, `client.address`, `user_agent.original`, `http.response.status_code`, `error.type`, `ozaco.request.id`; ends when the response BODY is done (a stream on its last chunk) |
 | WS upgrade                                                             | server                                  | `GET {route}`                                                                                                             | the HTTP keys, `ozaco.ws.session.id` (what every frame of the session carries); ends at 101 or the refusal                                                                                                                                                                                               |
-| WS inbound frame (not `auth` / `ping` / `pong`)                        | server, a ROOT per frame                | `WS {route}` — from receipt to the handler's next read                                                                    | `http.route`, `ozaco.ws.message.type`, `ozaco.ws.message.size`, `ozaco.ws.session.id`, link `ws.session`; sends are `ozaco.ws.send` events on the active span; the close is one `socket closed` record                                                                                                   |
+| WS inbound frame (not `auth` / `ping` / `pong`)                        | server, a ROOT per frame                | `WS {route}` — from receipt to the handler's next read                                                                    | `http.route`, `ozaco.ws.message.type`, `ozaco.ws.message.size`, `ozaco.ws.session.id`, link `ws.session`; sends are `ws.send` events on the active span; the close is one `socket closed` record                                                                                                         |
 | action, in process                                                     | internal                                | `{service}.{action}`                                                                                                      | `code.function.name`                                                                                                                                                                                                                                                                                     |
 | action over a carrier                                                  | client (caller) + server (owner)        | `{service}.{action}`                                                                                                      | `rpc.system.name = ozaco`, `rpc.method`, `rpc.response.status_code`; the caller's span lasts until a streamed reply is drained                                                                                                                                                                           |
-| `emit` / its handler (`defineEvents.handle`, `Server.actions.process`) | producer / consumer                     | `publish {event}` / `process {event}`                                                                                     | `messaging.system = ozaco`, `messaging.operation.type`, `messaging.destination.name`, `messaging.message.id`; the consumer links its producer (`creation`); a `Server.actions.events()` reader's span gets an `ozaco.event.recv` event per item and links the first 32 producers                         |
+| `emit` / its handler (`defineEvents.handle`, `Server.actions.process`) | producer / consumer                     | `publish {event}` / `process {event}`                                                                                     | `messaging.system = ozaco`, `messaging.operation.type`, `messaging.destination.name`, `messaging.message.id`; the consumer links its producer (`creation`); a `Server.actions.events()` reader's span gets an `event.recv` event per item and links the first 32 producers                               |
 | `ctx.span` / `Server.actions.span`                                     | `kind` (default internal)               | yours                                                                                                                     | yours                                                                                                                                                                                                                                                                                                    |
 | db operation (`@ozaco/db`) — only under a recording span               | client (memory adapter: internal)       | `{op} {table}`, `transaction`, `raw`; a Kv `{op} kv`                                                                      | `db.system.name`, `db.namespace`, `db.collection.name`, `db.operation.name`, `db.query.text` (parameterized SQL), `db.response.status_code`                                                                                                                                                              |
 | queue enqueue / attempt (`@ozaco/db/queue`)                            | producer / consumer, a ROOT per attempt | `send {queue}` / `process {queue}`                                                                                        | `messaging.system = ozaco.queue`, `messaging.message.id` = the job id, `ozaco.queue.attempt`; links `creation` + `queue.retry`; `service.name` = the queue's `service` (default: its table)                                                                                                              |
@@ -309,11 +309,11 @@ recorded as part of the one around it, never twice. It is then recorded exactly 
 the span it came from:
 
 - ONE `exception` span event on the origin span: `exception.type`, `exception.message`,
-  `exception.stacktrace` (≤ 2000 bytes — every `Caused by:` header survives, `at` lines are cut
-  first), `ozaco.failure.chain` (`type: message` of the failure, then of every failure nested in
+  `exception.stacktrace` (the whole chain, under the span's generic 2048-byte value cap),
+  `ozaco.failure.chain` (`type: message` of the failure, then of every failure nested in
   its causes, depth first) and `ozaco.failure.causes` (its own string causes; left out when it has
   none);
-- ONE log record whose line is the whole chain (≤ 16 KiB), with the same attributes and an event
+- ONE log record whose line is the whole chain, with the same attributes and an event
   name saying where it came from (below);
 - `error.type` (the failure's tag) on every span it escaped, on both sides of a carrier;
 - the same record handed to the std Logger when one is installed (the failure attached, bound
@@ -327,7 +327,7 @@ Caused by: std:result.unknown: TypeError: sku x1 has no price
 ```
 
 A level is `<type>: <message>`, its string causes as `at` lines, then each failure it wraps as a
-`Caused by:` level (depth first, at most 8 deep). No JavaScript stack frame is rendered anywhere.
+`Caused by:` level (depth first, every level). No JavaScript stack frame is rendered anywhere.
 
 A thrown value (an `Error`, or anything else that is not a Failure) is folded by `asFailure` into
 ONE level: `std:result.unknown`, its `TypeError: x` text the message, the value itself kept as the
@@ -404,14 +404,17 @@ differs from the trace id the edge span carries `ozaco.request.id`. WebSocket fr
   one app together (trace-to-logs below). Also `service.instance.id` (the node),
   `service.version`, `deployment.environment.name` (`observe.environment`), `telemetry.sdk.*`,
   `ozaco.carrier.name`, and `OTEL_RESOURCE_ATTRIBUTES` merged under them — in every sink.
-- `observe: { capture: { headers, bodies, frames, enduser } }` (all off;
+- `observe: { capture: { headers, bodies, frames, enduser, sensitiveKeys } }` (all off;
   `ObservePlugin.use({ capture })` may turn keys on): `http.request.header.<name>` /
   `http.response.header.<name>` (authorization, cookies, API-key and token headers REDACTED),
   `http.{request,response}.body.content` (≤ 2 KiB) + `.size`, `ozaco.ws.message.body`,
-  `enduser.id`. `url.query` / `url.full` always redact signature, token, key, password and secret
-  parameters, and a captured body — a JSON request or response, a ws frame, multipart fields —
-  gets the same list applied to its keys at every depth (`{"password":"REDACTED"}`, the access
-  and refresh tokens of a login reply). Captured bodies still reach every sink: gate the observe API
+  `enduser.id`. `url.query` / `url.full` always redact the values of the secret keys — one list,
+  std:fetch `SENSITIVE_KEYS` (signature, token, key, password, secret, session, cookie, …) — and a
+  captured header or body — a JSON request or response, a ws frame, multipart fields — gets the
+  same list applied to its keys at every depth (`{"password":"REDACTED"}`, the access and refresh
+  tokens of a login reply). `capture: { sensitiveKeys }` replaces the list
+  (`[...SENSITIVE_KEYS, 'tenant']` adds to it); a `FetchClient.use({ sensitiveKeys })` does the
+  same for its `url.full`. Captured bodies still reach every sink: gate the observe API
   (`ObservePlugin.use({ auth })`) when they are on.
 
 ### Log records
@@ -439,8 +442,8 @@ differs from the trace id the edge span carries `ozaco.request.id`. WebSocket fr
   (`observe: { processLogs }`, default on) with its resource.
 - `ctx.event(name, attributes, { time })` — a span event plus a record with `eventName` and
   `otel.event.name`; `time` replays a client-side timeline.
-- `Server.actions.report({ stream: 'audit', …fields })` — a record with event name `ozaco.domain`,
-  `ozaco.domain.stream` and the fields flattened.
+- `Server.actions.report({ stream: 'audit', …fields })` — a record with event name `ozaco.local`,
+  `ozaco.local.stream` and the fields flattened.
 - Operational lines (transport reconnects, carrier presence, db bus gaps, queue lease expiry, cache
   invalidation failures, hot reloads, exporter delivery problems) go through the std Logger under
   `logger: '@ozaco/<package>/…'`; an exporter's own complaints never become telemetry.
@@ -456,7 +459,7 @@ Keys are OTel semantic conventions where one exists, `ozaco.*` otherwise — one
 | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | failures          | `error.type` (span), `exception.{type,message,stacktrace}`, `ozaco.failure.chain`, `ozaco.failure.causes` (event + record), `ozaco.failure.remote`, `ozaco.cancelled`                                        |
 | requests / ws     | `ozaco.request.id`, `ozaco.ws.message.{type,size,body}`, `ozaco.ws.session.id`; the `socket closed` record: `ozaco.ws.messages.{received,sent}`, `ozaco.ws.session.duration`, `ozaco.ws.close.{code,reason}` |
-| records           | `otel.event.name`, `ozaco.domain.stream`, `ozaco.log.data`, `ozaco.data.<key>`                                                                                                                               |
+| records           | `otel.event.name`, `ozaco.local.stream`, `ozaco.log.data`, `ozaco.data.<key>`                                                                                                                                |
 | auth              | `ozaco.auth.outcome` (`granted` / `anonymous` / `denied`), `ozaco.auth.requirement`, `ozaco.auth.strategy`, `enduser.id` (capture)                                                                           |
 | cors              | `ozaco.cors.preflight`, `ozaco.cors.allowed`, `ozaco.cors.reason`                                                                                                                                            |
 | cache             | `ozaco.cache.{hit,coalesced,key,store,ttl_ms,tags}`                                                                                                                                                          |
@@ -464,13 +467,13 @@ Keys are OTel semantic conventions where one exists, `ozaco.*` otherwise — one
 | crud / hot reload | `ozaco.crud.{scoped,recovered,hook.phase}`, `ozaco.reload.*`                                                                                                                                                 |
 | events / queue    | `ozaco.event.origin`, `messaging.destination.subscription.name`, `ozaco.queue.{attempt,kind,op}`, `ozaco.db.transaction.attempt`                                                                             |
 
-Span events (all ≤ 20 characters): `exception`, `ozaco.ws.send`, `ozaco.ws.reject`,
-`ozaco.event.recv` (one per `Server.actions.events()` item on the reading span:
+Span events (all ≤ 20 characters): `exception`, `ws.send`, `ws.reject`,
+`event.recv` (one per `Server.actions.events()` item on the reading span:
 `messaging.destination.name`, `messaging.message.id` — the span also LINKS the item's `publish`
-span, `creation`, for its first 32 items), `ozaco.auth.skip` (an earlier strategy failed, a later
+span, `creation`, for its first 32 items), `auth.skip` (an earlier strategy failed, a later
 one answered),
-`ozaco.cors.reject`, `ozaco.cache.evict`, `ozaco.breaker` (also a record), `ozaco.crud.hook`,
-`ozaco.db.tx.retry`, `ozaco.queue.dead`.
+`cors.reject`, `cache.evict`, `breaker` (also a record), `crud.hook`,
+`db.tx.retry`, `queue.dead`.
 
 | `ozaco.link.reason` | from → to                                                                  |
 | ------------------- | -------------------------------------------------------------------------- |
@@ -631,10 +634,10 @@ The server, `@ozaco/db`, `@ozaco/client`, `@ozaco/transport`, std `Fetch` and th
 instrument through one std module, so a library of your own can too:
 
 ```ts
-import { span } from '@ozaco/std/trace'
+import { Trace } from '@ozaco/std/trace'
 
 function* charge(order: { id: string; total: number }) {
-  return yield* span(
+  return yield* Trace.actions.span(
     'payments.charge',
     { kind: 'client', attributes: { 'payments.order.id': order.id } },
     function* (handle) {
@@ -645,11 +648,13 @@ function* charge(order: { id: string; total: number }) {
 }
 ```
 
-- **Model.** `span(name, options?, body)` / `startSpan` (a `LiveSpan` you `run` and `end`, for
-  streams) record `SpanData`; `event()`, `emitLog()` and `recordFailure()` emit `LogData`. Both go to
-  every installed `Tracer` (a cloneable protocol: `export(span)`, `emit(log)` — the server installs
-  its own, a test an in-memory one). No Tracer, or tracing off in the scope, and a body runs with a
-  no-op handle; `current()` answers the active span's handle (a no-op when none). The active span
+- **Model.** Every feature is a `Trace.actions.*` call. `span(name, options?, body)` /
+  `startSpan` (a `LiveSpan` you `run` and `end`, for streams) record `SpanData`; `event()`,
+  `emitLog()` and `recordFailure()` emit `LogData`. Both go to every installed `Trace` impl (a
+  cloneable protocol: `export(span)`, `emit(log)` — the server installs its own, a test an
+  in-memory one). No impl, or tracing off in the scope, and a body runs with a no-op handle;
+  `current()` answers the active span's handle (a no-op when none, `handle.valid === false`). A
+  Result the body returns is unwrapped by the plugin runtime: `attempt` the call to get it back. The active span
   is a snapshot context holding the recorder, so every fork of a body writes to the same span.
 - **Options.** `kind`, `attributes`, `links`, `service`, `scope`, `parent` (`null` starts a new
   trace), `requireParent` (no recording parent ⇒ no span — what `@ozaco/db` uses),
@@ -662,36 +667,37 @@ function* charge(order: { id: string; total: number }) {
   `settle(f, { status })`, an ancestor handles it, or the local root ends — then recorded once per
   (failure, trace) at its origin span, as described [above](#failures). A failure nested in the
   causes of one around it is absorbed by it; one decoded from the wire that the sender recorded
-  (`markRecorded(f, traceId, { remote: true })`) only marks the span (`ozaco.failure.remote`). A
+  (`Trace.actions.markRecorded(f, traceId, { remote: true })`) only marks the span (`ozaco.failure.remote`). A
   handled failure sets `error.type` and never a status.
 - **Time.** Every span and event reads one process-wide sub-millisecond clock, so a child never
   starts before its parent in the same process; a span's events reach every sink in time order.
-- **Propagation.** `inject({ ozaco })` / `extract(get)` follow W3C trace-context level 2
-  (`traceparent` + validated `tracestate`; an invalid header is ignored, never thrown on);
-  `ozaco=1` in `tracestate` marks an exporting ozaco caller; telemetry code runs `suppressed()` —
+- **Propagation.** `inject({ ozaco, context })` / `extract(getter | carrier)` follow W3C
+  trace-context level 2 (`traceparent` + validated `tracestate`; an invalid header is ignored,
+  never thrown on); `ozaco=1` in `tracestate` marks an exporting ozaco caller (`extract` sets
+  `context.ozaco`); telemetry code runs `suppressed()` —
   no spans, no records, and the sampled flag cleared on anything it sends.
 - **Logger bridge.** `TraceTransport` turns std Logger entries into `LogData` (above); the logger
   stamps every entry with the active span (`trace_id` / `span_id` in JSON lines, `trace=<8>` in
-  pretty ones, where each failure prints once). A `Tracer`'s `emit` runs with the record's own
+  pretty ones, where each failure prints once). A sink's `emit` runs with the record's own
   span active, so a Logger line it writes — the server's forwarded exceptions — carries that trace
   too. Records emitted where no scope traces — infrastructure outside any node — go to a
-  process-level fallback (`registerFallback`) that an observing server claims.
+  process-level fallback (`Trace.actions.registerFallback`) that an observing server claims.
 
-A `Tracer` of your own — here an in-memory one for tests — is a protocol impl that turns tracing
+A `Trace` impl of your own — here an in-memory one for tests — turns tracing
 on for the scope it is installed in:
 
 ```ts
 import type { TraceDef } from '@ozaco/std/trace'
-import { enableTracing, Tracer } from '@ozaco/std/trace'
+import { Trace } from '@ozaco/std/trace'
 
 const spans: TraceDef.SpanData[] = []
 const logs: TraceDef.LogData[] = []
 
-export const MemoryTracer = Tracer.implement({
+export const MemoryTracer = Trace.implement({
   name: 'test/memory-tracer',
   version: '1.0.0',
   *setup() {
-    yield* enableTracing()
+    yield* Trace.actions.enableTracing()
     return {}
   },
 }).build({

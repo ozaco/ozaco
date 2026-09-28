@@ -18,6 +18,7 @@ export function deepMerge<T extends Record<string, AnyType>>(
 export function deepMerge<T extends Record<string, AnyType>>(
   ...sources: (Partial<T> | undefined)[]
 ): Partial<T>
+
 export function deepMerge<T extends Record<string, AnyType>>(
   ...sources: (Partial<T> | undefined)[]
 ): Partial<T> {
@@ -30,11 +31,13 @@ export function deepMerge<T extends Record<string, AnyType>>(
 
     for (const key of Object.keys(source)) {
       const next = source[key]
+
       if (next === undefined) {
         continue
       }
 
       const prev = result[key]
+
       result[key] = isObject(next) ? deepMerge(isObject(prev) ? prev : {}, next) : next
     }
   }

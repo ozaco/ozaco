@@ -162,11 +162,13 @@ describe('manifest failures', () => {
           url: URL_BASE,
           fetch: replying(() => {
             calls += 1
+
             return new Response('', { status: 401 })
           }),
         })
 
         yield* attempt(client.$manifest())
+
         return ((yield* attempt(client.$manifest())) as AnyType).error as string
       }),
     )
@@ -180,6 +182,7 @@ describe('manifest failures', () => {
  * has no `fetch` option, and a client without one reads the global at call time too. */
 const withGlobalFetch = async <T>(reply: () => Response, op: () => Promise<T>): Promise<T> => {
   const original = globalThis.fetch
+
   globalThis.fetch = replying(reply)
 
   try {

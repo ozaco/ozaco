@@ -6,9 +6,11 @@ export const normalizeMessage = (message: Helpers.MessageLike): Helpers.Message 
   if (typeof message === 'string') {
     return { role: 'user', parts: [{ kind: 'text', text: message }] }
   }
+
   if ('parts' in message) {
     return message
   }
+
   return {
     role: message.role,
     parts:
@@ -55,17 +57,22 @@ export const accumulateToolCalls = (): Helpers.ToolCallAccumulator => {
       if (!fragments) {
         return
       }
+
       for (const fragment of fragments) {
         const slot = slots.get(fragment.index) ?? { id: '', name: '', arguments: '' }
+
         if (!slot.id && fragment.id) {
           slot.id = fragment.id
         }
+
         if (!slot.name && fragment.name) {
           slot.name = fragment.name
         }
+
         if (fragment.arguments !== undefined) {
           slot.arguments += fragment.arguments
         }
+
         slots.set(fragment.index, slot)
       }
     },

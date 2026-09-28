@@ -53,6 +53,7 @@ const need = (url: string | undefined, name: string): string => {
   if (!url) {
     throw new Error(`${name} is not set — run the leg through scripts/test-observe.sh`)
   }
+
   return url.replace(/\/+$/u, '')
 }
 
@@ -96,6 +97,7 @@ export const poll = <T>(
       if (holds && (state.confirming || !options.confirm)) {
         return value
       }
+
       next = { seen: { value }, failure: state.failure, confirming: holds }
     } catch (error) {
       next = { seen: state.seen, failure: error, confirming: false }
@@ -103,11 +105,14 @@ export const poll = <T>(
 
     if (Date.now() < deadline) {
       await Bun.sleep(interval)
+
       return round(next)
     }
+
     if (next.seen) {
       return next.seen.value
     }
+
     throw next.failure instanceof Error ? next.failure : new Error(`nothing read: ${next.failure}`)
   }
 
@@ -121,6 +126,7 @@ const getJson = async (url: string, init?: RequestInit): Promise<AnyType> => {
   if (!response.ok) {
     throw new Error(`${init?.method ?? 'GET'} ${url} → ${response.status}: ${text.slice(0, 400)}`)
   }
+
   return JSON.parse(text)
 }
 
@@ -131,9 +137,11 @@ export const hexId = (id: unknown): string | null => {
   if (typeof id !== 'string' || id === '') {
     return null
   }
+
   if (/^[0-9a-f]+$/u.test(id) && (id.length === 16 || id.length === 32)) {
     return id
   }
+
   return Buffer.from(id, 'base64').toString('hex')
 }
 
@@ -161,24 +169,31 @@ const valueOf = (value: OtlpValue | undefined): unknown => {
   if (!value) {
     return null
   }
+
   if (value.stringValue !== undefined) {
     return value.stringValue
   }
+
   if (value.intValue !== undefined) {
     return Number(value.intValue)
   }
+
   if (value.doubleValue !== undefined) {
     return value.doubleValue
   }
+
   if (value.boolValue !== undefined) {
     return value.boolValue
   }
+
   if (value.arrayValue) {
     return (value.arrayValue.values ?? []).map(item => valueOf(item))
   }
+
   if (value.kvlistValue) {
     return attributesOf(value.kvlistValue.values)
   }
+
   return value.bytesValue ?? null
 }
 
@@ -246,6 +261,7 @@ const statusOf = (code: unknown): TempoSpan['status'] => {
   if (name === 'STATUS_CODE_ERROR' || name === '2') {
     return 'error'
   }
+
   return name === 'STATUS_CODE_OK' || name === '1' ? 'ok' : 'unset'
 }
 
@@ -299,9 +315,11 @@ const fetchTrace = async (traceId: string): Promise<TempoSpan[]> => {
   if (response.status === 404) {
     return []
   }
+
   if (!response.ok) {
     throw new Error(`tempo trace ${traceId} → ${response.status}: ${await response.text()}`)
   }
+
   return spansOf(await response.json())
 }
 
@@ -323,7 +341,9 @@ export const tempoTrace = (
       const complete =
         spans.length > 0 && names.every(name => spans.some(span => span.name === name))
       const stable = complete && spans.length === previous
+
       previous = spans.length
+
       return stable
     },
     options,
@@ -396,6 +416,7 @@ export const lokiQuery = (
     async () => {
       const url = `${base}/loki/api/v1/query_range?query=${encodeURIComponent(expr)}&start=${start}&end=${end}&limit=1000&direction=forward`
       const body = await getJson(url)
+
       return linesOf(body.data?.result)
     },
     done,
@@ -423,6 +444,7 @@ export const grafanaDatasource = async (type: string): Promise<AnyType> => {
   if (!found) {
     throw new Error(`grafana has no ${type} datasource: ${JSON.stringify(list.map(s => s.type))}`)
   }
+
   return found
 }
 
@@ -446,6 +468,7 @@ export const grafanaQuery = async (
   if (result?.error) {
     throw new Error(`grafana query failed: ${result.error}`)
   }
+
   return result?.frames ?? []
 }
 
@@ -453,6 +476,7 @@ export const grafanaQuery = async (
 export const frameColumn = (frames: readonly AnyType[], name: string): unknown[] =>
   frames.flatMap(frame => {
     const index = (frame.schema?.fields ?? []).findIndex((field: AnyType) => field.name === name)
+
     return index === -1 ? [] : (frame.data?.values?.[index] ?? [])
   })
 
@@ -474,6 +498,7 @@ export const promQuery = (
   return poll<PromSeries[]>(
     async () => {
       const body = await getJson(`${base}/api/v1/query?query=${encodeURIComponent(query)}`)
+
       return (body.data?.result ?? []).map((entry: AnyType) => ({
         metric: entry.metric ?? {},
         value: Number(entry.value?.[1]),
@@ -518,6 +543,7 @@ export const openobserveSearch = (
           },
         }),
       })
+
       return body.hits ?? []
     },
     options.done,

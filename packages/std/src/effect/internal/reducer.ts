@@ -14,8 +14,10 @@ class InstructionQueue extends PriorityQueue<Helpers.Coroutine> {
   }
   dequeue(): Helpers.Coroutine | undefined {
     const routine = this.pop()
+
     if (routine) {
       routine.data.enqueued = false
+
       return routine
     }
   }
@@ -43,6 +45,7 @@ export class Reducer {
 
           if (next.done) {
             const settle = item.scope.expect(SettleContext)
+
             settle(just(succeed(next.value)), item.settle)
           } else {
             const step = next.value
@@ -55,6 +58,7 @@ export class Reducer {
           }
         } catch (error) {
           const settle = item.scope.expect(SettleContext)
+
           settle(just(asFailure(error)), item.settle)
         }
       }

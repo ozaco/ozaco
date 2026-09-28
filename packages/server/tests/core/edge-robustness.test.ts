@@ -15,7 +15,7 @@ import { definePlugin } from 'std:plugin'
 import { fail, unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
 import type { TraceDef } from 'std:trace'
-import { span } from 'std:trace'
+import { Trace } from 'std:trace'
 
 import { describe, expect, it } from 'bun:test'
 import { connect } from 'node:net'
@@ -47,6 +47,7 @@ const feeds = service('feeds', {
     return flowOf<number>(function* (emit) {
       yield* emit(1)
       yield* sleep(10)
+
       return yield* fail('feeds.broke', 'the feed broke')
     })
   }),
@@ -54,12 +55,14 @@ const feeds = service('feeds', {
     return flowOf<number>(function* (emit) {
       yield* emit(1)
       yield* sleep(10)
+
       return yield* fail('feeds.broke', 'the feed broke')
     })
   }),
   // headers only after 80ms: a client may be gone before they are written
   late: action.stream({ output: stream.sse(z.number()) }, function* () {
     yield* sleep(80)
+
     return endless()
   }),
   live: action.stream({ output: stream.sse(z.number()) }, function* () {
@@ -111,6 +114,7 @@ const spy = () => {
           }
         },
       }
+
       return { hooks }
     },
   }).build()
@@ -136,12 +140,14 @@ const withServer = async (
   unwrap(
     await run(function* () {
       yield* storage()
+
       const server = yield* createServer({
         services: [feeds],
         edge: BunEdge,
         ...options,
         plugins: [seen.plugin.use(), ...(options.plugins ?? [])],
       })
+
       yield* body(seen, server)
       yield* server.stop()
     }),
@@ -154,6 +160,7 @@ const withServer = async (
 function* request(path: string, init?: RequestInit): Operation<{ status: number; text: string }> {
   const response = yield* Edge.actions.handle(new Request(`http://edge${path}`, init))
   const text = yield* until(response.text().catch(() => '<body failed>'))
+
   // the span of a streamed body ends from the edge's scope: let that run
   yield* sleep(20)
 
@@ -164,28 +171,35 @@ describe('edge robustness — bodies that break', () => {
   it('an sse feed that breaks ends cleanly on the wire but fails the edge span — ONE record, where the feed ran', async () => {
     const seen = await withServer({}, function* () {
       const sse = yield* request('/feeds/sse')
+
       expect(sse.status).toBe(200)
       // the wire is unchanged: the feed simply ends
       expect(sse.text).toBe(': ok\n\ndata: 1\n\n')
 
       const ndjson = yield* request('/feeds/ndjson')
+
       expect(ndjson.text).toBe('<body failed>')
     })
 
     for (const path of ['/feeds/sse', '/feeds/ndjson']) {
       const [edge] = seen.edgesOf(path)
+
       expect(edge!.attributes['http.response.status_code']).toBe(200)
       expect(edge!.attributes['error.type']).toBe('feeds.broke')
       expect(edge!.status).toEqual({ code: 'error', message: 'the feed broke' })
+
       const records = seen
         .exceptions()
         .filter(log => log.context?.traceId === edge!.context.traceId)
+
       // the feed is produced inside its dispatch span (it stays open with the stream): the
       // failure is recorded THERE, once — the edge span only fails with it
       expect(records.map(log => [log.eventName, log.severityNumber])).toEqual([
         ['ozaco.action.exception', 17],
       ])
+
       const origin = seen.spans.find(item => item.context.spanId === records[0]!.context?.spanId)
+
       expect(origin?.name).toBe(`feeds.${path.slice('/feeds/'.length)}`)
       expect(origin?.parent?.spanId).toBe(edge!.context.spanId)
     }
@@ -198,16 +212,22 @@ describe('edge robustness — bodies that break', () => {
         headers: { 'content-type': 'application/json' },
         body: '{not json',
       })
+
       expect(got.status).toBe(400)
       expect(JSON.parse(got.text).error.error).toBe('server.bad-request')
     })
 
     const [edge] = seen.edgesOf('/feeds/write')
+
     expect(edge!.attributes['error.type']).toBe('server.bad-request')
+
     const records = seen.exceptions()
+
     expect(records).toHaveLength(1)
+
     // the parser's own error, folded (`std:result.unknown`), ONE level under it
     const chain = records[0]!.attributes['ozaco.failure.chain'] as string[]
+
     expect(chain).toHaveLength(2)
     expect(chain[0]).toBe('server.bad-request: request body is not valid JSON')
     expect(chain[1]).toStartWith('std:result.unknown: SyntaxError: ')
@@ -226,8 +246,10 @@ describe('edge robustness — bodies that break', () => {
               pull(controller) {
                 if (sent) {
                   controller.error(new TypeError('the disk went away'))
+
                   return
                 }
+
                 sent = true
                 controller.enqueue(new TextEncoder().encode('part'))
               },
@@ -239,9 +261,12 @@ describe('edge robustness — bodies that break', () => {
     })
 
     const [edge] = seen.edgesOf('/breaks')
+
     expect(edge!.attributes['error.type']).toBe('server.internal')
     expect(edge!.status.code).toBe('error')
+
     const records = seen.exceptions()
+
     expect(records).toHaveLength(1)
     expect(records[0]!.attributes['ozaco.failure.chain']).toEqual([
       'server.internal: the response body failed',
@@ -264,7 +289,9 @@ describe('edge robustness — bodies that break', () => {
 
     // one request, one edge span — never a second `HTTP` crash root next to it
     expect(seen.spans.filter(item => item.kind === 'server')).toHaveLength(1)
+
     const [edge] = seen.edgesOf('/refused')
+
     expect(edge!.name).toBe('GET /refused')
     expect(edge!.attributes['http.response.status_code']).toBe(500)
     expect(edge!.attributes['error.type']).toBe('server.internal')
@@ -286,6 +313,7 @@ describe('edge robustness — inbound context and capture', () => {
     })
 
     const edges = seen.edgesOf('/feeds/read/x')
+
     expect(edges).toHaveLength(4)
 
     for (const edge of edges) {
@@ -297,7 +325,9 @@ describe('edge robustness — inbound context and capture', () => {
   it('query input is never captured as a request body (its values stay REDACTED)', async () => {
     const seen = await withServer({ observe: { capture: { bodies: true } } }, function* () {
       yield* request('/feeds/read/a42?token=secret-value')
+
       const payload = JSON.stringify({ name: 'ada' })
+
       yield* request('/feeds/write', {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'content-length': `${payload.length}` },
@@ -306,6 +336,7 @@ describe('edge robustness — inbound context and capture', () => {
     })
 
     const [read] = seen.edgesOf('/feeds/read/a42')
+
     expect(read!.attributes['url.query']).toBe('token=REDACTED')
     expect(read!.attributes['http.request.body.content']).toBeUndefined()
     expect(read!.attributes['http.request.body.size']).toBeUndefined()
@@ -313,6 +344,7 @@ describe('edge robustness — inbound context and capture', () => {
 
     // a body the request really carried is captured, its size as sent
     const [written] = seen.edgesOf('/feeds/write')
+
     expect(written!.attributes).toMatchObject({
       'http.request.body.content': '{"name":"ada"}',
       'http.request.body.size': 14,
@@ -329,17 +361,20 @@ describe('edge robustness — sockets', () => {
         {
           authorizeMode: 'first-frame',
           *authorize(_request, token) {
-            return yield* span('auth.verify', function* () {
+            return yield* Trace.actions.span('auth.verify', function* () {
               if (token !== 'good') {
                 return yield* fail('server.unauthorized', 'bad token')
               }
+
               return { sub: 'ada' }
             })
           },
         },
         function* (socket) {
           yield* socket.send({ t: 'hello' })
+
           const messages = yield* socket.messages
+
           yield* messages.next()
         },
       ),
@@ -349,6 +384,7 @@ describe('edge robustness — sockets', () => {
     const dial = (url: string, token: string): Promise<number> =>
       new Promise(resolve => {
         const ws = new WebSocket(url)
+
         ws.addEventListener('open', () => ws.send(JSON.stringify({ t: 'auth', token })))
         ws.addEventListener('message', () => {
           ws.send(JSON.stringify({ t: 'say' }))
@@ -360,6 +396,7 @@ describe('edge robustness — sockets', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({
           services: [guarded],
           edge: BunEdge,
@@ -367,6 +404,7 @@ describe('edge robustness — sockets', () => {
         })
         const info = yield* server.start({ port: 0 })
         const url = `${info.url!.replace('http', 'ws')}/guarded/feed`
+
         expect(yield* until(dial(url, 'bad'))).toBe(4401)
         expect(yield* until(dial(url, 'good'))).not.toBe(4401)
         yield* sleep(50)
@@ -376,9 +414,12 @@ describe('edge robustness — sockets', () => {
 
     // the refused session: the authorizer's span nests under the auth frame's root span
     const verify = seen.spans.filter(item => item.name === 'auth.verify')
+
     expect(verify).toHaveLength(1)
+
     const frames = seen.spans.filter(item => item.name === 'WS /guarded/feed')
     const refused = frames.find(item => item.context.traceId === verify[0]!.context.traceId)
+
     expect(refused).toBeDefined()
     expect(verify[0]!.parent?.spanId).toBe(refused!.context.spanId)
     expect(refused!.attributes).toMatchObject({
@@ -389,6 +430,7 @@ describe('edge robustness — sockets', () => {
 
     // ONE record for the whole refusal — WARN, at its origin
     const records = seen.exceptions()
+
     expect(records).toHaveLength(1)
     expect(records[0]!.severityNumber).toBe(13)
     expect(records[0]!.context?.spanId).toBe(verify[0]!.context.spanId)
@@ -418,6 +460,7 @@ describe('edge robustness — sockets', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({
           services: [broken],
           edge: BunEdge,
@@ -427,10 +470,12 @@ describe('edge robustness — sockets', () => {
         const code = yield* until(
           new Promise<number>(resolve => {
             const ws = new WebSocket(`${info.url!.replace('http', 'ws')}/broken/feed`)
+
             ws.addEventListener('open', () => ws.send(JSON.stringify({ t: 'auth', token: 'x' })))
             ws.addEventListener('close', event => resolve(event.code))
           }),
         )
+
         expect(code).toBe(4401)
         yield* sleep(50)
         yield* server.stop()
@@ -438,9 +483,12 @@ describe('edge robustness — sockets', () => {
     )
 
     const refused = seen.spans.find(item => item.name === 'WS /broken/feed')
+
     expect(refused!.attributes['error.type']).toBe('server.internal')
     expect(refused!.status.code).toBe('error')
+
     const records = seen.exceptions()
+
     expect(records).toHaveLength(1)
     expect(records[0]!.severityNumber).toBe(17)
     expect(String(records[0]!.attributes['exception.stacktrace'])).toContain(
@@ -454,24 +502,32 @@ describe('edge robustness — sockets', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({
           services: [feeds],
           edge: BunEdge,
           plugins: [seen.plugin.use()],
         })
+
         yield* Edge.actions.socket({
           path: '/crash',
           *handler(socket) {
             yield* socket.send({ t: 'hello' })
+
             const messages = yield* socket.messages
+
             yield* messages.next()
+
             throw new TypeError('handler blew up')
           },
         })
+
         const info = yield* server.start({ port: 0 })
+
         yield* until(
           new Promise<void>(resolve => {
             const ws = new WebSocket(`${info.url!.replace('http', 'ws')}/crash`)
+
             ws.addEventListener('message', () => ws.send(JSON.stringify({ t: 'go' })))
             ws.addEventListener('close', () => resolve())
             setTimeout(() => {
@@ -486,11 +542,14 @@ describe('edge robustness — sockets', () => {
     )
 
     const frames = seen.spans.filter(item => item.name === 'WS /crash')
+
     expect(frames).toHaveLength(1)
     expect(frames[0]!.attributes['error.type']).toBe('server.internal')
     // the status message is std:trace's: the fold's message, same as `exception.message`
     expect(frames[0]!.status).toEqual({ code: 'error', message: 'TypeError: handler blew up' })
+
     const records = seen.exceptions()
+
     expect(records).toHaveLength(1)
     expect(records[0]!.severityNumber).toBe(17)
   })
@@ -506,6 +565,7 @@ const leaving = (label: string, edge: ServerDef.PluginLike): void => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({
           services: [feeds],
           edge,
@@ -518,6 +578,7 @@ const leaving = (label: string, edge: ServerDef.PluginLike): void => {
           const pending = fetch(`${info.url}${path}`, { signal: controller.signal }).catch(
             () => null,
           )
+
           yield* sleep(30)
           controller.abort()
           yield* until(pending)
@@ -537,6 +598,7 @@ const leaving = (label: string, edge: ServerDef.PluginLike): void => {
 
     for (const path of ['/feeds/late', '/feeds/slow']) {
       const spans = seen.edgesOf(path)
+
       expect(spans).toHaveLength(1)
       expect(spans[0]!.attributes).toMatchObject({
         'http.response.status_code': 499,
@@ -553,6 +615,7 @@ const leaving = (label: string, edge: ServerDef.PluginLike): void => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({
           services: [feeds],
           edge,
@@ -564,6 +627,7 @@ const leaving = (label: string, edge: ServerDef.PluginLike): void => {
           fetch(`${info.url}/feeds/live`, { signal: controller.signal }),
         )
         const reader = response.body!.getReader()
+
         yield* until(reader.read())
         yield* until(reader.read())
         controller.abort()
@@ -576,7 +640,9 @@ const leaving = (label: string, edge: ServerDef.PluginLike): void => {
     )
 
     expect(after).toBe(before)
+
     const spans = seen.edgesOf('/feeds/live')
+
     expect(spans).toHaveLength(1)
     expect(spans[0]!.attributes['ozaco.cancelled']).toBe(true)
     expect(spans[0]!.status.code).toBe('unset')
@@ -596,13 +662,17 @@ describe('edge robustness — clients that leave', () => {
         path: '/bad-header',
         *handler() {
           const headers = new Headers()
+
           // a web `Headers` allows it; node's `writeHead` throws on it
           headers.set('x-bad', 'a\u0001b')
+
           return new Response('body', { headers })
         },
       })
+
       const info = yield* server.start({ port: 0 })
       const response = yield* until(fetch(`${info.url}/bad-header`))
+
       status = response.status
       expect(yield* until(response.text())).toBe('internal error')
     })
@@ -627,10 +697,12 @@ describe('edge robustness — clients that leave', () => {
 
     await withServer({ services: [gate], edge: NodeEdge }, function* (_seen, server) {
       const info = yield* server.start({ port: 0 })
+
       raw = yield* until(
         new Promise<string>(resolve => {
           const socket = connect(info.port!, '127.0.0.1')
           let data = ''
+
           socket.on('data', chunk => {
             data += chunk.toString('latin1')
           })
@@ -646,6 +718,7 @@ describe('edge robustness — clients that leave', () => {
     })
 
     const [head, body = ''] = raw.split('\r\n\r\n')
+
     expect(head!.startsWith('HTTP/1.1 401')).toBe(true)
     expect(head).toContain('x-request-id: ')
     expect(head).toContain('oz-error: server.unauthorized')

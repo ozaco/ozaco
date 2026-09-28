@@ -24,6 +24,7 @@ describe('backoffDelay', () => {
 
   it('backoff binds options into a reusable schedule', () => {
     const schedule = backoff({ delayMs: 10 })
+
     expect(schedule(1)).toBe(10)
     expect(schedule(3)).toBe(40)
   })
@@ -36,6 +37,7 @@ describe('retry', () => {
     const outcome = await run(() =>
       retry(function* (): Operation<string> {
         calls += 1
+
         return 'ok'
       }),
     )
@@ -52,9 +54,11 @@ describe('retry', () => {
       retry(
         function* (): Operation<string> {
           calls += 1
+
           if (calls < 3) {
             yield* fail('transient', `attempt ${calls} failed`)
           }
+
           return 'ok'
         },
         { attempts: 3, delayMs: 1 },
@@ -73,6 +77,7 @@ describe('retry', () => {
       retry(
         function* (): Operation<string> {
           calls += 1
+
           return yield* fail(`error-${calls}`, `attempt ${calls} down`)
         },
         { attempts: 2, delayMs: 1 },
@@ -81,6 +86,7 @@ describe('retry', () => {
 
     expect(calls).toBe(2)
     expect(isFailure(outcome)).toBe(true)
+
     if (isFailure(outcome)) {
       expect(outcome.error).toBe('error-2')
       expect(outcome.causes).toContain('retry: 2 attempts exhausted')
@@ -94,6 +100,7 @@ describe('retry', () => {
       retry(
         function* (): Operation<string> {
           calls += 1
+
           return yield* fail('fatal', 'not retriable')
         },
         { attempts: 5, delayMs: 1, when: failure => failure.error !== 'fatal' },
@@ -102,6 +109,7 @@ describe('retry', () => {
 
     expect(calls).toBe(1)
     expect(isFailure(outcome)).toBe(true)
+
     if (isFailure(outcome)) {
       expect(outcome.error).toBe('fatal')
       expect(outcome.causes).toContain('retry: 1 attempts exhausted')

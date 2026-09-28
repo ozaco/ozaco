@@ -19,6 +19,7 @@ export const api: Helpers.Apis = {
     },
     set(scope, context, value) {
       ;(scope as Helpers.ScopeInternal).contexts[context.name] = value
+
       return value
     },
     delete(scope, context) {

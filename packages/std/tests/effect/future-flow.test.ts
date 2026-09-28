@@ -18,15 +18,19 @@ const counting = (n: number, everyMs = 0) => {
   const flow: Flow<number, void> = {
     *[Symbol.iterator]() {
       let at = 0
+
       return {
         *next() {
           if (at >= n) {
             return { done: true as const, value: undefined }
           }
+
           if (everyMs > 0) {
             yield* sleep(everyMs)
           }
+
           produced += 1
+
           return { done: false as const, value: at++ }
         },
       }
@@ -39,11 +43,13 @@ const counting = (n: number, everyMs = 0) => {
 const failing = (after: number): Flow<number, void> => ({
   *[Symbol.iterator]() {
     let at = 0
+
     return {
       *next() {
         if (at >= after) {
           return yield* fail('flow.boom', 'asked to fail')
         }
+
         return { done: false as const, value: at++ }
       },
     }
@@ -56,6 +62,7 @@ describe('FutureFlow', () => {
       await run(function* () {
         const scope = yield* useScope()
         const hybrid = createFutureFlow(scope, counting(3).flow)
+
         expect(isFutureFlow(hybrid)).toBe(true)
 
         const seen: number[] = []
@@ -110,6 +117,7 @@ describe('FutureFlow', () => {
             const iterator = hybrid[Symbol.asyncIterator]()
             const first = await iterator.next()
             const second = await iterator.next()
+
             expect(first.value).toBe(0)
             expect(second.value).toBe(1)
             expect(produced()).toBe(2)
@@ -138,6 +146,7 @@ describe('FutureFlow', () => {
         )
 
         const at = produced()
+
         yield* sleep(20)
         expect(produced()).toBe(at)
         yield* hybrid.done
@@ -155,9 +164,12 @@ describe('FutureFlow', () => {
           (async () => {
             const iterator = hybrid[Symbol.asyncIterator]()
             const first = await iterator.next()
+
             expect(first.value).toBe(0)
             unwrap(await hybrid.cancel())
+
             const after = await iterator.next()
+
             expect(after.done).toBe(true)
             unwrap(await hybrid.done)
           })(),
@@ -185,7 +197,9 @@ describe('FutureFlow', () => {
 
         yield* sleep(10)
         yield* hybrid.cancel()
+
         const seen = yield* until(opened)
+
         expect(seen.length).toBeGreaterThan(0)
         yield* hybrid.done
       }),
@@ -205,6 +219,7 @@ describe('FutureFlow', () => {
               for await (const value of hybrid) {
                 seen.push(value)
               }
+
               return null
             })().catch((error: unknown) => error)
 
@@ -225,13 +240,16 @@ describe('FutureFlow', () => {
 
         // drain as a plain Flow
         const subscription = yield* hybrid
+
         while (!(yield* subscription.next()).done) {
           // drain
         }
 
         let settled = false
+
         void hybrid.done.then(() => {
           settled = true
+
           return null
         })
         yield* sleep(10)

@@ -14,7 +14,7 @@ import { definePlugin } from 'std:plugin'
 import { unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
 import type { TraceDef } from 'std:trace'
-import { emitLog } from 'std:trace'
+import { Trace } from 'std:trace'
 
 import { describe, expect, it } from 'bun:test'
 
@@ -52,8 +52,9 @@ const huge = (): Record<string, TraceDef.AttrValue> => {
 
 const wide = service('wide', {
   write: action.mutation({}, function* () {
-    yield* emitLog({ body: 'many fields', severityNumber: 9, attributes: many() })
-    yield* emitLog({ body: 'huge fields', severityNumber: 9, attributes: huge() })
+    yield* Trace.actions.emitLog({ body: 'many fields', severityNumber: 9, attributes: many() })
+    yield* Trace.actions.emitLog({ body: 'huge fields', severityNumber: 9, attributes: huge() })
+
     return 'ok'
   }),
 })
@@ -92,6 +93,7 @@ const hookSpy = () => {
           seen.push(event)
         },
       }
+
       return { hooks }
     },
   }).build()
@@ -103,7 +105,9 @@ const logOf = (events: readonly ObserveDef.Event[], body: string): TraceDef.LogD
   const found = events.flatMap(event =>
     event.t === 'log' && event.log.body === body ? [event.log] : [],
   )
+
   expect(found).toHaveLength(1)
+
   return found[0]!
 }
 
@@ -125,6 +129,7 @@ describe('log attribute budget — once, in the kernel, before every sink', () =
       unwrap(
         await run(function* () {
           yield* storage()
+
           const server = yield* createServer({
             services: [wide],
             name: 'budget',
@@ -149,6 +154,7 @@ describe('log attribute budget — once, in the kernel, before every sink', () =
             ],
           })
           const kernel = yield* useContext(Server)
+
           kernel.events.on('observe', event => {
             stream.push(event)
           })
@@ -164,6 +170,7 @@ describe('log attribute budget — once, in the kernel, before every sink', () =
     // the count budget: 96 kept (the exception key spared), everything else counted as dropped
     const counted = logOf(hook.seen, 'many fields')
     const countedKeys = Object.keys(counted.attributes)
+
     expect(countedKeys).toHaveLength(96)
     expect(countedKeys[0]).toBe('exception.type')
     expect(countedKeys.at(-1)).toBe('ozaco.field_94')
@@ -171,6 +178,7 @@ describe('log attribute budget — once, in the kernel, before every sink', () =
 
     // the byte budget: the largest values go first until ≤ 48 KiB — the small ones stay
     const sized = logOf(hook.seen, 'huge fields')
+
     expect(Object.keys(sized.attributes)).toEqual([
       'exception.type',
       ...Array.from({ length: 24 }, (_, at) => `ozaco.blob_${String(at + 6).padStart(2, '0')}`),
@@ -190,6 +198,7 @@ describe('log attribute budget — once, in the kernel, before every sink', () =
         const shipped = collector
           .logs()
           .filter((record: AnyType) => record.body.stringValue === body)
+
         expect(shipped).toHaveLength(1)
         expect(attrsOf(shipped[0])).toEqual(reference.attributes as Record<string, AnyType>)
         expect(shipped[0].droppedAttributesCount).toBe(reference.droppedAttributes)
@@ -197,10 +206,13 @@ describe('log attribute budget — once, in the kernel, before every sink', () =
 
       // stdout prints the same attributes — no more
       const line = lines.find(entry => entry.includes(` ${body} `))!
+
       expect(line).toBeDefined()
+
       const printed = [...line.matchAll(/ (ozaco\.[a-z_0-9]+|exception\.type)=/gu)].map(
         match => match[1],
       )
+
       expect(printed).toEqual(Object.keys(reference.attributes))
     }
   })

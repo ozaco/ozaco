@@ -1,8 +1,7 @@
-import { fail, isFailure } from 'std:result'
+import { asFailure, fail, isFailure } from 'std:result'
 
 import { attempt } from '../base/attempt'
 import { EffectCauses, EffectErrors } from '../errors'
-import { describe } from '../internal/breaker'
 import type { Operation } from '../types/operation'
 import type { Utils } from '../types/utils'
 
@@ -50,7 +49,10 @@ export const createBreaker = (options: Utils.BreakerOptions): Utils.Breaker => {
     const current = state()
 
     if (current === 'open' || (current === 'half-open' && trial)) {
-      const detail = describe(reason)
+      // the open reason's message (a foreign value folded first), else its tag
+      const cause = reason === undefined ? undefined : asFailure(reason)
+      const detail = cause ? cause.message || String(cause.error) : ''
+
       return yield* fail(
         EffectErrors.BreakerOpen,
         detail ? `${label} (${detail})` : label,
@@ -59,13 +61,16 @@ export const createBreaker = (options: Utils.BreakerOptions): Utils.Breaker => {
     }
 
     const probing = current === 'half-open'
+
     if (probing) {
       trial = true
     }
 
     let settled = false
+
     try {
       const outcome = yield* attempt(op)
+
       settled = true
 
       // a terminal trip that landed while this call was in flight wins over its outcome
@@ -78,6 +83,7 @@ export const createBreaker = (options: Utils.BreakerOptions): Utils.Breaker => {
         openedAt = null
         trial = false
         reason = undefined
+
         return outcome.value
       }
 

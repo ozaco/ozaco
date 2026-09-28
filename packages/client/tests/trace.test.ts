@@ -1,5 +1,5 @@
 /**
- * Tracing (std:trace) against a REAL server (BunEdge on a random port) with an in-memory Tracer:
+ * Tracing (std:trace) against a REAL server (BunEdge on a random port) with an in-memory Trace sink:
  * one CLIENT span per call the server continues, W3C propagation (`ozaco=1` while recording, the
  * ambient context as it is while tracing is off), spans that end with streamed replies,
  * failures decoded from the wire (nested failures, the `remote: …` cause, recorded once per
@@ -13,15 +13,7 @@ import type { Result } from 'std:result'
 import { fail, isFailure, ResultErrors, unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
 import type { TraceDef } from 'std:trace'
-import {
-  ActiveSpan,
-  getTracestate,
-  isRecorded,
-  parseTraceparent,
-  passThrough,
-  span,
-  traceparentOf,
-} from 'std:trace'
+import { Trace } from 'std:trace'
 import type { WsDef } from 'std:ws'
 import { Ws, WsErrors } from 'std:ws'
 
@@ -60,11 +52,20 @@ function* settled(ready: () => boolean): Operation<void> {
 /** The one CLIENT span named `name` (fails the test when there is not exactly one). */
 const only = (tracer: MemoryTracer, name: string): TraceDef.SpanData => {
   const found = tracer.client(name)
+
   expect(found.map(data => data.name)).toEqual([name])
+
   return found[0]!
 }
 
-const traceparent = (data: TraceDef.SpanData): string => traceparentOf(data.context)
+/** The `traceparent` a context is written as (`Trace.actions.inject`). */
+function* traceparentOf(context: TraceDef.SpanContext): Operation<string | undefined> {
+  return (yield* Trace.actions.inject({ context })).traceparent
+}
+
+/** Whether a `tracestate` marks an exporting ozaco caller. */
+const marked = (state: string | undefined): boolean =>
+  state?.split(',').includes('ozaco=1') === true
 
 /** The failures `failure` wraps (its nested causes), in order. */
 const nestedOf = (failure: Result.Failure<unknown>): Result.Failure<unknown>[] =>
@@ -92,6 +93,7 @@ describe('trace — the CLIENT span of a call', () => {
     traced(function* (tracer) {
       const { url } = yield* boot()
       const client = yield* createClient<Api>({ url })
+
       yield* client.$manifest()
 
       const seen = (yield* client.probe.headers()) as Record<string, string>
@@ -113,17 +115,20 @@ describe('trace — the CLIENT span of a call', () => {
       expect(call.attributes['rpc.method']).toBeUndefined()
 
       // THAT span's context went out, marked as an exporting ozaco caller
-      expect(seen.traceparent).toBe(traceparent(call))
-      expect(getTracestate(seen.tracestate, 'ozaco')).toBe('1')
+      expect(seen.traceparent).toBe(yield* traceparentOf(call.context))
+      expect(marked(seen.tracestate)).toBe(true)
 
       // … so the server CONTINUED it: its edge span is the client span's child
       const [edge] = tracer.server('GET /probe/headers')
+
       expect(edge?.parent?.spanId).toBe(call.context.spanId)
       expect(edge?.context.traceId).toBe(call.context.traceId)
 
       // the reply's `traceresponse` names the trace
       expect(client.$lastTraceId()).toBe(call.context.traceId)
+
       const withMeta = yield* client.$callWithMeta('demo.byId', { id: 'm' })
+
       expect(withMeta.meta.traceId).toBe(only(tracer, 'GET /demo/:id').context.traceId)
     }))
 
@@ -131,16 +136,19 @@ describe('trace — the CLIENT span of a call', () => {
     traced(function* (tracer) {
       const { url } = yield* boot()
       const client = yield* createClient<Api>({ url })
+
       yield* client.$manifest()
 
       yield* client.demo.byId({ id: 'x1' })
       yield* client.$call('demo.echo', { text: 'a', token: 'secret-value' })
 
       const byId = only(tracer, 'GET /demo/:id')
+
       expect(byId.attributes['url.template']).toBe('/demo/:id')
       expect(String(byId.attributes['url.full'])).toEndWith('/demo/x1')
 
       const echo = only(tracer, 'GET /demo/echo')
+
       expect(String(echo.attributes['url.full'])).toContain('token=REDACTED')
       expect(String(echo.attributes['url.full'])).not.toContain('secret-value')
     }))
@@ -155,6 +163,7 @@ describe('trace — the CLIENT span of a call', () => {
 
       // fetched once: one span
       const manifest = only(tracer, 'GET /docs/manifest')
+
       expect(manifest.kind).toBe('client')
       expect(manifest.attributes['http.response.status_code']).toBe(200)
     }))
@@ -163,10 +172,12 @@ describe('trace — the CLIENT span of a call', () => {
     traced(function* (tracer) {
       const { url } = yield* boot()
       const client = yield* createClient<Api>({ url })
+
       yield* client.$manifest()
 
-      const outer = yield* span('outer', function* (handle) {
+      const outer = yield* Trace.actions.span('outer', function* (handle) {
         yield* client.demo.byId({ id: 'n' })
+
         return handle.context
       })
 
@@ -185,6 +196,7 @@ describe('trace — the CLIENT span of a call', () => {
     traced(function* (tracer) {
       const { url } = yield* boot()
       const client = yield* createClient<Api>({ url })
+
       yield* client.$manifest()
 
       const reply = (yield* until(
@@ -204,6 +216,7 @@ describe('trace — tracing off', () => {
         const client = yield* createClient<Api>({ url })
 
         const bare = (yield* client.probe.headers()) as Record<string, string>
+
         expect(bare.traceparent).toBeUndefined()
         expect(bare.tracestate).toBeUndefined()
         // nothing traced, nothing echoed
@@ -216,12 +229,12 @@ describe('trace — tracing off', () => {
           state: 'vendor=x',
           remote: true,
         }
-        const seen = (yield* ActiveSpan.with(passThrough(ambient), () =>
+        const seen = (yield* Trace.actions.passThrough(ambient, () =>
           client.probe.headers(),
         )) as Record<string, string>
 
         // unchanged — no `ozaco=1`: this caller exports nothing
-        expect(seen.traceparent).toBe(traceparentOf(ambient))
+        expect(seen.traceparent).toBe(yield* traceparentOf(ambient))
         expect(seen.tracestate).toBe('vendor=x')
       }),
     )
@@ -233,30 +246,38 @@ describe('trace — streamed replies end the span with the stream', () => {
     traced(function* (tracer) {
       const { url } = yield* boot()
       const client = yield* createClient<Api>({ url })
+
       yield* client.$manifest()
 
       const flow = yield* client.demo.count({ n: 3 })
+
       // the reply's headers are in, its body is not: the span is still open
       expect(tracer.client('GET /demo/count')).toHaveLength(0)
       expect(yield* drain(flow as Flow<number, void>)).toEqual([0, 1, 2])
 
       const counted = only(tracer, 'GET /demo/count')
+
       expect(counted.attributes['ozaco.cancelled']).toBeUndefined()
       expect(counted.status.code).toBe('unset')
 
       yield* scoped(function* () {
         const endless = yield* client.probe.endless({ id: 'traced' })
+
         yield* drain(endless as Flow<number, void>, 2)
       })
       expect(only(tracer, 'GET /probe/endless').attributes['ozaco.cancelled']).toBe(true)
 
       const blob = yield* client.demo.blob({ size: 10 })
+
       expect(tracer.client('GET /demo/blob')).toHaveLength(0)
+
       const bytes = yield* until(new Response(blob).arrayBuffer())
+
       expect(bytes.byteLength).toBe(10)
       yield* settled(() => tracer.client('GET /demo/blob').length > 0)
 
       const read = only(tracer, 'GET /demo/blob')
+
       expect(read.attributes['ozaco.cancelled']).toBeUndefined()
       expect(read.status.code).toBe('unset')
     }))
@@ -282,6 +303,7 @@ describe('trace — streamed replies end the span with the stream', () => {
       const client = yield* createClient<Api>({ url, manifest, fetch: broken })
 
       const blob = yield* client.demo.blob({ size: 10 })
+
       expect(isFailure(yield* attempt(() => until(new Response(blob).arrayBuffer())))).toBe(true)
       yield* settled(() => tracer.client('GET /demo/blob').length > 0)
 
@@ -289,9 +311,12 @@ describe('trace — streamed replies end the span with the stream', () => {
       // transport fault, so `client.network` (never a `std:result.unknown` fold), named by its
       // code
       const call = only(tracer, 'GET /demo/blob')
+
       expect(call.status.code).toBe('error')
       expect(call.attributes['error.type']).toBe(ClientErrors.Network)
+
       const exception = tracer.exceptions().find(log => log.context?.spanId === call.context.spanId)
+
       expect(exception?.attributes['exception.type']).toBe(ClientErrors.Network)
       expect(exception?.attributes['exception.message']).toBe('ECONNRESET')
     }))
@@ -303,9 +328,11 @@ describe('trace — failures decoded from the wire', () => {
       // a node that TRUSTS its callers (`trace.trust`): only those get the nested chain back
       const { url } = yield* boot({ trust: true })
       const client = yield* createClient<Api>({ url })
+
       yield* client.$manifest()
 
       const failed = (yield* attempt(client.probe.wrapped())) as Result.Failure<unknown>
+
       expect(isFailure(failed)).toBe(true)
 
       const call = only(tracer, 'GET /probe/wrapped')
@@ -320,6 +347,7 @@ describe('trace — failures decoded from the wire', () => {
       // a trusted caller gets the nested failure back (through JsonCodec): the platform error's
       // fold — its tag and text, never the platform error itself (`raw` stays on the node)
       const [inner] = nestedOf(failed)
+
       expect(nestedOf(failed)).toHaveLength(1)
       expect(inner!.error).toBe(ResultErrors.Unknown)
       expect(inner!.message).toContain('inner type error')
@@ -328,7 +356,7 @@ describe('trace — failures decoded from the wire', () => {
 
       // where it was answered (the server's edge span), and that it was recorded there
       expect(failed.causes.at(-3)).toBe(origin('probe.wrapped', 'probe', edge!.context.spanId))
-      expect(isRecorded(failed, call.context.traceId)).toBe(true)
+      expect(yield* Trace.actions.isRecorded(failed, call.context.traceId)).toBe(true)
 
       // the CLIENT span fails with the tag; the exception is the server's, once per trace
       expect(call.status.code).toBe('error')
@@ -337,7 +365,9 @@ describe('trace — failures decoded from the wire', () => {
         'ozaco.failure.remote': true,
         'http.response.status_code': 500,
       })
+
       const exceptions = tracer.exceptions()
+
       expect(exceptions).toHaveLength(1)
       expect(exceptions[0]!.context?.traceId).toBe(call.context.traceId)
       expect(exceptions[0]!.context?.spanId).not.toBe(call.context.spanId)
@@ -349,6 +379,7 @@ describe('trace — failures decoded from the wire', () => {
       // `ozaco=1` is self-asserted: the node continues the trace but keeps its causes to itself
       const { url } = yield* boot()
       const client = yield* createClient<Api>({ url })
+
       yield* client.$manifest()
 
       const failed = (yield* attempt(client.probe.wrapped())) as Result.Failure<unknown>
@@ -359,7 +390,7 @@ describe('trace — failures decoded from the wire', () => {
       expect(nestedOf(failed)).toEqual([])
       expect(edge?.parent?.spanId).toBe(call.context.spanId)
       expect(failed.causes.at(-3)).toBe(origin('probe.wrapped', 'probe', edge!.context.spanId))
-      expect(isRecorded(failed, call.context.traceId)).toBe(true)
+      expect(yield* Trace.actions.isRecorded(failed, call.context.traceId)).toBe(true)
       expect(call.attributes['ozaco.failure.remote']).toBe(true)
       expect(tracer.exceptions()).toHaveLength(1)
       expect(tracer.exceptions()[0]!.scope.name).not.toBe('@ozaco/client')
@@ -369,9 +400,11 @@ describe('trace — failures decoded from the wire', () => {
     traced(function* (tracer) {
       const { url } = yield* boot()
       const client = yield* createClient<Api>({ url })
+
       yield* client.$manifest()
 
       yield* attempt(client.probe.teapot())
+
       const call = only(tracer, 'GET /probe/teapot')
 
       expect(call.status.code).toBe('error')
@@ -390,7 +423,9 @@ describe('trace — failures decoded from the wire', () => {
 
         yield* scoped(function* () {
           yield* tracer.plugin.use()
+
           const client = yield* createClient<Api>({ url })
+
           yield* client.$manifest()
 
           const failed = (yield* attempt(client.probe.caused())) as Result.Failure<unknown>
@@ -403,6 +438,7 @@ describe('trace — failures decoded from the wire', () => {
           expect(client.$lastTraceId()).toBe(call.context.traceId)
 
           const [exception] = tracer.exceptions()
+
           expect(tracer.exceptions()).toHaveLength(1)
           expect(exception!.eventName).toBe('http.client.request.exception')
           expect(exception!.severityNumber).toBe(17)
@@ -411,7 +447,9 @@ describe('trace — failures decoded from the wire', () => {
 
           // a 4xx the caller caused: WARN
           yield* attempt(client.probe.teapot())
+
           const warned = tracer.exceptions().filter(log => log.body.includes('probe.teapot'))
+
           expect(warned.map(log => log.severityNumber)).toEqual([13])
         })
       }),
@@ -454,10 +492,13 @@ describe('trace — platform faults are classified, the platform error kept as r
 
       // the CLIENT span failed with it and recorded it (nobody else could): ERROR
       const call = tracer.client('GET /demo/:id').find(data => data.status.code === 'error')
+
       expect(call?.attributes['error.type']).toBe(ClientErrors.Network)
+
       const recorded = tracer
         .exceptions()
         .filter(log => log.context?.spanId === call?.context.spanId)
+
       expect(recorded.map(log => [log.eventName, log.severityNumber])).toEqual([
         ['http.client.request.exception', 17],
       ])
@@ -511,6 +552,7 @@ describe('trace — a realtime socket gone for good', () => {
     unwrap(
       await run(function* () {
         yield* DeadWs.use()
+
         const client = yield* createClient({
           url: 'http://127.0.0.1:1',
           realtimePath: '/_realtime',
@@ -557,30 +599,36 @@ describe('trace — realtime frames carry the context', () => {
       await traced(function* (tracer) {
         const { url } = yield* boot()
         const client = yield* createClient<Api>({ url, token: 'tok' })
+
         yield* client.$manifest()
         yield* client.notes.create({ title: 'seen', done: false })
 
-        yield* span('watcher', function* (handle) {
-          const expected = traceparentOf(handle.context)
+        yield* Trace.actions.span('watcher', function* (handle) {
+          const expected = yield* traceparentOf(handle.context)
           const frames = yield* client.$watch<{ title: string }>('notes')
           const sync = yield* frames.next()
+
           expect((sync.value as AnyType).t).toBe('sync')
 
           const [first] = sockets
+
           // the upgrade (where the platform can set headers) …
           expect(first!.options.headers.traceparent).toBe(expected)
-          expect(getTracestate(first!.options.headers.tracestate, 'ozaco')).toBe('1')
+          expect(marked(first!.options.headers.tracestate)).toBe(true)
 
           // … the auth frame and the watch frame
           const [auth, watch] = first!.sent
+
           expect(auth).toMatchObject({ t: 'auth', token: 'tok', traceparent: expected })
-          expect(getTracestate(auth.tracestate, 'ozaco')).toBe('1')
+          expect(marked(auth.tracestate)).toBe(true)
           expect(watch).toMatchObject({ t: 'watch', traceparent: expected })
           expect(watch.reconnect).toBeUndefined()
 
           // the server parents the watch frame's span to it
           yield* settled(() => tracer.server('WS /notes/_realtime').length > 0)
+
           const [frame] = tracer.server('WS /notes/_realtime')
+
           expect(frame?.parent?.spanId).toBe(handle.context.spanId)
 
           // a dropped socket redials: the re-sent frames carry the opening context as
@@ -590,19 +638,24 @@ describe('trace — realtime frames carry the context', () => {
           yield* settled(() => (sockets[1]?.sent.length ?? 0) >= 2)
 
           const resent = sockets[1]!.sent.find(item => item.t === 'watch')
+
           expect(resent).toMatchObject({ t: 'watch', reconnect: expected })
           expect(resent.traceparent).toBeUndefined()
           expect(resent.tracestate).toBeUndefined()
-          expect(parseTraceparent(resent.reconnect)?.spanId).toBe(handle.context.spanId)
+          expect((yield* Trace.actions.extract({ traceparent: resent.reconnect }))?.spanId).toBe(
+            handle.context.spanId,
+          )
 
           // the server's span of the redial's watch frame is a fresh ROOT that LINKS the
           // opening (`ws.reconnect`) — never a link to its own parent
           yield* settled(() =>
             tracer.server('WS /notes/_realtime').some(data => data.links.some(isReconnect)),
           )
+
           const redial = tracer
             .server('WS /notes/_realtime')
             .find(data => data.links.some(isReconnect))!
+
           expect(redial.parent).toBeNull()
           expect(redial.links.find(isReconnect)?.context.spanId).toBe(handle.context.spanId)
           expect(new Set(redial.links.map(entry => entry.context.spanId)).size).toBe(
@@ -632,6 +685,7 @@ describe('trace — a failed watch the server recorded', () => {
         if (frame.t !== 'watch') {
           return
         }
+
         const reply = {
           t: 'error',
           id: frame.id,
@@ -639,6 +693,7 @@ describe('trace — a failed watch the server recorded', () => {
           message: 'invalid filter',
           recorded: recorder(frame.traceparent),
         }
+
         if (pending) {
           pending(reply)
           pending = null
@@ -657,6 +712,7 @@ describe('trace — a failed watch the server recorded', () => {
                     pending = resolve
                   }),
                 ))
+
               return { done: false as const, value }
             },
           }
@@ -684,9 +740,11 @@ describe('trace — a failed watch the server recorded', () => {
       const client = yield* createClient({ url: 'http://127.0.0.1:1', realtimePath: '/_realtime' })
       let traceId = ''
       const failed = (yield* attempt(() =>
-        span('consumer', function* (handle) {
+        Trace.actions.span('consumer', function* (handle) {
           traceId = handle.context.traceId
+
           const frames = yield* client.$watch('notes')
+
           yield* frames.next()
         }),
       )) as Result.Failure<unknown>
@@ -695,6 +753,7 @@ describe('trace — a failed watch the server recorded', () => {
       expect(tracer.spans.find(data => data.name === 'consumer')?.attributes['error.type']).toBe(
         'db.validation',
       )
+
       return { traceId, failed }
     }
 
@@ -702,12 +761,13 @@ describe('trace — a failed watch the server recorded', () => {
     traced(function* (tracer) {
       // the server's watch span: a child in the trace the watch frame was sent in
       yield* failingWs(sent =>
-        traceparentOf({ ...parseTraceparent(sent)!, spanId: 'aaaaaaaaaaaaaaaa' }),
+        sent.replace(/^(00-[\da-f]{32}-)[\da-f]{16}/u, '$1aaaaaaaaaaaaaaaa'),
       ).use()
+
       const { failed, traceId } = yield* consume(tracer)()
 
       expect(failed.causes).toEqual([origin('watch', 'notes', 'aaaaaaaaaaaaaaaa')])
-      expect(isRecorded(failed, traceId)).toBe(true)
+      expect(yield* Trace.actions.isRecorded(failed, traceId)).toBe(true)
       expect(
         tracer.spans.find(data => data.name === 'consumer')?.attributes['ozaco.failure.remote'],
       ).toBe(true)
@@ -718,34 +778,42 @@ describe('trace — a failed watch the server recorded', () => {
     traced(function* (tracer) {
       const { url } = yield* boot()
       const client = yield* createClient<Api>({ url })
+
       yield* client.$manifest()
 
       let traceId = ''
       const failed = (yield* attempt(() =>
-        span('consumer', function* (handle) {
+        Trace.actions.span('consumer', function* (handle) {
           traceId = handle.context.traceId
+
           // a field the resource does not declare: the server refuses the subscribe
           const frames = yield* client.$watch('notes', {
             filter: { op: 'eq', field: 'nope', value: 1 },
           })
+
           yield* frames.next()
         }),
       )) as Result.Failure<unknown>
 
       expect(isFailure(failed)).toBe(true)
-      expect(isRecorded(failed, traceId)).toBe(true)
+      expect(yield* Trace.actions.isRecorded(failed, traceId)).toBe(true)
 
       yield* settled(() => tracer.spans.some(data => data.name === 'watch notes'))
+
       const watch = tracer.spans.find(data => data.name === 'watch notes')!
+
       expect(watch.context.traceId).toBe(traceId)
       expect(failed.causes).toEqual([origin('watch', 'notes', watch.context.spanId)])
       expect(watch.status.code).toBe('error')
 
       // the consumer's span only fails; the one exception is the server's, on its watch span
       const own = tracer.spans.find(data => data.name === 'consumer')!
+
       expect(own.status.code).toBe('error')
       expect(own.attributes['error.type']).toBe(String(failed.error))
+
       const exceptions = tracer.exceptions()
+
       expect(exceptions).toHaveLength(1)
       expect(exceptions[0]!.context?.spanId).toBe(watch.context.spanId)
       expect(exceptions[0]!.scope.name).not.toBe('@ozaco/client')
@@ -754,6 +822,7 @@ describe('trace — a failed watch the server recorded', () => {
   it('recorded in another trace (or not at all): the consumer records it itself', () =>
     traced(function* (tracer) {
       yield* failingWs(() => '00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01').use()
+
       const { failed, traceId } = yield* consume(tracer)()
 
       // still where it came from — but recorded in ANOTHER trace: not a remote exception here

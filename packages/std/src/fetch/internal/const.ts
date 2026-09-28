@@ -17,29 +17,6 @@ export const REDACTED = 'REDACTED'
 /** `scheme://user:pass@` — the authority's LAST `@` ends the userinfo (WHATWG). */
 export const USERINFO = /^([a-z][\d+.a-z-]*:\/\/)[^#/?]*@/iu
 
-/**
- * Query parameters whose VALUES never reach telemetry (compared lowercased): the OTel semconv
- * list (presigned S3 / GCS / Azure signatures) plus the usual key-in-query secrets.
- */
-export const SENSITIVE_QUERY_KEYS: ReadonlySet<string> = new Set(
-  [
-    'X-Amz-Signature',
-    'X-Amz-Credential',
-    'X-Amz-Security-Token',
-    'AWSAccessKeyId',
-    'Signature',
-    'sig',
-    'X-Goog-Signature',
-    'key',
-    'api_key',
-    'apikey',
-    'token',
-    'access_token',
-    'password',
-    'secret',
-  ].map(key => key.toLowerCase()),
-)
-
 /** The methods the Fetch standard sends uppercased whatever the caller's casing. */
 export const NORMALIZED_METHODS: ReadonlySet<string> = new Set([
   'DELETE',

@@ -2,7 +2,7 @@ import type { ObserveDef, ServerDef } from 'server:core'
 import { Observe, Server, ServerErrors } from 'server:core'
 import { attempt, createQueue, ensure, fork, sleep, useContext } from 'std:effect'
 import { fail } from 'std:result'
-import { suppressed } from 'std:trace'
+import { Trace } from 'std:trace'
 
 import pkg from '../../../package.json'
 
@@ -37,6 +37,10 @@ const applyCapture = (
     if (value !== undefined) {
       kernel.telemetry.observe.capture[key] = value
     }
+  }
+
+  if (capture?.sensitiveKeys) {
+    kernel.telemetry.observe.capture.sensitiveKeys = Object.freeze([...capture.sensitiveKeys])
   }
 }
 
@@ -90,13 +94,16 @@ export const ObservePlugin = Observe.implement<
 
   *setup(options) {
     const kernel = yield* Server.context.get()
+
     if (!kernel) {
       return yield* fail(
         ServerErrors.Configuration,
         'Observe must be installed by createServer (plugins: [ObservePlugin.use(…)])',
       )
     }
+
     const state = stateOf(options)
+
     if ((state.forward !== false || state.collect) && !kernel.carrier) {
       return yield* fail(
         ServerErrors.Configuration,
@@ -105,7 +112,9 @@ export const ObservePlugin = Observe.implement<
     }
 
     applyCapture(kernel, options?.capture)
+
     const selfTrace = options?.selfTrace === true
+
     if (selfTrace) {
       kernel.selfTraced.add(OBSERVE_SERVICE)
       yield* ensure(() => {
@@ -116,15 +125,19 @@ export const ObservePlugin = Observe.implement<
     yield* StateRef.set(state)
     yield* openStore(state, options?.db)
     yield* startFlusher(state)
+
     if (state.forward !== false || state.collect) {
       yield* fork(() => runCluster(kernel, state))
     }
+
     if (state.retention.pruneEveryMs > 0) {
       yield* fork(() =>
-        suppressed(function* () {
+        Trace.actions.suppressed(function* () {
           for (;;) {
             yield* sleep(state.retention.pruneEveryMs)
+
             const now = Date.now()
+
             yield* attempt(() =>
               exec(state, db =>
                 pruneBefore(db, {
@@ -137,6 +150,7 @@ export const ObservePlugin = Observe.implement<
         }),
       )
     }
+
     const hooks: ServerDef.Hooks = {
       name: 'observe',
       *observe(event) {
@@ -151,6 +165,7 @@ export const ObservePlugin = Observe.implement<
         yield* flush(state)
       },
     }
+
     // the observe API is a REAL service (typed calls, docs, the console): `createServer`
     // registers it through the PluginContext seam — mounted with everything else, hosted
     // locally, never served over the carrier. `auth` is its requirement (the service-level
@@ -163,17 +178,23 @@ export const ObservePlugin = Observe.implement<
   },
   *traces(query) {
     const state = yield* useContext(StateRef)
+
     yield* flush(state)
+
     return yield* exec(state, db => queryTraces(db, query ?? {}))
   },
   *trace(traceId) {
     const state = yield* useContext(StateRef)
+
     yield* flush(state)
+
     return yield* exec(state, db => traceView(db, traceId))
   },
   *request(id) {
     const state = yield* useContext(StateRef)
+
     yield* flush(state)
+
     return yield* exec(state, db => requestView(db, id))
   },
   watch: (query?: ObserveDef.TracesQuery) => ({
@@ -184,32 +205,41 @@ export const ObservePlugin = Observe.implement<
       const out = createQueue<readonly ObserveDef.SpanRow[], never>()
       const watcher: ObservePluginDef.Watcher = rows => {
         const matching = rows.filter(row => matchesQuery(row, query ?? {}))
+
         if (matching.length > 0) {
           out.add(matching)
         }
       }
+
       state.watchers.add(watcher)
       yield* ensure(() => {
         state.watchers.delete(watcher)
       })
+
       return out
     },
   }),
   *prune(before) {
     const state = yield* useContext(StateRef)
+
     yield* flush(state)
+
     return yield* exec(state, db => pruneBefore(db, { spans: before, logs: before }))
   },
   *stats() {
     const state = yield* useContext(StateRef)
+
     return { ...state.stats, pending: state.pending.length, ...state.cluster }
   },
   *cluster(windowMs) {
     const state = yield* useContext(StateRef)
     const kernel = yield* Server.context.expect()
+
     yield* flush(state)
+
     const since = Date.now() - (windowMs ?? 15 * 60 * 1000)
     const rows = yield* exec(state, db => clusterSpans(db, since))
+
     return {
       members: yield* membersView(kernel),
       instances: instanceStats(rows),

@@ -71,11 +71,13 @@ export const NodeIO = IO.implement({
 
   *hmac(algorithm, key, data) {
     const mac = createHmac(toNodeHash(algorithm), key).update(data).digest()
+
     return new Uint8Array(mac)
   },
 
   hash: withEncoding(function* (algorithm, data) {
     const digest = createHash(toNodeHash(algorithm)).update(data).digest()
+
     return new Uint8Array(digest)
   }),
   encrypt: encryptSecret,
@@ -92,6 +94,7 @@ export const NodeIO = IO.implement({
 
   *read(path) {
     const buf = yield* fsCall(fs.readFile(toPath(path)))
+
     return new Uint8Array(buf)
   },
 
@@ -104,33 +107,39 @@ export const NodeIO = IO.implement({
   *write(path, data, options) {
     const f = options?.flags ?? IO_FLAGS.none
     const flag = writeFlagOf(f)
+
     yield* fsCall(fs.writeFile(toPath(path), data, { flag }))
   },
 
   *copy(src, dest, options) {
     const mode = hasFlag(options?.flags ?? IO_FLAGS.none, IO_FLAGS.exclusive) ? 1 : 0
+
     yield* fsCall(fs.copyFile(toPath(src), toPath(dest), mode))
   },
 
   *rename(src, dest, options) {
     if (hasFlag(options?.flags ?? IO_FLAGS.none, IO_FLAGS.exclusive)) {
       let destExists = false
+
       try {
         yield* fsCall(fs.access(toPath(dest)))
         destExists = true
       } catch {
         // dest doesn't exist, safe to rename
       }
+
       if (destExists) {
         return yield* fail(IOErrors.Exists, `destination already exists: ${toPath(dest)}`)
       }
     }
+
     yield* fsCall(fs.rename(toPath(src), toPath(dest)))
   },
 
   *exists(path) {
     try {
       yield* fsCall(fs.access(toPath(path)))
+
       return true
     } catch {
       return false
@@ -140,7 +149,9 @@ export const NodeIO = IO.implement({
   *ensureFile(path) {
     const p = toPath(path)
     const dir = dirname(p)
+
     yield* fsCall(fs.mkdir(dir, { recursive: true }))
+
     try {
       yield* fsCall(fs.access(p))
     } catch {

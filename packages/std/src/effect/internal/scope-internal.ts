@@ -19,6 +19,7 @@ export function createScopeInternal(
 ): [Helpers.ScopeInternal, () => Operation<void>] {
   if (!parent) {
     const [global, destroy] = buildScopeInternal()
+
     global.around(
       api.scope,
       {
@@ -29,8 +30,10 @@ export function createScopeInternal(
       },
       { at: 'min' },
     )
+
     return [global, destroy] as const
   }
+
   return api.scope.invoke(parent, 'create', [parent]) as [
     Helpers.ScopeInternal,
     () => Operation<void>,
@@ -57,6 +60,7 @@ export function buildScopeInternal(parent?: Scope): [Helpers.ScopeInternal, () =
       }
     }
   }
+
   const scope: Helpers.ScopeInternal = Object.create({
     [Symbol.toStringTag]: 'Scope',
     contexts,
@@ -68,9 +72,11 @@ export function buildScopeInternal(parent?: Scope): [Helpers.ScopeInternal, () =
     },
     expect<T>(context: Context<T>): T {
       const value = scope.get(context)
+
       if (value === undefined) {
         throw fail(EffectErrors.MissingContext, context.name)
       }
+
       return value
     },
     delete<T>(context: Context<T>): boolean {
@@ -99,6 +105,7 @@ export function buildScopeInternal(parent?: Scope): [Helpers.ScopeInternal, () =
             // method shorthand does not bind its own name — `operation()` below is fork's param
             *operation() {
               ready.resolve()
+
               return yield* operation()
             },
           })
@@ -126,6 +133,7 @@ export function buildScopeInternal(parent?: Scope): [Helpers.ScopeInternal, () =
 
     ensure(op: () => Operation<void>): () => void {
       destructors.add(op)
+
       return () => destructors.delete(op)
     },
 
@@ -133,16 +141,22 @@ export function buildScopeInternal(parent?: Scope): [Helpers.ScopeInternal, () =
       if (signaled) {
         return yield* destruction.future
       }
+
       signaled = true
       parent?.expect(ChildrenContext).delete(scope)
       unbind()
+
       let outcome: Result<unknown> = succeed()
+
       try {
         while (destructors.size > 0) {
           const current = [...destructors]
+
           destructors.clear()
+
           for (let i = current.length - 1; i >= 0; i--) {
             const destructor = current[i]!
+
             try {
               yield* destructor()
             } catch (error) {

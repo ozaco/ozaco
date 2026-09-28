@@ -32,7 +32,7 @@ export namespace ResilienceDef {
     readonly next: Next
   }
 
-  /** A circuit's state as its `ozaco.breaker` events name it. */
+  /** A circuit's state as its `breaker` events name it. */
   export type CircuitState = 'closed' | 'open' | 'half_open'
 
   export interface BreakerState {

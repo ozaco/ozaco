@@ -17,6 +17,7 @@ const wsServer = (websocket: WebSocketHandler<undefined>, port = 0) =>
       if (srv.upgrade(request)) {
         return
       }
+
       return new Response('no', { status: 400 })
     },
     websocket,

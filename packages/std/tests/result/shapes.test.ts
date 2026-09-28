@@ -24,10 +24,13 @@ import { describe, expect, it } from 'bun:test'
 describe('result — declared shapes vs runtime', () => {
   it('throwable over an async callback is typed Promise<Result> — no cast needed', async () => {
     const ok: Promise<Result<number, unknown>> = throwable(() => Promise.resolve(21))
+
     expect(unwrap(await ok)).toBe(21)
 
     const failed = await throwable(() => Promise.reject(new RangeError('async boom')))
+
     expect(isFailure(failed)).toBe(true)
+
     if (isFailure(failed)) {
       expect(failed.error).toBe('std:result.unknown')
       expect(failed.message).toBe('RangeError: async boom')
@@ -35,6 +38,7 @@ describe('result — declared shapes vs runtime', () => {
 
     // the sync overload is untouched
     const sync: Result<number, unknown> = throwable(() => 2)
+
     expect(unwrap(sync)).toBe(2)
   })
 
@@ -47,10 +51,12 @@ describe('result — declared shapes vs runtime', () => {
 
   it('asFailure appends every cause given', () => {
     const decorated = asFailure(fail('base', 'msg', 'first'), 'second', 'third')
+
     expect(decorated.causes).toEqual(['first', 'second', 'third'])
 
     const thrown = new Error('thrown')
     const folded = asFailure(thrown, 'a', 'b')
+
     expect(isFailure(folded)).toBe(true)
     // the foreign Error is the fold's `raw`, the causes are the ones given
     expect(folded.raw).toBe(thrown)
@@ -67,26 +73,31 @@ describe('result — declared shapes vs runtime', () => {
 
     // the declared type keeps the Failure arm: this assignment must compile
     const typed: Result<number, 'fallback.tag'> = outcome
+
     expect(isFailure(typed)).toBe(true)
     expect(typed).toBe(fallback)
 
     // a plain default still wraps as a Success
     const wrapped = auto(fail('original') as Result<number, string>, 'plain')
+
     expect(isSuccess(wrapped) && wrapped.value).toBe('plain')
   })
 
   it('the bare constructors carry every field the types declare', () => {
     const unit = succeed()
+
     expect('value' in unit).toBe(true)
     expect(unit.value).toBeUndefined()
 
     const bare = fail()
+
     expect('error' in bare).toBe(true)
     expect(bare.error).toBeUndefined()
     expect(bare.message).toBe('')
     expect(bare.causes).toEqual([])
 
     const empty = just()
+
     expect('value' in empty).toBe(true)
     expect(isJust(empty) ? empty.value : 'missing').toBeUndefined()
   })
@@ -95,6 +106,7 @@ describe('result — declared shapes vs runtime', () => {
     const mySucceed: ResultDef.Succeed = succeed
     const myFail: ResultDef.Fail = fail
     const myUnwrap: ResultDef.Unwrap = unwrap
+
     expect(typeof mySucceed).toBe('function')
     expect(typeof myFail).toBe('function')
     expect(typeof myUnwrap).toBe('function')

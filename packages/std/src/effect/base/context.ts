@@ -23,6 +23,7 @@ function $useScope<T>(fn: (scope: Scope) => T, cause: string): Helpers.Effect<T>
     cause,
     enter: (resolve, { scope }) => {
       resolve(succeed(fn(scope)) as Result.Success<T>)
+
       return exit => {
         exit(succeed())
       }
@@ -42,6 +43,7 @@ export function createContext<T>(name: string, defaultValue?: T): Context<T> {
     *with<R>(value: T, operation: (value: T) => Operation<R>): Operation<R> {
       const scope = yield* perform($useScope(s => s, '$useScope()'))
       const original = scope.hasOwn(context) ? scope.get(context) : undefined
+
       try {
         return yield* operation(scope.set(context, value))
       } finally {
@@ -64,5 +66,6 @@ export function createContext<T>(name: string, defaultValue?: T): Context<T> {
  */
 export const markContextAsSnapshot = <T>(context: Context<T>): Context<T> => {
   snapshots.add(context.name)
+
   return context
 }

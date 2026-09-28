@@ -1,7 +1,6 @@
-import { isPromise } from 'std:shared'
 import type { AnyType } from 'std:shared'
+import { isPromise } from 'std:shared'
 
-import { isTagSet } from '../internal/match'
 import type { ResultDef } from '../types/def'
 
 import { asFailure } from './as-failure'
@@ -13,14 +12,12 @@ import { auto } from './auto'
  * comes first, `causes` appended.
  */
 export const throwable: ResultDef.Throwable = ((cb: () => AnyType, ...rest: AnyType[]): AnyType => {
-  const tags = isTagSet(rest[0]) ? [rest[0]] : []
-  const causes = tags.length > 0 ? rest.slice(1) : rest
-  const folded = (error: unknown) => (asFailure as AnyType)(error, ...tags, ...causes)
+  const folded = (error: unknown) => asFailure(error, ...rest)
 
   try {
     const result = cb()
 
-    return isPromise(result) ? result.then(auto as AnyType, folded) : auto(result)
+    return isPromise(result) ? result.then(auto, folded) : auto(result)
   } catch (error) {
     return folded(error)
   }

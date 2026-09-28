@@ -1,7 +1,14 @@
 import { fail } from 'std:result'
-import { toAttributes } from 'std:trace'
+import type { TraceDef } from 'std:trace'
 
 import { describe, expect, it } from 'bun:test'
+
+import { attributesOf } from '../../src/trace/internal/attributes'
+import { MAX_ATTRIBUTES, MAX_VALUE_BYTES } from '../../src/trace/internal/const'
+
+/** `Trace.actions.toAttributes` without the Operation: the same defaults. */
+const toAttributes = (input: TraceDef.AttributesInput, options: TraceDef.AttributeOptions = {}) =>
+  attributesOf(input, options.maxBytes ?? MAX_VALUE_BYTES, options.maxCount ?? MAX_ATTRIBUTES)
 
 describe('toAttributes', () => {
   it('primitives stay, null / undefined / functions drop, the rest becomes text', () => {
@@ -67,7 +74,9 @@ describe('toAttributes', () => {
     // what a sink serializes is what it stored: a JSON round trip changes nothing
     expect(Object.is(attributes.zero, 0)).toBe(true)
     expect(Object.is((attributes.finite as readonly number[])[2], 0)).toBe(true)
+
     const json = JSON.stringify(attributes)
+
     expect(JSON.parse(json)).toEqual(attributes)
   })
 
@@ -80,6 +89,7 @@ describe('toAttributes', () => {
     }
 
     const cyclic: Record<string, unknown> = { a: 1 }
+
     cyclic.self = cyclic
 
     const { attributes } = toAttributes({
@@ -121,6 +131,7 @@ describe('toAttributes', () => {
 
   it('strings are cut on a code-point boundary', () => {
     const { attributes } = toAttributes({ emoji: '😀'.repeat(10) }, { maxBytes: 10 })
+
     // 4-byte emoji: one fits before the 3-byte ellipsis within 10 bytes
     expect(attributes.emoji).toBe('😀…')
   })

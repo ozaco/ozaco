@@ -30,34 +30,41 @@ export function* tokenize(
   const rest = separator === -1 ? [] : args.slice(separator + 1)
 
   const options: Record<string, Helpers.OptionSpec> = {}
+
   for (const info of infos) {
     const spec: Helpers.OptionSpec = {
       type: info.type === 'boolean' && !info.array ? 'boolean' : 'string',
       multiple: info.array,
     }
     const flag = short[info.name]
+
     if (flag !== undefined) {
       spec.short = flag
     }
+
     options[info.name] = spec
   }
 
   const parsed = yield* attempt(
     call(() => parseArgs({ args: head, options, strict: true, allowPositionals: true })),
   )
+
   if (isFailure(parsed)) {
     // parseArgs' throw as one short line: `attempt` folds it, `CliErrors` re-classifies the fold
     // as `cli.parse` named by the parser's first sentence (`Unknown option '--bogus'`) — never a
     // serialized object
     const { message } = asFailure(parsed, CliErrors)
+
     return { options: new Map(), positionals: [], rest, errors: [message] }
   }
 
   const parsedOptions = new Map<string, string[]>()
+
   for (const [name, value] of Object.entries(parsed.value.values)) {
     if (value === undefined) {
       continue
     }
+
     parsedOptions.set(name, Array.isArray(value) ? value.map(stringify) : [stringify(value)])
   }
 

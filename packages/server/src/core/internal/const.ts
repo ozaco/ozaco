@@ -42,13 +42,13 @@ export const SENT_BINDING: Readonly<Record<string, string>> = { 'ozaco.telemetry
 export const FAILURE_KEYS: ReadonlySet<string> = new Set(['err', 'error'])
 
 /** `Server.actions.report` records carry this event name. */
-export const DOMAIN_EVENT = 'ozaco.domain'
+export const DOMAIN_EVENT = 'ozaco.local'
 
 /** The span event an ambient recording span gets per `Server.actions.events()` item. */
-export const EVENT_RECV = 'ozaco.event.recv'
+export const EVENT_RECV = 'event.recv'
 
 /** How many `creation` links one span takes for the event items it received (a long-lived
- * listener stops linking past it — the `ozaco.event.recv` events go on; std:trace keeps 128 links
+ * listener stops linking past it — the `event.recv` events go on; std:trace keeps 128 links
  * a span, the other reasons keep room). */
 export const RECV_LINKS = 32
 

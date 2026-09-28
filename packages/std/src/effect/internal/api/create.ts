@@ -13,6 +13,7 @@ const getScope: Helpers.Effect<Scope> = {
   cause: 'Fast, non-typesafe lookup of co-routine scope',
   enter: (resolve, routine) => {
     resolve(succeed(routine.scope))
+
     return didExit => didExit(succeed())
   },
 }
@@ -31,14 +32,17 @@ export function createApiInternal<A extends object>(name: string, core: A): Help
       const handle = scope.get(api.context)?.handle ?? core
 
       const member = handle[key]
+
       if (typeof member === 'function') {
         return member(...(args as AnyType[]))
       }
+
       return member as AnyType
     },
     around: (decorator, options) => ({
       *[Symbol.iterator]() {
         const scope = (yield getScope) as Scope
+
         decorateApi(scope, api, decorator, options)
       },
     }),
@@ -56,11 +60,13 @@ export function createApiInternal<A extends object>(name: string, core: A): Help
             }),
           })
         }
+
         return Object.assign(sum, {
           [field]: {
             *[Symbol.iterator]() {
               const scope = (yield getScope) as Scope
               const target = api.invoke(scope, field, [] as AnyType)
+
               return isOperation(target) ? yield* target : target
             },
           },

@@ -80,6 +80,7 @@ describe('cli — node terminal', () => {
   it('walks the colour ladder the way every other tool does', () => {
     const level = (env: Record<string, string | undefined>, tty = true): string => {
       swap({ env, tty })
+
       return detect(undefined)!.capabilities.color
     }
 
@@ -100,6 +101,7 @@ describe('cli — node terminal', () => {
   it('reads unicode from the locale, and from the shell on windows', () => {
     const unicode = (env: Record<string, string | undefined>, platform = 'darwin'): boolean => {
       swap({ env, platform })
+
       return detect(undefined)!.capabilities.unicode
     }
 
@@ -112,6 +114,7 @@ describe('cli — node terminal', () => {
 
   it('degrades on a pipe: not interactive, no raw mode, no resize', () => {
     swap({ tty: false, env: {} })
+
     const binding = detect(undefined)!
 
     expect(binding.capabilities).toMatchObject({
@@ -137,11 +140,13 @@ describe('cli — node terminal', () => {
     const binding = detect(undefined)!
 
     const stopResize = binding.handle.onResize!(() => {})
+
     expect(signals.has('SIGWINCH')).toBe(true)
     stopResize()
     expect(signals.has('SIGWINCH')).toBe(false)
 
     const stopInterrupt = binding.handle.onInterrupt!(() => {})
+
     expect(signals.has('SIGINT')).toBe(true)
     stopInterrupt()
     expect(signals.has('SIGINT')).toBe(false)
@@ -157,6 +162,7 @@ describe('cli — node terminal', () => {
     expect(errors).toEqual(['err'])
 
     const bare = swap({ stderr: false })
+
     detect(undefined)!.handle.write('err', 'stderr')
     expect(bare.written).toEqual(['err'])
   })

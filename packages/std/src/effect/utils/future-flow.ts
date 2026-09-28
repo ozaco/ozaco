@@ -42,6 +42,7 @@ export const createFutureFlow = <T>(scope: Scope, flow: Flow<T, void>): FutureFl
           }
 
           const step = yield* subscription.next()
+
           bridge.settle(step.done ? { done: true, value: undefined } : step)
 
           if (step.done) {
@@ -79,6 +80,7 @@ export const createFutureFlow = <T>(scope: Scope, flow: Flow<T, void>): FutureFl
       return: async () => {
         bridge.close()
         await task.halt()
+
         return { done: true, value: undefined }
       },
     }
@@ -92,7 +94,9 @@ export const createFutureFlow = <T>(scope: Scope, flow: Flow<T, void>): FutureFl
     cancel: () =>
       run(function* () {
         settleDone()
+
         const halting = [...jobs]
+
         jobs.clear()
         yield* allSettled(halting.map(job => job.halt()))
       }),

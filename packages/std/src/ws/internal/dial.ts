@@ -59,6 +59,7 @@ const wire = (
       // the connection ended while this dial was in flight — do not adopt, just dispose
       socket.close()
       opened.reject(fail(WsErrors.Connect, `connection closed during dial: ${String(url)}`))
+
       return
     }
 
@@ -79,6 +80,7 @@ const wire = (
       WsErrors.Connect,
       `websocket error: ${String(url)}`,
     ) as Result.Failure<unknown>
+
     opened.reject(failure) // no-op once already open
 
     if (!session.ended && session.socket === socket && !reconnect) {
@@ -93,15 +95,18 @@ const wire = (
     }
 
     const info = { code: event?.code ?? 1000, reason: event?.reason ?? '' }
+
     session.lastClose = info
 
     if (session.closedByClient) {
       session.settle(true, info) // clean client close → the flow ends `true`
+
       return
     }
 
     if (!reconnect) {
       session.settle(session.erred ?? true, info) // single-shot: any server-side end is permanent
+
       return
     }
 
@@ -125,9 +130,11 @@ export const dial = guard(function* (session: Helpers.Session, impl: WsDef.ImplL
   socket.binaryType = 'arraybuffer'
 
   const opened = withResolvers<void>(WsCauses.Open)
+
   wire(session, socket, opened)
 
   let adopted = false
+
   try {
     yield* opened.operation
     adopted = true

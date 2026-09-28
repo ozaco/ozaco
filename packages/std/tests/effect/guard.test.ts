@@ -37,10 +37,13 @@ describe('guard()', () => {
         }, 'op:cause')
 
         const first = yield* attempt(() => returned())
+
         expect(isFailure(first) && first.error).toBe('op.returned')
 
         const second = yield* attempt(() => thrown())
+
         expect(isFailure(second)).toBe(true)
+
         if (isFailure(second)) {
           expect(second.causes).toContain('op:cause')
         }
@@ -54,6 +57,7 @@ describe('guard()', () => {
         let calls = 0
         const counted = guard(function* () {
           calls += 1
+
           return calls
         }, 'guard:count')
 

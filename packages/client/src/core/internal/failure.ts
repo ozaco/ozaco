@@ -48,11 +48,11 @@ export const causesOf = (envelope: Helpers.Envelope | null): Result.Cause[] =>
 
 /** The server's span that answered (its `traceresponse`), when it is in the trace the envelope
  * names. */
-export const answeredBy = (
+export function* answeredBy(
   response: Response,
   envelope: Helpers.Envelope | null,
-): string | undefined => {
-  const echoed = echoedContext(response)
+): Operation<string | undefined> {
+  const echoed = yield* echoedContext(response)
   const traceId = textOf(envelope?.traceId) ?? echoed?.traceId
 
   return echoed && echoed.traceId === traceId ? echoed.spanId : undefined

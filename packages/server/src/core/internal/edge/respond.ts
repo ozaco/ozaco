@@ -19,12 +19,14 @@ const encoder = new TextEncoder()
  * (Bun closes idle connections after ~10s by default). Env-tunable for tests. */
 const keepaliveMs = (): number => {
   const given = Number(process.env['OZACO_SSE_KEEPALIVE_MS'])
+
   return Number.isFinite(given) && given > 0 ? given : 15_000
 }
 
 /** Encode a flow-brand chunk (one codec value) for the wire: ndjson lines or SSE frames. */
 const frameOf = (brand: string, value: unknown): Uint8Array => {
   const json = JSON.stringify(value)
+
   return encoder.encode(brand === 'sse' ? `data: ${json}\n\n` : `${json}\n`)
 }
 
@@ -68,6 +70,7 @@ const bodyOf = (
             result => {
               clearTimeout(timer)
               resolve(result)
+
               return null
             },
             (error: unknown) => {
@@ -76,6 +79,7 @@ const bodyOf = (
               // never silently: the failure is handed to `broke` (the edge span ends with it)
               broke?.(error)
               resolve({ done: true, value: undefined })
+
               return null
             },
           )
@@ -83,6 +87,7 @@ const bodyOf = (
 
         if (step === null) {
           controller.enqueue(encoder.encode(': keepalive\n\n'))
+
           return
         }
 
@@ -90,18 +95,23 @@ const bodyOf = (
 
         if (step.done) {
           controller.close()
+
           return
         }
 
         controller.enqueue(frameOf(brand, step.value))
+
         return
       }
 
       const step = await reader.read()
+
       if (step.done) {
         controller.close()
+
         return
       }
+
       controller.enqueue(
         brand === 'text' ? encoder.encode(String(step.value)) : frameOf(brand, step.value),
       )
@@ -127,6 +137,7 @@ export const responseOf = (value: unknown, shape?: Helpers.ReplyShape): Response
 
   if (isBranded(value)) {
     const { body, type } = bodyOf(value, shape?.broke)
+
     headers.set('content-type', type)
     headers.set(HEADERS.brand, brandOf(value))
 
@@ -163,6 +174,7 @@ export function* jsonScope(): Operation<Scope | null> {
     // a JSON codec of ANOTHER std release under the same name refuses the install: the envelope
     // is then plain JSON (`textOf`), never an edge that cannot start
     const installed = yield* attempt(() => JsonCodec.use())
+
     ready.resolve(isFailure(installed) ? null : yield* useScope())
     yield* suspend()
   })

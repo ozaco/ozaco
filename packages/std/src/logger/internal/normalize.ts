@@ -8,28 +8,13 @@ import type { LoggerDef } from '../types/logger'
 import { ERROR_KEYS, NESTED_DEPTH } from './const'
 
 /** A value that is a failure to log: a Failure as-is, an `Error` folded by `asFailure` (tagged
- * `std:result.unknown`, the `Error` kept as its `raw`) — once per `Error` in one call. */
-const failureOf = (
-  value: unknown,
-  walk: Helpers.PayloadWalk,
-): Result.Failure<unknown> | undefined => {
+ * `std:result.unknown`, the `Error` kept as its `raw`). */
+const failureOf = (value: unknown): Result.Failure<unknown> | undefined => {
   if (isFailure(value)) {
     return value
   }
 
-  if (!(value instanceof Error)) {
-    return undefined
-  }
-
-  const known = walk.folds.get(value)
-  if (known) {
-    return known
-  }
-
-  const folded = asFailure(value)
-  walk.folds.set(value, folded)
-
-  return folded
+  return value instanceof Error ? asFailure(value) : undefined
 }
 
 /** An object literal (the only objects searched for nested failures — class instances stay). */
@@ -39,6 +24,7 @@ const isPlainObject = (value: unknown): value is Record<string, unknown> => {
   }
 
   const proto = Object.getPrototypeOf(value)
+
   return proto === Object.prototype || proto === null
 }
 
@@ -52,13 +38,6 @@ const define = (target: Record<string, unknown>, key: string, value: unknown): v
   })
 }
 
-/** Add `failure` once (the same failure twice in one call is one failure). */
-const collect = (failures: Result.Failure<unknown>[], failure: Result.Failure<unknown>): void => {
-  if (!failures.includes(failure)) {
-    failures.push(failure)
-  }
-}
-
 /**
  * `value` with every nested `Error` / Failure rendered by `formatFailure` (collected into
  * `failures`, payload order): never `{}` for an `Error`, never a Failure's internals. Copy on
@@ -66,9 +45,11 @@ const collect = (failures: Result.Failure<unknown>[], failure: Result.Failure<un
  * {@link NESTED_DEPTH} stay as they are.
  */
 const render = (value: unknown, depth: number, walk: Helpers.PayloadWalk): unknown => {
-  const failure = failureOf(value, walk)
+  const failure = failureOf(value)
+
   if (failure) {
-    collect(walk.failures, failure)
+    walk.failures.push(failure)
+
     return formatFailure(failure)
   }
 
@@ -80,7 +61,9 @@ const render = (value: unknown, depth: number, walk: Helpers.PayloadWalk): unkno
 
   if (Array.isArray(value)) {
     path.add(value)
+
     const items = value.map(item => render(item, depth + 1, walk))
+
     path.delete(value)
 
     return items.some((item, index) => item !== value[index]) ? items : value
@@ -97,6 +80,7 @@ const render = (value: unknown, depth: number, walk: Helpers.PayloadWalk): unkno
 
   for (const [key, item] of Object.entries(value)) {
     const next = render(item, depth + 1, walk)
+
     changed ||= next !== item
     define(out, key, next)
   }
@@ -130,7 +114,7 @@ export const normalizePayload = (
   errorKey = 'err',
 ): Helpers.NormalizedPayload => {
   const failures: Result.Failure<unknown>[] = []
-  const walk: Helpers.PayloadWalk = { failures, path: new WeakSet(), folds: new WeakMap() }
+  const walk: Helpers.PayloadWalk = { failures, path: new WeakSet() }
   const messages: string[] = []
   let data: Record<string, unknown> | undefined
 
@@ -145,15 +129,18 @@ export const normalizePayload = (
       arg = arg.value
     }
 
-    const failure = failureOf(arg, walk)
+    const failure = failureOf(arg)
+
     if (failure) {
       // fully consumed — falling through would spread the failure's internals into `data`
-      collect(failures, failure)
+      failures.push(failure)
+
       continue
     }
 
     if (typeof arg === 'string') {
       messages.push(arg)
+
       continue
     }
 
@@ -161,6 +148,7 @@ export const normalizePayload = (
       // an array is a VALUE, not fields: it joins the message as JSON text rather than spreading
       // its indexes into `data` (plain data only — no codec needed for this)
       messages.push(jsonText(render(arg, 1, walk)))
+
       continue
     }
 
@@ -171,13 +159,13 @@ export const normalizePayload = (
     data ??= {}
 
     for (const [key, value] of Object.entries(arg)) {
-      const lifted =
-        key === errorKey || ERROR_KEYS.includes(key) ? failureOf(value, walk) : undefined
+      const lifted = key === errorKey || ERROR_KEYS.includes(key) ? failureOf(value) : undefined
 
       if (lifted) {
-        collect(failures, lifted)
+        failures.push(lifted)
         // a later payload's error key replaces an earlier field of the same name
         Reflect.deleteProperty(data, key)
+
         continue
       }
 

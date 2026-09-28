@@ -1,36 +1,25 @@
 import { run } from 'std:effect'
 import { fail, isFailure, unwrap } from 'std:result'
 import type { TraceDef } from 'std:trace'
-import {
-  emitLog,
-  enableTracing,
-  event,
-  isTracing,
-  span,
-  TraceErrors,
-  traceNow,
-  Tracer,
-  TraceSeverity,
-} from 'std:trace'
+import { Trace, TraceErrors, TraceSeverity } from 'std:trace'
 
 import { describe, expect, it } from 'bun:test'
-
-import pkg from '../../package.json'
 
 import { memoryTracer, traced } from './helpers'
 
 const failingTracer = (how: 'throw' | 'fail') =>
-  Tracer.implement({
+  Trace.implement({
     name: `test/failing-tracer-${how}`,
     version: '1.0.0',
     *setup() {
-      yield* enableTracing()
+      yield* Trace.actions.enableTracing()
     },
   }).build({
     *export() {
       if (how === 'throw') {
         throw new Error('exporter crashed')
       }
+
       return yield* fail('test.export', 'rejected')
     },
     *emit() {
@@ -38,7 +27,7 @@ const failingTracer = (how: 'throw' | 'fail') =>
     },
   })
 
-describe('Tracer protocol', () => {
+describe('Trace protocol (sinks)', () => {
   it('fans every span and record out to EVERY install', async () => {
     const first = memoryTracer()
     const second = memoryTracer()
@@ -47,7 +36,7 @@ describe('Tracer protocol', () => {
       await run(function* () {
         yield* first.plugin.use()
         yield* second.plugin.use()
-        yield* span('both', () => event('ozaco.seen'))
+        yield* Trace.actions.span('both', () => Trace.actions.event('ozaco.seen'))
       }),
     )
 
@@ -65,8 +54,10 @@ describe('Tracer protocol', () => {
         yield* failingTracer('throw').use()
         yield* failingTracer('fail').use()
         yield* tracer.plugin.use()
-        return yield* span('survives', function* () {
-          yield* event('ozaco.step')
+
+        return yield* Trace.actions.span('survives', function* () {
+          yield* Trace.actions.event('ozaco.step')
+
           return 'ok'
         })
       }),
@@ -83,7 +74,8 @@ describe('Tracer protocol', () => {
     const outcome = await run(function* () {
       yield* failingTracer('fail').use()
       yield* tracer.plugin.use()
-      return yield* Tracer.actions.emit({
+
+      return yield* Trace.actions.emit({
         time: 0,
         observedTime: 0,
         severityNumber: 9,
@@ -98,25 +90,19 @@ describe('Tracer protocol', () => {
 
     expect(isFailure(outcome)).toBe(true)
     expect(outcome).toMatchObject({ error: TraceErrors.Tracer })
-    // the tracer's own failure is nested in the TraceErrors.Tracer one; each carries the plugin
-    // runtime labels of the hops it crossed — the impl action's on the inner one, the dispatch's
-    // on the outer one
+    // the tracer's own failure is nested in the TraceErrors.Tracer one; the Trace protocol adds no
+    // plugin runtime labels to either
     expect((outcome as { causes?: unknown[] }).causes).toEqual([
-      expect.objectContaining({
-        error: 'test.emit',
-        message: 'rejected',
-        causes: ['emit', 'test/failing-tracer-fail@1.0.0'],
-      }),
-      'dispatch',
-      `std/tracer@${pkg.version}`,
+      expect.objectContaining({ error: 'test.emit', message: 'rejected', causes: [] }),
     ])
     expect(tracer.logs.map(log => log.body)).toEqual(['direct'])
   })
 
   it('without an install the calls are no-ops', async () => {
     const outcome = await run(function* () {
-      yield* enableTracing()
-      return yield* span('nowhere', () => event('ozaco.lost'))
+      yield* Trace.actions.enableTracing()
+
+      return yield* Trace.actions.span('nowhere', () => Trace.actions.event('ozaco.lost'))
     })
 
     expect(isFailure(outcome)).toBe(false)
@@ -126,17 +112,17 @@ describe('Tracer protocol', () => {
     const seen: boolean[] = []
     const sink: TraceDef.SpanData[] = []
 
-    const recursive = Tracer.implement({
+    const recursive = Trace.implement({
       name: 'test/recursive-tracer',
       version: '1.0.0',
       *setup() {
-        yield* enableTracing()
+        yield* Trace.actions.enableTracing()
       },
     }).build({
       *export(data: TraceDef.SpanData) {
-        seen.push(yield* isTracing())
+        seen.push(yield* Trace.actions.isTracing())
         sink.push(data)
-        yield* span('exporter-work', () => event('ozaco.exporting'))
+        yield* Trace.actions.span('exporter-work', () => Trace.actions.event('ozaco.exporting'))
       },
       *emit() {},
     })
@@ -144,7 +130,7 @@ describe('Tracer protocol', () => {
     unwrap(
       await run(function* () {
         yield* recursive.use()
-        yield* span('user', function* () {})
+        yield* Trace.actions.span('user', function* () {})
       }),
     )
 
@@ -156,24 +142,26 @@ describe('Tracer protocol', () => {
 describe('event()', () => {
   it('a span event on the active span AND a log record', async () => {
     const { tracer } = await traced(() =>
-      span('dispatch', { service: 'todos', scope: { name: '@ozaco/server' } }, () =>
-        event('ozaco.cache.evict', { 'ozaco.cache.tags': ['todos'] }),
+      Trace.actions.span('dispatch', { service: 'todos', scope: { name: '@ozaco/server' } }, () =>
+        Trace.actions.event('cache.evict', { 'ozaco.cache.tags': ['todos'] }),
       ),
     )
 
     const data = tracer.span('dispatch')
     const [spanEvent] = data.events
+
     expect(spanEvent).toMatchObject({
-      name: 'ozaco.cache.evict',
+      name: 'cache.evict',
       attributes: { 'ozaco.cache.tags': ['todos'] },
     })
 
     const [log] = tracer.logs
+
     expect(log).toMatchObject({
       severityNumber: TraceSeverity.info,
-      body: 'ozaco.cache.evict',
-      eventName: 'ozaco.cache.evict',
-      attributes: { 'ozaco.cache.tags': ['todos'], 'otel.event.name': 'ozaco.cache.evict' },
+      body: 'cache.evict',
+      eventName: 'cache.evict',
+      attributes: { 'ozaco.cache.tags': ['todos'], 'otel.event.name': 'cache.evict' },
       context: { traceId: data.context.traceId, spanId: data.context.spanId, flags: 3 },
       service: 'todos',
       scope: { name: '@ozaco/server' },
@@ -184,8 +172,8 @@ describe('event()', () => {
 
   it('time / severity / body options', async () => {
     const { tracer } = await traced(() =>
-      span('rtc', () =>
-        event(
+      Trace.actions.span('rtc', () =>
+        Trace.actions.event(
           'ozaco.rtc.ice',
           { 'ozaco.rtc.state': 'connected' },
           {
@@ -202,7 +190,8 @@ describe('event()', () => {
   })
 
   it('outside any span: a record without context', async () => {
-    const { tracer } = await traced(() => event('ozaco.boot'))
+    const { tracer } = await traced(() => Trace.actions.event('ozaco.boot'))
+
     expect(tracer.logs[0]).toMatchObject({ context: null, eventName: 'ozaco.boot' })
   })
 })
@@ -210,8 +199,8 @@ describe('event()', () => {
 describe('emitLog()', () => {
   it('fills context, service, scope and time from the active span', async () => {
     const { tracer } = await traced(() =>
-      span('dispatch', { service: 'todos', scope: { name: '@ozaco/server' } }, () =>
-        emitLog({
+      Trace.actions.span('dispatch', { service: 'todos', scope: { name: '@ozaco/server' } }, () =>
+        Trace.actions.emitLog({
           body: 'created',
           severityNumber: TraceSeverity.info,
           severityText: 'info',
@@ -221,6 +210,7 @@ describe('emitLog()', () => {
     )
 
     const data = tracer.span('dispatch')
+
     expect(tracer.logs[0]).toMatchObject({
       body: 'created',
       severityText: 'info',
@@ -236,11 +226,11 @@ describe('emitLog()', () => {
 
   it('explicit fields win; an empty body falls back to the event name', async () => {
     const { tracer } = await traced(() =>
-      span('any', () =>
-        emitLog({
+      Trace.actions.span('any', () =>
+        Trace.actions.emitLog({
           body: '',
           severityNumber: 9,
-          eventName: 'ozaco.domain',
+          eventName: 'ozaco.local',
           context: null,
           service: 'billing',
           scope: { name: 'custom' },
@@ -250,9 +240,9 @@ describe('emitLog()', () => {
     )
 
     expect(tracer.logs[0]).toMatchObject({
-      body: 'ozaco.domain',
-      eventName: 'ozaco.domain',
-      attributes: { 'otel.event.name': 'ozaco.domain' },
+      body: 'ozaco.local',
+      eventName: 'ozaco.local',
+      attributes: { 'otel.event.name': 'ozaco.local' },
       context: null,
       service: 'billing',
       scope: { name: 'custom' },
@@ -262,10 +252,15 @@ describe('emitLog()', () => {
 
   it('log attribute values go up to 16 KiB (span values stop at 2 KiB)', async () => {
     const { tracer } = await traced(() =>
-      emitLog({ body: 'big', severityNumber: 9, attributes: { payload: 'z'.repeat(20_000) } }),
+      Trace.actions.emitLog({
+        body: 'big',
+        severityNumber: 9,
+        attributes: { payload: 'z'.repeat(20_000) },
+      }),
     )
 
     const value = String(tracer.logs[0]!.attributes.payload)
+
     expect(new TextEncoder().encode(value).length).toBeLessThanOrEqual(16_384)
     expect(value.length).toBeGreaterThan(2048)
   })
@@ -274,8 +269,9 @@ describe('emitLog()', () => {
 describe('traceNow()', () => {
   it('the active local trace clock, else Date.now()', async () => {
     const { value } = await traced(function* () {
-      const outside = yield* traceNow()
-      const inside = yield* span('clock', () => traceNow())
+      const outside = yield* Trace.actions.traceNow()
+      const inside = yield* Trace.actions.span('clock', () => Trace.actions.traceNow())
+
       return { outside, inside }
     })
 
@@ -287,17 +283,20 @@ describe('traceNow()', () => {
     // a wall clock AHEAD of the process trace clock (still within the drift budget): a
     // `Date.now()` fallback would stamp the root after everything its body does
     const realNow = Date.now
+
     Date.now = () => realNow() + 400
 
     try {
       const { tracer } = await traced(function* () {
-        const at = yield* traceNow()
-        yield* span('receipt', { startTime: at }, function* () {
-          yield* event('work')
+        const at = yield* Trace.actions.traceNow()
+
+        yield* Trace.actions.span('receipt', { startTime: at }, function* () {
+          yield* Trace.actions.event('work')
         })
       })
 
       const root = tracer.span('receipt')
+
       expect(root.events[0]!.time).toBeGreaterThanOrEqual(root.start)
       expect(root.end).toBeGreaterThanOrEqual(root.start)
     } finally {

@@ -33,10 +33,12 @@ const registeringCodec = (name: string, version: string): CodecDef => {
     version,
     *setup() {
       const context: CodecDef.Context = { name, priority: 500, ext: 'dup' }
+
       yield* Codec.actions.register(self, context)
       yield* ensure(function* () {
         yield* Codec.actions.unregister(self)
       })
+
       return context
     },
   }).build({
@@ -59,6 +61,7 @@ const registeringCodec = (name: string, version: string): CodecDef => {
       return yield* fail('not-implemented', 'decodeFlow')
     },
   })
+
   return self
 }
 
@@ -82,6 +85,7 @@ describe('single-codec routing (exec with one entry)', () => {
       yield* JsonCodec.use()
 
       const text = yield* Codec.actions.stringify([1, 2, 3])
+
       return yield* Codec.actions.parse<number[]>(text)
     })
 
@@ -94,6 +98,7 @@ describe('registry scope-locality', () => {
     const outcome = await run(function* () {
       const inside = yield* scoped(function* () {
         yield* JsonCodec.use()
+
         return {
           has: yield* Codec.actions.hasCodec(),
           count: (yield* Codec.actions.getTransports()).length,
@@ -117,6 +122,7 @@ describe('registry scope-locality', () => {
   it('re-installing the SAME codec (same name) is an idempotent no-op — one registry entry', async () => {
     const outcome = await run(function* () {
       yield* JsonCodec.use()
+
       const second = yield* attempt(() => JsonCodec.use())
 
       return {
@@ -134,6 +140,7 @@ describe('registry scope-locality', () => {
 
       const inner = yield* scoped(function* () {
         const again = yield* attempt(() => JsonCodec.use())
+
         return {
           ok: !isFailure(again),
           count: (yield* Codec.actions.getTransports()).length,
@@ -154,6 +161,7 @@ describe('registry scope-locality', () => {
   it('a DIFFERENT codec claiming a registered name fails `CodecErrors.AlreadyRegistered`', async () => {
     const outcome = await run(function* () {
       yield* JsonCodec.use()
+
       const clash = yield* attempt(() => TomlCodec.use({ name: 'std/json-codec' }))
 
       return isFailure(clash) ? clash.error : 'no-failure'
@@ -168,6 +176,7 @@ describe('registry scope-locality', () => {
     const copy = registeringCodec('dup-codec', '1.0.0')
     const outcome = await run(function* () {
       yield* first.use()
+
       const again = yield* attempt(() => copy.use())
       const listed = yield* Codec.actions.getTransports()
 
@@ -180,6 +189,7 @@ describe('registry scope-locality', () => {
   it('the same impl name at a DIFFERENT version fails `CodecErrors.AlreadyRegistered`', async () => {
     const outcome = await run(function* () {
       yield* registeringCodec('dup-codec', '1.0.0').use()
+
       const clash = yield* attempt(() => registeringCodec('dup-codec', '2.0.0').use())
 
       return isFailure(clash) ? { error: clash.error, message: clash.message } : 'no-failure'
@@ -198,6 +208,7 @@ describe('registry scope-locality', () => {
 
       const listed = yield* Codec.actions.getTransports()
       const names: string[] = []
+
       for (const codec of listed) {
         names.push((yield* useContext(codec)).name)
       }
@@ -263,6 +274,7 @@ describe('multi-codec priority routing (Codec.exec)', () => {
     const outcome = await run(function* () {
       const Low = fakeCodec('order-low')
       const High = fakeCodec('order-high')
+
       yield* High.use({ priority: 900 })
       yield* Low.use({ priority: 100 })
       yield* Codec.actions.register(High, { name: 'order-high', priority: 900, ext: 'fake' })
@@ -312,12 +324,15 @@ describe('json codec streaming', () => {
       const decoded = yield* JsonCodec.actions.decodeFlow<string>(source)
 
       const collected = withResolvers<string[]>()
+
       yield* spawn(function* () {
         const values: string[] = []
+
         for (const value of yield* each(decoded)) {
           values.push(value)
           yield* each.next()
         }
+
         collected.resolve(values)
       })
 
@@ -327,6 +342,7 @@ describe('json codec streaming', () => {
       const bytes = encoder.encode(JSON.stringify('café'))
       // split INSIDE the two-byte 'é' sequence (0xC3 0xA9)
       const splitAt = bytes.indexOf(0xc3) + 1
+
       expect(splitAt).toBeGreaterThan(0)
 
       yield* source.send(bytes.slice(0, splitAt))
@@ -348,12 +364,15 @@ describe('json codec streaming', () => {
       const decoded = yield* JsonCodec.actions.decodeFlow(encoded)
 
       const collected = withResolvers<unknown[]>()
+
       yield* spawn(function* () {
         const values: unknown[] = []
+
         for (const value of yield* each(decoded)) {
           values.push(value)
           yield* each.next()
         }
+
         collected.resolve(values)
       })
 
@@ -378,12 +397,16 @@ describe('json codec streaming', () => {
       const decoded = yield* JsonCodec.actions.decodeFlow(source)
 
       const closed = withResolvers<unknown>()
+
       yield* spawn(function* () {
         const subscription = yield* decoded
+
         while (true) {
           const next = yield* subscription.next()
+
           if (next.done) {
             closed.resolve(next.value)
+
             return
           }
         }
@@ -396,6 +419,7 @@ describe('json codec streaming', () => {
       yield* source.close(true)
 
       const closeValue = yield* closed.operation
+
       return closeValue === true ? 'clean-close' : isFailure(closeValue) ? 'failure' : 'other'
     })
 

@@ -24,9 +24,11 @@ describe('failure tags', () => {
       const [signalA, signalB] = createSignalPair()
       const peerA = yield* Rtc.actions.connect(signalA)
       const peerB = yield* Rtc.actions.connect(signalB, { polite: true })
+
       void peerB
 
       fake.hub.dead = true // the offer/answer round completes but the peers never link
+
       const result = yield* attempt(() => peerA.channel('chat', { openTimeoutMs: 20 }))
 
       return { tag: tagOf(result), state: peerA.connectionState }
@@ -71,6 +73,7 @@ describe('failure tags', () => {
       const [signalA, signalB] = createSignalPair()
       const peerA = yield* Rtc.actions.connect(signalA)
       const peerB = yield* Rtc.actions.connect(signalB, { polite: true })
+
       void peerB
       ;(fake.hub.peers[0] as FakePeer).faults.offer = new Error('createOffer refused')
 
@@ -133,6 +136,7 @@ describe('failure tags', () => {
 
     const outcome = await run(function* () {
       yield* rtcMock(Refusing).use()
+
       const [signalA] = createSignalPair()
       const result = yield* attempt(() => Rtc.actions.connect(signalA))
 
@@ -152,13 +156,16 @@ describe('failure tags', () => {
       const [signalA, signalB] = createSignalPair()
       const peerA = yield* Rtc.actions.connect(signalA)
       const peerB = yield* Rtc.actions.connect(signalB, { polite: true })
+
       void peerB
       yield* peerA.channel('chat')
 
       ;(fake.hub.peers[0] as FakePeer).faults.stats = new Error('report unavailable')
+
       const rejected = yield* attempt(() => peerA.stats())
 
       yield* peerA.close() // no live generation anymore
+
       const dead = yield* attempt(() => peerA.stats())
 
       return { rejected: tagOf(rejected), dead: tagOf(dead) }
@@ -177,6 +184,7 @@ describe('failure tags', () => {
       const [signalA, signalB] = createSignalPair()
       const peerA = yield* Rtc.actions.connect(signalA)
       const peerB = yield* Rtc.actions.connect(signalB, { polite: true })
+
       void peerB
       ;(fake.hub.peers[0] as FakePeer).faults.channel = new Error('too many channels')
 
@@ -199,14 +207,18 @@ describe('failure tags', () => {
       const [signalA, signalB] = createSignalPair()
       const peerA = yield* Rtc.actions.connect(signalA)
       const peerB = yield* Rtc.actions.connect(signalB, { polite: true })
+
       void peerB
 
       fake.hub.dead = true // keep the channel in `connecting`
+
       const opening = yield* spawn(() => attempt(() => peerA.channel('chat', { openTimeoutMs: 0 })))
 
       // let channel() reach its wait, then kill the native underneath it
       yield* sleep(0)
+
       const native = (fake.hub.peers[0] as FakePeer).channels[0]
+
       native?.close()
 
       const result = yield* opening

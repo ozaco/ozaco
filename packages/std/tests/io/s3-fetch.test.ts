@@ -36,6 +36,7 @@ const originalFetch = globalThis.fetch
 const stubFetch = (...responses: Response[]): Captured[] => {
   const calls: Captured[] = []
   let index = 0
+
   globalThis.fetch = ((input: URL | string, init: RequestInit = {}) => {
     calls.push({
       url: String(input),
@@ -43,10 +44,14 @@ const stubFetch = (...responses: Response[]): Captured[] => {
       headers: { ...(init.headers as Record<string, string>) },
       body: init.body,
     })
+
     const response = responses[Math.min(index, responses.length - 1)]!
+
     index += 1
+
     return Promise.resolve(response.clone())
   }) as AnyType
+
   return calls
 }
 
@@ -115,6 +120,7 @@ describe('fetch S3 client — object operations', () => {
       new Response(null, { status: 200 }),
       new Response('nope', { status: 404, statusText: 'Not Found' }),
     )
+
     const s3 = createS3(fetchS3Client(CONFIG))
 
     const outcome = await run(function* () {
@@ -130,6 +136,7 @@ describe('fetch S3 client — object operations', () => {
 
     const outcome = await run(function* () {
       yield* s3.delete('gone/key')
+
       return 'done'
     })
 
@@ -140,11 +147,13 @@ describe('fetch S3 client — object operations', () => {
 
   it('a non-2xx stat/read fails std:io.s3-failed with the status in the message', async () => {
     stubFetch(new Response('denied', { status: 403, statusText: 'Forbidden' }))
+
     const s3 = createS3(fetchS3Client(CONFIG))
 
     const outcome = await run(function* () {
       const stat = yield* attempt(() => s3.stat('k'))
       const read = yield* attempt(() => s3.read('k'))
+
       return {
         stat: isFailure(stat) ? [stat.error, stat.message] : 'no-failure',
         read: isFailure(read) ? read.error : 'no-failure',
@@ -215,6 +224,7 @@ describe('fetch S3 client — list', () => {
     })
 
     const url = new URL(calls[0]!.url)
+
     expect(url.origin + url.pathname).toBe('http://localhost:9000/bucket')
     expect(Object.fromEntries(url.searchParams)).toEqual({
       'list-type': '2',
@@ -232,6 +242,7 @@ describe('fetch S3 client — list', () => {
         status: 200,
       }),
     )
+
     const s3 = createS3(fetchS3Client(CONFIG))
 
     const outcome = await run(function* () {
@@ -249,6 +260,7 @@ describe('fetch S3 client — list', () => {
 describe('fetch S3 client — presign', () => {
   it('signs into the query string with host as the only signed header and UNSIGNED-PAYLOAD', async () => {
     setSystemTime(new Date('2013-05-24T00:00:00Z'))
+
     const s3 = createS3(fetchS3Client(CONFIG))
 
     const outcome = await run(function* () {
@@ -260,6 +272,7 @@ describe('fetch S3 client — presign', () => {
 
     const { get, put } = unwrap(outcome)
     const url = new URL(get)
+
     expect(url.origin + url.pathname).toBe('http://localhost:9000/bucket/photos/a%20b.jpg')
     expect(url.searchParams.get('X-Amz-Algorithm')).toBe('AWS4-HMAC-SHA256')
     expect(url.searchParams.get('X-Amz-Credential')).toBe(
@@ -297,11 +310,13 @@ describe('fetch S3 client — presign', () => {
       createHash('sha256').update(canonical).digest('hex'),
     ].join('\n')
     const expected = createHmac('sha256', signingKey('20130524')).update(stringToSign).digest('hex')
+
     expect(url.searchParams.get('X-Amz-Signature')).toBe(expected)
   })
 
   it('ignores acl and type — they are Bun-only and leave the presigned URL untouched', async () => {
     setSystemTime(new Date('2013-05-24T00:00:00Z'))
+
     const s3 = createS3(fetchS3Client({ ...CONFIG, acl: 'public-read' }))
 
     const outcome = await run(function* () {
@@ -312,6 +327,7 @@ describe('fetch S3 client — presign', () => {
     })
 
     const { bare, decorated } = unwrap(outcome)
+
     expect(decorated).toBe(bare)
     expect(decorated.toLowerCase()).not.toContain('acl')
   })
@@ -344,12 +360,14 @@ const signingKey = (dateStamp: string): Buffer => {
   const kDate = createHmac('sha256', `AWS4${CONFIG.secretAccessKey}`).update(dateStamp).digest()
   const kRegion = createHmac('sha256', kDate).update(CONFIG.region).digest()
   const kService = createHmac('sha256', kRegion).update('s3').digest()
+
   return createHmac('sha256', kService).update('aws4_request').digest()
 }
 
 describe('fetch S3 client — SigV4 known answer', () => {
   it('the Authorization header for a fixed GET matches an independent node:crypto derivation', async () => {
     setSystemTime(new Date('2013-05-24T00:00:00Z'))
+
     const calls = stubFetch(new Response('body', { status: 200 }))
     // no endpoint → regional AWS host, path-style
     const s3 = createS3(
@@ -369,6 +387,7 @@ describe('fetch S3 client — SigV4 known answer', () => {
     expect(calls[0]!.url).toBe('https://s3.us-east-1.amazonaws.com/examplebucket/test.txt')
 
     const emptyHash = createHash('sha256').update('').digest('hex')
+
     expect(emptyHash).toBe('e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855')
     expect(calls[0]!.headers['x-amz-date']).toBe('20130524T000000Z')
     expect(calls[0]!.headers['x-amz-content-sha256']).toBe(emptyHash)
@@ -452,14 +471,18 @@ describe('fetch S3 client — streaming', () => {
         controller.close()
       },
     })
+
     stubFetch(new Response(body, { status: 200 }))
+
     const s3 = createS3(fetchS3Client(CONFIG))
 
     const outcome = await run(function* () {
       const stream = yield* s3.file('big.bin').stream()
       const reader = stream.getReader()
       const first = new TextDecoder().decode((yield* until(reader.read())).value)
+
       release()
+
       const second = new TextDecoder().decode((yield* until(reader.read())).value)
       const end = yield* until(reader.read())
 
@@ -486,6 +509,7 @@ describe('fetch S3 client — streaming', () => {
         for (const chunk of chunks) {
           controller.enqueue(chunk)
         }
+
         controller.close()
       },
     })

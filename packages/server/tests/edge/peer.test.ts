@@ -44,6 +44,7 @@ const spy = () => {
           }
         },
       }
+
       return { hooks }
     },
   }).build()
@@ -55,6 +56,7 @@ const spy = () => {
 const greet = (url: string): Promise<void> =>
   new Promise((resolve, reject) => {
     const ws = new WebSocket(url)
+
     ws.addEventListener('message', () => ws.close())
     ws.addEventListener('close', () => resolve())
     ws.addEventListener('error', () => reject(new Error('socket error')))
@@ -86,12 +88,14 @@ describe('edge drivers — client.address from the peer', () => {
           }
 
           const server = yield* createServer({ services: [probe], edge, plugins: [seen.plugin] })
+
           yield* Edge.actions.socket({
             path: '/live',
             *handler(socket) {
               yield* socket.send({ t: 'hello' })
             },
           })
+
           const info = yield* server.start({ port: 0 })
 
           yield* until(fetch(`${info.url}/probe/ping?who=direct`).then(response => response.text()))
@@ -115,6 +119,7 @@ describe('edge drivers — client.address from the peer', () => {
       expect(request('proxied').attributes['client.address']).toBe('203.0.113.9')
 
       const upgrade = seen.spans.find(span => span.name === 'GET /live')!
+
       expect(upgrade.attributes['client.address']).toBe('127.0.0.1')
     })
   }

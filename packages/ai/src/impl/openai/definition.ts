@@ -68,10 +68,13 @@ export const OpenAIProvider = AiProvider.implement<
         'std:fetch is not installed — FetchClient.use() before the openai provider',
       )
     }
+
     if (!options.apiKey) {
       return yield* fail(AiErrors.Configuration, 'the openai provider requires an apiKey')
     }
+
     yield* StateRef.set(createState(options))
+
     return { provider: 'openai', capabilities: CAPABILITIES }
   },
 }).build({
@@ -79,6 +82,7 @@ export const OpenAIProvider = AiProvider.implement<
     const state = yield* useContext(StateRef)
     const init = yield* jsonInit(state, chatBody(spec, false))
     const response = yield* send(state, 'chat/completions', init)
+
     return yield* decodeChatResult(yield* readJson(response), spec.model)
   },
 
@@ -87,6 +91,7 @@ export const OpenAIProvider = AiProvider.implement<
     const init = yield* jsonInit(state, chatBody(spec, true))
     const response = yield* send(state, 'chat/completions', init)
     const raw = yield* response.raw()
+
     return yield* sseFlow(raw, decodeChatDelta)
   },
 
@@ -94,6 +99,7 @@ export const OpenAIProvider = AiProvider.implement<
     const state = yield* useContext(StateRef)
     const init = yield* jsonInit(state, embedBody(spec))
     const response = yield* send(state, 'embeddings', init)
+
     return yield* decodeEmbedResult(yield* readJson(response), spec)
   },
 
@@ -101,6 +107,7 @@ export const OpenAIProvider = AiProvider.implement<
     const state = yield* useContext(StateRef)
     const init = yield* jsonInit(state, speechBody(spec))
     const response = yield* send(state, 'audio/speech', init)
+
     return yield* readBytes(response)
   },
 
@@ -109,6 +116,7 @@ export const OpenAIProvider = AiProvider.implement<
     const init = yield* jsonInit(state, speechBody(spec))
     const response = yield* send(state, 'audio/speech', init)
     const raw = yield* response.raw()
+
     return yield* byteFlow(raw)
   },
 
@@ -119,6 +127,7 @@ export const OpenAIProvider = AiProvider.implement<
       'audio/transcriptions',
       formInit(state, transcribeForm(spec)),
     )
+
     return yield* decodeTranscription(yield* readJson(response))
   },
 })

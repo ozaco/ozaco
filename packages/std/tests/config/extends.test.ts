@@ -24,6 +24,7 @@ const bootstrap = function* (options: ConfigDef.Options) {
 describe('config extends resolution', () => {
   it('resolves a relative extends target; own keys win over inherited ones', async () => {
     const root = await makeRoot()
+
     try {
       await mkdir(join(root, 'presets'))
       await writeFile(
@@ -39,6 +40,7 @@ describe('config extends resolution', () => {
         yield* bootstrap({ cwd: root, home: root })
 
         const tree = yield* Config.actions.tree()
+
         return {
           merged: yield* Config.actions.get(),
           extendsPath: tree[0]?.extends[0]?.path,
@@ -59,6 +61,7 @@ describe('config extends resolution', () => {
 
   it('resolves extends lists transitively; later entries win; cycles are skipped', async () => {
     const root = await makeRoot()
+
     try {
       await writeFile(
         join(root, '.cfgspec.json'),
@@ -96,15 +99,18 @@ describe('config extends resolution', () => {
 
   it('fails the load when an extends target is missing', async () => {
     const root = await makeRoot()
+
     try {
       await writeFile(join(root, '.cfgspec.json'), jsonText({ extends: './nope.json' }))
 
       const outcome = await run(function* () {
         yield* bootstrap({ cwd: root, home: root })
+
         return 'unreachable'
       })
 
       expect(isFailure(outcome)).toBe(true)
+
       if (isFailure(outcome)) {
         expect(outcome.error).toBe('std:config.missing-extends')
         expect(outcome.message).toContain('extends a missing file')

@@ -22,7 +22,7 @@ import type { ClientDef } from '../types/client'
  * stream); server failures come back as Result failures with their own tag and `req:<id>` cause.
  *
  * Traced: when tracing is enabled where a call runs (std:trace — an observing node's handler, a
- * scope with a Tracer installed) the call is one CLIENT span `{METHOD} {route}` whose context the
+ * scope with a Trace sink installed) the call is one CLIENT span `{METHOD} {route}` whose context the
  * server continues; otherwise the caller's ambient trace context rides along as it is. Realtime
  * frames carry the caller's context too.
  *
@@ -54,6 +54,7 @@ export function* createClient<TApi = Record<string, Record<string, ClientDef.Ref
       if (tokenOverride !== undefined) {
         return tokenOverride ?? undefined
       }
+
       return typeof options.token === 'function' ? options.token() : options.token
     },
   })
@@ -103,6 +104,7 @@ export function* createClient<TApi = Record<string, Record<string, ClientDef.Ref
       scope,
       function* () {
         const { value } = yield* callOp(target, input, callOptions)()
+
         return value
       },
       { signal: callOptions?.signal, hold: value => holdOf(value) },
@@ -160,6 +162,7 @@ export function* createClient<TApi = Record<string, Record<string, ClientDef.Ref
 
         prev: () => {
           const cursor = last?.prev ?? null
+
           turnTo(cursor, cursor !== null)
         },
 
@@ -193,15 +196,18 @@ export function* createClient<TApi = Record<string, Record<string, ClientDef.Ref
       if (typeof key !== 'string') {
         return undefined
       }
+
       if (key in target) {
         return (target as AnyType)[key]
       }
+
       // `then` keeps the handle from reading as a thenable; every `$` key is reserved for the
       // client's own statics (`$close` on a connected handle, future additions) — an unknown one
       // is `undefined`, never a service proxy
       if (key === 'then' || key.startsWith('$')) {
         return undefined
       }
+
       return serviceProxy(key)
     },
   }) as AnyType

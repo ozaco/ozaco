@@ -70,17 +70,21 @@ export const BunIO = IO.implement({
   *read(path) {
     const p = toPath(path)
     const buf = yield* fsCall(Bun.file(p).arrayBuffer())
+
     return new Uint8Array(buf)
   },
 
   *readText(path, encoding) {
     const p = toPath(path)
+
     // oxlint-disable-next-line unicorn/text-encoding-identifier-case
     if (encoding && encoding !== 'utf-8' && encoding !== 'utf8') {
       const buf = yield* fsCall(Bun.file(p).arrayBuffer())
       const decoder = new TextDecoder(encoding)
+
       return decoder.decode(buf)
     }
+
     return yield* fsCall(Bun.file(p).text())
   },
 
@@ -89,9 +93,12 @@ export const BunIO = IO.implement({
 
     if (!flags) {
       yield* fsCall(Bun.write(toPath(path), data))
+
       return
     }
+
     const flag = writeFlagOf(flags)
+
     yield* fsCall(fs.writeFile(toPath(path), data, { flag }))
   },
 
@@ -109,10 +116,12 @@ export const BunIO = IO.implement({
       // `Bun.file().exists()` is `false` for a directory: an existing DIRECTORY destination
       // bypasses this guard on Bun (NodeIO fails `IOErrors.Exists` via `fs.access`).
       const destExists = yield* fsCall(Bun.file(toPath(dest)).exists())
+
       if (destExists) {
         return yield* fail(IOErrors.Exists, `destination already exists: ${toPath(dest)}`)
       }
     }
+
     yield* fsCall(fs.rename(toPath(src), toPath(dest)))
   },
 
@@ -124,6 +133,7 @@ export const BunIO = IO.implement({
     // pinned by tests/io/node.test.ts.
     try {
       yield* fsCall(fs.access(toPath(path)))
+
       return true
     } catch {
       return false
@@ -133,10 +143,13 @@ export const BunIO = IO.implement({
   *ensureFile(path) {
     const p = toPath(path)
     const dir = dirname(p)
+
     yield* fsCall(fs.mkdir(dir, { recursive: true }))
+
     // `Bun.file(dir).exists()` is `false` for a directory, so `ensureFile('<dir>')` falls through
     // to `Bun.write` and fails on Bun, whereas NodeIO (`fs.access`) treats it as a no-op.
     const fileExists = yield* fsCall(Bun.file(p).exists())
+
     if (!fileExists) {
       yield* fsCall(Bun.write(p, ''))
     }

@@ -44,8 +44,10 @@ import { memoryExporter } from './traffic'
 /** One in-process request, its body read to the end. */
 function* request(path: string, init?: RequestInit): Operation<number> {
   const response = yield* Edge.actions.handle(new Request(`http://edge${path}`, init))
+
   yield* until(response.arrayBuffer())
   yield* sleep(5)
+
   return response.status
 }
 
@@ -62,14 +64,17 @@ const observe = async (
     await run(function* () {
       yield* storage()
       yield* DefaultLogger.use({ level: LogLevel.info })
+
       if (before) {
         yield* before()
       }
+
       const server = yield* createServer({
         ...options,
         plugins: [memory.plugin, ...(options.plugins ?? [])],
       })
       const info = yield* server.start({ port: 0 })
+
       yield* body(server, info.url ?? '')
       yield* sleep(30)
       yield* server.stop()
@@ -187,12 +192,14 @@ const cached = service('cached', {
       if (input.id === 'bad') {
         return yield* fail('cached.broken', 'cannot compute')
       }
+
       return { id: input.id }
     },
   ),
   bump: action.mutation({ invalidate: ['todos'] }, function* () {}),
   write: action.mutation({ input: z.object({ title: z.string() }) }, function* ({ input }) {
     const db = yield* useDb(testSchema)
+
     yield* db.insert('todos', { title: input.title, done: false })
   }),
 })
@@ -222,6 +229,7 @@ const cacheTraffic = () => {
           if (broken.on) {
             return yield* fail('test.kv-down', 'the kv store is down')
           }
+
           return yield* next(...args)
         },
       })
@@ -238,6 +246,7 @@ const resilienceTraffic = () => {
       { input: z.object({ ms: z.number() }), output: z.string(), timeoutMs: 40 },
       function* ({ input }) {
         yield* sleep(input.ms)
+
         return 'done'
       },
     ),
@@ -245,9 +254,11 @@ const resilienceTraffic = () => {
       { output: z.number(), retry: { times: 2, when: ['tough.down'], delayMs: 1 } },
       function* () {
         counters.flaky += 1
+
         if (counters.flaky < 3) {
           return yield* fail('tough.down', 'not yet')
         }
+
         return counters.flaky
       },
     ),
@@ -276,6 +287,7 @@ const resilienceTraffic = () => {
       { input: z.object({ ms: z.number() }), output: z.string(), bulkhead: { max: 1, queue: 2 } },
       function* ({ input }) {
         yield* sleep(input.ms)
+
         return 'ok'
       },
     ),
@@ -283,6 +295,7 @@ const resilienceTraffic = () => {
       { input: z.object({ k: z.string() }), output: z.number(), singleflight: true },
       function* () {
         yield* sleep(20)
+
         return 1
       },
     ),
@@ -329,6 +342,7 @@ const crudTraffic = () => {
     *error({ op, input }) {
       if (op === 'get') {
         const now = new Date().toISOString()
+
         return {
           _id: String((input as AnyType).id),
           _created_at: now,
@@ -366,6 +380,7 @@ const crudTraffic = () => {
     // realtime: a watch, then a push that fails
     const frames: AnyType[] = []
     const ws = new WebSocket(`${url.replace('http', 'ws')}/todos/_realtime`)
+
     ws.addEventListener('message', message => frames.push(JSON.parse(String(message.data))))
     yield* until(
       new Promise<void>(resolve => {
@@ -431,7 +446,9 @@ const vault = service('vault', {
     { input: z.object({ text: z.string() }), output: z.string() },
     function* ({ input }) {
       const { job } = yield* Queue.actions.enqueue('index', { text: input.text })
+
       yield* Queue.actions.enqueue('broken', { text: input.text }, { maxAttempts: 2 })
+
       return job._id
     },
   ),
@@ -459,7 +476,7 @@ const carrierTraffic = async (): Promise<ObserveDef.Event[]> => {
   const b = memoryExporter()
   const dead = () =>
     b.seen.some(
-      seen => seen.t === 'span' && seen.span.events.some(item => item.name === 'ozaco.queue.dead'),
+      seen => seen.t === 'span' && seen.span.events.some(item => item.name === 'queue.dead'),
     )
 
   unwrap(
@@ -494,11 +511,13 @@ const carrierTraffic = async (): Promise<ObserveDef.Event[]> => {
           yield* sleep(60_000)
         }),
       )
+
       yield* ready.next()
       yield* scoped(function* () {
         yield* storage()
         yield* MemoryTransport.use({ prefix: 'contract', link })
         yield* DefaultLogger.use({ level: LogLevel.info })
+
         const server = yield* createServer({
           services: [front],
           carrier: NetworkCarrier,
@@ -507,6 +526,7 @@ const carrierTraffic = async (): Promise<ObserveDef.Event[]> => {
           timeoutMs: 2000,
           plugins: [a.plugin],
         })
+
         yield* sleep(50)
         yield* server.call(front, 'put', { text: 'hello' })
         yield* attempt(server.call(front, 'kaput'))

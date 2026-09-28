@@ -6,5 +6,6 @@ import type { Operation } from '../types/operation'
 export const until = <T>(promise: Promise<T>): Operation<T> =>
   action<T>((resolve, reject) => {
     promise.then(resolve).catch(reject)
+
     return () => {}
   }, EffectCauses.Until)

@@ -12,6 +12,7 @@ export function ensure(fn: () => Operation<unknown> | void): Operation<void> {
       yield* provide()
     } finally {
       const result = fn()
+
       if (result && typeof result[Symbol.iterator] === 'function') {
         yield* result
       }

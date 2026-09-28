@@ -38,15 +38,21 @@ export const TableKv = Kv.implement<KvDef.Options, [options?: TableKvDef.Options
     if (!(yield* Codec.actions.hasCodec())) {
       yield* JsonCodec.use()
     }
+
     const prefix = options?.prefix ?? DEFAULT_KV_PREFIX
+
     if (!isValidKvPrefix(prefix)) {
       return yield* fail(KvErrors.Configuration, `invalid kv prefix "${prefix}"`)
     }
+
     const name = options?.table ?? '_kv'
+
     if (!TABLE_NAME.test(name)) {
       return yield* fail(KvErrors.Configuration, `invalid kv table name "${name}"`)
     }
+
     const adapter = yield* attempt(() => useContext(DbAdapter))
+
     if (isFailure(adapter)) {
       return yield* fail(
         KvErrors.Configuration,
@@ -54,6 +60,7 @@ export const TableKv = Kv.implement<KvDef.Options, [options?: TableKvDef.Options
         adapter,
       )
     }
+
     const entries = tableSpecOf(
       table(
         name,
@@ -75,13 +82,17 @@ export const TableKv = Kv.implement<KvDef.Options, [options?: TableKvDef.Options
         { kind: 'create-table', table: tags },
       ]),
     )
+
     if (isFailure(created)) {
       return yield* fail(KvErrors.Configuration, `cannot create kv tables "${name}"`, created)
     }
+
     yield* StateRef.set({ entries, tags, lock: createLock() })
+
     // the store's spans are its backing database's: same system, namespace and server — the
     // table is the collection
     const { system, namespace, address, port } = adapterIdentity(adapter.value)
+
     return {
       store: 'table',
       prefix,

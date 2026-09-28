@@ -46,12 +46,14 @@ const todoAt = (index: number) => ({
 
 mkdirSync(dirname(path), { recursive: true })
 console.log(`seeding ${count.toLocaleString()} todos into ${path}`)
+
 const startedAt = Date.now()
 
 unwrap(
   await run(function* () {
     yield* BunIO.use()
     yield* SqliteAdapter.use({ path })
+
     const db = yield* DbClient.use({ schema })
 
     for (let at = 0; at < count; at += BATCH) {
@@ -63,6 +65,7 @@ unwrap(
       if ((at + size) % 100_000 === 0 || at + size === count) {
         const seconds = (Date.now() - startedAt) / 1000
         const rate = Math.round((at + size) / seconds)
+
         console.log(
           `  ${(at + size).toLocaleString()} rows · ${seconds.toFixed(1)}s · ${rate.toLocaleString()}/s`,
         )
@@ -70,6 +73,7 @@ unwrap(
     }
 
     const page = yield* db.query('todos').paginate({ limit: 1, count: true })
+
     console.log(`done — the table now holds ${page.total?.toLocaleString()} todos`)
   }),
 )

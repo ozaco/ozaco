@@ -22,15 +22,20 @@ const JwtAuthImpl = AuthStrategy.implement<AuthDef.JwtContext, [options: AuthDef
         'JwtAuth needs options — plugins: [JwtAuth.use({ secret | keys, provider })], not [JwtAuth]',
       )
     }
+
     const mode = given.mode ?? 'session'
+
     if (mode === 'access-refresh') {
       const provider = given.provider
+
       if (!provider) {
         return yield* fail(ServerErrors.Configuration, 'auth: access-refresh mode needs a provider')
       }
+
       const missing = (
         ['saveRefresh', 'loadRefresh', 'rotateRefresh', 'revokeFamily'] as const
       ).filter(hook => typeof provider[hook] !== 'function')
+
       if (missing.length > 0) {
         return yield* fail(
           ServerErrors.Configuration,
@@ -38,6 +43,7 @@ const JwtAuthImpl = AuthStrategy.implement<AuthDef.JwtContext, [options: AuthDef
         )
       }
     }
+
     return {
       strategy: 'jwt',
       mode,
@@ -63,9 +69,11 @@ export const JwtAuth = JwtAuthImpl.build({
   *verify(token: string) {
     const context = yield* JwtAuthImpl.context.expect()
     const verified = yield* verify(context.material, token)
+
     if (!verified) {
       return undefined
     }
+
     if (verified.type === 'refresh') {
       return yield* fail(
         ServerErrors.Unauthorized,
@@ -73,49 +81,65 @@ export const JwtAuth = JwtAuthImpl.build({
         AuthErrors.InvalidToken,
       )
     }
+
     const { family: _family, exp: _exp, ...principal } = verified
+
     return principal
   },
 
   *login(credentials: Record<string, unknown>) {
     const context = yield* JwtAuthImpl.context.expect()
+
     if (!context.provider) {
       return undefined
     }
+
     const user = yield* context.provider.authenticate(credentials)
+
     if (!user) {
       return yield* fail(ServerErrors.Unauthorized, 'bad credentials', AuthErrors.BadCredentials)
     }
+
     return yield* tokensFor(context, user, yield* IO.actions.uuid())
   },
 
   *refresh(refreshToken: string) {
     const context = yield* JwtAuthImpl.context.expect()
     const { provider } = context
+
     if (context.mode !== 'access-refresh' || !provider) {
       return undefined
     }
+
     const verified = yield* verify(context.material, refreshToken)
+
     if (!verified) {
       return undefined
     }
+
     if (verified.type !== 'refresh' || !verified.family) {
       return yield* fail(ServerErrors.Unauthorized, 'not a refresh token', AuthErrors.InvalidToken)
     }
+
     const record = yield* provider.loadRefresh!(verified.jti)
+
     if (!record || record.revoked || record.expiresAt < Date.now()) {
       // a consumed token presented again: someone else has it — burn the whole family
       yield* provider.revokeFamily!(verified.family)
+
       return yield* fail(
         ServerErrors.Unauthorized,
         'refresh token replayed or revoked',
         AuthErrors.Replayed,
       )
     }
+
     const user = yield* provider.loadUser(verified.sub)
+
     if (!user) {
       return yield* fail(ServerErrors.Unauthorized, 'unknown user', AuthErrors.InvalidToken)
     }
+
     const nextJti = yield* IO.actions.uuid()
     const next: AuthDef.RefreshRecord = {
       jti: nextJti,
@@ -125,16 +149,20 @@ export const JwtAuth = JwtAuthImpl.build({
       revoked: false,
     }
     const rotated = yield* provider.rotateRefresh!(verified.jti, next)
+
     if (!rotated) {
       yield* provider.revokeFamily!(verified.family)
+
       return yield* fail(ServerErrors.Unauthorized, 'refresh token replayed', AuthErrors.Replayed)
     }
+
     const base = {
       sub: user.sub,
       roles: user.roles ?? [],
       permissions: user.permissions ?? [],
       claims: user.claims ?? {},
     }
+
     return {
       accessToken: yield* sign(
         context.material,
@@ -152,6 +180,7 @@ export const JwtAuth = JwtAuthImpl.build({
 
   *signService(name: string, roles: readonly string[] = []) {
     const context = yield* JwtAuthImpl.context.expect()
+
     return yield* sign(
       context.material,
       {

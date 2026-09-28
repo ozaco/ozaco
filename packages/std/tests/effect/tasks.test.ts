@@ -22,8 +22,10 @@ describe('task value contract', () => {
     const awaited = await run(function* () {
       const task = yield* spawn(function* () {
         yield* sleep(1)
+
         return 'child'
       })
+
       return yield* task
     })
 
@@ -54,6 +56,7 @@ describe('structured concurrency: task trees', () => {
 
       yield* sleep(1)
       order.push('root')
+
       return 'done'
     })
 
@@ -69,8 +72,10 @@ describe('structured concurrency: task trees', () => {
       yield* spawn(function* () {
         yield* spawn(function* () {
           yield* sleep(1)
+
           throw new Error('grandchild boom')
         })
+
         try {
           yield* suspend()
         } finally {
@@ -87,6 +92,7 @@ describe('structured concurrency: task trees', () => {
       })
 
       yield* sleep(100)
+
       return 'unreachable'
     })
 
@@ -113,6 +119,7 @@ describe('structured concurrency: task trees', () => {
     const finished = run(function* () {
       return 'ok'
     })
+
     expect(unwrap(await finished)).toBe('ok')
     await finished.halt()
     expect(unwrap(await finished)).toBe('ok')
@@ -127,6 +134,7 @@ describe('structured concurrency: task trees', () => {
       yield* task.halt()
 
       let raised: unknown
+
       try {
         yield* task
       } catch (error) {
@@ -155,6 +163,7 @@ describe('structured concurrency: task trees', () => {
       })
 
       order.push('after-scoped')
+
       return order.slice()
     })
 
@@ -173,10 +182,12 @@ describe('structured concurrency: task trees', () => {
             order.push('encapsulated-teardown')
           }
         })
+
         return 'inner'
       })
 
       order.push('outer-continues')
+
       return inner
     })
 
@@ -193,6 +204,7 @@ describe('spawn vs fork: start semantics', () => {
       yield* scoped(function* () {
         yield* spawn(function* () {
           order.push('started')
+
           try {
             yield* suspend()
           } finally {
@@ -220,6 +232,7 @@ describe('spawn vs fork: start semantics', () => {
       })
 
       order.push('after-fork')
+
       return order.slice()
     })
 
@@ -235,6 +248,7 @@ describe('race', () => {
       return yield* race([
         (function* () {
           yield* sleep(1)
+
           throw new Error('fast boom')
         })(),
         (function* () {
@@ -243,6 +257,7 @@ describe('race', () => {
           } finally {
             loserTeardown = true
           }
+
           return 'slow'
         })(),
       ])
@@ -257,10 +272,12 @@ describe('race', () => {
       const inner = race([
         (function* () {
           yield* sleep(1)
+
           return 'inner-fast'
         })(),
         (function* () {
           yield* sleep(50)
+
           return 'inner-slow'
         })(),
       ])
@@ -269,6 +286,7 @@ describe('race', () => {
         inner,
         (function* () {
           yield* sleep(100)
+
           return 'outer-slow'
         })(),
       ])
@@ -284,10 +302,12 @@ describe('all / allSettled under load', () => {
       return yield* all([
         (function* () {
           yield* sleep(5)
+
           return 'a'
         })(),
         (function* () {
           yield* sleep(1)
+
           return 'b'
         })(),
         (function* () {
@@ -313,6 +333,7 @@ describe('all / allSettled under load', () => {
         })(),
         (function* () {
           yield* sleep(1)
+
           throw new Error('member boom')
         })(),
         (function* () {
@@ -343,6 +364,7 @@ describe('all / allSettled under load', () => {
         })(),
         (function* () {
           yield* sleep(2)
+
           return 'slow-ok'
         })(),
       ])
@@ -362,6 +384,7 @@ describe('withResolvers', () => {
   it('the first settle wins; later settles are ignored', async () => {
     const outcome = await run(function* () {
       const gate = withResolvers<number>()
+
       gate.resolve(1)
       gate.resolve(2)
       gate.reject(new Error('late reject'))
@@ -398,6 +421,7 @@ describe('withResolvers', () => {
   it('reject raises at every yield site', async () => {
     const outcome = await run(function* () {
       const gate = withResolvers<string>()
+
       gate.reject(new Error('nope'))
 
       return yield* gate.operation

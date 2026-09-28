@@ -24,9 +24,11 @@ describe('signal fan-out', () => {
       signal.send(0) // nobody is listening yet — dropped
 
       const first = yield* signal
+
       signal.send(1)
 
       const second = yield* signal
+
       signal.send(2)
 
       const firstSeen = [(yield* first.next()).value, (yield* first.next()).value]
@@ -46,6 +48,7 @@ describe('signal fan-out', () => {
 
       yield* scoped(function* () {
         const inner = yield* signal
+
         signal.send(1)
         expect((yield* inner.next()).value).toBe(1)
       })
@@ -92,6 +95,7 @@ describe('channel + each pipelines', () => {
           seen.push(value)
           yield* each.next()
         }
+
         done.resolve(seen)
       })
 
@@ -110,6 +114,7 @@ describe('channel + each pipelines', () => {
   it('nested each loops keep their own cursors', async () => {
     const outcome = await run(function* () {
       const outerQueue = createQueue<string, void>()
+
       outerQueue.add('a')
       outerQueue.add('b')
       outerQueue.close()
@@ -118,6 +123,7 @@ describe('channel + each pipelines', () => {
 
       for (const outer of yield* each(constant(outerQueue))) {
         const innerQueue = createQueue<number, void>()
+
         innerQueue.add(1)
         innerQueue.add(2)
         innerQueue.close()
@@ -139,6 +145,7 @@ describe('channel + each pipelines', () => {
   it('continuing an each loop without each.next() raises iteration-error', async () => {
     const outcome = await run(function* () {
       const queue = createQueue<number, void>()
+
       queue.add(1)
       queue.add(2)
       queue.close()
@@ -152,6 +159,7 @@ describe('channel + each pipelines', () => {
     })
 
     expect(isFailure(outcome)).toBe(true)
+
     if (isFailure(outcome)) {
       expect(String(outcome.error)).toContain('std:effect.iteration-error')
     }
@@ -160,17 +168,21 @@ describe('channel + each pipelines', () => {
   it('breaking out of each closes the loop; the subscription can be resumed manually afterwards', async () => {
     const outcome = await run(function* () {
       const queue = createQueue<number, void>()
+
       queue.add(1)
       queue.add(2)
       queue.add(3)
       queue.close()
 
       const seen: number[] = []
+
       for (const value of yield* each(constant(queue))) {
         seen.push(value)
+
         if (value === 2) {
           break
         }
+
         yield* each.next()
       }
 
@@ -185,6 +197,7 @@ describe('queue', () => {
   it('buffers ahead of the consumer and reports the close value once drained', async () => {
     const outcome = await run(function* () {
       const queue = createQueue<number, string>()
+
       queue.add(1)
       queue.add(2)
       queue.close('end')
@@ -227,6 +240,7 @@ describe('event interop', () => {
 
       yield* spawn(function* () {
         const event = yield* once(target, 'ping')
+
         got.resolve(event.type)
       })
 

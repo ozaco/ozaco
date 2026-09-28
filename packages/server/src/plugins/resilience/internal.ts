@@ -9,7 +9,7 @@ import type { Result } from 'std:result'
 import { fail, isFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
 import type { TraceDef } from 'std:trace'
-import { emitLog, isValidContext, span, startSpan, TraceSeverity } from 'std:trace'
+import { Trace, TraceSeverity } from 'std:trace'
 
 import { z } from 'zod'
 
@@ -28,7 +28,7 @@ const ATTEMPT_SPAN = 'resilience.attempt'
 const WAIT_SPAN = 'resilience.bulkhead.wait'
 
 /** A circuit's state change (≤ 20 chars). */
-const BREAKER_EVENT = 'ozaco.breaker'
+const BREAKER_EVENT = 'breaker'
 
 export const options = {
   timeoutMs: z.number().positive(),
@@ -85,6 +85,7 @@ export function* withTimeout(
     })(),
     (function* () {
       yield* sleep(ms)
+
       return { timeout: true as const }
     })(),
   ])
@@ -132,17 +133,24 @@ export function* withRetry(
 
   for (let round = 1; ; round += 1) {
     const delayMs = (retry.delayMs ?? 100) * 2 ** (round - 1)
+
     yield* sleep(delayMs)
 
-    const outcome = yield* span(
-      ATTEMPT_SPAN,
-      {
-        scope: RESILIENCE_SCOPE,
-        attributes: { 'ozaco.resilience.attempt': round + 1, 'ozaco.resilience.delay_ms': delayMs },
-        failure: dispatchFailure(call, ctx.meta),
-      },
-      // a returned Failure fails the span (held until it settles) without raising
-      () => attempt(next),
+    // a returned Failure fails the span (held until it settles); the runtime raises it, the outer
+    // `attempt` hands it back as a value
+    const outcome = yield* attempt(() =>
+      Trace.actions.span(
+        ATTEMPT_SPAN,
+        {
+          scope: RESILIENCE_SCOPE,
+          attributes: {
+            'ozaco.resilience.attempt': round + 1,
+            'ozaco.resilience.delay_ms': delayMs,
+          },
+          failure: dispatchFailure(call, ctx.meta),
+        },
+        () => attempt(next),
+      ),
     )
 
     if (!isFailure(outcome)) {
@@ -167,13 +175,17 @@ export const primary = ({
   ctx,
   next,
 }: Pick<ResilienceDef.Step, 'call' | 'ctx' | 'next'>): Operation<Result<unknown>> =>
-  span(ATTEMPT_SPAN, { scope: RESILIENCE_SCOPE, failure: dispatchFailure(call, ctx.meta) }, () =>
-    attempt(next),
+  attempt(() =>
+    Trace.actions.span(
+      ATTEMPT_SPAN,
+      { scope: RESILIENCE_SCOPE, failure: dispatchFailure(call, ctx.meta) },
+      () => attempt(next),
+    ),
   )
 
 // --- breaker ----------------------------------------------------------------------------------
 
-/** A circuit's state change: an `ozaco.breaker` event on the DISPATCH span AND its record (WARN
+/** A circuit's state change: an `breaker` event on the DISPATCH span AND its record (WARN
  * when it opens, correlated to that span) — the record under the plugin's own scope
  * (`@ozaco/server/resilience`), not the dispatch's. */
 function* transition(
@@ -187,14 +199,14 @@ function* transition(
   }
 
   dispatch.addEvent(BREAKER_EVENT, attributes)
-  yield* emitLog({
+  yield* Trace.actions.emitLog({
     body: `${key}: circuit ${previous} → ${state}`,
     severityNumber: state === 'open' ? TraceSeverity.warn : TraceSeverity.info,
     eventName: BREAKER_EVENT,
     attributes,
     scope: RESILIENCE_SCOPE,
     // no dispatch span (a no-op handle): the record goes where the active span is
-    context: isValidContext(dispatch.context) ? dispatch.context : undefined,
+    context: dispatch.valid ? dispatch.context : undefined,
   })
 }
 
@@ -204,7 +216,7 @@ function* transition(
  * calls fail fast (`server.unavailable`) and LINK the span of the call that tripped it
  * (`breaker.trip`); after `halfOpenMs` one trial call probes it (success closes it, a counted
  * failure re-opens it, a halted / uncounted trial frees the slot for the next probe). Every
- * change of state is an `ozaco.breaker` event.
+ * change of state is an `breaker` event.
  */
 export function* withBreaker(
   breaker: ResilienceDef.Breaker,
@@ -217,7 +229,9 @@ export function* withBreaker(
     trial: false,
     trippedBy: null,
   }
+
   state.breakers.set(key, circuit)
+
   const halfOpenMs = breaker.halfOpenMs ?? 10_000
   const probing = circuit.openedAt !== null
 
@@ -241,10 +255,12 @@ export function* withBreaker(
     }
 
     const outcome = yield* attempt(next)
+
     settled = true
 
     if (!isFailure(outcome)) {
       const previous = probing ? 'half_open' : circuit.openedAt === null ? null : 'open'
+
       circuit.failures = 0
       circuit.openedAt = null
       circuit.trial = false
@@ -267,6 +283,7 @@ export function* withBreaker(
     }
 
     circuit.failures += 1
+
     const previous = probing ? 'half_open' : circuit.openedAt === null ? 'closed' : null
 
     if (previous && (probing || circuit.failures >= breaker.failures)) {
@@ -299,7 +316,9 @@ export function* withBulkhead(
 ): Operation<unknown> {
   const key = keyOf(call)
   const slot = state.bulkheads.get(key) ?? { semaphore: createSemaphore(bulkhead.max), queued: 0 }
+
   state.bulkheads.set(key, slot)
+
   const { semaphore } = slot
 
   // a free slot and nobody ahead: `run` takes it without parking
@@ -313,6 +332,7 @@ export function* withBulkhead(
 
   // queued from HERE (synchronously — opening the span yields) until a slot is granted
   slot.queued += 1
+
   let queued = true
   const leave = (): void => {
     if (queued) {
@@ -323,12 +343,14 @@ export function* withBulkhead(
   let wait: TraceDef.LiveSpan | null = null
 
   try {
-    const waiting = yield* startSpan(WAIT_SPAN, { scope: RESILIENCE_SCOPE })
+    const waiting = yield* Trace.actions.startSpan(WAIT_SPAN, { scope: RESILIENCE_SCOPE })
+
     wait = waiting
 
     return yield* semaphore.run(function* () {
       leave()
       yield* waiting.end()
+
       return yield* next()
     })
   } finally {
@@ -376,7 +398,9 @@ export function* withSingleflight({
 
   const settled = withResolvers<Result<unknown> | null>('singleflight')
   const flight: ResilienceDef.Flight = { outcome: settled.operation, leader: linkable(dispatch) }
+
   state.inflight.set(key, flight)
+
   let outcome: Result<unknown> | null = null
 
   try {
@@ -416,6 +440,7 @@ export function* withRateLimit(
 
   if (isFailure(yield* attempt(() => useContext(Kv)))) {
     const local = state.counters.get(key) ?? { count: 0, window }
+
     local.count += 1
     state.counters.set(key, local)
     count = local.count

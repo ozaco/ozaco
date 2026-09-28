@@ -41,6 +41,7 @@ const writeBody = async (file: Helpers.S3NativeFile, data: IODef.S3Body): Promis
     while (true) {
       // oxlint-disable-next-line no-await-in-loop -- sequential by design: one chunk in memory at a time
       const { done, value } = await reader.read()
+
       if (done) {
         break
       }

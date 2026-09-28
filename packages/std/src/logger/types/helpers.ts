@@ -15,8 +15,6 @@ export namespace Helpers {
   export interface PayloadWalk {
     readonly failures: Result.Failure<unknown>[]
     readonly path: WeakSet<object>
-    /** Each `Error` payload's fold, so one `Error` logged twice is one failure. */
-    readonly folds: WeakMap<object, Result.Failure<unknown>>
   }
 
   export interface NormalizedPayload {

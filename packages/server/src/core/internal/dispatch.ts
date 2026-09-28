@@ -6,7 +6,7 @@ import type { Result } from 'std:result'
 import { appendCauses, fail, isFailure, isResult } from 'std:result'
 import type { AnyType } from 'std:shared'
 import type { TraceDef } from 'std:trace'
-import { current, event, inject, newSpanId } from 'std:trace'
+import { Trace } from 'std:trace'
 
 import { ActiveRequest, CtxRef, RequestRef } from '../context'
 import { ServerErrors } from '../errors'
@@ -72,7 +72,7 @@ function* contextOf({
   actions,
   auth,
 }: Helpers.ContextInput): Operation<ServerDef.Ctx> {
-  const trace = traceOf(yield* current(), call.requestId)
+  const trace = traceOf(yield* Trace.actions.current(), call.requestId)
 
   const log = (level: keyof ServerDef.Log) => (msg: string, data?: Record<string, unknown>) =>
     handlerLog(level, msg, data)
@@ -116,7 +116,8 @@ function* contextOf({
       call.reply?.(reply)
     },
     span: userSpanOf(kernel),
-    event: (name, attributes, options) => event(name, attributes, { time: options?.time }),
+    event: (name, attributes, options) =>
+      Trace.actions.event(name, attributes, { time: options?.time }),
   }
 }
 
@@ -158,7 +159,7 @@ export function* contextFor(
   return yield* contextOf({
     kernel,
     call: {
-      cid: yield* newSpanId(),
+      cid: yield* Trace.actions.newSpanId(),
       service: input.service ?? '$edge',
       action: input.name,
       input: undefined,
@@ -229,6 +230,7 @@ const invoke = (kernel: ServerDef.Context, def: ServiceDef.Action) =>
     }
 
     const outcome = 'outcome' in winner ? winner.outcome : yield* task
+
     settled = true
 
     if (isFailure(outcome)) {
@@ -330,7 +332,7 @@ function* writing<T>(handle: TraceDef.SpanHandle, body: () => Operation<T>): Ope
     return yield* body()
   }
 
-  const carrier = yield* inject()
+  const carrier = yield* Trace.actions.inject()
 
   return yield* carrier.traceparent ? withBusMeta({ ...carrier }, body) : body()
 }
@@ -377,6 +379,7 @@ export function* runDispatch(
     : call
 
   kernel.inflight += 1
+
   // the id of the span the dispatch runs in (its own, else a passed-through context's) for the
   // breadcrumb — `''`, left out, when there is none
   let spanId = ''
@@ -388,9 +391,11 @@ export function* runDispatch(
         withInbound(call.parent, () =>
           withDispatchSpan({ kernel, call, meta: def.meta, kind }, function* (handle) {
             spanId = traceOf(handle, call.requestId).spanId
+
             if (seen) {
               seen.spanId = spanId
             }
+
             const ctx = yield* contextOf({ kernel, call: served, meta: def.meta, actions })
             const outcome = yield* attempt(() => writing(handle, () => chain(served, ctx)))
 
@@ -474,6 +479,7 @@ export function* callLocal(local: Helpers.LocalCall): Operation<unknown> {
       controller.abort(ServerErrors.Cancelled)
     }
   })
+
   const state = { timedOut: false }
   // the span the dispatch runs in, known once it opened — the `local` breadcrumb's
   const seen = { spanId: '' }
@@ -482,6 +488,7 @@ export function* callLocal(local: Helpers.LocalCall): Operation<unknown> {
   // detached handler outlive the caller's patience and record its outcome
   const task = yield* fork(function* () {
     const outcome = yield* runDispatch(kernel, call, { actions: local.actions, seen })
+
     if (state.timedOut) {
       yield* local.actions.outcome({
         cid,
@@ -492,6 +499,7 @@ export function* callLocal(local: Helpers.LocalCall): Operation<unknown> {
         ts: Date.now(),
       })
     }
+
     return outcome
   })
 
@@ -501,6 +509,7 @@ export function* callLocal(local: Helpers.LocalCall): Operation<unknown> {
     })(),
     (function* () {
       yield* sleep(local.timeoutMs)
+
       return { timeout: true as const }
     })(),
   ])

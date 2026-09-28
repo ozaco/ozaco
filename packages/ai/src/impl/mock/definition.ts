@@ -41,7 +41,9 @@ export const MockProvider = AiProvider.implement<MockInfo, [script?: MockScript]
       cursors: new Map(),
       calls: { chat: [], chatStream: [], embed: [], tts: [], ttsStream: [], stt: [] },
     }
+
     yield* StateRef.set(state)
+
     return {
       provider: 'mock',
       capabilities: { ...FULL, ...script?.capabilities },
@@ -51,7 +53,9 @@ export const MockProvider = AiProvider.implement<MockInfo, [script?: MockScript]
 }).build({
   *chat(spec: Helpers.ChatSpec) {
     const state = yield* useContext(StateRef)
+
     state.calls.chat.push(spec)
+
     const partial = yield* resolveResponder({
       state,
       key: 'chat',
@@ -59,12 +63,15 @@ export const MockProvider = AiProvider.implement<MockInfo, [script?: MockScript]
       responder: state.script.chat,
       fallback: {},
     })
+
     return completeChatResult(spec, partial)
   },
 
   *chatStream(spec: Helpers.ChatSpec) {
     const state = yield* useContext(StateRef)
+
     state.calls.chatStream.push(spec)
+
     const script = yield* resolveResponder({
       state,
       key: 'chatStream',
@@ -72,12 +79,15 @@ export const MockProvider = AiProvider.implement<MockInfo, [script?: MockScript]
       responder: state.script.chatStream,
       fallback: { chunks: [] },
     })
+
     return scriptedFlow(script)
   },
 
   *embed(spec: Helpers.EmbedSpec) {
     const state = yield* useContext(StateRef)
+
     state.calls.embed.push(spec)
+
     const vectors = yield* resolveResponder({
       state,
       key: 'embed',
@@ -85,12 +95,15 @@ export const MockProvider = AiProvider.implement<MockInfo, [script?: MockScript]
       responder: state.script.embed,
       fallback: spec.input.map(() => [0]),
     })
+
     return { vectors, model: spec.model, usage: undefined }
   },
 
   *tts(spec: Helpers.SpeechSpec) {
     const state = yield* useContext(StateRef)
+
     state.calls.tts.push(spec)
+
     return yield* resolveResponder({
       state,
       key: 'tts',
@@ -102,7 +115,9 @@ export const MockProvider = AiProvider.implement<MockInfo, [script?: MockScript]
 
   *ttsStream(spec: Helpers.SpeechSpec) {
     const state = yield* useContext(StateRef)
+
     state.calls.ttsStream.push(spec)
+
     const script = yield* resolveResponder({
       state,
       key: 'ttsStream',
@@ -110,12 +125,15 @@ export const MockProvider = AiProvider.implement<MockInfo, [script?: MockScript]
       responder: state.script.ttsStream,
       fallback: { chunks: [] },
     })
+
     return scriptedFlow(script)
   },
 
   *stt(spec: Helpers.TranscribeSpec) {
     const state = yield* useContext(StateRef)
+
     state.calls.stt.push(spec)
+
     return yield* resolveResponder({
       state,
       key: 'stt',

@@ -18,19 +18,7 @@ import type { Result } from 'std:result'
 import { fail, isFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
 import type { TraceDef } from 'std:trace'
-import {
-  ActiveSpan,
-  current,
-  extract,
-  isRecorded,
-  isTracing,
-  isValidContext,
-  recordFailure,
-  settle,
-  span,
-  traceparentOf,
-  TraceSeverity,
-} from 'std:trace'
+import { Trace, TraceSeverity } from 'std:trace'
 
 import { z } from 'zod'
 
@@ -45,7 +33,7 @@ import type { ResourceDef } from '../types/resource'
 const CRUD_SCOPE = traceScopeOf('crud')
 
 /** The span event of a hook that REPLACED what flowed through it. */
-const HOOK_EVENT = 'ozaco.crud.hook'
+const HOOK_EVENT = 'crud.hook'
 
 /** How a crud op span classifies a failure escaping it — like the action it runs in: the server's
  * status table and tags (the dispatch span's own classifier, with the action's `errors`, wins). */
@@ -72,7 +60,7 @@ const WRITER_RING = 64
 const CATCH_UP_TURNS = 16
 
 /** A hook REPLACED what flowed through it (`before`/`around` the input, `after`/`around` the
- * output, `error` the failure): `ozaco.crud.hook` on the op's span `at` (a built-in's DISPATCH
+ * output, `error` the failure): `crud.hook` on the op's span `at` (a built-in's DISPATCH
  * span, a watch's own span). */
 const hookEvent = (
   at: TraceDef.SpanHandle,
@@ -84,16 +72,30 @@ const hookEvent = (
 /** Whether `outer` carries `inner` among its nested causes, at any depth (each failure walked
  * once — a cyclic chain ends). */
 const wraps = (outer: Result.Failure<unknown>, inner: Result.Failure<unknown>): boolean => {
-  const seen = new Set<Result.Failure<unknown>>()
-  const walk = (at: Result.Failure<unknown>): boolean => {
-    seen.add(at)
+  const seen = new Set<Result.Failure<unknown>>([outer])
+  // an explicit stack, not recursion: a chain of any depth never overflows the call stack
+  const stack: Result.Failure<unknown>[] = [outer]
 
-    return at.causes.some(
-      cause => typeof cause !== 'string' && (cause === inner || (!seen.has(cause) && walk(cause))),
-    )
+  while (stack.length > 0) {
+    const at = stack.pop() as Result.Failure<unknown>
+
+    for (const cause of at.causes) {
+      if (typeof cause === 'string') {
+        continue
+      }
+
+      if (cause === inner) {
+        return true
+      }
+
+      if (!seen.has(cause)) {
+        seen.add(cause)
+        stack.push(cause)
+      }
+    }
   }
 
-  return walk(outer)
+  return false
 }
 
 /** An `error` hook replaced `original` with `replacement`: the hook event — and, when the
@@ -278,6 +280,7 @@ export const cursorOf = (value: unknown): string | undefined =>
 
 export const ifMatch = (headers: Readonly<Record<string, string>>): string | undefined => {
   const header = headers['if-match']
+
   return header ? header.replaceAll('"', '') : undefined
 }
 
@@ -299,6 +302,7 @@ function* guardFilterOps(
         for (const inner of node.filters) {
           yield* walk(inner)
         }
+
         return
       }
 
@@ -397,7 +401,7 @@ export const resolveSchemas = (
  *
  * Telemetry lands on the DISPATCH span (the built-in's op — `dispatchSpan()`, even under a
  * plugin span wrapping the chain, such as a cache span): a hook that REPLACES the input, the
- * output or the failure adds `ozaco.crud.hook` (`ozaco.crud.hook.phase`); an `error` hook that
+ * output or the failure adds `crud.hook` (`ozaco.crud.hook.phase`); an `error` hook that
  * RECOVERS sets `ozaco.crud.recovered` and records the failure it swallowed (handled, WARN) — as
  * does one that replaces it with an UNRELATED failure (a wrap keeps it as a nested cause).
  */
@@ -454,7 +458,9 @@ export const hooked = <
     let inner: { readonly input: AnyType; readonly output: AnyType } | null = null
     const output = yield* around({ op, input, ctx } as AnyType, function* (value: AnyType) {
       const result = yield* chain(at, value, ctx)
+
       inner = { input: value, output: result }
+
       return result
     })
     const seen = inner as { readonly input: AnyType; readonly output: AnyType } | null
@@ -599,10 +605,12 @@ const looseDb = (): Operation<Helpers.LooseDb> => useDb() as Operation<Helpers.L
 function* opEnv(options: ResourceDef.OpOptions): Operation<Helpers.OpEnv> {
   if (options.db) {
     const ctx = options.ctx ?? (yield* CtxRef.get()) ?? null
+
     return { db: options.db, headers: ctx?.headers ?? {} }
   }
 
   const ctx = yield* opCtx(options.ctx)
+
   return { db: yield* looseDb(), headers: ctx.headers }
 }
 
@@ -617,7 +625,7 @@ function* runnable<T>(
 ): Operation<T> {
   const env = yield* opEnv(call.options)
 
-  return yield* span(
+  return yield* Trace.actions.span(
     `crud.${call.op} ${call.table.name}`,
     {
       kind: 'internal',
@@ -756,6 +764,7 @@ function* createIn(
   options: ResourceDef.CreateOp,
 ): Operation<AnyType> {
   const pins = yield* stampOf(options.scope)
+
   return yield* env.db.insert(table.name, { ...(options.value as object), ...pins } as AnyType)
 }
 
@@ -959,8 +968,9 @@ export const guardHandshake = (resource: ResourceDef.RealtimeSource) =>
 
 /** The writer of one change: the span its write ran under (`Change.Event.meta` — a dispatch
  * ships its span as bus meta while it records). */
-const writerOf = (event: Change.Event): TraceDef.SpanContext | null =>
-  event.meta ? extract(name => event.meta?.[name] ?? null) : null
+function* writerOf(event: Change.Event): Operation<TraceDef.SpanContext | null> {
+  return event.meta ? yield* Trace.actions.extract(name => event.meta?.[name] ?? null) : null
+}
 
 const linkOf = (context: TraceDef.SpanContext, reason: string): TraceDef.LinkInput => ({
   context,
@@ -970,6 +980,7 @@ const linkOf = (context: TraceDef.SpanContext, reason: string): TraceDef.LinkInp
 /** The same span once (a transaction's writes share their writer), the latest `MAX_WRITER_LINKS`. */
 const distinct = (contexts: readonly TraceDef.SpanContext[]): TraceDef.SpanContext[] => {
   const byId = new Map(contexts.map(context => [context.spanId, context]))
+
   return [...byId.values()].slice(-MAX_WRITER_LINKS)
 }
 
@@ -1011,7 +1022,8 @@ function* writerFeed(table: string): Operation<Helpers.Writers> {
         return
       }
 
-      const writer = writerOf(step.value)
+      const writer = yield* writerOf(step.value)
+
       seen = step.value.token > seen ? step.value.token : seen
 
       if (writer) {
@@ -1035,7 +1047,9 @@ function* writerFeed(table: string): Operation<Helpers.Writers> {
     const taken = ring.filter(
       entry => entry.token <= token && (entry.id === '' || rows.has(entry.id)),
     )
+
     ring.splice(0, ring.length, ...ring.filter(entry => entry.token > token))
+
     return distinct(taken.map(entry => entry.writer))
   }
 }
@@ -1097,7 +1111,7 @@ export function* watch(
       if (replaced !== undefined) {
         frame = { ...(replaced as AnyType), t: out.t, id: out.id } as ResourceDef.ServerFrame
         // the span sending it: the watch span (the initial sync) or a push's root
-        hookEvent(yield* current(), 'after')
+        hookEvent(yield* Trace.actions.current(), 'after')
       }
     }
 
@@ -1110,7 +1124,7 @@ export function* watch(
   let shaped: Helpers.Shaped | null = null
 
   const shape = function* (failure: Result.Failure<unknown>): Operation<Helpers.Shaped> {
-    const at = yield* current()
+    const at = yield* Trace.actions.current()
     let final = failure
 
     if (hooks.error) {
@@ -1127,6 +1141,7 @@ export function* watch(
     }
 
     shaped = { failure: final, at }
+
     return shaped
   }
 
@@ -1178,11 +1193,12 @@ export function* watch(
   const outcome = yield* attempt(function* () {
     let watching: TraceDef.SpanContext | null = null
 
-    const live = yield* span(
+    const live = yield* Trace.actions.span(
       `watch ${table}`,
       { kind: 'internal', scope: CRUD_SCOPE, service, failure: WATCH_FAILURE },
       function* (handle) {
         watching = handle.recording ? handle.context : null
+
         return yield* shaping(() => subscribe(handle))
       },
     )
@@ -1192,7 +1208,7 @@ export function* watch(
     const push: Helpers.Push = (writers, body) => {
       const watched = watching as TraceDef.SpanContext | null
 
-      return span(
+      return Trace.actions.span(
         `crud.delta ${table}`,
         {
           kind: 'internal',
@@ -1211,7 +1227,7 @@ export function* watch(
     }
 
     // the live phase belongs to no request: each push is a root of its own
-    yield* ActiveSpan.with(null, () => live(push))
+    yield* Trace.actions.detached(() => live(push))
   })
 
   if (!isFailure(outcome)) {
@@ -1223,18 +1239,18 @@ export function* watch(
 
   // a subscribe failure may still wait on the frame span that asked for it: settle it now, as the
   // ERROR it is (a no-op once it settled — a push is a root, it settles as it ends)
-  yield* settle(failure, { status: 500 })
+  yield* Trace.actions.settle(failure, { status: 500 })
 
   // nothing records here (tracing off): the process fallback sink (if any) gets it
-  if (!(yield* isTracing())) {
-    yield* recordFailure(failure, { severity: TraceSeverity.error })
+  if (!(yield* Trace.actions.isTracing())) {
+    yield* Trace.actions.recordFailure(failure, { severity: TraceSeverity.error })
   }
 
   // the span it failed in, once the failure is recorded in that span's trace: a subscriber whose
   // watch went out in that trace records nothing of its own
   const recorded =
-    isValidContext(recorder.context) && isRecorded(failure, recorder.context.traceId)
-      ? traceparentOf(recorder.context)
+    recorder.valid && (yield* Trace.actions.isRecorded(failure, recorder.context.traceId))
+      ? (yield* Trace.actions.inject({ context: recorder.context })).traceparent
       : undefined
 
   yield* attempt(() =>
@@ -1256,7 +1272,7 @@ export function* watch(
  * current has none — its first emission may be a live diff — so everything it emits is live.
  */
 function* deltas({ frame, query, send, resource }: Helpers.WatchArgs): Operation<Helpers.Live> {
-  const writers = (yield* isTracing()) ? yield* writerFeed(resource.table.name) : null
+  const writers = (yield* Trace.actions.isTracing()) ? yield* writerFeed(resource.table.name) : null
   const flow = yield* (query as AnyType).watch({ mode: 'delta', since: frame.since })
 
   const emit = function* (delta: AnyType): Operation<void> {
@@ -1264,6 +1280,7 @@ function* deltas({ frame, query, send, resource }: Helpers.WatchArgs): Operation
     // the first emission is a LIVE diff that must go out as a delta, not swallow the sync
     if (delta.baseline === true) {
       yield* send({ t: 'sync', id: frame.id, rows: delta.added, token: delta.token })
+
       return
     }
 
@@ -1301,6 +1318,7 @@ function* deltas({ frame, query, send, resource }: Helpers.WatchArgs): Operation
 
       if (isFailure(step)) {
         yield* push([], () => step)
+
         return
       }
 
@@ -1314,6 +1332,7 @@ function* deltas({ frame, query, send, resource }: Helpers.WatchArgs): Operation
         writers && delta.baseline !== true
           ? yield* writers(String(delta.token ?? ''), rowsOf(delta))
           : []
+
       yield* push(linked, () => emit(delta))
     }
   }
@@ -1360,6 +1379,7 @@ function* windowed({ resource, frame, query, send }: Helpers.WatchArgs): Operati
   /** One recompute: the page again, what moved in or around it out. */
   const recompute = function* (): Operation<void> {
     yield* sleep(15)
+
     const next = yield* pageOf()
     const rows = next.data as AnyType[]
     const ids = new Set(rows.map(row => String(row._id)))
@@ -1368,6 +1388,7 @@ function* windowed({ resource, frame, query, send }: Helpers.WatchArgs): Operati
 
     const changed = rows.filter(row => {
       const version = before.get(String(row._id))
+
       return version !== undefined && version !== String(row._version)
     })
 
@@ -1412,7 +1433,8 @@ function* windowed({ resource, frame, query, send }: Helpers.WatchArgs): Operati
         continue
       }
 
-      const writer = writerOf(event.value as Change.Event)
+      const writer = yield* writerOf(event.value as Change.Event)
+
       yield* push(writer ? [writer] : [], recompute)
     }
   }
@@ -1455,6 +1477,7 @@ export const realtime = (resource: ResourceDef.RealtimeSource): EdgeDef.SocketHa
         const task = yield* fork(() =>
           scoped(() => watch(socket, resource, { frame, subscribed: () => ready.resolve() })),
         )
+
         watches.set(frame.id, task)
         yield* ready.operation
       }

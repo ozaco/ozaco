@@ -70,13 +70,13 @@ export function* failureOf(
     tag,
     `${options.prefix ?? ''}${message}`,
     ...causesOf(envelope),
-    remote && remoteCause(remote, answeredBy(response, envelope)),
+    remote && remoteCause(remote, yield* answeredBy(response, envelope)),
     requestId === null ? undefined : `req:${requestId}`,
     `status:${response.status}`,
   )
 
   if (remote) {
-    markRemote(failure, remote)
+    yield* markRemote(failure, remote)
   }
 
   return yield* failure

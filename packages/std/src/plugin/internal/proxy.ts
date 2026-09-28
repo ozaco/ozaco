@@ -17,10 +17,12 @@ export const createActionProxy = <T>(
         if (key === Symbol.iterator) {
           return () => call(prefix, [])[Symbol.iterator]()
         }
+
         // `then` stays undefined so an action path is never mistaken for a thenable
         if (typeof key === 'symbol' || key === 'then') {
           return undefined
         }
+
         return child(`${prefix}.${String(key)}`)
       },
     })
@@ -33,6 +35,7 @@ export const createActionProxy = <T>(
         if (typeof key === 'symbol' || key === 'then') {
           return undefined
         }
+
         return child(String(key))
       },
     },

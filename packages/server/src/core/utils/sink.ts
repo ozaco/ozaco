@@ -64,11 +64,13 @@ export const createSink = <T>(options: Helpers.SinkOptions<T>): Helpers.Sink<T> 
 
   function* beat(): Operation<'beat'> {
     yield* sleep(waitMs)
+
     return 'beat'
   }
 
   function* filled(): Operation<'full'> {
     yield* full.wait()
+
     return 'full'
   }
 

@@ -16,8 +16,10 @@ const call = <T>(run: (callback: (error: Error | null, response: T) => void) => 
     run((error, response) => {
       if (error) {
         reject(error)
+
         return
       }
+
       resolve(response)
     })
   })
@@ -27,6 +29,7 @@ const loadClient = async (): Promise<(new () => Client) | null> => {
   try {
     const mod = await import('fb-watchman')
     const fromDefault = (mod as { default?: { Client?: new () => Client } }).default?.Client
+
     return mod.Client ?? fromDefault ?? null
   } catch {
     return null
@@ -40,9 +43,11 @@ const subscriptionConfig = (
 ): SubscriptionConfig => {
   const expression: Expression = name ? ['name', name] : ['type', 'f']
   const config: SubscriptionConfig = { expression, fields: ['name', 'exists'] }
+
   if (watched.relative_path) {
     config.relative_root = watched.relative_path
   }
+
   return config
 }
 
@@ -60,11 +65,13 @@ const startWatchman = async (
   }
 
   const ClientCtor = await loadClient()
+
   if (!ClientCtor) {
     return null
   }
 
   const client = new ClientCtor()
+
   client.on('error', () => {})
 
   try {
@@ -81,6 +88,7 @@ const startWatchman = async (
     const watched = await call<WatchProjectResponse>(callback =>
       client.command(['watch-project', root], callback),
     )
+
     await call(callback =>
       client.command(
         ['subscribe', watched.watch, SUBSCRIPTION, subscriptionConfig(watched, name)],
@@ -96,6 +104,7 @@ const startWatchman = async (
       ) {
         return
       }
+
       for (const file of response.files) {
         emit({ type: file.exists ? 'change' : 'rename', path: file.name })
       }
@@ -107,6 +116,7 @@ const startWatchman = async (
     }
   } catch {
     client.end()
+
     return null
   }
 }
@@ -125,10 +135,13 @@ const drainNative = (
     try {
       for (;;) {
         const result = yield* until(iterator.next())
+
         if (result.done) {
           break
         }
+
         const { eventType, filename } = result.value
+
         emit({ type: eventType === 'rename' ? 'rename' : 'change', path: filename })
       }
     } catch {

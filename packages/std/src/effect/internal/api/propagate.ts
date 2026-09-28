@@ -58,6 +58,7 @@ function createApiHandle<A>(decoration: Helpers.Decorator<A>, core: A): A {
       handle[key] = core[key]
     }
   }
+
   return handle
 }
 

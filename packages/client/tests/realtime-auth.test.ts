@@ -43,6 +43,7 @@ function* boot(): Operation<string> {
   yield* BunIO.use()
   yield* DbClient.use({ tables: [notesTable] })
   yield* MemoryKv.use()
+
   const server = yield* createServer({
     services: [crud(notesTable, { auth: { read: 'user', write: 'user' } })],
     edge: BunEdge,
@@ -105,7 +106,9 @@ describe('realtime — a refused watch fails, it never hangs', () => {
         const { outcome, ms } = yield* firstFrame(undefined)
 
         expect(outcome).not.toBe('hung')
+
         const failure = outcome as Result.Failure<unknown>
+
         expect(isFailure(failure)).toBe(true)
         // the refusal itself, not a generic close — the caller can tell auth from a bad line
         expect(String(failure.error)).toBe(ClientErrors.Refused)

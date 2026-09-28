@@ -17,14 +17,17 @@ export const DenoEdge = Edge.implement<EdgeDef.Options, []>({
 
   *setup() {
     const runtime = yield* denoImpl.get()
+
     if (!runtime) {
       return yield* fail(
         ServerErrors.Configuration,
         'no Deno runtime: run under Deno or set `denoImpl` to a compatible serve/upgrade pair',
       )
     }
+
     yield* StateRef.set({ server: null, runtime })
     yield* openEdge()
+
     return { runtime: 'deno' }
   },
 }).build(edgeActions(driver))

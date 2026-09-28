@@ -13,6 +13,7 @@ export function* autocomplete<T>(options: PromptDef.AutocompleteOptions<T>) {
     choices: readonly PromptDef.Choice<T>[],
   ): readonly PromptDef.Choice<T>[] => {
     const query = input.toLowerCase()
+
     return query === ''
       ? choices
       : choices.filter(choice => label(choice).toLowerCase().includes(query))
@@ -37,6 +38,7 @@ export function* autocomplete<T>(options: PromptDef.AutocompleteOptions<T>) {
       const rows = page.items.map((choice, offset) => {
         const index = page.start + offset
         const text = label(choice)
+
         return index === state.active
           ? `${colors.bold(colors.primary(symbols.pointer))} ${colors.bold(colors.primary(text))}`
           : `  ${text}`
@@ -53,18 +55,22 @@ export function* autocomplete<T>(options: PromptDef.AutocompleteOptions<T>) {
           state: { ...state, active: wrapIndex(state.active - 1, matches.length) },
         }
       }
+
       if (isDown(key)) {
         return {
           type: 'update',
           state: { ...state, active: wrapIndex(state.active + 1, matches.length) },
         }
       }
+
       if (isEnter(key)) {
         const choice = matches[state.active]
+
         return !choice || choice.disabled ? undefined : { type: 'submit', value: choice.value }
       }
 
       const input = editLine(state.input, key)
+
       return input === undefined ? undefined : { type: 'update', state: { input, active: 0 } }
     },
     submitted: (value, _state, ctx) =>

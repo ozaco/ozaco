@@ -93,8 +93,10 @@ describe('plugin — control surface', () => {
     // the definition's context reads what the install wrote
     const seen = await run(function* () {
       yield* Built.use()
+
       return yield* Def.context.expect()
     })
+
     expect(unwrap(seen)).toEqual({ n: 7 })
 
     const Plain = defineProtocol<{ n: number }, Actions>({ name: 'plain', version: '1.0.0' })
@@ -105,6 +107,7 @@ describe('plugin — control surface', () => {
         return { n: 1 }
       },
     })
+
     expect(PlainDef.context).toBe(
       PlainDef.build({
         *work() {
@@ -122,12 +125,15 @@ describe('plugin — control surface', () => {
         return { ready: true }
       },
     })
+
     expect(Object.keys(Standalone)).toEqual(['context', 'build'])
+
     const built = Standalone.build({
       *ping() {
         return 'pong'
       },
     })
+
     expect('around' in built).toBe(false)
 
     const P = defineProtocol<unknown, Actions>({ name: 'lazy-hooks', version: '1.0.0' })
@@ -150,8 +156,10 @@ describe('plugin — control surface', () => {
           return `wrapped(${yield* next(...args)})`
         },
       })
+
       return yield* P.actions.work()
     })
+
     expect(unwrap(seen)).toBe('wrapped(core)')
   })
 
@@ -169,8 +177,10 @@ describe('plugin — control surface', () => {
       const inner = yield* scoped(function* () {
         return yield* P.context.expect()
       })
+
       return { value, own: yield* P.context.expect(), inner }
     })
+
     expect(unwrap(seen)).toEqual({ value: { id: 1 }, own: { id: 1 }, inner: { id: 1 } })
   })
 
@@ -197,13 +207,16 @@ describe('plugin — control surface', () => {
           return yield* fail('hook.threw')
         },
       })
+
       const bare = yield* attempt(() => P.actions.bare())
       const tagged = yield* attempt(() => P.actions.tagged())
+
       return {
         bare: isFailure(bare) ? bare.causes[0] : 'ok',
         tagged: isFailure(tagged) ? tagged.causes[0] : 'ok',
       }
     })
+
     expect(unwrap(seen)).toEqual({
       bare: 'masked: untagged failure',
       tagged: 'masked: op.failed: the operation failed',

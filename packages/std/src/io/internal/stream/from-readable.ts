@@ -66,23 +66,28 @@ export const fromReadable = (
           target.destroy?.()
         }
       }
+
       return
     }
 
     yield* fork(function* () {
       let close: IODef.FlowClose = true
+
       try {
         while (true) {
           const { done, value } = yield* until(target.read())
+
           if (done) {
             break
           }
+
           if (value) {
             signal.send(value instanceof Uint8Array ? value : new Uint8Array(value))
           }
         }
       } catch (error) {
         close = asFailure(error, IOErrors)
+
         throw error
       } finally {
         signal.close(close)

@@ -25,6 +25,7 @@ function* bootstrap(defaults?: WsDef.Options) {
 describe('install-wide codec default', () => {
   it('WsClient.use({ codec }) applies to every connect; a per-connect codec overrides it', async () => {
     const server = echoServer()
+
     try {
       const outcome = await run(function* () {
         yield* bootstrap({ codec: fake })
@@ -32,7 +33,9 @@ describe('install-wide codec default', () => {
         // no per-connect option → the install-wide default frames the message
         const defaulted = yield* Ws.actions.connect(`ws://localhost:${server.port}`)
         const defaultedSub = yield* defaulted.messages
+
         yield* defaulted.send({ n: 1 })
+
         const viaDefault = yield* defaultedSub.next()
 
         // per-connect codec overrides the install default: JSON text echoes back and parses
@@ -40,7 +43,9 @@ describe('install-wide codec default', () => {
           codec: JsonCodec,
         })
         const pinnedSub = yield* pinned.messages
+
         yield* pinned.send({ n: 2 })
+
         const viaOverride = yield* pinnedSub.next()
 
         return { viaDefault: viaDefault.value, viaOverride: viaOverride.value }
@@ -59,6 +64,7 @@ describe('install-wide codec default', () => {
 describe('connect codec option', () => {
   it('encoding goes through the preferred codec even when routing would pick another', async () => {
     const server = echoServer()
+
     try {
       const outcome = await run(function* () {
         yield* bootstrap()
@@ -69,6 +75,7 @@ describe('connect codec option', () => {
         const subscription = yield* conn.messages
 
         yield* conn.send({ n: 1 })
+
         const echoed = yield* subscription.next()
 
         // the echoed text frame starts with 'FAKE:' (not '{'), so it passes through raw —
@@ -101,6 +108,7 @@ describe('connect codec option', () => {
       })
 
     const preferred = pushServer('{"n":7}')
+
     try {
       // with the option: parsed by JsonCodec into the object
       expect(unwrap(await readFirst(preferred, JsonCodec))).toEqual({ n: 7 })
@@ -109,6 +117,7 @@ describe('connect codec option', () => {
     }
 
     const routed = pushServer('{"n":7}')
+
     try {
       // without it: the routed NOISY codec fails to parse and the frame degrades to the raw string
       expect(unwrap(await readFirst(routed))).toBe('{"n":7}')

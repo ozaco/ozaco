@@ -22,9 +22,11 @@ export function* readSource(
   }
 
   const present = yield* IO.actions.exists(path)
+
   if (!present) {
     return undefined
   }
+
   seen.add(path)
 
   const text = yield* IO.actions.readText(path)
@@ -50,6 +52,7 @@ export function* readSource(
     }
 
     const source = yield* readSource(ctx, resolved, seen)
+
     if (source) {
       inherited.push(source)
     }

@@ -17,9 +17,11 @@ export const createBuilder = <Input, Remaining, Output>(
     for (const c of cases) {
       if (c.schema) {
         const result = validateSync(c.schema, value)
+
         if (isSuccess(result)) {
           return succeed(c.handler(result.value))
         }
+
         continue
       }
 
@@ -62,6 +64,7 @@ export const createBuilder = <Input, Remaining, Output>(
 
     run() {
       const result = execute()
+
       return isSuccess(result) ? result.value : undefined
     },
   } as AnyType

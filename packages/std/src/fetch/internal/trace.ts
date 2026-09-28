@@ -1,8 +1,7 @@
 import type { Operation } from 'std:effect'
 import type { TraceDef } from 'std:trace'
-import { inject, isTracing, startSpan } from 'std:trace'
+import { Trace } from 'std:trace'
 
-import type { FetchDef } from '../types/fetch'
 import type { Helpers } from '../types/helpers'
 import { redactUrl } from '../utils/redact'
 
@@ -58,7 +57,7 @@ const serverOf = (url: URL | undefined): TraceDef.AttributesInput => {
 const describe = (
   target: RequestInfo | URL,
   method: string,
-  { template, resendCount }: Pick<FetchDef.Init, 'template' | 'resendCount'>,
+  { template, resendCount, sensitiveKeys }: Helpers.Naming,
 ): { name: string; attributes: TraceDef.AttributesInput } => {
   const sent = sentMethod(method)
   const known = KNOWN_METHODS.has(sent)
@@ -72,7 +71,7 @@ const describe = (
     attributes: {
       'http.request.method': known ? sent : '_OTHER',
       'http.request.method_original': known ? undefined : sent,
-      'url.full': redactUrl(href),
+      'url.full': redactUrl(href, sensitiveKeys),
       'url.template': template || undefined,
       ...serverOf(url),
       'http.request.resend_count':
@@ -95,15 +94,15 @@ export const sentMethod = (method: string): string => {
 export function* openClientSpan(
   target: RequestInfo | URL,
   method: string,
-  naming: Pick<FetchDef.Init, 'template' | 'resendCount'>,
+  naming: Helpers.Naming,
 ): Operation<TraceDef.LiveSpan | null> {
-  if (!(yield* isTracing())) {
+  if (!(yield* Trace.actions.isTracing())) {
     return null
   }
 
   const { name, attributes } = describe(target, method, naming)
 
-  return yield* startSpan(name, {
+  return yield* Trace.actions.startSpan(name, {
     kind: 'client',
     scope: TRACE_SCOPE,
     attributes,
@@ -118,10 +117,10 @@ export function* openClientSpan(
  */
 export function* carrierOf(span: TraceDef.LiveSpan | null): Operation<TraceDef.Carrier> {
   if (span) {
-    return yield* span.run(() => inject({ ozaco: true }))
+    return yield* span.run(() => Trace.actions.inject({ ozaco: true }))
   }
 
-  return yield* inject()
+  return yield* Trace.actions.inject()
 }
 
 /**
@@ -139,6 +138,7 @@ export const withCarrier = (
   }
 
   const sent = new Headers(headers ?? (input instanceof Request ? input.headers : undefined))
+
   if (sent.has('traceparent')) {
     return headers
   }

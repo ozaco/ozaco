@@ -6,7 +6,7 @@ import { IO } from 'std:io'
 import type { Result } from 'std:result'
 import { asFailure, fail, isFailure } from 'std:result'
 import type { TraceDef } from 'std:trace'
-import { current } from 'std:trace'
+import { Trace } from 'std:trace'
 
 import { importPKCS8, importSPKI, jwtVerify, SignJWT } from 'jose'
 import { z } from 'zod'
@@ -18,7 +18,7 @@ const ENCODER = new TextEncoder()
 const BEARER = 'bearer '
 
 /** The span event a strategy that FAILED before a later one answered leaves (≤ 20 chars). */
-const SKIP_EVENT = 'ozaco.auth.skip'
+const SKIP_EVENT = 'auth.skip'
 
 export const HOUR = 60 * 60 * 1000
 export const DAY = 24 * HOUR
@@ -160,7 +160,7 @@ export const strategyOf = (entry: { readonly tag: string; readonly value: unknow
   return typeof named === 'string' && named !== '' ? named : entry.tag.replace(/@[^@]*$/u, '')
 }
 
-/** One `ozaco.auth.skip` event on the guarded span (`at`, else the active one) per strategy that
+/** One `auth.skip` event on the guarded span (`at`, else the active one) per strategy that
  * FAILED before a later one answered — `{ ozaco.auth.strategy, error.type }` (the failure itself
  * is dropped: it was not the answer). */
 export function* skipped(
@@ -171,7 +171,7 @@ export function* skipped(
     return
   }
 
-  const span = at ?? (yield* current())
+  const span = at ?? (yield* Trace.actions.current())
 
   for (const [strategy, failure] of failed) {
     span.addEvent(SKIP_EVENT, { 'ozaco.auth.strategy': strategy, 'error.type': tagOf(failure) })
@@ -338,6 +338,7 @@ export function* verify(
     }
 
     yield* reject(reason)
+
     return undefined
   }
 
@@ -409,6 +410,7 @@ export function* tokensFor(
     expiresAt: Date.now() + context.ttl.refresh,
     revoked: false,
   }
+
   yield* provider.saveRefresh!(refresh)
 
   return {

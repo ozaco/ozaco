@@ -38,6 +38,7 @@ export const NatsTransport = Transport.implement<TransportDef.Options, [options:
     if (!(yield* Codec.actions.hasCodec())) {
       yield* JsonCodec.use()
     }
+
     if (!isValidPrefix(options.prefix)) {
       return yield* fail(TransportErrors.Configuration, `invalid prefix "${options.prefix}"`)
     }
@@ -62,6 +63,7 @@ export const NatsTransport = Transport.implement<TransportDef.Options, [options:
 
     if (isFailure(manager)) {
       yield* attempt(until(nc.close()))
+
       return yield* fail(
         TransportErrors.Configuration,
         'jetstream is not available on this server',
@@ -88,6 +90,7 @@ export const NatsTransport = Transport.implement<TransportDef.Options, [options:
       if (!state.drained && !state.nc.isClosed()) {
         yield* attempt(until(state.nc.drain()))
       }
+
       yield* attempt(until(state.nc.close()))
     })
 

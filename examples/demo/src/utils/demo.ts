@@ -46,6 +46,7 @@ export function* createDemo(
   options: DemoOptions = {},
 ): Operation<ServerDef.Handle<typeof services>> {
   yield* infrastructure(options)
+
   const role = options.role ?? 'monolith'
   const withEdge = role !== 'service' || options.port !== undefined
 
@@ -132,6 +133,7 @@ export function* createDemo(
     // to reach the carrier must not take the node down — a single-edge deployment stays local.
     yield* fork(function* () {
       const outcome = yield* attempt(() => startRtcRelay())
+
       if (isFailure(outcome)) {
         // the whole failure (chain included) rides the line — and its log record
         yield* Logger.actions.child({ logger: 'demo/rtc' }, () =>

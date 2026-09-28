@@ -33,10 +33,12 @@ const makeDb = (options?: { cloneable?: boolean; exec?: Protocol.Exec }) => {
     }).build({
       *find(id) {
         const ctx = yield* Db.context.expect()
+
         return ctx.rows.get(id)
       },
       *put(id, row) {
         const ctx = yield* Db.context.expect()
+
         ctx.rows.set(id, row)
       },
 
@@ -44,6 +46,7 @@ const makeDb = (options?: { cloneable?: boolean; exec?: Protocol.Exec }) => {
       // annotate them explicitly
       *put2(id: number, row: string) {
         const ctx = yield* Db.context.expect()
+
         ctx.rows.set(id, row)
       },
       testValue: 12,
@@ -61,6 +64,7 @@ describe('protocol (flat surface)', () => {
       yield* MemoryDb.use([[1, 'one']])
 
       yield* Db.actions.put(2, 'two')
+
       return [yield* Db.actions.find(1), yield* Db.actions.find(2)]
     })
 
@@ -75,6 +79,7 @@ describe('protocol (flat surface)', () => {
     })
 
     expect(isFailure(outcome)).toBe(true)
+
     if (isFailure(outcome)) {
       expect(outcome.error).toBe('std:plugin.missing-action')
     }
@@ -87,10 +92,12 @@ describe('protocol (flat surface)', () => {
     const outcome = await run(function* () {
       const inside = yield* scoped(function* () {
         yield* MemoryDb.use([[1, 'one']])
+
         return yield* Db.actions.find(1)
       })
 
       let after: unknown
+
       try {
         after = yield* Db.actions.find(1)
       } catch (error) {
@@ -129,9 +136,11 @@ describe('protocol (flat surface)', () => {
   it('a custom exec can fan out over every installed impl', async () => {
     const fanout: Protocol.Exec = function* (entries, dispatch) {
       const results: unknown[] = []
+
       for (const entry of entries) {
         results.push(yield* dispatch(entry))
       }
+
       return results
     }
 
@@ -154,10 +163,12 @@ describe('protocol (flat surface)', () => {
     const outcome = await run(function* () {
       yield* memory('one-db').use([])
       yield* memory('other-db').use([])
+
       return yield* Db.actions.find(1)
     })
 
     expect(isFailure(outcome)).toBe(true)
+
     if (isFailure(outcome)) {
       expect(outcome.error).toBe('std:plugin.protocol-not-cloneable')
     }
@@ -217,6 +228,7 @@ describe('hooks over the api layer', () => {
         yield* Db.after({
           *find(result) {
             trace.push(`after:${result}`)
+
             return `${result}!`
           },
         })
@@ -224,8 +236,11 @@ describe('hooks over the api layer', () => {
           find: ([id], next) =>
             (function* () {
               trace.push('around:in')
+
               const result = yield* next(id)
+
               trace.push('around:out')
+
               return result
             })(),
         })
@@ -266,6 +281,7 @@ describe('hooks over the api layer', () => {
           seen.push(error)
         },
       })
+
       return yield* Boom.actions.boom()
     })
 
@@ -278,10 +294,12 @@ describe('hooks over the api layer', () => {
           throw new Error('hook boom')
         },
       })
+
       return yield* Boom.actions.boom()
     })
 
     expect(isFailure(masked)).toBe(true)
+
     if (isFailure(masked)) {
       expect(masked.causes.join(' ')).toContain('masked')
     }
@@ -311,6 +329,7 @@ describe('nested actions + standalone plugins + guards', () => {
       fs: {
         *read(path: string) {
           const ctx = yield* Io.context.expect()
+
           return `${ctx.prefix}${path}`
         },
       },
@@ -318,6 +337,7 @@ describe('nested actions + standalone plugins + guards', () => {
 
     const outcome = await run(function* () {
       yield* MemIo.use()
+
       return yield* Io.actions.fs.read('/tmp/x')
     })
 
@@ -326,6 +346,7 @@ describe('nested actions + standalone plugins + guards', () => {
 
   it('build accepts extras beyond the contract: custom actions and value members', async () => {
     const { Db, memory } = makeDb()
+
     void memory
 
     const Extended = Db.implement({
@@ -337,16 +358,19 @@ describe('nested actions + standalone plugins + guards', () => {
     }).build({
       *find(id) {
         const ctx = yield* Db.context.expect()
+
         return ctx.rows.get(id)
       },
       *put(id, row) {
         const ctx = yield* Db.context.expect()
+
         ctx.rows.set(id, row)
       },
 
       // extras beyond the contract
       *size() {
         const ctx = yield* Db.context.expect()
+
         return ctx.rows.size
       },
       testValue: 13,
@@ -376,13 +400,16 @@ describe('nested actions + standalone plugins + guards', () => {
     }).build({
       *increment() {
         const ctx = (yield* Counter.context.expect()) as { value: number }
+
         ctx.value += 1
+
         return ctx.value
       },
     })
 
     const outcome = await run(function* () {
       yield* Counter.use(41)
+
       return yield* Counter.actions.increment()
     })
 

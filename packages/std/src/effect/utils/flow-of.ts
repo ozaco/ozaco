@@ -32,6 +32,7 @@ export const flowOf = <T, TReturn = void>(
 
     yield* spawn(function* () {
       const outcome = yield* attempt(() => body(emit))
+
       queue.close((isFailure(outcome) ? outcome : outcome.value) as TReturn)
     })
 

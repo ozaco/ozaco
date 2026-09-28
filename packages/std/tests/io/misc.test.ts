@@ -116,6 +116,7 @@ describe('hash encoding', () => {
       yield* impl.use()
 
       const data = encoder.encode('abc')
+
       return {
         hex: yield* IO.actions.hash('SHA-256', data, { encoding: 'hex' }),
         base64: yield* IO.actions.hash('SHA-256', data, { encoding: 'base64' }),
@@ -138,6 +139,7 @@ describe('platform / expandHome', () => {
   ] as const)('%s: platform mirrors process.platform / arch / getuid', async (_, impl) => {
     const outcome = await run(function* () {
       yield* impl.use()
+
       return yield* IO.actions.platform()
     })
 
@@ -154,6 +156,7 @@ describe('platform / expandHome', () => {
   ] as const)('%s: expandHome resolves a leading ~ only', async (_, impl) => {
     const outcome = await run(function* () {
       yield* impl.use()
+
       return [
         yield* IO.actions.expandHome('~'),
         yield* IO.actions.expandHome('~/projects/app'),
@@ -175,7 +178,9 @@ describe('platform / expandHome', () => {
   it('WebIO: platform is the browser; expandHome passes plain paths, fails on ~', async () => {
     const outcome = await run(function* () {
       yield* WebIO.use()
+
       const tilde = yield* attempt(() => IO.actions.expandHome('~/x'))
+
       return {
         platform: yield* IO.actions.platform(),
         plain: yield* IO.actions.expandHome('/a/b'),
@@ -217,7 +222,9 @@ describe('secretbox (encrypt/decrypt)', () => {
       const wrongSecret = yield* attempt(() => IO.actions.decrypt(sealed, 'wrong-passphrase'))
 
       const tampered = Uint8Array.from(sealed)
+
       tampered[tampered.length - 1]! ^= 0xff
+
       const corrupted = yield* attempt(() => IO.actions.decrypt(tampered, 'right-passphrase'))
 
       return {
@@ -295,6 +302,7 @@ describe('watch', () => {
     const dir = await mkdtemp(join(osTmpdir(), 'ozaco-io-'))
     // force the deterministic fs.watch fallback — Watchman availability varies per machine
     const previous = process.env.STD_WATCHMAN
+
     process.env.STD_WATCHMAN = 'off'
 
     try {
@@ -306,6 +314,7 @@ describe('watch', () => {
 
         yield* spawn(function* () {
           const first = yield* events.next()
+
           if (!first.done) {
             got.resolve(first.value)
           }
@@ -323,6 +332,7 @@ describe('watch', () => {
       })
 
       const event = unwrap(outcome)
+
       expect(event.type === 'rename' || event.type === 'change').toBe(true)
       expect(event.path).toBe('poke.txt')
     } finally {
@@ -331,6 +341,7 @@ describe('watch', () => {
       } else {
         process.env.STD_WATCHMAN = previous
       }
+
       await rm(dir, { recursive: true, force: true })
     }
   }, 4000)
@@ -364,6 +375,7 @@ describe('protocol wiring', () => {
   it('actions without an installed impl fail with missing-action', async () => {
     const outcome = await run(function* () {
       const result = yield* attempt(() => IO.actions.read('/nowhere.txt'))
+
       return isFailure(result) ? result.error : 'no-failure'
     })
 
@@ -373,6 +385,7 @@ describe('protocol wiring', () => {
   it('the io protocol is single-impl: a second impl refuses to install', async () => {
     const outcome = await run(function* () {
       yield* BunIO.use()
+
       const second = yield* attempt(() => WebIO.use())
 
       return isFailure(second) ? second.error : 'no-failure'

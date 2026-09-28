@@ -22,8 +22,10 @@ describe('migrations — plan and apply', () => {
         yield* MemoryAdapter.use()
         yield* BunIO.use()
         yield* DbClient.use({ tables: [users] })
+
         const plan = yield* Db.actions.planMigration()
         const structural = plan.steps.filter((step: AnyType) => step.kind !== 'create-index')
+
         expect(structural).toEqual([])
       }),
     )
@@ -34,9 +36,11 @@ describe('migrations — plan and apply', () => {
       await run(function* () {
         yield* MemoryAdapter.use()
         yield* BunIO.use()
+
         const db = yield* DbClient.use({ tables: [users], migrations: 'manual' })
 
         const before = yield* attempt(db.query('users').collect())
+
         expect(isFailure(before)).toBe(true)
         expect((before as AnyType).error).toBe(DbErrors.Query)
 
@@ -57,7 +61,9 @@ describe('migrations — plan and apply', () => {
         await run(function* () {
           yield* SqliteAdapter.use({ path })
           yield* BunIO.use()
+
           const db = yield* DbClient.use({ tables: [v1] })
+
           yield* db.insert('items', { a: 'one', extra: 'keep?' })
         }),
       )
@@ -67,20 +73,25 @@ describe('migrations — plan and apply', () => {
         await run(function* () {
           yield* SqliteAdapter.use({ path })
           yield* BunIO.use()
+
           const db = yield* DbClient.use({ tables: [v2], migrations: 'manual', safe: true })
 
           const plan = yield* Db.actions.planMigration()
           const kinds = plan.steps.map((step: AnyType) => step.kind)
+
           expect(kinds).toContain('add-column')
           expect(kinds).toContain('drop-column')
           expect(plan.steps.some((step: AnyType) => isDestructive(step))).toBe(true)
 
           yield* Db.actions.migrate()
+
           const rows = yield* Db.actions.raw('SELECT * FROM "items"')
+
           expect(rows.rows[0]).toHaveProperty('extra', 'keep?')
           expect(rows.rows[0]).toHaveProperty('b', null)
 
           const row = yield* db.query('items').first()
+
           expect((row as AnyType).a).toBe('one')
         }),
       )
@@ -91,7 +102,9 @@ describe('migrations — plan and apply', () => {
           yield* SqliteAdapter.use({ path })
           yield* BunIO.use()
           yield* DbClient.use({ tables: [v2] })
+
           const rows = yield* Db.actions.raw('SELECT * FROM "items"')
+
           expect(rows.rows[0]).not.toHaveProperty('extra')
         }),
       )
@@ -105,7 +118,9 @@ describe('migrations — plan and apply', () => {
       await run(function* () {
         yield* SqliteAdapter.use()
         yield* BunIO.use()
+
         const db = yield* DbClient.use({ tables: [users] })
+
         yield* db.insert('users', { name: 'ada' })
 
         yield* Db.actions.reindex('users')
@@ -115,7 +130,9 @@ describe('migrations — plan and apply', () => {
         expect(yield* db.query('users').count()).toBe(2)
 
         yield* Db.actions.dropTable('users')
+
         const after = yield* attempt(db.query('users').collect())
+
         expect(isFailure(after)).toBe(true)
       }),
     )

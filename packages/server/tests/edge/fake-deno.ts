@@ -18,12 +18,15 @@ const fakeDeno = {
         const address = bunServer.requestIP(request)?.address
         const response = await handler(request, { remoteAddr: { hostname: address } })
         const upgrade = pending.get(request)
+
         if (upgrade) {
           pending.delete(request)
+
           return bunServer.upgrade(request, { data: { socket: upgrade } })
             ? (undefined as AnyType)
             : new Response('upgrade failed', { status: 500 })
         }
+
         return response
       },
       websocket: {
@@ -38,7 +41,9 @@ const fakeDeno = {
         },
       },
     })
+
     options.onListen?.({ port: server.port, hostname: String(server.hostname) })
+
     return {
       addr: { port: server.port, hostname: String(server.hostname) },
       shutdown: () => Promise.resolve(server.stop(true)),
@@ -66,15 +71,20 @@ const fakeDeno = {
         target.dispatchEvent(new CloseEvent('close', { code, reason }))
       },
     }
+
     fakeDeno.last?.pending.set(request, bridge)
+
     return { socket: socket as unknown as WebSocket, response: new Response(null, { status: 101 }) }
   },
   last: null as AnyType,
 }
 const serveOriginal = fakeDeno.serve
+
 fakeDeno.serve = (options, handler) => {
   const server = serveOriginal(options, handler)
+
   fakeDeno.last = server
+
   return server
 }
 

@@ -7,7 +7,7 @@ import { column, DbClient, defineSchema, Kv, table, useDb } from 'db:core'
 import { kvActions } from 'db:internal'
 import type { Operation } from 'std:effect'
 import type { AnyType } from 'std:shared'
-import { span } from 'std:trace'
+import { Trace } from 'std:trace'
 
 import { describe, expect, it } from 'bun:test'
 import { mkdtempSync } from 'node:fs'
@@ -24,7 +24,8 @@ import pkg from '../../package.json'
 
 import { traced } from './helpers'
 
-const request = <T>(body: () => Operation<T>): Operation<T> => span('request', () => body())
+const request = <T>(body: () => Operation<T>): Operation<T> =>
+  Trace.actions.span('request', () => body())
 
 describe('kv spans', () => {
   it('memory store: INTERNAL `{op} kv` spans only under a recording parent', async () => {
@@ -42,7 +43,9 @@ describe('kv spans', () => {
     })
 
     expect(tracer.names()).toEqual(['set kv', 'get kv', 'mget kv', 'incr kv', 'request'])
+
     const get = tracer.span('get kv')
+
     expect(get.kind).toBe('internal')
     expect(get.scope).toEqual({ name: '@ozaco/db', version: pkg.version })
     expect(get.attributes).toEqual({
@@ -85,7 +88,9 @@ describe('kv spans', () => {
       capabilities: { persistent: false, atomic: false, scan: false },
       *get() {
         const db = (yield* useDb()) as AnyType
+
         yield* db.query('notes').collect()
+
         return null
       },
       *set() {},
@@ -125,7 +130,9 @@ describe('kv spans', () => {
     const { tracer } = await traced(function* () {
       yield* BunIO.use()
       yield* MemoryAdapter.use()
+
       const db = (yield* DbClient.use({ schema: defineSchema({ notes }) })) as AnyType
+
       yield* DbBackedKv.use()
       yield* request(function* () {
         yield* Kv.actions.get('k')
@@ -150,7 +157,9 @@ describe('kv spans', () => {
     const { tracer } = await traced(function* () {
       yield* BunIO.use()
       yield* MemoryAdapter.use()
+
       const db = (yield* DbClient.use({ schema: defineSchema({ notes }) })) as AnyType
+
       yield* MemoryKv.use({ prefix: 'cache' })
       yield* request(() =>
         Kv.actions.wrap('all-notes', { ttlMs: 1000 }, () => db.query('notes').collect()),
@@ -158,7 +167,9 @@ describe('kv spans', () => {
     })
 
     expect(tracer.names()).toEqual(['get kv', 'find notes', 'set kv', 'request'])
+
     const root = tracer.span('request').context.spanId
+
     for (const name of ['get kv', 'find notes', 'set kv']) {
       expect(tracer.span(name).parent?.spanId).toBe(root)
     }

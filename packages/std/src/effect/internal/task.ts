@@ -33,6 +33,7 @@ class TaskControl {
     if (this.settled || this.interrupted) {
       return
     }
+
     this.interrupted = true
     this.routine.unwind()
   }
@@ -41,6 +42,7 @@ class TaskControl {
     this.settled = true
 
     let final: Maybe<Result<unknown>>
+
     if (isJust(outcome) && isFailure(outcome.value)) {
       final = outcome
     } else if (isJust(outcome) && this.interrupted) {
@@ -89,6 +91,7 @@ class TaskInternal<T> implements Task<T> {
 
     const signal = () => {
       this.control.interrupt()
+
       return future
     }
     // the promise side of a Future never rejects: a failure raised while the task unwinds (a
@@ -111,6 +114,7 @@ class TaskInternal<T> implements Task<T> {
       [Symbol.iterator]: {
         value: function* halt() {
           const outcome = yield* signal()
+
           if (control.interrupted && isJust(outcome) && isFailure(outcome.value)) {
             throw outcome.value
           }
@@ -127,11 +131,14 @@ class TaskInternal<T> implements Task<T> {
 
   *[Symbol.iterator]() {
     const outcome = yield* this.routine.future
+
     if (isJust(outcome)) {
       const result = outcome.value
+
       if (isSuccess(result)) {
         return result.value
       }
+
       throw asFailure(result)
     } else {
       throw fail(EffectErrors.Halted)
@@ -153,6 +160,7 @@ class TaskInternal<T> implements Task<T> {
       this.routine.future.then(rawOutcome => {
         if (!isSuccess(rawOutcome)) {
           resolve(asFailure(rawOutcome) as T)
+
           return
         }
 
@@ -160,6 +168,7 @@ class TaskInternal<T> implements Task<T> {
 
         if (isJust(outcome)) {
           const result = outcome.value
+
           if (isSuccess(result)) {
             // auto() keeps the no-nesting law: a returned bare Failure IS the failure outcome
             resolve(auto(result.value) as T)
@@ -203,6 +212,7 @@ export function createTask<T>(options: Helpers.TaskOptions<T>): Task<T> {
   })
 
   const group = scope.expect(TaskGroupContext)
+
   group.tasks.add(task)
 
   const unbind = owner.ensure(task.halt)

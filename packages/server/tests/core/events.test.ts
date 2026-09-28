@@ -13,7 +13,7 @@ import { definePlugin } from 'std:plugin'
 import { fail, unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
 import type { TraceDef } from 'std:trace'
-import { current } from 'std:trace'
+import { Trace } from 'std:trace'
 
 import { describe, expect, it } from 'bun:test'
 
@@ -33,6 +33,7 @@ const app = service('app', {
     { input: z.object({ title: z.string() }), output: z.object({ ok: z.boolean() }) },
     function* ({ input }) {
       yield* events.emit('todo.created', { id: 'a1', title: input.title })
+
       return { ok: true }
     },
   ),
@@ -43,15 +44,18 @@ describe('core — defineEvents', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({ services: [app] })
 
         const feed = yield* events.on('todo.created')
+
         yield* server.call(app, 'create', { title: 'typed' })
 
         const step = yield* race([
           feed.next(),
           (function* () {
             yield* sleep(1000)
+
             return { done: true as const, value: undefined }
           })(),
         ])
@@ -60,19 +64,23 @@ describe('core — defineEvents', () => {
 
         // typed end to end — no cast on the payload
         const payload = (step as { value: { id: string; title: string } }).value
+
         expect(payload).toEqual({ id: 'a1', title: 'typed' })
 
         // the schema's defaults apply on the way out
         const uploads = yield* events.on('media.uploaded')
+
         yield* events.emit('media.uploaded', { id: 'u1' })
 
         const upload = yield* race([
           uploads.next(),
           (function* () {
             yield* sleep(1000)
+
             return { done: true as const, value: undefined }
           })(),
         ])
+
         expect((upload as AnyType).value).toEqual({ id: 'u1', size: 0 })
 
         yield* server.stop()
@@ -84,6 +92,7 @@ describe('core — defineEvents', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const reported: ObserveDef.Event[] = []
 
         const Spy = definePlugin<ServerDef.PluginContext, []>({
@@ -105,10 +114,12 @@ describe('core — defineEvents', () => {
 
         // the emitter is where a bad payload is still fixable
         const bad = yield* attempt(() => events.emit('todo.created', { id: 'a1' } as AnyType))
+
         expect((bad as AnyType).error).toBe('server.validation')
 
         // one published off the typed plane (the raw wire) with the wrong shape is DROPPED
         const feed = yield* events.on('todo.created')
+
         yield* server.emit('todo.created', { nope: true })
         yield* server.call(app, 'create', { title: 'good one' })
 
@@ -116,6 +127,7 @@ describe('core — defineEvents', () => {
           feed.next(),
           (function* () {
             yield* sleep(1000)
+
             return { done: true as const, value: undefined }
           })(),
         ])
@@ -129,6 +141,7 @@ describe('core — defineEvents', () => {
         const spans = reported.flatMap(event => (event.t === 'span' ? [event.span] : []))
         const publish = spans.find(span => span.name === 'publish todo.created')!
         const processed = spans.find(span => span.name === 'process todo.created')!
+
         expect(publish.kind).toBe('producer')
         expect(processed).toMatchObject({
           kind: 'consumer',
@@ -148,6 +161,7 @@ describe('core — defineEvents', () => {
             ? [event.log]
             : [],
         )
+
         expect(exceptions).toHaveLength(1)
         expect(exceptions[0]!.severityNumber).toBe(13)
         expect(exceptions[0]!.context?.spanId).toBe(processed.context.spanId)
@@ -205,7 +219,9 @@ describe('core — defineEvents.handle', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({ services: [app], plugins: [spy.plugin] })
+
         serviceId = (yield* Server.context.expect()).serviceId
 
         // called under a span of its own: the loop outlives it, so it never parents the events
@@ -217,7 +233,7 @@ describe('core — defineEvents.handle', () => {
                 title: todo.title,
                 origin: meta.origin,
                 creation: meta.trace?.spanId ?? null,
-                span: (yield* current()).context.spanId,
+                span: (yield* Trace.actions.current()).context.spanId,
               })
               yield* Server.actions.span('send mail', function* () {})
             },
@@ -237,11 +253,13 @@ describe('core — defineEvents.handle', () => {
     const publishes = spy.spans('publish todo.created')
     const processes = spy.spans('process todo.created')
     const mails = spy.spans('send mail')
+
     expect(publishes).toHaveLength(2)
     expect(processes).toHaveLength(2)
 
     for (const [index, processed] of processes.entries()) {
       const publish = publishes.find(span => span.context.spanId === processed.parent?.spanId)!
+
       expect(publish).toBeDefined()
 
       // a trace continuing the emitter's: its PRODUCER span is the parent AND the link
@@ -272,6 +290,7 @@ describe('core — defineEvents.handle', () => {
 
     // the span `handle` was called under parents nothing it did afterwards
     const subscriber = spy.spans('subscriber')[0]!
+
     expect(processes.some(span => span.context.traceId === subscriber.context.traceId)).toBe(false)
   })
 
@@ -282,6 +301,7 @@ describe('core — defineEvents.handle', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({ services: [app], plugins: [spy.plugin] })
 
         yield* events.handle('todo.created', function* (todo) {
@@ -305,7 +325,9 @@ describe('core — defineEvents.handle', () => {
 
     // (told apart by outcome: separate traces, so their start times need not be ordered)
     const processes = spy.spans('process todo.created')
+
     expect(processes).toHaveLength(3)
+
     const bad = processes.find(span => span.attributes['error.type'] === 'server.validation')
     const boom = processes.find(span => span.attributes['error.type'] === 'mailer.down')
     const fine = processes.find(span => span.attributes['error.type'] === undefined)
@@ -328,6 +350,7 @@ describe('core — defineEvents.handle', () => {
       .exceptions()
       .map(log => [log.context?.spanId, log.severityNumber])
       .toSorted((left, right) => Number(left[1]) - Number(right[1]))
+
     expect(exceptions).toEqual([
       [bad!.context.spanId, 13],
       [boom!.context.spanId, 17],
@@ -356,6 +379,7 @@ describe('core — defineEvents.handle', () => {
         yield* storage()
         yield* DefaultLogger.use({ level: LogLevel.info })
         yield* Capture.use()
+
         // nothing observes: tracing is off on this node
         const server = yield* createServer({ services: [app] })
 
@@ -372,7 +396,9 @@ describe('core — defineEvents.handle', () => {
     )
 
     expect(handled).toBe(2)
+
     const lines = entries.filter(entry => entry.msg === 'event "todo.created" was not handled')
+
     expect(lines).toHaveLength(2)
     expect(lines[0]!.level).toBe(LogLevel.error)
     expect(lines[0]!.bindings['logger']).toBe('@ozaco/server')
@@ -413,6 +439,7 @@ describe('core — Server.actions.events() when its subscription ends', () => {
             *next(): Operation<IteratorResult<WireDef.Event, never>> {
               if (!delivered) {
                 delivered = true
+
                 return {
                   done: false,
                   value: {
@@ -439,7 +466,9 @@ describe('core — Server.actions.events() when its subscription ends', () => {
       status: () => ({
         *[Symbol.iterator]() {
           const queue = createQueue<'connected' | 'reconnecting' | 'closed', void>()
+
           queue.add('connected')
+
           return queue
         },
       }),
@@ -457,9 +486,11 @@ describe('core — Server.actions.events() when its subscription ends', () => {
         yield* createServer({ services: [app], carrier: finiteCarrier(pulls) })
 
         const feed = yield* Server.actions.events()
+
         steps.push((yield* feed.next()).value, yield* feed.next())
 
         const on = yield* events.on('todo.created')
+
         typed.push((yield* on.next()).value, (yield* on.next()).done)
 
         const loop = yield* events.handle('todo.created', function* (todo) {
@@ -468,13 +499,16 @@ describe('core — Server.actions.events() when its subscription ends', () => {
         const ended = yield* race([
           (function* () {
             yield* loop
+
             return 'ended'
           })(),
           (function* () {
             yield* sleep(1000)
+
             return 'still running'
           })(),
         ])
+
         expect(ended).toBe('ended')
       }),
     )
@@ -510,6 +544,7 @@ describe('core — Server.actions.events() when its subscription ends', () => {
           feed.next(),
           (function* () {
             yield* sleep(1000)
+
             return 'still waiting'
           })(),
         ])
@@ -531,11 +566,13 @@ describe('core — Server.actions.events() when its subscription ends', () => {
 
         // while its scope lives, the node's own emits arrive
         const feed = yield* Server.actions.events()
+
         yield* Server.actions.emit('todo.created', { id: 'a1', title: 'live' })
         live.push((yield* feed.next()).value)
 
         // subscribed in a scope that is gone by the time it is pulled
         let gone: Subscription<ServerDef.EventItem, never> | null = null
+
         yield* scoped(function* () {
           gone = yield* Server.actions.events()
         })
@@ -546,6 +583,7 @@ describe('core — Server.actions.events() when its subscription ends', () => {
               gone!.next(),
               (function* () {
                 yield* sleep(300)
+
                 return 'still waiting'
               })(),
             ]),

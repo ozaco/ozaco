@@ -21,6 +21,7 @@ describe('coroutine — type/runtime agreement', () => {
           operation: () => ({
             *[Symbol.iterator]() {
               yield fail('test.step', 'raised from the body')
+
               return 1
             },
           }),
@@ -28,11 +29,14 @@ describe('coroutine — type/runtime agreement', () => {
 
         // typed access, no cast: the iterator is created lazily and is a real generator
         const iterator: Iterator<Helpers.Step, number, unknown> = routine.data.iterator
+
         expect(typeof iterator.next).toBe('function')
 
         const step: IteratorResult<Helpers.Step, number> = routine.step()
+
         expect(step.done).toBe(false)
         expect(!step.done && isFailure(step.value)).toBe(true)
+
         if (!step.done && isFailure(step.value)) {
           expect(step.value.error).toBe('test.step')
         }

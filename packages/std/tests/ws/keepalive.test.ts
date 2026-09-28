@@ -18,17 +18,20 @@ const recordingServer = (count: number) => {
   const server = wsServer({
     message(_socket, data) {
       received.push(String(data))
+
       if (received.length >= count) {
         signal()
       }
     },
   })
+
   return { server, received, gate }
 }
 
 describe('keepalive', () => {
   it('sends the default payload at the configured interval while OPEN', async () => {
     const { server, received, gate } = recordingServer(2)
+
     try {
       const outcome = await run(function* () {
         yield* JsonCodec.use()
@@ -52,6 +55,7 @@ describe('keepalive', () => {
 
   it('frames a structured payload through the registered codec', async () => {
     const { server, received, gate } = recordingServer(2)
+
     try {
       const outcome = await run(function* () {
         yield* JsonCodec.use()

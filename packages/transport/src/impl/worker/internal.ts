@@ -21,11 +21,13 @@ export const isFrame = (value: unknown): value is Worker.Frame =>
 /** Hand one frame to every local subscriber whose pattern matches. */
 export const deliver = (state: Worker.State, frame: Worker.Frame): number => {
   const topic = unprefixed(state.prefix, frame.topic)
+
   if (topic === null) {
     return 0
   }
 
   let delivered = 0
+
   for (const sub of state.subscribers) {
     if (matchTopic(sub.pattern, topic)) {
       sub.queue.add({ topic, data: new Uint8Array(frame.data), headers: { ...frame.headers } })
@@ -47,6 +49,7 @@ export const driver: TransportDef.Driver = {
 
   *publish({ topic, data, headers }) {
     const state = yield* useContext(StateRef)
+
     if (state.status === 'closed') {
       return yield* fail(TransportErrors.Closed, 'worker transport drained')
     }
@@ -57,6 +60,7 @@ export const driver: TransportDef.Driver = {
       data: new Uint8Array(data),
       headers: { ...headers },
     }
+
     // both ends see every publish: the other side over the channel, this side directly
     // oxlint-disable-next-line unicorn/require-post-message-target-origin -- a worker/port channel, not a window
     state.port.postMessage(frame)
@@ -72,6 +76,7 @@ export const driver: TransportDef.Driver = {
     const state = yield* useContext(StateRef)
     const queue = createQueue<TransportDef.Raw, void>()
     const subscriber: Worker.Subscriber = { pattern: topic, queue }
+
     state.subscribers.add(subscriber)
 
     yield* ensure(() => {
@@ -88,6 +93,7 @@ export const driver: TransportDef.Driver = {
       const signal = createSignal<TransportDef.Status, void>()
 
       const subscription = yield* signal
+
       signal.send(state.status)
 
       return subscription
@@ -96,6 +102,7 @@ export const driver: TransportDef.Driver = {
 
   *drain() {
     const state = yield* useContext(StateRef)
+
     state.status = 'closed'
   },
 }

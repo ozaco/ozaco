@@ -37,6 +37,7 @@ const claimPeer = (origin: string, now: number): boolean => {
   if (peers.size >= PEER_MAX) {
     // the oldest announcement gives way (insertion order is announcement order)
     const [oldest] = peers.keys()
+
     peers.delete(oldest!)
   }
 
@@ -123,6 +124,7 @@ export const createHub = (options: Helpers.HubOptions): Helpers.Hub => {
   ): void => {
     const now = Date.now()
     const before = applied.get(write.table)
+
     applied.set(write.table, { token, at: Math.max(before?.at ?? 0, now) })
     latest.set(write.table, token)
     arrivals.set(write.table, (arrivals.get(write.table) ?? 0) + 1)
@@ -137,6 +139,7 @@ export const createHub = (options: Helpers.HubOptions): Helpers.Hub => {
     meta: Readonly<Record<string, string>> | undefined,
   ): Change.BusEvent => {
     apply(write, write.token, 'local', meta)
+
     return write
   }
 
@@ -167,6 +170,7 @@ export const createHub = (options: Helpers.HubOptions): Helpers.Hub => {
 
     if (buffer) {
       buffer.push(write)
+
       return
     }
 
@@ -182,6 +186,7 @@ export const createHub = (options: Helpers.HubOptions): Helpers.Hub => {
 
     if (outer) {
       outer.push(...writes)
+
       return
     }
 
@@ -219,11 +224,13 @@ export const createHub = (options: Helpers.HubOptions): Helpers.Hub => {
 
   const feedBus = function* (envelope: Bus.Envelope) {
     counters.received += 1
+
     const now = Date.now()
     const peer = peers.get(envelope.origin)
 
     if (peer && envelope.seq <= peer.seq) {
       counters.deduped += 1
+
       return
     }
 
@@ -290,6 +297,7 @@ export const createHub = (options: Helpers.HubOptions): Helpers.Hub => {
       }
 
       const { token, ...write } = event
+
       apply(write, token, 'bus', meta)
     }
 
@@ -306,14 +314,18 @@ export const createHub = (options: Helpers.HubOptions): Helpers.Hub => {
   const changes = (table?: string): Flow<Change.Event, never> => ({
     *[Symbol.iterator]() {
       const subscription = yield* useBufferedEvent(emitter, 'change')
+
       return {
         *next() {
           for (;;) {
             const step = yield* subscription.next()
+
             if (step.done) {
               continue
             }
+
             const [event] = step.value
+
             if (!table || event.table === table) {
               return { done: false as const, value: event }
             }
@@ -372,6 +384,7 @@ const pumpBus = function* (
  * drain — a forked subscribe would race the first send. */
 export const attachBus = function* (hub: Change.Hub, bus: Change.Bus) {
   const subscription = yield* useBufferedEvent(bus.events, 'change')
+
   // the pump (and the replays it triggers) belong to no request: no span over them
   yield* fork(() =>
     untraced(() => pumpBus(subscription, bus.origin, envelope => hub.feedBus(envelope))),

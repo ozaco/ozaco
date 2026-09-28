@@ -46,6 +46,7 @@ export const WsClient = WsClientImpl.build({
     const { defaults } = yield* WsClientImpl.context.expect()
 
     const impl = (globalThis as AnyType).WebSocket as WsDef.ImplLike | undefined
+
     if (!impl) {
       return yield* fail(WsErrors.Unsupported, 'this platform has no WebSocket global')
     }

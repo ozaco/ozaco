@@ -37,6 +37,7 @@ const jobs = service('jobs', {
     },
     function* ({ input, ctx }) {
       ctx.reply({ headers: { location: `/jobs/status/${input.name}` } })
+
       return { id: input.name }
     },
   ),
@@ -49,6 +50,7 @@ const jobs = service('jobs', {
         status: 201,
         headers: { location: `/jobs/${input.name}`, 'bad header': 'dropped' },
       })
+
       return { id: input.name }
     },
   ),
@@ -63,6 +65,7 @@ let installs = 0
 /** Every observe event of the node it is installed on. */
 const memoryExporter = () => {
   installs += 1
+
   const events: ObserveDef.Event[] = []
 
   const plugin = ObserveExporter.implement<ObserveDef.ExporterContext, []>({
@@ -117,6 +120,7 @@ const gatewayOf = async (
         scoped(function* () {
           yield* storage()
           yield* MemoryTransport.use({ prefix: 'gw', link })
+
           const app = yield* createServer({
             services,
             carrier: NetworkCarrier,
@@ -125,15 +129,18 @@ const gatewayOf = async (
             instance: 'owner',
             plugins: options.observeOwner === false ? [] : [owner.plugin],
           })
+
           yield* app.start()
           ready.add(undefined)
           yield* sleep(60_000)
         }),
       )
+
       yield* ready.next()
       yield* scoped(function* () {
         yield* storage()
         yield* MemoryTransport.use({ prefix: 'gw', link })
+
         const server = yield* createServer({
           services,
           edge: BunEdge,
@@ -146,6 +153,7 @@ const gatewayOf = async (
           ...options.gateway,
         })
         const info = yield* server.start()
+
         yield* body(info.url!)
         yield* server.stop()
       })
@@ -173,6 +181,7 @@ describe('gateway — the owner shapes the reply', () => {
 
     const { gateway, owner } = await gatewayOf({}, function* (url) {
       const response = yield* post(`${url}/jobs/submit`, { name: 'j-1' })
+
       status = response.status
       location = response.headers.get('location')
       cache = response.headers.get('cache-control')
@@ -186,6 +195,7 @@ describe('gateway — the owner shapes the reply', () => {
     // both sides of the hop stand for the status the edge answered with
     const client = gateway.spans().find(span => span.name === 'jobs.submit')!
     const server = owner.spans().find(span => span.name === 'jobs.submit')!
+
     expect(client.attributes['rpc.response.status_code']).toBe('202')
     expect(server.attributes['rpc.response.status_code']).toBe('202')
   })
@@ -196,6 +206,7 @@ describe('gateway — the owner shapes the reply', () => {
 
     const { gateway, owner } = await gatewayOf({}, function* (url) {
       const response = yield* post(`${url}/jobs/create`, { name: 'j-2' })
+
       status = response.status
       location = response.headers.get('location')
       yield* until(response.arrayBuffer())
@@ -215,7 +226,9 @@ describe('gateway — the owner shapes the reply', () => {
 describe('gateway — remote causes stay home', () => {
   const kaput = function* (url: string, headers: Record<string, string> = {}) {
     const response = yield* until(fetch(`${url}/jobs/kaput`, { headers }))
+
     expect(response.status).toBe(500)
+
     return ((yield* until(response.json())) as AnyType).error
   }
 
@@ -270,6 +283,7 @@ describe('gateway — remote causes stay home', () => {
     ] as const) {
       // the owner's breadcrumb came over the wire; the decoder appends where it came from
       const span = spanOf(owner, 'server')
+
       expect(envelope.causes).toEqual(
         causesOf(envelope, span, [
           `remote: jobs.kaput @ app@0.0.0#owner span ${span.context.spanId.slice(0, 8)}`,
@@ -290,6 +304,7 @@ describe('gateway — remote causes stay home', () => {
     expect(envelope.causes).toEqual(causesOf(envelope, spanOf(gateway, 'client')))
 
     const record = gateway.logs().find(log => log.attributes['exception.type'] === 'jobs.kaput')
+
     expect(record).toBeDefined()
     expect(JSON.stringify(record!.attributes)).toContain('remote: jobs.kaput @ app@0.0.0#owner')
   })
@@ -311,6 +326,7 @@ describe('gateway — realtime belongs to the owning service', () => {
 
     const { gateway } = await gatewayOf({ services: [todos] }, function* (url) {
       const ws = new WebSocket(`${url.replace('http', 'ws')}/todos/_realtime`)
+
       ws.addEventListener('message', event => frames.push(JSON.parse(String(event.data))))
       yield* until(
         new Promise(resolve => {
@@ -328,6 +344,7 @@ describe('gateway — realtime belongs to the owning service', () => {
                 : Date.now() > deadline
                   ? reject(new Error(`frames: ${JSON.stringify(frames)}`))
                   : setTimeout(poll, 10)
+
             poll()
           }),
         )
@@ -337,6 +354,7 @@ describe('gateway — realtime belongs to the owning service', () => {
 
       // the gateway's own storage feeds its watch: a write that makes the push fail
       const db = yield* useDb(testSchema)
+
       yield* db.insert('todos', { title: 'explode', done: false })
       yield* wait(2)
       ws.close()
@@ -361,6 +379,7 @@ describe('gateway — realtime belongs to the owning service', () => {
       .filter(span => span.parent?.spanId === watch.context.spanId)) {
       expect(gateway.resourceOf(child)['service.name']).toBe('todos')
     }
+
     expect(frame.name).toBe('WS /todos/_realtime')
     expect(gateway.resourceOf(frame)['service.name']).toBe('app')
   })

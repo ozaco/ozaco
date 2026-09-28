@@ -17,6 +17,7 @@ const rawOf = (ws: WebSocket): EdgeDef.RawSocket => ({
   onMessage: listener => {
     ws.addEventListener('message', event => {
       const data = (event as MessageEvent).data
+
       listener(typeof data === 'string' ? data : new Uint8Array(data as ArrayBuffer))
     })
   },
@@ -44,26 +45,34 @@ export const driver: EdgeDef.Driver = {
 
             if (handlers.isSocket(request)) {
               const decision = await handlers.upgrade(request, peer)
+
               if (decision.kind === 'reject') {
                 return decision.response
               }
+
               try {
                 const { socket, response } = runtime.upgradeWebSocket(request)
+
                 socket.addEventListener('open', () => decision.attach(rawOf(socket)))
+
                 return response
               } catch (error) {
                 // accepted by the engine, refused by the runtime: the upgrade span ends with the
                 // 500 the client gets and what the runtime threw (the engine records it)
                 decision.failed(error, 500)
+
                 return new Response('upgrade failed', { status: 500 })
               }
             }
+
             return handlers.fetch(request, peer)
           },
         )
+
         state.server = server
       }),
     )
+
     return {
       url: `http://${listening.hostname}:${listening.port}`,
       port: listening.port,
@@ -74,7 +83,9 @@ export const driver: EdgeDef.Driver = {
   *stop() {
     const state = yield* useContext(StateRef)
     const { server } = state
+
     state.server = null
+
     if (server) {
       yield* until(server.shutdown())
     }

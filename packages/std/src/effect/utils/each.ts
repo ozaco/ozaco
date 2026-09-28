@@ -13,6 +13,7 @@ export function each<T>(flow: Flow<T, unknown>): Operation<Iterable<T>> {
   return {
     *[Symbol.iterator]() {
       const scope = yield* useScope()
+
       if (!scope.hasOwn(EachStack)) {
         scope.set(EachStack, [])
       }
@@ -55,18 +56,23 @@ export function each<T>(flow: Flow<T, unknown>): Operation<Iterable<T>> {
               )
             } else {
               context.stale = true
+
               const current = context.current
+
               // honor the flow's return value: a Failure close means the source was truncated,
               // and ending the loop as if it completed cleanly would swallow that
               if (current.done && isFailure(current.value)) {
                 context.finish()
+
                 throw current.value
               }
+
               return current
             }
           },
           return() {
             context.finish()
+
             return { done: true, value: void 0 }
           },
         }),
@@ -84,11 +90,13 @@ each.next = function* next(): Operation<void> {
   }
 
   const current = yield* context.subscription.next()
+
   delete context.stale
   context.current = current
 
   if (current.done) {
     context.finish()
+
     // same contract as the loop head: a Failure close raises instead of ending cleanly
     if (isFailure(current.value)) {
       return yield* current.value

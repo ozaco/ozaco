@@ -8,7 +8,7 @@ import { definePlugin } from 'std:plugin'
 import { fail, isFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
 import type { TraceDef } from 'std:trace'
-import { inject, span } from 'std:trace'
+import { Trace } from 'std:trace'
 
 import pkg from '../../package.json'
 
@@ -129,7 +129,7 @@ const isCount = (value: unknown, min: number): boolean =>
  * previous attempt's (`queue.retry`) — find a job's attempts by `messaging.message.id`. Attempts
  * run as the queue's `service` (`Queue.use({ service })` / `work(…, { service })`, default the
  * table name), so their `service.name` is the worker's, not the node's default. A failure
- * with attempts left is recorded WARN, a dead letter ERROR with the span event `ozaco.queue.dead`;
+ * with attempts left is recorded WARN, a dead letter ERROR with the span event `queue.dead`;
  * the claim loop and the sweeper open no spans.
  */
 export const Queue = QueueImpl.build<QueueDef.Actions>({
@@ -158,7 +158,7 @@ export const Queue = QueueImpl.build<QueueDef.Actions>({
     const dedupeKey = options?.dedupeKey
 
     // the PRODUCER span: its context rides the row, so every attempt of the job links it
-    return yield* span(
+    return yield* Trace.actions.span(
       `send ${table}`,
       {
         kind: 'producer',
@@ -173,7 +173,7 @@ export const Queue = QueueImpl.build<QueueDef.Actions>({
         failure: { eventName: SEND_EXCEPTION_EVENT },
       },
       function* (handle) {
-        const context: TraceDef.Carrier = traced ? yield* inject() : {}
+        const context: TraceDef.Carrier = traced ? yield* Trace.actions.inject() : {}
 
         const value = {
           kind,

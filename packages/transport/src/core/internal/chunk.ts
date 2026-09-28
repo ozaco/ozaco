@@ -83,6 +83,7 @@ export const chunkedDriver = (driver: TransportDef.Driver): TransportDef.Driver 
       }
 
       const now = Date.now()
+
       sweep(now)
 
       const { [HEADERS.chunk]: _omit, ...headers } = part.headers

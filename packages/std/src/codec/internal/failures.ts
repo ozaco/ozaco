@@ -16,6 +16,7 @@ const encodeFailure = (failure: Result.Failure<unknown>, path: Set<unknown>): Co
   path.add(failure)
 
   const causes: unknown[] = []
+
   for (const cause of Array.isArray(failure.causes) ? failure.causes : []) {
     if (typeof cause === 'string') {
       causes.push(cause)
@@ -50,6 +51,7 @@ const needsReplacer = (value: unknown): boolean => {
     }
 
     budget -= 1
+
     if (budget < 0 || isFailure(item)) {
       return true
     }
@@ -108,13 +110,16 @@ export const revive = (value: unknown, depth = 0): unknown => {
     for (const [index, item] of value.entries()) {
       value[index] = revive(item, depth + 1)
     }
+
     return value
   }
 
   const data = value as CodecDef.Json
+
   for (const key of Object.keys(data)) {
     const item = data[key]
     const next = revive(item, depth + 1)
+
     if (next !== item) {
       define(data, key, next)
     }

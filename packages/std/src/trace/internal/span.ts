@@ -1,13 +1,12 @@
 import type { Scope } from 'std:effect'
 
-import { ActiveSpan } from '../definition'
 import type { Helpers } from '../types/helpers'
 import type { TraceDef } from '../types/trace'
-import { isValidContext } from '../utils/propagation'
 
 import { APP_SCOPE, FLAG_RANDOM, FLAG_SAMPLED, LIBRARY_SCOPE_PREFIX } from './const'
-import { activeOf, isOn } from './context'
+import { ActiveSpan, activeOf, isOn } from './context'
 import { mintSpanId, mintTraceId } from './ids'
+import { isValidContext } from './propagation'
 import { LocalTrace, openerOf, SpanRecorder } from './recorder'
 import { finish } from './settle'
 import { plainContext } from './tree'

@@ -39,16 +39,19 @@ describe('rtc rewraps of a rejected platform call', () => {
       const [signalA, signalB] = createSignalPair()
       const peerA = yield* Rtc.actions.connect(signalA)
       const peerB = yield* Rtc.actions.connect(signalB, { polite: true })
+
       void peerB
 
       const sender = yield* peerA.addTrack(mic('mic-1'))
       ;(sender.native as FakeSender).replaceTrack = () => Promise.reject(refused)
 
       const result = yield* attempt(() => sender.replace(mic('mic-2')))
+
       return isFailure(result) ? { result } : { result: undefined }
     })
 
     const { result } = unwrap(outcome)
+
     if (!result) {
       throw new Error('replace succeeded')
     }
@@ -78,15 +81,19 @@ describe('rtc rewraps of a rejected platform call', () => {
       const [signalA, signalB] = createSignalPair()
       const peerA = yield* Rtc.actions.connect(signalA)
       const peerB = yield* Rtc.actions.connect(signalB, { polite: true })
+
       void peerB
       yield* peerA.channel('chat')
 
       ;(fake.hub.peers[0] as FakePeer).faults.stats = unavailable
+
       const result = yield* attempt(() => peerA.stats())
+
       return isFailure(result) ? { result } : { result: undefined }
     })
 
     const { result } = unwrap(outcome)
+
     if (!result) {
       throw new Error('stats succeeded')
     }

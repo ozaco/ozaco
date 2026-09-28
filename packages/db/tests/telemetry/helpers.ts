@@ -6,12 +6,12 @@ import { DefaultLogger, LoggerTransport, LogLevel } from 'std:logger'
 import type { Result } from 'std:result'
 import { unwrap } from 'std:result'
 import type { TraceDef } from 'std:trace'
-import { enableTracing, Tracer } from 'std:trace'
+import { Trace } from 'std:trace'
 
 let installs = 0
 
 /**
- * An in-memory `Tracer`: every exported span and emitted log record lands in `spans` / `logs`.
+ * An in-memory `Trace sink`: every exported span and emitted log record lands in `spans` / `logs`.
  * Each call builds a distinct impl, so several can be installed side by side.
  */
 export const memoryTracer = () => {
@@ -20,11 +20,12 @@ export const memoryTracer = () => {
   const spans: TraceDef.SpanData[] = []
   const logs: TraceDef.LogData[] = []
 
-  const plugin = Tracer.implement({
+  const plugin = Trace.implement({
     name: `db-test/memory-tracer-${installs}`,
     version: '1.0.0',
     *setup() {
-      yield* enableTracing()
+      yield* Trace.actions.enableTracing()
+
       return { spans, logs }
     },
   }).build({
@@ -41,9 +42,11 @@ export const memoryTracer = () => {
   /** The one exported span named `name` (throws when there is not exactly one). */
   const span = (name: string): TraceDef.SpanData => {
     const found = spans.filter(data => data.name === name)
+
     if (found.length !== 1) {
       throw new Error(`expected one span "${name}", got ${found.length}: ${names().join(', ')}`)
     }
+
     return found[0]!
   }
 
@@ -68,6 +71,7 @@ export const traced = async <T>(
   const value = unwrap(
     await run(function* () {
       yield* tracer.plugin.use()
+
       return yield* body(tracer)
     }),
   )
@@ -83,6 +87,7 @@ export const tracedResult = async <T>(
 
   const result = await run(function* () {
     yield* tracer.plugin.use()
+
     return yield* body(tracer)
   })
 
@@ -94,6 +99,7 @@ export function* captureLogs(): Operation<LoggerDef.Entry[]> {
   const entries: LoggerDef.Entry[] = []
 
   installs += 1
+
   const transport = LoggerTransport.implement<{ name: string; level: LogLevel }, []>({
     name: `db-test/capture-${installs}`,
     version: '1.0.0',

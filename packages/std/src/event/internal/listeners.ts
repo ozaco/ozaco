@@ -2,6 +2,7 @@ import type { EventEmitter } from '../types'
 
 export const removeFrom = (list: EventEmitter.Listener[], fn: EventEmitter.Listener): void => {
   const i = list.indexOf(fn)
+
   if (i !== -1) {
     list.splice(i, 1)
   }

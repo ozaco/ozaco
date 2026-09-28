@@ -38,14 +38,17 @@ export const debounce = <T>(source: Flow<T, unknown>, ms: number): Flow<T, never
       const subscription = yield* source
 
       let done = false
+
       while (!done) {
         const next = yield* subscription.next()
+
         if (next.done) {
           done = true
         } else {
           if (timerId !== undefined) {
             clearTimeout(timerId)
           }
+
           pending = { value: next.value }
           timerId = setTimeout(fire, ms)
         }
@@ -55,6 +58,7 @@ export const debounce = <T>(source: Flow<T, unknown>, ms: number): Flow<T, never
       if (timerId !== undefined) {
         clearTimeout(timerId)
       }
+
       fire()
       output.close(undefined as never)
     })

@@ -20,6 +20,7 @@ export const createSemaphore = (permits: number): Utils.Semaphore => {
 
     if (!next) {
       free += 1
+
       return
     }
 
@@ -33,10 +34,12 @@ export const createSemaphore = (permits: number): Utils.Semaphore => {
     action<void>(resolve => {
       if (ticket.granted) {
         resolve()
+
         return () => {}
       }
 
       ticket.wake = resolve
+
       return () => {
         ticket.wake = undefined
       }
@@ -63,6 +66,7 @@ export const createSemaphore = (permits: number): Utils.Semaphore => {
         release()
       } else {
         const index = queue.indexOf(ticket)
+
         if (index !== -1) {
           queue.splice(index, 1)
         }

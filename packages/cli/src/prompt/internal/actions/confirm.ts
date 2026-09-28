@@ -18,9 +18,11 @@ export function* confirm(options: PromptDef.ConfirmOptions) {
       }
 
       const seq = key.sequence.toLowerCase()
+
       if (seq === 'y') {
         return { type: 'submit', value: true }
       }
+
       if (seq === 'n') {
         return { type: 'submit', value: false }
       }

@@ -21,13 +21,16 @@ describe('debounce (forked pump)', () => {
     const source: Flow<number, undefined> = {
       *[Symbol.iterator]() {
         let step = 0
+
         return {
           next: () => ({
             *[Symbol.iterator]() {
               step += 1
+
               if (step === 1) {
                 return { done: false as const, value: 42 }
               }
+
               return { done: true as const, value: undefined }
             },
           }),
@@ -37,10 +40,12 @@ describe('debounce (forked pump)', () => {
 
     const outcome = await run(function* () {
       const seen: number[] = []
+
       for (const value of yield* each(debounce(source, 5))) {
         seen.push(value)
         yield* each.next()
       }
+
       return seen
     })
 
@@ -55,10 +60,12 @@ describe('codec flow pumps (forked)', () => {
     const source: Flow<Uint8Array, true> = {
       *[Symbol.iterator]() {
         subscribed = true
+
         return {
           next: () => ({
             *[Symbol.iterator]() {
               yield* suspend()
+
               return { done: true as const, value: true as const }
             },
           }),
@@ -70,6 +77,7 @@ describe('codec flow pumps (forked)', () => {
       scoped(function* () {
         yield* JsonCodec.use()
         yield* JsonCodec.actions.decodeFlow(source)
+
         // the scope closes right after this line with no further suspension — a lazily spawned
         // pump would never run: the source would stay unsubscribed and the channel close unarmed
         return subscribed
@@ -89,6 +97,7 @@ describe('fromReadable (forked pump)', () => {
       read: () => new Promise<ReadableStreamReadResult<Uint8Array>>(() => {}),
       cancel: () => {
         cancelled = true
+
         return Promise.resolve()
       },
       releaseLock: () => {

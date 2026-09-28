@@ -34,13 +34,19 @@ const PUBLISH_LABELS = [
  * fold followed by exactly `labels`. */
 const expectTwoLevels = (outcome: unknown, thrown: Error, labels: readonly string[]): void => {
   expect(isFailure(outcome)).toBe(true)
+
   const failure = outcome as Result.Failure<unknown>
+
   expect(failure.error).toBe(TransportErrors.Encoding)
   expect(failure.causes).toHaveLength(1 + labels.length)
+
   const [nested, ...rest] = failure.causes
+
   expect(rest).toEqual([...labels])
   expect(isFailure(nested)).toBe(true)
+
   const level = nested as Result.Failure<unknown>
+
   // the fold of the Error — the Error itself is its `raw`, no level of its own
   expect(level.error).toBe(ResultErrors.Unknown)
   expect(level.message).toBe(`${thrown.name}: ${thrown.message}`)
@@ -60,6 +66,7 @@ describe('cause chain: a thrown codec Error nests one level under transport.enco
             throw boom
           },
         })
+
         // a Failure returned from `run` would be raised: hand it back inside an object
         return { outcome: yield* attempt(Transport.actions.publish('t', { n: 1 })) }
       }),
@@ -77,13 +84,16 @@ describe('cause chain: a thrown codec Error nests one level under transport.enco
       await run(function* () {
         yield* BunIO.use()
         yield* MemoryTransport.use({ prefix: 'chain-in', link })
+
         const subscription = yield* Transport.actions.subscribe<{ n: number }>('t')
+
         yield* Transport.actions.publish('t', { n: 1 })
         yield* Codec.around({
           *decode() {
             throw boom
           },
         })
+
         return { outcome: yield* attempt(subscription.next()) }
       }),
     )

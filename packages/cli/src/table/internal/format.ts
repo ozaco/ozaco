@@ -15,29 +15,38 @@ const truncate = (text: string, max: number, ellipsis: string): string => {
   if (max <= 0) {
     return ''
   }
+
   if (displayWidth(text) <= max) {
     return text
   }
+
   const chars = Array.from(stripAnsi(text))
   const dots = Array.from(ellipsis).length
+
   if (max <= dots) {
     return chars.slice(0, max).join('')
   }
+
   return `${chars.slice(0, max - dots).join('')}${ellipsis}`
 }
 
 const pad = (text: string, width: number, align: TableDef.Align): string => {
   const gap = width - displayWidth(text)
+
   if (gap <= 0) {
     return text
   }
+
   if (align === 'right') {
     return `${' '.repeat(gap)}${text}`
   }
+
   if (align === 'center') {
     const left = Math.floor(gap / 2)
+
     return `${' '.repeat(left)}${text}${' '.repeat(gap - left)}`
   }
+
   return `${text}${' '.repeat(gap)}`
 }
 
@@ -81,6 +90,7 @@ const cellText = (column: TableDef.Column, row: TableDef.Row, index: number): st
   if (column.format) {
     return column.format(value)
   }
+
   return value === null || value === undefined ? '' : String(value)
 }
 
@@ -98,6 +108,7 @@ const shrinkToFit = (widths: number[], budget: number): void => {
 
     let index = -1
     let max = MIN_WIDTH
+
     for (const [i, w] of widths.entries()) {
       if (w > max) {
         max = w
@@ -106,9 +117,11 @@ const shrinkToFit = (widths: number[], budget: number): void => {
     }
 
     const current = widths[index]
+
     if (current === undefined) {
       break
     }
+
     widths[index] = current - 1
     total -= 1
   }
@@ -123,20 +136,24 @@ const styledCells = (
     const width = layout.widths[index]!
     const shown = pad(truncate(text, width, layout.ellipsis), width, layout.aligns[index] ?? 'left')
     const style = styles[index]
+
     return style ? style(shown) : shown
   })
 
 const joinCells = (layout: Helpers.Layout, parts: string[]): string => {
   if (layout.border === 'full') {
     const v = layout.muted(layout.chars.v)
+
     return `${v} ${parts.join(` ${v} `)} ${v}`
   }
+
   return parts.join(' '.repeat(layout.gutter))
 }
 
 const fullRule = (layout: Helpers.Layout, ends: [string, string, string]): string => {
   const [left, mid, right] = ends
   const segments = layout.widths.map(width => layout.chars.h.repeat(width + 2))
+
   return layout.muted(`${left}${segments.join(mid)}${right}`)
 }
 
@@ -164,19 +181,24 @@ export const makeLayout = (spec: {
     }
 
     let width = options.head ? displayWidth(headers[index]!) : 0
+
     for (const row of rows) {
       width = Math.max(width, displayWidth(cellText(column, row, index)))
     }
+
     if (column.min !== undefined) {
       width = Math.max(width, column.min)
     }
+
     if (column.max !== undefined) {
       width = Math.min(width, column.max)
     }
+
     return Math.max(MIN_WIDTH, width)
   })
 
   const budget = termColumns - chromeWidth(options.border, columns.length, options.gutter)
+
   shrinkToFit(widths, Math.max(columns.length * MIN_WIDTH, budget))
 
   return {
@@ -198,9 +220,11 @@ export const makeLayout = (spec: {
 /** Terminal rows the header/border chrome occupies (so the live window can size its body). */
 export const chromeRows = (border: TableDef.Border, head: boolean): number => {
   let rows = border === 'full' ? 2 : 0
+
   if (head) {
     rows += border === 'full' || border === 'header' ? 2 : 1
   }
+
   return rows
 }
 
@@ -215,6 +239,7 @@ export const separator = (layout: Helpers.Layout): string => {
   if (layout.border === 'full') {
     return fullRule(layout, [layout.chars.ml, layout.chars.mm, layout.chars.mr])
   }
+
   return layout.muted(
     layout.widths.map(width => layout.chars.h.repeat(width)).join(' '.repeat(layout.gutter)),
   )
@@ -232,6 +257,7 @@ export const headerRow = (layout: Helpers.Layout): string =>
 
 export const bodyRow = (layout: Helpers.Layout, row: TableDef.Row): string => {
   const cells = layout.columns.map((column, index) => cellText(column, row, index))
+
   return joinCells(layout, styledCells(layout, cells, layout.colors))
 }
 
@@ -250,21 +276,27 @@ export const frame = (spec: {
   const visible = hidden > 0 ? rows.slice(rows.length - maxBody!) : rows
 
   const lines: string[] = []
+
   if (layout.border === 'full') {
     lines.push(topBorder(layout))
   }
+
   if (layout.head) {
     lines.push(headerRow(layout))
+
     if (layout.border === 'full' || layout.border === 'header') {
       lines.push(separator(layout))
     }
   }
+
   for (const row of visible) {
     lines.push(bodyRow(layout, row))
   }
+
   if (layout.border === 'full') {
     lines.push(bottomBorder(layout))
   }
+
   if (hidden > 0) {
     lines.push(moreNote(layout, hidden))
   }

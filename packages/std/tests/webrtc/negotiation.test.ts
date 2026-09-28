@@ -58,6 +58,7 @@ describe('perfect negotiation', () => {
       yield* fake.mock.use()
 
       const [signalA, signalB, queues] = createSignalPair()
+
       // noise the peer must skip: a keepalive string, an app frame, junk
       queues.toA.add('ping')
       queues.toA.add({ t: 'app:event', payload: 1 })
@@ -65,9 +66,11 @@ describe('perfect negotiation', () => {
 
       const peerA = yield* Rtc.actions.connect(signalA)
       const peerB = yield* Rtc.actions.connect(signalB, { polite: true })
+
       void peerB
 
       const chat = yield* peerA.channel('chat')
+
       return { chat: chat.readyState, state: peerA.connectionState }
     })
 

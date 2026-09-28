@@ -13,7 +13,7 @@ export namespace Helpers {
 
   /**
    * One HTTP exchange's CLIENT span as the call hands it on: `live` until it ends (then dropped —
-   * a long-lived scope keeps a spent holder, never the span), the scope it started in (its Tracer
+   * a long-lived scope keeps a spent holder, never the span), the scope it started in (its Trace sinks
    * is visible there: an end from anywhere else runs in it), when the reply's headers arrived (a
    * body never consumed ends the span at that time) and whether a streamed body is being
    * consumed (left mid-way, the span ends cancelled).
@@ -21,6 +21,8 @@ export namespace Helpers {
   export interface CallSpan {
     live: TraceDef.LiveSpan | null
     readonly context: TraceDef.SpanContext
+    /** whether `context` names a span (a no-op span's does not). */
+    readonly valid: boolean
     readonly recording: boolean
     readonly scope: Scope
     headersAt: number | undefined

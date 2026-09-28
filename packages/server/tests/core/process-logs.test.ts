@@ -1,6 +1,6 @@
 /**
  * An observing node claims the PROCESS's log records (`observe.processLogs`, std:trace's process
- * fallback): lines logged where no Tracer records — infrastructure (transport, db) installed
+ * fallback): lines logged where no Trace sink records — infrastructure (transport, db) installed
  * BEFORE the node, in a parent scope — reach its exporters with its resource. One node per
  * process takes them; the next takes over when it stops. With `DefaultLogger` + `TraceTransport`
  * at the root, every line is exactly ONE record.
@@ -13,7 +13,7 @@ import { DefaultLogger, Logger, LogLevel } from 'std:logger'
 import { definePlugin } from 'std:plugin'
 import { fail, unwrap } from 'std:result'
 import type { TraceDef } from 'std:trace'
-import { canEmit, emitLog, event as traceEvent, recordFailure } from 'std:trace'
+import { Trace } from 'std:trace'
 
 import { describe, expect, it } from 'bun:test'
 
@@ -27,6 +27,7 @@ let installs = 0
 /** An in-memory exporter: every observed event of the node it is installed on. */
 const memoryExporter = () => {
   installs += 1
+
   const events: ObserveDef.Event[] = []
 
   const plugin = ObserveExporter.implement<ObserveDef.ExporterContext, []>({
@@ -56,6 +57,7 @@ const memoryExporter = () => {
 const shop = service('shop', {
   hello: action.query({}, function* () {
     yield* Logger.actions.info('inside the node')
+
     return 'hi'
   }),
 })
@@ -68,6 +70,7 @@ function* until(check: () => boolean, ms = 2000): Operation<void> {
     if (Date.now() > deadline) {
       throw new Error('timed out waiting')
     }
+
     yield* sleep(2)
   }
 }
@@ -77,12 +80,13 @@ const logIn = (scope: Scope, msg: string, binding = '@ozaco/db') =>
   within(scope, () => Logger.actions.child({ logger: binding }, () => Logger.actions.warn(msg)))
 
 /** Whether a record emitted in `scope` would go anywhere. */
-const canEmitIn = (scope: Scope) => within(scope, () => canEmit())
+const canEmitIn = (scope: Scope) => within(scope, () => Trace.actions.canEmit())
 
 /** The recommended root: `DefaultLogger` + `TraceTransport` installed once, before any node. */
 function* rootLogger(): Operation<Scope> {
   yield* DefaultLogger.use({ level: LogLevel.info })
   yield* TraceTransport.use()
+
   return yield* useScope()
 }
 
@@ -95,6 +99,7 @@ describe('process logs — a node claims the lines logged outside it', () => {
     unwrap(
       await run(function* () {
         const root = yield* rootLogger()
+
         // infrastructure BEFORE the node, in the root: its loops log where tracing is off
         yield* MemoryTransport.use({ link, prefix: 'shop' })
 
@@ -116,6 +121,7 @@ describe('process logs — a node claims the lines logged outside it', () => {
     )
 
     const lost = sink.byBody('transport connection lost')
+
     expect(lost).toHaveLength(1)
     expect(lost[0]).toMatchObject({
       severityNumber: 13,
@@ -134,6 +140,7 @@ describe('process logs — a node claims the lines logged outside it', () => {
     expect(sink.byBody('transport reconnected')).toHaveLength(1)
 
     const db = sink.byBody('db bus: envelopes lost — replaying the change logs')
+
     expect(db).toHaveLength(1)
     expect(db[0]).toMatchObject({ scope: { name: '@ozaco/db' }, severityNumber: 13 })
     expect(db[0]!.resource['service.name']).toBe('shop-node')
@@ -151,12 +158,16 @@ describe('process logs — a node claims the lines logged outside it', () => {
           yield* storage()
           yield* createServer({ name: 'worker-node', services: [shop], plugins: [sink.plugin] })
 
-          yield* within(root, () => recordFailure(failure))
-          yield* within(root, () => recordFailure(failure))
+          yield* within(root, () => Trace.actions.recordFailure(failure))
+          yield* within(root, () => Trace.actions.recordFailure(failure))
           yield* within(root, () =>
-            emitLog({ body: 'a bootstrap record', severityNumber: 9, scope: { name: 'boot' } }),
+            Trace.actions.emitLog({
+              body: 'a bootstrap record',
+              severityNumber: 9,
+              scope: { name: 'boot' },
+            }),
           )
-          yield* within(root, () => traceEvent('boot.ready', { 'boot.ms': 12 }))
+          yield* within(root, () => Trace.actions.event('boot.ready', { 'boot.ms': 12 }))
         })
       }),
     )
@@ -167,6 +178,7 @@ describe('process logs — a node claims the lines logged outside it', () => {
     ])
 
     const exceptions = sink.logs().filter(log => log.attributes['exception.type'] === 'queue.lease')
+
     expect(exceptions).toHaveLength(1)
     expect(exceptions[0]).toMatchObject({ eventName: 'exception', severityNumber: 17 })
     expect(exceptions[0]!.resource['service.name']).toBe('worker-node')
@@ -182,6 +194,7 @@ describe('process logs — a node claims the lines logged outside it', () => {
 
         return yield* scoped(function* () {
           yield* storage()
+
           const server = yield* createServer({ services: [shop], plugins: [sink.plugin] })
 
           // the node saw the root's TraceTransport and did not install its own
@@ -204,9 +217,11 @@ describe('process logs — a node claims the lines logged outside it', () => {
     expect(seen.skipped).toBe(true)
 
     const inside = sink.byBody('inside the node')
+
     expect(inside).toHaveLength(2)
+
     for (const line of inside) {
-      // inside: the node's Tracer, correlated to the action's span
+      // inside: the node's Trace sink, correlated to the action's span
       expect(line.context?.spanId).toMatch(/^[0-9a-f]{16}$/u)
     }
 
@@ -224,13 +239,19 @@ describe('process logs — a node claims the lines logged outside it', () => {
 
         return yield* scoped(function* () {
           yield* storage()
+
           const server = yield* createServer({ services: [shop], plugins: [sink.plugin] })
+
           yield* server.start()
+
           const claimed = yield* canEmitIn(root)
+
           yield* logIn(root, 'while claimed')
 
           yield* server.stop()
+
           const released = yield* canEmitIn(root)
+
           yield* logIn(root, 'after stop')
 
           yield* server.start()
@@ -261,7 +282,8 @@ describe('process logs — a node claims the lines logged outside it', () => {
         })
 
         yield* logIn(root, 'nobody claims this')
-        return yield* canEmit()
+
+        return yield* Trace.actions.canEmit()
       }),
     )
 
@@ -279,6 +301,7 @@ describe('process logs — a node claims the lines logged outside it', () => {
 
         yield* scoped(function* () {
           yield* storage()
+
           const a = yield* createServer({ name: 'a', services: [shop], plugins: [first.plugin] })
 
           yield* scoped(function* () {
@@ -319,12 +342,14 @@ describe('process logs — a node claims the lines logged outside it', () => {
             observe: { processLogs: false },
           })
           yield* logIn(root, 'not claimed')
+
           return yield* canEmitIn(root)
         })
 
         const idle = yield* scoped(function* () {
           yield* storage()
           yield* createServer({ services: [shop] })
+
           return yield* canEmitIn(root)
         })
 
@@ -371,6 +396,7 @@ describe('process logs — what a node logs while it comes up is its own', () =>
         yield* scoped(function* () {
           yield* storage()
           yield* createServer({ name: 'a', services: [shop], plugins: [first.plugin] })
+
           const a = (yield* useContext(Server)).instance
 
           // `a` claims the process's records by now: `b`'s boot line fell to it before the fix
@@ -380,6 +406,7 @@ describe('process logs — what a node logs while it comes up is its own', () =>
               services: [shop],
               plugins: [bootLine('b is coming up'), second.plugin],
             })
+
             return (yield* useContext(Server)).instance
           })
 
@@ -391,6 +418,7 @@ describe('process logs — what a node logs while it comes up is its own', () =>
     expect(first.bodies()).not.toContain('b is coming up')
 
     const line = second.byBody('b is coming up')
+
     expect(line).toHaveLength(1)
     expect(line[0]).toMatchObject({ severityNumber: 13, scope: { name: 'boot' } })
     expect(line[0]!.resource).toMatchObject({

@@ -35,13 +35,17 @@ export const detectColor = (): boolean => {
   if (typeof process === 'undefined') {
     return false
   }
+
   const env = process.env
+
   if (env.NO_COLOR) {
     return false
   }
+
   if (env.FORCE_COLOR) {
     return true
   }
+
   return Boolean(process.stdout && process.stdout.isTTY)
 }
 
@@ -49,18 +53,23 @@ export const labelOf = (level: LogLevel): string => {
   if (level >= LogLevel.fatal) {
     return 'FATAL'
   }
+
   if (level >= LogLevel.error) {
     return 'ERROR'
   }
+
   if (level >= LogLevel.warn) {
     return 'WARN '
   }
+
   if (level >= LogLevel.info) {
     return 'INFO '
   }
+
   if (level >= LogLevel.debug) {
     return 'DEBUG'
   }
+
   return 'TRACE'
 }
 
@@ -68,18 +77,23 @@ export const colorOf = (level: LogLevel): string => {
   if (level >= LogLevel.fatal) {
     return `${ANSI.bold}${ANSI.magenta}`
   }
+
   if (level >= LogLevel.error) {
     return ANSI.red
   }
+
   if (level >= LogLevel.warn) {
     return ANSI.yellow
   }
+
   if (level >= LogLevel.info) {
     return ANSI.green
   }
+
   if (level >= LogLevel.debug) {
     return ANSI.cyan
   }
+
   return ANSI.gray
 }
 
@@ -88,13 +102,17 @@ export const formatBindings = function* (
   color: boolean,
 ): Operation<string> {
   const keys = Object.keys(bindings)
+
   if (keys.length === 0) {
     return ''
   }
+
   const parts = yield* map(keys, function* (k) {
     const key = paint(color, ANSI.cyan, k)
+
     return `${key}=${yield* JsonCodec.actions.stringify(bindings[k])}`
   })
+
   return ` ${parts.join(' ')}`
 }
 
@@ -111,9 +129,9 @@ export const formatChains = (chains: readonly string[], color: boolean): string 
 
 /**
  * `[iso-time] LABEL bindings trace=<8>: msg data err="<one line>"`, then the failure chains
- * indented below it. Every failure prints ONCE: the first one as the line's `err=` when its chain
- * is one line, else as its chain block alone (causes, stack frames, `Caused by:` levels); every
- * further failure as its block. `trace=` is the span the entry was logged in (an exception record
+ * indented below it. Each of the entry's failures prints in ONE form — the first one as the
+ * line's `err=` when its chain is one line, else as its chain block alone (causes, `Caused by:`
+ * levels); every further failure as its block (a failure given twice prints twice). `trace=` is the span the entry was logged in (an exception record
  * forwarded to the Logger is logged in its own span's context).
  */
 export const prettyFormat = function* (entry: LoggerDef.Entry, color: boolean): Operation<string> {

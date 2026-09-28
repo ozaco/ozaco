@@ -1,8 +1,10 @@
 import { run } from 'std:effect'
 import { unwrap } from 'std:result'
-import { newSpanId, newTraceId, span, TraceIds } from 'std:trace'
+import { Trace } from 'std:trace'
 
 import { describe, expect, it } from 'bun:test'
+
+import { TraceIds } from '../../src/trace/internal/context'
 
 import { sequentialIds, traced } from './helpers'
 
@@ -11,9 +13,14 @@ describe('ids', () => {
     const ids = unwrap(
       await run(function* () {
         const out: { trace: string; span: string }[] = []
+
         for (let at = 0; at < 50; at += 1) {
-          out.push({ trace: yield* newTraceId(), span: yield* newSpanId() })
+          out.push({
+            trace: yield* Trace.actions.newTraceId(),
+            span: yield* Trace.actions.newSpanId(),
+          })
         }
+
         return out
       }),
     )
@@ -33,7 +40,11 @@ describe('ids', () => {
     const ids = unwrap(
       await run(() =>
         TraceIds.with(sequentialIds(), function* () {
-          return [yield* newTraceId(), yield* newSpanId(), yield* newSpanId()]
+          return [
+            yield* Trace.actions.newTraceId(),
+            yield* Trace.actions.newSpanId(),
+            yield* Trace.actions.newSpanId(),
+          ]
         }),
       ),
     )
@@ -43,7 +54,9 @@ describe('ids', () => {
 
   it('spans take their ids from TraceIds', async () => {
     const { tracer } = await traced(() =>
-      TraceIds.with(sequentialIds(), () => span('root', () => span('child', function* () {}))),
+      TraceIds.with(sequentialIds(), () =>
+        Trace.actions.span('root', () => Trace.actions.span('child', function* () {})),
+      ),
     )
 
     const root = tracer.span('root')
@@ -57,7 +70,8 @@ describe('ids', () => {
   })
 
   it('mints ids without tracing (the server correlates calls with them)', async () => {
-    const id = unwrap(await run(() => newSpanId()))
+    const id = unwrap(await run(() => Trace.actions.newSpanId()))
+
     expect(id).toMatch(/^[\da-f]{16}$/u)
   })
 })

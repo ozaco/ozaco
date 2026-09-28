@@ -20,9 +20,11 @@ const MAX_CANDIDATES = 8
  */
 function* defaultScan(dir: string): Operation<PromptDef.PathEntry[]> {
   const walked = yield* attempt(IO.actions.walk(dir, { maxDepth: 1 }))
+
   if (!isSuccess(walked)) {
     return []
   }
+
   return walked.value
     .filter(entry => entry.path !== dir)
     .map(entry => ({ name: entry.name, isDir: entry.isDirectory }))
@@ -34,11 +36,13 @@ const longestCommonPrefix = (items: readonly string[]): string => {
   }
 
   let prefix = items[0]!
+
   for (const item of items) {
     while (!item.startsWith(prefix)) {
       prefix = prefix.slice(0, -1)
     }
   }
+
   return prefix
 }
 
@@ -48,6 +52,7 @@ const splitValue = (value: string, root: string): Helpers.Split => {
   const dir = trailing ? absolute : absolute.slice(0, absolute.lastIndexOf('/') + 1)
   const prefix = trailing ? '' : value.slice(value.lastIndexOf('/') + 1)
   const base = trailing ? value : value.slice(0, value.length - prefix.length)
+
   return { dir: dir === '' ? '.' : dir, prefix, base }
 }
 
@@ -57,6 +62,7 @@ export function* path(options: PromptDef.PathOptions) {
 
   const matchesOf = (state: Helpers.PathState): PromptDef.PathEntry[] => {
     const { prefix } = splitValue(state.input.value, root)
+
     return state.entries
       .filter(entry => entry.name.startsWith(prefix))
       .filter(entry => !options.directory || entry.isDir)
@@ -65,15 +71,18 @@ export function* path(options: PromptDef.PathOptions) {
   const complete = (state: Helpers.PathState): string => {
     const value = state.input.value
     const matches = matchesOf(state)
+
     if (matches.length === 0) {
       return value
     }
 
     const { base } = splitValue(value, root)
     let completed = base + longestCommonPrefix(matches.map(entry => entry.name))
+
     if (matches.length === 1 && matches[0]!.isDir && !completed.endsWith('/')) {
       completed += '/'
     }
+
     return completed
   }
 
@@ -85,8 +94,10 @@ export function* path(options: PromptDef.PathOptions) {
       if (state.scanned === state.input.value) {
         return state
       }
+
       const { dir } = splitValue(state.input.value, root)
       const entries = yield* scan(dir)
+
       return { ...state, scanned: state.input.value, entries }
     },
     render: (state, ctx) => {
@@ -99,6 +110,7 @@ export function* path(options: PromptDef.PathOptions) {
       })
 
       const matches = matchesOf(state)
+
       if (matches.length === 0) {
         return head
       }
@@ -110,6 +122,7 @@ export function* path(options: PromptDef.PathOptions) {
       if (matches.length > MAX_CANDIDATES) {
         rows.push(`  ${colors.muted(`…and ${matches.length - MAX_CANDIDATES} more`)}`)
       }
+
       rows.push(`  ${colors.muted('Tab to complete')}`)
 
       return `${head}\n${rows.join('\n')}`
@@ -118,6 +131,7 @@ export function* path(options: PromptDef.PathOptions) {
       if (isEnter(key)) {
         const value = state.input.value
         const error = options.validate?.(value)
+
         return error === undefined
           ? { type: 'submit', value }
           : { type: 'update', state: { ...state, error } }
@@ -128,6 +142,7 @@ export function* path(options: PromptDef.PathOptions) {
       }
 
       const input = editLine(state.input, key)
+
       return input === undefined ? undefined : { type: 'update', state: { ...state, input } }
     },
     submitted: (value, _state, ctx) => submittedLine(ctx, options.message, value),

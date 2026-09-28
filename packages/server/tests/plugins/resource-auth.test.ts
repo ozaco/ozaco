@@ -63,6 +63,7 @@ function* boot(sessionTtlMs: number) {
   yield* BunIO.use()
   yield* DbClient.use({ tables: [todosTable, openTable] })
   yield* MemoryKv.use()
+
   const subs: (string | null)[] = []
   const guarded = crud(todosTable, {
     auth: { read: 'user', write: 'user' },
@@ -82,6 +83,7 @@ function* boot(sessionTtlMs: number) {
     plugins: [JwtAuth.use({ provider: provider(), secret: 'test-secret', sessionTtlMs }), Auth],
   })
   const info = yield* server.start({ port: 0 })
+
   return { server, ws: info.url!.replace('http', 'ws'), subs }
 }
 

@@ -13,6 +13,7 @@ export function lift<TArgs extends unknown[], TReturn>(
       } catch (error) {
         reject(error)
       }
+
       return () => {}
     })
 }

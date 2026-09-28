@@ -26,6 +26,7 @@ export const superviseIce = guard(function* (session: Helpers.Session, budget: U
 
     while (true) {
       const outage = yield* generation.outages.next()
+
       if (outage.done) {
         return
       }
@@ -54,6 +55,7 @@ export const superviseIce = guard(function* (session: Helpers.Session, budget: U
           counters.restarts += 1
           observe.record('ice-restart', 'recovered', { durationMs: Date.now() - startedAt })
           recovered = true
+
           break
         }
       }
@@ -67,6 +69,7 @@ export const superviseIce = guard(function* (session: Helpers.Session, budget: U
           ) as Result.Failure<unknown>,
           { state: generation.pc.connectionState, reason: 'ice-exhausted' },
         )
+
         return
       }
     }
@@ -89,6 +92,7 @@ export const superviseReconnect = guard(function* (
 
   while (true) {
     const outage = yield* session.outages.next()
+
     if (outage.done || gone()) {
       return
     }
@@ -113,6 +117,7 @@ export const superviseReconnect = guard(function* (
       }
 
       const previous = session.generation
+
       if (previous?.alive) {
         session.teardownGeneration(previous) // a half-dialed attempt that never connected
       }
@@ -130,6 +135,7 @@ export const superviseReconnect = guard(function* (
 
       if (isConnected(session.generation)) {
         recovered = true
+
         break
       }
     }
@@ -137,6 +143,7 @@ export const superviseReconnect = guard(function* (
     if (recovered) {
       counters.reconnects += 1
       observe.record('redial', 'recovered', { durationMs: Date.now() - startedAt })
+
       continue
     }
 
@@ -147,6 +154,7 @@ export const superviseReconnect = guard(function* (
       ) as Result.Failure<unknown>,
       { state: session.stateOf(), reason: 'reconnect-exhausted' },
     )
+
     return
   }
 }, RtcCauses.Reconnect)

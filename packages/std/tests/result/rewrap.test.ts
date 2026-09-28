@@ -40,34 +40,44 @@ const argumentsAt = (text: string, start: number): string[] => {
 
   for (let index = start + 1; index < text.length; index += 1) {
     const char = text[index] as string
+
     if (quote) {
       current += char
+
       if (char === '\\') {
         current += text[index + 1] ?? ''
         index += 1
       } else if (char === quote) {
         quote = ''
       }
+
       continue
     }
+
     if (char === "'" || char === '"' || char === '`') {
       quote = char
       current += char
+
       continue
     }
+
     if (OPEN.has(char)) {
       depth += 1
     } else if (CLOSE.has(char)) {
       if (depth === 0) {
         args.push(current.trim())
+
         return args.filter(arg => arg.length > 0)
       }
+
       depth -= 1
     } else if (char === ',' && depth === 0) {
       args.push(current.trim())
       current = ''
+
       continue
     }
+
     current += char
   }
 

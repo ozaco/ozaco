@@ -1,9 +1,11 @@
-import { race, sleep, spawn, suspend } from 'std:effect'
+import { attempt, race, sleep, spawn, suspend } from 'std:effect'
 import { ResultErrors, fail, isFailure } from 'std:result'
 import type { TraceDef } from 'std:trace'
-import { current, emitLog, parseTraceparent, recordFailure, span, startSpan } from 'std:trace'
+import { Trace } from 'std:trace'
 
 import { describe, expect, it } from 'bun:test'
+
+import { parseTraceparent } from '../../src/trace/internal/propagation'
 
 import { traced, tracedResult } from './helpers'
 
@@ -12,7 +14,7 @@ const REMOTE = parseTraceparent('00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba
 describe('span lifecycle', () => {
   it('a root span: new trace, sampled + random flags, defaults', async () => {
     const { tracer, value } = await traced(() =>
-      span('root', function* () {
+      Trace.actions.span('root', function* () {
         return 42
       }),
     )
@@ -20,6 +22,7 @@ describe('span lifecycle', () => {
     expect(value).toBe(42)
 
     const root = tracer.span('root')
+
     expect(root.parent).toBeNull()
     expect(root.context.flags).toBe(3)
     expect(root.kind).toBe('internal')
@@ -33,9 +36,9 @@ describe('span lifecycle', () => {
 
   it('children share the trace, point at their parent, inherit the service', async () => {
     const { tracer } = await traced(() =>
-      span('root', { service: 'todos', kind: 'server' }, () =>
-        span('child', { kind: 'client', scope: { name: 'db', version: '1' } }, () =>
-          span('grandchild', { service: 'other' }, function* () {}),
+      Trace.actions.span('root', { service: 'todos', kind: 'server' }, () =>
+        Trace.actions.span('child', { kind: 'client', scope: { name: 'db', version: '1' } }, () =>
+          Trace.actions.span('grandchild', { service: 'other' }, function* () {}),
         ),
       ),
     )
@@ -65,13 +68,16 @@ describe('span lifecycle', () => {
   })
 
   it('the two-argument form works like the three-argument one', async () => {
-    const { tracer } = await traced(() => span('short', function* () {}))
+    const { tracer } = await traced(() => Trace.actions.span('short', function* () {}))
+
     expect(tracer.span('short').kind).toBe('internal')
   })
 
   it('an explicit remote parent continues its trace as a local root', async () => {
     const { tracer } = await traced(() =>
-      span('outer', () => span('handler', { parent: REMOTE, kind: 'server' }, function* () {})),
+      Trace.actions.span('outer', () =>
+        Trace.actions.span('handler', { parent: REMOTE, kind: 'server' }, function* () {}),
+      ),
     )
 
     const handler = tracer.span('handler')
@@ -86,8 +92,8 @@ describe('span lifecycle', () => {
 
   it('an explicit parent equal to the active span stays an in-process child', async () => {
     const { tracer } = await traced(() =>
-      span('outer', function* (outer) {
-        yield* span('inner', { parent: outer.context }, function* () {})
+      Trace.actions.span('outer', function* (outer) {
+        yield* Trace.actions.span('inner', { parent: outer.context }, function* () {})
       }),
     )
 
@@ -100,7 +106,9 @@ describe('span lifecycle', () => {
 
   it('parent: null forces a new trace under an active span', async () => {
     const { tracer } = await traced(() =>
-      span('outer', () => span('fresh', { parent: null }, function* () {})),
+      Trace.actions.span('outer', () =>
+        Trace.actions.span('fresh', { parent: null }, function* () {}),
+      ),
     )
 
     expect(tracer.span('fresh').parent).toBeNull()
@@ -109,7 +117,11 @@ describe('span lifecycle', () => {
 
   it('an invalid explicit parent starts a new trace', async () => {
     const { tracer } = await traced(() =>
-      span('odd', { parent: { traceId: 'nope', spanId: 'nope', flags: 1 } }, function* () {}),
+      Trace.actions.span(
+        'odd',
+        { parent: { traceId: 'nope', spanId: 'nope', flags: 1 } },
+        function* () {},
+      ),
     )
 
     expect(tracer.span('odd').parent).toBeNull()
@@ -117,23 +129,27 @@ describe('span lifecycle', () => {
 
   it('attributes: set, flatten, drop null / undefined, arrays', async () => {
     const { tracer } = await traced(() =>
-      span('attrs', { attributes: { 'http.route': '/todos', skipped: undefined } }, function* (s) {
-        s.setAttributes({
-          count: 3,
-          ok: true,
-          tags: ['a', 'b'],
-          sizes: [1, 2],
-          flags: [true, false],
-          mixed: [1, 'a', null],
-          objects: [{ a: 1 }],
-          empty: null,
-          when: new Date(0),
-          big: 12n,
-          user: { id: 7, address: { city: 'x', geo: { lat: 1, deep: { deeper: true } } } },
-        })
-        s.setAttribute('single', 'value')
-        s.setAttribute('count', 4)
-      }),
+      Trace.actions.span(
+        'attrs',
+        { attributes: { 'http.route': '/todos', skipped: undefined } },
+        function* (s) {
+          s.setAttributes({
+            count: 3,
+            ok: true,
+            tags: ['a', 'b'],
+            sizes: [1, 2],
+            flags: [true, false],
+            mixed: [1, 'a', null],
+            objects: [{ a: 1 }],
+            empty: null,
+            when: new Date(0),
+            big: 12n,
+            user: { id: 7, address: { city: 'x', geo: { lat: 1, deep: { deeper: true } } } },
+          })
+          s.setAttribute('single', 'value')
+          s.setAttribute('count', 4)
+        },
+      ),
     )
 
     expect(tracer.span('attrs').attributes).toEqual({
@@ -157,11 +173,13 @@ describe('span lifecycle', () => {
 
   it('limits: 128 attributes, values capped at 2048 UTF-8 bytes', async () => {
     const { tracer } = await traced(() =>
-      span('limits', function* (s) {
+      Trace.actions.span('limits', function* (s) {
         const many: Record<string, number> = {}
+
         for (let at = 0; at < 140; at += 1) {
           many[`k${at}`] = at
         }
+
         s.setAttributes(many)
         // overwriting a kept key is never dropped
         s.setAttribute('k0', -1)
@@ -169,12 +187,13 @@ describe('span lifecycle', () => {
     )
 
     const data = tracer.span('limits')
+
     expect(Object.keys(data.attributes)).toHaveLength(128)
     expect(data.droppedAttributes).toBe(12)
     expect(data.attributes.k0).toBe(-1)
 
     const { tracer: long } = await traced(() =>
-      span('long', function* (s) {
+      Trace.actions.span('long', function* (s) {
         s.setAttributes({
           ascii: 'x'.repeat(5000),
           wide: 'ğ'.repeat(3000),
@@ -185,6 +204,7 @@ describe('span lifecycle', () => {
 
     const attributes = long.span('long').attributes
     const bytes = (text: unknown) => new TextEncoder().encode(String(text)).length
+
     expect(bytes(attributes.ascii)).toBeLessThanOrEqual(2048)
     expect(bytes(attributes.wide)).toBeLessThanOrEqual(2048)
     expect(String(attributes.wide).endsWith('…')).toBe(true)
@@ -193,9 +213,10 @@ describe('span lifecycle', () => {
 
   it('events: name, time, attributes; 128 per span, the rest counted', async () => {
     const { tracer } = await traced(() =>
-      span('events', function* (s) {
+      Trace.actions.span('events', function* (s) {
         s.addEvent('first', { 'ozaco.step': 1 })
         s.addEvent('timed', undefined, 1234.5)
+
         for (let at = 0; at < 130; at += 1) {
           s.addEvent(`e${at}`)
         }
@@ -203,6 +224,7 @@ describe('span lifecycle', () => {
     )
 
     const data = tracer.span('events')
+
     expect(data.events).toHaveLength(128)
     expect(data.droppedEvents).toBe(4)
     // exported in time order: the explicitly-timed (earlier) event first
@@ -214,18 +236,21 @@ describe('span lifecycle', () => {
 
   it('events are exported sorted by time — an exception recorded at its failure time included', async () => {
     const { tracer } = await tracedResult(() =>
-      span('sorted', function* (s) {
+      Trace.actions.span('sorted', function* (s) {
         const failure = fail('app.early', 'failed before the event')
+
         yield* sleep(3)
         s.addEvent('late')
         s.addEvent('same-a', undefined, 5)
         s.addEvent('same-b', undefined, 5)
+
         return yield* failure
       }),
     )
 
     const data = tracer.span('sorted')
     const times = data.events.map(event => event.time)
+
     expect(times).toEqual(times.toSorted((left, right) => left - right))
     // equal times keep the order they were added in
     expect(data.events.slice(0, 2).map(event => event.name)).toEqual(['same-a', 'same-b'])
@@ -235,17 +260,19 @@ describe('span lifecycle', () => {
 
   it("exception events stay under the cap too, displacing the span code's own events", async () => {
     const { tracer } = await traced(() =>
-      span('busy', function* (s) {
+      Trace.actions.span('busy', function* (s) {
         for (let at = 0; at < 128; at += 1) {
           s.addEvent(`e${at}`)
         }
+
         for (let at = 0; at < 200; at += 1) {
-          yield* recordFailure(fail('app.flaky', `attempt ${at}`), { handled: true })
+          yield* Trace.actions.recordFailure(fail('app.flaky', `attempt ${at}`), { handled: true })
         }
       }),
     )
 
     const data = tracer.span('busy')
+
     expect(data.events).toHaveLength(128)
     // every user event gave way first, then the exceptions past the cap were counted dropped
     expect(data.events.every(item => item.name === 'exception')).toBe(true)
@@ -256,6 +283,7 @@ describe('span lifecycle', () => {
 
   it('a hostile Error (throwing getters) never breaks the span nor replaces the failure', async () => {
     const hostile = new Error('hidden')
+
     for (const key of ['stack', 'message', 'name', 'code', 'cause']) {
       Object.defineProperty(hostile, key, {
         get() {
@@ -265,7 +293,7 @@ describe('span lifecycle', () => {
     }
 
     const { tracer, result } = await tracedResult(() =>
-      span('hostile', function* () {
+      Trace.actions.span('hostile', function* () {
         throw hostile
       }),
     )
@@ -286,37 +314,41 @@ describe('span lifecycle', () => {
     }
 
     const { tracer, value } = await traced(() =>
-      span('guarded', { attributes: hostile }, function* (s) {
+      Trace.actions.span('guarded', { attributes: hostile }, function* (s) {
         s.setAttributes(hostile)
         s.addEvent('step', hostile)
+
         return 42
       }),
     )
 
     expect(value).toBe(42)
+
     const data = tracer.span('guarded')
+
     expect(data.attributes).toEqual({ ok: 1 })
     expect(data.events[0]?.attributes).toEqual({ ok: 1 })
   })
 
-  it('non-finite numbers reach the Tracer as strings on spans, events, links and logs', async () => {
+  it('non-finite numbers reach the Trace sink as strings on spans, events, links and logs', async () => {
     const odd = { ratio: 0 / 0, max: Number.POSITIVE_INFINITY, min: Number.NEGATIVE_INFINITY }
     const expected = { ratio: 'NaN', max: 'Infinity', min: '-Infinity' }
 
     const { tracer } = await traced(() =>
-      span(
+      Trace.actions.span(
         'odd',
         { attributes: odd, links: [{ context: REMOTE, attributes: odd }] },
         function* (s) {
           s.setAttributes({ late: Number.NaN })
           s.addEvent('step', odd)
           s.addLink(REMOTE, odd)
-          yield* emitLog({ body: 'odd', severityNumber: 9, attributes: odd })
+          yield* Trace.actions.emitLog({ body: 'odd', severityNumber: 9, attributes: odd })
         },
       ),
     )
 
     const data = tracer.span('odd')
+
     expect(data.attributes).toMatchObject({ ...expected, late: 'NaN' })
     expect(data.events[0]?.attributes).toEqual(expected)
     expect(data.links.map(link => link.attributes)).toEqual([expected, expected])
@@ -325,16 +357,19 @@ describe('span lifecycle', () => {
 
   it('event attributes are limited on their own', async () => {
     const { tracer } = await traced(() =>
-      span('event-attrs', function* (s) {
+      Trace.actions.span('event-attrs', function* (s) {
         const many: Record<string, number> = {}
+
         for (let at = 0; at < 130; at += 1) {
           many[`k${at}`] = at
         }
+
         s.addEvent('wide', many)
       }),
     )
 
     const [event] = tracer.span('event-attrs').events
+
     expect(Object.keys(event!.attributes ?? {})).toHaveLength(128)
     expect(event!.droppedAttributes).toBe(2)
   })
@@ -347,7 +382,7 @@ describe('span lifecycle', () => {
     }
 
     const { tracer } = await traced(() =>
-      span(
+      Trace.actions.span(
         'links',
         {
           links: [
@@ -357,6 +392,7 @@ describe('span lifecycle', () => {
         },
         function* (s) {
           s.addLink(REMOTE, { 'ozaco.link.reason': 'remote.parent' })
+
           for (let at = 0; at < 130; at += 1) {
             s.addLink(other)
           }
@@ -365,6 +401,7 @@ describe('span lifecycle', () => {
     )
 
     const data = tracer.span('links')
+
     expect(data.links).toHaveLength(128)
     expect(data.droppedLinks).toBe(4)
     expect(data.links[0]).toEqual({
@@ -382,7 +419,7 @@ describe('span lifecycle', () => {
     let late: TraceDef.SpanHandle | undefined
 
     const { tracer } = await traced(() =>
-      span('before', function* (s) {
+      Trace.actions.span('before', function* (s) {
         s.setStatus({ code: 'error', message: 'bad' })
         s.updateName('after')
         late = s
@@ -395,6 +432,7 @@ describe('span lifecycle', () => {
     late!.setStatus({ code: 'unset' })
 
     const data = tracer.span('after')
+
     expect(data.status).toEqual({ code: 'error', message: 'bad' })
     expect(data.attributes).toEqual({})
     expect(data.events).toEqual([])
@@ -402,12 +440,12 @@ describe('span lifecycle', () => {
 
   it('startTime is honoured; children run inside their parent on the anchored clock', async () => {
     const { tracer } = await traced(() =>
-      span('root', function* () {
+      Trace.actions.span('root', function* () {
         yield* sleep(2)
-        yield* span('child', function* () {
+        yield* Trace.actions.span('child', function* () {
           yield* sleep(2)
         })
-        yield* span('backdated', { startTime: 1000 }, function* () {})
+        yield* Trace.actions.span('backdated', { startTime: 1000 }, function* () {})
       }),
     )
 
@@ -422,13 +460,16 @@ describe('span lifecycle', () => {
     expect(Math.abs(root.start - Date.now())).toBeLessThan(5000)
   })
 
-  it('a failure RETURNED by the body fails the span and is returned as-is', async () => {
+  it('a failure RETURNED by the body fails the span and comes back through attempt', async () => {
     const failure = fail('app.nope', 'returned')
 
     const { tracer, value } = await traced(function* () {
-      const returned = yield* span('returns', function* () {
-        return failure
-      })
+      const returned = yield* attempt(() =>
+        Trace.actions.span('returns', function* () {
+          return failure
+        }),
+      )
+
       return { returned }
     })
 
@@ -440,7 +481,7 @@ describe('span lifecycle', () => {
   it('a halted span is cancelled: ozaco.cancelled, status unset, no exception', async () => {
     const { tracer } = await traced(() =>
       race([
-        span('slow', function* () {
+        Trace.actions.span('slow', function* () {
           yield* suspend()
         }),
         sleep(1),
@@ -448,6 +489,7 @@ describe('span lifecycle', () => {
     )
 
     const slow = tracer.span('slow')
+
     expect(slow.attributes['ozaco.cancelled']).toBe(true)
     expect(slow.status).toEqual({ code: 'unset' })
     expect(tracer.exceptions()).toHaveLength(0)
@@ -457,11 +499,12 @@ describe('span lifecycle', () => {
 describe('startSpan (LiveSpan)', () => {
   it('runs code with the span active and ends when told to (idempotent)', async () => {
     const { tracer, value } = await traced(function* (memory) {
-      const live = yield* startSpan('stream', { kind: 'server' })
+      const live = yield* Trace.actions.startSpan('stream', { kind: 'server' })
 
       const inside = yield* live.run(function* () {
-        yield* span('chunk', function* () {})
-        return (yield* current()).context.spanId
+        yield* Trace.actions.span('chunk', function* () {})
+
+        return (yield* Trace.actions.current()).context.spanId
       })
 
       expect(memory.names()).toBe('chunk')
@@ -481,13 +524,16 @@ describe('startSpan (LiveSpan)', () => {
 
   it('end({ failure }) fails it, end({ cancelled }) cancels it, end({ time }) stamps it', async () => {
     const { tracer } = await traced(function* () {
-      const failing = yield* startSpan('failing', { kind: 'client' })
+      const failing = yield* Trace.actions.startSpan('failing', { kind: 'client' })
+
       yield* failing.end({ failure: fail('rpc.down', 'lane closed') })
 
-      const cancelled = yield* startSpan('cancelled')
+      const cancelled = yield* Trace.actions.startSpan('cancelled')
+
       yield* cancelled.end({ cancelled: true })
 
-      const stamped = yield* startSpan('stamped', { startTime: 10 })
+      const stamped = yield* Trace.actions.startSpan('stamped', { startTime: 10 })
+
       yield* stamped.end({ time: 20 })
     })
 
@@ -499,11 +545,12 @@ describe('startSpan (LiveSpan)', () => {
 
   it('a span started in one task can be ended from another', async () => {
     const { tracer } = await traced(function* () {
-      const live = yield* startSpan('detached')
+      const live = yield* Trace.actions.startSpan('detached')
       const task = yield* spawn(function* () {
         yield* sleep(1)
         yield* live.end()
       })
+
       yield* task
     })
 

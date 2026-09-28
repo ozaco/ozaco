@@ -21,11 +21,14 @@ beforeEach(() => {
   cleared = []
   globalThis.setInterval = ((...args: Parameters<typeof setInterval>) => {
     const id = realSetInterval(...args)
+
     created.push(id)
+
     return id
   }) as typeof setInterval
   globalThis.clearInterval = ((id: Parameters<typeof clearInterval>[0]) => {
     cleared.push(id)
+
     return realClearInterval(id)
   }) as typeof clearInterval
 })
@@ -44,9 +47,11 @@ describe('interval', () => {
 
       for (const _ of yield* each(interval(10))) {
         ticks.push(performance.now() - started)
+
         if (ticks.length === 3) {
           break
         }
+
         yield* each.next()
       }
 
@@ -75,6 +80,7 @@ describe('interval', () => {
       while (performance.now() - pulled < 2) {
         yield* subscription.next()
         buffered++
+
         if (buffered >= 3) {
           break
         }
@@ -90,6 +96,7 @@ describe('interval', () => {
     await run(function* () {
       yield* scoped(function* () {
         const subscription = yield* interval(5)
+
         yield* subscription.next()
 
         expect(created).toHaveLength(1)

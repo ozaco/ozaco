@@ -47,6 +47,7 @@ describe('critical', () => {
             order.push('critical-start')
             yield* sleep(20)
             order.push('critical-end')
+
             return 'critical-value'
           })
 
@@ -154,6 +155,7 @@ describe('critical', () => {
     const outcome = await run(function* () {
       return yield* critical(function* () {
         yield* sleep(1)
+
         return 'plain'
       })
     })

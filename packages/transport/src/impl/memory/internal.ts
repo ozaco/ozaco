@@ -13,6 +13,7 @@ const offer = (durable: Memory.Durable, held: Memory.Held): void => {
 
   if (members.length === 0) {
     durable.pending.push(held)
+
     return
   }
 
@@ -31,16 +32,19 @@ const targetsOf = (link: Memory.Link, raw: TransportDef.Raw): Queue<TransportDef
   for (const sub of matching) {
     if (sub.group === undefined) {
       targets.push(sub.queue)
+
       continue
     }
 
     const members = groups.get(sub.group) ?? []
+
     members.push(sub)
     groups.set(sub.group, members)
   }
 
   for (const [group, members] of groups) {
     const cursor = link.cursors.get(group) ?? 0
+
     targets.push(members[cursor % members.length]!.queue)
     link.cursors.set(group, cursor + 1)
   }
@@ -73,10 +77,12 @@ function* misdeliver(link: Memory.Link, chaos: Memory.Chaos, raw: TransportDef.R
   for (const queue of targets) {
     if (random() < rules.dropRate) {
       counters.dropped += 1
+
       continue
     }
 
     const copies = random() < rules.duplicateRate ? 2 : 1
+
     counters.duplicated += copies - 1
 
     for (let copy = 0; copy < copies; copy += 1) {
@@ -111,17 +117,21 @@ function* subscribeDurable(
   }
 
   link.durables.set(name, durable)
+
   const inbox = createQueue<Memory.Held, void>()
   const taken = new Set<number>()
+
   durable.members.add(inbox)
 
   yield* ensure(() => {
     durable.members.delete(inbox)
     inbox.close(undefined)
+
     // unacked work of a departing member returns to the front of the line, then everything
     // parked is offered to whoever is still pulling
     for (const seq of [...taken].toSorted((left, right) => right - left)) {
       const held = durable.inflight.get(seq)
+
       if (held) {
         durable.inflight.delete(seq)
         durable.pending.unshift(held)
@@ -141,12 +151,15 @@ function* subscribeDurable(
   return {
     *next() {
       const step = yield* inbox.next()
+
       if (step.done) {
         return step
       }
 
       const held = step.value
+
       taken.add(held.seq)
+
       const settle = (): void => {
         taken.delete(held.seq)
         durable.inflight.delete(held.seq)
@@ -185,9 +198,12 @@ export const mulberry32 = (seed: number): (() => number) => {
 
   return () => {
     state = (state + 0x6d_2b_79_f5) >>> 0
+
     let mixed = state
+
     mixed = Math.imul(mixed ^ (mixed >>> 15), mixed | 1)
     mixed ^= mixed + Math.imul(mixed ^ (mixed >>> 7), mixed | 61)
+
     return ((mixed ^ (mixed >>> 14)) >>> 0) / 4_294_967_296
   }
 }
@@ -235,6 +251,7 @@ export const driver: TransportDef.Driver = {
 
     if (state.status === 'reconnecting') {
       state.outbox.push(raw)
+
       return null
     }
 
@@ -253,6 +270,7 @@ export const driver: TransportDef.Driver = {
 
     const queue = createQueue<TransportDef.Raw, void>()
     const subscriber: Memory.Subscriber = { pattern, group: options.group, queue }
+
     state.link.subscribers.add(subscriber)
 
     yield* ensure(() => {
@@ -263,6 +281,7 @@ export const driver: TransportDef.Driver = {
     return {
       *next() {
         const step = yield* queue.next()
+
         return step.done
           ? step
           : { done: false as const, value: relative(state.prefix, step.value) }
@@ -293,6 +312,7 @@ export const driver: TransportDef.Driver = {
 
   *drain() {
     const state = yield* useContext(StateRef)
+
     state.status = 'closed'
 
     for (const watcher of state.watchers) {

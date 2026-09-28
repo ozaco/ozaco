@@ -133,6 +133,7 @@ function* seams(): Operation<void> {
   const fromSchema = yield* useDb(schema)
   const row = (yield* fromSchema.query('todos').first())!
   const title: string = row.title
+
   void title
 
   // @ts-expect-error a table the schema does not declare is a compile error
@@ -140,8 +141,11 @@ function* seams(): Operation<void> {
 
   // `_id` is annotated with its table; an id column takes it — and a plain string too
   const tag = yield* fromSchema.insert('tags', { todo: row._id, label: 'x' })
+
   yield* fromSchema.insert('tags', { todo: 'plain-string-id', label: 'y' })
+
   const backref: Schema.Id<'todos'> = tag.todo
+
   void backref
 
   // `where(match)` narrows to comparable columns — json/Date columns do not fit an equality
@@ -163,6 +167,7 @@ function* seams(): Operation<void> {
   const scoped = fromSchema.scoped(where.eq('done', false))
   const scopedRow = (yield* scoped.query('todos').first())!
   const scopedTitle: string = scopedRow.title
+
   void scopedTitle
 }
 
@@ -175,6 +180,7 @@ function* probe(): Operation<void> {
   const title: string = row.title
   const priority: 'low' | 'high' = row.priority
   const note: string | null = row.note
+
   void [title, priority, note]
 
   // a projection keeps what was picked plus the system fields, and drops the rest
@@ -183,6 +189,7 @@ function* probe(): Operation<void> {
   const pickedSize: number = picked.size
   const pickedId: string = picked._id
   const pickedVersion: string = picked._version
+
   void [pickedTitle, pickedSize, pickedId, pickedVersion]
 
   // @ts-expect-error `done` was not selected
@@ -191,12 +198,14 @@ function* probe(): Operation<void> {
   const total: number = yield* db.query('todos').sum('size')
   const mean: number | null = yield* db.query('todos').avg('size')
   const biggest: string | null = yield* db.query('todos').max('title')
+
   void [total, mean, biggest]
 
   // a grouped answer carries the grouped columns plus the aggregate — nothing else
   const group = (yield* db.query('todos').groupBy('priority').count())[0]!
   const key: 'low' | 'high' = group.priority
   const howMany: number = group.count
+
   void [key, howMany]
 
   // @ts-expect-error the group answer carries the keys and the aggregate only
@@ -208,6 +217,7 @@ function* probe(): Operation<void> {
     { title: 'x', done: false, priority: 'low', size: 1 },
   )
   const upsertedId: string = upserted._id
+
   void upsertedId
 
   // `when` turns the answer into an outcome
@@ -219,6 +229,7 @@ function* probe(): Operation<void> {
   )
   const op: 'inserted' | 'updated' | 'skipped' = guarded.op
   const guardedTitle: string = guarded.doc.title
+
   void [op, guardedTitle]
 
   // @ts-expect-error `when` names real columns
@@ -230,23 +241,28 @@ function* probe(): Operation<void> {
     priority: 'low',
     size: 1,
   })
+
   // @ts-expect-error insertOrIgnore may answer null
   void ignored.title
 
   const seen: number | null = (yield* db.get('todos', 'a'))!.seen
   const due: Date | null = (yield* db.get('todos', 'a'))!.due
+
   void [seen, due]
 
   const page = yield* db.query('todos').paginate({ page: 1, pageSize: 10 })
   const pageRows: readonly { readonly title: string }[] = page.rows
   const pages: number = page.pages
+
   void [pageRows, pages]
 
   const keyset = yield* db.query('todos').paginate({ limit: 10 })
+
   void keyset.pageInfo.nextCursor
 
   const copy = stripSystem((yield* db.get('todos', 'a'))!)
   const copyTitle: string = copy.title
+
   // @ts-expect-error the system fields are gone
   void copy._id
   void copyTitle

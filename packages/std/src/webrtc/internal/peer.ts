@@ -34,6 +34,7 @@ export const createPeer = (
 
     // initial dial — a construction failure surfaces directly to the connect() caller
     const dialError = dialGeneration(session, impl)
+
     if (dialError !== undefined) {
       return yield* fail(RtcErrors.Connect, `peer construction failed: ${dialError}`)
     }
@@ -45,15 +46,18 @@ export const createPeer = (
 
     if (session.restart) {
       const budget = session.restart
+
       yield* fork(() => superviseIce(session, budget))
     }
 
     if (session.reconnect) {
       const budget = session.reconnect
+
       yield* fork(() => superviseReconnect(session, impl, budget))
     }
 
     const sampleMs = options.observe?.sampleMs ?? 0
+
     if (sampleMs > 0) {
       yield* fork(() => sampleStats(session, sampleMs))
     }

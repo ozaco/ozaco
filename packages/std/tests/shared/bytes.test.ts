@@ -22,6 +22,7 @@ describe('toBase64 / fromBase64', () => {
 
   it('round-trips arbitrary bytes, larger than one encoding chunk', () => {
     const bytes = new Uint8Array(100_000).map((_, index) => (index * 31) % 256)
+
     expect(fromBase64(toBase64(bytes))).toEqual(bytes)
   })
 

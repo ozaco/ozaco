@@ -7,17 +7,22 @@ const HEX = '0123456789abcdef'
  */
 export function* uuidId() {
   const bytes = new Uint8Array(16)
+
   crypto.getRandomValues(bytes)
   bytes[6] = (bytes[6]! & 0x0f) | 0x40 // version 4
   bytes[8] = (bytes[8]! & 0x3f) | 0x80 // variant 10xx
 
   let out = ''
+
   for (let i = 0; i < 16; i++) {
     if (i === 4 || i === 6 || i === 8 || i === 10) {
       out += '-'
     }
+
     const byte = bytes[i]!
+
     out += HEX[byte >> 4]! + HEX[byte & 0x0f]!
   }
+
   return out
 }

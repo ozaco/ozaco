@@ -9,12 +9,15 @@ import type { Helpers } from '../types/helpers'
 
 const baseType = (type: string | string[] | undefined): 'string' | 'number' | 'boolean' => {
   const resolved = Array.isArray(type) ? type.find(entry => entry !== 'null') : type
+
   if (resolved === 'boolean') {
     return 'boolean'
   }
+
   if (resolved === 'number' || resolved === 'integer') {
     return 'number'
   }
+
   return 'string'
 }
 
@@ -36,6 +39,7 @@ const walk = (json: Helpers.JsonSchema): CommandDef.OptionInfo[] => {
 
   for (const [name, prop] of Object.entries(json.properties ?? {})) {
     const array = Array.isArray(prop.type) ? prop.type.includes('array') : prop.type === 'array'
+
     infos.push({
       name,
       type: array ? baseType(prop.items?.type) : baseType(prop.type),
@@ -67,11 +71,13 @@ export function* optionsFromAction(meta: CommandDef.Inherited): Operation<Comman
   }
 
   const input: StandardSchemaV1 | undefined = meta.input
+
   if (input === undefined || input['~standard'].vendor !== 'zod') {
     return []
   }
 
   const zod = yield* attempt(call(() => import('zod')))
+
   if (!isSuccess(zod)) {
     return []
   }

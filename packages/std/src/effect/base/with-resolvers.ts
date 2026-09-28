@@ -27,10 +27,12 @@ export function withResolvers<T>(cause?: string): Helpers.WithResolvers<T> {
 
     if (result) {
       settle(result)
+
       return () => {}
     }
 
     continuations.add(settle)
+
     return () => continuations.delete(settle)
   }, cause)
 
@@ -38,6 +40,7 @@ export function withResolvers<T>(cause?: string): Helpers.WithResolvers<T> {
     if (!result) {
       result = outcome
     }
+
     for (const continuation of continuations) {
       continuation(result)
     }

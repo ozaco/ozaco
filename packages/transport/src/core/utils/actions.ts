@@ -30,9 +30,11 @@ export const transportActions = (backend: TransportDef.Driver): TransportDef.Act
     if (options.group !== undefined && !driver.capabilities.groups) {
       return yield* fail(TransportErrors.Unsupported, 'this transport has no consumer groups')
     }
+
     if (options.durable !== undefined && !driver.capabilities.durable) {
       return yield* fail(TransportErrors.Unsupported, 'this transport has no durable subscriptions')
     }
+
     if (options.transient && options.durable !== undefined) {
       return yield* fail(TransportErrors.Unsupported, 'a transient subscription cannot be durable')
     }
@@ -87,18 +89,22 @@ export const transportActions = (backend: TransportDef.Driver): TransportDef.Act
 
       const task = yield* fork(function* () {
         const subscription = yield* subscribe(topic, options)
+
         ready.resolve(undefined)
 
         for (;;) {
           const step = yield* subscription.next()
+
           if (step.done) {
             return
           }
+
           emitter.emit('message', step.value)
         }
       })
 
       yield* ready.operation
+
       return {
         emitter,
         *stop() {
@@ -109,6 +115,7 @@ export const transportActions = (backend: TransportDef.Driver): TransportDef.Act
 
     *emit(topic, value) {
       const encoded = yield* encodeValue(value)
+
       yield* driver.publish({ topic, data: encoded.data, headers: encoded.headers })
     },
     flow: (topic, options) => flowLane(runtime, topic, options),
@@ -126,6 +133,7 @@ export const transportActions = (backend: TransportDef.Driver): TransportDef.Act
     },
     *serve(topic, handler, options) {
       const { group } = yield* check({ group: options?.group, prefix: options?.prefix })
+
       return yield* servePackage(runtime, { topic, handler, group, origin: options?.origin })
     },
 

@@ -1,10 +1,10 @@
 import type { TraceDef } from 'std:trace'
-import { enableTracing, Tracer } from 'std:trace'
+import { Trace } from 'std:trace'
 
 let installs = 0
 
 /**
- * An in-memory `Tracer` (tests): every exported span and emitted log record lands in `spans` /
+ * An in-memory `Trace sink` (tests): every exported span and emitted log record lands in `spans` /
  * `logs`. Installed in a scope it enables tracing there — a server booted in that scope observes
  * (its spans land here too), a client created there traces its calls.
  */
@@ -14,11 +14,12 @@ export const memoryTracer = () => {
   const spans: TraceDef.SpanData[] = []
   const logs: TraceDef.LogData[] = []
 
-  const plugin = Tracer.implement({
+  const plugin = Trace.implement({
     name: `test/client-tracer-${installs}`,
     version: '1.0.0',
     *setup() {
-      yield* enableTracing()
+      yield* Trace.actions.enableTracing()
+
       return { spans, logs }
     },
   }).build({

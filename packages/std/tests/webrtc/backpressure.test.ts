@@ -24,28 +24,37 @@ describe('channel backpressure', () => {
       const chatA = yield* peerA.channel('chat', { highWaterMark: 1000, lowWaterMark: 100 })
       const channelsB = yield* peerB.channels
       const emitted = yield* channelsB.next()
+
       if (emitted.done) {
         return 'closed'
       }
+
       const chatB = emitted.value
 
       const received: unknown[] = []
+
       yield* fork(function* () {
         const messages = yield* chatB.messages
+
         while (true) {
           const item = yield* messages.next()
+
           if (item.done) {
             return
           }
+
           received.push(item.value)
         }
       })
 
       const native = chatA.native as FakeChannel
+
       native.bufferedAmount = 5000 // simulate a congested SCTP buffer
 
       const sendTask = yield* spawn(() => chatA.send('parked frame'))
+
       yield* sleep(20)
+
       const deliveredWhileParked = received.length
 
       native.drain() // buffer emptied → bufferedamountlow fires → the parked send resumes

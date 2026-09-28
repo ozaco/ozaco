@@ -4,6 +4,7 @@ import type { TraceDef } from '../types/trace'
 
 import { activeOf, isOn, isSuppressed } from './context'
 import { NOOP_HANDLE } from './handle'
+import { isValidContext } from './propagation'
 
 /**
  * The handle span code sees in `scope`: the active span's (recording, non-recording or a
@@ -19,6 +20,6 @@ export const handleIn = (scope: Scope): TraceDef.SpanHandle => {
   }
 
   return active.recording && !isOn(scope)
-    ? { ...NOOP_HANDLE, context: active.context }
+    ? { ...NOOP_HANDLE, context: active.context, valid: isValidContext(active.context) }
     : active.handle
 }

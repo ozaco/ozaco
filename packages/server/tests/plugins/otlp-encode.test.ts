@@ -477,12 +477,16 @@ describe('observe/otlp — encoder (protobuf)', () => {
     const logs = encodeLogs(logsOnly(logEvents)).body as Uint8Array
     const f64 = (value: number) => {
       const bytes = new Uint8Array(8)
+
       new DataView(bytes.buffer).setFloat64(0, value, true)
+
       return [...bytes]
     }
     const u64 = (value: bigint) => {
       const bytes = new Uint8Array(8)
+
       new DataView(bytes.buffer).setBigUint64(0, value, true)
+
       return [...bytes]
     }
 
@@ -499,8 +503,10 @@ describe('observe/otlp — encoder (protobuf)', () => {
     expect(contains(traces, [0x85, 0x01, 0x03, 0x03, 0x00, 0x00])).toBe(true)
     // Span.trace_id (1, bytes[16])
     expect(contains(traces, [0x0a, 0x10, ...Buffer.from(T1, 'hex')])).toBe(true)
+
     // LogRecord.event_name (12, string)
     const name = [...new TextEncoder().encode('http.server.request.exception')]
+
     expect(contains(logs, [0x62, name.length, ...name])).toBe(true)
   })
 })

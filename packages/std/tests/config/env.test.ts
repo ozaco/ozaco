@@ -32,8 +32,10 @@ const restoreEnv = (key: string, previous: string | undefined) => {
 describe('config provenance + env overlay', () => {
   it('explain lists every definer highest to lowest; origin is the first of them', async () => {
     const root = await makeRoot()
+
     try {
       const app = join(root, 'app')
+
       await mkdir(app)
       await writeFile(join(root, '.cfgspec.json'), jsonText({ mode: 'outer' }))
       await writeFile(
@@ -73,9 +75,11 @@ describe('config provenance + env overlay', () => {
     const previousPort = process.env.CFGSPEC_SERVER_PORT
     const previousVerbose = process.env.CFGSPEC_FLAGS_VERBOSE
     const previousLabel = process.env.CFGSPEC_LABEL
+
     process.env.CFGSPEC_SERVER_PORT = '8080'
     process.env.CFGSPEC_FLAGS_VERBOSE = 'true'
     process.env.CFGSPEC_LABEL = 'plain'
+
     try {
       await writeFile(
         join(root, '.cfgspec.json'),
@@ -113,13 +117,16 @@ describe('config provenance + env overlay', () => {
   it('STD_CONFIG selects the active variant when no variant option is given', async () => {
     const root = await makeRoot()
     const previous = process.env.STD_CONFIG
+
     process.env.STD_CONFIG = 'prod'
+
     try {
       await writeFile(join(root, '.cfgspec.json'), jsonText({ mode: 'base', keep: true }))
       await writeFile(join(root, '.prod.cfgspec.json'), jsonText({ mode: 'prod' }))
 
       const outcome = await run(function* () {
         yield* bootstrap({ cwd: root, home: root })
+
         return yield* Config.actions.get()
       })
 

@@ -6,7 +6,7 @@ import { isUse } from 'std:plugin'
 import { fail, isFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
 import type { TraceDef } from 'std:trace'
-import { newTraceId } from 'std:trace'
+import { Trace } from 'std:trace'
 
 import { ActiveRequest, RequestRef } from '../context'
 import { ObserveExporter, Server } from '../definition/protocol'
@@ -117,6 +117,7 @@ function* tracedLane(
           if (isFailure(step)) {
             ended = true
             yield* live.end({ failure: step })
+
             return yield* step
           }
 
@@ -196,6 +197,7 @@ export function* callRemote(
     if (isFailure(outcome)) {
       live.setAttribute('rpc.response.status_code', String(statusOf(outcome, meta)))
       yield* live.end({ failure: outcome })
+
       return yield* outcome
     }
 
@@ -207,7 +209,9 @@ export function* callRemote(
 
     if (outcome.value.lane) {
       const lane = yield* tracedLane(outcome.value.lane, live)
+
       handedOver = true
+
       return lane
     }
 
@@ -316,7 +320,9 @@ export const serverFor = (kernel: ServerDef.Context, name: string): CarrierDef.S
     const inProcess = transport === IN_PROCESS
     const request = inProcess ? yield* RequestRef.get() : undefined
     const wired = dispatch.trace?.request_id
-    const requestId = isRequestId(wired) ? wired : (request?.requestId ?? (yield* newTraceId()))
+    const requestId = isRequestId(wired)
+      ? wired
+      : (request?.requestId ?? (yield* Trace.actions.newTraceId()))
     const controller = new AbortController()
 
     // the handler's `ctx.reply`, merged like the edge merges it: carried back as the reply's
@@ -332,7 +338,7 @@ export const serverFor = (kernel: ServerDef.Context, name: string): CarrierDef.S
       input: dispatch.args,
       requestId,
       origin: request?.origin ?? 'external',
-      ...(inProcess ? {} : { parent: wireParent(dispatch.trace) }),
+      ...(inProcess ? {} : { parent: yield* wireParent(dispatch.trace) }),
       headers: dispatch.meta ?? {},
       deadline: dispatch.deadline,
       idempotencyKey: dispatch.idempotencyKey,
@@ -367,6 +373,7 @@ export const serverFor = (kernel: ServerDef.Context, name: string): CarrierDef.S
 
     if (def.meta.inputPlane === 'stream') {
       const [lane] = dispatch.inputs
+
       input = lane ? yield* inputs(lane.name) : undefined
     } else if (def.meta.inputPlane === 'parts') {
       const streams: Record<string, StreamDef.Branded> = {}
@@ -383,6 +390,7 @@ export const serverFor = (kernel: ServerDef.Context, name: string): CarrierDef.S
         controller.abort(ServerErrors.Cancelled)
       }
     })
+
     const outcome = yield* runDispatch(kernel, { ...call, input }, { actions: actionsOf(kernel) })
 
     if (isFailure(outcome)) {

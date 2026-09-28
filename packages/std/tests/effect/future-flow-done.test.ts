@@ -26,17 +26,21 @@ describe('future-flow — done', () => {
           for await (const _ of flow) {
             break
           }
+
           return 'short'
         })()
         const long = (async () => {
           const got: number[] = []
+
           for await (const value of flow) {
             got.push(value)
           }
+
           return `long:${got.length}`
         })()
 
         const first = yield* until(Promise.race([flow.done.then(() => 'done'), long]))
+
         expect(first).toBe('long:4')
 
         yield* until(Promise.all([short, long]))
@@ -52,6 +56,7 @@ describe('future-flow — done', () => {
         const flow = createFutureFlow(scope, ticks(2, 5))
 
         const seen: number[] = []
+
         yield* until(
           (async () => {
             for await (const value of flow) {
@@ -74,9 +79,11 @@ describe('future-flow — done', () => {
 
         const loop = (async () => {
           let count = 0
+
           for await (const _ of flow) {
             count += 1
           }
+
           return count
         })()
 

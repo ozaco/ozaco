@@ -74,17 +74,22 @@ export function* encryptSecret(data: Uint8Array | string, secret: string) {
 
   const key = yield* deriveKey(secret, salt)
   const cipher = createCipheriv('aes-256-gcm', key, iv, { authTagLength: TAG_BYTES })
+
   cipher.setAAD(Uint8Array.of(VERSION))
+
   const ct = Buffer.concat([cipher.update(bytes), cipher.final()])
   const tag = cipher.getAuthTag()
+
   key.fill(0)
 
   const out = new Uint8Array(HEADER_BYTES + ct.length)
+
   out[0] = VERSION
   out.set(salt, 1)
   out.set(iv, 1 + SALT_BYTES)
   out.set(tag, 1 + SALT_BYTES + IV_BYTES)
   out.set(ct, HEADER_BYTES)
+
   return out
 }
 
@@ -92,6 +97,7 @@ export function* decryptSecret(data: Uint8Array, secret: string) {
   if (data.length < HEADER_BYTES) {
     return yield* fail(IOErrors.DecryptFailed, 'ciphertext is too short')
   }
+
   if (data[0] !== VERSION) {
     return yield* fail(IOErrors.DecryptFailed, `unsupported ciphertext version: ${data[0]}`)
   }
@@ -108,15 +114,19 @@ export function* decryptSecret(data: Uint8Array, secret: string) {
     until(
       new Promise<Buffer>(resolve => {
         const decipher = createDecipheriv('aes-256-gcm', key, iv, { authTagLength: TAG_BYTES })
+
         decipher.setAAD(Uint8Array.of(VERSION))
         decipher.setAuthTag(tag)
+
         const out = Buffer.concat([decipher.update(ct), decipher.final()])
+
         key.fill(0)
         resolve(out)
       }),
     ),
     failure => {
       key.fill(0)
+
       return fail(
         IOErrors.DecryptFailed,
         'decryption failed — wrong secret or corrupted data',
@@ -124,6 +134,7 @@ export function* decryptSecret(data: Uint8Array, secret: string) {
       )
     },
   )
+
   return new Uint8Array(plain)
 }
 
@@ -160,12 +171,14 @@ export function* generateSignKeyPair() {
 
 export function* signData(data: Uint8Array | string, privateKey: Uint8Array) {
   const bytes = typeof data === 'string' ? encoder.encode(data) : data
+
   return yield* mapError(
     // createPrivateKey / sign are synchronous and throw on a malformed key; the throw rejects the
     // promise, surfaced here as a tagged failure (no bare try/catch).
     until(
       new Promise<Uint8Array>(resolve => {
         const key = createPrivateKey({ key: Buffer.from(privateKey), format: 'der', type: 'pkcs8' })
+
         resolve(new Uint8Array(nodeSign(null, bytes, key)))
       }),
     ),
@@ -179,11 +192,13 @@ export function* verifyData(
   publicKey: Uint8Array,
 ) {
   const bytes = typeof data === 'string' ? encoder.encode(data) : data
+
   return yield* mapError(
     // A bad signature returns `false`; only a malformed public key throws -> tagged failure.
     until(
       new Promise<boolean>(resolve => {
         const key = createPublicKey({ key: Buffer.from(publicKey), format: 'der', type: 'spki' })
+
         resolve(nodeVerify(null, bytes, key, signature))
       }),
     ),

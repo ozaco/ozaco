@@ -7,6 +7,7 @@ function combine<TArgs extends unknown[], TReturn>(
   if (middlewares.length === 0) {
     return (args, next) => next(...args)
   }
+
   return middlewares.reduceRight(
     (sum, middleware) => (args, next) => middleware(args, (...inner) => sum(inner, next)),
   )
@@ -33,15 +34,19 @@ export function append<A>(
   inner: Partial<Around<A>>,
 ): Partial<Around<A>> {
   const result: Partial<Around<A>> = { ...outer }
+
   for (const key of Object.keys(inner) as (keyof A)[]) {
     const current = outer[key]
     const decoration = inner[key]
+
     if (current) {
       const pair = [current, decoration] as Middleware<unknown[], unknown>[]
+
       result[key] = combine(pair) as Around<A>[keyof A]
     } else {
       result[key] = decoration
     }
   }
+
   return result
 }

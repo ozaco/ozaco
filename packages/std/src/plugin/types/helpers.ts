@@ -30,6 +30,8 @@ export namespace Helpers {
     subtype?: symbol | undefined
     /** Allow several implementations to be installed side by side (each with its own context). */
     cloneable?: boolean | undefined
+    /** `false`: failures passing this protocol get no location labels (default `true`). */
+    labels?: boolean | undefined
 
     name: string
     version: string
@@ -142,6 +144,7 @@ export namespace Helpers {
     version: string
     subtype?: symbol | undefined
     cloneable?: boolean | undefined
+    labels?: boolean | undefined
     handlers?: Record<string, AnyType> | undefined
     defaults?: Record<string, AnyType> | undefined
     exec?: Protocol.Exec | undefined

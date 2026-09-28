@@ -37,6 +37,7 @@ describe('logger creation + record shape', () => {
     })
 
     expect(isFailure(outcome)).toBe(true)
+
     if (isFailure(outcome)) {
       expect(outcome.error).toBe('std:plugin.missing-action')
     }
@@ -46,6 +47,7 @@ describe('logger creation + record shape', () => {
     const outcome = await run(function* () {
       yield* DefaultLogger.use()
       yield* Logger.actions.info('into the void')
+
       return 'done'
     })
 

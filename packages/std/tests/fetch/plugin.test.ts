@@ -31,11 +31,13 @@ const server = Bun.serve({
 
     if (pathname === '/hit' || pathname === '/cached') {
       hits += 1
+
       return new Response('served')
     }
 
     if (pathname === '/slow') {
       await Bun.sleep(400)
+
       return new Response('late')
     }
 
@@ -131,6 +133,7 @@ describe('install options', () => {
     })
 
     expect(isFailure(timedOut)).toBe(true)
+
     if (isFailure(timedOut)) {
       expect(timedOut.error).toBe('std:fetch.timeout')
       expect(timedOut.message).toBe(`${base}/slow: timed out after 25ms`)
@@ -207,9 +210,11 @@ describe('middleware over the request dispatch', () => {
         request: ([input, init], next) =>
           (function* () {
             trace.push(String(input))
+
             if (String(input) === '/cached') {
               return createFetchResponse(new Response('from-cache'))
             }
+
             return yield* next(input, init)
           })(),
       })

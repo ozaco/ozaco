@@ -11,12 +11,15 @@ export const coerce = (value: string): unknown => {
   if (value === 'true') {
     return true
   }
+
   if (value === 'false') {
     return false
   }
+
   if (value !== '' && !Number.isNaN(Number(value))) {
     return Number(value)
   }
+
   return value
 }
 
@@ -79,12 +82,14 @@ export const findOrigin = (list: ConfigDef.Source[], key: string): ConfigDef.Sou
 
   for (let depth = parts.length; depth >= 1; depth--) {
     const prefix = parts.slice(0, depth).join('.')
+
     for (const source of flat) {
       if (getPath(source.data, prefix) !== undefined) {
         return source
       }
     }
   }
+
   return undefined
 }
 
@@ -96,12 +101,14 @@ export const explainOf = (ctx: ConfigDef.Context, key: string): ConfigDef.Origin
   const out: ConfigDef.Origin[] = []
 
   const envValue = getPath(ctx.env, key)
+
   if (envValue !== undefined) {
     out.push({ path: '<env>', value: envValue })
   }
 
   for (const source of collectSources(sources(ctx))) {
     const value = getPath(source.data, key)
+
     if (value !== undefined) {
       out.push({ path: source.path, value })
     }
@@ -122,10 +129,12 @@ export const payloadOf = (source: ConfigDef.Source): ConfigDef.Object =>
  */
 export function* watchTargets(ctx: ConfigDef.Context) {
   const recursiveDirs: string[] = []
+
   // a targeted file (`path`) has no config directories — only its own sources are watched
   if (ctx.path === undefined && hasFlag(ctx.features, Features.DIR)) {
     for (const level of yield* collectDirs(ctx, ctx.cwd)) {
       const configDir = yield* IO.actions.join(level, dirName(ctx))
+
       if (yield* IO.actions.exists(configDir)) {
         recursiveDirs.push(configDir)
       }
@@ -136,6 +145,7 @@ export function* watchTargets(ctx: ConfigDef.Context) {
   const sep = (yield* IO.actions.join('a', 'b')).slice(1, -1)
 
   const files = new Set<string>()
+
   for (const source of collectSources(ctx.chain)) {
     if (!recursiveDirs.some(dir => withinDir(source.path, dir, sep))) {
       files.add(source.path)

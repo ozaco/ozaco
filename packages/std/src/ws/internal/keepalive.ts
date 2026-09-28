@@ -25,11 +25,13 @@ export const keepAlive = guard(function* (
     yield* sleep(intervalMs)
 
     const socket = session.socket
+
     if (session.ended || !socket || socket.readyState !== OPEN) {
       continue
     }
 
     const encoded = yield* attempt(() => Codec.actions.encodeFrame(payload, session.options.codec))
+
     if (!isSuccess(encoded)) {
       return
     }

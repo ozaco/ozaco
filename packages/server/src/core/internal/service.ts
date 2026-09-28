@@ -31,6 +31,7 @@ const _onlyStructural: readonly Helpers.StructuralKey[] = STRUCTURAL
 const _allStructural: [Helpers.MissingStructural<typeof STRUCTURAL>] extends [never]
   ? true
   : Helpers.MissingStructural<typeof STRUCTURAL> = true
+
 void [_onlyStructural, _allStructural]
 
 export const RESERVED: ReadonlySet<string> = new Set(STRUCTURAL)

@@ -78,6 +78,7 @@ describe('devkit — resolve', () => {
 
     // a `sourceDir` build inlines real files; its declarations never name an alias
     const inlined = stdResolve.rolldown({ sourceDir: './src' })
+
     expect(rendered(inlined, `import("std:shared")`, 'index.d.ts')).toBeNull()
     expect(resolved(inlined, 'std:shared')).toBe('./src/shared/index.ts')
     expect(resolved(inlined, '@ozaco/std/shared')).toBe('./src/shared/index.ts')

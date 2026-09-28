@@ -21,7 +21,9 @@ const resourceOf = (socket: Socket): string => socket.service ?? socket.path.spl
 
 const socketUrl = (connection: Connection, path: string): string => {
   const url = new URL(path, connection.base)
+
   url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
+
   // tokens never ride the URL — first-frame sockets authorize in-band after open
   return url.toString()
 }
@@ -51,27 +53,36 @@ export const SocketTab = ({ socket, connection }: Props) => {
 
   const apply = (frame: WatchFrame) => {
     setToken(frame.token)
+
     if (frame.t === 'notify') {
       setPage(frame.page)
       log('info', `notify · the set changed around this window · total ${frame.page.total}`)
+
       return
     }
+
     if (frame.page) {
       setPage(frame.page)
     }
+
     if (frame.t === 'sync') {
       setRows([...frame.rows])
       log('in', `sync ${frame.rows.length} row(s) · ${frame.token}`)
+
       return
     }
+
     setRows(prior => {
       const byId = new Map(prior.map(row => [String(row['_id']), row]))
+
       for (const row of [...frame.added, ...frame.changed]) {
         byId.set(String(row['_id']), row)
       }
+
       for (const id of frame.removed) {
         byId.delete(id)
       }
+
       return [...byId.values()]
     })
     log(
@@ -92,16 +103,20 @@ export const SocketTab = ({ socket, connection }: Props) => {
   const openWatch = (turnCursor: string | null) => {
     let parsedFilter: unknown
     let parsedOrder: { field: string; direction?: 'asc' | 'desc' } | undefined
+
     try {
       parsedFilter = filter.trim() ? JSON.parse(filter) : undefined
       parsedOrder = order.trim() ? (JSON.parse(order) as typeof parsedOrder) : undefined
     } catch {
       log('error', 'filter/order must be JSON')
       setConnected(false)
+
       return
     }
+
     const window = Number(limit)
     const opening = turnCursor ?? cursor.trim() ?? ''
+
     log(
       'out',
       `watch ${resourceOf(socket)} ${filter.trim() || ''}${window > 0 ? ` limit ${window}` : ''}${opening && opening !== '0' ? ' (cursor)' : ''}${since.trim() ? ` since ${since}` : ''}`,
@@ -151,11 +166,15 @@ export const SocketTab = ({ socket, connection }: Props) => {
     setRows([])
     setPage(null)
     setConnected(true)
+
     if (isResource) {
       openWatch(null)
+
       return
     }
+
     const ws = new WebSocket(socketUrl(connection, socket.path))
+
     raw.current = ws
     log('out', `connect ${socket.path}`)
     ws.addEventListener('open', () => {
@@ -180,8 +199,10 @@ export const SocketTab = ({ socket, connection }: Props) => {
   const sendFrame = () => {
     if (!raw.current || raw.current.readyState !== WebSocket.OPEN) {
       log('error', 'not connected')
+
       return
     }
+
     raw.current.send(frameText)
     log('out', frameText)
   }

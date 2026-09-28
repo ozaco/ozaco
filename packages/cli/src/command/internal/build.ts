@@ -5,11 +5,14 @@ import type { Helpers } from '../types/helpers'
 const convert = (type: 'string' | 'number' | 'boolean', value: string): unknown => {
   if (type === 'number') {
     const parsed = Number(value)
+
     return Number.isNaN(parsed) ? value : parsed
   }
+
   if (type === 'boolean') {
     return value !== 'false'
   }
+
   return value
 }
 
@@ -36,21 +39,25 @@ export const build = (
     if (index >= raw.positionals.length) {
       break
     }
+
     const info = byName.get(field)
     const type = info?.type ?? 'string'
 
     if (info?.array && index === args.length - 1) {
       values[field] = raw.positionals.slice(index).map(value => convert(type, value))
       consumed = raw.positionals.length
+
       break
     }
 
     const converted = convert(type, raw.positionals[index]!)
+
     values[field] = info?.array ? [converted] : converted
     consumed = index + 1
   }
 
   const surplus = raw.positionals.slice(consumed)
+
   if (surplus.length > 0) {
     errors.push(
       surplus.length === 1
@@ -61,9 +68,11 @@ export const build = (
 
   for (const info of infos) {
     const got = raw.options.get(info.name)
+
     if (got === undefined || got.length === 0) {
       continue
     }
+
     values[info.name] = info.array
       ? got.map(value => convert(info.type, value))
       : convert(info.type, got[got.length - 1]!)

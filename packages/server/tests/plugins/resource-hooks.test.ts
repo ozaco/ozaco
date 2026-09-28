@@ -14,6 +14,7 @@ import { storage, todosTable, testSchema } from '../helpers'
 const json = function* (path: string, init?: RequestInit) {
   const response = yield* Edge.actions.handle(new Request(`http://edge${path}`, init))
   const text = yield* until(response.text())
+
   return {
     status: response.status,
     body: text ? JSON.parse(text) : null,
@@ -41,10 +42,13 @@ describe('resource hooks', () => {
       // output rewrite: list rows SHOUT, get rows are stamped
       *after({ op, output }) {
         const upper = (row: AnyType) => ({ ...row, title: row.title.toUpperCase() })
+
         if (op === 'list') {
           const page = output as AnyType
+
           return { ...page, data: page.data.map(upper) }
         }
+
         if (op === 'get') {
           return { ...(output as AnyType), title: `seen:${(output as AnyType).title}` }
         }
@@ -59,16 +63,21 @@ describe('resource hooks', () => {
             filter: { op: 'eq', field: 'done', value: false },
           })
         }
+
         if (op === 'get') {
           const out = (yield* next(input)) as AnyType
+
           return { ...out, title: `${out.title}:wrapped` }
         }
+
         if (op === 'remove') {
           const row = yield* (yield* useDb(testSchema)).get('todos', (input as AnyType).id)
+
           if (row && String(row.title).includes('keep')) {
             return yield* fail(ServerErrors.Forbidden, 'protected row')
           }
         }
+
         return yield* next(input)
       },
 
@@ -77,6 +86,7 @@ describe('resource hooks', () => {
       *error({ op, input, failure }) {
         if (op === 'get') {
           const now = new Date().toISOString()
+
           return {
             _id: String((input as AnyType).id),
             _created_at: now,
@@ -87,9 +97,11 @@ describe('resource hooks', () => {
             note: null,
           }
         }
+
         if (op === 'update') {
           return yield* fail(ServerErrors.BadRequest, 'update rewritten by hook')
         }
+
         return appendCauses(failure, 'hook:error saw it')
       },
     })
@@ -97,28 +109,34 @@ describe('resource hooks', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({
           services: [todos],
           edge: BunEdge,
         })
+
         yield* server.start()
 
         // before: input was rewritten before the insert
         const open = yield* post('/todos', { title: 'a', done: false })
+
         expect(open.status).toBe(200)
         expect(open.body.title).toBe('a!')
         yield* post('/todos', { title: 'b', done: true })
 
         // around(list) scopes to done=false, after(list) shouts — the client asked for ALL
         const page = yield* json('/todos')
+
         expect(page.body.data.map((row: AnyType) => row.title)).toEqual(['A!'])
 
         // after runs INSIDE around: get is stamped by after, then wrapped by around
         const got = yield* json(`/todos/${open.body._id}`)
+
         expect(got.body.title).toBe('seen:a!:wrapped')
 
         // error(get) RECOVERS the not-found with a stub row (it still passes the output schema)
         const ghost = yield* json('/todos/nope')
+
         expect(ghost.status).toBe(200)
         expect(ghost.body).toMatchObject({ _id: 'nope', title: 'ghost' })
 
@@ -128,6 +146,7 @@ describe('resource hooks', () => {
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ title: 'x' }),
         })
+
         expect(rewritten.status).toBe(400)
         expect(rewritten.body.error.error).toBe(ServerErrors.BadRequest)
         expect(rewritten.body.error.message).toBe('update rewritten by hook')
@@ -135,11 +154,13 @@ describe('resource hooks', () => {
         // around(remove) short-circuits on the guard — the row survives
         const guarded = yield* post('/todos', { title: 'keep me', done: false })
         const denied = yield* json(`/todos/${guarded.body._id}`, { method: 'DELETE' })
+
         expect(denied.status).toBe(403)
         expect((yield* json(`/todos/${guarded.body._id}`)).status).toBe(200)
 
         // an unguarded remove still works
         const removed = yield* json(`/todos/${open.body._id}`, { method: 'DELETE' })
+
         expect(removed.body).toEqual({ removed: true })
         yield* server.stop()
       }),
@@ -152,10 +173,13 @@ describe('resource hooks', () => {
         if (op !== 'watch') {
           return
         }
+
         const frame = input as AnyType
+
         if (frame.filter?.value === 'boom') {
           return yield* fail(ServerErrors.Forbidden, 'no boom')
         }
+
         // the tenancy seam: whatever the client asked for, this watch only sees done=false
         return { ...frame, filter: { op: 'eq', field: 'done', value: false } }
       },
@@ -164,8 +188,10 @@ describe('resource hooks', () => {
         if (op !== 'watch') {
           return
         }
+
         const frame = output as AnyType
         const live = (row: AnyType) => ({ ...row, title: `live:${row.title}` })
+
         return frame.t === 'sync'
           ? { ...frame, rows: frame.rows.map(live) }
           : { ...frame, added: frame.added.map(live), changed: frame.changed.map(live) }
@@ -181,6 +207,7 @@ describe('resource hooks', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({
           services: [todos],
           edge: BunEdge,
@@ -188,7 +215,9 @@ describe('resource hooks', () => {
         const info = yield* server.start({ port: 0 })
         const ws = new WebSocket(`${info.url!.replace('http', 'ws')}/todos/_realtime`)
         const frames: AnyType[] = []
+
         ws.addEventListener('message', event => frames.push(JSON.parse(String(event.data))))
+
         const next = (after: number) =>
           until(
             new Promise<AnyType>((resolve, reject) => {
@@ -202,9 +231,11 @@ describe('resource hooks', () => {
                   setTimeout(poll, 10)
                 }
               }
+
               poll()
             }),
           )
+
         yield* until(
           new Promise<void>(resolve => {
             ws.addEventListener('open', () => resolve())
@@ -215,12 +246,16 @@ describe('resource hooks', () => {
 
         // the client watches EVERYTHING — before scopes it to done=false, after projects titles
         ws.send(JSON.stringify({ t: 'watch', id: 'w1' }))
+
         const sync = yield* next(0)
+
         expect(sync.t).toBe('sync')
         expect(sync.rows.map((row: AnyType) => row.title)).toEqual(['live:open'])
 
         yield* server.call(todos, 'create', { title: 'fresh', done: false })
+
         const delta = yield* next(1)
+
         expect(delta.t).toBe('delta')
         expect(delta.added.map((row: AnyType) => row.title)).toEqual(['live:fresh'])
 
@@ -232,7 +267,9 @@ describe('resource hooks', () => {
             filter: { op: 'eq', field: 'title', value: 'boom' },
           }),
         )
+
         const denied = yield* next(2)
+
         expect(denied).toMatchObject({
           t: 'error',
           id: 'w2',
@@ -269,11 +306,14 @@ describe('resource hooks', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({ services: [declared, bare], edge: BunEdge })
+
         yield* server.start()
 
         const row = yield* post('/declared', { title: 'a', done: false })
         const locked = yield* json(`/declared/${row.body._id}`, { method: 'DELETE' })
+
         expect(locked.status).toBe(423)
         expect(locked.body.error.error).toBe('todos.locked')
 
@@ -285,6 +325,7 @@ describe('resource hooks', () => {
           headers: { 'content-type': 'application/json', 'if-match': 'v:stale' },
           body: JSON.stringify({ title: 'x' }),
         })
+
         expect(stale.status).toBe(412)
         yield* server.stop()
       }),

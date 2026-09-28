@@ -27,6 +27,7 @@ const columnDdl = (dialect: Sql.Dialect, column: Spec.Column): string => {
   } else if (!column.optional) {
     parts.push('NOT NULL')
   }
+
   const fallback = systemDefault(column)
 
   if (fallback) {
@@ -51,6 +52,7 @@ export const compileStep = (dialect: Sql.Dialect, step: Spec.Step): readonly str
   switch (step.kind) {
     case 'create-table': {
       const columns = step.table.columns.map(column => columnDdl(dialect, column)).join(', ')
+
       return [`CREATE TABLE IF NOT EXISTS ${quoteIdent(step.table.name)} (${columns})`]
     }
 
@@ -66,6 +68,7 @@ export const compileStep = (dialect: Sql.Dialect, step: Spec.Step): readonly str
 
     case 'alter-column': {
       const { alterColumn } = dialect
+
       return alterColumn && !step.unsupported
         ? [alterColumn(step.table, step.column.name, dialect.types[step.column.kind])]
         : []

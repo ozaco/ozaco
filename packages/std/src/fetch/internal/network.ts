@@ -11,6 +11,7 @@ export const networkFault = (value: unknown): false | string => {
   }
 
   const { name, code, message } = value as { name?: unknown; code?: unknown; message?: unknown }
+
   if (name === 'AbortError' || name === 'TimeoutError') {
     return false
   }

@@ -49,14 +49,17 @@ export const App = () => {
       loaded => {
         setManifest(loaded)
         setStatus({ kind: 'ok' })
+
         return loaded
       },
       (error: WireFailure) => {
         setStatus({ kind: 'offline', error })
+
         return null
       },
     )
   }, [connection])
+
   useEffect(refresh, [refresh])
 
   const open = (entry: Entry) => {
@@ -64,15 +67,18 @@ export const App = () => {
       entry.kind === 'action'
         ? { id: entry.id, kind: 'http', title: entry.action.id, method: entry.action.route.method }
         : { id: entry.id, kind: 'socket', title: entry.socket.path }
+
     setTabs(prior => (prior.some(tab => tab.id === spec.id) ? prior : [...prior, spec]))
     setActive(spec.id)
   }
   const close = (id: string) => {
     setTabs(prior => {
       const next = prior.filter(tab => tab.id !== id)
+
       if (active === id) {
         setActive(next.at(-1)?.id ?? null)
       }
+
       return next
     })
   }
@@ -142,6 +148,7 @@ export const App = () => {
           {manifest &&
             tabs.map(tab => {
               const entry = tab.kind === 'manifest' ? null : findEntry(manifest, tab.id)
+
               return (
                 <div
                   key={tab.id}

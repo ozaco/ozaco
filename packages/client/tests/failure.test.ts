@@ -10,7 +10,7 @@ import { createClient, failureOf, wireFailureOf } from 'client:core'
 import { attempt, run } from 'std:effect'
 import type { Result } from 'std:result'
 import { asFailure, fail, isFailure, ResultErrors, unwrap } from 'std:result'
-import { isRecorded } from 'std:trace'
+import { Trace } from 'std:trace'
 
 import { describe, expect, it } from 'bun:test'
 
@@ -26,6 +26,7 @@ const encoded = async (value: unknown): Promise<string> =>
   unwrap(
     await run(function* () {
       yield* JsonCodec.use()
+
       return yield* JsonCodec.actions.stringify(value)
     }),
   )
@@ -92,6 +93,7 @@ describe('failure decode — the JsonCodec path', () => {
 
     // the wrapped failure: a real one (iterable, `isFailure`), its own causes kept in order
     const storage = failed.causes[1] as Result.Failure<unknown>
+
     expect(isFailure(storage)).toBe(true)
     expect(storage.error).toBe('storage.full')
     expect(storage.message).toBe('cannot write the report')
@@ -99,6 +101,7 @@ describe('failure decode — the JsonCodec path', () => {
 
     // … over the platform error's fold: its tag and text travel, the platform error (`raw`) never
     const platform = storage.causes[1] as Result.Failure<unknown>
+
     expect(isFailure(platform)).toBe(true)
     expect(platform.error).toBe(ResultErrors.Unknown)
     expect(platform.message).toBe('RangeError: no space left on device (ENOSPC)')
@@ -153,8 +156,8 @@ describe('failure decode — the JsonCodec path', () => {
       'status:500',
     ])
     // the server recorded it in the caller's trace: marked recorded there (a remote one)
-    expect(isRecorded(failed, TRACE)).toBe(true)
-    expect(isRecorded(failed, OTHER_TRACE)).toBe(false)
+    expect(unwrap(await run(() => Trace.actions.isRecorded(failed, TRACE)))).toBe(true)
+    expect(unwrap(await run(() => Trace.actions.isRecorded(failed, OTHER_TRACE)))).toBe(false)
   })
 
   it('wireFailureOf renders a nested failure cause as its one-line form', () => {

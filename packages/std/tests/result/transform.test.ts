@@ -29,6 +29,7 @@ describe('unwrap', () => {
     const failure = fail('nope')
 
     let caught: unknown
+
     try {
       unwrap(failure)
     } catch (error) {
@@ -45,18 +46,22 @@ describe('unwrap', () => {
 
   it('resolves through promises of results', async () => {
     const eventual = unwrap(Promise.resolve(succeed(7)) as AnyType) as Promise<number>
+
     expect(await eventual).toBe(7)
 
     const failure = fail('late')
     const substituted = unwrap(Promise.resolve(failure) as AnyType, 'fallback') as Promise<string>
+
     expect(await substituted).toBe('fallback')
 
     let caught: unknown
+
     try {
       await unwrap(Promise.resolve(failure) as AnyType)
     } catch (error) {
       caught = error
     }
+
     expect(caught).toBe(failure)
   })
 })
@@ -67,12 +72,14 @@ describe('appendCauses', () => {
     const returned = appendCauses(failure, 'second', 'third')
 
     expect(returned).toBe(failure)
+
     if (isFailure(failure)) {
       expect(failure.causes).toEqual(['first', 'second', 'third'])
     }
 
     // successes flow through untouched — no causes property is invented
     const ok = succeed('fine')
+
     expect(appendCauses(ok, 'ignored')).toBe(ok)
     expect('causes' in ok).toBe(false)
   })
@@ -82,6 +89,7 @@ describe('appendCauses', () => {
     const settled = await (appendCauses(Promise.resolve(failure) as AnyType, 'later') as AnyType)
 
     expect(settled).toBe(failure)
+
     if (isFailure(failure)) {
       expect(failure.causes).toEqual(['later'])
     }
@@ -92,11 +100,13 @@ describe('asFailure', () => {
   it('reuses an existing failure and tags anything else `std:result.unknown`', () => {
     const original = fail('root')
     const decorated = asFailure(original as AnyType, 'while retrying')
+
     expect(decorated).toBe(original as AnyType)
     expect(decorated.causes).toEqual(['while retrying'])
 
     // a non-Error value is serialized into the message, nothing nested
     const wrapped = asFailure('raw-error')
+
     expect(isFailure(wrapped)).toBe(true)
     expect(wrapped.error).toBe(ResultErrors.Unknown)
     expect(wrapped.message).toBe('raw-error')
@@ -108,6 +118,7 @@ describe('asFailure', () => {
   it('tags a foreign Error `std:result.unknown`, serializes it into the message, keeps it as raw', () => {
     const error = new TypeError('denied')
     const wrapped = asFailure(error, 'opening socket')
+
     expect(wrapped.error).toBe('std:result.unknown')
     expect(wrapped.error).toBe(ResultErrors.Unknown)
     expect(wrapped.message).toBe('TypeError: denied')
@@ -126,6 +137,7 @@ describe('auto', () => {
     expect(auto(bad)).toBe(bad)
 
     const wrapped = auto('plain')
+
     expect(isSuccess(wrapped)).toBe(true)
     expect(unwrap(wrapped)).toBe('plain')
   })
@@ -137,10 +149,12 @@ describe('auto', () => {
 
     // a default that is already a result is passed through as-is
     const fallbackFailure = fail('fallback-error')
+
     expect(auto(bad as AnyType, fallbackFailure)).toBe(fallbackFailure as AnyType)
 
     // successes never trigger the default
     const ok = succeed('kept')
+
     expect(auto(ok, 'unused')).toBe(ok as AnyType)
   })
 })
@@ -150,6 +164,7 @@ describe('throwable', () => {
     expect(unwrap(throwable(() => 21))).toBe(21)
 
     const existing = succeed('kept')
+
     expect(throwable(() => existing)).toBe(existing as AnyType)
   })
 
@@ -157,6 +172,7 @@ describe('throwable', () => {
     const outcome = throwable(() => JSON.parse('{oops'), 'parsing config')
 
     expect(isFailure(outcome)).toBe(true)
+
     if (isFailure(outcome)) {
       expect(outcome.error).toBe(ResultErrors.Unknown)
       expect(outcome.message).toStartWith('SyntaxError: ')
@@ -174,11 +190,14 @@ describe('throwable', () => {
 
   it('settles async callbacks into results', async () => {
     const ok = await (throwable(() => Promise.resolve('done')) as AnyType)
+
     expect(unwrap(ok) as string).toBe('done')
 
     const kaput = new Error('kaput')
     const bad = await (throwable(() => Promise.reject(kaput)) as AnyType)
+
     expect(isFailure(bad)).toBe(true)
+
     if (isFailure(bad)) {
       expect(bad.error).toBe(ResultErrors.Unknown)
       expect(bad.message).toBe('Error: kaput')
@@ -207,6 +226,7 @@ describe('formatFailure', () => {
     )
 
     const coded = Object.assign(new Error('refused'), { code: 'ECONNREFUSED' })
+
     expect(formatFailure(asFailure(coded))).toBe(
       'std:result.unknown: Error: refused (ECONNREFUSED)',
     )

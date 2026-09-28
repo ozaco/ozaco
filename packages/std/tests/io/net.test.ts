@@ -18,11 +18,14 @@ describe('tcp', () => {
     const echo = function* (socket: IODef.TcpSocket) {
       try {
         const inbound = yield* socket.data
+
         while (true) {
           const chunk = yield* inbound.next()
+
           if (chunk.done) {
             return
           }
+
           yield* socket.write(chunk.value)
         }
       } finally {
@@ -43,21 +46,28 @@ describe('tcp', () => {
 
         const payload = encoder.encode('ping')
         const bytes: number[] = []
+
         while (bytes.length < payload.length) {
           const chunk = yield* received.next()
+
           if (chunk.done) {
             break
           }
+
           bytes.push(...chunk.value)
         }
 
         // close our side, then drain to the flow's end — the close value must be checked
         yield* client.close()
+
         let close: unknown = 'still-open'
+
         while (true) {
           const trailing = yield* received.next()
+
           if (trailing.done) {
             close = trailing.value
+
             break
           }
         }
@@ -90,9 +100,11 @@ describe('tcp', () => {
     const replyAndClose = function* (socket: IODef.TcpSocket) {
       const inbound = yield* socket.data
       const first = yield* inbound.next()
+
       if (!first.done) {
         yield* socket.write('bye')
       }
+
       yield* socket.close()
     }
 
@@ -125,13 +137,17 @@ describe('tcp', () => {
     const answerAfterEof = function* (socket: IODef.TcpSocket) {
       const inbound = yield* socket.data
       const bytes: number[] = []
+
       while (true) {
         const chunk = yield* inbound.next()
+
         if (chunk.done) {
           break
         }
+
         bytes.push(...chunk.value)
       }
+
       yield* socket.write(`got:${decoder.decode(Uint8Array.from(bytes))}`)
       yield* socket.end()
     }
@@ -150,12 +166,16 @@ describe('tcp', () => {
 
       const bytes: number[] = []
       let close: unknown = 'still-open'
+
       while (true) {
         const chunk = yield* received.next()
+
         if (chunk.done) {
           close = chunk.value
+
           break
         }
+
         bytes.push(...chunk.value)
       }
 
@@ -175,6 +195,7 @@ describe('tcp', () => {
     const lateTalker = function* (socket: IODef.TcpSocket) {
       const inbound = yield* socket.data
       const first = yield* inbound.next()
+
       // the client already sent FIN: its data has ended, yet we can still talk to it
       yield* socket.write(first.done ? 'eof-first' : 'data-first')
       yield* sleep(5)
@@ -192,13 +213,17 @@ describe('tcp', () => {
       yield* client.end()
 
       const bytes: number[] = []
+
       while (true) {
         const chunk = yield* received.next()
+
         if (chunk.done) {
           break
         }
+
         bytes.push(...chunk.value)
       }
+
       const closed = yield* client.closed
 
       yield* server.close()
@@ -215,10 +240,12 @@ describe('tcp', () => {
 
       const server = yield* IO.actions.tcpListen({ port: 0 }, function* () {})
       const deadPort = server.port
+
       yield* server.close()
       yield* sleep(20)
 
       const refused = yield* attempt(() => IO.actions.tcpConnect({ port: deadPort }))
+
       return isFailure(refused) ? refused.error : 'no-failure'
     })
 
@@ -234,9 +261,12 @@ describe('tcp', () => {
     const accepted = withResolvers<void>()
     const parked = function* (socket: IODef.TcpSocket) {
       accepted.resolve()
+
       const inbound = yield* socket.data
+
       while (true) {
         const chunk = yield* inbound.next()
+
         if (chunk.done) {
           return
         }
@@ -248,6 +278,7 @@ describe('tcp', () => {
         yield* BunIO.use()
 
         const server = yield* IO.actions.tcpListen({ port: 0 }, parked)
+
         yield* IO.actions.tcpConnect({ port: server.port })
 
         // the handler is live and parked on `next()` when this scope closes — the halt it takes
@@ -273,6 +304,7 @@ describe('udp', () => {
       const messages = yield* socket.messages
 
       yield* socket.close()
+
       const second = yield* attempt(() => socket.close())
       const closing = yield* messages.next()
 
@@ -291,6 +323,7 @@ describe('udp', () => {
 
       const socket = yield* IO.actions.udpBind({ hostname: '127.0.0.1' })
       const sent = yield* attempt(() => socket.send('x', socket.port, '::1'))
+
       yield* socket.close()
 
       return isFailure(sent) ? sent.error : 'no-failure'
@@ -313,7 +346,9 @@ describe('udp', () => {
       const datagram = first.done === true ? undefined : first.value
 
       yield* receiver.close()
+
       const closing = yield* messages.next()
+
       yield* sender.close()
 
       return {

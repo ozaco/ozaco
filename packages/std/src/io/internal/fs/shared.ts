@@ -48,8 +48,11 @@ export const sharedFs: Helpers.SharedFs = {
 
   *emptyDir(path) {
     const p = toPath(path)
+
     yield* fsCall(fs.mkdir(p, { recursive: true }))
+
     const entries = yield* fsCall(fs.readdir(p))
+
     for (const entry of entries) {
       yield* fsCall(fs.rm(join(p, entry), { recursive: true, force: true }))
     }
@@ -57,6 +60,7 @@ export const sharedFs: Helpers.SharedFs = {
 
   *walk(root, options) {
     const results: IODef.WalkEntry[] = []
+
     yield* walkRecursive(
       toPath(root),
       {
@@ -68,6 +72,7 @@ export const sharedFs: Helpers.SharedFs = {
       0,
       results,
     )
+
     return results
   },
 

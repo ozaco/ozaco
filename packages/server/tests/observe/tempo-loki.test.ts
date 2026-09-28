@@ -25,8 +25,10 @@ const only = (spans: readonly TempoSpan[], name: string, kind?: TempoSpan['kind'
 
   if (found.length !== 1) {
     const seen = spans.map(span => `${span.kind} ${span.name}`).join(', ')
+
     throw new Error(`expected ONE ${kind ?? ''} span "${name}", got ${found.length}: ${seen}`)
   }
+
   return found[0]!
 }
 
@@ -60,6 +62,7 @@ describe.skipIf(!backends.otlp || !backends.tempo || !backends.loki)(
             expect(signal.sent).toBeGreaterThan(0)
           }
         }
+
         expect(run.statuses).toEqual({
           chain: 500,
           crash: 500,
@@ -81,18 +84,23 @@ describe.skipIf(!backends.otlp || !backends.tempo || !backends.loki)(
           ...run.socket.frames.map(frame => frame.traceId),
           run.job.traceId,
         ]
+
         // node a mints every other trace with a leading `00` — the search must pad them back
         expect(ids.some(id => id.startsWith('00'))).toBe(true)
 
         const traces = await Promise.all(ids.map(id => tempoTrace(id)))
+
         for (const [at, spans] of traces.entries()) {
           const roots = spans.filter(span => span.parentSpanId === null)
+
           expect({ id: ids[at], roots: roots.map(span => span.name) }).toEqual({
             id: ids[at],
             roots: [expect.any(String)],
           })
+
           // every parent is IN the trace: nothing dangles
           const known = new Set(spans.map(span => span.spanId))
+
           for (const span of spans) {
             expect(span.parentSpanId === null || known.has(span.parentSpanId)).toBe(true)
           }
@@ -100,11 +108,13 @@ describe.skipIf(!backends.otlp || !backends.tempo || !backends.loki)(
 
         // the chain trace names every service: the edge (the node), the gateway action, the owner
         const chain = await tempoTrace(run.traces.chain, [`POST /${API}/save`, `${STORE}.save`])
+
         expect(new Set(chain.map(span => span.service))).toEqual(new Set([APP, API, STORE]))
         expect(only(chain, `POST /${API}/save`).service).toBe(APP)
         expect(only(chain, `${API}.save`).service).toBe(API)
         expect(only(chain, `${STORE}.save`, 'server').service).toBe(STORE)
         expect(only(chain, `${STORE}.save`, 'client').service).toBe(API)
+
         for (const span of chain) {
           expect(span.resource['service.namespace']).toBe(APP)
         }
@@ -115,14 +125,18 @@ describe.skipIf(!backends.otlp || !backends.tempo || !backends.loki)(
           found => ids.every(id => found.some(hit => hit.traceId === id)),
           { sinceMs: run.startedAt },
         )
+
         for (const id of ids) {
           const hit = hits.find(entry => entry.traceId === id)
+
           expect({ id, found: hit !== undefined }).toEqual({ id, found: true })
           expect(hit!.rootServiceName).toBeString()
           expect(hit!.rootServiceName).not.toBe(NO_ROOT)
           expect(hit!.rootTraceName).toBeString()
         }
+
         const chainHit = hits.find(hit => hit.traceId === run.traces.chain)!
+
         expect(chainHit).toMatchObject({ rootServiceName: APP, rootTraceName: `POST /${API}/save` })
       },
       TIMEOUT,
@@ -139,10 +153,12 @@ describe.skipIf(!backends.otlp || !backends.tempo || !backends.loki)(
         ])
 
         const exceptions = exceptionsOf(spans)
+
         expect(exceptions).toHaveLength(1)
 
         const owner = only(spans, `${STORE}.save`, 'server')
         const [{ span, event }] = exceptions as [(typeof exceptions)[number]]
+
         expect(span.spanId).toBe(owner.spanId)
         expect(owner).toMatchObject({ service: STORE, status: 'error' })
         expect(owner.attributes).toMatchObject({
@@ -162,6 +178,7 @@ describe.skipIf(!backends.otlp || !backends.tempo || !backends.loki)(
         // Tempo cuts attributes at 2048 bytes: the budgeted copy keeps every level's header —
         // the innermost root cause (the thrown TypeError's fold) included
         const stack = String(event.attributes['exception.stacktrace'])
+
         expect(Buffer.byteLength(stack)).toBeLessThanOrEqual(2048)
         expect(stack.startsWith('store.save: the note could not be saved')).toBe(true)
         expect(stack).toContain('Caused by: store.write: writing sector 7 failed')
@@ -170,13 +187,16 @@ describe.skipIf(!backends.otlp || !backends.tempo || !backends.loki)(
 
         // the caller's side takes the status and the type — no exception of its own
         const client = only(spans, `${STORE}.save`, 'client')
+
         expect(client).toMatchObject({ service: API, status: 'error' })
         expect(client.attributes).toMatchObject({
           'error.type': 'store.save',
           'ozaco.failure.remote': true,
         })
         expect(only(spans, `${API}.save`).attributes['error.type']).toBe('store.save')
+
         const edge = only(spans, `POST /${API}/save`)
+
         expect(edge).toMatchObject({ kind: 'server', status: 'error' })
         expect(edge.attributes).toMatchObject({
           'http.response.status_code': 500,
@@ -194,9 +214,11 @@ describe.skipIf(!backends.otlp || !backends.tempo || !backends.loki)(
         const owner = only(spans, `${STORE}.save`, 'server')
 
         const exceptions = exceptionLines(await traceLines(run.traces.chain, run.startedAt))
+
         expect(exceptions).toHaveLength(1)
 
         const [record] = exceptions as [(typeof exceptions)[number]]
+
         expect(record.labels).toMatchObject({
           service_name: STORE,
           service_namespace: APP,
@@ -228,10 +250,12 @@ describe.skipIf(!backends.otlp || !backends.tempo || !backends.loki)(
         ])
 
         const exceptions = exceptionsOf(spans)
+
         expect(exceptions).toHaveLength(1)
 
         const owner = only(spans, `${STORE}.crash`, 'server')
         const [{ span, event }] = exceptions as [(typeof exceptions)[number]]
+
         expect(span.spanId).toBe(owner.spanId)
         expect(owner).toMatchObject({ service: STORE, status: 'error' })
         expect(owner.attributes).toMatchObject({
@@ -246,13 +270,16 @@ describe.skipIf(!backends.otlp || !backends.tempo || !backends.loki)(
         expect(event.attributes['ozaco.failure.chain']).toEqual([
           'std:result.unknown: RangeError: disk 9 is on fire',
         ])
+
         const stack = String(event.attributes['exception.stacktrace'])
+
         expect(stack.startsWith('std:result.unknown: RangeError: disk 9 is on fire')).toBe(true)
         expect(stack).not.toContain('Caused by:')
         expect(stack).not.toContain('at burnDisk')
 
         // the caller and the edge answer the stable wire tag, never the fold's
         const client = only(spans, `${STORE}.crash`, 'client')
+
         expect(client).toMatchObject({ service: API, status: 'error' })
         expect(client.attributes).toMatchObject({
           'error.type': 'server.internal',
@@ -275,9 +302,11 @@ describe.skipIf(!backends.otlp || !backends.tempo || !backends.loki)(
         const owner = only(spans, `${STORE}.crash`, 'server')
 
         const exceptions = exceptionLines(await traceLines(run.traces.crash, run.startedAt))
+
         expect(exceptions).toHaveLength(1)
 
         const [record] = exceptions as [(typeof exceptions)[number]]
+
         expect(record.labels).toMatchObject({
           service_name: STORE,
           span_id: owner.spanId!,
@@ -302,13 +331,16 @@ describe.skipIf(!backends.otlp || !backends.tempo || !backends.loki)(
         const spans = await tempoTrace(run.traces.denied, [`GET /${API}/me`, `${API}.me`])
 
         const dispatch = only(spans, `${API}.me`)
+
         expect(dispatch).toMatchObject({ kind: 'internal', status: 'unset', service: API })
         expect(dispatch.attributes).toMatchObject({
           'error.type': 'server.unauthorized',
           'ozaco.auth.outcome': 'denied',
           'ozaco.auth.requirement': 'user',
         })
+
         const edge = only(spans, `GET /${API}/me`)
+
         expect(edge).toMatchObject({ status: 'unset' })
         expect(edge.attributes).toMatchObject({
           'http.response.status_code': 401,
@@ -318,6 +350,7 @@ describe.skipIf(!backends.otlp || !backends.tempo || !backends.loki)(
         expect(exceptionsOf(spans).map(entry => entry.span.spanId)).toEqual([dispatch.spanId])
 
         const exceptions = exceptionLines(await traceLines(run.traces.denied, run.startedAt))
+
         expect(exceptions.map(line => line.labels['severity_number'])).toEqual(['13'])
         expect(exceptions[0]!.labels).toMatchObject({
           span_id: dispatch.spanId!,
@@ -335,10 +368,12 @@ describe.skipIf(!backends.otlp || !backends.tempo || !backends.loki)(
         const spans = await tempoTrace(run.traces.retry, [`${API}.flaky`, 'resilience.attempt'])
 
         const dispatch = only(spans, `${API}.flaky`)
+
         expect(dispatch.status).toBe('unset')
         expect(dispatch.attributes['error.type']).toBeUndefined()
 
         const attempts = spans.filter(span => span.name === 'resilience.attempt')
+
         expect(attempts).toHaveLength(1)
         expect(attempts[0]!.attributes).toMatchObject({ 'ozaco.resilience.attempt': 2 })
         expect(attempts[0]!.parentSpanId).toBe(dispatch.spanId)
@@ -346,6 +381,7 @@ describe.skipIf(!backends.otlp || !backends.tempo || !backends.loki)(
 
         // the retried first attempt: handled — ONE WARN on the dispatch span
         const exceptions = exceptionLines(await traceLines(run.traces.retry, run.startedAt))
+
         expect(exceptions.map(line => line.labels['severity_number'])).toEqual(['13'])
         expect(exceptions[0]!.labels['span_id']).toBe(dispatch.spanId!)
       },
@@ -356,6 +392,7 @@ describe.skipIf(!backends.otlp || !backends.tempo || !backends.loki)(
       '(5) websocket: one ROOT span per frame linked to the upgrade span, sends as events',
       async () => {
         const run = await scenario()
+
         expect(run.socket.replies).toEqual([
           { t: 'echo', text: 'a' },
           { t: 'echo', text: 'b' },
@@ -372,6 +409,7 @@ describe.skipIf(!backends.otlp || !backends.tempo || !backends.loki)(
         for (const [at, spans] of traces.entries()) {
           const frame = run.socket.frames[at]!
           const root = only(spans, `WS ${LIVE}`)
+
           expect(root).toMatchObject({ kind: 'server', parentSpanId: null, spanId: frame.spanId })
           expect(root.attributes).toMatchObject({ 'ozaco.ws.message.type': 'say' })
 
@@ -379,7 +417,8 @@ describe.skipIf(!backends.otlp || !backends.tempo || !backends.loki)(
           expect(root.links[0]!.attributes).toEqual({ 'ozaco.link.reason': 'ws.session' })
           upgrades.add(`${root.links[0]!.traceId}/${root.links[0]!.spanId}`)
 
-          const sends = root.events.filter(event => event.name === 'ozaco.ws.send')
+          const sends = root.events.filter(event => event.name === 'ws.send')
+
           expect(sends).toHaveLength(1)
           expect(sends[0]!.attributes).toMatchObject({ 'ozaco.ws.message.type': 'echo' })
           durations.push(...spans.map(span => span.end - span.start))
@@ -387,15 +426,18 @@ describe.skipIf(!backends.otlp || !backends.tempo || !backends.loki)(
 
         // both frames link the ONE upgrade span: a SERVER `GET {route}` that ended at the 101
         expect(upgrades.size).toBe(1)
+
         const [upgradeTrace, upgradeSpan] = [...upgrades][0]!.split('/') as [string, string]
         const spans = await tempoTrace(upgradeTrace, [`GET ${LIVE}`])
         const upgrade = only(spans, `GET ${LIVE}`)
+
         expect(upgrade).toMatchObject({ kind: 'server', spanId: upgradeSpan, parentSpanId: null })
         expect(upgrade.attributes['http.response.status_code']).toBe(101)
         durations.push(...spans.map(span => span.end - span.start))
 
         // the session lived for several frame gaps; no span covers more than a frame
         expect(run.socket.lifetimeMs).toBeGreaterThanOrEqual(FRAME_GAP_MS * 3)
+
         for (const duration of durations) {
           expect(duration).toBeLessThan(FRAME_GAP_MS)
         }
@@ -415,6 +457,7 @@ describe.skipIf(!backends.otlp || !backends.tempo || !backends.loki)(
         ])
 
         const publish = only(spans, 'publish note.stored')
+
         expect(publish).toMatchObject({ kind: 'producer', service: STORE })
         expect(publish.attributes).toMatchObject({
           'messaging.system': 'ozaco',
@@ -423,6 +466,7 @@ describe.skipIf(!backends.otlp || !backends.tempo || !backends.loki)(
 
         // the consumer ran on the OTHER node: parented to the producer AND linking it
         const consume = only(spans, 'process note.stored')
+
         expect(consume).toMatchObject({
           kind: 'consumer',
           spanId: run.consumer.spanId,
@@ -439,6 +483,7 @@ describe.skipIf(!backends.otlp || !backends.tempo || !backends.loki)(
 
         // the enqueue: a PRODUCER in the writer's trace …
         const send = only(spans, 'send jobs')
+
         expect(send).toMatchObject({ kind: 'producer', service: STORE })
         expect(send.attributes).toMatchObject({
           'messaging.system': 'ozaco.queue',
@@ -448,7 +493,9 @@ describe.skipIf(!backends.otlp || !backends.tempo || !backends.loki)(
 
         // … the attempt: a ROOT consumer of its own trace, linking it
         expect(run.job.traceId).not.toBe(run.traces.note)
+
         const job = only(await tempoTrace(run.job.traceId, ['process jobs']), 'process jobs')
+
         expect(job).toMatchObject({ kind: 'consumer', parentSpanId: null, spanId: run.job.spanId })
         expect(job.attributes).toMatchObject({
           'messaging.system': 'ozaco.queue',
@@ -470,10 +517,12 @@ describe.skipIf(!backends.otlp || !backends.tempo || !backends.loki)(
       '(7) an unexported client’s traceparent: a link-mode ROOT (`remote.parent`); its `-00` is still recorded',
       async () => {
         const run = await scenario()
+
         expect(run.traces.inbound).not.toBe(INBOUND.traceId)
 
         const spans = await tempoTrace(run.traces.inbound, [`GET /${API}/ping`])
         const edge = only(spans, `GET /${API}/ping`)
+
         expect(edge).toMatchObject({ kind: 'server', parentSpanId: null, service: APP })
         expect(edge.links).toEqual([
           {
@@ -489,6 +538,7 @@ describe.skipIf(!backends.otlp || !backends.tempo || !backends.loki)(
           found => found.some(hit => hit.traceId === run.traces.inbound),
           { sinceMs: run.startedAt },
         )
+
         expect(hits.map(hit => hit.traceId)).toEqual([run.traces.inbound])
         expect(hits[0]).toMatchObject({ rootServiceName: APP, rootTraceName: `GET /${API}/ping` })
       },
@@ -508,6 +558,7 @@ describe.skipIf(!backends.otlp || !backends.tempo || !backends.loki)(
           { sinceMs: run.startedAt, confirm: true },
         )
         const stored = lines.filter(line => line.line === 'note stored')
+
         expect(stored).toHaveLength(1)
         expect(stored[0]!.labels).toMatchObject({
           service_name: STORE,

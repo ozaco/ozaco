@@ -13,6 +13,7 @@ import { runTransportSuite } from './suite'
 // the suite runs both ends in this thread over a MessageChannel: every install attaches to the
 // same port (local delivery covers the cross-scope cases; the far end just echoes nothing back)
 const channel = new MessageChannel()
+
 channel.port1.start()
 
 runTransportSuite({
@@ -25,6 +26,7 @@ runTransportSuite({
 describe('transport — worker: a real worker thread on the far end', () => {
   it('request/reply, pub/sub and a lane cross the thread boundary', async () => {
     const worker = new Worker(new URL('fixtures/echo-worker.ts', import.meta.url).href)
+
     try {
       unwrap(
         await run(function* () {
@@ -32,27 +34,37 @@ describe('transport — worker: a real worker thread on the far end', () => {
           yield* WorkerTransport.use({ prefix: 'w', port: worker as AnyType })
           // the worker needs a moment to boot and subscribe
           yield* sleep(300)
+
           const echoed = yield* Transport.actions.request<{ n: number; from: string }>('echo', {
             n: 21,
           })
+
           expect(echoed).toEqual({ n: 42, from: 'worker' })
 
           const pongs = yield* Transport.actions.subscribe<string>('pong')
+
           yield* Transport.actions.publish('ping', 'hello')
           expect(((yield* pongs.next()) as AnyType).value.value).toBe('hello!')
 
           const lane = yield* Transport.actions.flow<number, string>('lane')
+
           yield* Transport.actions.publish('ping', 'stream')
           yield* Transport.actions.publish('lane.start', 5)
+
           const got: number[] = []
+
           for (;;) {
             const step = yield* lane.next()
+
             if (step.done) {
               expect(step.value).toBe('streamed')
+
               break
             }
+
             got.push(step.value)
           }
+
           expect(got).toEqual([0, 1, 2, 3, 4])
         }),
       )

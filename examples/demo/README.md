@@ -94,7 +94,7 @@ trace, so the terminal shows each failure once, with its chain. Things worth ope
 - Tempo (Grafana → Explore): `{ resource.service.namespace = "demo" }`; the queue:
   `{ span.messaging.message.id = "<job id>" }` finds every attempt of a job, each a root
   `process jobs` span linking the `send jobs` of its submit — a `fail` job's first two attempts
-  are WARN (`error.type` only), the third is the dead letter (ERROR, `ozaco.queue.dead`).
+  are WARN (`error.type` only), the third is the dead letter (ERROR, `queue.dead`).
 - Loki: `{service_namespace="demo"} | trace_id="<trace id>"` — the std Logger's lines and the
   exception records (their body is the whole `Caused by:` chain).
 - OpenObserve: Traces / Logs in org `default`, same records.

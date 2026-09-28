@@ -61,6 +61,7 @@ describe('std — published subpaths', () => {
   it('the packages built on std map std:trace to its dist', () => {
     for (const pkg of ['server', 'db', 'client', 'transport']) {
       const paths = read(join(packages, pkg, 'tsconfig.paths.json'))
+
       expect([
         pkg,
         paths.includes('"std:trace": ["./node_modules/@ozaco/std/dist/trace"]'),

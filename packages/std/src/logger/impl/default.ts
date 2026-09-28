@@ -39,21 +39,25 @@ export const DefaultLogger = Logger.implement({
 
   *child<R>(bindings: Record<string, unknown>, fn: () => Operation<R>) {
     const previous = (yield* LoggerBindingsContext.get()) ?? {}
+
     return yield* LoggerBindingsContext.with({ ...previous, ...bindings }, () => fn())
   },
 
   *bind(bindings: Record<string, unknown>) {
     const previous = (yield* LoggerBindingsContext.get()) ?? {}
+
     yield* LoggerBindingsContext.set({ ...previous, ...bindings })
   },
 
   *setLevel(level: LogLevel) {
     const ctx = yield* useContext(Logger)
+
     ctx.level = level
   },
 
   *isLevelEnabled(level: LogLevel) {
     const ctx = yield* useContext(Logger)
+
     return level >= ctx.level
   },
 

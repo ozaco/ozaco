@@ -26,16 +26,20 @@ const bootstrap = function* (options: ConfigDef.Options) {
 describe('config editing', () => {
   it('set lands new keys in the working file; save creates it on disk', async () => {
     const root = await makeRoot()
+
     try {
       const outcome = await run(function* () {
         yield* bootstrap({ cwd: root, home: root })
 
         const before = (yield* Config.actions.tree()).length
+
         yield* Config.actions.set('fresh.key', 1)
+
         const merged = yield* Config.actions.get()
 
         yield* Config.actions.save()
         yield* Config.actions.load()
+
         const after = (yield* Config.actions.tree()).length
 
         return { before, merged, after }
@@ -51,8 +55,10 @@ describe('config editing', () => {
 
   it('set routes an existing key to the file that owns it, not the cwd file', async () => {
     const root = await makeRoot()
+
     try {
       const app = join(root, 'app')
+
       await mkdir(app)
       await writeFile(join(root, '.cfgspec.json'), jsonText({ db: { host: 'localhost' } }))
 
@@ -78,6 +84,7 @@ describe('config editing', () => {
 
   it('remove and clear edit the merged view in memory; save persists them', async () => {
     const root = await makeRoot()
+
     try {
       await writeFile(join(root, '.cfgspec.json'), jsonText({ a: 1, b: { c: 2 } }))
 
@@ -85,12 +92,14 @@ describe('config editing', () => {
         yield* bootstrap({ cwd: root, home: root })
 
         yield* Config.actions.remove('b.c')
+
         const afterRemove = {
           merged: yield* Config.actions.get(),
           hasRemoved: yield* Config.actions.has('b.c'),
         }
 
         yield* Config.actions.clear()
+
         const afterClear = yield* Config.actions.get()
 
         yield* Config.actions.save()
@@ -110,16 +119,20 @@ describe('config editing', () => {
 
   it('save(path) exports the working payload with its extends spec intact', async () => {
     const root = await makeRoot()
+
     try {
       await writeFile(join(root, '.cfgspec.json'), jsonText({ extends: './preset.json', over: 1 }))
       await writeFile(join(root, 'preset.json'), jsonText({ under: 2 }))
+
       const exported = join(root, 'out', 'exported.json')
 
       const outcome = await run(function* () {
         yield* bootstrap({ cwd: root, home: root })
 
         const merged = yield* Config.actions.get()
+
         yield* Config.actions.save(exported)
+
         return merged
       })
 

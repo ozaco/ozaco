@@ -23,6 +23,7 @@ export function* bunExec(cmd: string, args?: readonly string[], options?: IODef.
   const config = normalizeSpawn(options)
 
   let proc
+
   try {
     proc = Bun.spawn([cmd, ...(args ?? [])], {
       ...config,
@@ -51,6 +52,7 @@ export function* bunExec(cmd: string, args?: readonly string[], options?: IODef.
       stdout: new Uint8Array(out),
       stderr: new Uint8Array(err),
     }
+
     return result
   } catch (error) {
     return yield* fail(IOErrors.ExecFailed, `command "${cmd}" failed`, asFailure(error, IOErrors))
@@ -67,6 +69,7 @@ export function* bunSpawn(cmd: string, args?: readonly string[], options?: IODef
   const stdio = resolveStdio(options?.stdio)
 
   let proc
+
   try {
     proc = Bun.spawn([cmd, ...(args ?? [])], {
       ...config,
@@ -80,6 +83,7 @@ export function* bunSpawn(cmd: string, args?: readonly string[], options?: IODef
 
   const exited = function* () {
     yield* until(proc.exited)
+
     return makeStatus(proc.exitCode, proc.signalCode)
   }
 
@@ -133,5 +137,6 @@ export function* bunSpawn(cmd: string, args?: readonly string[], options?: IODef
     closeStdin,
     kill,
   }
+
   return handle
 }

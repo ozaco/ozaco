@@ -37,11 +37,13 @@ export const kvActions = (driver: KvDef.Driver): KvDef.Actions => {
 
   const tagsOf = function* (tags: readonly string[] | undefined) {
     const prefix = yield* prefixOf()
+
     return (tags ?? []).map(tag => namespacedTag(prefix, tag))
   }
 
   const read = function* <T>(key: string): Operation<T | undefined> {
     const data = yield* driver.get(yield* keyOf(key))
+
     return data === null ? undefined : yield* decode<T>(key, data)
   }
 
@@ -158,6 +160,7 @@ export const kvActions = (driver: KvDef.Driver): KvDef.Actions => {
 
         if (cached !== undefined) {
           tell(options, 'hit')
+
           return cached
         }
 
@@ -169,6 +172,7 @@ export const kvActions = (driver: KvDef.Driver): KvDef.Actions => {
 
         // someone in this process is already computing it: share the outcome
         tell(options, 'coalesced')
+
         const shared = yield* running
 
         if (shared !== null) {
@@ -177,15 +181,20 @@ export const kvActions = (driver: KvDef.Driver): KvDef.Actions => {
       }
 
       tell(options, 'miss')
+
       const settled = withResolvers<Result<unknown> | null>('kv wrap')
       const flight = settled.operation
+
       inflight.set(full, flight)
+
       let outcome: Result<unknown> | null = null
 
       try {
         outcome = yield* attempt(function* () {
           const value = yield* compute()
+
           yield* set(key, value, options)
+
           return value
         })
       } finally {

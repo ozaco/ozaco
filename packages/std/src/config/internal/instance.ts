@@ -24,6 +24,7 @@ import {
 /** Serialize `data` with the context codec and write it to `target`, creating parent dirs. */
 function* writeData(ctx: ConfigDef.Context, target: string, data: ConfigDef.Object) {
   const text = yield* ctx.codec.actions.stringify(data)
+
   yield* IO.actions.ensureDir(yield* IO.actions.dirname(target))
   yield* IO.actions.write(target, text)
 }
@@ -36,11 +37,13 @@ function* writeData(ctx: ConfigDef.Context, target: string, data: ConfigDef.Obje
 export const makeInstance = (getCtx: () => Operation<ConfigDef.Context>): ConfigDef.Instance => ({
   *load(cwd?: string) {
     const ctx = yield* getCtx()
+
     yield* rediscover(ctx, cwd ?? ctx.cwd)
   },
 
   *refresh() {
     const ctx = yield* getCtx()
+
     yield* rediscover(ctx, ctx.cwd)
   },
 
@@ -65,11 +68,13 @@ export const makeInstance = (getCtx: () => Operation<ConfigDef.Context>): Config
         yield* writeData(ctx, source.path, payloadOf(source))
       }
     }
+
     ctx.dirty.clear()
   },
 
   *get(key?: string) {
     const ctx = yield* getCtx()
+
     return (key === undefined ? ctx.merged : getPath(ctx.merged, key)) as AnyType
   },
 
@@ -77,6 +82,7 @@ export const makeInstance = (getCtx: () => Operation<ConfigDef.Context>): Config
     const ctx = yield* getCtx()
     // Write into the file that already defines the key; new keys land in the base working file.
     const target = findOrigin(sources(ctx), key) ?? ctx.working
+
     target.data = setPath(target.data, key, value)
     ctx.dirty.add(target.path)
     // the set is what `get` answers from here on: an env overlay value for the key steps aside
@@ -89,9 +95,11 @@ export const makeInstance = (getCtx: () => Operation<ConfigDef.Context>): Config
     const ctx = yield* getCtx()
     // Remove from the file that currently provides the key (a shadowed copy below may re-surface).
     const target = findOrigin(sources(ctx), key)
+
     if (target === undefined) {
       return
     }
+
     target.data = unsetPath(target.data, key)
     ctx.dirty.add(target.path)
     ctx.merged = merge(ctx)
@@ -99,6 +107,7 @@ export const makeInstance = (getCtx: () => Operation<ConfigDef.Context>): Config
 
   *clear() {
     const ctx = yield* getCtx()
+
     ctx.working.data = {}
     ctx.dirty.add(ctx.working.path)
     ctx.merged = merge(ctx)
@@ -125,26 +134,31 @@ export const makeInstance = (getCtx: () => Operation<ConfigDef.Context>): Config
 
   *tree() {
     const ctx = yield* getCtx()
+
     return ctx.chain
   },
 
   *has(key: string) {
     const ctx = yield* getCtx()
+
     return getPath(ctx.merged, key) !== undefined
   },
 
   *keys() {
     const ctx = yield* getCtx()
+
     return flattenEntries(ctx.merged).map(entry => entry.key)
   },
 
   *origin(key: string) {
     const ctx = yield* getCtx()
+
     return explainOf(ctx, key)[0]?.path
   },
 
   *explain(key: string) {
     const ctx = yield* getCtx()
+
     return explainOf(ctx, key)
   },
 
@@ -175,6 +189,7 @@ export const makeInstance = (getCtx: () => Operation<ConfigDef.Context>): Config
       for (const dir of recursiveDirs) {
         yield* fork(feed(IO.actions.watch(dir, { recursive: true })))
       }
+
       for (const file of files) {
         yield* fork(feed(IO.actions.watch(file)))
       }
@@ -183,13 +198,16 @@ export const makeInstance = (getCtx: () => Operation<ConfigDef.Context>): Config
         // a transient reload failure (e.g. an `extends` target briefly absent during an atomic
         // save/rename) must NOT kill the watcher — swallow it and keep watching; the next event retries
         const reloaded = yield* attempt(() => rediscover(ctx, ctx.cwd))
+
         if (isSuccess(reloaded)) {
           const next = yield* JsonCodec.actions.stringify(ctx.merged)
+
           if (next !== last) {
             last = next
             listener(ctx.merged)
           }
         }
+
         yield* each.next()
       }
     })
@@ -199,5 +217,6 @@ export const makeInstance = (getCtx: () => Operation<ConfigDef.Context>): Config
 /** The `open` action: a brand-new context + an instance bound to it (independent of the scope). */
 export function* openInstance(options?: ConfigDef.Options) {
   const ctx = yield* buildContext(options)
+
   return makeInstance(constCtx(ctx))
 }

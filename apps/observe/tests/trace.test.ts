@@ -86,15 +86,18 @@ describe('console — the live list', () => {
       [span('other', null, { start: 49, trace_id: 'o' })],
       [span('child', 'gw-client', { start: 50, trace_id: 't', root: true })],
     )
+
     expect(early.map(row => row.span_id)).toEqual(['child', 'other'])
 
     const settled = mergeLive(early, [span('gw', null, { start: 50.2, trace_id: 't' })])
+
     expect(settled.map(row => row.span_id)).toEqual(['gw', 'other'])
 
     // …and a child arriving after the real root never displaces it, however early it starts
     const again = mergeLive(settled, [
       span('late-child', 'gw-client', { start: 10, trace_id: 't', root: true }),
     ])
+
     expect(again.map(row => row.span_id)).toEqual(['gw', 'other'])
   })
 
@@ -149,9 +152,10 @@ describe('console — formatting', () => {
     ])
 
     const log = (event: string | null) => ({ event_name: event }) as LogRow
+
     expect(isExceptionLog(log('exception'))).toBe(true)
     expect(isExceptionLog(log('ozaco.action.exception'))).toBe(true)
-    expect(isExceptionLog(log('ozaco.domain'))).toBe(false)
+    expect(isExceptionLog(log('ozaco.local'))).toBe(false)
     expect(isExceptionLog(log(null))).toBe(false)
   })
 })
@@ -161,7 +165,7 @@ describe('console — every failure in full once', () => {
     const failed = span('s', null, {
       start: 0,
       events: [
-        { name: 'ozaco.cache.evict', time: 0.2 },
+        { name: 'cache.evict', time: 0.2 },
         { name: 'exception', time: 0.5, attributes: { 'exception.type': 'todo.kaput' } },
       ],
     })
@@ -175,17 +179,15 @@ describe('console — every failure in full once', () => {
     const line = { ...record, event_name: null } as LogRow
 
     // the record is the failures list's block: the event is only the bar's mark
-    expect(inlineEvents(failed, [line, record]).map(event => event.name)).toEqual([
-      'ozaco.cache.evict',
-    ])
+    expect(inlineEvents(failed, [line, record]).map(event => event.name)).toEqual(['cache.evict'])
     // no record stored (another span's, or logs switched off): the event is all there is
     expect(inlineEvents(failed, [line]).map(event => event.name)).toEqual([
-      'ozaco.cache.evict',
+      'cache.evict',
       'exception',
     ])
     expect(
       inlineEvents(failed, [{ ...record, span_id: 'other' } as LogRow]).map(event => event.name),
-    ).toEqual(['ozaco.cache.evict', 'exception'])
+    ).toEqual(['cache.evict', 'exception'])
   })
 })
 

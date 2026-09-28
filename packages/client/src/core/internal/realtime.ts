@@ -5,7 +5,7 @@ import type { Result } from 'std:result'
 import { fail, isFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
 import type { TraceDef } from 'std:trace'
-import { inject, parseTraceparent } from 'std:trace'
+import { Trace } from 'std:trace'
 import type { WsDef } from 'std:ws'
 import { Ws } from 'std:ws'
 
@@ -60,6 +60,7 @@ function* socketPath(
 
 const socketUrl = (ctx: ClientDef.Context, path: string): string => {
   const url = new URL(path, ctx.options.url)
+
   url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
 
   // tokens never ride the URL: browsers authorize with a first `{ t: 'auth' }` frame,
@@ -69,11 +70,11 @@ const socketUrl = (ctx: ClientDef.Context, path: string): string => {
 
 /** The trace the watch went out in, when the span a server names as the failure's recorder
  * (`recorded`, a `traceparent`) lives in it — and is not the sender's context itself. */
-const recordedIn = (
+function* recordedIn(
   recorder: TraceDef.SpanContext | null,
   sent: string | undefined,
-): string | undefined => {
-  const sender = parseTraceparent(sent ?? null)
+): Operation<string | undefined> {
+  const sender = sent ? yield* Trace.actions.extract({ traceparent: sent }) : null
 
   return recorder !== null &&
     sender !== null &&
@@ -88,22 +89,25 @@ const recordedIn = (
  * message, then `remote: watch @ <resource> span <id8>` (the span that recorded it) — marked
  * recorded in the watch's own trace when the server recorded it there.
  */
-const verdictOf = (
+function* verdictOf(
   frame: Extract<Helpers.Frame, { t: 'error' }>,
   resource: string,
   sent: string | undefined,
-): Result.Failure<unknown> => {
-  const recorder = parseTraceparent(typeof frame.recorded === 'string' ? frame.recorded : null)
+): Operation<never> {
+  const recorder =
+    typeof frame.recorded === 'string'
+      ? yield* Trace.actions.extract({ traceparent: frame.recorded })
+      : null
   const remote: Helpers.Remote = {
     service: resource,
     operation: 'watch',
-    recordedIn: recordedIn(recorder, sent),
+    recordedIn: yield* recordedIn(recorder, sent),
   }
   const failure = fail(frame.tag, frame.message, remoteCause(remote, recorder?.spanId))
 
-  markRemote(failure, remote)
+  yield* markRemote(failure, remote)
 
-  return failure
+  return yield* failure
 }
 
 /**
@@ -131,7 +135,7 @@ export const watch = <TRow>(
     const id = yield* IO.actions.uuid()
     const path = yield* socketPath(ctx, resource, options?.path)
     const token = typeof ctx.options.token === 'function' ? ctx.options.token() : ctx.options.token
-    const opening = yield* inject({ ozaco: true })
+    const opening = yield* Trace.actions.inject({ ozaco: true })
     const connection = yield* Ws.actions.connect(socketUrl(ctx, path), {
       headers: withCarrier(
         { ...ctx.options.headers, ...(token ? { authorization: `Bearer ${token}` } : {}) },
@@ -167,6 +171,7 @@ export const watch = <TRow>(
       }
 
       guarded.add(native)
+
       const previous = native.onclose
 
       // SocketLike is the handler-property shape shared by browser/Bun/Node — this one
@@ -174,6 +179,7 @@ export const watch = <TRow>(
       // oxlint-disable-next-line unicorn/prefer-add-event-listener
       native.onclose = event => {
         previous?.(event)
+
         const code = event?.code ?? 0
 
         if (refused !== null || code !== REFUSED_CODE) {
@@ -200,10 +206,11 @@ export const watch = <TRow>(
     const subscribe = function* (reconnect = false): Operation<void> {
       guardRefusal()
 
-      const carrier = reconnect ? null : yield* inject({ ozaco: true })
+      const carrier = reconnect ? null : yield* Trace.actions.inject({ ozaco: true })
       const trace =
         carrier ??
         (opening.traceparent === undefined ? {} : { [RECONNECT_FIELD]: opening.traceparent })
+
       sent = carrier?.traceparent
 
       // in-band auth FIRST on every (re)connect — the server settles it before the watch
@@ -224,6 +231,7 @@ export const watch = <TRow>(
         ...trace,
       })
     }
+
     yield* subscribe()
 
     // page turns arrive from promise land: a fresh watch on the SAME id replaces the window
@@ -251,17 +259,24 @@ export const watch = <TRow>(
     // pump: every frame of this watch into the queue
     yield* fork(function* () {
       const messages = yield* attempt(connection.messages)
+
       if (isFailure(messages)) {
         frames.close(messages)
+
         return
       }
+
       for (;;) {
         const step = yield* messages.value.next()
+
         if (step.done) {
           frames.close(step.value === true ? undefined : step.value)
+
           return
         }
+
         const frame = step.value as AnyType
+
         if (frame && frame.id === id) {
           frames.add(frame)
         }
@@ -276,8 +291,10 @@ export const watch = <TRow>(
     // re-subscribe after every reconnect, resuming from the last token — linked to the opening
     yield* fork(function* () {
       let seen = connection.reconnects
+
       for (;;) {
         yield* sleep(RECONNECT_POLL_MS)
+
         if (connection.reconnects !== seen) {
           seen = connection.reconnects
           yield* attempt(() => subscribe(true))
@@ -288,29 +305,37 @@ export const watch = <TRow>(
     const subscription: Subscription<ClientDef.WatchFrame<TRow>, void> = {
       *next() {
         const step = yield* frames.next()
+
         if (step.done) {
           // the server refused this session (4401 = the handshake was rejected): the verdict
           // itself is the answer — retrying with the same token would only loop
           if (refused !== null) {
             return yield* refused
           }
+
           // the socket's own failure stays a nested cause (a rewrap, never a stringified copy)
           if (step.value && isFailure(step.value)) {
             return yield* fail(ClientErrors.Closed, 'realtime socket closed', step.value)
           }
+
           return { done: true, value: undefined }
         }
+
         const frame = step.value
+
         // the server's verdict on the watch, decoded like any wire failure (a remote one) —
         // recorded when the server recorded it in the trace this watch was sent in
         if (frame.t === 'error') {
           return yield* verdictOf(frame, resource, sent)
         }
+
         since = frame.token
         hooks?.onPage?.((frame as AnyType).page ?? null)
+
         return { done: false, value: frame as ClientDef.WatchFrame<TRow> }
       },
     }
+
     return subscription
   },
 })
@@ -330,12 +355,16 @@ export const rows = <TRow>(
     const subscription: Subscription<ClientDef.Materialized<TRow>, void> = {
       *next() {
         const step = yield* source.next()
+
         if (step.done) {
           return step
         }
+
         const frame = step.value
+
         if (frame.t === 'sync') {
           byId.clear()
+
           for (const row of frame.rows) {
             byId.set(String((row as AnyType)._id), row)
           }
@@ -343,19 +372,23 @@ export const rows = <TRow>(
           for (const row of [...frame.added, ...frame.changed]) {
             byId.set(String((row as AnyType)._id), row)
           }
+
           for (const id of frame.removed) {
             byId.delete(id)
           }
         }
+
         if ((frame as AnyType).page) {
           page = (frame as AnyType).page
         }
+
         return {
           done: false,
           value: { rows: [...byId.values()], token: frame.token, ...(page ? { page } : {}) },
         }
       },
     }
+
     return subscription
   },
 })

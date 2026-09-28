@@ -9,7 +9,7 @@ import { all, fork, run, scoped, sleep, suspend, withResolvers } from 'std:effec
 import { IO } from 'std:io'
 import { unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
-import { Suppressed } from 'std:trace'
+import { Trace } from 'std:trace'
 
 import { describe, expect, it } from 'bun:test'
 
@@ -31,10 +31,12 @@ const tokenAhead = (aheadMs: number, origin: string): string => {
     const alphabet = '0123456789ABCDEFGHJKMNPQRSTVWXYZ'
     let out = ''
     let rest = value
+
     for (let index = 0; index < length; index += 1) {
       out = alphabet[rest % 32]! + out
       rest = Math.floor(rest / 32)
     }
+
     return out
   }
 
@@ -56,7 +58,9 @@ const announcements = async (
   unwrap(
     await run(function* () {
       const logs = yield* captureLogs()
+
       yield* BunIO.use()
+
       const link = createLink()
 
       // `heard` settles once the node's hub applied the envelope (any line is logged before)
@@ -64,22 +68,22 @@ const announcements = async (
         const up = withResolvers<void>('node up')
         const heard = withResolvers<void>('node heard')
 
-        yield* fork(() =>
-          scoped(function* () {
-            if (options.suppressed) {
-              yield* Suppressed.set(true)
-            }
+        const body = function* (): Operation<void> {
+          yield* MemoryAdapter.use()
+          yield* MemoryTransport.use({ prefix: 'app', link })
+          yield* DbBus.use()
 
-            yield* MemoryAdapter.use()
-            yield* MemoryTransport.use({ prefix: 'app', link })
-            yield* DbBus.use()
-            const db = (yield* DbClient.use({ tables: options.tables })) as AnyType
-            const feed = yield* db.changes()
-            up.resolve()
-            yield* feed.next()
-            heard.resolve()
-            yield* suspend()
-          }),
+          const db = (yield* DbClient.use({ tables: options.tables })) as AnyType
+          const feed = yield* db.changes()
+
+          up.resolve()
+          yield* feed.next()
+          heard.resolve()
+          yield* suspend()
+        }
+
+        yield* fork(() =>
+          scoped(() => (options.suppressed ? Trace.actions.suppressed(body) : body())),
         )
         yield* up.operation
 
@@ -94,7 +98,9 @@ const announcements = async (
 
       yield* scoped(function* () {
         yield* MemoryTransport.use({ prefix: 'app', link })
+
         const token = yield* IO.actions.hlc({ origin })
+
         yield* Transport.actions.publish('db.change', {
           origin,
           seq: 1,
@@ -115,13 +121,16 @@ describe('bus meta on the change feed', () => {
       await run(function* () {
         yield* BunIO.use()
         yield* MemoryAdapter.use()
+
         const db = (yield* DbClient.use({ tables: [users] })) as AnyType
         const feed = yield* db.changes('users')
 
         yield* withBusMeta({ traceparent: TRACEPARENT, tracestate: 'ozaco=1', hops: 2 }, () =>
           db.insert('users', { name: 'ada' }),
         )
+
         const traced = (yield* feed.next()).value as Change.Event
+
         expect(traced.source).toBe('local')
         expect(traced.meta).toEqual({ traceparent: TRACEPARENT, tracestate: 'ozaco=1' })
 
@@ -148,6 +157,7 @@ describe('bus meta on the change feed', () => {
         yield* MemoryAdapter.use()
         yield* MemoryTransport.use({ prefix: 'app' })
         yield* DbBus.use()
+
         const db = (yield* DbClient.use({ tables: [users] })) as AnyType
         const feed = yield* db.changes('users')
         const token = yield* Db.actions.version()
@@ -161,6 +171,7 @@ describe('bus meta on the change feed', () => {
         })
 
         const event = (yield* feed.next()).value as Change.Event
+
         expect(event.source).toBe('bus')
         expect(event.id).toBe('remote-1')
         expect(event.meta).toEqual({ traceparent: TRACEPARENT })
@@ -174,14 +185,17 @@ describe('hub operational logging', () => {
     const entries = unwrap(
       await run(function* () {
         const logs = yield* captureLogs()
+
         yield* BunIO.use()
         yield* MemoryAdapter.use()
         yield* MemoryTransport.use({ prefix: 'app' })
         yield* DbBus.use()
+
         const db = (yield* DbClient.use({ tables: [users] })) as AnyType
         const feed = yield* db.changes('users')
         const envelope = function* (seq: number) {
           const token = yield* Db.actions.version()
+
           return {
             origin: 'NDEA0001',
             seq,
@@ -194,7 +208,9 @@ describe('hub operational logging', () => {
         yield* feed.next()
         yield* Transport.actions.publish('db.change', yield* envelope(4))
         yield* feed.next()
+
         const ahead = tokenAhead(10 * 60 * 1000, 'NDEA0001')
+
         yield* Transport.actions.publish('db.change', {
           origin: 'NDEA0001',
           seq: 5,
@@ -210,6 +226,7 @@ describe('hub operational logging', () => {
     )
 
     const hub = entries.filter(entry => entry.bindings.logger === '@ozaco/db')
+
     expect(hub.map(entry => [entry.level, entry.msg])).toEqual([
       [30, 'db bus: first envelope from a peer — replaying the change logs'],
       [40, 'db bus: envelopes lost — replaying the change logs'],
@@ -251,6 +268,7 @@ describe('hub operational logging', () => {
       { tables: [users], suppressed: true },
       { tables: [users] },
     ])
+
     expect(later.map(entry => entry.msg)).toEqual([
       'db bus: first envelope from a peer — replaying the change logs',
     ])
@@ -263,9 +281,11 @@ describe('hub operational logging', () => {
         yield* MemoryAdapter.use()
         yield* MemoryTransport.use({ prefix: 'app' })
         yield* DbBus.use()
+
         const db = (yield* DbClient.use({ tables: [users] })) as AnyType
         const feed = yield* db.changes('users')
         const token = yield* Db.actions.version()
+
         yield* Transport.actions.publish('db.change', {
           origin: 'NDEA0002',
           seq: 7,

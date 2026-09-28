@@ -24,6 +24,7 @@ export const createLock = (): TableKvDef.Lock => {
 
     if (next) {
       next() // straight to the next waiter; the lock stays held
+
       return
     }
 
@@ -34,6 +35,7 @@ export const createLock = (): TableKvDef.Lock => {
     *acquire() {
       if (!held) {
         held = true
+
         return release
       }
 
@@ -117,6 +119,7 @@ function* rowOf(state: TableKvDef.State, key: string): Operation<Helpers.Row | n
   if (row.expires_at !== null && row.expires_at <= now()) {
     // lazy expiry: an expired row is dropped on the way out, tags included
     yield* dropKeys(state, [key])
+
     return null
   }
 
@@ -197,6 +200,7 @@ export const driver: KvDef.Driver = {
 
   *get(key) {
     const row = yield* rowOf(yield* useContext(StateRef), key)
+
     return row ? fromBase64(row.data) : null
   },
 
@@ -223,6 +227,7 @@ export const driver: KvDef.Driver = {
 
   *ttl(key) {
     const row = yield* rowOf(yield* useContext(StateRef), key)
+
     return row === null || row.expires_at === null ? null : Math.max(0, row.expires_at - now())
   },
 

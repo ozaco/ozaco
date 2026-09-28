@@ -32,6 +32,7 @@ export const createCoroutine = <T>({
         if (!iterator) {
           iterator = operation()[Symbol.iterator]()
         }
+
         return iterator
       },
       set iterator(value) {
@@ -55,6 +56,7 @@ export const createCoroutine = <T>({
     },
     unwind() {
       routine.data.unwinding = true
+
       if (!routine.data.critical) {
         routine.resume(succeed())
       }
@@ -69,6 +71,7 @@ export const createCoroutine = <T>({
 
       if (isFailure(resumeWith)) {
         data.unwinding = false
+
         if (iterator!.throw) {
           return iterator!.throw(resumeWith)
         }
@@ -76,10 +79,12 @@ export const createCoroutine = <T>({
         throw resumeWith
       } else if (data.unwinding && !data.critical) {
         data.unwinding = false
+
         return iterator!.return
           ? iterator!.return()
           : { done: true, value: undefined as unknown as T }
       }
+
       return iterator!.next(resumeWith.value)
     },
     perform(effect) {
@@ -90,6 +95,7 @@ export const createCoroutine = <T>({
           routine.resume(result)
         }
       })
+
       try {
         routine.data.exit = effect.enter(resolve, routine)
       } catch (error) {

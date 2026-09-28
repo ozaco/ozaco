@@ -31,7 +31,9 @@ runAdapterSuite({
 const closedPort = (): number => {
   const server = Bun.listen({ hostname: '127.0.0.1', port: 0, socket: { data() {} } })
   const { port } = server
+
   server.stop(true)
+
   return port
 }
 
@@ -39,6 +41,7 @@ const closedPort = (): number => {
 const refused = (use: (url: string) => AnyType): Promise<AnyType> =>
   run(function* () {
     yield* use(`postgres://ozaco:secret@127.0.0.1:${closedPort()}/ozaco`)
+
     return yield* DbAdapter.actions.raw('SELECT 1', [])
   })
 

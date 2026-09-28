@@ -30,6 +30,7 @@ describe('event — contract', () => {
         }, 5)
       },
     } as unknown as Promise<void>
+
     emitter.on('tick', () => thenable)
     emitter.on('tick', () => {
       seen.push('sync')
@@ -41,6 +42,7 @@ describe('event — contract', () => {
 
   it('the emitter tag is the exported EVENT symbol', () => {
     const emitter = createEvent<{ a: [] }>()
+
     expect(emitter._t).toBe(EVENT)
     expect(isEventEmitter({ _t: EVENT })).toBe(true)
     expect(EVENT).toBe(Symbol.for('std:event') as typeof EVENT)
@@ -52,6 +54,7 @@ describe('event — contract', () => {
     unwrap(
       await run(function* () {
         const once = yield* spawn(() => useEventOnce(emitter, 'value'))
+
         yield* sleep(1)
         emitter.emit('value', 7)
         expect(yield* once).toEqual([7])
@@ -62,6 +65,7 @@ describe('event — contract', () => {
             seen.push(n)
           }),
         )
+
         yield* sleep(1)
         emitter.emit('value', 1)
         emitter.emit('value', 2)
@@ -71,6 +75,7 @@ describe('event — contract', () => {
 
         // buffered: events emitted before next() is called are kept
         const buffered = yield* useBufferedEvent(emitter, 'value')
+
         emitter.emit('value', 3)
         emitter.emit('value', 4)
         expect((yield* buffered.next()).value).toEqual([3])

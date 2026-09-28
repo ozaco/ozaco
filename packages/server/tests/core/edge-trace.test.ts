@@ -16,7 +16,7 @@ import { definePlugin } from 'std:plugin'
 import { fail, isFailure, unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
 import type { TraceDef } from 'std:trace'
-import { inject } from 'std:trace'
+import { Trace } from 'std:trace'
 
 import { afterAll, describe, expect, it } from 'bun:test'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -43,6 +43,7 @@ const items = service('items', {
     },
     function* ({ input, ctx }) {
       yield* ctx.log.info('reading', { id: input.id })
+
       return { id: input.id }
     },
   ),
@@ -165,6 +166,7 @@ const spy = () => {
           }
         },
       }
+
       return { hooks }
     },
   }).build()
@@ -176,7 +178,9 @@ const spy = () => {
   /** the ONE edge span of the request to `path`. */
   const edgeOf = (path: string): TraceDef.SpanData => {
     const found = edgesOf(path)
+
     expect(found).toHaveLength(1)
+
     return found[0]!
   }
 
@@ -204,12 +208,14 @@ const withServer = async (
   unwrap(
     await run(function* () {
       yield* storage()
+
       const server = yield* createServer({
         services: [items],
         edge: BunEdge,
         ...options,
         plugins: [seen.plugin.use(), ...(options.plugins ?? [])],
       })
+
       yield* server.start()
       yield* body(seen, server)
       yield* server.stop()
@@ -226,6 +232,7 @@ const request = function* (
 ): Operation<{ status: number; headers: Headers; text: string; body: AnyType }> {
   const response = yield* Edge.actions.handle(new Request(`http://edge${path}`, init))
   const text = yield* until(response.text())
+
   // the span of a streamed body ends from the edge's scope: let that run
   yield* sleep(5)
 
@@ -241,6 +248,7 @@ const request = function* (
 }
 
 const site = mkdtempSync(join(tmpdir(), 'oz-edge-trace-'))
+
 writeFileSync(join(site, 'app.js'), 'console.log(1)')
 
 afterAll(() => {
@@ -257,10 +265,12 @@ describe('edge trace — the HTTP span', () => {
           [HEADERS.requestId]: 'req-attrs',
         },
       })
+
       expect(got.status).toBe(200)
     })
 
     const edge = seen.edgeOf('/items/a42')
+
     expect(edge.name).toBe('GET /items/:id')
     expect(edge.kind).toBe('server')
     expect(edge.parent).toBeNull()
@@ -283,8 +293,11 @@ describe('edge trace — the HTTP span', () => {
 
     // the dispatch nests under it; the handler's log line is correlated to the dispatch span
     const dispatch = seen.inTrace(edge.context.traceId).find(span => span.name === 'items.get')
+
     expect(dispatch?.parent?.spanId).toBe(edge.context.spanId)
+
     const line = seen.logs.find(log => log.body === 'reading')
+
     expect(line?.context?.spanId).toBe(dispatch?.context.spanId)
   })
 
@@ -292,6 +305,7 @@ describe('edge trace — the HTTP span', () => {
     const seen = await withServer({}, function* () {
       const v6 = yield* Edge.actions.handle(new Request('http://[::1]:8443/items/v6'))
       const v4 = yield* Edge.actions.handle(new Request('https://127.0.0.1/items/v4'))
+
       expect([v6.status, v4.status]).toEqual([200, 200])
       yield* until(Promise.all([v6.text(), v4.text()]))
       yield* sleep(5)
@@ -321,22 +335,28 @@ describe('edge trace — the HTTP span', () => {
     })
 
     const unrouted = seen.edgeOf('/nowhere')
+
     expect(unrouted.name).toBe('GET')
     expect(unrouted.status.code).toBe('unset')
     expect(unrouted.attributes['error.type']).toBe('server.not-found')
     expect(unrouted.attributes['http.route']).toBeUndefined()
+
     const debug = seen.exceptionsIn(unrouted.context.traceId)
+
     expect(debug.map(log => [log.eventName, log.severityNumber])).toEqual([
       ['http.server.request.exception', 5],
     ])
     expect(unrouted.events.map(event => event.name)).toEqual(['exception'])
 
     const invalid = seen.edgeOf('/items/put')
+
     expect(invalid.status.code).toBe('unset')
     expect(invalid.attributes['error.type']).toBe('server.validation')
     // recorded at its origin (the dispatch span), never a second time on the edge span
     expect(invalid.events).toHaveLength(0)
+
     const warn = seen.exceptionsIn(invalid.context.traceId)
+
     expect(warn.map(log => [log.eventName, log.severityNumber])).toEqual([
       ['ozaco.action.exception', 13],
     ])
@@ -345,16 +365,22 @@ describe('edge trace — the HTTP span', () => {
   it('5xx: error on the edge span too — ONE ERROR record, at the origin', async () => {
     const seen = await withServer({}, function* () {
       const got = yield* request('/items/boom')
+
       expect(got.status).toBe(500)
     })
 
     const edge = seen.edgeOf('/items/boom')
+
     expect(edge.status).toEqual({ code: 'error', message: 'kaput' })
     expect(edge.attributes['error.type']).toBe('items.kaput')
     expect(edge.events).toHaveLength(0)
+
     const dispatch = seen.inTrace(edge.context.traceId).find(span => span.name === 'items.boom')
+
     expect(dispatch?.status.code).toBe('error')
+
     const records = seen.exceptionsIn(edge.context.traceId)
+
     expect(records).toHaveLength(1)
     expect(records[0]).toMatchObject({ eventName: 'ozaco.action.exception', severityNumber: 17 })
     expect(records[0]!.context?.spanId).toBe(dispatch?.context.spanId)
@@ -363,11 +389,13 @@ describe('edge trace — the HTTP span', () => {
   it("a thrown Error: the edge span's status message is the fold's, like the action span's", async () => {
     const seen = await withServer({}, function* () {
       const got = yield* request('/items/thrown')
+
       expect(got.status).toBe(500)
     })
 
     const edge = seen.edgeOf('/items/thrown')
     const dispatch = seen.inTrace(edge.context.traceId).find(span => span.name === 'items.thrown')
+
     expect(dispatch?.status).toEqual({ code: 'error', message: 'TypeError: the item exploded' })
     expect(edge.status).toEqual({ code: 'error', message: 'TypeError: the item exploded' })
     expect(edge.attributes['error.type']).toBe('server.internal')
@@ -378,16 +406,21 @@ describe('edge trace — the HTTP span', () => {
       yield* Edge.actions.decorate(function* () {
         throw new Error('the decorator broke')
       })
+
       const got = yield* request('/items/x7', { headers: { [HEADERS.requestId]: 'req-crash' } })
+
       expect(got.status).toBe(500)
       expect(got.headers.get(HEADERS.requestId)).toBe('req-crash')
       expect(got.body.error).toMatchObject({ error: 'server.internal', requestId: 'req-crash' })
     })
 
     const edge = seen.edgeOf('/items/x7')
+
     expect(edge.status.code).toBe('error')
     expect(edge.attributes['error.type']).toBe('server.internal')
+
     const records = seen.exceptionsIn(edge.context.traceId)
+
     expect(records).toHaveLength(1)
     expect(records[0]!.severityNumber).toBe(17)
     expect(records[0]!.eventName).toBe('http.server.request.exception')
@@ -408,12 +441,14 @@ describe('edge trace — inbound context, traceresponse, request ids', () => {
         ['/items/unsampled', '00'],
       ] as const) {
         const got = yield* request(path, { headers: { traceparent: traceparent(flags) } })
+
         expect(got.status).toBe(200)
       }
     })
 
     for (const path of ['/items/sampled', '/items/unsampled']) {
       const edge = seen.edgeOf(path)
+
       expect(edge.parent).toBeNull()
       expect(edge.context.traceId).not.toBe(INBOUND_TRACE)
       expect(edge.context.flags & 1).toBe(1)
@@ -430,6 +465,7 @@ describe('edge trace — inbound context, traceresponse, request ids', () => {
     })
 
     const edge = continued.edgeOf('/items/one')
+
     expect(edge.context.traceId).toBe(INBOUND_TRACE)
     expect(edge.parent).toMatchObject({ traceId: INBOUND_TRACE, spanId: INBOUND_SPAN })
     expect(edge.links).toHaveLength(0)
@@ -441,6 +477,7 @@ describe('edge trace — inbound context, traceresponse, request ids', () => {
     })
 
     const root = ignored.edgeOf('/items/three')
+
     expect(root.parent).toBeNull()
     expect(root.context.traceId).not.toBe(INBOUND_TRACE)
     expect(root.links).toHaveLength(0)
@@ -491,6 +528,7 @@ describe('edge trace — inbound context, traceresponse, request ids', () => {
 
     // continued (one trace between ozaco nodes) — but recorded here, and answered sampled
     const marked = seen.edgeOf('/items/marked')
+
     expect(marked.context.traceId).toBe(INBOUND_TRACE)
     expect(marked.parent?.spanId).toBe(INBOUND_SPAN)
     expect(marked.context.flags & 1).toBe(1)
@@ -587,6 +625,7 @@ describe('edge trace — inbound context, traceresponse, request ids', () => {
 
     // a new root minted here: the request id IS the trace id
     const minted = seen.edgeOf('/items/minted')
+
     expect(answers['minted']!.headers.get(HEADERS.requestId)).toBe(minted.context.traceId)
     expect(minted.attributes['ozaco.request.id']).toBeUndefined()
     // minted here: sampled + random flags
@@ -597,7 +636,9 @@ describe('edge trace — inbound context, traceresponse, request ids', () => {
     // a valid inbound id wins (and is kept on the span); an invalid one is replaced
     expect(answers['given']!.headers.get(HEADERS.requestId)).toBe('req-given')
     expect(seen.edgeOf('/items/given').attributes['ozaco.request.id']).toBe('req-given')
+
     const invalid = seen.edgeOf('/items/invalid')
+
     expect(answers['invalid']!.headers.get(HEADERS.requestId)).toBe(invalid.context.traceId)
 
     // the failure envelope: tag, message, causes, status, ids — no `_d`, no chain by default;
@@ -607,6 +648,7 @@ describe('edge trace — inbound context, traceresponse, request ids', () => {
     const dispatch = seen
       .inTrace(failed.context.traceId)
       .find(span => span.name === 'items.chained')
+
     expect(answers['failed']!.status).toBe(500)
     expect(answers['failed']!.body).toEqual({
       error: {
@@ -644,6 +686,7 @@ describe('edge trace — inbound context, traceresponse, request ids', () => {
     // the trace was not minted here: a fresh request id, never the (shared) trace id
     const edge = seen.edgeOf('/items/continued')
     const id = continued!.get(HEADERS.requestId)
+
     expect(id).toMatch(/^[0-9a-f]{32}$/u)
     expect(id).not.toBe(edge.context.traceId)
     // …and kept on the span, so the store finds the request by it
@@ -688,6 +731,7 @@ describe('edge trace — inbound context, traceresponse, request ids', () => {
 
     expect(marked.error.error).toBe('items.outer')
     expect(marked.error.message).toBe('outer broke')
+
     // continued (never trusted): the breadcrumb names its dispatch span in the caller's trace
     const markedEdge = trusting
       .edgesOf('/items/chained')
@@ -695,6 +739,7 @@ describe('edge trace — inbound context, traceresponse, request ids', () => {
     const markedDispatch = trusting
       .inTrace(INBOUND_TRACE)
       .find(span => span.name === 'items.chained')!
+
     expect(marked.error.causes).toEqual([
       'at: the outer step',
       `action:items.chained span:${markedDispatch.context.spanId} req:${markedEdge.attributes['ozaco.request.id']}`,
@@ -709,22 +754,27 @@ describe('edge trace — inbound context, traceresponse, request ids', () => {
     await withServer({ errors: { expose: 'chain' } }, function* () {
       const chained = yield* request('/items/chained')
       const thrown = yield* request('/items/thrown')
+
       texts.push(chained.text, thrown.text)
     })
 
     const decoded = unwrap(
       await run(function* () {
         yield* JsonCodec.use()
+
         const out: AnyType[] = []
+
         for (const text of texts) {
           out.push(yield* JsonCodec.actions.parse(text))
         }
+
         return out
       }),
     ) as AnyType[]
 
     const [chained, thrown] = decoded
     const inner = chained.error.causes[1]
+
     expect(isFailure(inner)).toBe(true)
     expect(inner).toMatchObject({ error: 'items.inner', message: 'inner broke' })
 
@@ -742,16 +792,20 @@ describe('edge trace — span lifetime and record modes', () => {
     const seen = await withServer({}, function* (spyOf) {
       const response = yield* Edge.actions.handle(new Request('http://edge/items/ticks'))
       const headersAt = Date.now()
+
       yield* sleep(5)
       // the headers are out, the body is not: the span is still open
       expect(spyOf.edgesOf('/items/ticks')).toHaveLength(0)
       expect(yield* until(response.text())).toBe('0\n1\n2\n')
       yield* sleep(5)
+
       const edge = spyOf.edgeOf('/items/ticks')
+
       expect(edge.end).toBeGreaterThanOrEqual(headersAt + 30)
     })
 
     const edge = seen.edgeOf('/items/ticks')
+
     expect(edge.attributes['http.response.status_code']).toBe(200)
   })
 
@@ -795,7 +849,9 @@ describe('edge trace — span lifetime and record modes', () => {
 
     // failures surface with their whole local trace
     expect(seen.edgeOf('/quiet/down').attributes['error.type']).toBe('server.unavailable')
+
     const bad = seen.edgeOf('/owned/bad')
+
     expect(seen.inTrace(bad.context.traceId).map(span => span.name)).toContain('owned.bad')
     expect(seen.edgeOf('/assets/missing.js').name).toBe('GET /assets/**:path')
   })
@@ -822,6 +878,7 @@ describe('edge trace — captured headers and bodies', () => {
     })
 
     const edge = seen.edgeOf('/items/put')
+
     expect(edge.attributes).toMatchObject({
       'http.request.header.authorization': ['REDACTED'],
       'http.request.header.cookie': ['REDACTED'],
@@ -834,11 +891,13 @@ describe('edge trace — captured headers and bodies', () => {
     expect(JSON.stringify(edge)).not.toContain('secret-token')
 
     const streamed = seen.edgeOf('/items/ticks')
+
     expect(streamed.attributes['ozaco.response.body.kind']).toBe('flow')
     expect(streamed.attributes['http.response.body.size']).toBe(6)
 
     // a text stream's chunks are strings: counted in UTF-8 bytes (7 + 6 + 7 + 4), never NaN
     const text = seen.edgeOf('/items/words')
+
     expect(text.attributes['http.response.body.size']).toBe(24)
 
     const plain = await withServer({}, function* () {
@@ -846,8 +905,30 @@ describe('edge trace — captured headers and bodies', () => {
     })
 
     const keys = Object.keys(plain.edgeOf('/items/put').attributes)
+
     expect(keys.some(key => key.startsWith('http.request.header.'))).toBe(false)
     expect(keys.some(key => key.includes('.body.'))).toBe(false)
+  })
+})
+
+describe('edge trace — a secret list of your own', () => {
+  it('capture.sensitiveKeys replaces the default list for headers and bodies', async () => {
+    const capture = { headers: true, bodies: true, sensitiveKeys: ['name', 'x-custom'] }
+    const init: RequestInit = {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-custom': 'yes', cookie: 'session=abc' },
+      body: JSON.stringify({ name: 'ada' }),
+    }
+
+    const seen = await withServer({ observe: { capture } }, function* () {
+      yield* request('/items/put', init)
+    })
+
+    expect(seen.edgeOf('/items/put').attributes).toMatchObject({
+      'http.request.header.x-custom': ['REDACTED'],
+      'http.request.header.cookie': ['session=abc'],
+      'http.request.body.content': '{"name":"REDACTED"}',
+    })
   })
 })
 
@@ -859,6 +940,7 @@ describe('edge trace — secrets never reach telemetry', () => {
       profile: { pin: '0000', keys: [{ label: 'ci', Access_Token: 'tok-inner' }] },
     }
     const form = new FormData()
+
     form.append('album', 'summer')
     form.append('apiKey', 'key-in-a-field')
     form.append('photo', new Blob([new Uint8Array(8)], { type: 'image/png' }), 'p.png')
@@ -871,12 +953,14 @@ describe('edge trace — secrets never reach telemetry', () => {
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify(login),
         })
+
         expect(reply.body.accessToken).toBe('tok-access-1')
         expect((yield* request('/vault/upload', { method: 'POST', body: form })).status).toBe(200)
       },
     )
 
     const edge = seen.edgeOf('/vault/login')
+
     expect(JSON.parse(edge.attributes['http.request.body.content'] as string)).toEqual({
       email: 'ada@example.com',
       password: 'REDACTED',
@@ -892,6 +976,7 @@ describe('edge trace — secrets never reach telemetry', () => {
     expect(edge.attributes['http.request.body.size']).toBe(JSON.stringify(login).length)
 
     const upload = seen.edgeOf('/vault/upload')
+
     expect(upload.attributes['ozaco.request.body.kind']).toBe('parts')
     expect(JSON.parse(upload.attributes['http.request.body.content'] as string)).toEqual({
       album: 'summer',
@@ -899,6 +984,7 @@ describe('edge trace — secrets never reach telemetry', () => {
     })
 
     const everything = JSON.stringify(seen.spans)
+
     for (const secret of [
       'hunter2',
       '0000',
@@ -961,18 +1047,21 @@ describe('edge trace — websockets', () => {
       await run(function* () {
         yield* storage()
         yield* DefaultLogger.use({ level: LogLevel.info })
+
         const server = yield* createServer({
           services: [items],
           edge: BunEdge,
           plugins: [seen.plugin.use()],
           observe: { capture: { frames: true } },
         })
+
         yield* Edge.actions.socket({
           path: '/live/:room',
           receives: z.object({ text: z.string() }),
           *handler(socket) {
             // a push outside any frame: counted, no span to put it on
             yield* socket.send({ t: 'hello' })
+
             const messages = yield* socket.messages
 
             for (;;) {
@@ -983,13 +1072,16 @@ describe('edge trace — websockets', () => {
               }
 
               const { text } = step.value as { text: string }
+
               ctxSpans.push(socket.ctx.trace.spanId)
               yield* socket.ctx.log.info('heard', { text })
               yield* socket.send({ t: 'echo', text })
             }
           },
         })
+
         const info = yield* server.start({ port: 0 })
+
         heard = yield* until(
           converse(
             `${info.url!.replace('http', 'ws')}/live/lobby`,
@@ -1010,6 +1102,7 @@ describe('edge trace — websockets', () => {
     expect(heard!.got).toEqual([{ t: 'hello' }, { t: 'echo', text: 'a' }, { t: 'echo', text: 'b' }])
 
     const upgrade = seen.edgeOf('/live/lobby')
+
     expect(upgrade.name).toBe('GET /live/:room')
     expect(upgrade.attributes['http.response.status_code']).toBe(101)
     expect(upgrade.status.code).toBe('unset')
@@ -1020,8 +1113,11 @@ describe('edge trace — websockets', () => {
     const frames = seen.spans
       .filter(span => span.name === 'WS /live/:room')
       .toSorted((left, right) => left.start - right.start)
+
     expect(frames).toHaveLength(3)
+
     const traces = new Set(frames.map(span => span.context.traceId))
+
     expect(traces.size).toBe(3)
     expect(traces.has(upgrade.context.traceId)).toBe(false)
 
@@ -1039,6 +1135,7 @@ describe('edge trace — websockets', () => {
     }
 
     const [first, malformed, last] = frames
+
     expect(first!.attributes['ozaco.ws.message.size']).toBe(
       JSON.stringify({ t: 'say', text: 'a' }).length,
     )
@@ -1046,29 +1143,36 @@ describe('edge trace — websockets', () => {
 
     // the echo is an event on the frame it answers; the hello went out under no span
     for (const frame of [first!, last!]) {
-      const sends = frame.events.filter(event => event.name === 'ozaco.ws.send')
+      const sends = frame.events.filter(event => event.name === 'ws.send')
+
       expect(sends).toHaveLength(1)
       expect(sends[0]!.attributes).toMatchObject({ 'ozaco.ws.message.type': 'echo' })
     }
+
     expect(JSON.stringify(seen.spans)).not.toContain('"ozaco.ws.message.type":"hello"')
 
     // the handler's log line — and `ctx.trace` — belong to the frame it handled
     expect(ctxSpans).toEqual([first!.context.spanId, last!.context.spanId])
+
     const lines = seen.logs.filter(log => log.body === 'heard')
+
     expect(lines.map(log => log.context?.spanId)).toEqual([
       first!.context.spanId,
       last!.context.spanId,
     ])
 
     // the malformed frame never reached the handler: a reject event + ONE WARN record
-    expect(malformed!.events.map(event => event.name)).toContain('ozaco.ws.reject')
+    expect(malformed!.events.map(event => event.name)).toContain('ws.reject')
     expect(malformed!.attributes['error.type']).toBe('server.validation')
+
     const rejected = seen.exceptionsIn(malformed!.context.traceId)
+
     expect(rejected).toHaveLength(1)
     expect(rejected[0]!.severityNumber).toBe(13)
 
     // the close: one INFO line, correlated to the upgrade span, with the session's totals
     const closed = seen.logs.filter(log => log.body === 'socket closed')
+
     expect(closed).toHaveLength(1)
     expect(closed[0]!.context?.spanId).toBe(upgrade.context.spanId)
     expect(closed[0]!.attributes).toMatchObject({
@@ -1086,17 +1190,20 @@ describe('edge trace — websockets', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({
           services: [items],
           edge: BunEdge,
           plugins: [seen.plugin.use()],
           observe: { capture: { frames: true } },
         })
+
         yield* Edge.actions.socket({
           path: '/burst',
           receives: z.object({ text: z.string() }),
           *handler(socket) {
             yield* socket.send({ t: 'hello' })
+
             const messages = yield* socket.messages
 
             for (;;) {
@@ -1111,7 +1218,9 @@ describe('edge trace — websockets', () => {
             }
           },
         })
+
         const info = yield* server.start({ port: 0 })
+
         yield* until(converse(`${info.url!.replace('http', 'ws')}/burst`, burst, burst.length))
         yield* sleep(50)
         yield* server.stop()
@@ -1122,8 +1231,11 @@ describe('edge trace — websockets', () => {
     // same order, every start distinct — a whole-millisecond `Date.now()` receipt stamp tied
     // frames of one burst, and their spans sorted any which way
     const frames = seen.spans.filter(span => span.name === 'WS /burst')
+
     expect(frames).toHaveLength(burst.length)
+
     const byStart = frames.toSorted((left, right) => left.start - right.start)
+
     expect(byStart.map(span => span.attributes['ozaco.ws.message.body'])).toEqual(
       burst.map(frame => JSON.stringify(frame)),
     )
@@ -1134,6 +1246,7 @@ describe('edge trace — websockets', () => {
       const line = seen.logs.find(
         log => log.body === 'heard' && log.context?.spanId === frame.context.spanId,
       )
+
       expect(line).toBeDefined()
       expect(frame.start).toBeLessThanOrEqual(line!.time)
     }
@@ -1145,16 +1258,19 @@ describe('edge trace — websockets', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({
           services: [items],
           edge: BunEdge,
           plugins: [seen.plugin.use()],
           observe: { capture: { frames: true } },
         })
+
         yield* Edge.actions.socket({
           path: '/watch',
           *handler(socket) {
             yield* socket.send({ t: 'hello' })
+
             const messages = yield* socket.messages
 
             for (;;) {
@@ -1177,7 +1293,9 @@ describe('edge trace — websockets', () => {
             }
           },
         })
+
         const info = yield* server.start({ port: 0 })
+
         yield* until(
           converse(
             `${info.url!.replace('http', 'ws')}/watch`,
@@ -1192,6 +1310,7 @@ describe('edge trace — websockets', () => {
 
     const frame = seen.spans.find(data => data.name === 'WS /watch')!
     const watch = seen.spans.find(data => data.name === 'watch probe')!
+
     expect(watch.parent?.spanId).toBe(frame.context.spanId)
     // the frame span is still open when the work it started opens its span
     expect(watch.start).toBeLessThanOrEqual(frame.end)
@@ -1211,15 +1330,18 @@ describe('edge trace — websockets', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({
           services: [items],
           edge: BunEdge,
           plugins: [seen.plugin.use()],
         })
+
         yield* Edge.actions.socket({
           path: '/relay',
           *handler(socket) {
             yield* socket.send({ t: 'hello' })
+
             const messages = yield* socket.messages
 
             for (;;) {
@@ -1234,7 +1356,9 @@ describe('edge trace — websockets', () => {
             }
           },
         })
+
         const info = yield* server.start({ port: 0 })
+
         yield* until(
           converse(
             `${info.url!.replace('http', 'ws')}/relay`,
@@ -1272,7 +1396,9 @@ describe('edge trace — websockets', () => {
     const frames = seen.spans
       .filter(span => span.name === 'WS /relay')
       .toSorted((left, right) => left.start - right.start)
+
     expect(frames).toHaveLength(4)
+
     const [trusted, stranger, resent, plain] = frames
 
     // a re-sent frame LINKS the previous generation it names (`ws.reconnect`)
@@ -1310,16 +1436,19 @@ describe('edge trace — websockets', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({
           services: [items],
           edge: BunEdge,
           plugins: [seen.plugin.use()],
           trace: { trust: probe => new URL(probe.url).searchParams.get('internal') === 'yes' },
         })
+
         yield* Edge.actions.socket({
           path: '/relay',
           *handler(socket) {
             yield* socket.send({ t: 'hello' })
+
             const messages = yield* socket.messages
 
             for (;;) {
@@ -1334,6 +1463,7 @@ describe('edge trace — websockets', () => {
             }
           },
         })
+
         const info = yield* server.start({ port: 0 })
         const base = `${info.url!.replace('http', 'ws')}/relay`
         const unsampled = { t: 'call', traceparent: traceparent('00'), tracestate: 'ozaco=1' }
@@ -1348,6 +1478,7 @@ describe('edge trace — websockets', () => {
     )
 
     expect(delivered).toEqual([1, 2])
+
     const frames = seen.spans.filter(span => span.name === 'WS /relay')
 
     // only the marked stranger's frame is exported — continued, sampled
@@ -1366,16 +1497,19 @@ describe('edge trace — websockets', () => {
       unwrap(
         await run(function* () {
           yield* storage()
+
           // no observe hook, no exporter: tracing is OFF on this node
           const server = yield* createServer({
             services: [items],
             edge: BunEdge,
             ...(inbound ? { trace: { inbound } } : {}),
           })
+
           yield* Edge.actions.socket({
             path: '/relay',
             *handler(socket) {
               yield* socket.send({ t: 'hello' })
+
               const messages = yield* socket.messages
 
               for (;;) {
@@ -1386,12 +1520,15 @@ describe('edge trace — websockets', () => {
                 }
 
                 const { who } = step.value as { who: string }
-                carried[who] = (yield* inject()).traceparent ?? null
+
+                carried[who] = (yield* Trace.actions.inject()).traceparent ?? null
                 yield* socket.send({ t: 'ack' })
               }
             },
           })
+
           const info = yield* server.start({ port: 0 })
+
           yield* until(
             converse(
               `${info.url!.replace('http', 'ws')}/relay`,
@@ -1437,6 +1574,7 @@ describe('edge trace — websockets', () => {
             if (token !== 'good') {
               return yield* fail('server.unauthorized', 'bad token', 'test.token-check')
             }
+
             return { sub: 'ada' }
           },
         },
@@ -1449,6 +1587,7 @@ describe('edge trace — websockets', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({
           services: [guarded],
           edge: BunEdge,
@@ -1456,9 +1595,11 @@ describe('edge trace — websockets', () => {
           observe: { capture: { frames: true } },
         })
         const info = yield* server.start({ port: 0 })
+
         result = yield* until(
           new Promise<{ got: unknown[]; code: number }>(resolve => {
             const ws = new WebSocket(`${info.url!.replace('http', 'ws')}/guarded/feed`)
+
             ws.addEventListener('open', () =>
               ws.send(JSON.stringify({ t: 'auth', token: 'sekrit-token' })),
             )
@@ -1471,10 +1612,13 @@ describe('edge trace — websockets', () => {
     )
 
     expect(result!.code).toBe(4401)
+
     const upgrade = seen.edgeOf('/guarded/feed')
+
     expect(upgrade.attributes['http.response.status_code']).toBe(101)
 
     const refused = seen.spans.filter(span => span.name === 'WS /guarded/feed')
+
     expect(refused).toHaveLength(1)
     expect(refused[0]!.attributes).toMatchObject({
       'error.type': 'server.unauthorized',
@@ -1484,7 +1628,9 @@ describe('edge trace — websockets', () => {
     expect(refused[0]!.links[0]!.context.spanId).toBe(upgrade.context.spanId)
     // frames are captured — never an auth frame's token
     expect(JSON.stringify(seen.spans)).not.toContain('sekrit-token')
+
     const records = seen.exceptionsIn(refused[0]!.context.traceId)
+
     expect(records).toHaveLength(1)
     expect(records[0]!.severityNumber).toBe(13)
     // the verdict's own cause survives; the first-frame cause is appended

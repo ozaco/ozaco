@@ -22,6 +22,7 @@ const DbBusImpl = definePlugin<Bus.Context, [options?: Bus.Options]>({
     // pinned to the given transport, or routed to the most recently installed one
     const transport = (options?.transport ?? Transport) as Bus.Context['transport']
     const described = yield* attempt(() => useContext(transport))
+
     if (isFailure(described)) {
       return yield* fail(
         DbErrors.Configuration,
@@ -39,9 +40,11 @@ const DbBusImpl = definePlugin<Bus.Context, [options?: Bus.Options]>({
       untraced(function* () {
         for (;;) {
           const step = yield* subscription.next()
+
           if (step.done) {
             return
           }
+
           events.emit('change', step.value.value)
         }
       }),
@@ -62,6 +65,7 @@ const DbBusImpl = definePlugin<Bus.Context, [options?: Bus.Options]>({
 export const DbBus = DbBusImpl.build<Bus.Actions>({
   *publish(envelope: Bus.Envelope): Operation<void> {
     const { transport, topic } = yield* DbBusImpl.context.expect()
+
     yield* transport.actions.publish(topic, envelope)
   },
 })

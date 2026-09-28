@@ -1,6 +1,8 @@
+import { capUtf8 } from 'std:shared'
+
 import type { TraceDef } from '../types/trace'
 
-import { attributesOf, capBytes } from './attributes'
+import { attributesOf } from './attributes'
 import { DEFAULT_SCOPE, LOG_VALUE_BYTES, MAX_ATTRIBUTES } from './const'
 import type { SpanRecorder } from './recorder'
 import { logContextOf } from './tree'
@@ -15,7 +17,7 @@ export const logOf = (rec: SpanRecorder | null, input: TraceDef.LogInput): Trace
   const { attributes, dropped } = attributesOf(input.attributes, LOG_VALUE_BYTES, MAX_ATTRIBUTES)
   const { eventName, severityText } = input
   const traced = rec !== null && !rec.passThrough
-  const body = capBytes(input.body || eventName || severityText || 'log', LOG_VALUE_BYTES)
+  const body = capUtf8(input.body || eventName || severityText || 'log', LOG_VALUE_BYTES)
 
   return {
     time: input.time ?? rec?.now() ?? Date.now(),

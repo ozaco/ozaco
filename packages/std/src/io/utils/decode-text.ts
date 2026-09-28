@@ -21,13 +21,16 @@ export const decodeText = <TClose>(
 
       if (item.done) {
         const tail = decoder.decode()
+
         if (tail) {
           yield* emit(tail)
         }
+
         return item.value
       }
 
       const text = decoder.decode(item.value, { stream: true })
+
       if (text) {
         yield* emit(text)
       }

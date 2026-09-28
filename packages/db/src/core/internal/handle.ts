@@ -163,6 +163,7 @@ export const createHandle = (state: Database.State, base?: Spec.Filter): Databas
       // the write never happened: take its log row back (harmless if we crash in between —
       // a phantom row only costs a spurious recompute, and `compact` sweeps it)
       yield* hub.retract(change)
+
       return yield* missed(target, id, options)
     }
 
@@ -173,6 +174,7 @@ export const createHandle = (state: Database.State, base?: Spec.Filter): Databas
 
   const get = function* (table: string, id: string, options?: Helpers.WriteOptions) {
     const target = yield* targetOf(table)
+
     return yield* loadOne(target.spec, id, scopeOf(options?.scope))
   }
 
@@ -216,6 +218,7 @@ export const createHandle = (state: Database.State, base?: Spec.Filter): Databas
 
   const insert = function* (table: string, value: unknown) {
     const docs = yield* insertMany(table, [value])
+
     return docs[0]!
   }
 
@@ -227,6 +230,7 @@ export const createHandle = (state: Database.State, base?: Spec.Filter): Databas
     options?: Helpers.WriteOptions,
   ) {
     const target = yield* targetOf(table)
+
     return yield* write(target, id, yield* preparePatch(target.def, value), guardOptions(options))
   }
 
@@ -262,6 +266,7 @@ export const createHandle = (state: Database.State, base?: Spec.Filter): Databas
       // nothing was deleted: take the log row back before deciding miss vs conflict
       yield* hub.retract(change)
       yield* missed(target, id, merged)
+
       return false
     }
 
@@ -305,6 +310,7 @@ export const createHandle = (state: Database.State, base?: Spec.Filter): Databas
 
       if (!isFailure(outcome)) {
         yield* hub.flush(buffer, outcome.value.tx)
+
         return outcome.value.result
       }
 
@@ -343,11 +349,13 @@ export const createHandle = (state: Database.State, base?: Spec.Filter): Databas
       if (!existing) {
         const pins = yield* pinned(table, options?.scope)
         const doc = yield* loose.insert(table, { ...match, ...(value as object), ...pins })
+
         return { op: 'inserted' as const, doc: doc as Spec.Doc }
       }
 
       if (options?.when) {
         const target = yield* targetOf(table)
+
         yield* guardPaths(target.spec, [options.when])
       }
 
@@ -409,6 +417,7 @@ export const createHandle = (state: Database.State, base?: Spec.Filter): Databas
     for (const value of values) {
       const system = yield* systemOf(table, value)
       const data = yield* prepareInsert(target.def, { ...(value as object), ...pins })
+
       rows.push({ ...(yield* stamp(system)), ...data })
     }
 

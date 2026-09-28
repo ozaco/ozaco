@@ -2,7 +2,7 @@ import type { Flow, Operation, Scope } from 'std:effect'
 import type { EventEmitter } from 'std:event'
 import type { Plugin } from 'std:plugin'
 import type { AnyType, StandardSchemaV1 } from 'std:shared'
-import type { TraceDef, TracingState } from 'std:trace'
+import type { TraceDef } from 'std:trace'
 
 import type { CarrierDef } from './carrier'
 import type { EdgeDef } from './edge'
@@ -139,7 +139,7 @@ export namespace ServerDef {
 
     /**
      * Claim the PROCESS's log records while this node observes: every record emitted where no
-     * Tracer records — tracing off there, not suppressed: a std Logger line of infrastructure
+     * Trace sink records — tracing off there, not suppressed: a std Logger line of infrastructure
      * (transport, db) installed BEFORE `createServer`, in a parent scope, an `emitLog` /
      * `event()` / `recordFailure` there — reaches this node's store and exporters with its
      * resource (`service.name` = the node's, unless the record names a span service) and the
@@ -166,6 +166,10 @@ export namespace ServerDef {
 
     /** the verified principal as `enduser.id`. */
     readonly enduser?: boolean | undefined
+
+    /** the names whose values are `REDACTED` in captured headers, bodies, frames and `url.query`
+     * (replaces std:fetch's `SENSITIVE_KEYS`; `[...SENSITIVE_KEYS, 'my_key']` adds to it). */
+    readonly sensitiveKeys?: readonly string[] | undefined
   }
 
   /** `createServer({ errors })`. */
@@ -191,6 +195,7 @@ export namespace ServerDef {
     bodies: boolean
     frames: boolean
     enduser: boolean
+    sensitiveKeys: readonly string[]
   }
 
   export interface ObserveSettings {
@@ -247,12 +252,12 @@ export namespace ServerDef {
     readonly requestId: string
   }
 
-  /** The kernel `Tracer` impl's (`server-tracer`) context. */
+  /** The kernel `Trace` impl's (`server-tracer`) context. */
   export interface TracerContext {
     readonly kernel: Context
 
     /** this node's tracing switch — `createServer` flips `enabled` once the plugins are in. */
-    readonly state: TracingState
+    readonly state: TraceDef.TracingState
 
     /** the node's scope — where a span that outlives its dispatch (a streamed output's) ends. */
     readonly scope: Scope
@@ -362,7 +367,8 @@ export namespace ServerDef {
     reply(reply: Reply): void
 
     /** Open a child span under the ACTIVE one (custom instrumentation; kind `internal` unless
-     * given). */
+     * given). A Result the body returns is unwrapped (a failure raised): `attempt` the call to get
+     * it back as a value. */
     span<T>(
       name: string,
       body: (span: TraceDef.SpanHandle) => Operation<T>,
@@ -561,7 +567,7 @@ export namespace ServerDef {
      * in, read on the hot path (events are fanned out to exporters only when one listens). */
     exporting: boolean
 
-    /** whether this node records telemetry (an exporter, an observe hook, or a Tracer already
+    /** whether this node records telemetry (an exporter, an observe hook, or a Trace sink already
      * enabled around `createServer`) — set by `createServer` once the plugins are in; the
      * `server-tracer` switch follows it. */
     observing: boolean
@@ -625,7 +631,7 @@ export namespace ServerDef {
     emit(name: string, payload: unknown): Operation<void>
 
     /** Events arriving from every node (own emits included; `_`-prefixed internal events
-     * hidden). An ambient recording span gets an `ozaco.event.recv` span event per item
+     * hidden). An ambient recording span gets an `event.recv` span event per item
      * (`messaging.message.id`) and, for its first 32 items, a LINK to the item's creation context
      * (`ozaco.link.reason = 'creation'`). The flow ends when the carrier's subscription does (the
      * node stopping). */
@@ -650,7 +656,7 @@ export namespace ServerDef {
     reload(services: readonly ServiceDef.Service[]): Operation<ReloadReport>
 
     /** Report a DOMAIN record (audit trail, business event) from application code: one log
-     * record (`eventName: 'ozaco.domain'`, `ozaco.domain.stream`, the fields flattened) every
+     * record (`eventName: 'ozaco.local'`, `ozaco.local.stream`, the fields flattened) every
      * sink receives, correlated to the active span. Spans and logs are the kernel's own. */
     report(record: ObserveDef.DomainRecord): Operation<void>
 

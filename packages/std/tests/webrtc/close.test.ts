@@ -59,8 +59,10 @@ describe('close semantics', () => {
       const peerB = yield* Rtc.actions.connect(signalB, { polite: true })
 
       let escaped: RtcDef.Peer | undefined
+
       yield* scoped(function* () {
         const peerA = yield* Rtc.actions.connect(signalA)
+
         yield* peerA.channel('chat')
         escaped = peerA
       })
@@ -84,12 +86,14 @@ describe('close semantics', () => {
       const [signalA, signalB] = createSignalPair()
       const peerA = yield* Rtc.actions.connect(signalA)
       const peerB = yield* Rtc.actions.connect(signalB, { polite: true })
+
       void peerB
 
       const chatA = yield* peerA.channel('chat')
       const sideA = yield* peerA.channel('side')
 
       yield* chatA.close()
+
       const closedValue = yield* chatA.closed
       const messagesA = yield* chatA.messages
       const end = yield* messagesA.next()

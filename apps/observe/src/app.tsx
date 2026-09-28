@@ -90,8 +90,10 @@ export const App = () => {
         // a page is older than what is listed: append the traces not listed yet
         setRows(prior => {
           const known = new Set(prior.map(row => row.trace_id))
+
           return [...prior, ...page.traces.filter(row => !known.has(row.trace_id))]
         })
+
         return page
       })
       .catch((error: unknown) => {
@@ -156,6 +158,7 @@ export const App = () => {
 
           if (stopped) {
             await flow.cancel()
+
             return
           }
 

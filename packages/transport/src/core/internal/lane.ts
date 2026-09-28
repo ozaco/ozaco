@@ -40,10 +40,12 @@ function* awaitCredit(
   const winner = yield* race([
     (function* () {
       const step = yield* credits.next()
+
       return { step }
     })(),
     (function* () {
       yield* sleep(timeoutMs)
+
       return { timeout: true as const }
     })(),
   ])
@@ -103,6 +105,7 @@ export function* openProducer(
         available += grant.n
       }
     }
+
     available -= 1
   }
 
@@ -113,14 +116,17 @@ export function* openProducer(
 
       if (value instanceof Uint8Array) {
         yield* publish(KINDS.chunk, value)
+
         return
       }
 
       const encoded = yield* encodeValue(value)
+
       yield* publish(KINDS.data, encoded.data)
     },
     *end(close) {
       terminal = true
+
       const data = close === undefined ? empty() : (yield* encodeValue(close)).data
 
       yield* publish(KINDS.end, data)
@@ -143,6 +149,7 @@ export function* openProducer(
 
   // a halted pipe/writable never reaches `end`/`abort`: the scope's teardown closes the lane
   yield* ensure(() => producer.leave())
+
   return producer
 }
 
@@ -161,11 +168,13 @@ export function* pipeLane<T, TClose>(
 
     if (isFailure(step)) {
       yield* producer.abort(step)
+
       return yield* step
     }
 
     if (step.value.done) {
       yield* producer.end(step.value.value)
+
       return step.value.value as TClose
     }
 
@@ -212,6 +221,7 @@ export const flowLane = <T, TClose>(
 
     const grant = function* (n: number, initial: boolean) {
       const encoded = yield* encodeValue({ n, initial } satisfies Helpers.CreditFrame)
+
       yield* driver.publish({
         topic: creditTopic,
         data: encoded.data,
@@ -256,11 +266,13 @@ export const flowLane = <T, TClose>(
         }
 
         const frame = frameOf(step.value)
+
         if (!frame) {
           continue
         }
 
         attach.started = true
+
         if (frame.seq !== expected) {
           return finish(
             fail(
@@ -271,10 +283,12 @@ export const flowLane = <T, TClose>(
         }
 
         expected += 1
+
         switch (frame.kind) {
           case 'end': {
             const close =
               frame.raw.data.length === 0 ? undefined : yield* decodeValue<TClose>(frame.raw)
+
             return finish(close as TransportDef.LaneClose<TClose>)
           }
           case 'fail': {
@@ -282,11 +296,14 @@ export const flowLane = <T, TClose>(
           }
           default: {
             consumed += 1
+
             if (consumed % half === 0) {
               yield* grant(half, false)
             }
+
             const value =
               frame.kind === 'chunk' ? (frame.raw.data as T) : yield* decodeValue<T>(frame.raw)
+
             return { done: false as const, value }
           }
         }
@@ -310,13 +327,18 @@ export function* readableLane(
   yield* fork(function* () {
     for (;;) {
       const want = yield* demand.next()
+
       if (want.done) {
         return
       }
+
       const step = yield* subscription.next()
+
       want.value(step)
+
       if (step.done) {
         demand.close(undefined)
+
         return
       }
     }
@@ -330,14 +352,19 @@ export function* readableLane(
   return new ReadableStream<Uint8Array>({
     async pull(controller) {
       const step = await take()
+
       if (!step.done) {
         controller.enqueue(step.value)
+
         return
       }
+
       if (isFailure(step.value)) {
         controller.error(step.value)
+
         return
       }
+
       controller.close()
     },
   })
@@ -377,6 +404,7 @@ export function* writableLane(
   const sendChunk = function* (chunk: Uint8Array): Operation<void> {
     if (chunk.length <= frameBytes) {
       yield* producer.send(chunk)
+
       return
     }
 
@@ -388,9 +416,11 @@ export function* writableLane(
   yield* fork(function* () {
     for (;;) {
       const step = yield* commands.next()
+
       if (step.done) {
         return
       }
+
       const command = step.value
       const outcome = yield* attempt(function* () {
         if (command.failure) {
@@ -401,9 +431,12 @@ export function* writableLane(
           yield* producer.end(undefined)
         }
       })
+
       command.settle(isFailure(outcome) ? outcome : null)
+
       if (command.chunk === null) {
         commands.close(undefined)
+
         return
       }
     }
@@ -417,8 +450,10 @@ export function* writableLane(
         settle: outcome => {
           if (outcome) {
             reject(outcome)
+
             return
           }
+
           resolve()
         },
       })

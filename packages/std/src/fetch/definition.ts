@@ -52,6 +52,8 @@ const FetchClientImpl = Fetch.implement<FetchDef.Context, [options?: FetchDef.Op
       codec: options?.codec,
       tls: options?.tls,
       propagate: options?.propagate,
+      // a copy: the caller's array changing later never reaches (nor goes stale in) the lookup
+      sensitiveKeys: options?.sensitiveKeys && Object.freeze([...options.sensitiveKeys]),
     }
   },
 })

@@ -20,6 +20,7 @@ export function* validate<T>(
       const path = (issue.path ?? [])
         .map(segment => (typeof segment === 'object' ? String(segment.key) : String(segment)))
         .join('.')
+
       return path ? `${path}: ${issue.message}` : issue.message
     })
 

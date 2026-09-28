@@ -52,12 +52,15 @@ export const demo = service('demo', {
       return {
         *[Symbol.iterator]() {
           let at = 0
+
           return {
             *next() {
               if (at >= input.n) {
                 return { done: true as const, value: undefined }
               }
+
               yield* sleep(1)
+
               return { done: false as const, value: at++ }
             },
           }
@@ -71,11 +74,13 @@ export const demo = service('demo', {
       return {
         *[Symbol.iterator]() {
           let at = 0
+
           return {
             *next() {
               if (at >= input.n) {
                 return { done: true as const, value: undefined }
               }
+
               return { done: false as const, value: { tick: at++ } }
             },
           }
@@ -89,9 +94,11 @@ export const demo = service('demo', {
       return {
         *[Symbol.iterator]() {
           const parts = input.text.split(' ')
+
           return {
             *next() {
               const next = parts.shift()
+
               return next === undefined
                 ? { done: true as const, value: undefined }
                 : { done: false as const, value: `${next} ` }
@@ -125,13 +132,17 @@ export const demo = service('demo', {
     function* ({ input }) {
       const reader = (input.streams.file as ReadableStream<Uint8Array>).getReader()
       let size = 0
+
       for (;;) {
         const step = yield* until(reader.read())
+
         if (step.done) {
           break
         }
+
         size += step.value.length
       }
+
       return { name: input.fields.name, size }
     },
   ),
@@ -140,13 +151,17 @@ export const demo = service('demo', {
     function* ({ input }) {
       const reader = (input as ReadableStream<Uint8Array>).getReader()
       let size = 0
+
       for (;;) {
         const step = yield* until(reader.read())
+
         if (step.done) {
           break
         }
+
         size += step.value.length
       }
+
       return { size }
     },
   ),
@@ -257,6 +272,7 @@ export function* boot(options?: {
   yield* BunIO.use()
   yield* DbClient.use({ tables: [notesTable] })
   yield* MemoryKv.use()
+
   const server = yield* createServer({
     services: [demo, probe, notes, wall],
     edge: BunEdge,
@@ -275,5 +291,6 @@ export function* boot(options?: {
     ...(options?.trust ? { trace: { trust: () => true } } : {}),
   })
   const info = yield* server.start({ port: 0 })
+
   return { url: info.url ?? `http://127.0.0.1:${info.port}`, server }
 }

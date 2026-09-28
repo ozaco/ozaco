@@ -25,11 +25,15 @@ export const MemoryKv = Kv.implement<KvDef.Options, [options?: MemoryKvDef.Optio
     if (!(yield* Codec.actions.hasCodec())) {
       yield* JsonCodec.use()
     }
+
     const prefix = options?.prefix ?? DEFAULT_KV_PREFIX
+
     if (!isValidKvPrefix(prefix)) {
       return yield* fail(KvErrors.Configuration, `invalid kv prefix "${prefix}"`)
     }
+
     yield* StateRef.set({ link: options?.link ?? createLink() })
+
     return {
       store: 'memory',
       prefix,

@@ -1,32 +1,17 @@
 // oxlint-disable import/exports-last
 import type { Operation } from 'std:effect'
 import { attempt, useContext } from 'std:effect'
+import { redactQuery, SENSITIVE_KEYS } from 'std:fetch'
 import type { Result } from 'std:result'
 import { isFailure } from 'std:result'
 import type { TraceDef } from 'std:trace'
-import {
-  ActiveSpan,
-  activeContext,
-  current,
-  extract,
-  inject,
-  isRecorded,
-  isTracing,
-  isValidContext,
-  newTraceId,
-  passThrough,
-  settle,
-  startSpan,
-  Suppressed,
-  suppressed,
-} from 'std:trace'
+import { Trace } from 'std:trace'
 
 import pkg from '../../../package.json'
 import { EXCEPTION_EVENT_NAME, HEADERS, TRACE_SCOPE } from '../const'
 import { DispatchSpan, RequestRef } from '../context'
 import { ObserveExporter } from '../definition/protocol'
 import { budgetLog } from '../internal/budget'
-import { queryText } from '../internal/capture'
 import { HTTP_METHODS, REQUEST_ID, RESOURCE_CACHE_LIMIT } from '../internal/const'
 import { DispatchScope } from '../internal/context'
 import { addressOf, enterActive, policyOf, portOf, trusts } from '../internal/edge/inbound'
@@ -103,6 +88,8 @@ export const settingsOf = (
           bodies: observe.capture?.bodies === true,
           frames: observe.capture?.frames === true,
           enduser: observe.capture?.enduser === true,
+          // a copy: the caller's array changing later never reaches (nor goes stale in) the lookup
+          sensitiveKeys: Object.freeze([...(observe.capture?.sensitiveKeys ?? SENSITIVE_KEYS)]),
         },
       },
       resource,
@@ -160,7 +147,7 @@ export const resourceOf = (
 export function* report(kernel: ServerDef.Context, event: ObserveDef.Event): Operation<void> {
   kernel.events.emit('observe', event)
 
-  yield* suppressed(function* () {
+  yield* Trace.actions.suppressed(function* () {
     for (const hooks of kernel.hooks) {
       if (hooks.observe) {
         yield* attempt(() => hooks.observe!(event))
@@ -185,7 +172,7 @@ export const markLogged = (failure: Result.Failure<unknown>): void => {
 }
 
 /**
- * The kernel's `Tracer` impl (`server-tracer`, `yield* ServerTracer.use(kernel)`): every
+ * The kernel's `Trace` impl (`server-tracer`, `yield* ServerTracer.use(kernel)`): every
  * finished span / log record std:trace hands it becomes ONE observe event (`report`) with its
  * resource. A log record's attributes are cut to the log budget HERE, once, before the fan-out
  * (≤ 96 attributes / 48 KiB, counted into `droppedAttributes`) — the store, stdout and every
@@ -260,7 +247,7 @@ export function* withDispatchSpan<T>(
       }
     : { 'code.function.name': method }
 
-  const live = yield* startSpan(rpc && !meta ? 'ozaco' : method, {
+  const live = yield* Trace.actions.startSpan(rpc && !meta ? 'ozaco' : method, {
     kind,
     scope: scopeOf(),
     service: kernel.telemetry.observe.perService ? call.service : undefined,
@@ -280,30 +267,37 @@ export function* withDispatchSpan<T>(
   const request = yield* RequestRef.get()
 
   // the dispatch's contexts, entered again wherever its streamed output is produced
-  const enter = <R>(active: TraceDef.ActiveRecorder | null, op: () => Operation<R>) => {
+  const enter = <R>(active: TraceDef.SpanContext | null, op: () => Operation<R>) => {
     const inner = (handle: TraceDef.SpanHandle) =>
       DispatchSpan.with(handle, () => DispatchScope.with(scope, op))
     const traced = () =>
-      live.recording ? live.run(inner) : ActiveSpan.with(active, () => inner(live))
+      live.recording
+        ? live.run(inner)
+        : active
+          ? Trace.actions.passThrough(active, () => inner(live))
+          : Trace.actions.detached(() => inner(live))
 
     return request ? RequestRef.with(request, traced) : traced()
   }
 
-  let active = null as TraceDef.ActiveRecorder | null
+  let active = null as TraceDef.SpanContext | null
   let ended = false
 
   try {
     const outcome = yield* attempt(() =>
       live.run(function* (handle) {
-        active = (yield* ActiveSpan.get()) ?? null
+        active = yield* Trace.actions.activeContext()
+
         return yield* DispatchSpan.with(handle, () => DispatchScope.with(scope, () => body(handle)))
       }),
     )
+
     ended = true
 
     if (isFailure(outcome)) {
       noteFailure(outcome)
       yield* live.end({ failure: outcome })
+
       return yield* outcome
     }
 
@@ -312,11 +306,13 @@ export function* withDispatchSpan<T>(
     if (isFailure(value)) {
       noteFailure(value)
       yield* live.end({ failure: value })
+
       return value as T
     }
 
     if (isDeferred(value)) {
       const held = active
+
       return {
         ...value,
         flow: dispatchFlow(value.flow, live, op => enter(held, op)),
@@ -332,6 +328,7 @@ export function* withDispatchSpan<T>(
     }
 
     yield* live.end()
+
     return value as T
   } finally {
     if (!ended) {
@@ -350,12 +347,12 @@ export function* withDispatchSpan<T>(
 export function* dispatchSpan(): Operation<TraceDef.SpanHandle> {
   const handle = yield* DispatchSpan.get()
 
-  if (handle !== undefined && !(yield* Suppressed.get())) {
+  if (handle !== undefined && !(yield* Trace.actions.isSuppressed())) {
     return handle
   }
 
   // std:trace hands the no-op handle out under suppression
-  return yield* suppressed(() => current())
+  return yield* Trace.actions.suppressed(() => Trace.actions.current())
 }
 
 /**
@@ -369,7 +366,7 @@ export function* carrierSpan(input: Helpers.CarrierSpanInput): Operation<TraceDe
   const method = `${input.service}.${input.action}`
   const meta = input.meta
 
-  return yield* startSpan(method, {
+  return yield* Trace.actions.startSpan(method, {
     kind: 'client',
     scope: scopeOf(),
     attributes: { 'rpc.system.name': 'ozaco', 'rpc.method': method },
@@ -408,12 +405,12 @@ export function* requestIdFor(
     return inbound
   }
 
-  return minted || (yield* newTraceId())
+  return minted || (yield* Trace.actions.newTraceId())
 }
 
 /** `ctx.trace` from a span handle: `''` ids when it carries no valid context. */
 export const traceOf = (handle: TraceDef.SpanHandle, requestId: string): ServerDef.Trace =>
-  isValidContext(handle.context)
+  handle.valid
     ? { traceId: handle.context.traceId, spanId: handle.context.spanId, requestId }
     : { traceId: '', spanId: '', requestId }
 
@@ -423,24 +420,24 @@ export const traceOf = (handle: TraceDef.SpanHandle, requestId: string): ServerD
  * `span_id` + empty `lane`. Call it INSIDE the carrier CLIENT / emit PRODUCER span.
  */
 export function* wireTrace(requestId: string): Operation<WireDef.Trace> {
-  const carrier = yield* inject()
-  const active = yield* activeContext()
+  const carrier = yield* Trace.actions.inject()
+  const active = yield* Trace.actions.activeContext()
 
   return { ...carrier, request_id: requestId, span_id: active?.spanId ?? '', lane: [] }
 }
 
 /** The remote parent an envelope's trace names (`remote: true`), or `null` (none / invalid / an
  * old wire without `traceparent`). Never throws. */
-export const wireParent = (wire: WireDef.Trace | undefined): TraceDef.SpanContext | null => {
+export function* wireParent(
+  wire: WireDef.Trace | undefined,
+): Operation<TraceDef.SpanContext | null> {
   if (!wire?.traceparent) {
     return null
   }
 
   const { traceparent, tracestate } = wire
 
-  return extract(name =>
-    name === HEADERS.traceparent ? traceparent : name === HEADERS.tracestate ? tracestate : null,
-  )
+  return yield* Trace.actions.extract({ traceparent, ...(tracestate ? { tracestate } : {}) })
 }
 
 // --- edge ------------------------------------------------------------------------------------
@@ -471,7 +468,7 @@ export const inboundOf = (
  * Open the SERVER span of one HTTP request / WS upgrade (§6.2) — ROUTE FIRST, then call this:
  * name `{METHOD} {route}` (`{METHOD}` unrouted, `HTTP` for an unknown method), the HTTP semconv
  * request attributes (`http.request.method` (+`_original`), `http.route`, `url.path`,
- * `url.scheme`, `url.query` (secrets redacted — `queryText`), `server.address`, `server.port`,
+ * `url.scheme`, `url.query` (secrets redacted — `redactQuery` over `capture.sensitiveKeys`), `server.address`, `server.port`,
  * `user_agent.original`, `ozaco.request.id` whenever the request id is not the trace id — an inbound `x-request-id`, or
  * the fresh id of a continued request), the inbound policy (`inboundOf`) and the request id
  * (`requestIdFor`); the request counts into `kernel.active` until `span` ends. The caller runs
@@ -482,19 +479,19 @@ export const inboundOf = (
 export function* edgeSpan(input: Helpers.EdgeSpanInput): Operation<Helpers.EdgeSpan> {
   const { kernel, request, url, route } = input
   const observe = input.observe ?? 'on'
-  const inbound = extract(name => request.headers.get(name))
+  const inbound = yield* Trace.actions.extract(name => request.headers.get(name))
   const { parent, links, trusted, marked, mode } = inboundOf(kernel, request, inbound)
   const upper = request.method.toUpperCase()
   const known = HTTP_METHODS.has(upper)
   const method = known ? upper : '_OTHER'
   const name = known ? (route ? `${method} ${route}` : method) : 'HTTP'
   const scheme = url.protocol.replace(/:$/u, '')
-  const tracing = observe !== 'off' && (yield* isTracing())
+  const tracing = observe !== 'off' && (yield* Trace.actions.isTracing())
 
   const live: TraceDef.LiveSpan =
     observe === 'off'
-      ? yield* suppressed(() => startSpan(name))
-      : yield* startSpan(name, {
+      ? yield* Trace.actions.suppressed(() => Trace.actions.startSpan(name))
+      : yield* Trace.actions.startSpan(name, {
           kind: 'server',
           scope: scopeOf(),
           parent,
@@ -508,21 +505,24 @@ export function* edgeSpan(input: Helpers.EdgeSpanInput): Operation<Helpers.EdgeS
             'http.route': route ?? undefined,
             'url.path': url.pathname,
             'url.scheme': scheme,
-            'url.query': url.search.length > 1 ? queryText(url.search.slice(1)) : undefined,
+            'url.query':
+              url.search.length > 1
+                ? redactQuery(url.search.slice(1), kernel.telemetry.observe.capture.sensitiveKeys)
+                : undefined,
             'server.address': addressOf(url),
             'server.port': portOf(url),
             'user_agent.original': request.headers.get('user-agent') ?? undefined,
           },
         })
 
-  const minted = tracing && parent === null && isValidContext(live.context)
+  const minted = tracing && parent === null && live.valid
   const asked = request.headers.get(HEADERS.requestId)
   const requestId = yield* requestIdFor(asked, minted ? live.context.traceId : null)
 
   // the request id is findable (`Observe.actions.request`) whenever it is not the trace id: an
   // inbound `x-request-id`, or the fresh one a CONTINUED request gets (the shared trace id is
   // never a request's)
-  if (isValidContext(live.context) && requestId !== live.context.traceId) {
+  if (live.valid && requestId !== live.context.traceId) {
     live.setAttribute('ozaco.request.id', requestId)
   }
 
@@ -554,10 +554,10 @@ export function* edgeSpan(input: Helpers.EdgeSpanInput): Operation<Helpers.EdgeS
 
     run: body => {
       if (observe === 'off') {
-        return suppressed(() => live.run(body))
+        return Trace.actions.suppressed(() => live.run(body))
       }
 
-      return passing ? ActiveSpan.with(passThrough(passing), () => live.run(body)) : live.run(body)
+      return passing ? Trace.actions.passThrough(passing, () => live.run(body)) : live.run(body)
     },
   }
 }
@@ -603,9 +603,9 @@ export function* replyFailure(
   failure: Result.Failure<unknown>,
   reply: Helpers.ReplyOptions,
 ): Operation<void> {
-  yield* settle(failure, { status: reply.status })
+  yield* Trace.actions.settle(failure, { status: reply.status })
 
-  if (!isRecorded(failure, handle.context.traceId)) {
+  if (!(yield* Trace.actions.isRecorded(failure, handle.context.traceId))) {
     yield* handle.recordFailure(failure, {
       eventName: reply.eventName ?? EXCEPTION_EVENT_NAME.edge,
       severity: reply.status >= 500 ? 17 : 5,

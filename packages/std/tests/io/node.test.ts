@@ -17,6 +17,7 @@ const decoder = new TextDecoder()
 
 const withTempDir = async (fn: (dir: string) => Promise<void>) => {
   const dir = await mkdtemp(join(tmpdir(), 'ozaco-io-node-'))
+
   try {
     await fn(dir)
   } finally {
@@ -86,7 +87,9 @@ describe('NodeIO fs divergences', () => {
         yield* NodeIO.use()
 
         const src = join(dir, 'src.txt')
+
         yield* IO.actions.write(src, 'payload')
+
         const result = yield* attempt(() => IO.actions.copy(src, join(dir, 'missing', 'dest.txt')))
 
         return codeOf(result)
@@ -102,8 +105,10 @@ describe('NodeIO fs divergences', () => {
         yield* NodeIO.use()
 
         const existing = join(dir, 'already-a-dir')
+
         yield* IO.actions.ensureDir(existing)
         yield* IO.actions.ensureFile(existing)
+
         const info = yield* IO.actions.stat(existing)
 
         return { isDirectory: info.isDirectory, isFile: info.isFile }
@@ -120,6 +125,7 @@ describe('NodeIO fs divergences', () => {
 
         const src = join(dir, 'src.txt')
         const blockerDir = join(dir, 'blocker')
+
         yield* IO.actions.write(src, 'x')
         yield* IO.actions.ensureDir(blockerDir)
 
@@ -140,6 +146,7 @@ describe('NodeIO fs divergences', () => {
         yield* NodeIO.use()
 
         const file = join(dir, 'bytes.bin')
+
         yield* IO.actions.write(file, Uint8Array.from([0xde, 0xad, 0xbe, 0xef]))
 
         return {
@@ -150,6 +157,7 @@ describe('NodeIO fs divergences', () => {
       })
 
       const got = unwrap(outcome)
+
       expect(got.hex).toBe('deadbeef')
       expect(got.base64).toBe('3q2+7w==')
       expect(typeof got.utf8).toBe('string')
@@ -163,6 +171,7 @@ describe('NodeIO crypto divergences', () => {
       yield* NodeIO.use()
 
       const bytes = yield* IO.actions.randomBytes(70_000)
+
       return { length: bytes.length, notAllZero: bytes.some(byte => byte !== 0) }
     })
 
@@ -176,6 +185,7 @@ describe('NodeIO process divergences', () => {
       yield* NodeIO.use()
 
       const result = yield* attempt(() => IO.actions.exec('ozaco-definitely-not-a-binary'))
+
       return errorOf(result)
     })
 
@@ -187,10 +197,13 @@ describe('NodeIO process divergences', () => {
       yield* NodeIO.use()
 
       const spawned = yield* attempt(() => IO.actions.spawn('ozaco-definitely-not-a-binary'))
+
       if (isFailure(spawned)) {
         return { stage: 'spawn', pid: -1, error: spawned.error as string }
       }
+
       const status = yield* attempt(() => spawned.value.exited())
+
       return { stage: 'exited', pid: spawned.value.pid, error: errorOf(status) }
     })
 
@@ -217,6 +230,7 @@ describe('NodeIO process divergences', () => {
       yield* NodeIO.use()
 
       const result = yield* IO.actions.exec('cat', [], { stdin: 'via-node' })
+
       return { stdout: decoder.decode(result.stdout), success: result.success }
     })
 

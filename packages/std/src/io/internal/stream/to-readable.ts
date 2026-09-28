@@ -42,7 +42,9 @@ export function* toReadable(source: Flow<Uint8Array, unknown>) {
     if (settled || cancelled) {
       return
     }
+
     settled = true
+
     if (isFailure(close)) {
       controller.error(close)
     } else {
@@ -56,6 +58,7 @@ export function* toReadable(source: Flow<Uint8Array, unknown>) {
     },
     pull() {
       const resume = wake
+
       wake = null
       resume?.()
     },
@@ -75,15 +78,21 @@ export function* toReadable(source: Flow<Uint8Array, unknown>) {
         if (cancelled) {
           break
         }
+
         const next = yield* subscription.next()
+
         if (next.done) {
           settle(next.value ?? true)
+
           break
         }
+
         if (cancelled) {
           break
         }
+
         controller.enqueue(next.value)
+
         if ((controller.desiredSize ?? 1) <= 0) {
           yield* until(awaitPull())
         }

@@ -66,6 +66,7 @@ const DbImpl = Db.implement<Database.Context, [options: Database.Options]>({
 
     const adapter = options.adapter ?? DbAdapter
     const described = yield* attempt(() => useContext(adapter))
+
     if (isFailure(described)) {
       return yield* fail(
         DbErrors.Configuration,
@@ -78,6 +79,7 @@ const DbImpl = Db.implement<Database.Context, [options: Database.Options]>({
     // here so a missing IO install fails the install loudly instead of the first insert
     const mintId = options.id ?? (() => IO.actions.ulid({ length: 32, window: 100 }))
     const probe = yield* attempt(mintId)
+
     if (isFailure(probe)) {
       return yield* fail(
         DbErrors.Configuration,
@@ -94,6 +96,7 @@ const DbImpl = Db.implement<Database.Context, [options: Database.Options]>({
     ).toUpperCase()
     const mintToken = () => IO.actions.hlc({ origin })
     const minted = yield* attempt(mintToken)
+
     if (isFailure(minted)) {
       return yield* fail(
         DbErrors.Configuration,
@@ -103,6 +106,7 @@ const DbImpl = Db.implement<Database.Context, [options: Database.Options]>({
     }
 
     const reserved = tables.find(def => isLogName(def.name))
+
     if (reserved) {
       return yield* fail(
         DbErrors.Configuration,
@@ -121,6 +125,7 @@ const DbImpl = Db.implement<Database.Context, [options: Database.Options]>({
       }
 
       const bad = def.columns.find(column => !COLUMN_NAME.test(column.name))
+
       if (bad) {
         return yield* fail(
           DbErrors.Configuration,
@@ -128,6 +133,7 @@ const DbImpl = Db.implement<Database.Context, [options: Database.Options]>({
         )
       }
     }
+
     const base = {
       tables: new Map(tables.map(def => [def.name, def])),
       specs: new Map(tables.map(def => [def.name, tableSpecOf(def)])),
@@ -141,6 +147,7 @@ const DbImpl = Db.implement<Database.Context, [options: Database.Options]>({
       mintId,
       mintToken,
     }
+
     if ((options.migrations ?? 'auto') === 'auto') {
       yield* applyPlan(base, yield* planMigration(base))
     }
@@ -164,11 +171,14 @@ const DbImpl = Db.implement<Database.Context, [options: Database.Options]>({
       bridged: new Set(),
       outbox: outbox.counters,
     }
+
     yield* StateRef.set(state)
 
     yield* attachBus(hub, outbox.bus)
     yield* bridgeTransports(state)
+
     const pollMs = options.pollMs ?? 0
+
     if (pollMs > 0) {
       yield* fork(() =>
         untraced(function* () {
@@ -179,6 +189,7 @@ const DbImpl = Db.implement<Database.Context, [options: Database.Options]>({
         }),
       )
     }
+
     return createHandle(state)
   },
 })
@@ -186,6 +197,7 @@ const DbImpl = Db.implement<Database.Context, [options: Database.Options]>({
 export const DbClient: Database.Client = DbImpl.build({
   *migrate() {
     const state = yield* useContext(StateRef)
+
     yield* applyPlan(state, yield* planMigration(state))
   },
 
@@ -199,6 +211,7 @@ export const DbClient: Database.Client = DbImpl.build({
     options?: Database.RawOptions,
   ) {
     const state = yield* useContext(StateRef)
+
     if (Array.isArray(statement)) {
       // a script: statements one by one, atomically — params and decoding belong to ONE statement
       if ((params && params.length > 0) || options?.table || options?.emit) {
@@ -207,38 +220,51 @@ export const DbClient: Database.Client = DbImpl.build({
           'a raw script (string[]) takes no params, `table` or `emit` — pass one statement for those',
         )
       }
+
       const statements = statement as readonly string[]
+
       return yield* state.adapter.transaction(function* () {
         let rows: readonly Spec.Doc[] = []
         let rowCount = 0
+
         for (const text of statements) {
           const result = yield* state.adapter.raw(text)
+
           rows = result.rows
           rowCount += result.rowCount
         }
+
         return { rows, rowCount }
       })
     }
+
     const spec: Spec.Table | undefined = options?.table ? yield* specOf(options.table) : undefined
     const emit = options?.emit
+
     if (emit && !spec) {
       return yield* fail(DbErrors.Validation, '`emit` requires `table`')
     }
+
     const result = yield* state.adapter.raw(statement as string, params, spec)
+
     if (!emit || !spec) {
       return result
     }
+
     const ids = result.rows.map(row => row[FIELDS.id]).filter(id => id !== undefined && id !== null)
+
     if (ids.length === 0) {
       return yield* fail(
         DbErrors.Validation,
         `emit requires the statement to RETURNING "${FIELDS.id}" — nothing to announce`,
       )
     }
+
     // one token per row; insert/update re-version the rows so delta watchers and `ifVersion`
     // see the change (a structured update in the same session rides the open transaction)
     const stamp = emit.stamp ?? emit.op !== 'delete'
     const writes: Helpers.Tokened[] = []
+
     for (const id of ids) {
       const write = yield* state.hub.record({
         table: spec.name,
@@ -246,6 +272,7 @@ export const DbClient: Database.Client = DbImpl.build({
         op: emit.op,
         ...(emit.op === 'update' && emit.fields ? { fields: emit.fields } : {}),
       })
+
       if (stamp && emit.op !== 'delete') {
         yield* state.adapter.update({
           table: spec,
@@ -253,11 +280,14 @@ export const DbClient: Database.Client = DbImpl.build({
           set: { [FIELDS.version]: write.token, [FIELDS.updated]: Date.now() },
         })
       }
+
       writes.push(write)
     }
+
     for (const write of writes) {
       yield* state.hub.announce(write)
     }
+
     return result
   },
 
@@ -287,12 +317,14 @@ export const DbClient: Database.Client = DbImpl.build({
 
   *busStats() {
     const state = yield* useContext(StateRef)
+
     return { ...state.outbox, ...state.hub.stats() } satisfies Bus.Stats
   },
 
   // a table and its change log come and go together
   *dropTable(table: string) {
     const state = yield* useContext(StateRef)
+
     yield* state.adapter.migrate([
       { kind: 'drop-table', table },
       { kind: 'drop-table', table: CHANGES_PREFIX + table },
@@ -301,11 +333,13 @@ export const DbClient: Database.Client = DbImpl.build({
 
   *log(table: string, options?: Database.LogOptions) {
     const state = yield* useContext(StateRef)
+
     return yield* readLog(state, yield* logOf(table), options)
   },
 
   *logStats(table: string) {
     const state = yield* useContext(StateRef)
+
     return yield* logStats(state, yield* logOf(table))
   },
 
@@ -313,20 +347,24 @@ export const DbClient: Database.Client = DbImpl.build({
     const state = yield* useContext(StateRef)
     const logs = table === undefined ? [...state.logs.values()] : [yield* logOf(table)]
     let removed = 0
+
     for (const log of logs) {
       removed += yield* compactLog(state, log, options)
     }
+
     return removed
   },
 
   *dropIndex(table: string, index: string) {
     const state = yield* useContext(StateRef)
+
     yield* state.adapter.migrate([{ kind: 'drop-index', table, index }])
   },
 
   *reindex(table: string) {
     const state = yield* useContext(StateRef)
     const spec = yield* specOf(table)
+
     yield* state.adapter.migrate([{ kind: 'reindex', table, indexes: spec.indexes }])
   },
 })

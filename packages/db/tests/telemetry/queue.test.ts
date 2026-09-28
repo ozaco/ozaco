@@ -1,7 +1,7 @@
 /**
  * Queue telemetry: `enqueue` is a PRODUCER span whose context rides the job row; every attempt is
  * a ROOT CONSUMER span linking the enqueue (`creation`) and the previous attempt (`queue.retry`);
- * a failure with attempts left is WARN, a dead letter ERROR + `ozaco.queue.dead`.
+ * a failure with attempts left is WARN, a dead letter ERROR + `queue.dead`.
  */
 import { column, DbClient, defineSchema, table } from 'db:core'
 import { Queue, queueTable } from 'db:queue'
@@ -10,7 +10,7 @@ import { run, sleep } from 'std:effect'
 import { fail, unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
 import type { TraceDef } from 'std:trace'
-import { parseTraceparent, span, traceparentOf } from 'std:trace'
+import { Trace } from 'std:trace'
 
 import { describe, expect, it } from 'bun:test'
 
@@ -19,6 +19,10 @@ import { SqliteAdapter } from 'db:impl/sqlite'
 import { BunIO } from 'std:io/impl/bun'
 
 import { captureLogs, traced } from './helpers'
+
+/** A stored `traceparent` read back through `Trace.actions.extract`. */
+const contextOf = async (traceparent: string | null | undefined) =>
+  traceparent ? unwrap(await run(() => Trace.actions.extract({ traceparent }))) : null
 
 const schema = defineSchema({ jobs: queueTable('jobs') })
 
@@ -49,11 +53,16 @@ describe('queue telemetry', () => {
   it('enqueue: a PRODUCER `send {queue}` span whose context the job row keeps', async () => {
     const { tracer, value: row } = await traced(function* () {
       yield* bootstrap()
-      const { job } = yield* span('request', () => Queue.actions.enqueue('email', { to: 'ada' }))
+
+      const { job } = yield* Trace.actions.span('request', () =>
+        Queue.actions.enqueue('email', { to: 'ada' }),
+      )
+
       return job
     })
 
     const send = tracer.span('send jobs')
+
     expect(send.kind).toBe('producer')
     expect(send.parent?.spanId).toBe(tracer.span('request').context.spanId)
     expect(send.attributes).toMatchObject({
@@ -67,13 +76,17 @@ describe('queue telemetry', () => {
     })
     // the row write is the producer's child
     expect(tracer.span('insert jobs').parent?.spanId).toBe(send.context.spanId)
-    expect(row.traceparent).toBe(traceparentOf(send.context))
+    expect(await contextOf(row.traceparent)).toMatchObject({
+      traceId: send.context.traceId,
+      spanId: send.context.spanId,
+    })
     expect(row.last_traceparent).toBeNull()
   })
 
   it('an attempt: a ROOT `process {queue}` CONSUMER span linking the enqueue', async () => {
     const { tracer, value: jobId } = await traced(function* () {
       yield* bootstrap()
+
       const worker = yield* Queue.actions.work(
         {
           *email(job) {
@@ -83,16 +96,21 @@ describe('queue telemetry', () => {
         },
         { pollMs: 5 },
       )
-      const { job } = yield* span('request', () => Queue.actions.enqueue('email', null))
+      const { job } = yield* Trace.actions.span('request', () =>
+        Queue.actions.enqueue('email', null),
+      )
+
       yield* until(function* () {
         return worker.stats().done === 1
       })
       yield* sleep(5)
+
       return job._id
     })
 
     const send = tracer.span('send jobs')
     const process = tracer.span('process jobs')
+
     expect(process.kind).toBe('consumer')
     expect(process.parent).toBeNull()
     expect(process.context.traceId).not.toBe(send.context.traceId)
@@ -112,6 +130,7 @@ describe('queue telemetry', () => {
 
     // the handler's read and the settle write are the attempt's children; the claim loop is not
     const children = tracer.spans.filter(data => data.parent?.spanId === process.context.spanId)
+
     expect(children.map(data => data.name).toSorted()).toEqual(['find jobs', 'update jobs'])
     expect(tracer.exceptions()).toEqual([])
   })
@@ -123,6 +142,7 @@ describe('queue telemetry', () => {
         yield* MemoryAdapter.use()
         yield* DbClient.use({ schema })
         yield* Queue.use({ table: 'jobs', service: options.use })
+
         const worker = yield* Queue.actions.work(
           {
             *email(job) {
@@ -131,7 +151,8 @@ describe('queue telemetry', () => {
           },
           { pollMs: 5, service: options.work },
         )
-        yield* span('request', () => Queue.actions.enqueue('email', null))
+
+        yield* Trace.actions.span('request', () => Queue.actions.enqueue('email', null))
         yield* until(function* () {
           return worker.stats().done === 1
         })
@@ -143,22 +164,29 @@ describe('queue telemetry', () => {
 
     const plain = await attempt()
     const process = plain.span('process jobs')
+
     // a root span: without a service of its own it would be the node's default (null)
     expect(process.service).toBe('jobs')
+
     // everything under the attempt runs as it; the producer stays its caller's
     const children = plain.spans.filter(data => data.parent?.spanId === process.context.spanId)
+
     expect(children.map(data => data.service)).toEqual(['jobs', 'jobs'])
     expect(plain.span('send jobs').service).toBeNull()
 
     const named = await attempt({ use: 'mailer' })
+
     expect(named.span('process jobs').service).toBe('mailer')
+
     const overridden = await attempt({ use: 'mailer', work: 'billing' })
+
     expect(overridden.span('process jobs').service).toBe('billing')
   })
 
-  it('a retry is WARN and links the previous attempt; the dead letter is ERROR + ozaco.queue.dead', async () => {
+  it('a retry is WARN and links the previous attempt; the dead letter is ERROR + queue.dead', async () => {
     const { tracer, value: row } = await traced(function* () {
       yield* bootstrap(true)
+
       const worker = yield* Queue.actions.work(
         {
           *flaky(job) {
@@ -168,18 +196,22 @@ describe('queue telemetry', () => {
         { maxAttempts: 2, backoff: { kind: 'linear', stepMs: 5 }, pollMs: 5 },
       )
       const { job } = yield* Queue.actions.enqueue('flaky', null)
+
       yield* until(function* () {
         return worker.stats().dead === 1
       })
       yield* sleep(5)
+
       return (yield* Queue.actions.get(job._id))!
     })
 
     const send = tracer.span('send jobs')
+
     // an enqueue outside any span is a root of its own
     expect(send.parent).toBeNull()
 
     const [first, second] = tracer.all('process jobs')
+
     expect(first!.attributes['ozaco.queue.attempt']).toBe(1)
     expect(second!.attributes['ozaco.queue.attempt']).toBe(2)
 
@@ -191,7 +223,7 @@ describe('queue telemetry', () => {
     // attempt 2: dead — an error, the event, and a link back to attempt 1
     expect(second!.status).toEqual({ code: 'error', message: 'boom 2' })
     // events in time order: the failure, then its dead-lettering
-    expect(second!.events.map(event => event.name)).toEqual(['exception', 'ozaco.queue.dead'])
+    expect(second!.events.map(event => event.name)).toEqual(['exception', 'queue.dead'])
     expect(second!.links.map(link => link.attributes?.['ozaco.link.reason'])).toEqual([
       'creation',
       'queue.retry',
@@ -200,6 +232,7 @@ describe('queue telemetry', () => {
     expect(sameSpan(second!.links[1]!, first!)).toBe(true)
 
     const exceptions = tracer.exceptions()
+
     expect(exceptions.map(log => [log.eventName, log.severityNumber, log.body])).toEqual([
       ['messaging.process.exception', 13, 'test.flaky: boom 1'],
       ['messaging.process.exception', 17, 'test.flaky: boom 2'],
@@ -208,12 +241,16 @@ describe('queue telemetry', () => {
     // the row: the chain as last_error, the dead attempt as last_traceparent
     expect(row.state).toBe('dead')
     expect(row.last_error).toBe('test.flaky: boom 2')
-    expect(parseTraceparent(row.last_traceparent)?.spanId).toBe(second!.context.spanId)
+
+    const last = await contextOf(row.last_traceparent)
+
+    expect(last?.spanId).toBe(second!.context.spanId)
   })
 
   it('last_error keeps the whole cause chain of a thrown error', async () => {
     const { value: row } = await traced(function* () {
       yield* bootstrap()
+
       const worker = yield* Queue.actions.work(
         {
           *explode() {
@@ -223,9 +260,11 @@ describe('queue telemetry', () => {
         { maxAttempts: 1, pollMs: 5 },
       )
       const { job } = yield* Queue.actions.enqueue('explode', null)
+
       yield* until(function* () {
         return worker.stats().dead === 1
       })
+
       return (yield* Queue.actions.get(job._id))!
     })
 
@@ -238,11 +277,14 @@ describe('queue telemetry', () => {
     const row = unwrap(
       await run(function* () {
         yield* bootstrap()
+
         const worker = yield* Queue.actions.work({ *ping() {} }, { pollMs: 5 })
         const { job } = yield* Queue.actions.enqueue('ping', null)
+
         yield* until(function* () {
           return worker.stats().done === 1
         })
+
         return (yield* Queue.actions.get(job._id))!
       }),
     )
@@ -255,7 +297,9 @@ describe('queue telemetry', () => {
   it('a lapsed lease is logged (WARN, logger @ozaco/db)', async () => {
     const { value: logs } = await traced(function* () {
       const entries = yield* captureLogs()
+
       yield* bootstrap()
+
       const db = (yield* DbClient.context.expect()) as AnyType
 
       // what a crashed worker leaves behind: running, lease long gone
@@ -274,9 +318,11 @@ describe('queue telemetry', () => {
         },
         { pollMs: 5, leaseMs: 300, sweepMs: 10, backoff: () => 0 },
       )
+
       yield* until(function* () {
         return worker.stats().swept === 1
       })
+
       return entries.filter(entry => entry.data?.['messaging.message.id'] === orphan._id)
     })
 
@@ -313,12 +359,15 @@ describe('queue telemetry', () => {
       yield* MemoryAdapter.use()
       yield* DbClient.use({ schema: defineSchema({ legacy }) })
       yield* Queue.use({ table: 'legacy' })
+
       const worker = yield* Queue.actions.work({ *ping() {} }, { pollMs: 5 })
       const { job } = yield* Queue.actions.enqueue('ping', null)
+
       yield* until(function* () {
         return worker.stats().done === 1
       })
       yield* sleep(5)
+
       return (yield* Queue.actions.get(job._id)) as AnyType
     })
 

@@ -1,6 +1,3 @@
-/** The subtype of the `Tracer` protocol and its impls. */
-export const TRACER = Symbol.for('std:trace.tracer')
-
 /** OTel log severity numbers (the lowest of each range). */
 export const TraceSeverity = {
   trace: 1,

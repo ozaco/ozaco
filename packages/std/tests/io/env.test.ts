@@ -24,6 +24,7 @@ describe('IO — cwd and homeDir', () => {
   ] as const)('%s answers the process cwd and the OS home', async (_label, impl) => {
     const outcome = await run(function* () {
       yield* impl.use()
+
       return { cwd: yield* IO.actions.cwd(), home: yield* IO.actions.homeDir() }
     })
 
@@ -39,7 +40,9 @@ describe('IO — cwd and homeDir', () => {
 
     const outcome = await run(function* () {
       yield* WebIO.use()
+
       const home = yield* attempt(() => IO.actions.homeDir())
+
       return { cwd: yield* IO.actions.cwd(), home: isFailure(home) ? home.error : home.value }
     })
 

@@ -22,6 +22,7 @@ export const treeOf = (spans: readonly SpanRow[]): readonly Placed[] => {
   for (const span of spans) {
     const parent =
       span.parent_span_id !== null && ids.has(span.parent_span_id) ? span.parent_span_id : null
+
     children.set(parent, [...(children.get(parent) ?? []), span])
   }
 

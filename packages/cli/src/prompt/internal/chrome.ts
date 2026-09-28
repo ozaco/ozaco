@@ -3,16 +3,19 @@ import type { PromptDef, PromptContext } from '../types/prompt'
 
 export const activeLine = (ctx: PromptContext, message: string): string => {
   const { colors, symbols } = ctx.palette
+
   return `${colors.bold(colors.primary(symbols.question))} ${colors.bold(message)}`
 }
 
 export const submittedLine = (ctx: PromptContext, message: string, value: string): string => {
   const { colors, symbols } = ctx.palette
+
   return `${colors.success(symbols.answered)} ${colors.bold(message)} ${colors.muted(symbols.separator)} ${colors.primary(value)}`
 }
 
 export const cancelledLine = (ctx: PromptContext, message: string): string => {
   const { colors, symbols } = ctx.palette
+
   return `${colors.error(symbols.error)} ${colors.bold(message)} ${colors.muted(symbols.separator)} ${colors.muted('cancelled')}`
 }
 
@@ -23,6 +26,7 @@ export const inlineFrame = (
 ): string => {
   const { colors, symbols } = ctx.palette
   const head = `${activeLine(ctx, message)} ${colors.primary(symbols.separator)} ${parts.body}`
+
   return parts.error === undefined ? head : `${head}\n${colors.error(parts.error)}`
 }
 

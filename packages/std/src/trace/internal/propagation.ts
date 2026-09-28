@@ -1,8 +1,6 @@
-import type { Operation } from 'std:effect'
-import { useScope } from 'std:effect'
+import type { TraceDef } from '../types/trace'
 
 import {
-  FLAG_RANDOM,
   HEX2,
   INVALID_SPAN_ID,
   INVALID_TRACE_ID,
@@ -12,10 +10,30 @@ import {
   STATE_KEY,
   STATE_VALUE,
   TRACE_ID,
-} from '../internal/const'
-import { activeOf, isSuppressed } from '../internal/context'
-import { joined, single, trimOws } from '../internal/headers'
-import type { TraceDef } from '../types/trace'
+} from './const'
+
+/** HTTP optional whitespace (space / tab) around a field value or list member. */
+const trimOws = (text: string): string => text.replaceAll(/^[\t ]+|[\t ]+$/gu, '')
+
+/** The one value of a header: several `traceparent` fields make it invalid. */
+const single = (value: string | readonly string[] | null | undefined): string | null => {
+  if (typeof value === 'string') {
+    return value
+  }
+
+  return Array.isArray(value) && value.length === 1 && typeof value[0] === 'string'
+    ? value[0]
+    : null
+}
+
+/** Several `tracestate` fields are one list (RFC 9110 field order). */
+const joined = (value: string | readonly string[] | null | undefined): string | null => {
+  if (typeof value === 'string') {
+    return value
+  }
+
+  return Array.isArray(value) ? value.join(',') : null
+}
 
 /** A context that can be propagated / parented to: valid, non-zero ids. */
 export const isValidContext = (context: TraceDef.SpanContext | null | undefined): boolean =>
@@ -38,11 +56,13 @@ export const parseTraceparent = (value: unknown): TraceDef.SpanContext | null =>
   }
 
   const text = trimOws(value)
+
   if (text.length < 55) {
     return null
   }
 
   const version = text.slice(0, 2)
+
   if (!HEX2.test(version) || version === 'ff' || text[2] !== '-') {
     return null
   }
@@ -90,11 +110,13 @@ export const parseTracestate = (value: unknown): [string, string][] | null => {
 
   for (const raw of value.split(',')) {
     const member = trimOws(raw)
+
     if (!member) {
       continue
     }
 
     const at = member.indexOf('=')
+
     if (at <= 0) {
       return null
     }
@@ -119,10 +141,6 @@ export const formatTracestate = (
 ): string | undefined =>
   members.length > 0 ? members.map(([key, value]) => `${key}=${value}`).join(',') : undefined
 
-/** A member's value in a `tracestate` (invalid lists have none). */
-export const getTracestate = (state: string | undefined, key: string): string | undefined =>
-  (state === undefined ? undefined : parseTracestate(state))?.find(([name]) => name === key)?.[1]
-
 /**
  * `state` with `key=value` set as its LEFTMOST member (a modified key moves to the front, W3C);
  * the rightmost members give way past 32. An invalid key / value leaves `state` unchanged; an
@@ -145,13 +163,20 @@ export const setTracestate = (
 }
 
 /**
- * The inbound W3C context behind `get` (e.g. `name => headers.get(name)`), or `null`: `traceparent`
+ * The inbound W3C context behind `source` (a getter — `name => headers.get(name)` — or a
+ * carrier), or `null`: `traceparent`
  * per {@link parseTraceparent} (duplicate fields ⇒ invalid); `tracestate` only when that parsed —
  * several fields joined, validated, DROPPED (not the context) when invalid. Never throws.
  */
-export const extract = (get: TraceDef.Getter): TraceDef.SpanContext | null => {
+export const extract = (
+  source: TraceDef.Getter | TraceDef.Carrier,
+): TraceDef.SpanContext | null => {
+  const get: TraceDef.Getter =
+    typeof source === 'function' ? source : name => source[name as keyof TraceDef.Carrier]
+
   try {
     const parent = parseTraceparent(single(get('traceparent')))
+
     if (!parent) {
       return null
     }
@@ -159,38 +184,10 @@ export const extract = (get: TraceDef.Getter): TraceDef.SpanContext | null => {
     const raw = joined(get('tracestate'))
     const members = raw === null ? null : parseTracestate(raw)
     const state = members ? formatTracestate(members) : undefined
+    const marked = members?.some(([key, value]) => key === 'ozaco' && value === '1') === true
 
-    return state ? { ...parent, state } : parent
+    return { ...parent, ...(state ? { state } : {}), ...(marked ? { ozaco: true } : {}) }
   } catch {
     return null
   }
-}
-
-/**
- * The headers for an outgoing call, from `ActiveSpan` — a recording or non-recording span, or a
- * pass-through inbound context (carried UNCHANGED, so its `tracestate` too); `{}` without one.
- * Suppressed code sends the context unsampled (sampled bit clear, the random bit kept). `{ ozaco: true }` marks a recording span's context as an
- * exporting ozaco caller (`ozaco=1`, leftmost in `tracestate`).
- */
-export function* inject(options: TraceDef.InjectOptions = {}): Operation<TraceDef.Carrier> {
-  const scope = yield* useScope()
-  const active = activeOf(scope)
-
-  if (!active) {
-    return {}
-  }
-
-  const suppressed = isSuppressed(scope)
-  const { context } = active
-  // suppressed: NOT sampled — the random bit stays (W3C: a trace id's random flag MUST go out as
-  // it came in / was minted, whatever the sampling decision)
-  const traceparent = traceparentOf(
-    suppressed ? { ...context, flags: context.flags & FLAG_RANDOM } : context,
-  )
-  const state =
-    options.ozaco && !suppressed && active.recording
-      ? setTracestate(context.state, 'ozaco', '1')
-      : context.state
-
-  return state ? { traceparent, tracestate: state } : { traceparent }
 }

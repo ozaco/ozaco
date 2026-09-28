@@ -26,12 +26,15 @@ describe('cli — key decoder', () => {
 
   it('reads xterm modifier parameters', () => {
     const [shifted] = decodeKeys(`${ESC}[1;2A`)
+
     expect(shifted).toMatchObject({ name: 'up', shift: true, ctrl: false })
 
     const [controlled] = decodeKeys(`${ESC}[1;5C`)
+
     expect(controlled).toMatchObject({ name: 'right', ctrl: true })
 
     const [backtab] = decodeKeys(`${ESC}[Z`)
+
     expect(backtab).toMatchObject({ name: 'tab', shift: true })
   })
 
@@ -43,11 +46,13 @@ describe('cli — key decoder', () => {
     expect(names(String.fromCodePoint(127))).toEqual(['backspace'])
 
     const [interrupt] = decodeKeys(String.fromCodePoint(3))
+
     expect(interrupt).toMatchObject({ name: 'c', ctrl: true })
   })
 
   it('reads ESC + key as the alt/meta combination', () => {
     const [alt] = decodeKeys(`${ESC}b`)
+
     expect(alt).toMatchObject({ name: 'b', meta: true })
   })
 
@@ -55,6 +60,7 @@ describe('cli — key decoder', () => {
     expect(names('hey')).toEqual(['h', 'e', 'y'])
 
     const [upper] = decodeKeys('H')
+
     expect(upper).toMatchObject({ name: 'H', shift: true })
 
     // a non-BMP codepoint is ONE key, not two halves of a surrogate pair

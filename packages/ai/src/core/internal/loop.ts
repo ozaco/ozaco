@@ -19,10 +19,13 @@ import { withRetry } from './retry'
 function* parseArguments(call: Helpers.ToolCall): Operation<Record<string, unknown>> {
   const raw = call.arguments.trim() === '' ? '{}' : call.arguments
   const outcome = yield* attempt(JsonCodec.actions.parse<AnyType>(raw))
+
   if (isFailure(outcome) && outcome.error !== CodecErrors.Parse) {
     return yield* outcome
   }
+
   const parsed: unknown = isFailure(outcome) ? undefined : outcome.value
+
   if (
     parsed === undefined ||
     parsed === null ||
@@ -34,6 +37,7 @@ function* parseArguments(call: Helpers.ToolCall): Operation<Record<string, unkno
       `tool call "${call.name}" carried malformed arguments: ${call.arguments}`,
     )
   }
+
   return parsed as Record<string, unknown>
 }
 
@@ -45,6 +49,7 @@ function* toolMessage(call: Helpers.ToolCall, value: unknown): Operation<Helpers
     typeof value === 'string'
       ? value
       : (((yield* JsonCodec.actions.stringify(value)) as string | undefined) ?? 'null')
+
   return {
     role: 'tool',
     parts: [{ kind: 'text', text: encoded }],
@@ -58,10 +63,13 @@ function* invokeTool(
   call: Helpers.ToolCall,
 ): Operation<unknown> {
   const runner = Object.hasOwn(run, call.name) ? run[call.name] : undefined
+
   if (!runner) {
     return yield* fail(AiErrors.BadResponse, `the model called an unknown tool "${call.name}"`)
   }
+
   const args = yield* parseArguments(call)
+
   return yield* runner(args)
 }
 
@@ -87,6 +95,7 @@ export function* runToolLoop(input: Helpers.ToolLoopInput): Operation<Helpers.Ch
 
     for (const call of result.toolCalls) {
       const value = yield* invokeTool(input.run, call)
+
       messages.push(yield* toolMessage(call, value))
     }
   }

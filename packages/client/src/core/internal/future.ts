@@ -14,6 +14,7 @@ export const holdOf = (value: unknown): Operation<void> | null => {
   }
 
   const held = (value as AnyType)?.[HELD] as Promise<void> | undefined
+
   return held ? until(held) : null
 }
 
@@ -63,6 +64,7 @@ export const heldReadable = (
         failed = true
         controller.error(error)
         settle({ error })
+
         return { done: true as const, value: undefined }
       })
 
@@ -76,6 +78,7 @@ export const heldReadable = (
         }
 
         settle({})
+
         return
       }
 
@@ -89,5 +92,6 @@ export const heldReadable = (
   })
 
   ;(wrapped as AnyType)[HELD] = held
+
   return wrapped
 }

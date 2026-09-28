@@ -1,4 +1,3 @@
-import { fileUrlToPath } from '../internal/path/url'
 import type { IODef } from '../types/io'
 
 /**
@@ -12,11 +11,13 @@ import type { IODef } from '../types/io'
  * `file:/x`) is returned UNCHANGED. Use `node:url`'s `fileURLToPath` when those can occur.
  */
 export const toPath = (pathOrUrl: IODef.PathLike): string => {
-  if (typeof pathOrUrl === 'string') {
-    if (!pathOrUrl.startsWith('file:')) {
-      return pathOrUrl
-    }
-    return fileUrlToPath(pathOrUrl)
+  // a string that is no `file:` URL passes through; a URL object is always converted
+  if (typeof pathOrUrl === 'string' && !pathOrUrl.startsWith('file:')) {
+    return pathOrUrl
   }
-  return fileUrlToPath(pathOrUrl.href)
+
+  const text = typeof pathOrUrl === 'string' ? pathOrUrl : pathOrUrl.href
+
+  // strips the literal `file:///` only, then percent-decodes
+  return decodeURIComponent(text.replace(/^file:\/\/\//u, '/'))
 }

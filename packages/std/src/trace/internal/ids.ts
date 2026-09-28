@@ -1,13 +1,14 @@
 import type { Scope } from 'std:effect'
 import { toHex } from 'std:shared'
 
-import { TraceIds } from '../definition'
+import { TraceIds } from './context'
 
 const fill = (bytes: Uint8Array): void => {
   const source = globalThis.crypto
 
   if (typeof source?.getRandomValues === 'function') {
     source.getRandomValues(bytes)
+
     return
   }
 

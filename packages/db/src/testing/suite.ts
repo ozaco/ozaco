@@ -24,10 +24,13 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
   const bootstrap = function* (): Operation<AnyType> {
     yield* target.use()
     yield* BunIO.use()
+
     const db = yield* DbClient.use({ tables: [users, posts], migrations: 'manual' })
+
     yield* Db.actions.dropTable('posts')
     yield* Db.actions.dropTable('users')
     yield* Db.actions.migrate()
+
     return db
   }
 
@@ -36,7 +39,9 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
       unwrap(
         await run(function* () {
           yield* bootstrap()
+
           const info = yield* useContext(DbAdapter)
+
           expect(info.adapter).toBe(target.label)
           expect(info.capabilities.transactions).toBe(true)
           expect(info.capabilities.raw).toBe(target.raw)
@@ -49,6 +54,7 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
         await run(function* () {
           const db = yield* bootstrap()
           const doc = yield* db.insert('users', { name: 'ada', age: 36, junk: 'nope' })
+
           expect(typeof doc._id).toBe('string')
           expect(typeof doc._created_at).toBe('number')
           expect(doc._version).toMatch(TOKEN)
@@ -67,24 +73,30 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
           const db = yield* bootstrap()
           const bytes = new Uint8Array([0, 1, 2, 250, 251, 252, 253, 254, 255])
           const made = yield* db.insert('users', { name: 'pixel', avatar: bytes })
+
           expect(made.avatar).toBeInstanceOf(Uint8Array)
           expect(Array.from(made.avatar as Uint8Array)).toEqual(Array.from(bytes))
 
           // reads come back as plain Uint8Array (never a Buffer subclass, never base64 text)
           const read = yield* db.get('users', made._id)
+
           expect(Object.getPrototypeOf(read!.avatar)).toBe(Uint8Array.prototype)
           expect(Array.from(read!.avatar as Uint8Array)).toEqual(Array.from(bytes))
+
           const listed = yield* db.query('users').select('name', 'avatar').collect()
+
           expect(Array.from((listed[0] as AnyType).avatar)).toEqual(Array.from(bytes))
 
           // patch replaces the bytes; an empty blob is still a blob
           const patched = yield* db.patch('users', made._id, { avatar: new Uint8Array() })
+
           expect((patched.avatar as Uint8Array).length).toBe(0)
 
           // anything but bytes is a validation failure
           const text = yield* attempt(
             db.insert('users', { name: 'nope', avatar: 'abc' as AnyType }),
           )
+
           expect((text as AnyType).error).toBe(DbErrors.Validation)
         }),
       )
@@ -95,15 +107,24 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
         await run(function* () {
           const db = yield* bootstrap()
           const missing = yield* attempt(db.insert('users', {}))
+
           expect((missing as AnyType).error).toBe(DbErrors.Validation)
+
           const fraction = yield* attempt(db.insert('users', { name: 'x', age: 1.5 }))
+
           expect((fraction as AnyType).error).toBe(DbErrors.Validation)
+
           const badEnum = yield* attempt(db.insert('users', { name: 'x', role: 'boss' }))
+
           expect((badEnum as AnyType).error).toBe(DbErrors.Validation)
+
           const badTable = yield* attempt(db.insert('ghosts', { name: 'x' }))
+
           expect((badTable as AnyType).error).toBe(DbErrors.Validation)
+
           const created = yield* db.insert('users', { name: 'ok' })
           const nulled = yield* attempt(db.patch('users', String(created._id), { name: null }))
+
           expect((nulled as AnyType).error).toBe(DbErrors.Validation)
         }),
       )
@@ -117,16 +138,20 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
           const id = String(created._id)
 
           const loaded = yield* db.get('users', id)
+
           expect(loaded?.name).toBe('ada')
 
           yield* sleep(2)
+
           const patched = yield* db.patch('users', id, { age: 37 })
+
           expect(patched?.age).toBe(37)
           expect(patched?._version).toMatch(TOKEN)
           expect(String(patched?._version) > String(created._version)).toBe(true)
           expect(Number(patched?._updated_at)).toBeGreaterThan(Number(created._created_at))
 
           const replaced = yield* db.replace('users', id, { name: 'lovelace' })
+
           expect(replaced?.name).toBe('lovelace')
           expect(replaced?.age).toBeNull()
           expect(String(replaced?._version) > String(patched?._version)).toBe(true)
@@ -151,16 +176,19 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
             meta: { tags: ['a', 'b'] },
             joined,
           })
+
           expect(author.role).toBe('admin')
           expect(author.active).toBe(false)
           expect(author.meta).toEqual({ tags: ['a', 'b'] })
           expect(author.joined).toEqual(joined)
 
           const post = yield* db.insert('posts', { title: 'notes', author: author._id })
+
           expect(post.author).toBe(author._id)
           expect(post.views).toBe(0)
 
           const found = yield* db.query('users').where({ active: false }).first()
+
           expect((found as AnyType).name).toBe('ada')
         }),
       )
@@ -170,12 +198,14 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
       unwrap(
         await run(function* () {
           const db = yield* bootstrap()
+
           yield* db.insert('users', { name: 'ada', age: 36, role: 'admin' })
           yield* db.insert('users', { name: 'grace', age: 45, role: 'admin' })
           yield* db.insert('users', { name: 'linus', age: 25 })
           yield* db.insert('users', { name: 'margaret' })
 
           const admins = yield* db.query('users').where({ role: 'admin' }).order('name').collect()
+
           expect(admins.map((row: AnyType) => row.name)).toEqual(['ada', 'grace'])
 
           const seniors = yield* db
@@ -183,9 +213,11 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
             .filter(where.gt('age', 30))
             .order('age', 'desc')
             .collect()
+
           expect(seniors.map((row: AnyType) => row.name)).toEqual(['grace', 'ada'])
 
           const g = yield* db.query('users').filter(where.like('name', 'g%')).collect()
+
           expect(g.map((row: AnyType) => row.name)).toEqual(['grace'])
 
           // `_` is a wildcard in a raw pattern; `\` escapes it on every backend, and
@@ -196,22 +228,30 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
             .filter(where.like('name', 'g_%'))
             .order('name')
             .collect()
+
           expect(wild.map((row: AnyType) => row.name)).toEqual(['g_ray', 'grace'])
+
           const escaped = yield* db
             .query('users')
             .filter(where.like('name', String.raw`g\_%`))
             .collect()
+
           expect(escaped.map((row: AnyType) => row.name)).toEqual(['g_ray'])
+
           const prefixed = yield* db.query('users').filter(where.startsWith('name', 'g_')).collect()
+
           expect(prefixed.map((row: AnyType) => row.name)).toEqual(['g_ray'])
+
           const caselessPrefix = yield* db
             .query('users')
             .filter(where.startsWith('name', 'G_', { insensitive: true }))
             .collect()
+
           expect(caselessPrefix.map((row: AnyType) => row.name)).toEqual(['g_ray'])
           yield* db.delete('users', gray._id)
 
           const caseless = yield* db.query('users').filter(where.ilike('name', 'ADA')).collect()
+
           expect(caseless.map((row: AnyType) => row.name)).toEqual(['ada'])
 
           const pair = yield* db
@@ -219,6 +259,7 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
             .filter(where.oneOf('name', ['ada', 'linus']))
             .order('name')
             .collect()
+
           expect(pair.map((row: AnyType) => row.name)).toEqual(['ada', 'linus'])
 
           const mixed = yield* db
@@ -226,6 +267,7 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
             .filter(where.or(where.like('name', 'mar%'), where.gt('age', 40)))
             .order('name')
             .collect()
+
           expect(mixed.map((row: AnyType) => row.name)).toEqual(['grace', 'margaret'])
 
           expect(yield* db.query('users').filter(where.notNull('age')).count()).toBe(3)
@@ -255,14 +297,18 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
           expect((yield* db.query('users').order('name').take(2)).length).toBe(2)
 
           const single = yield* db.query('users').where({ name: 'ada' }).unique()
+
           expect((single as AnyType).age).toBe(36)
+
           const many = yield* attempt(db.query('users').where({ role: 'admin' }).unique())
+
           expect((many as AnyType).error).toBe(DbErrors.DataIntegrity)
 
           expect(yield* db.query('users').where({ name: 'ada' }).exists()).toBe(true)
           expect(yield* db.query('users').where({ name: 'zzz' }).exists()).toBe(false)
 
           const unknown = yield* attempt(db.query('users').where({ ghost: 1 }).collect())
+
           expect((unknown as AnyType).error).toBe(DbErrors.Validation)
         }),
       )
@@ -292,12 +338,15 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
           // the same order, paginated: the cursor must carry BOTH keys or the window drifts
           const query = () => db.query('users').order('role').order('age', 'desc')
           const one = yield* query().paginate({ limit: 2 })
+
           expect(one.data.map((row: AnyType) => row.name)).toEqual(['c', 'b'])
 
           const two = yield* query().paginate({ limit: 2, cursor: one.pageInfo.nextCursor })
+
           expect(two.data.map((row: AnyType) => row.name)).toEqual(['a', 'f'])
 
           const three = yield* query().paginate({ limit: 2, cursor: two.pageInfo.nextCursor })
+
           expect(three.data.map((row: AnyType) => row.name)).toEqual(['d', 'e'])
           expect(three.pageInfo.hasNext).toBe(false)
 
@@ -307,6 +356,7 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
             cursor: three.pageInfo.prevCursor,
             direction: 'backward',
           })
+
           expect(back.data.map((row: AnyType) => row.name)).toEqual(['a', 'f'])
         }),
       )
@@ -316,6 +366,7 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
       unwrap(
         await run(function* () {
           const db = yield* bootstrap()
+
           yield* db.insert('users', { name: 'ada', age: 36, role: 'admin' })
 
           const rows = yield* db.query('users').select('name', 'age').collect()
@@ -330,6 +381,7 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
           expect(row._version).toMatch(TOKEN)
 
           const page = yield* db.query('users').select('name').order('name').paginate({ limit: 1 })
+
           expect((page.data[0] as AnyType).name).toBe('ada')
           expect('age' in (page.data[0] as AnyType)).toBe(false)
         }),
@@ -340,12 +392,14 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
       unwrap(
         await run(function* () {
           const db = yield* bootstrap()
+
           yield* db.insert('users', { name: 'ada', age: 36, role: 'admin' })
           yield* db.insert('users', { name: 'grace', age: 44, role: 'admin' })
           yield* db.insert('users', { name: 'linus', age: 25, role: 'member' })
           yield* db.insert('users', { name: 'nobody', role: 'member' })
 
           const every = db.query('users')
+
           expect(yield* every.sum('age')).toBe(105)
           expect(yield* every.min('age')).toBe(25)
           expect(yield* every.max('age')).toBe(44)
@@ -356,6 +410,7 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
 
           // nothing matched: sum is 0, the rest are null
           const none = db.query('users').filter(where.gt('age', 1000))
+
           expect(yield* none.sum('age')).toBe(0)
           expect(yield* none.avg('age')).toBe(null)
           expect(yield* none.max('age')).toBe(null)
@@ -364,15 +419,18 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
           const counts = Object.fromEntries(
             byRole.map((row: AnyType) => [row.role, Number(row.count)]),
           )
+
           expect(counts).toEqual({ admin: 2, member: 2 })
 
           const sums = yield* db.query('users').groupBy('role').sum('age')
+
           expect(
             Object.fromEntries(sums.map((row: AnyType) => [row.role, Number(row.sum)])),
           ).toEqual({ admin: 80, member: 25 })
 
           // an unknown column is a validation failure, not a silent empty answer
           const bad = yield* attempt(() => db.query('users').sum('nope' as AnyType))
+
           expect(isFailure(bad) && bad.error).toBe(DbErrors.Validation)
         }),
       )
@@ -384,9 +442,11 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
           const db = yield* bootstrap()
 
           const created = yield* db.upsert('users', { name: 'ada' }, { name: 'ada', age: 36 })
+
           expect(created.age).toBe(36)
 
           const updated = yield* db.upsert('users', { name: 'ada' }, { name: 'ada', age: 37 })
+
           expect(updated._id).toBe(created._id)
           expect(updated.age).toBe(37)
           expect(yield* db.query('users').count()).toBe(1)
@@ -398,6 +458,7 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
       unwrap(
         await run(function* () {
           const db = yield* bootstrap()
+
           for (const [name, age] of [
             ['a', 1],
             ['b', 2],
@@ -410,6 +471,7 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
 
           const query = () => db.query('users').order('age')
           const pageOne = yield* query().paginate({ limit: 2 })
+
           expect(pageOne.data.map((row: AnyType) => row.name)).toEqual(['a', 'b'])
           expect(pageOne.pageInfo.hasNext).toBe(true)
           expect(pageOne.pageInfo.hasPrev).toBe(false)
@@ -418,16 +480,19 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
             limit: 2,
             cursor: pageOne.pageInfo.nextCursor,
           })
+
           expect(pageTwo.data.map((row: AnyType) => row.name)).toEqual(['c', 'd'])
 
           const pageThree = yield* query().paginate({
             limit: 2,
             cursor: pageTwo.pageInfo.nextCursor,
           })
+
           expect(pageThree.data.map((row: AnyType) => row.name)).toEqual(['e'])
           expect(pageThree.pageInfo.hasNext).toBe(false)
 
           const counted = yield* query().paginate({ limit: 2, count: true })
+
           expect(counted.total).toBe(5)
           expect(pageOne.total).toBeUndefined()
 
@@ -436,34 +501,41 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
             cursor: pageTwo.pageInfo.prevCursor,
             direction: 'backward',
           })
+
           expect(back.data.map((row: AnyType) => row.name)).toEqual(['a', 'b'])
 
           const garbage = yield* attempt(query().paginate({ limit: 2, cursor: '???' }))
+
           expect((garbage as AnyType).error).toBe(DbErrors.Cursor)
 
           // a bare row id is an INCLUSIVE boundary: the page STARTS at that row — here on a
           // non-id order column (the boundary row is looked up for its order value)
           const cId = String(pageTwo.data[0]!._id)
           const fromRow = yield* query().paginate({ limit: 2, cursor: cId })
+
           expect(fromRow.data.map((row: AnyType) => row.name)).toEqual(['c', 'd'])
 
           // and on the default `_id` order — no lookup, a vanished row degrades gracefully
           const fromId = yield* db.query('users').paginate({ limit: 3, cursor: cId })
+
           expect(fromId.data[0]!.name).toBe('c')
 
           // a bare id naming no row on a value-ordered paginate is a clear failure
           const missing = yield* attempt(
             query().paginate({ limit: 2, cursor: '00000000000000000000000000000000' }),
           )
+
           expect((missing as AnyType).error).toBe(DbErrors.Cursor)
 
           // the boundary lookup carries the query's own filter: a bare id OUTSIDE the query's
           // set (here: another role) answers EXACTLY like a missing one — no cross-scope
           // existence oracle — while an in-scope bare id still positions the window
           yield* db.insert('users', { name: 'zed', age: 6, role: 'admin' })
+
           const members = () => db.query('users').where({ role: 'member' }).order('age')
 
           const inScope = yield* members().paginate({ limit: 2, cursor: cId })
+
           expect(inScope.data.map((row: AnyType) => row.name)).toEqual(['c', 'd'])
 
           const admin = yield* db.query('users').where({ role: 'admin' }).first()
@@ -472,6 +544,7 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
           const absent = yield* attempt(
             members().paginate({ limit: 2, cursor: '00000000000000000000000000000000' }),
           )
+
           expect((foreign as AnyType).error).toBe(DbErrors.Cursor)
           expect((absent as AnyType).error).toBe(DbErrors.Cursor)
           expect(String((foreign as AnyType).message).replace(foreignId, 'ID')).toBe(
@@ -485,8 +558,11 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
       unwrap(
         await run(function* () {
           const db = yield* bootstrap()
+
           yield* db.insert('users', { name: 'dup' })
+
           const outcome = yield* attempt(db.insert('users', { name: 'dup' }))
+
           expect(isFailure(outcome)).toBe(true)
           expect((outcome as AnyType).error).toBe(DbErrors.Unique)
         }),
@@ -501,12 +577,14 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
           const postsFeed = yield* db.changes('posts')
 
           const created = yield* db.insert('users', { name: 'ada' })
+
           yield* db.insert('posts', { title: 'notes', author: created._id })
           yield* db.patch('users', String(created._id), { age: 36 })
           yield* db.delete('users', String(created._id))
 
           // events carry identity + op (+ changed field names) and a token — never documents
           const first = yield* usersFeed.next()
+
           expect(first.value).toMatchObject({
             table: 'users',
             id: created._id,
@@ -517,14 +595,17 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
           expect('new' in (first.value as AnyType)).toBe(false)
 
           const second = yield* usersFeed.next()
+
           expect(second.value).toMatchObject({ op: 'update', fields: ['age'] })
           expect((second.value as AnyType).token > (first.value as AnyType).token).toBe(true)
 
           const third = yield* usersFeed.next()
+
           expect(third.value).toMatchObject({ op: 'delete' })
           expect('fields' in (third.value as AnyType)).toBe(false)
 
           const postEvent = yield* postsFeed.next()
+
           expect(postEvent.value).toMatchObject({ table: 'posts', op: 'insert' })
           // the table version is the token of the last applied change
           expect(db.version('users')).toBe((third.value as AnyType).token)
@@ -537,14 +618,18 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
       unwrap(
         await run(function* () {
           const db = yield* bootstrap()
+
           yield* db.insert('users', { name: 'ada', role: 'admin' })
 
           const snaps = yield* db.query('users').where({ role: 'admin' }).order('name').watch()
           const initial = yield* snaps.next()
+
           expect((initial.value as AnyType).rows.map((row: AnyType) => row.name)).toEqual(['ada'])
 
           yield* db.insert('users', { name: 'grace', role: 'admin' })
+
           const updated = yield* snaps.next()
+
           expect((updated.value as AnyType).rows.map((row: AnyType) => row.name)).toEqual([
             'ada',
             'grace',
@@ -557,14 +642,19 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
           const id = String(created._id)
           const docFeed = yield* db.watch('users', id)
           const current = yield* docFeed.next()
+
           expect((current.value as AnyType).name).toBe('watched')
 
           yield* db.patch('users', id, { age: 1 })
+
           const patched = yield* docFeed.next()
+
           expect((patched.value as AnyType).age).toBe(1)
 
           yield* db.delete('users', id)
+
           const gone = yield* docFeed.next()
+
           expect(gone.value).toBeNull()
         }),
       )
@@ -579,8 +669,10 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
           const committed = yield* db.transaction(function* (tx: AnyType) {
             const ada = yield* tx.insert('users', { name: 'ada' })
             const grace = yield* tx.insert('users', { name: 'grace' })
+
             return [ada._id, grace._id]
           })
+
           expect(yield* db.query('users').count()).toBe(2)
           expect(((yield* feed.next()).value as AnyType).id).toBe(committed[0])
           expect(((yield* feed.next()).value as AnyType).id).toBe(committed[1])
@@ -588,9 +680,11 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
           const outcome = yield* attempt(
             db.transaction(function* (tx: AnyType) {
               yield* tx.insert('users', { name: 'doomed' })
+
               return yield* fail(DbErrors.Query, 'boom')
             }),
           )
+
           expect(isFailure(outcome)).toBe(true)
           expect(yield* db.query('users').count()).toBe(2)
 
@@ -599,13 +693,17 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
             const inner = yield* attempt(
               tx.transaction(function* (nested: AnyType) {
                 yield* nested.insert('users', { name: 'inner' })
+
                 return yield* fail(DbErrors.Query, 'inner boom')
               }),
             )
+
             expect(isFailure(inner)).toBe(true)
+
             return outer._id
           })
           const names = yield* db.query('users').order('name').collect()
+
           expect(names.map((row: AnyType) => row.name)).toEqual(['ada', 'grace', 'outer'])
 
           // rolled-back writes never reached the feed: the next event is the outer insert
@@ -618,16 +716,20 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
             const inner = yield* tx.transaction(function* (nested: AnyType) {
               return yield* nested.insert('users', { name: 'joined-inner' })
             })
+
             return [outer._id, inner._id]
           })
+
           expect(((yield* feed.next()).value as AnyType).id).toBe(joined[0])
           expect(((yield* feed.next()).value as AnyType).id).toBe(joined[1])
 
           // `upsert` IS a transaction — nested inside one it must still commit
           const upserted = yield* db.transaction(function* (tx: AnyType) {
             yield* tx.upsert('users', { name: 'ada' }, { age: 30 })
+
             return yield* tx.upsert('users', { name: 'ada' }, { age: 31 })
           })
+
           expect(upserted.age).toBe(31)
         }),
       )
@@ -641,7 +743,9 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
 
           // stamp: the scope pins `role` onto the insert, overriding the value
           const member = yield* a.insert('users', { name: 'scoped-member', role: 'admin' })
+
           expect(member.role).toBe('member')
+
           const admin = yield* db.insert('users', { name: 'scoped-admin', role: 'admin' })
 
           // reads narrowed; foreign row absent
@@ -652,15 +756,19 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
 
           // guarded writes: miss (not conflict) outside the scope, even with a stale version
           const before = yield* Db.actions.logStats('users')
+
           expect(yield* a.patch('users', admin._id, { age: 9 })).toBeNull()
+
           const hidden = yield* attempt(
             a.patch('users', admin._id, { age: 9 }, { ifVersion: 'v:stale' }),
           )
+
           expect(isFailure(hidden)).toBe(false)
           expect(yield* a.delete('users', admin._id)).toBe(false)
 
           // ...and none of those misses left a phantom change-log row
           const after = yield* Db.actions.logStats('users')
+
           expect(after.rows).toBe(before.rows)
 
           // upsert under a per-call scope: both branches
@@ -670,13 +778,16 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
             { role: 'member' },
             { scope: where.eq('role', 'member') },
           )
+
           expect(up.role).toBe('member')
+
           const again = yield* db.upsert(
             'users',
             { name: 'scoped-up' },
             { age: 7 },
             { scope: where.eq('role', 'member') },
           )
+
           expect(again._id).toBe(up._id)
           expect(again.age).toBe(7)
 
@@ -684,6 +795,7 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
           const denied = yield* attempt(
             (db as AnyType).scoped(where.gt('age', 3)).insert('users', { name: 'scoped-denied' }),
           )
+
           expect(isFailure(denied)).toBe(true)
           expect((denied as AnyType).error).toBe(DbErrors.Validation)
         }),
@@ -694,10 +806,12 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
       unwrap(
         await run(function* () {
           const db = yield* bootstrap()
+
           yield* db.insert('users', { name: 'ada' })
 
           const plan = yield* Db.actions.planMigration()
           const structural = plan.steps.filter((step: AnyType) => step.kind !== 'create-index')
+
           expect(structural).toEqual([])
 
           yield* Db.actions.reindex('users')
@@ -706,7 +820,9 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
           expect(yield* db.query('users').count()).toBe(2)
 
           yield* Db.actions.dropTable('users')
+
           const after = yield* attempt(db.query('users').collect())
+
           expect(isFailure(after)).toBe(true)
         }),
       )
@@ -717,6 +833,7 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
         await run(function* () {
           const db = yield* bootstrap()
           const joined = new Date('2021-01-02T03:04:05.678Z')
+
           yield* db.insert('users', {
             name: 'ada',
             age: 36,
@@ -724,14 +841,18 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
             meta: { tags: ['x'] },
             joined,
           })
+
           const placeholder = target.label === 'sqlite' ? '?' : '$1'
           const outcome = yield* attempt(
             Db.actions.raw(`SELECT "name" FROM "users" WHERE "age" > ${placeholder}`, [30]),
           )
+
           if (!target.raw) {
             expect((outcome as AnyType).error).toBe(DbErrors.Unsupported)
+
             return
           }
+
           expect(isFailure(outcome)).toBe(false)
           expect((outcome as AnyType).value.rows).toEqual([{ name: 'ada' }])
 
@@ -740,11 +861,13 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
             `SELECT "name" FROM "users" WHERE "joined" = ${placeholder}`,
             [joined],
           )
+
           expect(byDate.rows).toEqual([{ name: 'ada' }])
 
           // { table } decodes result rows by declared column kinds
           const decoded = yield* Db.actions.raw('SELECT * FROM "users"', [], { table: 'users' })
           const row = decoded.rows[0] as AnyType
+
           expect(row.active).toBe(false)
           expect(row.meta).toEqual({ tags: ['x'] })
           expect(row.joined).toEqual(joined)
@@ -757,8 +880,11 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
               '0',
             ]),
           )
+
           expect((nullName as AnyType).error).toBe(DbErrors.NotNull)
+
           const badTable = yield* attempt(Db.actions.raw('SELECT 1', [], { table: 'ghosts' }))
+
           expect((badTable as AnyType).error).toBe(DbErrors.Validation)
 
           // a SCRIPT is an array: every statement runs, in one transaction, on every backend
@@ -767,27 +893,37 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
             'CREATE TABLE "raw_b" ("y" TEXT)',
             'INSERT INTO "raw_a" ("x") VALUES (1)',
           ])
+
           const scripted = yield* attempt(Db.actions.raw(['SELECT 1'], [1]))
+
           expect((scripted as AnyType).error).toBe(DbErrors.Validation)
+
           const listing =
             target.label === 'sqlite'
               ? `SELECT "name" FROM sqlite_master WHERE "name" IN ('raw_a', 'raw_b') ORDER BY "name"`
               : `SELECT "table_name" AS "name" FROM information_schema.tables WHERE "table_name" IN ('raw_a', 'raw_b') ORDER BY "name"`
           const created = yield* Db.actions.raw(listing)
+
           expect(created.rows).toEqual([{ name: 'raw_a' }, { name: 'raw_b' }])
+
           const counted = yield* Db.actions.raw('SELECT COUNT(*) AS "n" FROM "raw_a"')
+
           expect(Number(counted.rows[0]!['n'])).toBe(1)
+
           // a bound statement can never hold two statements — every backend refuses
           const bound = yield* attempt(
             Db.actions.raw(`SELECT ${placeholder} AS "v"; SELECT 2 AS "v";`, [1]),
           )
+
           expect(isFailure(bound)).toBe(true)
           // a ;-joined string with no params still runs whole on sqlite (bun:sqlite would
           // otherwise silently keep the first statement) — the array form is the contract
           yield* target.label === 'sqlite'
             ? Db.actions.raw('DROP TABLE "raw_a"; DROP TABLE "raw_b";')
             : Db.actions.raw(['DROP TABLE "raw_a"', 'DROP TABLE "raw_b"'])
+
           const dropped = yield* Db.actions.raw(listing)
+
           expect(dropped.rows).toEqual([])
         }),
       )
@@ -802,26 +938,38 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
 
           const feed = yield* db.changes('users')
           const snaps = yield* db.query('users').watch()
+
           yield* snaps.next()
+
           const docFeed = yield* db.watch('users', id)
+
           yield* docFeed.next()
 
           yield* Db.actions.touch('users')
+
           // the feed subscribed after the insert, so its first event is the touch itself
           const touchEvent = yield* feed.next()
+
           expect(touchEvent.value).toMatchObject({ op: 'touch', id: '', source: 'local' })
+
           const touchToken = (touchEvent.value as AnyType).token
+
           expect(touchToken > String(created._version)).toBe(true)
           expect(db.version('users')).toBe(touchToken)
+
           const snap = yield* snaps.next()
+
           expect((snap.value as AnyType).token).toBe(touchToken)
 
           // doc-level touch re-fetches the current document for its watchers
           yield* Db.actions.touch('users', id)
+
           const refreshed = yield* docFeed.next()
+
           expect((refreshed.value as AnyType).name).toBe('ada')
 
           const unknown = yield* attempt(Db.actions.touch('ghosts'))
+
           expect((unknown as AnyType).error).toBe(DbErrors.Validation)
         }),
       )
@@ -837,8 +985,10 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
           const before = db.version('users')
 
           yield* Db.actions.touchBatch('users', [String(a._id), String(b._id)])
+
           const first = yield* feed.next()
           const second = yield* feed.next()
+
           expect(first.value).toMatchObject({ op: 'touch', id: String(a._id), source: 'local' })
           expect(second.value).toMatchObject({ op: 'touch', id: String(b._id), source: 'local' })
           expect((second.value as AnyType).token > (first.value as AnyType).token).toBe(true)
@@ -846,6 +996,7 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
 
           // buffered inside a transaction like any write — nothing leaks before commit
           const inside = db.version('users')
+
           yield* db.transaction(function* () {
             yield* Db.actions.touchBatch('users', [String(a._id)])
             expect(db.version('users')).toBe(inside)
@@ -861,14 +1012,19 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
       unwrap(
         await run(function* () {
           const db = yield* bootstrap()
+
           yield* db.insert('users', { name: 'ada', age: 1 })
+
           const snaps = yield* db.query('users').watch()
+
           yield* snaps.next()
 
           // out-of-band write: invisible to watchers until touched
           yield* Db.actions.raw('UPDATE "users" SET "age" = 99')
           yield* Db.actions.touch('users')
+
           const snap = yield* snaps.next()
+
           expect((snap.value as AnyType).rows[0].age).toBe(99)
         }),
       )
@@ -883,7 +1039,9 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
             const ada = yield* db.insert('users', { name: 'ada', age: 1 })
             const bob = yield* db.insert('users', { name: 'bob', age: 70 })
             const deltas = yield* db.query('users').watch({ mode: 'delta' })
+
             yield* deltas.next()
+
             const feed = yield* db.changes('users')
 
             yield* Db.actions.raw(
@@ -891,19 +1049,27 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
               [99, 50],
               { table: 'users', emit: { op: 'update', fields: ['age'] } },
             )
+
             // the event names the row, the op and the changed columns; the row carries a NEW token
             const event = yield* feed.next()
+
             expect(event.value).toMatchObject({ id: bob._id, op: 'update', fields: ['age'] })
+
             const stamped = yield* db.get('users', String(bob._id))
+
             expect(stamped?._version).toBe((event.value as AnyType).token)
             expect(stamped?.age).toBe(99)
             expect(String(stamped?._version) > String(bob._version)).toBe(true)
+
             // …so a delta watcher sees it as changed, and the log has it
             const delta = yield* deltas.next()
+
             expect((delta.value as AnyType).changed.map((row: AnyType) => row.name)).toEqual([
               'bob',
             ])
+
             const entries = yield* Db.actions.log('users', { since: String(bob._version) })
+
             expect(entries.at(-1)).toMatchObject({ id: bob._id, op: 'update', fields: ['age'] })
 
             // ada was untouched by the statement: same version, no event
@@ -916,14 +1082,18 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
                 emit: { op: 'update' },
               }),
             )
+
             expect((silent as AnyType).error).toBe(DbErrors.Validation)
+
             const noTable = yield* attempt(
               Db.actions.raw('SELECT 1', [], { emit: { op: 'update' } }),
             )
+
             expect((noTable as AnyType).error).toBe(DbErrors.Validation)
 
             // manual versioning with `version()` + stamp: false
             const token = yield* Db.actions.version()
+
             yield* Db.actions.raw(
               'UPDATE "users" SET "_version" = $1 WHERE "_id" = $2 RETURNING "_id"',
               [token, String(ada._id)],
@@ -941,12 +1111,15 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
           const db = yield* bootstrap()
           const ada = yield* db.insert('users', { name: 'ada' })
           const feed = yield* db.changes('users')
+
           yield* Db.actions.publish([
             { table: 'users', id: String(ada._id), op: 'update', fields: ['age'] },
             { table: 'users', id: 'gone', op: 'delete' },
           ])
+
           const first = yield* feed.next()
           const second = yield* feed.next()
+
           expect(first.value).toMatchObject({
             id: ada._id,
             op: 'update',
@@ -954,7 +1127,9 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
             source: 'local',
           })
           expect(second.value).toMatchObject({ id: 'gone', op: 'delete' })
+
           const entries = yield* Db.actions.log('users', { since: String(ada._version) })
+
           expect(entries.map(entry => entry.op)).toEqual(['update', 'delete'])
 
           const bad = [
@@ -962,8 +1137,10 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
             [{ table: 'users', id: '1', op: 'insert', fields: ['name'] }],
             [{ table: 'users', id: '1', op: 'update', fields: ['nope'] }],
           ] as const
+
           for (const writes of bad) {
             const outcome = yield* attempt(Db.actions.publish(writes as AnyType))
+
             expect((outcome as AnyType).error).toBe(DbErrors.Validation)
           }
         }),
@@ -980,15 +1157,19 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
           const v1 = String(created._version)
           const patched = yield* db.patch('users', id, { age: 2 }, { ifVersion: v1 })
           const v2 = String(patched?._version)
+
           expect(v2 > v1).toBe(true)
 
           const stale = yield* attempt(db.patch('users', id, { age: 3 }, { ifVersion: v1 }))
+
           expect((stale as AnyType).error).toBe(DbErrors.Conflict)
 
           const missing = yield* db.patch('users', 'no-such-id', { age: 3 }, { ifVersion: v1 })
+
           expect(missing).toBeNull()
 
           const staleDelete = yield* attempt(db.delete('users', id, { ifVersion: v1 }))
+
           expect((staleDelete as AnyType).error).toBe(DbErrors.Conflict)
           expect(yield* db.delete('users', id, { ifVersion: v2 })).toBe(true)
         }),
@@ -1005,17 +1186,22 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
             { name: 'grace' },
             { name: 'linus' },
           ])
+
           expect(docs).toHaveLength(3)
           expect(new Set(docs.map((doc: AnyType) => doc._id)).size).toBe(3)
           expect(yield* db.query('users').count()).toBe(3)
+
           for (const expected of ['ada', 'grace', 'linus']) {
             const step = yield* feed.next()
+
             expect((step.value as AnyType).op).toBe('insert')
             void expected
           }
+
           expect(yield* db.insertMany('users', [])).toEqual([])
 
           const invalid = yield* attempt(db.insertMany('users', [{ name: 'ok' }, { age: 1 }]))
+
           expect((invalid as AnyType).error).toBe(DbErrors.Validation)
           expect(yield* db.query('users').count()).toBe(3)
         }),
@@ -1026,10 +1212,12 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
       unwrap(
         await run(function* () {
           const db = yield* bootstrap()
+
           yield* db.insert('users', { name: 'ada', role: 'admin' })
 
           const deltas = yield* db.query('users').where({ role: 'admin' }).watch({ mode: 'delta' })
           const initial = yield* deltas.next()
+
           expect((initial.value as AnyType).added.map((row: AnyType) => row.name)).toEqual(['ada'])
 
           // one transaction, two inserts — coalesces into a single delta emission
@@ -1037,16 +1225,22 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
             yield* tx.insert('users', { name: 'grace', role: 'admin' })
             yield* tx.insert('users', { name: 'hopper', role: 'admin' })
           })
+
           const batch = yield* deltas.next()
+
           expect((batch.value as AnyType).added.map((row: AnyType) => row.name).toSorted()).toEqual(
             ['grace', 'hopper'],
           )
 
           // a non-matching insert recomputes to an empty delta (suppressed); the matching patch lands
           yield* db.insert('users', { name: 'linus', role: 'member' })
+
           const admin = yield* db.query('users').where({ name: 'ada' }).unique()
+
           yield* db.patch('users', String((admin as AnyType)._id), { age: 40 })
+
           const changed = yield* deltas.next()
+
           expect((changed.value as AnyType).changed.map((row: AnyType) => row.name)).toEqual([
             'ada',
           ])
@@ -1055,8 +1249,11 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
           // since-resume: a consumer already at the current version skips the initial emission
           const current = db.version('users')
           const resumed = yield* db.query('users').order('name').watch({ since: current })
+
           yield* db.insert('users', { name: 'zuse' })
+
           const first = yield* resumed.next()
+
           expect((first.value as AnyType).rows.map((row: AnyType) => row.name)).toContain('zuse')
           expect((first.value as AnyType).token > current).toBe(true)
         }),
@@ -1067,6 +1264,7 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
       unwrap(
         await run(function* () {
           const db = yield* bootstrap()
+
           expect(yield* Db.actions.logStats('users')).toEqual({
             rows: 0,
             oldest: null,
@@ -1074,11 +1272,13 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
           })
 
           const ada = yield* db.insert('users', { name: 'ada' })
+
           yield* db.patch('users', String(ada._id), { age: 1 })
           yield* db.delete('users', String(ada._id))
           yield* Db.actions.touch('users')
 
           const entries = yield* Db.actions.log('users')
+
           expect(entries.map(entry => entry.op)).toEqual(['insert', 'update', 'delete', 'touch'])
           expect(entries[0]!.token).toBe(ada._version)
           expect(entries[1]!.fields).toEqual(['age'])
@@ -1088,9 +1288,11 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
           expect(entries.every(entry => typeof entry.ts === 'number')).toBe(true)
 
           const after = yield* Db.actions.log('users', { since: entries[1]!.token })
+
           expect(after.map(entry => entry.op)).toEqual(['delete', 'touch'])
 
           const stats = yield* Db.actions.logStats('users')
+
           expect(stats).toEqual({ rows: 4, oldest: entries[0]!.token, newest: entries[3]!.token })
           expect(db.version('users')).toBe(stats.newest)
 
@@ -1110,13 +1312,16 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
       unwrap(
         await run(function* () {
           const db = yield* bootstrap()
+
           yield* db.transaction(function* (tx: AnyType) {
             yield* tx.insert('users', { name: 'a' })
             yield* tx.insert('users', { name: 'b' })
             // not visible yet: the log rows land as the transaction's last step
             expect((yield* Db.actions.logStats('users')).rows).toBe(0)
           })
+
           const entries = yield* Db.actions.log('users')
+
           expect(entries).toHaveLength(2)
           expect(entries[0]!.tx).toBe(entries[1]!.tx)
           expect(entries[0]!.tx).not.toBe(entries[0]!.token)
@@ -1124,6 +1329,7 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
           yield* attempt(
             db.transaction(function* (tx: AnyType) {
               yield* tx.insert('users', { name: 'doomed' })
+
               return yield* fail(DbErrors.Query, 'boom')
             }),
           )
@@ -1136,29 +1342,38 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
       unwrap(
         await run(function* () {
           yield* bootstrap()
+
           const hidden = yield* attempt(Db.actions.touch('__changes_users'))
+
           expect((hidden as AnyType).error).toBe(DbErrors.Validation)
+
           const reserved = yield* attempt(
             DbClient.use({ tables: [table('__secret', { x: column.text() })] }),
           )
+
           expect((reserved as AnyType).error).toBe(DbErrors.Configuration)
 
           // the schema speaks snake_case: camelCase table and column names are refused
           const camelTable = yield* attempt(
             DbClient.use({ tables: [table('uploadChunks', { x: column.text() })] }),
           )
+
           expect((camelTable as AnyType).error).toBe(DbErrors.Configuration)
+
           const camelColumn = yield* attempt(
             DbClient.use({ tables: [table('chunks', { requestId: column.text() })] }),
           )
+
           expect((camelColumn as AnyType).error).toBe(DbErrors.Configuration)
           expect((camelColumn as AnyType).message).toContain('requestId')
 
           yield* Db.actions.dropTable('posts')
+
           const plan = yield* Db.actions.planMigration()
           const created = plan.steps
             .filter((step: AnyType) => step.kind === 'create-table')
             .map((step: AnyType) => step.table.name)
+
           expect(created).toEqual(['posts', '__changes_posts'])
         }),
       )
@@ -1167,11 +1382,14 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
     it('type drift: the plan reports alter-column; applied with a cast only where supported', async () => {
       const v1 = table('gauges', { value: column.text() })
       const v2 = table('gauges', { value: column.int() })
+
       unwrap(
         await run(function* () {
           yield* target.use()
           yield* BunIO.use()
+
           const before = yield* DbClient.use({ tables: [v1], migrations: 'manual' })
+
           yield* Db.actions.dropTable('gauges')
           yield* Db.actions.migrate()
           yield* before.insert('gauges', { value: '42' })
@@ -1182,6 +1400,7 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
             const drift = (yield* Db.actions.planMigration()).steps.find(
               (step: AnyType) => step.kind === 'alter-column',
             ) as AnyType
+
             expect(drift).toMatchObject({
               table: 'gauges',
               from: 'text',
@@ -1191,10 +1410,12 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
             expect(isDestructive(drift)).toBe(true)
 
             yield* Db.actions.migrate()
+
             const after = (yield* Db.actions.planMigration()).steps.filter(
               (step: AnyType) => step.kind === 'alter-column',
             )
             const row = (yield* db.query('gauges').first()) as AnyType
+
             if (capabilities.alterColumn) {
               // retyped in place, the data cast along
               expect(after).toHaveLength(0)
@@ -1214,11 +1435,14 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
         await run(function* () {
           yield* target.use()
           yield* BunIO.use()
+
           const before = yield* DbClient.use({ tables: [users, posts], migrations: 'manual' })
+
           yield* Db.actions.dropTable('posts')
           yield* Db.actions.dropTable('users')
           yield* Db.actions.migrate()
           yield* before.insert('users', { name: 'ada' })
+
           if (target.raw) {
             yield* Db.actions.raw('DROP TABLE IF EXISTS "visitors"')
             yield* Db.actions.raw('CREATE TABLE "visitors" ("_id" TEXT PRIMARY KEY)')
@@ -1227,16 +1451,20 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
           // the same storage, `posts` no longer declared
           yield* scoped(function* () {
             yield* DbClient.use({ tables: [users], migrations: 'manual', safe: true })
+
             const plan = yield* Db.actions.planMigration()
             const dropped = plan.steps
               .filter((step: AnyType) => step.kind === 'drop-table')
               .map((step: AnyType) => step.table)
+
             // `posts` carried a change log, so it is ours: both go; `visitors` has none: it stays
             expect(dropped).toEqual(['posts', '__changes_posts'])
             expect(dropped).not.toContain('visitors')
             // safe mode only reports
             yield* Db.actions.migrate()
+
             const after = yield* Db.actions.planMigration()
+
             expect(after.steps.filter((step: AnyType) => step.kind === 'drop-table')).toHaveLength(
               2,
             )
@@ -1244,20 +1472,26 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
           yield* scoped(function* () {
             yield* DbClient.use({ tables: [users], migrations: 'manual' })
             yield* Db.actions.migrate()
+
             const tables = yield* DbAdapter.actions.tables()
+
             expect(tables).not.toContain('posts')
             expect(tables).not.toContain('__changes_posts')
             expect(tables).toContain('users')
+
             if (target.raw) {
               expect(tables).toContain('visitors')
               yield* Db.actions.raw('DROP TABLE "visitors"')
             }
+
             // a declared table dropped behind our back comes back with a FRESH log
             yield* DbAdapter.actions.migrate([{ kind: 'drop-table', table: 'users' }])
+
             const vanished = yield* Db.actions.planMigration()
             const kinds = vanished.steps.map(
               (step: AnyType) => `${step.kind}:${step.table.name ?? step.table}`,
             )
+
             expect(kinds.indexOf('drop-table:__changes_users')).toBeGreaterThanOrEqual(0)
             expect(kinds.indexOf('drop-table:__changes_users')).toBeLessThan(
               kinds.indexOf('create-table:__changes_users'),
@@ -1300,47 +1534,59 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
         await run(function* () {
           yield* target.use()
           yield* BunIO.use()
+
           // a tiny replay window so "older than the window" is reachable in a test
           const db = yield* DbClient.use({
             tables: [users, posts],
             migrations: 'manual',
             replayWindowMs: 10,
           })
+
           yield* Db.actions.dropTable('posts')
           yield* Db.actions.dropTable('users')
           yield* Db.actions.migrate()
+
           const ada = (yield* db.insert('users', { name: 'ada' })) as AnyType
           const current = db.version('users')
 
           // current and older than the replay window → no initial emission at all
           yield* sleep(30)
+
           const silent = yield* db.query('users').watch({ since: current })
           const nothing = yield* race([
             silent.next(),
             (function* () {
               yield* sleep(50)
+
               return 'quiet' as const
             })(),
           ])
+
           expect(nothing).toBe('quiet')
           yield* db.insert('users', { name: 'grace' })
+
           const woke = yield* silent.next()
+
           expect((woke.value as AnyType).rows).toHaveLength(2)
 
           // a change after `since` (even one with an OLDER token, if it committed later) → emit
           const resumed = yield* db.query('users').watch({ since: current })
           const first = yield* resumed.next()
+
           expect((first.value as AnyType).rows).toHaveLength(2)
 
           // compacted past `since` → full snapshot
           yield* db.patch('users', String(ada._id), { age: 9 })
           yield* Db.actions.compact('users', { keep: 1 })
+
           const reset = yield* db.query('users').watch({ mode: 'delta', since: current })
           const full = yield* reset.next()
+
           expect((full.value as AnyType).added).toHaveLength(2)
 
           // garbage → snapshot, not a failure
           const junk = yield* db.query('users').watch({ since: 'not-a-token' })
+
           expect(((yield* junk.next()).value as AnyType).rows).toHaveLength(2)
         }),
       )
@@ -1352,19 +1598,24 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
           const db = yield* bootstrap()
           const seen = Date.UTC(2024, 0, 2, 3, 4, 5, 678)
           const made = yield* db.insert('users', { name: 'ada', seen })
+
           expect(made.seen).toBe(seen)
 
           const read = yield* db.get('users', made._id)
+
           expect(read.seen).toBe(seen)
           expect(typeof read.seen).toBe('number')
 
           yield* db.insert('users', { name: 'grace', seen: seen + 1000 })
+
           const later = yield* db.query('users').filter(where.gt('seen', seen)).collect()
+
           expect(later.map((row: AnyType) => row.name)).toEqual(['grace'])
           expect(yield* db.query('users').max('seen')).toBe(seen + 1000)
 
           // a Date is not epoch millis
           const wrong = yield* attempt(db.insert('users', { name: 'x', seen: new Date() }))
+
           expect((wrong as AnyType).error).toBe(DbErrors.Validation)
         }),
       )
@@ -1399,18 +1650,23 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
           expect(names(yield* db.query('users').skip(3).collect())).toEqual(['d', 'e'])
 
           const one = yield* byAge().paginate({ page: 1, pageSize: 2 })
+
           expect(names(one.rows)).toEqual(['a', 'b'])
           expect([one.total, one.page, one.pages, one.pageSize]).toEqual([5, 1, 3, 2])
           expect(typeof one.token).toBe('string')
 
           const three = yield* byAge().paginate({ page: 3, pageSize: 2 })
+
           expect(names(three.rows)).toEqual(['e'])
 
           // past the end clamps to the last page; below 1 to the first
           const beyond = yield* byAge().paginate({ page: 9, pageSize: 2 })
+
           expect(names(beyond.rows)).toEqual(['e'])
           expect([beyond.page, beyond.pages]).toEqual([3, 3])
+
           const below = yield* byAge().paginate({ page: 0, pageSize: 2 })
+
           expect([below.page, names(below.rows)]).toEqual([1, ['a', 'b']])
 
           // nothing matched: one empty page, not zero pages
@@ -1418,6 +1674,7 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
             .query('users')
             .filter(where.gt('age', 99))
             .paginate({ page: 4, pageSize: 2 })
+
           expect([empty.rows, empty.total, empty.page, empty.pages]).toEqual([[], 0, 1, 1])
 
           const filtered = yield* db
@@ -1425,11 +1682,13 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
             .filter(where.gt('age', 2))
             .order('age', 'desc')
             .paginate({ page: 2, pageSize: 2 })
+
           expect(names(filtered.rows)).toEqual(['c'])
           expect([filtered.total, filtered.pages]).toEqual([3, 2])
 
           // the keyset form is untouched
           const keyset = yield* byAge().paginate({ limit: 2 })
+
           expect(names(keyset.data)).toEqual(['a', 'b'])
           expect(keyset.pageInfo.hasNext).toBe(true)
         }),
@@ -1443,22 +1702,26 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
           const finished = where.eq('active', false)
 
           const first = yield* db.upsert('users', { name: 'job' }, { age: 1 }, { when: finished })
+
           expect(first.op).toBe('inserted')
           expect(first.doc.age).toBe(1)
 
           // the row is still active → the guarded update leaves it alone
           const busy = yield* db.upsert('users', { name: 'job' }, { age: 2 }, { when: finished })
+
           expect(busy.op).toBe('skipped')
           expect(busy.doc.age).toBe(1)
           expect((yield* db.get('users', first.doc._id)).age).toBe(1)
 
           yield* db.patch('users', first.doc._id, { active: false })
+
           const rearmed = yield* db.upsert(
             'users',
             { name: 'job' },
             { age: 3, active: true },
             { when: finished },
           )
+
           expect(rearmed.op).toBe('updated')
           expect(rearmed.doc._id).toBe(first.doc._id)
           expect(rearmed.doc.age).toBe(3)
@@ -1469,6 +1732,7 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
             db.upsert('users', { name: 'race' }, { age: 1 }, { when: finished }),
             db.upsert('users', { name: 'race' }, { age: 2 }, { when: finished }),
           ])
+
           expect(outcomes.map((entry: AnyType) => entry.op).toSorted()).toEqual([
             'inserted',
             'skipped',
@@ -1478,11 +1742,16 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
           // insertOrIgnore: a unique violation is a quiet null, and leaves a transaction usable
           const kept = yield* db.transaction(function* (tx: AnyType) {
             const dup = yield* tx.insertOrIgnore('users', { name: 'job' })
+
             expect(dup).toBeNull()
+
             return yield* tx.insertOrIgnore('users', { name: 'fresh' })
           })
+
           expect(kept.name).toBe('fresh')
+
           const invalid = yield* attempt(db.insertOrIgnore('users', { age: 1 }))
+
           expect((invalid as AnyType).error).toBe(DbErrors.Validation)
         }),
       )
@@ -1492,6 +1761,7 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
       unwrap(
         await run(function* () {
           const db = yield* bootstrap()
+
           yield* db.insert('users', {
             name: 'ada',
             meta: { tags: ['x', 'y'], team: { id: 'core' }, score: 10, pro: true, note: null },
@@ -1509,6 +1779,7 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
               .filter(...filters)
               .order('name')
               .collect()
+
             return rows.map((row: AnyType) => row.name)
           }
 
@@ -1556,6 +1827,7 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
 
           // path filters also guard writes (a scoped handle)
           const core = db.scoped(where.eq(['meta', 'team', 'id'], 'core'))
+
           expect((yield* core.query('users').collect()).map((row: AnyType) => row.name)).toEqual([
             'ada',
           ])
@@ -1567,13 +1839,16 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
               .filter(where.eq(['name', 'x'], 1))
               .collect(),
           )
+
           expect((text as AnyType).error).toBe(DbErrors.Validation)
+
           const quote = yield* attempt(
             db
               .query('users')
               .filter(where.eq(['meta', 'a"b'], 1))
               .collect(),
           )
+
           expect((quote as AnyType).error).toBe(DbErrors.Validation)
         }),
       )
@@ -1594,32 +1869,40 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
               age: 36,
             },
           ])
+
           expect([kept._id, kept._created_at, kept._updated_at, kept._version]).toEqual([
             'fixed-id',
             5,
             7,
             version,
           ])
+
           const read = yield* db.get('users', 'fixed-id')
+
           expect([read._created_at, read._updated_at, read._version, read.age]).toEqual([
             5,
             7,
             version,
             36,
           ])
+
           // the import is a change like any other
           const log = yield* Db.actions.log('users')
+
           expect(log.some(entry => entry.id === 'fixed-id' && entry.op === 'insert')).toBe(true)
 
           // missing stamps are filled in; `_updated_at` follows `_created_at`
           const [partial] = yield* db.import('users', [
             { _id: 'second', _created_at: 11, name: 'grace' },
           ])
+
           expect([partial._created_at, partial._updated_at]).toEqual([11, 11])
           expect(partial._version).toMatch(TOKEN)
 
           const duplicate = yield* attempt(db.import('users', [{ _id: 'fixed-id', name: 'x' }]))
+
           expect((duplicate as AnyType).error).toBe(DbErrors.Unique)
+
           for (const bad of [
             { name: 'no-id' },
             { _id: '', name: 'empty-id' },
@@ -1628,11 +1911,13 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
             { _id: 'c', _version: 'nope', name: 'ver' },
           ]) {
             const failed = yield* attempt(db.import('users', [bad]))
+
             expect([bad.name, (failed as AnyType).error]).toEqual([bad.name, DbErrors.Validation])
           }
 
           // a copy under a new identity
           const copy = yield* db.insert('users', { ...stripSystem(read), name: 'ada-copy' })
+
           expect(copy._id).not.toBe('fixed-id')
           expect(copy._created_at).toBeGreaterThan(5)
           expect(copy.age).toBe(36)
@@ -1644,11 +1929,15 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
     it('scope teardown resolves promptly with active watchers parked', async () => {
       const task = run(function* () {
         const db = yield* bootstrap()
+
         // park subscriptions without draining them, then let the scope close over them
         yield* db.changes('users')
+
         const snaps = yield* db.query('users').watch()
+
         yield* snaps.next()
         yield* db.insert('users', { name: 'ada' })
+
         return 'closed'
       })
       const winner = await Promise.race([
@@ -1657,6 +1946,7 @@ export const runAdapterSuite = (target: Testing.AdapterTarget): void => {
           setTimeout(() => resolve('timeout'), 3000)
         }),
       ])
+
       expect(winner).toBe('completed')
     })
   })

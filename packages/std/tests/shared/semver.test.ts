@@ -22,10 +22,12 @@ describe('compareVersions', () => {
       '1.0.0-rc.1',
       '1.0.0',
     ]
+
     for (let at = 1; at < chain.length; at += 1) {
       expect(compareVersions(chain[at - 1]!, chain[at]!)).toBe(-1)
       expect(compareVersions(chain[at]!, chain[at - 1]!)).toBe(1)
     }
+
     expect(chain.toReversed().toSorted(compareVersions)).toEqual(chain)
   })
 

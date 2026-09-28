@@ -26,6 +26,7 @@ describe('the shared inspector API', () => {
             const client = connectClient<Api>({ url })
 
             const manifest = await loadManifest(client)
+
             expect(manifest.manifest).toBe('ozaco/2')
             expect(manifest.services.some(service => service.name === 'demo')).toBe(true)
 
@@ -35,6 +36,7 @@ describe('the shared inspector API', () => {
               action: 'make',
               input: { title: 'inspector' },
             }).done
+
             expect(made.ok).toBe(true)
             expect(made.status).toBe(200)
             expect(made.requestId).toBeTruthy()
@@ -47,6 +49,7 @@ describe('the shared inspector API', () => {
               { service: 'demo', action: 'count', input: { n: 3 } },
               chunk => chunks.push(chunk.kind === 'value' ? chunk.value : chunk),
             ).done
+
             expect(chunks).toEqual([0, 1, 2])
             expect(counted.streamed).toBe(true)
             expect(counted.value).toEqual([0, 1, 2])
@@ -62,6 +65,7 @@ describe('the shared inspector API', () => {
                 }
               },
             ).done
+
             expect(blob.bytes?.length).toBe(2048)
             expect(lastSize).toBe(2048)
 
@@ -71,6 +75,7 @@ describe('the shared inspector API', () => {
               action: 'explode',
               input: { code: 'demo.teapot' },
             }).done
+
             expect(failed.ok).toBe(false)
             expect(failed.error?.tag).toBe('demo.teapot')
             expect(failed.status).toBe(418)
@@ -94,7 +99,9 @@ describe('the shared inspector API', () => {
             await new Promise(resolve => {
               setTimeout(resolve, 100)
             })
+
             const handle = await client
+
             unwrap(await handle.notes.create({ title: 'watched', done: false }))
             await new Promise(resolve => {
               setTimeout(resolve, 100)

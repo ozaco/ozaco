@@ -25,20 +25,26 @@ describe('session reconnect (redial)', () => {
       const chatA = yield* peerA.channel('chat')
       const channelsB = yield* peerB.channels
       const firstEmit = yield* channelsB.next()
+
       if (firstEmit.done) {
         return 'channels closed early'
       }
+
       const chatB1 = firstEmit.value
 
       // collect A's messages on the ORIGINAL subscription — it must survive the redial
       const received: unknown[] = []
+
       yield* fork(function* () {
         const messages = yield* chatA.messages
+
         while (true) {
           const item = yield* messages.next()
+
           if (item.done) {
             return
           }
+
           received.push(item.value)
         }
       })
@@ -52,10 +58,13 @@ describe('session reconnect (redial)', () => {
       // B's old remote handle closed cleanly; a FRESH handle re-emits after the redial
       const oldClose = yield* chatB1.closed
       const secondEmit = yield* channelsB.next()
+
       if (secondEmit.done) {
         return 'channels closed after redial'
       }
+
       const chatB2 = secondEmit.value
+
       yield* parked
 
       const messagesB2 = yield* chatB2.messages
@@ -79,6 +88,7 @@ describe('session reconnect (redial)', () => {
     })
 
     const value = unwrap(outcome)
+
     expect(value).toEqual({
       stateA: 'connected',
       stateB: 'connected',
@@ -104,6 +114,7 @@ describe('session reconnect (redial)', () => {
         reconnect: { retries: 2, delayMs: 5 },
       })
       const peerB = yield* Rtc.actions.connect(signalB, { polite: true })
+
       void peerB
 
       const chatA = yield* peerA.channel('chat')
@@ -140,6 +151,7 @@ describe('session reconnect (redial)', () => {
       const peerB = yield* Rtc.actions.connect(signalB, { polite: true, reconnect: budget })
 
       const chatA = yield* peerA.channel('chat')
+
       yield* peerB.close()
 
       const info = yield* peerA.closed

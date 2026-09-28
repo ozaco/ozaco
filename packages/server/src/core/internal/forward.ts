@@ -2,8 +2,9 @@ import type { Operation } from 'std:effect'
 import type { LoggerDef } from 'std:logger'
 import { Logger, LoggerTransport, LogLevel } from 'std:logger'
 import type { Result } from 'std:result'
+import { serializeError } from 'std:shared'
 import type { TraceDef } from 'std:trace'
-import { exceptionType, isRecorded, TraceSeverity } from 'std:trace'
+import { Trace, TraceSeverity } from 'std:trace'
 
 import { Server } from '../definition/protocol'
 import type { ServerDef } from '../types/server'
@@ -39,7 +40,7 @@ export const markShown = (failure: Result.Failure<unknown>): void => {
 
 /** The noted failure an exception record was made of: recorded in the record's trace, same
  * `exception.type` (its tag) and message — the newest such one. */
-export const recall = (log: TraceDef.LogData): Result.Failure<unknown> | undefined => {
+export function* recall(log: TraceDef.LogData): Operation<Result.Failure<unknown> | undefined> {
   const traceId = log.context?.traceId ?? ''
   const type = log.attributes['exception.type']
   const message = log.attributes['exception.message']
@@ -50,8 +51,8 @@ export const recall = (log: TraceDef.LogData): Result.Failure<unknown> | undefin
 
     if (
       failure &&
-      isRecorded(failure, traceId) &&
-      exceptionType(failure) === type &&
+      (yield* Trace.actions.isRecorded(failure, traceId)) &&
+      serializeError(failure.error) === type &&
       (!text ||
         text === message ||
         (typeof message === 'string' && text.startsWith(message.slice(0, 64))))
@@ -91,7 +92,7 @@ export function* forwardException(
     return
   }
 
-  const failure = recall(log)
+  const failure = yield* recall(log)
 
   if (failure && logged.has(failure)) {
     return

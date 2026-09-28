@@ -1,10 +1,11 @@
 import type { Scope } from 'std:effect'
 import type { Result } from 'std:result'
+import { capUtf8 } from 'std:shared'
 
 import type { Helpers } from '../types/helpers'
 import type { TraceDef } from '../types/trace'
 
-import { attributesOf, capBytes, entriesOf } from './attributes'
+import { attributesOf, entriesOf } from './attributes'
 import { anchorNow, timeOf } from './clock'
 import {
   EXCEPTION_EVENT,
@@ -24,10 +25,12 @@ const openers = new WeakMap<Scope, object>()
 /** The token standing for `scope` in the recorders opened there (weakly keyed: no retention). */
 export const openerOf = (scope: Scope): object => {
   let token = openers.get(scope)
+
   if (!token) {
     token = {}
     openers.set(scope, token)
   }
+
   return token
 }
 
@@ -136,6 +139,7 @@ export class SpanRecorder implements TraceDef.ActiveRecorder {
 
   get handle(): TraceDef.SpanHandle {
     this.#handle ??= handleOf(this)
+
     return this.#handle
   }
 
@@ -181,6 +185,7 @@ export class SpanRecorder implements TraceDef.ActiveRecorder {
 
     if (this.events.length >= MAX_EVENTS) {
       this.droppedEvents += 1
+
       return
     }
 
@@ -199,15 +204,18 @@ export class SpanRecorder implements TraceDef.ActiveRecorder {
 
     if (this.events.length >= MAX_EVENTS) {
       const at = this.events.findLastIndex(item => item.name !== EXCEPTION_EVENT)
+
       this.droppedEvents += 1
 
       if (at === -1) {
         return
       }
+
       this.events.splice(at, 1)
     }
 
-    this.events.push({ name: EXCEPTION_EVENT, time, attributes })
+    // under the span limits like every event (a whole chain would otherwise ride unbounded)
+    this.events.push(eventOf(EXCEPTION_EVENT, attributes, time))
   }
 
   addLink(context: TraceDef.SpanContext, input?: TraceDef.AttributesInput): void {
@@ -217,6 +225,7 @@ export class SpanRecorder implements TraceDef.ActiveRecorder {
 
     if (this.links.length >= MAX_LINKS) {
       this.droppedLinks += 1
+
       return
     }
 
@@ -232,7 +241,7 @@ export class SpanRecorder implements TraceDef.ActiveRecorder {
       status.code === 'error'
         ? {
             code: 'error',
-            ...(status.message ? { message: capBytes(status.message, MAX_VALUE_BYTES) } : {}),
+            ...(status.message ? { message: capUtf8(status.message, MAX_VALUE_BYTES) } : {}),
           }
         : UNSET
   }
@@ -242,7 +251,7 @@ export class SpanRecorder implements TraceDef.ActiveRecorder {
     if (this.recording && this.status.code === 'unset') {
       this.status = {
         code: 'error',
-        ...(message ? { message: capBytes(message, MAX_VALUE_BYTES) } : {}),
+        ...(message ? { message: capUtf8(message, MAX_VALUE_BYTES) } : {}),
       }
     }
   }

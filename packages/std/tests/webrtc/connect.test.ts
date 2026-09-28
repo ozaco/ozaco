@@ -26,9 +26,11 @@ describe('Rtc.actions.connect', () => {
       // B receives it (already OPEN) on the channels flow
       const channelsB = yield* peerB.channels
       const emitted = yield* channelsB.next()
+
       if (emitted.done) {
         return { error: 'channels flow closed early' }
       }
+
       const chatB = emitted.value
 
       // structured value: codec-encoded on send, codec-decoded on receive
@@ -75,13 +77,16 @@ describe('Rtc.actions.connect', () => {
       const dataA = yield* peerA.channel('bin')
       const channelsB = yield* peerB.channels
       const emitted = yield* channelsB.next()
+
       if (emitted.done) {
         return 'closed'
       }
 
       yield* dataA.send(new Uint8Array([1, 2, 3]))
+
       const messagesB = yield* emitted.value.messages
       const received = yield* messagesB.next()
+
       return received.done ? 'closed' : [...(received.value as Uint8Array)]
     })
 
@@ -100,6 +105,7 @@ describe('Rtc.actions.connect', () => {
       const peerB = yield* Rtc.actions.connect(signalB, { polite: true })
 
       yield* peerA.channel('first')
+
       const second = yield* peerA.channel('second')
       const third = yield* peerB.channel('from-b') // the answerer can open channels too
 
@@ -137,6 +143,7 @@ describe('Rtc.actions.connect', () => {
       // the fake REJECTS addIceCandidate before setRemoteDescription — reaching connected with
       // delivered candidates on both sides proves the plugin buffered and flushed correctly
       const [a, b] = fake.hub.peers
+
       return {
         connected: a?.connectionState === 'connected' && b?.connectionState === 'connected',
         aGotCandidates: (a?.candidates.length ?? 0) > 0,

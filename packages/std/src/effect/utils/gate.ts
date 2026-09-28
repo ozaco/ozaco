@@ -14,6 +14,7 @@ export const createGate = (cause?: string): Utils.Gate => {
 
     notify() {
       const gate = current
+
       current = withResolvers<void>(cause)
       gate.resolve()
     },

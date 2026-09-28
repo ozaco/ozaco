@@ -41,10 +41,12 @@ export const toFuture = <T>(
 
           if (isFailure(outcome)) {
             early.resolve(outcome as AnyType)
+
             return
           }
 
           const keep = hold(outcome.value)
+
           early.resolve(outcome.value)
 
           if (keep) {
@@ -69,12 +71,14 @@ export const toFuture = <T>(
 
     // plain: the detached task IS the settlement — its future resolves the Result, never rejects
     const task = scope.run(op, { detached: true })
+
     options?.signal?.addEventListener(
       'abort',
       // halt() is a lazy Future — consuming it (`then`) is what interrupts the task
       () => void task.halt().then(() => undefined),
       { once: true },
     )
+
     return task as unknown as Promise<Result<T>>
   }
 

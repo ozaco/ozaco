@@ -26,7 +26,7 @@ import type { Result } from 'std:result'
 import { asFailure, fail, unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
 import type { TraceDef } from 'std:trace'
-import { current, TraceIds } from 'std:trace'
+import { Trace } from 'std:trace'
 
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -127,6 +127,7 @@ const burnDisk = (id: string): never => {
 const thrownBy = (body: () => void): Result.Failure<unknown> | null => {
   try {
     body()
+
     return null
   } catch (error) {
     return asFailure(error)
@@ -138,6 +139,7 @@ const thrownBy = (body: () => void): Result.Failure<unknown> | null => {
 const store = service(STORE, {
   save: action.mutation({ input: z.object({ id: z.string() }) }, function* ({ input }) {
     const thrown = thrownBy(() => readSector(input.id))
+
     return yield* fail(
       'store.save',
       'the note could not be saved',
@@ -154,10 +156,14 @@ const store = service(STORE, {
     },
     function* ({ input }) {
       yield* Logger.actions.info('note stored', { 'note.size': input.text.length })
+
       const db = yield* useDb(storeSchema)
       const row = yield* db.insert('notes', { text: input.text })
+
       yield* events.emit('note.stored', { id: row._id, size: input.text.length })
+
       const { job } = yield* Queue.actions.enqueue('index', { note: row._id })
+
       return { id: row._id, job: job._id }
     },
   ),
@@ -189,9 +195,11 @@ const api = service(API, {
     { output: z.number(), retry: { times: 2, when: ['api.flaky'], delayMs: 1 } },
     function* () {
       flakyCalls += 1
+
       if (flakyCalls === 1) {
         return yield* fail('api.flaky', 'the first attempt fails')
       }
+
       return flakyCalls
     },
   ),
@@ -225,6 +233,7 @@ function* statsOf(): Operation<NodeStats> {
   const openobserve = backends.openobserve
     ? (yield* OpenObserveExporter.context.expect()).stats()
     : null
+
   return { otlp, openobserve }
 }
 
@@ -235,6 +244,7 @@ const traceOf = (response: Response): string => {
   if (!/^[0-9a-f]{32}$/u.test(traceId)) {
     throw new Error(`no traceresponse on ${response.url}: ${JSON.stringify(header)}`)
   }
+
   return traceId
 }
 
@@ -248,6 +258,7 @@ const converse = (url: string, texts: readonly string[]): Promise<unknown[]> =>
     const later = () => {
       setTimeout(() => {
         const text = texts[next]
+
         next += 1
 
         if (text === undefined) {
@@ -277,11 +288,14 @@ function* settle(
     if (probe) {
       yield* probe()
     }
+
     if (ready()) {
       return
     }
+
     yield* sleep(50)
   }
+
   throw new Error(`timed out waiting for ${what}`)
 }
 
@@ -298,6 +312,7 @@ const zeroLed = (): TraceDef.Ids => {
   return {
     trace: () => {
       minted += 1
+
       return minted % 2 === 1 ? `00${randomHex(15)}` : randomHex(16)
     },
     span: () => randomHex(8),
@@ -330,6 +345,7 @@ async function drive(): Promise<Scenario> {
             yield* MemoryTransport.use({ prefix: APP, link })
             yield* DefaultLogger.use({ level: LogLevel.info })
             yield* Queue.use({ table: 'jobs' })
+
             const server = yield* createServer({
               name: APP,
               version: VERSION,
@@ -339,10 +355,12 @@ async function drive(): Promise<Scenario> {
               observe: { environment: 'docker-leg' },
               plugins: exporters(),
             })
+
             yield* Queue.actions.work(
               {
                 *index(job) {
-                  const { context } = yield* current()
+                  const { context } = yield* Trace.actions.current()
+
                   worked.push({ traceId: context.traceId, spanId: context.spanId, id: job.id })
                 },
               },
@@ -354,6 +372,7 @@ async function drive(): Promise<Scenario> {
             bStopped.add(yield* statsOf())
           }),
         )
+
         yield* bReady.next()
 
         // node a — the edge: drives every request, then stops (its exporters flush)
@@ -361,7 +380,8 @@ async function drive(): Promise<Scenario> {
           yield* storage()
           yield* MemoryTransport.use({ prefix: APP, link })
           yield* DefaultLogger.use({ level: LogLevel.info })
-          yield* TraceIds.set(zeroLed())
+          yield* Trace.actions.useIds(zeroLed())
+
           const server: ServerDef.Handle<AnyType> = yield* createServer({
             name: APP,
             version: VERSION,
@@ -378,6 +398,7 @@ async function drive(): Promise<Scenario> {
               Resilience,
             ],
           })
+
           yield* Edge.actions.socket({
             path: LIVE,
             receives: z.object({ text: z.string() }),
@@ -390,21 +411,25 @@ async function drive(): Promise<Scenario> {
                 if (step.done) {
                   return
                 }
+
                 frames.push({ traceId: socket.ctx.trace.traceId, spanId: socket.ctx.trace.spanId })
                 yield* socket.send({ t: 'echo', text: (step.value as { text: string }).text })
               }
             },
           })
+
           const info = yield* server.start({ port: 0 })
           const base = info.url!
 
           yield* events.handle('note.stored', function* () {
-            const { context } = yield* current()
+            const { context } = yield* Trace.actions.current()
+
             consumed.push({ traceId: context.traceId, spanId: context.spanId })
           })
 
           // a learns b's store (presence) before the first call
           let members = 0
+
           yield* settle(
             () => members > 0,
             `a member of ${STORE}`,
@@ -416,7 +441,9 @@ async function drive(): Promise<Scenario> {
           const startedAt = Date.now()
           const request = function* (path: string, init?: RequestInit) {
             const response = yield* until(fetch(`${base}${path}`, init))
+
             yield* until(response.text())
+
             return { status: response.status, traceId: traceOf(response) }
           }
           const post = (body: unknown): RequestInit => ({
@@ -476,10 +503,13 @@ async function drive(): Promise<Scenario> {
         })
 
         bStop.add(undefined)
+
         const b = yield* bStopped.next()
+
         yield* nodeB
 
         const { a: aStats, ...rest } = a
+
         return { ...rest, stats: { a: aStats, b: b.value as NodeStats } }
       }),
     )
@@ -493,5 +523,6 @@ let memo: Promise<Scenario> | null = null
 /** The ONE run of the workload (memoized per process). */
 export const scenario = (): Promise<Scenario> => {
   memo ??= drive()
+
   return memo
 }

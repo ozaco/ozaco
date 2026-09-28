@@ -44,6 +44,7 @@ export const createFailure = (
     *[Symbol.iterator]() {
       // oxlint-disable-next-line no-this-alias
       const self = this
+
       yield self
     },
   }) as Result.Failure<AnyType>
@@ -84,6 +85,7 @@ export const causesOf = (
 
   for (const value of values) {
     const cause = causeOf(value)
+
     if (cause !== undefined && cause !== owner) {
       causes.push(cause)
     }

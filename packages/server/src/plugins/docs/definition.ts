@@ -31,9 +31,11 @@ export const Docs = definePlugin<
 
   *setup(options) {
     const kernel = yield* Server.context.get()
+
     if (!kernel) {
       return yield* fail(ServerErrors.Configuration, 'Docs must be installed by createServer')
     }
+
     const path = (options?.path ?? '/docs').replace(/\/$/u, '')
     const title = options?.title ?? 'docs'
     const requirement: OptionsDef.Requirement = options?.auth ?? false
@@ -57,17 +59,22 @@ export const Docs = definePlugin<
         name: 'docs',
         *start() {
           const auth = yield* Auth.context.get()
+
           if (requirement !== false && !auth) {
             return yield* fail(
               ServerErrors.Configuration,
               'Docs.use({ auth }) needs the Auth plugin installed',
             )
           }
+
           defaultAuth = auth?.default ?? false
+
           const edge = kernel.edge
+
           if (!edge) {
             return
           }
+
           yield* edge.actions.raw({
             method: 'GET',
             path: `${path}/manifest`,

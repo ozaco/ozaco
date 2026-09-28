@@ -68,6 +68,7 @@ describe('match', () => {
     const exhaustive = builder.exhaustive as AnyType
 
     let caught: unknown
+
     try {
       exhaustive()
     } catch (error) {
@@ -75,6 +76,7 @@ describe('match', () => {
     }
 
     expect(isFailure(caught)).toBe(true)
+
     if (isFailure(caught)) {
       expect(String(caught.error)).toContain('non-exhaustive')
     }
@@ -87,6 +89,7 @@ describe('match', () => {
         value => value * 10,
       )
       .run()
+
     expect(hit).toBe(50)
 
     const miss = match(0 as number)
@@ -95,6 +98,7 @@ describe('match', () => {
         value => value * 10,
       )
       .run()
+
     expect(miss).toBeUndefined()
   })
 })
@@ -102,11 +106,14 @@ describe('match', () => {
 describe('validateSync', () => {
   it('returns the parsed output, a tagged validation failure, or an async-schema failure', () => {
     const parsed = validateSync(numberSchema, 4)
+
     expect(isSuccess(parsed)).toBe(true)
     expect(unwrap(parsed)).toBe(8)
 
     const invalid = validateSync(numberSchema, 'nope')
+
     expect(isFailure(invalid)).toBe(true)
+
     if (isFailure(invalid)) {
       expect(invalid.error).toBe(SchemaErrors.Validation)
       expect(invalid.message).toBe('expected number')
@@ -114,7 +121,9 @@ describe('validateSync', () => {
     }
 
     const asyncOutcome = validateSync(asyncSchema, 'later')
+
     expect(isFailure(asyncOutcome)).toBe(true)
+
     if (isFailure(asyncOutcome)) {
       expect(asyncOutcome.error).toBe(SchemaErrors.AsyncSchema)
       expect(asyncOutcome.message).toContain('async schema')
@@ -125,6 +134,7 @@ describe('validateSync', () => {
 describe('match shapes', () => {
   it('exhaustive stays a function — callable with no argument once every case is covered', () => {
     type Shape = 'circle' | 'square'
+
     const covered = match('circle' as Shape)
       .when(
         (value): value is 'circle' => value === 'circle',
@@ -134,12 +144,14 @@ describe('match shapes', () => {
         (value): value is 'square' => value === 'square',
         () => 'boxy',
       )
+
     expect(covered.exhaustive()).toBe('round')
 
     const partial = match('square' as Shape).when(
       (value): value is 'circle' => value === 'circle',
       () => 'round',
     )
+
     // @ts-expect-error — a case is missing: the signature demands the unhandled remainder
     expect(() => partial.exhaustive()).toThrow()
     // it is still a real function at runtime, not a Failure value
@@ -148,6 +160,7 @@ describe('match shapes', () => {
 
   it('MatchCase lives under the schema Helpers; the builder type is the public one', () => {
     const recorded: Helpers.MatchCase = { handler: value => value, predicate: () => true }
+
     expect(typeof recorded.handler).toBe('function')
   })
 })

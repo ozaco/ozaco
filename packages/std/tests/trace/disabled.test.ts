@@ -1,24 +1,12 @@
 import { run, spawn } from 'std:effect'
 import { fail, unwrap } from 'std:result'
 import type { TraceDef } from 'std:trace'
-import {
-  ActiveSpan,
-  activeContext,
-  current,
-  enableTracing,
-  event,
-  extract,
-  inject,
-  parseTraceparent,
-  passThrough,
-  recordFailure,
-  span,
-  startSpan,
-  suppressed,
-  TraceIds,
-} from 'std:trace'
+import { Trace } from 'std:trace'
 
 import { describe, expect, it } from 'bun:test'
+
+import { ActiveSpan, TraceIds } from '../../src/trace/internal/context'
+import { extract, parseTraceparent } from '../../src/trace/internal/propagation'
 
 import { memoryTracer, traced, tracedResult } from './helpers'
 
@@ -42,16 +30,19 @@ describe('tracing off', () => {
       await run(function* () {
         // an installed tracer in a scope where tracing is OFF receives nothing
         yield* tracer.plugin.use()
-        yield* enableTracing(false)
+        yield* Trace.actions.enableTracing(false)
 
         return yield* TraceIds.with(forbiddenIds, () =>
-          span('off', function* (handle) {
+          Trace.actions.span('off', function* (handle) {
             handle.setAttributes({ ignored: true })
-            yield* event('ignored')
-            yield* recordFailure(fail('app.ignored'))
-            const live = yield* startSpan('live')
+            yield* Trace.actions.event('ignored')
+            yield* Trace.actions.recordFailure(fail('app.ignored'))
+
+            const live = yield* Trace.actions.startSpan('live')
+
             yield* live.run(function* () {})
             yield* live.end()
+
             return { recording: handle.recording, active: yield* ActiveSpan.get() }
           }),
         )
@@ -68,13 +59,13 @@ describe('tracing off', () => {
 
     const seen = unwrap(
       await run(() =>
-        ActiveSpan.with(passThrough(inbound), () =>
-          span('off', function* (handle) {
+        Trace.actions.passThrough(inbound, () =>
+          Trace.actions.span('off', function* (handle) {
             return {
               context: handle.context,
               recording: handle.recording,
-              current: (yield* current()).context,
-              carrier: yield* inject(),
+              current: (yield* Trace.actions.current()).context,
+              carrier: yield* Trace.actions.inject(),
             }
           }),
         ),
@@ -91,10 +82,11 @@ describe('tracing off', () => {
     const inbound = parseTraceparent(INBOUND)!
 
     const { tracer } = await traced(() =>
-      ActiveSpan.with(passThrough(inbound), () => span('continued', function* () {})),
+      Trace.actions.passThrough(inbound, () => Trace.actions.span('continued', function* () {})),
     )
 
     const data = tracer.span('continued')
+
     expect(data.context.traceId).toBe(inbound.traceId)
     expect(data.parent).toEqual({ ...inbound, remote: true })
   })
@@ -103,20 +95,23 @@ describe('tracing off', () => {
 describe('a tracing-OFF scope under a traced one', () => {
   it('sees the outer span (its context propagates) but can never write to it', async () => {
     const { tracer, value } = await traced(() =>
-      span('outer', function* (outer) {
+      Trace.actions.span('outer', function* (outer) {
         const task = yield* spawn(function* () {
-          yield* enableTracing(false)
+          yield* Trace.actions.enableTracing(false)
 
-          return yield* span('off', function* (handle) {
+          return yield* Trace.actions.span('off', function* (handle) {
             handle.setAttributes({ leaked: true })
             handle.setStatus({ code: 'error', message: 'leaked' })
             handle.addEvent('leaked')
-            const seen = yield* current()
+
+            const seen = yield* Trace.actions.current()
+
             seen.updateName('renamed')
+
             return {
               recording: handle.recording,
               same: seen.context.spanId === outer.context.spanId,
-              carrier: yield* inject(),
+              carrier: yield* Trace.actions.inject(),
             }
           })
         })
@@ -130,6 +125,7 @@ describe('a tracing-OFF scope under a traced one', () => {
     expect(value.carrier.traceparent).toContain(value.outer)
 
     const outer = tracer.span('outer')
+
     expect(outer.attributes).toEqual({})
     expect(outer.events).toEqual([])
     expect(outer.status.code).toBe('unset')
@@ -139,7 +135,7 @@ describe('a tracing-OFF scope under a traced one', () => {
 describe('requireParent', () => {
   it('no parent ⇒ no span (the body still runs)', async () => {
     const { tracer, value } = await traced(() =>
-      span('db', { requireParent: true, kind: 'client' }, function* (handle) {
+      Trace.actions.span('db', { requireParent: true, kind: 'client' }, function* (handle) {
         return handle.recording
       }),
     )
@@ -150,7 +146,9 @@ describe('requireParent', () => {
 
   it('a recording parent ⇒ a child span', async () => {
     const { tracer } = await traced(() =>
-      span('handler', () => span('db', { requireParent: true }, function* () {})),
+      Trace.actions.span('handler', () =>
+        Trace.actions.span('db', { requireParent: true }, function* () {}),
+      ),
     )
 
     expect(tracer.span('db').parent?.spanId).toBe(tracer.span('handler').context.spanId)
@@ -158,9 +156,9 @@ describe('requireParent', () => {
 
   it('an unsampled parent ⇒ no span, the parent stays active', async () => {
     const { tracer, value } = await traced(() =>
-      span('poll', { sampled: false }, function* (poll) {
-        return yield* span('db', { requireParent: true }, function* () {
-          return (yield* current()).context.spanId === poll.context.spanId
+      Trace.actions.span('poll', { sampled: false }, function* (poll) {
+        return yield* Trace.actions.span('db', { requireParent: true }, function* () {
+          return (yield* Trace.actions.current()).context.spanId === poll.context.spanId
         })
       }),
     )
@@ -171,7 +169,11 @@ describe('requireParent', () => {
 
   it('a sampled remote parent counts as recording', async () => {
     const { tracer } = await traced(() =>
-      span('db', { requireParent: true, parent: parseTraceparent(INBOUND)! }, function* () {}),
+      Trace.actions.span(
+        'db',
+        { requireParent: true, parent: parseTraceparent(INBOUND)! },
+        function* () {},
+      ),
     )
 
     expect(tracer.span('db').context.traceId).toBe(parseTraceparent(INBOUND)!.traceId)
@@ -181,16 +183,19 @@ describe('requireParent', () => {
 describe('suppressed', () => {
   it('acts as tracing off: no spans, no events, no records — and an unsampled context goes out', async () => {
     const { tracer, value } = await traced(() =>
-      span('outer', function* () {
-        return yield* suppressed(function* () {
-          const inner = yield* span('inner', function* (handle) {
+      Trace.actions.span('outer', function* () {
+        return yield* Trace.actions.suppressed(function* () {
+          const inner = yield* Trace.actions.span('inner', function* (handle) {
             handle.setAttributes({ leaked: true })
+
             return handle.recording
           })
-          yield* event('ignored')
-          yield* recordFailure(fail('app.ignored'))
-          ;(yield* current()).setAttributes({ leaked: true })
-          return { inner, carrier: yield* inject() }
+
+          yield* Trace.actions.event('ignored')
+          yield* Trace.actions.recordFailure(fail('app.ignored'))
+          ;(yield* Trace.actions.current()).setAttributes({ leaked: true })
+
+          return { inner, carrier: yield* Trace.actions.inject() }
         })
       }),
     )
@@ -207,11 +212,17 @@ describe('suppressed', () => {
 describe('sampling', () => {
   it('sampled: false on a root ⇒ ids and a context, no SpanData, flags without the sampled bit', async () => {
     const { tracer, value } = await traced(() =>
-      span('unsampled', { sampled: false }, function* (root) {
-        const child = yield* span('child', function* (handle) {
+      Trace.actions.span('unsampled', { sampled: false }, function* (root) {
+        const child = yield* Trace.actions.span('child', function* (handle) {
           return handle.context
         })
-        return { root: root.context, recording: root.recording, child, carrier: yield* inject() }
+
+        return {
+          root: root.context,
+          recording: root.recording,
+          child,
+          carrier: yield* Trace.actions.inject(),
+        }
       }),
     )
 
@@ -227,8 +238,9 @@ describe('sampling', () => {
     const parent = parseTraceparent('00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-00')!
 
     const { tracer, result } = await tracedResult(() =>
-      span('handler', { parent }, function* () {
-        yield* event('ozaco.step', { 'ozaco.step.name': 'load' })
+      Trace.actions.span('handler', { parent }, function* () {
+        yield* Trace.actions.event('ozaco.step', { 'ozaco.step.name': 'load' })
+
         return yield* fail('app.broken', 'nope')
       }),
     )
@@ -237,6 +249,7 @@ describe('sampling', () => {
     expect(tracer.spans).toEqual([])
 
     const [step, exception] = tracer.logs
+
     expect(step).toMatchObject({ eventName: 'ozaco.step', severityNumber: 9 })
     expect(step!.context?.traceId).toBe(parent.traceId)
     expect(step!.context!.flags & 1).toBe(0)
@@ -247,8 +260,10 @@ describe('sampling', () => {
 
   it('sampled: false opts a child out under a sampled parent', async () => {
     const { tracer } = await traced(() =>
-      span('parent', () =>
-        span('opted-out', { sampled: false }, () => span('grandchild', function* () {})),
+      Trace.actions.span('parent', () =>
+        Trace.actions.span('opted-out', { sampled: false }, () =>
+          Trace.actions.span('grandchild', function* () {}),
+        ),
       ),
     )
 
@@ -262,8 +277,11 @@ describe('activeContext', () => {
 
     const off = unwrap(
       await run(function* () {
-        const none = yield* activeContext()
-        const through = yield* ActiveSpan.with(passThrough(inbound), () => activeContext())
+        const none = yield* Trace.actions.activeContext()
+        const through = yield* Trace.actions.passThrough(inbound, () =>
+          Trace.actions.activeContext(),
+        )
+
         return { none, through }
       }),
     )
@@ -272,8 +290,11 @@ describe('activeContext', () => {
     expect(off.through).toEqual({ ...inbound, remote: true })
 
     const { value } = await traced(() =>
-      span('on', function* (handle) {
-        return { handle: handle.context, quiet: yield* suppressed(() => activeContext()) }
+      Trace.actions.span('on', function* (handle) {
+        return {
+          handle: handle.context,
+          quiet: yield* Trace.actions.suppressed(() => Trace.actions.activeContext()),
+        }
       }),
     )
 

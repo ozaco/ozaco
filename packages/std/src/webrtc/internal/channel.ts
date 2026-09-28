@@ -153,6 +153,7 @@ export const wrapChannel = (
       if (!state.closedByClient && !state.ended && retain?.()) {
         // the native died under a session that is redialing — suspend and await the rebind
         suspend()
+
         return
       }
 
@@ -168,6 +169,7 @@ export const wrapChannel = (
     }
 
     const native = state.native
+
     state.suspended = true
     state.native = undefined
 
@@ -243,6 +245,7 @@ export const wrapChannel = (
 
         if (!native || state.suspended || native.readyState === 'connecting') {
           yield* opening // park until (re)open or the permanent end, then re-check
+
           continue
         }
 
@@ -252,6 +255,7 @@ export const wrapChannel = (
 
         if (native.bufferedAmount > highWaterMark) {
           yield* draining // backpressure: wait for bufferedamountlow, then re-check
+
           continue
         }
 

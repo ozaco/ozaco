@@ -73,6 +73,7 @@ function* runValidator(schema: StandardSchemaV1, table: string, value: unknown) 
 
   if (result.issues) {
     const issues = result.issues.slice(0, 5).map(issue => issue.message)
+
     return yield* fail(DbErrors.Validation, `value rejected by the "${table}" validator`, ...issues)
   }
 
@@ -104,10 +105,12 @@ const normalize = (
 
       if (!column.optional) {
         problems.push(`missing required column "${column.name}"`)
+
         continue
       }
 
       data[column.name] = null
+
       continue
     }
 
@@ -118,10 +121,12 @@ const normalize = (
             ? `missing required column "${column.name}"`
             : `"${column.name}" is required and cannot be null`,
         )
+
         continue
       }
 
       data[column.name] = null
+
       continue
     }
 
@@ -129,6 +134,7 @@ const normalize = (
 
     if (problem) {
       problems.push(problem)
+
       continue
     }
 

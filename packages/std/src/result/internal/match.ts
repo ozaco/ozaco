@@ -31,6 +31,7 @@ const recognize = (matcher: Helpers.TagMatcher, value: unknown): boolean | strin
   if (typeof matcher === 'function') {
     try {
       const verdict = matcher(value)
+
       return verdict === true || (typeof verdict === 'string' && verdict.length > 0 && verdict)
     } catch {
       return false
@@ -60,8 +61,10 @@ export const matchOf = (
 ): { tag: string; message: string } | undefined => {
   for (const [tag, matcher] of tags[TAG_MATCHERS]) {
     const verdict = recognize(matcher, value)
+
     if (verdict !== false) {
       const message = typeof verdict === 'string' ? verdict : (ownTextOf(value) ?? fallback())
+
       return { tag, message }
     }
   }

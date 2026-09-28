@@ -45,13 +45,18 @@ export function* openEdge(): Operation<Helpers.EdgeState> {
 export const edgeActions = (driver: EdgeDef.Driver): EdgeDef.Actions => ({
   *listen(options) {
     const state = yield* EdgeStateRef.expect()
+
     mountActions(state)
+
     const info = yield* driver.serve(options ?? {}, serveHandlers(state))
+
     state.info = info
+
     return info
   },
   *stop() {
     const state = yield* EdgeStateRef.expect()
+
     yield* driver.stop()
     state.info = null
   },
@@ -79,6 +84,7 @@ export const edgeActions = (driver: EdgeDef.Driver): EdgeDef.Actions => ({
   },
   *socket(route) {
     const state = yield* EdgeStateRef.expect()
+
     state.socketRoutes.push(route)
     addRoute(state.sockets, 'WS', route.path, route)
     state.kernel.sockets.push({
@@ -100,7 +106,9 @@ export const edgeActions = (driver: EdgeDef.Driver): EdgeDef.Actions => ({
   },
   *handle(request) {
     const state = yield* EdgeStateRef.expect()
+
     mountActions(state)
+
     return yield* handleRequest(state, request)
   },
   *info() {

@@ -33,12 +33,14 @@ const renderer = function* (
       held = true
 
       region.columns = (yield* Terminal.actions.size()).columns
+
       if (interactive) {
         yield* Terminal.actions.write(ansi.hideCursor)
       }
 
       const draw = function* (frame: string) {
         const codes = eraseCodes(region.rows)
+
         region.frame = frame
         region.rows = rowsOf(frame, region.columns)
         yield* Terminal.actions.write(codes + frame)
@@ -49,6 +51,7 @@ const renderer = function* (
           if (region.closed || !interactive) {
             return
           }
+
           yield* draw(frame)
         },
 
@@ -56,9 +59,12 @@ const renderer = function* (
           if (region.closed || !interactive) {
             return
           }
+
           const codes = eraseCodes(region.rows)
+
           region.rows = 0
           region.frame = ''
+
           if (codes !== '') {
             yield* Terminal.actions.write(codes)
           }
@@ -68,14 +74,20 @@ const renderer = function* (
           if (region.closed) {
             return
           }
+
           region.closed = true
+
           const codes = interactive ? eraseCodes(region.rows) : ''
+
           region.rows = 0
+
           const text = frame === undefined ? '' : `${frame}\n`
           const cursor = interactive ? ansi.showCursor : ''
+
           if (codes + text + cursor !== '') {
             yield* Terminal.actions.write(codes + text + cursor)
           }
+
           releaseLease(state)
         },
       }
@@ -83,13 +95,17 @@ const renderer = function* (
       if (info.capabilities.resize && interactive) {
         // subscribe HERE, then fork the drain — a forked subscribe races the first event
         const sizes = yield* yield* Terminal.actions.resize()
+
         yield* fork(function* () {
           let next = yield* sizes.next()
+
           while (next.done !== true) {
             region.columns = next.value.columns
+
             if (!region.closed && region.frame !== '') {
               yield* draw(region.frame)
             }
+
             next = yield* sizes.next()
           }
         })
@@ -99,11 +115,14 @@ const renderer = function* (
     } finally {
       if (held && !region.closed) {
         region.closed = true
+
         // abrupt exit (failure/halt): wipe the leftover frame and restore the cursor
         const codes = interactive ? eraseCodes(region.rows) + ansi.showCursor : ''
+
         if (codes !== '') {
           yield* Terminal.actions.write(codes)
         }
+
         releaseLease(state)
       }
     }

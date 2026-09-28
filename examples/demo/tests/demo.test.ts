@@ -25,7 +25,9 @@ describe('demo — every use case end to end', () => {
       await run(function* () {
         const app = yield* createDemo({ instance: 'mono' })
         const info = yield* app.start()
+
         expect(info.ready).toBe(true)
+
         const steps = yield* walk(info.url!)
 
         expect(detail(steps, 'manifest').services).toEqual([
@@ -79,7 +81,9 @@ describe('demo — every use case end to end', () => {
           missing: 'media.not-found',
         })
         expect(detail(steps, 'cache')).toEqual({ hit: true, recomputedAfterInvalidate: true })
+
         const resilience = detail(steps, 'resilience')
+
         expect(resilience.retryAttempts).toBe(3)
         expect(resilience.fallback).toBe('fallback')
         expect(resilience.limited).toEqual([
@@ -119,6 +123,7 @@ describe('demo — every use case end to end', () => {
           upper: ['photo.bin'],
           wildcardIsLiteral: [],
         })
+
         // the 202 carries the per-call `location` header; the rpc failure is a 200 + `oz-error`
         const login = yield* until(
           fetch(`${info.url}/account/login`, {
@@ -138,9 +143,11 @@ describe('demo — every use case end to end', () => {
             body: JSON.stringify({ kind: 'report' }),
           }),
         )
+
         expect(submit.status).toBe(202)
         expect(submit.headers.get('cache-control')).toBe('no-store')
         expect(submit.headers.get('location')).toMatch(/^\/jobs\/status\//u)
+
         const rpc = yield* until(
           fetch(`${info.url}/jobs/rpc`, {
             method: 'POST',
@@ -148,6 +155,7 @@ describe('demo — every use case end to end', () => {
             body: JSON.stringify({ method: 'nope' }),
           }),
         )
+
         expect(rpc.status).toBe(200)
         expect(rpc.headers.get('oz-error')).toBe('jobs.method-not-found')
         expect(((yield* until(rpc.json())) as AnyType).error.error).toBe('jobs.method-not-found')
@@ -168,8 +176,10 @@ describe('demo — every use case end to end', () => {
           '/',
         ]) {
           const response = yield* until(fetch(`${info.url}${path}`, { headers: OBSERVE_AUTH }))
+
           expect([path, response.status]).toEqual([path, 200])
         }
+
         yield* app.stop()
       }),
     )
@@ -185,25 +195,31 @@ describe('demo — the job queue', () => {
         const url = info.url!
         const client = yield* createClient<Api>({ url })
         const tokens = yield* client.account.login({ email: 'ada@example.com', password: 'ada' })
+
         client.$setToken(tokens.accessToken)
 
         const json = function* (path: string): Generator<AnyType, AnyType, AnyType> {
           const response = yield* until(fetch(`${url}${path}`, { headers: OBSERVE_AUTH }))
+
           return yield* until(response.json())
         }
         const settled = function* (id: string) {
           for (let tries = 0; tries < 100; tries += 1) {
             const job = yield* client.jobs.status({ id })
+
             if (job.state === 'done' || job.state === 'dead') {
               return job
             }
+
             yield* sleep(50)
           }
+
           throw new Error(`job ${id} never settled`)
         }
 
         const report = yield* settled((yield* client.jobs.submit({ kind: 'report' })).id)
         const doomed = yield* settled((yield* client.jobs.submit({ kind: 'fail' })).id)
+
         expect(report.state).toBe('done')
         expect(doomed).toMatchObject({ state: 'dead', attempts: 3 })
 
@@ -217,17 +233,23 @@ describe('demo — the job queue', () => {
               log.event_name === 'messaging.process.exception' || log.body === 'report rendered',
           )
         let attempts: AnyType[] = []
+
         for (let tries = 0; tries < 60; tries += 1) {
           yield* sleep(50)
+
           const page = yield* json('/_observe/api/traces?name=process%20jobs&limit=50')
+
           attempts = []
+
           for (const root of page.traces) {
             attempts.push(yield* json(`/_observe/api/trace/${root.trace_id}`))
           }
+
           if (attempts.length >= 4 && attempts.every(complete)) {
             break
           }
         }
+
         const failing = attempts
           .filter(view => rootOf(view).attributes['messaging.message.id'] === doomed.id)
           .toSorted(
@@ -235,6 +257,7 @@ describe('demo — the job queue', () => {
               rootOf(a).attributes['ozaco.queue.attempt'] -
               rootOf(b).attributes['ozaco.queue.attempt'],
           )
+
         expect(failing.map(view => rootOf(view).attributes['ozaco.queue.attempt'])).toEqual([
           1, 2, 3,
         ])
@@ -245,6 +268,7 @@ describe('demo — the job queue', () => {
         )
         const submit = yield* json(`/_observe/api/trace/${creation.context.traceId}`)
         const send = submit.spans.find((span: AnyType) => span.name === 'send jobs')
+
         expect(send).toMatchObject({ kind: 'producer', span_id: creation.context.spanId })
         expect(send.attributes).toMatchObject({
           'messaging.system': 'ozaco.queue',
@@ -254,6 +278,7 @@ describe('demo — the job queue', () => {
 
         for (const [index, view] of failing.entries()) {
           const root = rootOf(view)
+
           expect(root).toMatchObject({
             name: 'process jobs',
             kind: 'consumer',
@@ -263,28 +288,35 @@ describe('demo — the job queue', () => {
             // a failure with attempts left is handled by the retry; the dead letter is an error
             status_code: index < 2 ? 'unset' : 'error',
           })
+
           const reasons = root.links.map((link: AnyType) => link.attributes?.['ozaco.link.reason'])
+
           expect(reasons).toContain('creation')
+
           if (index > 0) {
             // …and the previous attempt
             const retry = root.links.find(
               (link: AnyType) => link.attributes?.['ozaco.link.reason'] === 'queue.retry',
             )
+
             expect(retry.context.spanId).toBe(rootOf(failing[index - 1]).span_id)
           }
 
           // ONE exception per attempt: the span event on the origin + one log record, WARN while
           // retries are left, ERROR for the dead letter — the whole chain in both
           const exceptions = root.events.filter((event: AnyType) => event.name === 'exception')
+
           expect(exceptions).toHaveLength(1)
           expect(exceptions[0].attributes['ozaco.failure.chain']).toEqual([
             `jobs.job-failed: job ${doomed.id} failed (attempt ${index + 1}/3)`,
             `jobs.storage: cannot write the report of job ${doomed.id}`,
             `jobs.disk-full: no space left on device, write 'reports/${doomed.id}.pdf'`,
           ])
+
           const logs = view.logs.filter(
             (log: AnyType) => log.event_name === 'messaging.process.exception',
           )
+
           expect(logs).toHaveLength(1)
           expect(logs[0]).toMatchObject({
             span_id: root.span_id,
@@ -292,7 +324,7 @@ describe('demo — the job queue', () => {
           })
           expect(logs[0].body).toContain('Caused by: jobs.storage')
           expect(logs[0].body).toContain('Caused by: jobs.disk-full')
-          expect(root.events.some((event: AnyType) => event.name === 'ozaco.queue.dead')).toBe(
+          expect(root.events.some((event: AnyType) => event.name === 'queue.dead')).toBe(
             index === 2,
           )
         }
@@ -303,14 +335,17 @@ describe('demo — the job queue', () => {
           view => rootOf(view).attributes['messaging.message.id'] === report.id,
         )
         const worked = rootOf(done)
+
         expect(worked.status_code).toBe('unset')
         // …in the worker's own scope, the one its Logger line uses — never `@ozaco/std`
         expect(done.spans.find((span: AnyType) => span.name === 'render report')).toMatchObject({
           parent_span_id: worked.span_id,
           scope: 'demo/jobs',
         })
+
         // exactly ONE record per line (the demo's TraceTransport; `createServer` adds none)
         const lines = done.logs.filter((log: AnyType) => log.body === 'report rendered')
+
         expect(lines).toHaveLength(1)
         expect(lines[0]).toMatchObject({
           span_id: worked.span_id,
@@ -340,6 +375,7 @@ describe('demo — the telemetry is not public', () => {
 
         const statusOf = function* (path: string, token?: string) {
           const headers: Record<string, string> = token ? { authorization: `Bearer ${token}` } : {}
+
           return (yield* until(fetch(`${info.url}${path}`, { headers }))).status
         }
 
@@ -357,6 +393,7 @@ describe('demo — the telemetry is not public', () => {
             admin: yield* statusOf(path, admin),
           }).toEqual({ path, anonymous: 401, service: 403, user: 403, ops: 200, admin: 200 })
         }
+
         yield* app.stop()
       }),
     )
@@ -386,12 +423,14 @@ describe('demo — failures reach the terminal', () => {
 
           // a 500 the node records — its exception must not stay in the telemetry alone
           const failed = (yield* attempt(client.reports.guarded({ boom: true }))) as AnyType
+
           expect(failed.error).toBe('reports.boom')
           traceId = client.$lastTraceId()
 
           for (let tries = 0; tries < 40 && !boomed(); tries += 1) {
             yield* sleep(25)
           }
+
           yield* app.stop()
         }),
       )
@@ -401,9 +440,11 @@ describe('demo — failures reach the terminal', () => {
     }
 
     expect(boomed()).toBe(true)
+
     // ONE line, correlated to the request's trace, the failure on it once (a one-line failure
     // rides `err=`, no chain block repeats it)
     const lines = printed.filter(line => line.includes('reports.boom'))
+
     expect(lines).toHaveLength(1)
     expect(lines[0]).toContain(` trace=${traceId?.slice(0, 8)}`)
     expect(lines[0]!.split('reports.boom')).toHaveLength(2)
@@ -415,6 +456,7 @@ describe('demo — cluster', () => {
     const link = createLink()
     // one database for the cluster (a file every node opens), the bus on the shared link
     const dbPath = join(mkdtempSync(join(tmpdir(), 'ozaco-demo-')), 'demo.sqlite')
+
     unwrap(
       await run(function* () {
         const ready = createQueue<void, void>()
@@ -422,6 +464,7 @@ describe('demo — cluster', () => {
           fork(() =>
             scoped(function* () {
               const app = yield* createDemo({ ...options, dbPath, link })
+
               yield* app.start()
               ready.add(undefined)
               yield* sleep(60_000)
@@ -439,8 +482,10 @@ describe('demo — cluster', () => {
           instance: 'api-2',
           observe: 'forward',
         })
+
         yield* ready.next()
         yield* ready.next()
+
         const gateway = yield* createDemo({
           role: 'gateway',
           instance: 'gw',
@@ -449,9 +494,11 @@ describe('demo — cluster', () => {
           link,
         })
         const info = yield* gateway.start()
+
         expect(info).toMatchObject({ role: 'gateway', hosted: [], ready: true })
 
         const steps = yield* walk(info.url!)
+
         expect(detail(steps, 'cluster').servedBy).toBe('api-2')
         expect(detail(steps, 'cluster').members).toMatchObject({
           todos: ['api-1'],
@@ -482,18 +529,22 @@ describe('demo — cluster', () => {
 
         // the gateway's observe store holds the service nodes' spans (forward → collect)
         yield* sleep(300)
+
         const clusterView = yield* until(
           fetch(`${info.url}/_observe/api/cluster`, { headers: OBSERVE_AUTH }),
         )
         const view = (yield* until(clusterView.json())) as AnyType
+
         expect(view.instances.map((entry: AnyType) => entry.instance).toSorted()).toEqual([
           'api-1',
           'api-2',
           'gw',
         ])
+
         const health = (yield* until(
           (yield* until(fetch(`${info.url}/_health`))).json(),
         )) as AnyType
+
         expect(health.members.todos.map((member: AnyType) => member.instance)).toEqual(['api-1'])
 
         yield* gateway.stop()

@@ -39,6 +39,7 @@ export function* registerService(
         service: def.name,
         handler: entry.handler,
       })
+
       continue
     }
 
@@ -88,6 +89,7 @@ export function* reloadRegistry(
     kernel.pluginServices.has(def.name),
   )
   const next = yield* buildRegistry([...kept, ...services])
+
   yield* validateOptions(kernel, next)
 
   const before = new Set(
@@ -107,6 +109,7 @@ export function* reloadRegistry(
   const actionsMap = kernel.registry.actions as Map<string, ServiceDef.Action>
   const socketsList = kernel.registry.sockets as ServiceDef.ServiceSocket[]
   const declared = new Set(socketsList.filter(socket => !kernel.pluginServices.has(socket.service)))
+
   servicesMap.clear()
   actionsMap.clear()
   socketsList.length = 0
@@ -125,6 +128,7 @@ export function* reloadRegistry(
   // what the edge registered directly (`Edge.actions.socket`), add the new declarations'
   const stale = new Set([...declared].map(socket => `${socket.service} ${socket.path}`))
   const external = kernel.sockets.filter(info => !stale.has(`${info.service ?? ''} ${info.path}`))
+
   kernel.sockets.length = 0
   kernel.sockets.push(...external)
 
@@ -155,6 +159,7 @@ export function* buildRegistry(
     for (const [name, def2] of Object.entries(def.actions)) {
       if (isSocketAction(def2)) {
         sockets.push({ ...def2.socket, service: def.name, handler: def2.handler })
+
         continue
       }
 
@@ -183,6 +188,7 @@ export const manifestOf = (kernel: ServerDef.Context): ServerDef.Manifest => ({
   instance: kernel.instance,
   actions: [...kernel.registry.actions].map(([key, def]) => {
     const [service, action] = key.split('.') as [string, string]
+
     return {
       service,
       action,

@@ -13,6 +13,7 @@ export function once<T extends EventTarget, K extends Helpers.EventList<T> | (st
     *[Symbol.iterator]() {
       const subscription = yield* on(target, name)
       const next = yield* subscription.next()
+
       return next.value as Helpers.EventTypeFromEventTarget<T, K>
     },
   }

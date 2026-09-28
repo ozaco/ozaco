@@ -41,6 +41,7 @@ describe('file transport', () => {
 
     const raw = await readFile(path, 'utf8')
     const lines = raw.trimEnd().split('\n')
+
     expect(lines).toHaveLength(2)
     expect(JSON.parse(lines[0]!)).toEqual({
       level: LogLevel.info,
@@ -71,13 +72,16 @@ describe('file transport', () => {
 
       yield* Logger.actions.info('one')
       yield* Logger.actions.info('two')
+
       const beforeThreshold = yield* until(readFile(path, 'utf8'))
 
       yield* Logger.actions.info('three')
+
       const afterThreshold = yield* until(readFile(path, 'utf8'))
 
       yield* Logger.actions.info('four')
       yield* Logger.actions.flush()
+
       const afterFlush = yield* until(readFile(path, 'utf8'))
 
       return {
@@ -113,6 +117,7 @@ describe('file transport', () => {
 
     const raw = await readFile(path, 'utf8')
     const lines = raw.trimEnd().split('\n')
+
     expect(lines).toHaveLength(1)
     expect(JSON.parse(lines[0]!)).toMatchObject({ msg: 'pending' })
   })
@@ -134,6 +139,7 @@ describe('file transport', () => {
 
     const raw = await readFile(path, 'utf8')
     const lines = raw.trimEnd().split('\n')
+
     expect(lines).toHaveLength(1)
     expect(JSON.parse(lines[0]!)).toMatchObject({ level: LogLevel.warn, msg: 'written' })
   })
@@ -154,6 +160,7 @@ describe('file transport', () => {
 
     const raw = await readFile(path, 'utf8')
     const record = JSON.parse(raw.trimEnd())
+
     expect(record).toMatchObject({ note: 'bad', problem: 'boom: why' })
     expect(record.msg).toBeUndefined()
   })

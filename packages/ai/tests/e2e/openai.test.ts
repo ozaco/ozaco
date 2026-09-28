@@ -63,9 +63,11 @@ const sseFrame = (payload: unknown): string =>
 const wireDelta = (chunk: Helpers.ChatDelta): Record<string, unknown> => {
   const frame: Record<string, unknown> = {}
   const delta: Record<string, unknown> = {}
+
   if (chunk.text !== undefined) {
     delta.content = chunk.text
   }
+
   if (chunk.toolCalls) {
     delta.tool_calls = chunk.toolCalls.map(fragment => ({
       index: fragment.index,
@@ -76,10 +78,12 @@ const wireDelta = (chunk: Helpers.ChatDelta): Record<string, unknown> => {
       },
     }))
   }
+
   frame.choices =
     Object.keys(delta).length > 0 || chunk.finishReason
       ? [{ index: 0, delta, finish_reason: chunk.finishReason ?? null }]
       : []
+
   if (chunk.usage) {
     frame.usage = {
       prompt_tokens: chunk.usage.promptTokens,
@@ -87,6 +91,7 @@ const wireDelta = (chunk: Helpers.ChatDelta): Record<string, unknown> => {
       total_tokens: chunk.usage.totalTokens,
     }
   }
+
   return frame
 }
 
@@ -95,13 +100,16 @@ const sseResponse = (stream: SuiteStream, special: Special | undefined): Respons
     async start(controller) {
       if (special === 'split-event') {
         const whole = sseFrame(wireDelta({ text: 'AB' }))
+
         controller.enqueue(encoder.encode(whole.slice(0, 14)))
         await Bun.sleep(5)
         controller.enqueue(encoder.encode(whole.slice(14)))
         controller.enqueue(encoder.encode(sseFrame('[DONE]')))
         controller.close()
+
         return
       }
+
       if (special === 'mid-stream-error') {
         controller.enqueue(encoder.encode(sseFrame(wireDelta({ text: 'partial' }))))
         await Bun.sleep(2)
@@ -109,24 +117,30 @@ const sseResponse = (stream: SuiteStream, special: Special | undefined): Respons
           encoder.encode(sseFrame({ error: { message: 'boom mid-stream', type: 'server_error' } })),
         )
         controller.close()
+
         return
       }
+
       if (special === 'garbage-chunk') {
         controller.enqueue(encoder.encode('data: totally{{garbage\n\n'))
         controller.close()
+
         return
       }
+
       for (const chunk of stream.chunks) {
         controller.enqueue(encoder.encode(sseFrame(wireDelta(chunk))))
         // oxlint-disable-next-line no-await-in-loop
         await Bun.sleep(1)
       }
+
       if (!stream.hang) {
         controller.enqueue(encoder.encode(sseFrame('[DONE]')))
         controller.close()
       }
     },
   })
+
   return new Response(readable, { headers: { 'content-type': 'text/event-stream' } })
 }
 
@@ -137,12 +151,14 @@ const errorResponse = (turn: SuiteChatTurn & { kind: 'error' }): Response => {
       { status: 401 },
     )
   }
+
   if (turn.error === 'rate-limit') {
     return Response.json(
       { error: { message: 'rate limited', code: 'rate_limit_exceeded' } },
       { status: 429, headers: { 'retry-after': String(turn.retryAfterSeconds ?? 1) } },
     )
   }
+
   return new Response('this is not json {{', {
     headers: { 'content-type': 'application/json' },
   })
@@ -170,7 +186,9 @@ const completionBody = (turn: SuiteChatTurn, model: string): Record<string, unkn
       ],
     }
   }
+
   const text = turn.kind === 'text' ? turn.text : ''
+
   return {
     id: 'chatcmpl-test',
     model,
@@ -192,43 +210,63 @@ const server = Bun.serve({
   port: 0,
   async fetch(req) {
     const { pathname } = new URL(req.url)
+
     if (state.special === 'stall') {
       await Bun.sleep(5000)
+
       return new Response('late')
     }
+
     if (pathname.endsWith('/chat/completions')) {
       const body = (await req.json()) as AnyType
+
       record('chat/completions', req, { body })
+
       if (body.stream) {
         if (state.special) {
           return sseResponse({ chunks: [] }, state.special)
         }
+
         const stream = state.script.chatStream?.[state.streamIndex] ?? { chunks: [] }
+
         state.streamIndex += 1
+
         return sseResponse(stream, undefined)
       }
+
       const turn = state.script.chat?.[state.chatIndex] ?? { kind: 'text', text: 'ok' }
+
       state.chatIndex += 1
+
       if (turn.kind === 'error') {
         return errorResponse(turn)
       }
+
       return Response.json(completionBody(turn, body.model))
     }
+
     if (pathname.endsWith('/embeddings')) {
       const body = (await req.json()) as AnyType
+
       record('embeddings', req, { body })
+
       const vectors = state.script.embed ?? (body.input as string[]).map(() => [0])
+
       return Response.json({
         data: vectors.map((vector, index) => ({ index, embedding: vector })),
         model: body.model,
         usage: { prompt_tokens: 1, total_tokens: 1 },
       })
     }
+
     if (pathname.endsWith('/audio/speech')) {
       const body = (await req.json()) as AnyType
+
       record('audio/speech', req, { body })
+
       return new Response(state.script.tts ?? new Uint8Array([0]))
     }
+
     if (pathname.endsWith('/audio/transcriptions')) {
       // Bun's formData() rewrites file.type from the filename extension (.wav -> audio/x-wav),
       // so the declared part content-type is read from the raw multipart body instead.
@@ -238,6 +276,7 @@ const server = Bun.serve({
         .find(line => line.toLowerCase().startsWith('content-type:'))
       const form = await req.formData()
       const file = form.get('file') as File | null
+
       record('audio/transcriptions', req, {
         form: {
           model: form.get('model'),
@@ -246,8 +285,10 @@ const server = Bun.serve({
           fileType: partType?.slice('content-type:'.length).trim() ?? null,
         },
       })
+
       return Response.json({ text: state.script.stt ?? '' })
     }
+
     return new Response('not found', { status: 404 })
   },
 })
@@ -266,6 +307,7 @@ const installOpenAI = (
     prime(script)
     yield* FetchClient.use()
     yield* JsonCodec.use()
+
     return yield* OpenAIProvider.use({ apiKey: 'test-key', baseUrl: base, ...options })
   })()
 
@@ -297,7 +339,9 @@ describe('openai provider — wire & transport', () => {
         })
         yield* AiClient.use({ models: { chat: 'm' } })
         yield* Ai.actions.chat('hi')
+
         const request = state.requests[0]!
+
         expect(request.auth).toBe('Bearer test-key')
         expect(request.headers.get('x-extra')).toBe('yes')
       }),
@@ -310,7 +354,9 @@ describe('openai provider — wire & transport', () => {
         yield* installOpenAI(undefined, { auth: { kind: 'header', name: 'X-Api-Key' } })
         yield* AiClient.use({ models: { chat: 'm' } })
         yield* Ai.actions.chat('hi')
+
         const request = state.requests[0]!
+
         expect(request.headers.get('x-api-key')).toBe('test-key')
         expect(request.auth).toBeNull()
       }),
@@ -330,7 +376,9 @@ describe('openai provider — wire & transport', () => {
           maxTokens: 5,
           stop: ['END'],
         })
+
         const body = state.requests[0]!.body
+
         expect(body.tools).toEqual([
           {
             type: 'function',
@@ -355,9 +403,13 @@ describe('openai provider — wire & transport', () => {
       await run(function* () {
         yield* installOpenAI({ chatStream: [{ chunks: [{ text: 'a' }] }] })
         yield* AiClient.use({ models: { chat: 'm' } })
+
         const flow = yield* Ai.actions.chatStream('x')
+
         yield* drain(flow)
+
         const body = state.requests[0]!.body
+
         expect(body.stream).toBe(true)
         expect(body.stream_options).toEqual({ include_usage: true })
       }),
@@ -370,8 +422,10 @@ describe('openai provider — wire & transport', () => {
         yield* installOpenAI()
         yield* AiClient.use({ models: { chat: 'm' } })
         state.special = 'mid-stream-error'
+
         const flow = yield* Ai.actions.chatStream('x')
         const { values, close } = yield* drain(flow)
+
         expect(values.map(value => value.text ?? '').join('')).toBe('partial')
         expect(isFailure(close)).toBe(true)
         expect((close as AnyType).error).toBe(AiErrors.Request)
@@ -386,8 +440,10 @@ describe('openai provider — wire & transport', () => {
         yield* installOpenAI()
         yield* AiClient.use({ models: { chat: 'm' } })
         state.special = 'garbage-chunk'
+
         const flow = yield* Ai.actions.chatStream('x')
         const { values, close } = yield* drain(flow)
+
         expect(values).toEqual([])
         expect(isFailure(close)).toBe(true)
         expect((close as AnyType).error).toBe(AiErrors.BadResponse)
@@ -401,8 +457,10 @@ describe('openai provider — wire & transport', () => {
         yield* installOpenAI()
         yield* AiClient.use({ models: { chat: 'm' } })
         state.special = 'split-event'
+
         const flow = yield* Ai.actions.chatStream('x')
         const { values, close } = yield* drain(flow)
+
         expect(close).toBe(true)
         expect(values.map(value => value.text ?? '').join('')).toBe('AB')
       }),
@@ -415,7 +473,9 @@ describe('openai provider — wire & transport', () => {
         yield* installOpenAI(undefined, { timeoutMs: 100 })
         yield* AiClient.use({ models: { chat: 'm' } })
         state.special = 'stall'
+
         const outcome = yield* attempt(Ai.actions.chat('x'))
+
         state.special = undefined
         expect((outcome as AnyType).error).toBe(AiErrors.Timeout)
       }),
@@ -427,13 +487,17 @@ describe('openai provider — wire & transport', () => {
       await run(function* () {
         yield* installOpenAI({ stt: 'hello' })
         yield* AiClient.use({ models: { stt: 'model-stt' } })
+
         const text = yield* Ai.actions.stt(new Uint8Array([1, 2]), {
           language: 'tr',
           filename: 'clip.wav',
           contentType: 'audio/wav',
         })
+
         expect(text).toBe('hello')
+
         const request = state.requests[0]!
+
         expect(request.form).toEqual({
           model: 'model-stt',
           language: 'tr',

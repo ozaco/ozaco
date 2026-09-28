@@ -68,6 +68,7 @@ export const serveHandlers = (state: Helpers.EdgeState): EdgeDef.ServeHandlers =
 
         if (isFailure(served)) {
           settle(yield* crashResponse(state, request, served))
+
           return
         }
 

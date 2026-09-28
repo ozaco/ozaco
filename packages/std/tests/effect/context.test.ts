@@ -25,6 +25,7 @@ describe('context inheritance across scopes', () => {
       })
 
       yield* Word.set('written-after-spawn')
+
       return yield* seen.operation
     })
 
@@ -39,6 +40,7 @@ describe('context inheritance across scopes', () => {
 
       const inChild = yield* scoped(function* () {
         yield* Word.set('child')
+
         return yield* Word.expect()
       })
 
@@ -56,9 +58,11 @@ describe('context inheritance across scopes', () => {
 
       return yield* scoped(function* () {
         yield* Word.set('child')
+
         const shadowed = yield* Word.expect()
 
         yield* Word.delete()
+
         const inherited = yield* Word.expect()
 
         return { shadowed, inherited }
@@ -75,9 +79,11 @@ describe('context inheritance across scopes', () => {
       const initial = yield* Limit.get()
 
       yield* Limit.set(99)
+
       const overridden = yield* Limit.get()
 
       yield* Limit.delete()
+
       const restored = yield* Limit.get()
 
       return { initial, overridden, restored }
@@ -114,6 +120,7 @@ describe('Context.with', () => {
       }
 
       seen.push(yield* Word.expect())
+
       return seen
     })
 
@@ -129,6 +136,7 @@ describe('Context.with', () => {
       })
 
       const after = yield* Word.get()
+
       return { inside, after: after ?? 'unset' }
     })
 
@@ -159,6 +167,7 @@ describe('expect / useContext', () => {
     })
 
     expect(isFailure(outcome)).toBe(true)
+
     if (isFailure(outcome)) {
       expect(JSON.stringify([outcome.error, outcome.message, ...outcome.causes])).toContain(
         'ctx-test.missing',
@@ -172,6 +181,7 @@ describe('expect / useContext', () => {
 
     const outcome = await run(function* () {
       yield* Word.set('hello')
+
       return [yield* useContext(Word), yield* useContext(carrier)]
     })
 
@@ -189,6 +199,7 @@ describe('expect / useContext', () => {
         const before = scope.hasOwn(Word)
 
         yield* Word.set('child')
+
         const after = scope.hasOwn(Word)
 
         return { before, after, value: scope.get(Word) }

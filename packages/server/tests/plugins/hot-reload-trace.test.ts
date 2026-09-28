@@ -5,7 +5,7 @@
  * `hot-reload.import`, `server.reload`). A failed reload is recorded ONCE (WARN — the node keeps
  * serving) with its whole chain — what the user's code threw (its fold) as the cause — and logged
  * through the std Logger as the Failure itself; a failing `onReload` / `onError` hook is logged,
- * never swallowed. Seen through an in-memory std:trace `Tracer`.
+ * never swallowed. Seen through an in-memory std:trace `Trace` sink.
  */
 import type { ServiceDef } from 'server:core'
 import { action, createServer, refs, service } from 'server:core'
@@ -18,7 +18,7 @@ import { DefaultLogger, LoggerTransport, LogLevel } from 'std:logger'
 import type { Result } from 'std:result'
 import { fail, isFailure, ResultErrors, unwrap } from 'std:result'
 import type { TraceDef } from 'std:trace'
-import { enableTracing, Tracer } from 'std:trace'
+import { Trace } from 'std:trace'
 
 import { describe, expect, it } from 'bun:test'
 
@@ -34,17 +34,19 @@ const SCOPE = '@ozaco/server/hot-reload'
 
 let installs = 0
 
-/** An in-memory std:trace `Tracer` installed around the server: every span and log record. */
+/** An in-memory std:trace `Trace` sink installed around the server: every span and log record. */
 const memoryTracer = () => {
   installs += 1
+
   const spans: TraceDef.SpanData[] = []
   const logs: TraceDef.LogData[] = []
 
-  const plugin = Tracer.implement({
+  const plugin = Trace.implement({
     name: `test/hot-reload-tracer-${installs}`,
     version: '1.0.0',
     *setup() {
-      yield* enableTracing()
+      yield* Trace.actions.enableTracing()
+
       return {}
     },
   }).build({
@@ -68,6 +70,7 @@ const memoryTracer = () => {
 /** Every std Logger entry (the HotReload lines among them). */
 const captureLogger = () => {
   installs += 1
+
   const entries: LoggerDef.Entry[] = []
 
   const plugin = LoggerTransport.implement({
@@ -102,9 +105,13 @@ function* scaffold(
   body: readonly string[],
 ): Operation<{ dir: string; entry: string }> {
   const dir = yield* IO.actions.join(import.meta.dirname, '..', '..', '.ozaco', 'hot-reload', name)
+
   yield* IO.actions.emptyDir(dir)
+
   const entry = yield* IO.actions.join(dir, 'services.ts')
+
   yield* writeEntry(entry, body)
+
   return { dir, entry }
 }
 
@@ -136,6 +143,7 @@ describe('plugins — hot reload telemetry', () => {
       await run(function* () {
         yield* storage()
         yield* tracer.plugin.use()
+
         const server = yield* createServer({
           services: [],
           plugins: [
@@ -157,6 +165,7 @@ describe('plugins — hot reload telemetry', () => {
     )
 
     const [first, second] = tracer.named('hot-reload')
+
     expect(first).toBeDefined()
     expect(second).toBeDefined()
 
@@ -200,10 +209,12 @@ describe('plugins — hot reload telemetry', () => {
     // the steps: the (custom) import, then the swap — children of their generation
     for (const root of [first!, second!]) {
       const steps = tracer.childrenOf(root)
+
       expect(steps.map(data => data.name).toSorted()).toEqual([
         'hot-reload.import',
         'server.reload',
       ])
+
       for (const child of steps) {
         expect(child.scope.name).toBe(SCOPE)
         expect(child.context.traceId).toBe(root.context.traceId)
@@ -239,6 +250,7 @@ describe('plugins — hot reload telemetry', () => {
                 // the user's own code throws while its declarations load
                 throw new TypeError('greeting is not a function')
               }
+
               return [hot('hi')]
             },
             *onReload() {
@@ -246,6 +258,7 @@ describe('plugins — hot reload telemetry', () => {
             },
             *onError(failure) {
               seen.push(failure)
+
               throw new RangeError('the onError hook broke too')
             },
           }),
@@ -254,12 +267,17 @@ describe('plugins — hot reload telemetry', () => {
 
       // the onReload hook fails: the reload still succeeds
       const report = yield* HotReload.actions.reload()
+
       expect(report.added).toEqual(['hot'])
 
       broken = true
+
       const failed = yield* attempt(HotReload.actions.reload())
+
       expect(isFailure(failed)).toBe(true)
+
       const status = yield* HotReload.actions.status()
+
       return { failed: failed as Result.Failure<unknown>, lastError: status.lastError }
     })
 
@@ -282,6 +300,7 @@ describe('plugins — hot reload telemetry', () => {
     expect(seen).toEqual([failed])
 
     const [ok, bad] = tracer.named('hot-reload')
+
     expect(ok!.status.code).toBe('unset')
     expect(bad!.status.code).toBe('error')
     expect(bad!.attributes['error.type']).toBe('server.internal')
@@ -289,6 +308,7 @@ describe('plugins — hot reload telemetry', () => {
 
     // the import step failed; no swap happened
     const steps = tracer.childrenOf(bad!)
+
     expect(steps.map(data => data.name)).toEqual(['hot-reload.import'])
     expect(steps[0]!.attributes['error.type']).toBe('server.internal')
 
@@ -303,17 +323,20 @@ describe('plugins — hot reload telemetry', () => {
           log.attributes['exception.message'] === text,
       )
     const reload = thrown('TypeError: greeting is not a function')
+
     expect(reload).toHaveLength(1)
     expect(reload[0]!.severityNumber).toBe(13)
     expect(reload[0]!.context?.spanId).toBe(bad!.context.spanId)
     expect(reload[0]!.body).toContain('TypeError: greeting is not a function')
 
     const onReload = records.filter(log => log.attributes['exception.type'] === 'test.on-reload')
+
     expect(onReload).toHaveLength(1)
     expect(onReload[0]!.severityNumber).toBe(13)
     expect(onReload[0]!.context?.spanId).toBe(ok!.context.spanId)
 
     const onError = thrown('RangeError: the onError hook broke too')
+
     expect(onError).toHaveLength(1)
     expect(onError[0]!.context?.spanId).toBe(bad!.context.spanId)
     expect(records).toHaveLength(3)
@@ -321,12 +344,14 @@ describe('plugins — hot reload telemetry', () => {
     // the Logger got the Failure ITSELF (never its pieces), under the plugin's logger binding —
     // and its line is the record of the same span, scoped to the plugin
     const warned = logger.entries.find(entry => entry.msg.startsWith('reload #2 failed'))
+
     expect(warned).toBeDefined()
     expect(warned!.failures).toEqual([failed])
     expect(warned!.bindings['logger']).toBe(SCOPE)
     expect(warned!.trace?.spanId).toBe(bad!.context.spanId)
 
     const hookLines = logger.entries.filter(entry => entry.msg.endsWith('hook failed'))
+
     expect(hookLines.map(entry => entry.msg).toSorted()).toEqual([
       'the onError hook failed',
       'the onReload hook failed',
@@ -336,12 +361,14 @@ describe('plugins — hot reload telemetry', () => {
     expect(logger.entries.filter(entry => entry.level >= LogLevel.warn)).toHaveLength(3)
 
     const line = tracer.logs.find(log => log.body.startsWith('reload #2 failed'))
+
     expect(line?.scope.name).toBe(SCOPE)
     expect(line?.severityNumber).toBe(13)
     expect(line?.context?.spanId).toBe(bad!.context.spanId)
     expect(line?.attributes['ozaco.reload.generation']).toBe(2)
 
     const info = logger.entries.find(entry => entry.msg.startsWith('reload #1 in'))
+
     expect(info?.data).toMatchObject({
       'ozaco.reload.generation': 1,
       'ozaco.reload.services.added': ['hot'],
@@ -355,11 +382,13 @@ describe('plugins — hot reload telemetry', () => {
       await run(function* () {
         yield* storage()
         yield* tracer.plugin.use()
+
         const files = yield* scaffold('trace-steps', GOOD)
         const server = yield* createServer({
           services: [],
           plugins: [HotReload.use({ entry: files.entry, watch: [files.dir] })],
         })
+
         yield* HotReload.actions.reload()
         expect(yield* server.call(refs<Hot>('hot').greet)).toBe('hi')
 
@@ -369,14 +398,20 @@ describe('plugins — hot reload telemetry', () => {
           `const broken: any = undefined`,
           `broken.greeting()`,
         ])
+
         const thrown = yield* attempt(HotReload.actions.reload())
+
         expect(isFailure(thrown)).toBe(true)
+
         const evaluated = thrown as Result.Failure<unknown>
+
         expect(evaluated.error).toBe(HotReloadErrors.Load)
         expect(evaluated.message).toStartWith('could not evaluate ')
+
         // the nested cause: the fold of the user's TypeError, ONE level under the load failure —
         // the Error itself its `raw`
         const inner = evaluated.causes.find(isFailure)!
+
         expect(inner.error).toBe(ResultErrors.Unknown)
         expect(inner.message).toBe(
           "TypeError: undefined is not an object (evaluating 'broken.greeting')",
@@ -388,10 +423,14 @@ describe('plugins — hot reload telemetry', () => {
 
         // a syntax error never gets past the bundler: its message, at the source position
         yield* writeEntry(files.entry, [`export const services = = []`])
+
         const syntax = yield* attempt(HotReload.actions.reload())
         const bundled = syntax as Result.Failure<unknown>
+
         expect(bundled.error).toBe(HotReloadErrors.Load)
+
         const said = bundled.causes.find(isFailure)!
+
         expect(said.error).toBe(HotReloadErrors.Build)
         expect(said.message).toBe('Unexpected =')
         expect(said.causes).toHaveLength(1)
@@ -404,6 +443,7 @@ describe('plugins — hot reload telemetry', () => {
     )
 
     const [good, threw, unparsable] = tracer.named('hot-reload')
+
     expect(tracer.childrenOf(good!).map(data => data.name)).toEqual([
       'hot-reload.bundle',
       'hot-reload.import',
@@ -411,6 +451,7 @@ describe('plugins — hot reload telemetry', () => {
     ])
 
     const threwSteps = tracer.childrenOf(threw!)
+
     expect(threwSteps.map(data => [data.name, data.status.code])).toEqual([
       ['hot-reload.bundle', 'unset'],
       ['hot-reload.import', 'error'],
@@ -418,12 +459,14 @@ describe('plugins — hot reload telemetry', () => {
     expect(threwSteps[1]!.attributes['error.type']).toBe(HotReloadErrors.Load)
 
     const unparsableSteps = tracer.childrenOf(unparsable!)
+
     expect(unparsableSteps.map(data => [data.name, data.status.code])).toEqual([
       ['hot-reload.bundle', 'error'],
     ])
 
     // one WARN record per failed generation, its chain down to the user's error
     const records = tracer.exceptions()
+
     expect(records).toHaveLength(2)
     expect(records.map(log => log.severityNumber)).toEqual([13, 13])
     expect(records[0]!.attributes['ozaco.failure.chain']).toHaveLength(2)
@@ -439,11 +482,13 @@ describe('plugins — hot reload telemetry', () => {
       await run(function* () {
         yield* storage()
         yield* tracer.plugin.use()
+
         const files = yield* scaffold('trace-watch', GOOD)
         const server = yield* createServer({
           services: [],
           plugins: [HotReload.use({ entry: files.entry, watch: [files.dir], debounceMs: 30 })],
         })
+
         yield* server.start()
         yield* HotReload.actions.reload()
 
@@ -456,6 +501,7 @@ describe('plugins — hot reload telemetry', () => {
 
         const deadline = Date.now() + 5000
         let answer = ''
+
         while (answer !== 'saved' && Date.now() < deadline) {
           yield* sleep(50)
           answer = yield* server.call(refs<Hot>('hot').greet)
@@ -471,8 +517,11 @@ describe('plugins — hot reload telemetry', () => {
     // have made one more before it)
     const generations = tracer.named('hot-reload')
     const saved = generations.at(-1)!
+
     expect(generations.length).toBeGreaterThanOrEqual(2)
+
     const triggers = saved.attributes['ozaco.reload.triggers'] as readonly string[]
+
     expect(triggers.some(path => path.endsWith('/trace-watch/services.ts'))).toBe(true)
 
     // every generation links the one before it

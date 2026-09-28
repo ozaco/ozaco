@@ -14,6 +14,7 @@ import { z } from 'zod'
 import pkg from '../package.json'
 
 export const Todo = z.object({ id: z.string(), title: z.string(), done: z.boolean() })
+
 export type Todo = z.infer<typeof Todo>
 
 export const todosTable = table('todos', {
@@ -32,6 +33,7 @@ export const todos = service('todos', {
     function* ({ input }) {
       const db = yield* useDb(testSchema)
       const rows = yield* db.query('todos').collect()
+
       return rows
         .filter(row => input.done === undefined || row.done === input.done)
         .map(row => ({ id: row._id, title: row.title, done: row.done }))
@@ -41,8 +43,10 @@ export const todos = service('todos', {
     { input: z.object({ title: z.string().min(1) }), output: Todo },
     function* ({ input, ctx }) {
       yield* ctx.log.info('creating', { title: input.title })
+
       const db = yield* useDb(testSchema)
       const row = yield* db.insert('todos', { title: input.title, done: false })
+
       return { id: row._id, title: input.title, done: false }
     },
   ),
@@ -53,6 +57,7 @@ export const todos = service('todos', {
     { input: z.object({ ms: z.number() }), output: z.string(), onDisconnect: 'detach' },
     function* ({ input }) {
       yield* sleep(input.ms)
+
       return 'late'
     },
   ),
@@ -60,6 +65,7 @@ export const todos = service('todos', {
     { input: z.object({ ms: z.number() }), output: z.string() },
     function* ({ input, ctx }) {
       yield* sleep(input.ms)
+
       return ctx.signal.aborted ? 'aborted' : 'late'
     },
   ),
@@ -85,7 +91,9 @@ export const todos = service('todos', {
     // breaks the inference cycle (the body is then checked AFTER `todos` has its type).
     function* ({ input, ctx }): Operation<Todo> {
       const created = yield* ctx.call(todos, 'create', { title: input.title })
+
       yield* ctx.emit('todo.created', created)
+
       return created
     },
   ),

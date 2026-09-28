@@ -2,7 +2,7 @@ import type { Operation, Task } from 'std:effect'
 import { attempt, ensure, fork, race, scoped, sleep, withResolvers } from 'std:effect'
 import { IO } from 'std:io'
 import { fail, isFailure, throwable } from 'std:result'
-import { extract, inject, isRecorded } from 'std:trace'
+import { Trace } from 'std:trace'
 
 import {
   CANCEL_PREFIX,
@@ -69,7 +69,7 @@ function* outbound(headers: TransportDef.Headers | undefined): Operation<Transpo
 
   const { tracestate: _stale, ...rest } = headers ?? {}
 
-  return { ...rest, ...(yield* inject()) }
+  return { ...rest, ...(yield* Trace.actions.inject()) }
 }
 
 /**
@@ -78,13 +78,13 @@ function* outbound(headers: TransportDef.Headers | undefined): Operation<Transpo
  * second time) — then whatever the service's own `origin` names (it wins; a throwing one is
  * ignored).
  */
-const originOf = <TArgs>(
+function* originOf<TArgs>(
   service: Helpers.Service<TArgs, unknown>,
   failed: Helpers.Failed<TArgs>,
-): TransportDef.Origin => {
+): Operation<TransportDef.Origin> {
   const { raw, failure, request } = failed
-  const inbound = extract(name => raw.headers[name])
-  const recorded = inbound !== null && isRecorded(failure, inbound.traceId)
+  const inbound = yield* Trace.actions.extract(name => raw.headers[name])
+  const recorded = inbound !== null && (yield* Trace.actions.isRecorded(failure, inbound.traceId))
   const named =
     request && service.origin ? throwable(() => service.origin?.(failure, request)) : undefined
   const own = named && !isFailure(named) ? named.value : undefined
@@ -138,6 +138,7 @@ function* respond(
 
   if (cid === undefined || threshold === null || data.length <= threshold) {
     yield* publish(data, {})
+
     return
   }
 
@@ -181,6 +182,7 @@ export function* requestPackage<TResult, TArgs>(
 
   return yield* scoped(function* () {
     let settled = false
+
     yield* ensure(function* () {
       if (!settled) {
         // best effort: the backend may already be gone with the scope
@@ -228,6 +230,7 @@ export function* requestPackage<TResult, TArgs>(
           headers: body.headers,
           timeoutMs,
         })
+
         return yield* parseReply<TResult>(runtime, cid, raw)
       }
 
@@ -247,10 +250,12 @@ export function* requestPackage<TResult, TArgs>(
       const winner = yield* race([
         (function* () {
           const step = yield* replies.next()
+
           return { step }
         })(),
         (function* () {
           yield* sleep(timeoutMs)
+
           return { timeout: true as const }
         })(),
       ])
@@ -268,6 +273,7 @@ export function* requestPackage<TResult, TArgs>(
 
       return yield* parseReply<TResult>(runtime, cid, winner.step.value)
     })
+
     // settled either way (a timeout is an outcome too — the handler keeps running on purpose:
     // the caller stopped waiting, it did not cancel); only a HALT leaves `settled` false
     settled = true
@@ -291,6 +297,7 @@ export function* servePackage<TArgs, TResult>(
 
   const answer = function* (raw: TransportDef.Raw) {
     const replyTo = raw.headers[HEADERS.reply]
+
     if (!replyTo) {
       return
     }
@@ -303,19 +310,26 @@ export function* servePackage<TArgs, TResult>(
       // a parcelled request is collected here, inside the answer: a failure to receive it is
       // reported to the caller like any other, instead of leaving it waiting
       const message = yield* toMessage<TArgs>(yield* whole(runtime, { cid, direction: 'in' }, raw))
+
       request = message
+
       return yield* handler(message.value, message)
     })
 
     if (isFailure(outcome)) {
       yield* respond(runtime, reply, {
-        data: yield* encodeFailure(outcome, originOf(service, { raw, failure: outcome, request })),
+        data: yield* encodeFailure(
+          outcome,
+          yield* originOf(service, { raw, failure: outcome, request }),
+        ),
         headers: { [HEADERS.kind]: KINDS.value, [HEADERS.result]: 'fail' },
       })
+
       return
     }
 
     const encoded = yield* encodeValue(outcome.value)
+
     yield* respond(runtime, reply, {
       data: encoded.data,
       headers: { ...encoded.headers, [HEADERS.result]: 'ok' },
@@ -329,16 +343,20 @@ export function* servePackage<TArgs, TResult>(
   const task = yield* fork(function* () {
     const requests = yield* driver.subscribe(topic, { group, transient: true })
     const cancels = yield* driver.subscribe(`${CANCEL_PREFIX}>`, { transient: true })
+
     ready.resolve(undefined)
 
     yield* fork(function* () {
       for (;;) {
         const step = yield* cancels.next()
+
         if (step.done) {
           return
         }
+
         const cid = step.value.headers[HEADERS.cid] ?? step.value.topic.slice(CANCEL_PREFIX.length)
         const running = inflight.get(cid)
+
         if (running) {
           inflight.delete(cid)
           yield* running.halt()
@@ -348,12 +366,14 @@ export function* servePackage<TArgs, TResult>(
 
     for (;;) {
       const step = yield* requests.next()
+
       if (step.done) {
         // the backend ended the subscription (drained, or it failed): nothing is served here
         // any more — a halt (`stop()`, scope teardown) never gets this far
         yield* logTransport('info', 'transport stopped serving: its subscription closed', {
           'messaging.destination.name': topic,
         })
+
         return
       }
 
@@ -365,12 +385,14 @@ export function* servePackage<TArgs, TResult>(
         // was still crossing the sideband, the backend drained): that is this exchange's
         // problem, never the serving loop's — the caller is left to its timeout, so say so
         const sent = yield* attempt(() => answer(step.value))
+
         if (isFailure(sent)) {
           yield* logTransport('warn', 'transport reply failed', {
             'messaging.destination.name': step.value.topic,
             error: sent,
           })
         }
+
         if (cid !== undefined) {
           inflight.delete(cid)
         }
@@ -381,6 +403,7 @@ export function* servePackage<TArgs, TResult>(
       }
     }
   })
+
   yield* ready.operation
 
   return function* () {

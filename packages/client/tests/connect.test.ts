@@ -27,11 +27,13 @@ describe('connectClient — Futures in promise land', () => {
 
             // a call awaits to a Result success; `unwrap` is the std way in
             const made = unwrap(await client.demo.make({ title: 'facade' }))
+
             expect(made).toEqual({ id: 'n1', title: 'facade' })
             expect(client.$lastRequestId()).toBeTruthy()
 
             // a failure RESOLVES as the failure Result — the std `run()` contract
             const failed = await client.demo.explode({ code: 'demo.teapot' })
+
             expect(isFailure(failed)).toBe(true)
             expect((failed as { error: string }).error).toBe('demo.teapot')
 
@@ -57,12 +59,16 @@ describe('connectClient — Futures in promise land', () => {
             // bytes come back as a platform stream — `Response` folds it
             const blob = unwrap(await client.demo.blob({ size: 2048 }))
             const bytes = await new Response(blob).arrayBuffer()
+
             expect(bytes.byteLength).toBe(2048)
 
             // `$setToken` rotates the bearer for every call from here on
             const before = unwrap(await client.demo.whoami()) as { authorization: string }
+
             client.$setToken('rotated')
+
             const after = unwrap(await client.demo.whoami()) as { authorization: string }
+
             expect(before.authorization).toBe('Bearer boot-token')
             expect(after.authorization).toBe('Bearer rotated')
 
@@ -70,10 +76,13 @@ describe('connectClient — Futures in promise land', () => {
             const rows = client.$rows<{ title: string }>('notes')
             const iterator = rows[Symbol.asyncIterator]()
             const first = await iterator.next()
+
             expect((first.value as ClientDef.Materialized).rows.length).toBe(0)
             await client.notes.create({ title: 'live', done: false })
+
             const second = await iterator.next()
             const materialized = second.value as ClientDef.Materialized<{ title: string }>
+
             expect(materialized.rows.map(row => row.title)).toEqual(['live'])
             await rows.cancel()
 
@@ -138,21 +147,26 @@ describe('connectClient — Futures in promise land', () => {
 
             const firstStep = await iterator.next()
             const first = firstStep.value as ClientDef.Materialized<{ title: string }>
+
             expect(first.rows.map(row => row.title)).toEqual(['a', 'b'])
             expect(first.page).toMatchObject({ prev: null, total: 3 })
             expect(win.page()?.total).toBe(3)
 
             // another client's out-of-window insert: the window is untouched, the pager moves
             unwrap(await client.notes.create({ title: 'z', done: false }))
+
             const secondStep = await iterator.next()
             const second = secondStep.value as ClientDef.Materialized<{ title: string }>
+
             expect(second.rows.map(row => row.title)).toEqual(['a', 'b'])
             expect(second.page?.total).toBe(4)
 
             // next() turns THIS subscriber's page — a fresh sync of the new window
             win.next()
+
             const thirdStep = await iterator.next()
             const third = thirdStep.value as ClientDef.Materialized<{ title: string }>
+
             expect(third.rows.map(row => row.title)).toEqual(['c', 'z'])
             expect(third.page?.prev).toBeTruthy()
 
@@ -174,10 +188,12 @@ describe('futures — ONE handle, both worlds', () => {
 
         // effect world: inline, in this task
         const inline = yield* client.demo.make({ title: 'effect' })
+
         expect(inline.title).toBe('effect')
 
         // promise land: the SAME handle, awaited (a detached job of the client's scope)
         const awaited = unwrap(yield* until(client.demo.make({ title: 'await' })))
+
         expect(awaited.title).toBe('await')
 
         // a stream: `yield*` drains it as a Flow …

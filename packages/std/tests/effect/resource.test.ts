@@ -62,6 +62,7 @@ describe('resource lifecycle', () => {
       const value = yield* scoped(function* () {
         const handle = yield* resource<string>(function* (provide) {
           order.push('setup')
+
           try {
             yield* provide('handle')
             order.push('unreachable: provide returned')
@@ -149,6 +150,7 @@ describe('resource lifecycle', () => {
       try {
         yield* resource<void>(function* () {
           yield* sleep(1)
+
           return yield* fail('resource.setup.boom')
         })
       } catch (error) {

@@ -3,7 +3,7 @@ import type { ObserveDef } from 'server:core'
 import { Server } from 'server:core'
 import type { Operation } from 'std:effect'
 import { ensure, fork, race, sleep, withResolvers } from 'std:effect'
-import { suppressed } from 'std:trace'
+import { Trace } from 'std:trace'
 
 import type { ObservePluginDef } from '../types/observe'
 
@@ -36,7 +36,7 @@ export function* flush(state: ObservePluginDef.State): Operation<void> {
 
   // writing / forwarding telemetry is never telemetry itself (flush also runs inside the
   // observe service's own handlers)
-  yield* suppressed(() => flushNow(state))
+  yield* Trace.actions.suppressed(() => flushNow(state))
 }
 
 function* flushNow(state: ObservePluginDef.State): Operation<void> {
@@ -48,6 +48,7 @@ function* flushNow(state: ObservePluginDef.State): Operation<void> {
 
   if (state.forward === false) {
     yield* writeLocal(state, batch)
+
     return
   }
 
@@ -57,6 +58,7 @@ function* flushNow(state: ObservePluginDef.State): Operation<void> {
 
   if (state.forward === 'both') {
     yield* writeLocal(state, batch)
+
     return
   }
 
@@ -74,6 +76,7 @@ export function* startFlusher(state: ObservePluginDef.State): Operation<void> {
     gate.wake = withResolvers<void>('observe flush')
     state.wake = () => gate.wake.resolve(undefined)
   }
+
   rearm()
 
   const tick = function* (): Operation<void> {
@@ -88,15 +91,17 @@ export function* startFlusher(state: ObservePluginDef.State): Operation<void> {
   }
 
   const task = yield* fork(() =>
-    suppressed(function* () {
+    Trace.actions.suppressed(function* () {
       for (;;) {
         yield* tick()
+
         if (gate.closing && state.pending.length === 0) {
           return
         }
       }
     }),
   )
+
   state.flusher = task
 
   yield* ensure(function* () {

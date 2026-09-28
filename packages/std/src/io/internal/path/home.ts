@@ -17,5 +17,6 @@ export const createExpandHome = (
     }
 
     const home = yield* homeDir()
+
     return path === '~' ? home : yield* join(home, path.slice(2))
   }

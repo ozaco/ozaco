@@ -39,6 +39,7 @@ const extra = service('extra', {
 
 const get = function* (path: string) {
   const response = yield* Edge.actions.handle(new Request(`http://edge${path}`))
+
   return { status: response.status, body: yield* until(response.text()) }
 }
 
@@ -47,7 +48,9 @@ describe('kernel — reload', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({ services: [greeter('hello')], edge: BunEdge })
+
         yield* server.start()
         yield* Edge.actions.raw({
           method: 'GET',
@@ -64,6 +67,7 @@ describe('kernel — reload', () => {
         expect((yield* get('/extra/ping')).status).toBe(404)
 
         const report = yield* server.reload([greeter('hi'), extra])
+
         expect(report).toEqual({
           added: ['extra'],
           removed: [],
@@ -80,7 +84,9 @@ describe('kernel — reload', () => {
 
         // the added service is routed, hosted, documented
         expect((yield* get('/extra/ping')).body).toBe('"pong"')
+
         const boom = yield* get('/extra/boom')
+
         expect(boom.status).toBe(500)
         expect(JSON.parse(boom.body).error).toMatchObject({
           error: ServerErrors.Internal,
@@ -88,7 +94,9 @@ describe('kernel — reload', () => {
         })
         expect(yield* server.call(extra, 'ping')).toBe('pong')
         expect((yield* server.members('extra')).length).toBe(1)
+
         const manifest = yield* server.manifest()
+
         expect(manifest.actions.map(entry => `${entry.service}.${entry.action}`)).toEqual([
           'greeter.hello',
           'extra.ping',
@@ -102,11 +110,14 @@ describe('kernel — reload', () => {
         // removing a service unmounts and unhosts it: a call goes looking over the carrier
         // like any undeclared service would, and the local one honestly has nobody
         const gone = yield* server.reload([extra])
+
         expect(gone.removed).toEqual(['greeter'])
         expect((yield* get('/greeter/hello?name=a')).status).toBe(404)
+
         const missing = yield* attempt(
           server.call(refs<ReturnType<typeof greeter>>('greeter').hello, { name: 'a' }),
         )
+
         expect((missing as AnyType).error).toBe(ServerErrors.Unavailable)
         expect(yield* server.members('greeter')).toEqual([])
 
@@ -119,6 +130,7 @@ describe('kernel — reload', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({ services: [greeter('hello')] })
 
         // an option no installed plugin handles
@@ -126,10 +138,12 @@ describe('kernel — reload', () => {
           x: action.query({ cache: { ttlMs: 5 } } as AnyType, function* () {}),
         })
         const rejected = yield* attempt(server.reload([greeter('hi'), bad]))
+
         expect((rejected as AnyType).error).toBe(ServerErrors.Configuration)
 
         // a duplicate name
         const twice = yield* attempt(server.reload([greeter('hi'), greeter('hey')]))
+
         expect((twice as AnyType).error).toBe(ServerErrors.Configuration)
 
         expect(
@@ -165,15 +179,18 @@ describe('kernel — reload', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({ services: [greeter('hello')], plugins: [Mine] })
 
         const report = yield* server.reload([greeter('hi')])
+
         expect(report.replaced).toEqual(['greeter'])
         expect(reports).toEqual([report])
         expect(yield* server.call(mine, 'who')).toBe('plugin')
 
         // an application declaration cannot take a plugin service's name
         const clash = yield* attempt(server.reload([service('mine', {})]))
+
         expect((clash as AnyType).error).toBe(ServerErrors.Configuration)
         expect(yield* server.call(mine, 'who')).toBe('plugin')
       }),

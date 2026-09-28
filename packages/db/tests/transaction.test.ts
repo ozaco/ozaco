@@ -16,6 +16,7 @@ const bootstrap = function* () {
   yield* MemoryAdapter.use()
   yield* BunIO.use()
   yield* DbClient.use({ schema })
+
   return yield* useDb(schema)
 }
 
@@ -28,14 +29,18 @@ describe('transactions — memory adapter', () => {
 
         const created = yield* db.transaction(function* (tx) {
           const ada = yield* tx.insert('users', { name: 'ada' })
+
           yield* tx.insert('users', { name: 'grace' })
+
           return ada
         })
+
         expect(created.name).toBe('ada')
         expect(yield* db.query('users').count()).toBe(2)
 
         const first = yield* feed.next()
         const second = yield* feed.next()
+
         expect((first.value as AnyType).id).toBe(created._id)
         expect((second.value as AnyType).op).toBe('insert')
         expect((second.value as AnyType).token > (first.value as AnyType).token).toBe(true)
@@ -52,9 +57,11 @@ describe('transactions — memory adapter', () => {
         const outcome = yield* attempt(
           db.transaction(function* (tx) {
             yield* tx.insert('users', { name: 'doomed' })
+
             return yield* fail(DbErrors.Query, 'boom')
           }),
         )
+
         expect(isFailure(outcome)).toBe(true)
         expect((outcome as AnyType).error).toBe(DbErrors.Query)
         expect(yield* db.query('users').count()).toBe(0)
@@ -62,6 +69,7 @@ describe('transactions — memory adapter', () => {
         // the next event on the feed is the marker write, not anything from the rolled-back tx
         const marker = yield* db.insert('users', { name: 'marker' })
         const step = yield* feed.next()
+
         expect((step.value as AnyType).id).toBe(marker._id)
       }),
     )
@@ -71,17 +79,23 @@ describe('transactions — memory adapter', () => {
     unwrap(
       await run(function* () {
         const db = yield* bootstrap()
+
         yield* db.transaction(function* (tx) {
           yield* tx.insert('users', { name: 'outer' })
+
           const inner = yield* attempt(
             tx.transaction(function* (nested) {
               yield* nested.insert('users', { name: 'inner' })
+
               return yield* fail(DbErrors.Query, 'inner boom')
             }),
           )
+
           expect(isFailure(inner)).toBe(true)
         })
+
         const names = yield* db.query('users').collect()
+
         expect(names.map((row: AnyType) => row.name)).toEqual(['outer'])
       }),
     )
@@ -101,12 +115,14 @@ describe('transactions — memory adapter', () => {
         })
 
         const rows = yield* db.query('users').collect()
+
         expect(rows.map((row: AnyType) => row.name).toSorted()).toEqual(['inner', 'outer'])
 
         // one event per write — a nested transaction that logged its own buffer too would have
         // inserted the same tokens twice (`db.unique` on `__changes_users`)
         const first = yield* feed.next()
         const second = yield* feed.next()
+
         expect((first.value as AnyType).op).toBe('insert')
         expect((second.value as AnyType).op).toBe('insert')
         expect((first.value as AnyType).token).not.toBe((second.value as AnyType).token)
@@ -122,11 +138,13 @@ describe('transactions — memory adapter', () => {
         const created = yield* db.transaction(function* (tx) {
           return yield* tx.upsert('users', { name: 'ada' }, { age: 30 })
         })
+
         expect(created.age).toBe(30)
 
         const updated = yield* db.transaction(function* (tx) {
           return yield* tx.upsert('users', { name: 'ada' }, { age: 31 })
         })
+
         expect(updated._id).toBe(created._id)
         expect(updated.age).toBe(31)
         expect(yield* db.query('users').count()).toBe(1)
@@ -180,12 +198,14 @@ describe('transactions — capability gating and retry', () => {
       await run(function* () {
         yield* NoTxAdapter.use()
         yield* BunIO.use()
+
         const db = yield* DbClient.use({ tables: [users] })
         const outcome = yield* attempt(
           db.transaction(function* () {
             return 1
           }),
         )
+
         expect((outcome as AnyType).error).toBe(DbErrors.Unsupported)
       }),
     )
@@ -208,9 +228,11 @@ describe('transactions — capability gating and retry', () => {
       ...minimalActions,
       *transaction(body: () => AnyType) {
         calls += 1
+
         if (calls === 1) {
           return yield* fail(DbErrors.Conflict, 'serialization failure')
         }
+
         return yield* body()
       },
     })
@@ -219,17 +241,21 @@ describe('transactions — capability gating and retry', () => {
       await run(function* () {
         yield* FlakyAdapter.use()
         yield* BunIO.use()
+
         const db = yield* DbClient.use({ tables: [users] })
         const value = yield* db.transaction(function* () {
           bodyRuns += 1
+
           return 'done'
         })
+
         expect(value).toBe('done')
         expect(calls).toBe(2)
         expect(bodyRuns).toBe(1)
 
         // retries: 0 → the conflict surfaces
         calls = 0
+
         const strict = yield* attempt(
           db.transaction(
             function* () {
@@ -238,6 +264,7 @@ describe('transactions — capability gating and retry', () => {
             { retries: 0 },
           ),
         )
+
         expect((strict as AnyType).error).toBe(DbErrors.Conflict)
       }),
     )

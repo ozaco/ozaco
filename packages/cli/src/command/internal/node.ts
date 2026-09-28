@@ -33,6 +33,7 @@ const compile = (spec: CommandDef.Spec, path: string): CommandDef.Built =>
  */
 export const buildNode = (spec: CommandDef.Spec, path: string): Helpers.RuntimeNode => {
   const children: Record<string, Helpers.RuntimeNode> = {}
+
   for (const [key, child] of Object.entries(spec.subs)) {
     children[key] = buildNode(child, `${path}.${key}`)
   }

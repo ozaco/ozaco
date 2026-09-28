@@ -112,6 +112,7 @@ export const objectOf = (entries: Iterable<[string, string]>): Record<string, un
 
     if (key in out) {
       const prior = out[key]
+
       out[key] = Array.isArray(prior) ? [...prior, coerced] : [prior, coerced]
     } else {
       out[key] = coerced
@@ -141,6 +142,7 @@ export function* valueBody(
 
   if (type.includes('application/x-www-form-urlencoded')) {
     const text = yield* until(request.text())
+
     return wrapArrays({ ...objectOf(new URLSearchParams(text).entries()), ...fromParams }, arrays)
   }
 

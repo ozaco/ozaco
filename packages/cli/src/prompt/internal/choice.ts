@@ -7,11 +7,13 @@ const isDisabled = <T>(choices: readonly PromptDef.Choice<T>[], index: number): 
 
 export const labelOf = <T>(value: T, choices: readonly PromptDef.Choice<T>[]): string => {
   const found = choices.find(choice => choice.value === value)
+
   return found?.label ?? String(value)
 }
 
 export const firstEnabled = <T>(choices: readonly PromptDef.Choice<T>[]): number => {
   const index = choices.findIndex(choice => !choice.disabled)
+
   return Math.max(0, index)
 }
 
@@ -29,6 +31,7 @@ export const resolveIndex = <T>(
     index = wrapIndex(initial, choices.length)
   } else if (initial !== undefined) {
     const found = choices.findIndex(choice => choice.value === initial)
+
     if (found !== -1) {
       index = found
     }
@@ -44,6 +47,7 @@ export const resolveSelected = <T>(
   choices: readonly PromptDef.Choice<T>[],
 ): Set<number> => {
   const selected = new Set<number>()
+
   if (!initial) {
     return selected
   }
@@ -55,6 +59,7 @@ export const resolveSelected = <T>(
       }
     } else {
       const index = choices.findIndex(choice => choice.value === item)
+
       if (index !== -1) {
         selected.add(index)
       }

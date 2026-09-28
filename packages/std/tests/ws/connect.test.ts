@@ -12,6 +12,7 @@ import { echoServer } from './helpers'
 describe('Ws.actions.connect', () => {
   it('resolves once the socket is OPEN, exposing url, readyState, and reconnects', async () => {
     const server = echoServer()
+
     try {
       const url = `ws://localhost:${server.port}`
 
@@ -25,6 +26,7 @@ describe('Ws.actions.connect', () => {
           readyState: connection.readyState,
           reconnects: connection.reconnects,
         }
+
         yield* connection.close()
 
         return snapshot
@@ -40,10 +42,12 @@ describe('Ws.actions.connect', () => {
     // grab an ephemeral port, then free it — nothing listens there anymore
     const server = echoServer()
     const deadPort = server.port
+
     await server.stop(true)
 
     const outcome = await run(function* () {
       yield* WsClient.use()
+
       const result = yield* attempt(() => Ws.actions.connect(`ws://localhost:${deadPort}`))
 
       return isFailure(result) ? String(result.error) : 'connected'
@@ -60,9 +64,11 @@ describe('Ws.actions.connect', () => {
         return new Response('no websocket here', { status: 400 })
       },
     })
+
     try {
       const outcome = await run(function* () {
         yield* WsClient.use()
+
         const result = yield* attempt(() => Ws.actions.connect(`ws://localhost:${server.port}`))
 
         return isFailure(result) ? String(result.error) : 'connected'
@@ -77,9 +83,12 @@ describe('Ws.actions.connect', () => {
   it('a missing WebSocket implementation fails with ws/unsupported', async () => {
     // simulate a platform without a WebSocket global: WsClient reads it at connect time
     const Native = (globalThis as AnyType).WebSocket
+
     delete (globalThis as AnyType).WebSocket
+
     const outcome = await run(function* () {
       yield* WsClient.use()
+
       const result = yield* attempt(() => Ws.actions.connect('ws://localhost:1'))
 
       return isFailure(result) ? String(result.error) : 'connected'

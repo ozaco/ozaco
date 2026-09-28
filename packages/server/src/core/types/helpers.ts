@@ -129,7 +129,7 @@ export namespace Helpers {
     readonly kernel: ServerDef.Context
     readonly tracer: ServerDef.TracerContext
 
-    /** a non-server Tracer was enabled around the node: it observes. */
+    /** a non-server Trace sink was enabled around the node: it observes. */
     readonly traced: boolean
 
     /** stop holding the node's boot records (`bootLogs`; idempotent). */
@@ -399,9 +399,8 @@ export namespace Helpers {
   /** The frame span the handler works under: active in the scope that pulled the frame. */
   export interface HeldFrame {
     readonly live: TraceDef.LiveSpan
-    readonly scope: Scope
-    readonly own: boolean
-    readonly prior: TraceDef.ActiveRecorder | null | undefined
+    /** gives the handler's scope back what was active before the frame span. */
+    readonly restore: () => void
 
     /** ends the frame span once released, a tick later (see `release`). */
     readonly later: ReleasedFrames

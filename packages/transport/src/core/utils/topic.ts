@@ -7,6 +7,7 @@ export const matchTopic = (pattern: string, topic: string): boolean => {
   if (pattern === topic) {
     return true
   }
+
   const want = pattern.split('.')
   const have = topic.split('.')
 
@@ -14,6 +15,7 @@ export const matchTopic = (pattern: string, topic: string): boolean => {
     if (segment === '>') {
       return have.length > index
     }
+
     if (index >= have.length || (segment !== '*' && segment !== have[index])) {
       return false
     }

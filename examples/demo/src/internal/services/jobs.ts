@@ -13,7 +13,7 @@
  * `workerErrors` matcher), so the queue's telemetry is there to look at: the enqueue is a
  * `send jobs` producer span inside the submit's trace, every attempt a ROOT `process jobs`
  * consumer span LINKING it (and the previous attempt), an attempt with retries left records its
- * failure WARN, the dead letter ERROR with the span event `ozaco.queue.dead` — and the row's
+ * failure WARN, the dead letter ERROR with the span event `queue.dead` — and the row's
  * `last_error` keeps the whole chain.
  */
 import { useDb, where } from 'db:core'
@@ -26,7 +26,7 @@ import { attempt, sleep } from 'std:effect'
 import { Logger } from 'std:logger'
 import { definePlugin } from 'std:plugin'
 import { asFailure, fail, isFailure } from 'std:result'
-import { span } from 'std:trace'
+import { Trace } from 'std:trace'
 
 import { z } from 'zod'
 
@@ -95,7 +95,7 @@ const handlers = {
   *report(job: QueueDef.Job) {
     // the work nests under the attempt's `process jobs` span, in the scope its Logger line uses
     // (none given, it would be the span's service — `jobs` — never `@ozaco/std`)
-    yield* span('render report', { scope: { name: JOBS_SCOPE } }, function* () {
+    yield* Trace.actions.span('render report', { scope: { name: JOBS_SCOPE } }, function* () {
       yield* sleep(REPORT_MS)
     })
     yield* log('report rendered', { 'job.id': job.id, 'job.attempt': job.attempt })
@@ -142,6 +142,7 @@ export const JobsWorker = definePlugin<ServerDef.PluginContext, []>({
 
         *stop() {
           const running = worker
+
           worker = null
 
           if (running) {
@@ -176,7 +177,9 @@ export const jobs = service(
           { by: ctx.auth?.sub ?? null },
           input.delayMs === undefined ? {} : { runAt: Date.now() + input.delayMs },
         )
+
         ctx.reply({ headers: { location: `/jobs/status/${job._id}` } })
+
         return jobOf(job)
       },
     ),
@@ -190,6 +193,7 @@ export const jobs = service(
       },
       function* ({ input }) {
         const row = yield* Queue.actions.get(input.id)
+
         return row ? jobOf(row) : yield* jobsErrors.notFound(`no job ${input.id}`)
       },
     ),
@@ -208,6 +212,7 @@ export const jobs = service(
           .filter(where.oneOf('state', LIVE))
           .order('run_at')
           .take(input.limit + 1)
+
         return {
           ids: rows.slice(0, input.limit).map(row => row._id),
           more: rows.length > input.limit,

@@ -20,22 +20,30 @@ const probeWatchman = async (): Promise<boolean> => {
   if (process.env.STD_WATCHMAN === 'off') {
     return false
   }
+
   try {
     const mod = await import('fb-watchman')
     const Ctor = mod.Client ?? (mod as { default?: { Client?: typeof mod.Client } }).default?.Client
+
     if (!Ctor) {
       return false
     }
+
     const client = new Ctor()
+
     client.on('error', () => {})
+
     const answered = await new Promise<boolean>(resolve => {
       const timer = setTimeout(() => resolve(false), 3000)
+
       client.capabilityCheck({ optional: [], required: ['wildmatch'] }, error => {
         clearTimeout(timer)
         resolve(!error)
       })
     })
+
     client.end()
+
     return answered
   } catch {
     return false
@@ -57,6 +65,7 @@ describe.skipIf(!watchmanUsable)('watch (Watchman path)', () => {
 
         yield* spawn(function* () {
           const first = yield* events.next()
+
           if (!first.done) {
             got.resolve(first.value)
           }
@@ -74,6 +83,7 @@ describe.skipIf(!watchmanUsable)('watch (Watchman path)', () => {
       })
 
       const event = unwrap(outcome)
+
       expect(event.type === 'rename' || event.type === 'change').toBe(true)
       // Watchman names files relative to the subscription's relative_root — the same base the
       // fs.watch fallback reports (`filename` relative to the watched directory).

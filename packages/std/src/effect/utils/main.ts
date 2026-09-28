@@ -43,17 +43,21 @@ export async function main(body: (args: string[]) => Operation<void>): Promise<v
         yield* withHost({
           *deno() {
             hardexit = status => Deno.exit(status)
+
             try {
               Deno.addSignalListener('SIGINT', interrupt.SIGINT)
+
               /**
                * Windows only supports ctrl-c (SIGINT), ctrl-break (SIGBREAK), and ctrl-close (SIGUP)
                */
               if (Deno.build.os !== 'windows') {
                 Deno.addSignalListener('SIGTERM', interrupt.SIGTERM)
               }
+
               yield* body(Deno.args.slice())
             } finally {
               Deno.removeSignalListener('SIGINT', interrupt.SIGINT)
+
               if (Deno.build.os !== 'windows') {
                 Deno.removeSignalListener('SIGTERM', interrupt.SIGTERM)
               }
@@ -68,14 +72,18 @@ export async function main(body: (args: string[]) => Operation<void>): Promise<v
 
             // oxlint-disable-next-line unicorn/no-process-exit
             hardexit = status => process.exit(status)
+
             try {
               process.on('SIGINT', interrupt.SIGINT)
+
               if (process.platform !== 'win32') {
                 process.on('SIGTERM', interrupt.SIGTERM)
               }
+
               yield* body(process.argv.slice(2))
             } finally {
               process.off('SIGINT', interrupt.SIGINT)
+
               if (process.platform !== 'win32') {
                 process.off('SIGTERM', interrupt.SIGTERM)
               }

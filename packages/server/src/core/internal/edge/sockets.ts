@@ -3,20 +3,12 @@ import type { Operation, Scope } from 'std:effect'
 import { attempt, createQueue, race, scoped, sleep, useScope } from 'std:effect'
 import type { Result } from 'std:result'
 import { appendCauses, isFailure } from 'std:result'
+import { utf8Length } from 'std:shared'
 import type { TraceDef } from 'std:trace'
-import {
-  ActiveSpan,
-  current,
-  extract,
-  isTracing,
-  parseTraceparent,
-  passThrough,
-  startSpan,
-  traceNow,
-} from 'std:trace'
+import { Trace } from 'std:trace'
 
 import { AuthCauses } from '../../../plugins/auth/errors'
-import { EXCEPTION_EVENT_NAME, HEADERS, SOCKET_AUTH_GRACE_MS } from '../../const'
+import { EXCEPTION_EVENT_NAME, SOCKET_AUTH_GRACE_MS } from '../../const'
 import { CtxRef } from '../../context'
 import type { EdgeDef } from '../../types/edge'
 import type { Helpers } from '../../types/helpers'
@@ -24,7 +16,7 @@ import type { ServerDef } from '../../types/server'
 import { tagOf } from '../../utils/failure'
 import { scopeOf, traceOf } from '../../utils/trace'
 import { validate } from '../../utils/validation'
-import { byteLength, frameText } from '../capture'
+import { frameText } from '../capture'
 import { contextFor } from '../dispatch'
 import { classify } from '../spans'
 
@@ -46,7 +38,7 @@ const CLIENT_SEVERITY = 13
  * elapsed since its receipt (never a `Date.now()` stamp — whole milliseconds, and a clock the
  * frame's children do not read). */
 function* startOf(frame: Helpers.InboundFrame): Operation<number> {
-  return (yield* traceNow()) - Math.max(0, performance.now() - frame.at)
+  return (yield* Trace.actions.traceNow()) - Math.max(0, performance.now() - frame.at)
 }
 
 /**
@@ -85,10 +77,12 @@ const laterIn = (scope: Scope): Helpers.ReleasedFrames => {
       } catch {
         // the socket's scope is gone: nothing left to wait for
         waiting.pop()
+
         return false
       }
 
       armed = true
+
       return true
     },
     flush,
@@ -117,7 +111,7 @@ const typeOf = (value: unknown): string | undefined => {
 }
 
 /** The trace context a frame carries in its `traceparent` / `tracestate` fields. */
-const contextOf = (value: unknown): TraceDef.SpanContext | null => {
+function* contextOf(value: unknown): Operation<TraceDef.SpanContext | null> {
   if (typeof value !== 'object' || value === null) {
     return null
   }
@@ -128,30 +122,33 @@ const contextOf = (value: unknown): TraceDef.SpanContext | null => {
     return null
   }
 
-  return extract(name =>
-    name === HEADERS.traceparent
-      ? traceparent
-      : name === HEADERS.tracestate && typeof tracestate === 'string'
-        ? tracestate
-        : null,
-  )
+  return yield* Trace.actions.extract({
+    traceparent,
+    ...(typeof tracestate === 'string' ? { tracestate } : {}),
+  })
 }
 
 /** The previous socket generation a RE-sent frame names: its `reconnect` field, the
  * `traceparent` that generation opened with (what `@ozaco/client` sends after a reconnect). */
-const reconnectOf = (value: unknown): TraceDef.SpanContext | null =>
-  typeof value === 'object' && value !== null && !Array.isArray(value)
-    ? parseTraceparent((value as { reconnect?: unknown }).reconnect)
+function* reconnectOf(value: unknown): Operation<TraceDef.SpanContext | null> {
+  const reconnect =
+    typeof value === 'object' && value !== null && !Array.isArray(value)
+      ? (value as { reconnect?: unknown }).reconnect
+      : undefined
+
+  return typeof reconnect === 'string'
+    ? yield* Trace.actions.extract({ traceparent: reconnect })
     : null
+}
 
 /** A frame's value without the transport's trace fields (`traceparent`, `tracestate`, and a
  * `reconnect` that IS a traceparent) — they are never the handler's. */
-const payloadOf = (value: unknown): unknown => {
+function* payloadOf(value: unknown): Operation<unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     return value
   }
 
-  const reconnecting = reconnectOf(value) !== null
+  const reconnecting = (yield* reconnectOf(value)) !== null
 
   if (!('traceparent' in value) && !('tracestate' in value) && !reconnecting) {
     return value
@@ -189,11 +186,11 @@ function* openFrame(
 ): Operation<TraceDef.LiveSpan> {
   const { kernel, route } = input
   const { frame, record = 'always' } = opening
-  const inbound = frame ? contextOf(frame.value) : null
+  const inbound = frame ? yield* contextOf(frame.value) : null
   // the inbound policy only for a frame that carries a context, under the upgrade's verdict
   const policy = inbound ? frameInboundOf(kernel, inbound, input) : null
 
-  const previous = frame ? reconnectOf(frame.value) : null
+  const previous = frame ? yield* reconnectOf(frame.value) : null
   const links: TraceDef.LinkInput[] = [
     ...(input.upgrade
       ? [{ context: input.upgrade, attributes: { 'ozaco.link.reason': 'ws.session' } }]
@@ -203,7 +200,7 @@ function* openFrame(
       : []),
   ]
 
-  return yield* startSpan(`WS ${route.path}`, {
+  return yield* Trace.actions.startSpan(`WS ${route.path}`, {
     kind: 'server',
     scope: scopeOf(),
     parent: policy?.parent ?? null,
@@ -220,7 +217,7 @@ function* openFrame(
       // never an auth frame's body: its token stays out of telemetry
       'ozaco.ws.message.body':
         frame && kernel.telemetry.observe.capture.frames && authFrameOf(frame.value) === null
-          ? frameText(frame.text, frame.value)
+          ? frameText(frame.text, frame.value, kernel.telemetry.observe.capture.sensitiveKeys)
           : undefined,
     },
   })
@@ -244,29 +241,16 @@ function* hold(
     later,
   }: { live: TraceDef.LiveSpan; frame: Helpers.InboundFrame; later: Helpers.ReleasedFrames },
 ): Operation<Helpers.HeldFrame> {
-  const scope = yield* useScope()
-  const held: Helpers.HeldFrame = {
-    live,
-    scope,
-    own: scope.hasOwn(ActiveSpan),
-    prior: scope.get(ActiveSpan),
-    later,
+  if (yield* Trace.actions.isTracing()) {
+    return { live, restore: yield* Trace.actions.activate(live), later }
   }
 
-  if (yield* isTracing()) {
-    scope.set(ActiveSpan, (yield* live.run(() => ActiveSpan.get())) ?? null)
-    return held
-  }
-
-  const inbound = contextOf(frame.value)
+  const inbound = yield* contextOf(frame.value)
   const policy = inbound ? frameInboundOf(input.kernel, inbound, input) : null
-
   // forwarded as it would be continued: a self-marked caller's with the sampled bit set
-  if (policy?.mode === 'continue' && policy.parent) {
-    scope.set(ActiveSpan, passThrough(policy.parent))
-  }
+  const parent = policy?.mode === 'continue' ? policy.parent : undefined
 
-  return held
+  return { live, restore: yield* Trace.actions.activate(parent ?? undefined), later }
 }
 
 /**
@@ -281,15 +265,7 @@ function* release(
   held: Helpers.HeldFrame,
   { now = false, ...end }: TraceDef.EndOptions & { readonly now?: boolean } = {},
 ): Operation<void> {
-  try {
-    if (held.own) {
-      held.scope.set(ActiveSpan, held.prior ?? null)
-    } else {
-      held.scope.delete(ActiveSpan)
-    }
-  } catch {
-    // the handler's scope is already gone
-  }
+  held.restore()
 
   // a span that records nothing has no end time worth waiting for
   if (
@@ -352,7 +328,7 @@ function* closed(input: Helpers.SocketInput, session: Helpers.SocketSession): Op
 
   const log = () => edgeLog('info', 'socket closed', data)
 
-  yield* input.upgrade ? ActiveSpan.with(passThrough(input.upgrade), log) : log()
+  yield* input.upgrade ? Trace.actions.passThrough(input.upgrade, log) : log()
 }
 
 /**
@@ -364,9 +340,9 @@ function* closed(input: Helpers.SocketInput, session: Helpers.SocketSession): Op
  * `auth` / `ping` / `pong`) is a ROOT span `WS {route}` from its receipt to the handler's next
  * pull (and the tick the work it started gets, `release`), linking the upgrade span — whose
  * `ozaco.ws.session.id` (`sessionId`, decided at the upgrade) every frame span carries too; an
- * outbound frame is an `ozaco.ws.send` event on the ACTIVE
+ * outbound frame is an `ws.send` event on the ACTIVE
  * span (only counted without one); a malformed frame (`receives`) is dropped with an
- * `ozaco.ws.reject` event + its failure (WARN) on its span; the close is one Logger INFO line.
+ * `ws.reject` event + its failure (WARN) on its span; the close is one Logger INFO line.
  *
  * A DEFERRED handshake (an `authorize` route reached without an authorization header) settles
  * here: the first frame within a short grace either carries `{ t: 'auth', token }` or the
@@ -411,7 +387,7 @@ function* serve(input: Helpers.SocketInput, session: Helpers.SocketSession): Ope
     inbound.add({
       value,
       text,
-      size: typeof data === 'string' ? byteLength(data) : data.byteLength,
+      size: typeof data === 'string' ? utf8Length(data) : data.byteLength,
       at: performance.now(),
     })
   })
@@ -432,6 +408,7 @@ function* serve(input: Helpers.SocketInput, session: Helpers.SocketSession): Ope
     const first = yield* race([
       (function* (): Operation<IteratorResult<Helpers.InboundFrame, void> | 'grace'> {
         yield* sleep(SOCKET_AUTH_GRACE_MS)
+
         return 'grace'
       })(),
       (function* (): Operation<IteratorResult<Helpers.InboundFrame, void> | 'grace'> {
@@ -455,6 +432,7 @@ function* serve(input: Helpers.SocketInput, session: Helpers.SocketSession): Ope
       session.code = AUTH_CLOSE_CODE
       yield* refuse(live, session, verdict)
       raw.close(AUTH_CLOSE_CODE, 'authorization required')
+
       return
     }
 
@@ -502,12 +480,12 @@ function* serve(input: Helpers.SocketInput, session: Helpers.SocketSession): Ope
     },
   )
 
-  /** A malformed frame (`receives`): dropped, but never silently — an `ozaco.ws.reject` event
+  /** A malformed frame (`receives`): dropped, but never silently — an `ws.reject` event
    * and its failure (WARN) on the frame's span. */
   function* reject(live: TraceDef.LiveSpan, failure: Result.Failure<unknown>): Operation<void> {
     yield* live.run(function* (handle) {
       handle.setAttribute('error.type', tagOf(failure))
-      handle.addEvent('ozaco.ws.reject', { 'error.type': tagOf(failure) })
+      handle.addEvent('ws.reject', { 'error.type': tagOf(failure) })
       yield* handle.recordFailure(failure, { severity: CLIENT_SEVERITY, handled: true })
     })
     yield* live.end()
@@ -517,6 +495,7 @@ function* serve(input: Helpers.SocketInput, session: Helpers.SocketSession): Ope
   function* next(): Operation<IteratorResult<unknown, void>> {
     if (active) {
       const held = active
+
       active = null
       yield* release(held)
     }
@@ -525,6 +504,7 @@ function* serve(input: Helpers.SocketInput, session: Helpers.SocketSession): Ope
       const step: IteratorResult<Helpers.InboundFrame, void> = pending
         ? { done: false, value: pending }
         : yield* inbound.next()
+
       pending = null
 
       if (step.done) {
@@ -538,7 +518,7 @@ function* serve(input: Helpers.SocketInput, session: Helpers.SocketSession): Ope
         continue
       }
 
-      const value = payloadOf(frame.value)
+      const value = yield* payloadOf(frame.value)
       const type = typeOf(frame.value)
       const quiet = type !== undefined && QUIET.has(type)
       const live = quiet ? null : yield* openFrame(input, session, { frame })
@@ -553,6 +533,7 @@ function* serve(input: Helpers.SocketInput, session: Helpers.SocketSession): Ope
           if (live) {
             yield* reject(live, checked)
           }
+
           continue
         }
 
@@ -585,17 +566,18 @@ function* serve(input: Helpers.SocketInput, session: Helpers.SocketSession): Ope
     },
     *send(value) {
       const text = JSON.stringify(value)
+
       raw.send(text)
       session.sent += 1
 
       // an event on the ACTIVE span (the frame being answered, a span the handler opened); a
       // push outside any span is only counted
-      const handle = yield* current()
+      const handle = yield* Trace.actions.current()
 
       if (handle.recording) {
-        handle.addEvent('ozaco.ws.send', {
+        handle.addEvent('ws.send', {
           'ozaco.ws.message.type': typeOf(value),
-          'ozaco.ws.message.size': byteLength(text),
+          'ozaco.ws.message.size': utf8Length(text),
         })
       }
     },
@@ -613,8 +595,11 @@ function* serve(input: Helpers.SocketInput, session: Helpers.SocketSession): Ope
     const outcome = yield* attempt(() =>
       scoped(() => CtxRef.with(ctx, () => route.handler(socket))),
     )
+
     finished = true
+
     const held = active as Helpers.HeldFrame | null
+
     active = null
 
     if (!isFailure(outcome)) {

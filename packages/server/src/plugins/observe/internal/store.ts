@@ -10,7 +10,7 @@ import type { Plugin } from 'std:plugin'
 import { isUse } from 'std:plugin'
 import { fail, isFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
-import { Suppressed } from 'std:trace'
+import { Trace } from 'std:trace'
 
 import type { Helpers } from '../types/helpers'
 import type { ObservePluginDef } from '../types/observe'
@@ -30,25 +30,28 @@ export function* openStore(
   const ready = withResolvers<ObservePluginDef.OpenStore>('observe store')
 
   yield* fork(() =>
-    scoped(function* () {
-      yield* Suppressed.set(true)
+    scoped(() =>
+      Trace.actions.suppressed(function* () {
+        if (adapter) {
+          yield* isUse(adapter) ? adapter : (adapter as Plugin<AnyType, [], AnyType>).use()
+        }
 
-      if (adapter) {
-        yield* isUse(adapter) ? adapter : (adapter as Plugin<AnyType, [], AnyType>).use()
-      }
+        // `safe`: this client shares the adapter with the app's — it must never drop what it does
+        // not declare (the app's tables, an older deployment's `_ob_*`, are leftovers to it)
+        const opened = yield* attempt(() =>
+          DbClient.use({ tables: [...observeTables], safe: true }),
+        )
 
-      // `safe`: this client shares the adapter with the app's — it must never drop what it does
-      // not declare (the app's tables, an older deployment's `_ob_*`, are leftovers to it)
-      const opened = yield* attempt(() => DbClient.use({ tables: [...observeTables], safe: true }))
+        if (isFailure(opened)) {
+          ready.reject(opened)
 
-      if (isFailure(opened)) {
-        ready.reject(opened)
-        return
-      }
+          return
+        }
 
-      ready.resolve({ scope: yield* useScope(), db: opened.value as Helpers.Db })
-      yield* suspend()
-    }),
+        ready.resolve({ scope: yield* useScope(), db: opened.value as Helpers.Db })
+        yield* suspend()
+      }),
+    ),
   )
 
   state.store = yield* ready.operation
@@ -113,8 +116,10 @@ export function* writeBatch(
   const written = yield* attempt(() =>
     db.insertMany(observeSpans.name, spans.map(clean) as AnyType),
   )
+
   if (isFailure(written)) {
     state.stats.dropped += spans.length
+
     return
   }
 

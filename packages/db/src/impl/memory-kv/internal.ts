@@ -22,6 +22,7 @@ const live = (link: MemoryKvDef.Link, key: string): MemoryKvDef.Entry | null => 
 
   if (entry.expiresAt !== null && entry.expiresAt <= Date.now()) {
     remove(link, key)
+
     return null
   }
 
@@ -37,6 +38,7 @@ const remove = (link: MemoryKvDef.Link, key: string): boolean => {
 
   for (const tag of entry.tags) {
     const members = link.tags.get(tag)
+
     members?.delete(key)
 
     if (members && members.size === 0) {
@@ -57,10 +59,12 @@ const put = (link: MemoryKvDef.Link, entry: KvDef.RawSet): void => {
     expiresAt: entry.ttlMs === null ? null : Date.now() + entry.ttlMs,
     tags: new Set(entry.tags),
   }
+
   link.entries.set(entry.key, stored)
 
   for (const tag of entry.tags) {
     const members = link.tags.get(tag) ?? new Set<string>()
+
     members.add(entry.key)
     link.tags.set(tag, members)
   }
@@ -100,6 +104,7 @@ export const driver: KvDef.Driver = {
 
   *ttl(key) {
     const entry = live((yield* useContext(StateRef)).link, key)
+
     return entry?.expiresAt === null || entry === null
       ? null
       : Math.max(0, entry.expiresAt - Date.now())

@@ -35,6 +35,7 @@ async function* parts(
     while (true) {
       // oxlint-disable-next-line no-await-in-loop -- sequential by design: bounded memory, ordered parts
       const { done, value } = await reader.read()
+
       if (done) {
         break
       }
@@ -44,8 +45,11 @@ async function* parts(
 
       while (length >= partSize) {
         const whole = concat(buffered, length)
+
         yield whole.subarray(0, partSize)
+
         const rest = whole.subarray(partSize)
+
         buffered = rest.length > 0 ? [rest] : []
         length = rest.length
       }
@@ -59,12 +63,15 @@ async function* parts(
 
 const initiate = async (transport: Helpers.S3Transport, key: string): Promise<string> => {
   const url = transport.objectUrl(key)
+
   url.searchParams.set('uploads', '')
 
   const response = await transport.send({ method: 'POST', url })
+
   ensureOk(response, key)
 
   const uploadId = parseUploadId(await response.text())
+
   if (!uploadId) {
     throw fail(IOErrors.S3Failed, `s3 multipart initiation returned no UploadId for "${key}"`)
   }
@@ -79,10 +86,12 @@ const uploadPart = async (
 ): Promise<Helpers.S3Part> => {
   const { transport, key, uploadId } = upload
   const url = transport.objectUrl(key)
+
   url.searchParams.set('partNumber', String(partNumber))
   url.searchParams.set('uploadId', uploadId)
 
   const response = await transport.send({ method: 'PUT', url, body })
+
   ensureOk(response, key)
 
   return { partNumber, etag: response.headers.get('etag') ?? '' }
@@ -94,6 +103,7 @@ const complete = async (
 ): Promise<void> => {
   const { transport, key, uploadId } = upload
   const url = transport.objectUrl(key)
+
   url.searchParams.set('uploadId', uploadId)
 
   const response = await transport.send({
@@ -102,11 +112,13 @@ const complete = async (
     body: renderCompletion(uploaded),
     headers: { 'content-type': 'application/xml' },
   })
+
   ensureOk(response, key)
 }
 
 const abort = async ({ transport, key, uploadId }: Helpers.S3Upload) => {
   const url = transport.objectUrl(key)
+
   url.searchParams.set('uploadId', uploadId)
 
   await transport.send({ method: 'DELETE', url }).catch(() => undefined) // best effort
@@ -135,6 +147,7 @@ export const uploadStream = async (
     await complete(upload, uploaded)
   } catch (error) {
     await abort(upload)
+
     throw error
   }
 

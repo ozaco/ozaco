@@ -19,6 +19,7 @@ export const SettingsDialog = ({ connection, theme, onSave, onClose }: Props) =>
   const [docsPath, setDocsPath] = useState(connection.docsPath)
   const [token, setToken] = useState(connection.token ?? '')
   const [nextTheme, setNextTheme] = useState<Theme>(theme)
+
   return (
     <div
       className='fixed inset-0 z-20 flex items-center justify-center'

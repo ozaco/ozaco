@@ -36,17 +36,28 @@ export function* walk(url: string, report: (step: Step) => void = () => {}): Ope
 
   // --- auth: login → whoami → refresh → role gate ----------------------------------------
   const anonymous = yield* attempt(client.account.whoami())
+
   note('whoami anonymous', isFailure(anonymous) ? anonymous.error : anonymous.value)
+
   const tokens = yield* client.account.login({ email: 'ada@example.com', password: 'ada' })
+
   client.$setToken(tokens.accessToken)
+
   const me = yield* client.account.whoami()
+
   note('login + whoami', me)
+
   const rotated = yield* client.account.refresh({ refreshToken: tokens.refreshToken! })
+
   note('refresh', { rotated: rotated.refreshToken !== tokens.refreshToken })
+
   const replay = yield* attempt(client.account.refresh({ refreshToken: tokens.refreshToken! }))
+
   note('refresh replay', isFailure(replay) ? replay.error : 'accepted?!')
   client.$setToken(rotated.accessToken)
+
   const promoted = yield* client.account.promote({ email: 'bob@example.com' })
+
   note('admin-only promote', promoted)
 
   // --- crud resource + optimistic concurrency --------------------------------------------
@@ -72,8 +83,11 @@ export function* walk(url: string, report: (step: Step) => void = () => {}): Ope
   yield* scoped(function* () {
     const rows = yield* client.$rows<{ _id: string; title: string }>('todos')
     const first = yield* rows.next()
+
     yield* client.todos.create({ title: 'seen live' })
+
     const second = yield* rows.next()
+
     note('realtime watch', {
       syncRows: (first.value as ClientDef.Materialized).rows.length,
       afterCreate: (second.value as ClientDef.Materialized).rows.length,
@@ -86,6 +100,7 @@ export function* walk(url: string, report: (step: Step) => void = () => {}): Ope
   const guarded = yield* client.todos.create({ title: '[keep] forever' })
   const denied = yield* attempt(client.todos.remove({ id: guarded._id }))
   const ghost = yield* attempt(client.todos.get({ id: 'missing' }))
+
   // releasing the guard makes the row removable again (the walk nets zero rows)
   yield* client.todos.update({ id: guarded._id, title: 'released' })
   yield* client.todos.remove({ id: guarded._id })
@@ -109,6 +124,7 @@ export function* walk(url: string, report: (step: Step) => void = () => {}): Ope
 
   // --- crud schema: the definition-time hook tightened the create input ------------------
   const short = yield* attempt(client.todos.create({ title: 'no' }))
+
   note('crud schema', { rejected: isFailure(short) ? short.error : 'accepted?!' })
 
   // --- crud ops: the runnable `crud.list` inside a custom action (scope + total) ---------
@@ -141,7 +157,9 @@ export function* walk(url: string, report: (step: Step) => void = () => {}): Ope
     streams: { file: new Uint8Array(3000) },
   })
   const ingest = yield* client.media.ingest(bytesOf(5000))
+
   yield* sleep(50)
+
   const after = yield* client.media.list()
   const stored = yield* client.media.download({ id: upload.id })
   const storedBytes = yield* until(new Response(stored).arrayBuffer())
@@ -159,13 +177,16 @@ export function* walk(url: string, report: (step: Step) => void = () => {}): Ope
   // --- cache + resilience ---------------------------------------------------------------
   const summary1 = yield* client.reports.summary({})
   const summary2 = yield* client.reports.summary({})
+
   yield* client.reports.reset()
+
   const summary3 = yield* client.reports.summary({})
 
   note('cache', {
     hit: summary1.computedAt === summary2.computedAt,
     recomputedAfterInvalidate: summary3.computations > summary1.computations,
   })
+
   const flaky = yield* client.reports.flaky({ failTimes: 2 })
   // `ms` has a server-side default — the CLIENT input type keeps it optional (InferInput)
   const fallback = yield* client.reports.eventually({})
@@ -173,6 +194,7 @@ export function* walk(url: string, report: (step: Step) => void = () => {}): Ope
 
   for (let index = 0; index < 5; index += 1) {
     const outcome = yield* attempt(client.reports.limited())
+
     limited.push(isFailure(outcome) ? String(outcome.error) : 'ok')
   }
 
@@ -180,6 +202,7 @@ export function* walk(url: string, report: (step: Step) => void = () => {}): Ope
 
   for (let index = 0; index < 4; index += 1) {
     const outcome = yield* attempt(client.reports.guarded({ boom: true }))
+
     boomed.push(isFailure(outcome) ? String(outcome.error) : 'ok')
   }
 
@@ -189,7 +212,9 @@ export function* walk(url: string, report: (step: Step) => void = () => {}): Ope
     limited,
     breaker: boomed,
   })
+
   const overview = yield* client.reports.overview()
+
   note('nested ctx.call', overview)
 
   // --- the job queue: 202 + location, a worker, a dead letter; rpc-style 200 failure ------
@@ -276,8 +301,10 @@ export function* walk(url: string, report: (step: Step) => void = () => {}): Ope
   // --- events + sse relay ---------------------------------------------------------------
   const relayed = yield* scoped(function* () {
     const listen = yield* client.live.listen({ name: 'demo.ping', max: 1 })
+
     yield* sleep(50)
     yield* client.live.notify({ name: 'demo.ping', payload: { hello: 'world' } })
+
     return yield* drain(listen, 1)
   })
 
@@ -288,6 +315,7 @@ export function* walk(url: string, report: (step: Step) => void = () => {}): Ope
 
   // --- deadline / cancel ----------------------------------------------------------------
   const slow = yield* attempt(client.feed.slow({ ms: 50 }, { timeoutMs: 2000 }))
+
   note('slow within deadline', isFailure(slow) ? slow.error : slow.value)
 
   // --- cluster ----------------------------------------------------------------------------

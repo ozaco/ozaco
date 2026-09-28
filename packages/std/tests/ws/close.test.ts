@@ -15,6 +15,7 @@ const closingServer = (code: number, reason: string, frames: string[] = []) =>
       for (const frame of frames) {
         socket.send(frame)
       }
+
       socket.close(code, reason)
     },
     message() {},
@@ -23,6 +24,7 @@ const closingServer = (code: number, reason: string, frames: string[] = []) =>
 describe('client-side close', () => {
   it('close() resolves once fully closed; the messages flow ends with `true`', async () => {
     const server = echoServer()
+
     try {
       const outcome = await run(function* () {
         yield* JsonCodec.use()
@@ -51,12 +53,14 @@ describe('client-side close', () => {
 
   it('send after close is a silent no-op', async () => {
     const server = echoServer()
+
     try {
       const outcome = await run(function* () {
         yield* JsonCodec.use()
         yield* WsClient.use()
 
         const connection = yield* Ws.actions.connect(`ws://localhost:${server.port}`)
+
         yield* connection.close()
 
         const late = yield* attempt(() => connection.send('too late'))
@@ -74,6 +78,7 @@ describe('client-side close', () => {
 describe('server-initiated close (no reconnect configured)', () => {
   it('delivers pending frames, then the flow closes `true` and `closed` carries code/reason', async () => {
     const server = closingServer(4001, 'server-bye', ['last words'])
+
     try {
       const outcome = await run(function* () {
         yield* JsonCodec.use()
@@ -105,6 +110,7 @@ describe('server-initiated close (no reconnect configured)', () => {
 
   it('close() on an already-closed socket resolves immediately', async () => {
     const server = closingServer(1000, 'early')
+
     try {
       const outcome = await run(function* () {
         yield* JsonCodec.use()
@@ -142,6 +148,7 @@ describe('scope teardown', () => {
         signalClosed()
       },
     })
+
     try {
       const outcome = await run(function* () {
         yield* scoped(function* () {
@@ -153,6 +160,7 @@ describe('scope teardown', () => {
         })
 
         yield* until(serverSawClose)
+
         return observedCode
       })
 
@@ -178,6 +186,7 @@ describe('scope teardown', () => {
         signalClosed()
       },
     })
+
     try {
       const outcome = await run(function* () {
         yield* scoped(function* () {
@@ -192,6 +201,7 @@ describe('scope teardown', () => {
         yield* until(serverSawClose)
         // give a spurious redial (delayMs 10) ample time to show up — it must not
         yield* sleep(60)
+
         return connections
       })
 

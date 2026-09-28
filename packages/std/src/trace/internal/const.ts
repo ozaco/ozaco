@@ -1,10 +1,16 @@
 import pkg from '../../../package.json'
 import type { TraceDef } from '../types/trace'
 
+/** The subtype of the `Trace` protocol and its impls. */
+export const TRACE = Symbol.for('std:trace.trace')
+
 /** Attributes, events and links per span (per event / link for their own attributes). */
 export const MAX_ATTRIBUTES = 128
 export const MAX_EVENTS = 128
 export const MAX_LINKS = 128
+
+/** Items one array attribute value keeps (the first ones) — a value never grows without bound. */
+export const MAX_ARRAY_ITEMS = 128
 
 /** A span / event / link attribute string value (UTF-8 bytes) — Tempo's `max_attribute_bytes`. */
 export const MAX_VALUE_BYTES = 2048
@@ -14,9 +20,6 @@ export const LOG_VALUE_BYTES = 16_384
 
 /** How many object levels below an attribute key are flattened into dotted keys. */
 export const FLATTEN_DEPTH = 3
-
-/** The `exception.stacktrace` byte budget of the span event. */
-export const EVENT_STACK_BYTES = 2000
 
 /** Failures parked per local trace before the oldest is settled as handled. */
 export const MAX_PENDING = 128
@@ -52,6 +55,9 @@ export const SERVER_ERROR = 500
 
 export const EXCEPTION_EVENT = 'exception'
 
+/** Where a log line's own attribute goes when an exception attribute takes its key. */
+export const PROTECTED_PREFIX = 'ozaco.data.'
+
 /** Trace ids remembered per recorded failure (the latest ones — a long-lived shared failure object
  * must not grow the registry without bound). */
 export const MAX_RECORDED_TRACES = 128
@@ -84,14 +90,6 @@ export const LIBRARY_SCOPE_PREFIX = '@ozaco/'
 
 export const INVALID_TRACE_ID = '0'.repeat(32)
 export const INVALID_SPAN_ID = '0'.repeat(16)
-
-/** How deep `ozaco.failure.chain` follows nested failures, and how many it lists. */
-export const CHAIN_DEPTH = 8
-export const CHAIN_LEVELS = 32
-
-/** How far absorption looks for a pending failure inside an outer one's causes. */
-export const ABSORB_DEPTH = 64
-export const ABSORB_LEVELS = 1024
 
 /** How far a trace's clock may drift from `Date.now()` before the process anchor is taken anew
  * (a suspended machine stops the monotonic clock; an NTP step moves the wall clock). */

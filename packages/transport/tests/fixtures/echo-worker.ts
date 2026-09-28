@@ -20,31 +20,40 @@ void run(function* () {
       return { n: args.n * 2, from: 'worker' }
     },
   )
+
   const pings = yield* Transport.actions.subscribe<string>('ping')
   const pumps = yield* Transport.actions.subscribe<number>('lane.start')
+
   for (;;) {
     // answer pings and stream lanes until the main thread ends the worker
     const next = yield* pings.next()
+
     if (next.done) {
       return
     }
+
     yield* Transport.actions.publish('pong', `${next.value.value}!`)
+
     if (next.value.value === 'stream') {
       const count = ((yield* pumps.next()) as { value: { value: number } }).value.value
       const source = {
         *[Symbol.iterator]() {
           let at = 0
+
           return {
             *next() {
               if (at >= count) {
                 return { done: true as const, value: 'streamed' }
               }
+
               yield* sleep(1)
+
               return { done: false as const, value: at++ }
             },
           }
         },
       }
+
       yield* Transport.actions.pipe('lane', source)
     }
   }

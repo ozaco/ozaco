@@ -95,6 +95,7 @@ const logsForSpan = async (traceId: string, span: GrafanaSpan): Promise<AnyType[
       )
       const lines = frameColumn(frames, 'Line')
       const labels = frameColumn(frames, 'labels')
+
       return lines.map((line, at) => ({ line: String(line), labels: labels[at] ?? {} }))
     },
     lines => lines.some(entry => entry.labels.service_name === STORE),
@@ -114,6 +115,7 @@ describe.skipIf(!backends.otlp || !backends.grafana)('observe leg — Grafana', 
       expect(new Set(spans.map(span => span.serviceNamespace))).toEqual(new Set([APP]))
 
       const owner = spans.find(span => span.serviceName === STORE)!
+
       expect(owner).toMatchObject({ operationName: `${STORE}.save`, kind: 'server', statusCode: 2 })
     },
     TIMEOUT,
@@ -125,10 +127,12 @@ describe.skipIf(!backends.otlp || !backends.grafana)('observe leg — Grafana', 
       const run = await scenario()
       const spans = await grafanaTrace(run.traces.chain, run.startedAt)
       const root = spans.find(span => span.parentSpanID === '')!
+
       expect(root.serviceName).toBe(APP)
 
       const lines = await logsForSpan(run.traces.chain, root)
       const downstream = lines.filter(entry => entry.labels.service_name === STORE)
+
       expect(downstream).toHaveLength(1)
       expect(downstream[0].line.startsWith('store.save: the note could not be saved')).toBe(true)
       expect(downstream[0].line).toContain(
@@ -155,6 +159,7 @@ describe.skipIf(!backends.otlp || !backends.prometheus)('observe leg — Prometh
         // two calls crossed: `save` and `put`
         series => series.some(entry => entry.value >= 2),
       )
+
       expect(Math.max(0, ...edge.map(entry => entry.value))).toBeGreaterThanOrEqual(2)
 
       // a CLIENT db span with `db.namespace` is a database node (sqlite: the file's basename)
@@ -162,6 +167,7 @@ describe.skipIf(!backends.otlp || !backends.prometheus)('observe leg — Prometh
         `traces_service_graph_request_total{client="${STORE}", server="${SQLITE}"}`,
         series => series.length > 0,
       )
+
       expect(database.length).toBeGreaterThan(0)
       expect(database[0]!.metric['connection_type']).toBe('database')
     },
@@ -179,8 +185,11 @@ describe.skipIf(!backends.otlp || !backends.prometheus)('observe leg — Prometh
         found => routes.every(route => found.some(entry => entry.metric['http_route'] === route)),
       )
       const seen = new Set(series.map(entry => entry.metric['http_route']))
+
       expect(routes.filter(route => !seen.has(route))).toEqual([])
+
       const failed = series.find(entry => entry.metric['http_route'] === `/${API}/save`)!
+
       expect(failed.metric).toMatchObject({
         http_request_method: 'POST',
         http_response_status_code: '500',

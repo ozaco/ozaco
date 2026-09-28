@@ -1,4 +1,3 @@
-import type { Operation } from 'std:effect'
 import type { Result } from 'std:result'
 
 import type { SpanRecorder } from '../internal/recorder'
@@ -7,9 +6,6 @@ import type { TraceDef } from './trace'
 
 /** The shapes this module passes around inside itself. */
 export namespace Helpers {
-  /** A span body. */
-  export type Body<T> = (span: TraceDef.SpanHandle) => Operation<T>
-
   /** The wall/monotonic pair a local root anchors its clock to. */
   export interface Anchor {
     readonly wall: number

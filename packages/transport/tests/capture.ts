@@ -13,6 +13,7 @@ let captures = 0
 /** A LoggerTransport collecting every entry (or failing every write, with `broken`). */
 export const capture = (broken = false) => {
   captures += 1
+
   const entries: LoggerDef.Entry[] = []
   const impl = LoggerTransport.implement<
     { name: string; level: LogLevel; entries: LoggerDef.Entry[] },

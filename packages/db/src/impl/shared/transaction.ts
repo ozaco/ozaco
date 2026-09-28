@@ -20,11 +20,14 @@ export function* runSqlTransaction(
 
   if (level > 0) {
     const savepoint = `ozaco_sp_${level}`
+
     yield* exec(`SAVEPOINT ${savepoint}`, [])
+
     const outcome = yield* attempt(depth.with(level + 1, body))
 
     if (isFailure(outcome)) {
       yield* attempt(exec(`ROLLBACK TO SAVEPOINT ${savepoint}`, []))
+
       return yield* outcome
     }
 
@@ -36,12 +39,17 @@ export function* runSqlTransaction(
   return yield* runtime.session(() =>
     depth.with(1, function* () {
       yield* exec(begin, [])
+
       const outcome = yield* attempt(body)
+
       if (isFailure(outcome)) {
         yield* attempt(exec('ROLLBACK', []))
+
         return yield* outcome
       }
+
       yield* exec('COMMIT', [])
+
       return outcome.value as AnyType
     }),
   )

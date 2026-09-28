@@ -24,8 +24,10 @@ function* scanDir(ctx: ConfigDef.Context, dir: string, seen: Set<string>) {
   // 1) active-variant overlay (highest)
   if (hasFlag(ctx.features, Features.VARIANT) && ctx.variant) {
     const name = infixFile(ctx, ctx.variant)
+
     if (names.includes(name)) {
       const source = yield* readSource(ctx, yield* IO.actions.join(dir, name), seen)
+
       if (source) {
         out.push(source)
       }
@@ -36,6 +38,7 @@ function* scanDir(ctx: ConfigDef.Context, dir: string, seen: Set<string>) {
   // matching the recursive watch; later name wins.
   if (hasFlag(ctx.features, Features.DIR)) {
     const configDir = yield* IO.actions.join(dir, dirName(ctx))
+
     if (yield* IO.actions.exists(configDir)) {
       const suffix = `.${ctx.ext}`
       const files = (yield* IO.actions.readdir(configDir, { recursive: true }))
@@ -45,6 +48,7 @@ function* scanDir(ctx: ConfigDef.Context, dir: string, seen: Set<string>) {
 
       for (const name of files) {
         const source = yield* readSource(ctx, yield* IO.actions.join(configDir, name), seen)
+
         if (source) {
           out.push(source)
         }
@@ -55,8 +59,10 @@ function* scanDir(ctx: ConfigDef.Context, dir: string, seen: Set<string>) {
   // 3) base file (lowest)
   if (hasFlag(ctx.features, Features.FILE)) {
     const name = baseFile(ctx)
+
     if (names.includes(name)) {
       const source = yield* readSource(ctx, yield* IO.actions.join(dir, name), seen)
+
       if (source) {
         out.push(source)
       }
@@ -69,16 +75,20 @@ function* scanDir(ctx: ConfigDef.Context, dir: string, seen: Set<string>) {
 /** The directories to scan, innermost → outermost: `start`, then its parents up to `home` (`CHAIN`). */
 export function* collectDirs(ctx: ConfigDef.Context, start: string) {
   const dirs: string[] = [start]
+
   if (!hasFlag(ctx.features, Features.CHAIN)) {
     return dirs
   }
 
   let dir = start
+
   while (dir !== ctx.home) {
     const parent = yield* IO.actions.dirname(dir)
+
     if (parent === dir) {
       break
     }
+
     dir = parent
     dirs.push(dir)
   }

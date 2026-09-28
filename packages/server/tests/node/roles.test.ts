@@ -14,6 +14,7 @@ import { storage, todos } from '../helpers'
 describe('server — roles', () => {
   it('a gateway node serves the edge; a service node does the work; health tells who is who', async () => {
     const link = createLink()
+
     unwrap(
       await run(function* () {
         const ready = createQueue<void, void>()
@@ -21,6 +22,7 @@ describe('server — roles', () => {
           scoped(function* () {
             yield* storage()
             yield* MemoryTransport.use({ prefix: 'app', link })
+
             const app = yield* createServer({
               services: [todos],
               carrier: NetworkCarrier,
@@ -29,15 +31,18 @@ describe('server — roles', () => {
               instance: 'svc',
             })
             const info = yield* app.start()
+
             expect(info).toMatchObject({ role: 'service', hosted: ['todos'], url: null })
             ready.add(undefined)
             yield* sleep(60_000)
           }),
         )
+
         yield* ready.next()
         yield* scoped(function* () {
           yield* storage()
           yield* MemoryTransport.use({ prefix: 'app', link })
+
           const gateway = yield* createServer({
             services: [todos],
             edge: BunEdge,
@@ -48,11 +53,15 @@ describe('server — roles', () => {
             listen: { port: 0 },
           })
           const info = yield* gateway.start()
+
           expect(info.hosted).toEqual([])
+
           const health = yield* until(fetch(`${info.url}/_health`))
           const body = (yield* until(health.json())) as AnyType
+
           expect(body).toMatchObject({ ok: true, ready: true, role: 'gateway', hosted: [] })
           expect(body.members.todos.map((member: AnyType) => member.instance)).toEqual(['svc'])
+
           // an HTTP request at the gateway is served by the service node over the carrier
           const created = yield* until(
             fetch(`${info.url}/todos/create`, {
@@ -61,6 +70,7 @@ describe('server — roles', () => {
               body: JSON.stringify({ title: 'via gateway' }),
             }),
           )
+
           expect(created.status).toBe(200)
           expect(((yield* until(created.json())) as AnyType).title).toBe('via gateway')
           yield* gateway.stop()
@@ -74,12 +84,14 @@ describe('server — roles', () => {
   it('readiness: start waits for dependsOn; health is 503 until then; a missing dependency fails start', async () => {
     const link = createLink()
     const presence = { heartbeatMs: 100, ttlMs: 300, waitMs: 100 }
+
     unwrap(
       await run(function* () {
         // nobody hosts todos: a gateway that depends on it cannot become ready
         yield* scoped(function* () {
           yield* storage()
           yield* MemoryTransport.use({ prefix: 'ready', link })
+
           const lonely = yield* createServer({
             services: [todos],
             edge: BunEdge,
@@ -91,8 +103,11 @@ describe('server — roles', () => {
             readyTimeoutMs: 300,
           })
           const outcome = yield* attempt(lonely.start())
+
           expect((outcome as AnyType).error).toBe(ServerErrors.Unavailable)
+
           const health = yield* lonely.health()
+
           expect(health.ready).toBe(false)
           expect(health.members.todos).toEqual([])
           yield* lonely.stop()
@@ -105,6 +120,7 @@ describe('server — roles', () => {
             yield* sleep(200)
             yield* storage()
             yield* MemoryTransport.use({ prefix: 'ready', link })
+
             const app = yield* createServer({
               services: [todos],
               carrier: NetworkCarrier.use({ presence }),
@@ -112,14 +128,17 @@ describe('server — roles', () => {
               name: 'app',
               instance: 'svc',
             })
+
             yield* app.start()
             ready.add(undefined)
             yield* sleep(60_000)
           }),
         )
+
         yield* scoped(function* () {
           yield* storage()
           yield* MemoryTransport.use({ prefix: 'ready', link })
+
           const gateway = yield* createServer({
             services: [todos],
             edge: BunEdge,
@@ -132,9 +151,12 @@ describe('server — roles', () => {
           })
           const startedAt = Date.now()
           const info = yield* gateway.start()
+
           expect(info.ready).toBe(true)
           expect(Date.now() - startedAt).toBeGreaterThanOrEqual(150)
+
           const health = yield* until(fetch(`${info.url}/_health`))
+
           expect(health.status).toBe(200)
           yield* gateway.stop()
         })
@@ -146,12 +168,14 @@ describe('server — roles', () => {
 
   it('hosted: [] is refused off-gateway; a service node starts without waiting for anyone', async () => {
     const link = createLink()
+
     unwrap(
       await run(function* () {
         // the silent trap, refused loudly: hosting nothing while not being a gateway
         yield* scoped(function* () {
           yield* storage()
           yield* MemoryTransport.use({ prefix: 'trap', link })
+
           const outcome = yield* attempt(
             createServer({
               services: [todos],
@@ -161,6 +185,7 @@ describe('server — roles', () => {
               name: 'app',
             }),
           )
+
           expect((outcome as AnyType).error).toBe(ServerErrors.Configuration)
         })
 
@@ -169,9 +194,11 @@ describe('server — roles', () => {
         const other = service('other', {
           ping: action.query({}, function* () {}),
         })
+
         yield* scoped(function* () {
           yield* storage()
           yield* MemoryTransport.use({ prefix: 'trap', link })
+
           const app = yield* createServer({
             services: [todos, other],
             carrier: NetworkCarrier,
@@ -183,6 +210,7 @@ describe('server — roles', () => {
           })
           const startedAt = Date.now()
           const info = yield* app.start()
+
           expect(info.ready).toBe(true)
           expect(Date.now() - startedAt).toBeLessThan(1000)
           yield* app.stop()

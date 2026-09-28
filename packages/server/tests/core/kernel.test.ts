@@ -14,14 +14,17 @@ import { LABELS, storage, todos } from '../helpers'
 describe('kernel — services, dispatch, hooks', () => {
   it('routes default to /<service>/<action>; kinds fix the method; options are collected', () => {
     const def = todos.actions.list.meta
+
     expect(def.route).toEqual({ method: 'GET', path: '/todos/list' })
     expect(todos.actions.create.meta.route.method).toBe('POST')
     expect(todos.actions.count.meta.outputPlane).toBe('stream')
     expect(todos.actions.slow.meta.options).toEqual({})
+
     const custom = action.query(
       { input: z.object({}), cache: { ttlMs: 5 }, route: { method: 'GET', path: '/x' } },
       function* () {},
     )
+
     expect(custom.meta.options).toEqual({ cache: { ttlMs: 5 } })
   })
 
@@ -29,16 +32,22 @@ describe('kernel — services, dispatch, hooks', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({ services: [todos] })
+
         expect(server.api.todos.create).toEqual({ service: 'todos', action: 'create' })
 
         const created = yield* server.call(todos, 'create', { title: 'write tests' })
+
         expect(created).toMatchObject({ title: 'write tests', done: false })
+
         const listed = yield* server.call(todos, 'list', {})
+
         expect(listed).toHaveLength(1)
 
         // input validation: one server.validation with the field path in the causes
         const bad = yield* attempt(server.call(todos, 'create', { title: '' }))
+
         expect((bad as AnyType).error).toBe(ServerErrors.Validation)
         expect((bad as AnyType).causes.some((cause: string) => cause.startsWith('title:'))).toBe(
           true,
@@ -47,6 +56,7 @@ describe('kernel — services, dispatch, hooks', () => {
         // a handler failure keeps its tag and message and gains the action breadcrumb (the
         // request id — no span id, nothing is traced here), then the plugin runtime's labels
         const boom = yield* attempt(server.call(todos, 'explode', { code: 'todo.custom' }))
+
         expect((boom as AnyType).error).toBe('todo.custom')
         expect((boom as AnyType).message).toBe('boom todo.custom')
         expect((boom as AnyType).causes).toEqual([
@@ -56,13 +66,17 @@ describe('kernel — services, dispatch, hooks', () => {
 
         // unknown action
         const none = yield* attempt(server.call(todos as AnyType, 'nope', {}))
+
         expect((none as AnyType).error).toBe(ServerErrors.NotFound)
 
         // nested call + emit from inside a handler
         const events = yield* server.events('todo.created')
         const nested = yield* server.call(todos, 'nested', { title: 'nested' })
+
         expect(nested.title).toBe('nested')
+
         const event = yield* events.next()
+
         expect((event.value as AnyType).payload.title).toBe('nested')
       }),
     )
@@ -79,6 +93,7 @@ describe('kernel — services, dispatch, hooks', () => {
             name: 'auth',
             *dispatch(call, ctx, next) {
               seen.push(`auth:${call.action}`)
+
               return yield* next(call, { ...ctx, auth: { user: 'ada' } as AnyType })
             },
           },
@@ -95,8 +110,11 @@ describe('kernel — services, dispatch, hooks', () => {
             name: options.label,
             *dispatch(call, ctx, next) {
               seen.push(`${options.label}:in ${(ctx.auth as AnyType)?.user ?? 'anon'}`)
+
               const value = yield* next(call, ctx)
+
               seen.push(`${options.label}:out`)
+
               return value
             },
           },
@@ -108,13 +126,16 @@ describe('kernel — services, dispatch, hooks', () => {
         return (ctx.auth as AnyType).user
       }),
     })
+
     unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({
           services: [whoami],
           plugins: [Auth, Timing.use({ label: 'timing' })],
         })
+
         expect(yield* server.call(whoami, 'am')).toBe('ada')
         expect(seen).toEqual(['auth:am', 'timing:in ada', 'timing:out'])
       }),
@@ -124,9 +145,12 @@ describe('kernel — services, dispatch, hooks', () => {
     const orphan = service('o', { x: action.query({ cache: { ttlMs: 1 } }, function* () {}) })
     const outcome = await run(function* () {
       yield* storage()
+
       return yield* createServer({ services: [orphan], plugins: [Auth] })
     })
+
     expect((outcome as AnyType).error).toBe(ServerErrors.Configuration)
+
     // `auth: 'admin'` is a COMPILE error now (the requirement is a role ARRAY) — the
     // runtime validator is the second line of defence, and this proves it still holds
     const invalid = service('i', {
@@ -135,8 +159,10 @@ describe('kernel — services, dispatch, hooks', () => {
     })
     const outcome2 = await run(function* () {
       yield* storage()
+
       return yield* createServer({ services: [invalid], plugins: [Auth] })
     })
+
     expect((outcome2 as AnyType).error).toBe(ServerErrors.Configuration)
   })
 
@@ -156,18 +182,22 @@ describe('kernel — services, dispatch, hooks', () => {
         }
       },
     }).build()
+
     unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({ services: [todos], plugins: [Observer] })
 
         // the client sees the VALUE, never `{ value: { ... } }`
         const created = yield* server.call(todos, 'create', { title: 'enveloped' })
+
         expect(created.title).toBe('enveloped')
         expect((created as AnyType).value).toBeUndefined()
 
         // and a captured failure propagates as a failure, not as a success payload
         const boom = yield* attempt(server.call(todos, 'explode', { code: 'x.y' }))
+
         expect((boom as AnyType).error).toBe('x.y')
       }),
     )
@@ -177,8 +207,10 @@ describe('kernel — services, dispatch, hooks', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({ services: [todos], timeoutMs: 100 })
         const late = yield* attempt(server.call(todos, 'slowCancel', { ms: 300 }))
+
         expect((late as AnyType).error).toBe(ServerErrors.TimeoutPending)
         // raised by the caller's side: the `local` breadcrumb (the request id — no span id,
         // nothing is traced here), then the plugin runtime's labels
@@ -186,12 +218,16 @@ describe('kernel — services, dispatch, hooks', () => {
           expect.stringMatching(/^local req:[0-9a-f]{32}$/u),
           ...LABELS.call,
         ])
+
         const detached = yield* attempt(server.call(todos, 'slow', { ms: 200 }, { timeoutMs: 50 }))
+
         expect((detached as AnyType).error).toBe(ServerErrors.TimeoutPending)
         // the detached handler finished on its own and left an outcome behind
         yield* sleep(250)
+
         const kernel = yield* useContext(Server)
         const pruned = yield* kernel.outcomes!.actions.prune()
+
         expect(pruned).toBe(0)
       }),
     )
@@ -199,8 +235,10 @@ describe('kernel — services, dispatch, hooks', () => {
 
   it('OTEL_RESOURCE_ATTRIBUTES ride in the KERNEL resource — every sink sees them alike', async () => {
     const previous = process.env['OTEL_RESOURCE_ATTRIBUTES']
+
     process.env['OTEL_RESOURCE_ATTRIBUTES'] =
       'deployment.environment.name=staging,service.namespace=from-env,team=a%20b,broken'
+
     const reported: ObserveDef.Event[] = []
     const Spy = definePlugin<ServerDef.PluginContext, []>({
       name: 'spy',
@@ -221,7 +259,9 @@ describe('kernel — services, dispatch, hooks', () => {
       unwrap(
         await run(function* () {
           yield* storage()
+
           const server = yield* createServer({ services: [todos], name: 'env-res', plugins: [Spy] })
+
           yield* server.call(todos, 'create', { title: 'resourced' })
         }),
       )
@@ -238,6 +278,7 @@ describe('kernel — services, dispatch, hooks', () => {
     const dispatch = reported.find(
       event => event.t === 'span' && event.span.name === 'todos.create',
     )
+
     expect(dispatch?.resource).toMatchObject({
       'service.name': 'todos',
       'service.namespace': 'env-res',
@@ -251,6 +292,7 @@ describe('kernel — services, dispatch, hooks', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const reported: ObserveDef.Event[] = []
         const Spy = definePlugin<ServerDef.PluginContext, []>({
           name: 'spy',
@@ -268,16 +310,22 @@ describe('kernel — services, dispatch, hooks', () => {
         }).build()
         const server = yield* createServer({ services: [todos], plugins: [Spy] })
         const out = yield* server.call(todos, 'count', { n: 3 })
+
         expect(out instanceof ReadableStream).toBe(true)
+
         const values: number[] = []
         const flow = yield* stream.flow(out as AnyType)
+
         for (;;) {
           const step = yield* flow.next()
+
           if (step.done) {
             break
           }
+
           values.push(step.value as number)
         }
+
         expect(values).toEqual([0, 1, 2])
 
         // the plainest stream answer: a handler returning an ARRAY is normalized to a flow
@@ -303,6 +351,7 @@ describe('kernel — services, dispatch, hooks', () => {
         // every dispatch is ONE internal span (a root: called from outside any request)
         const all = reported.flatMap(event => (event.t === 'span' ? [event] : []))
         const spans = all.filter(event => event.span.scope.name === '@ozaco/server')
+
         expect(spans.map(event => event.span.name)).toEqual([
           'todos.count',
           'todos.letters',
@@ -338,6 +387,7 @@ describe('kernel — services, dispatch, hooks', () => {
         // ctx.log: one record, on the dispatch span it ran in
         const logs = reported.flatMap(event => (event.t === 'log' ? [event.log] : []))
         const line = logs.find(log => log.body === 'creating')!
+
         expect(line).toMatchObject({
           severityNumber: 9,
           severityText: 'INFO',
@@ -348,6 +398,7 @@ describe('kernel — services, dispatch, hooks', () => {
 
         // the failure: ONE exception record (ERROR — an unmapped tag is a 500) on its span
         const exceptions = logs.filter(log => log.attributes['exception.type'] !== undefined)
+
         expect(exceptions).toHaveLength(1)
         expect(exceptions[0]).toMatchObject({
           eventName: 'ozaco.action.exception',
@@ -364,10 +415,14 @@ describe('kernel — services, dispatch, hooks', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({ services: [todos], name: 'tests', version: '1.2.3' })
         const manifest = yield* server.manifest()
+
         expect(manifest.name).toBe('tests')
+
         const count = manifest.actions.find(entry => entry.action === 'count')!
+
         expect(count).toMatchObject({
           kind: 'stream',
           route: { method: 'GET', path: '/todos/count' },
@@ -384,16 +439,19 @@ describe('kernel — calling by ref', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({ services: [todos] })
 
         // built from the service TYPE alone — `refs` only ever sees the name string
         const api = refs<typeof todos>('todos')
 
         const created = yield* server.call(api.create, { title: 'by ref' })
+
         expect(created.title).toBe('by ref')
 
         // the handle's own api map carries the same refs
         const listed = yield* server.call(server.api.todos.list, {})
+
         expect(listed.map(row => row.title)).toEqual(['by ref'])
 
         // and the definition form still works, unchanged
@@ -401,6 +459,7 @@ describe('kernel — calling by ref', () => {
 
         // a garbage target is a configuration failure, not a crash
         const bad = yield* attempt(() => server.call({} as AnyType, 'list', {}))
+
         expect((bad as AnyType).error).toBe(ServerErrors.Configuration)
 
         yield* server.stop()

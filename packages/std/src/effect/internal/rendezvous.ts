@@ -12,11 +12,13 @@ export const rendezvous = <T>(): Helpers.Rendezvous<T> => {
       new Promise<IteratorResult<T, undefined>>((resolve, reject) => {
         if (state === 'failed') {
           reject(failure as Error)
+
           return
         }
 
         if (state === 'done') {
           resolve({ done: true, value: undefined })
+
           return
         }
 
@@ -24,6 +26,7 @@ export const rendezvous = <T>(): Helpers.Rendezvous<T> => {
 
         if (wanted) {
           const want = wanted
+
           wanted = null
           want(true)
         }
@@ -36,12 +39,14 @@ export const rendezvous = <T>(): Helpers.Rendezvous<T> => {
 
       if (waiting) {
         const waiter = waiting
+
         waiting = null
         waiter.resolve({ done: true, value: undefined })
       }
 
       if (wanted) {
         const want = wanted
+
         wanted = null
         want(false)
       }
@@ -51,11 +56,13 @@ export const rendezvous = <T>(): Helpers.Rendezvous<T> => {
       new Promise<boolean>(resolve => {
         if (state !== 'live') {
           resolve(false)
+
           return
         }
 
         if (waiting) {
           resolve(true)
+
           return
         }
 
@@ -69,6 +76,7 @@ export const rendezvous = <T>(): Helpers.Rendezvous<T> => {
 
       if (waiting) {
         const waiter = waiting
+
         waiting = null
         waiter.resolve(step)
       }
@@ -84,6 +92,7 @@ export const rendezvous = <T>(): Helpers.Rendezvous<T> => {
 
       if (waiting) {
         const waiter = waiting
+
         waiting = null
         waiter.reject(error as Error)
       }

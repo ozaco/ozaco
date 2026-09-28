@@ -36,6 +36,7 @@ const q = service('q', {
 
 const get = function* (path: string) {
   const response = yield* Edge.actions.handle(new Request(`http://edge${path}`))
+
   return { status: response.status, body: JSON.parse(yield* until(response.text())) }
 }
 
@@ -44,7 +45,9 @@ describe('edge — query strings by the declared schema', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({ services: [q], edge: BunEdge })
+
         yield* server.start()
 
         // one pass into a DECLARED array field is that array's one element

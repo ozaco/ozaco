@@ -41,6 +41,7 @@ describe('snapshot contexts', () => {
 
         const child = yield* spawn(function* () {
           yield* sleep(5)
+
           return {
             plain: (yield* plain.expect()).n,
             snap: (yield* snap.expect()).n,

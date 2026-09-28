@@ -18,11 +18,13 @@ const TONES: Record<Line['tone'], string> = {
 export const Timeline = ({ lines }: { lines: readonly Line[] }) => {
   const host = useRef<HTMLDivElement>(null)
   const [follow, setFollow] = useState(true)
+
   useEffect(() => {
     if (follow && host.current) {
       host.current.scrollTop = host.current.scrollHeight
     }
   }, [lines, follow])
+
   return (
     <div className='relative h-full'>
       <div
@@ -30,6 +32,7 @@ export const Timeline = ({ lines }: { lines: readonly Line[] }) => {
         className='mono h-full overflow-auto p-2'
         onScroll={event => {
           const element = event.currentTarget
+
           setFollow(element.scrollTop + element.clientHeight >= element.scrollHeight - 4)
         }}>
         {lines.length === 0 && <div style={{ color: 'var(--dim)' }}>nothing yet</div>}

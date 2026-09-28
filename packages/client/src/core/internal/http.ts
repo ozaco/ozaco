@@ -67,11 +67,15 @@ const resolvePath = (
 
   const resolved = path.replaceAll(/:([A-Za-z_][\w]*)/gu, (_match, name: string) => {
     const value = record?.get(name)
+
     if (value === undefined) {
       failure = `path param "${name}" is missing from the input`
+
       return ''
     }
+
     record!.delete(name)
+
     return encodeURIComponent(String(value))
   })
 
@@ -96,6 +100,7 @@ export const networkFailure = (error: unknown, operation: string): Result.Failur
 /** The `authorization` header value of this client's token, if any (a value or a resolver). */
 export const authorization = (options: ClientDef.Options): string | undefined => {
   const token = typeof options.token === 'function' ? options.token() : options.token
+
   return token ? `Bearer ${token}` : undefined
 }
 
@@ -212,6 +217,7 @@ function* prepare(
     headers['content-type'] = 'application/json'
     body = JSON.stringify(rest)
   }
+
   const init: RequestInit = { method, headers, body }
 
   if (duplex) {
@@ -245,10 +251,12 @@ function* exchange(
 
   yield* ensure(() => {
     clearTimeout(timer)
+
     if (!settled) {
       controller.abort(ClientErrors.Closed)
     }
   })
+
   const doFetch = ctx.options.fetch ?? fetch
   let response: Response
 
@@ -264,8 +272,9 @@ function* exchange(
 
     return yield* networkFailure(error, action.id)
   }
+
   const echoed = response.headers.get(HEADERS.requestId) ?? requestId
-  const trace = echoedContext(response)
+  const trace = yield* echoedContext(response)
 
   if (traced) {
     yield* markResponse(traced, response)
@@ -342,14 +351,17 @@ export function* request(
   }
 
   yield* ensure(fallbackOf(traced))
+
   let ended = false
 
   try {
     const outcome = yield* attempt(() => exchange(call, target, traced))
+
     ended = true
 
     if (isFailure(outcome)) {
       yield* endCall(traced, { failure: outcome })
+
       return yield* outcome
     }
 
@@ -371,6 +383,7 @@ export function* request(
     }
 
     yield* endCall(traced)
+
     return outcome.value
   } finally {
     if (!ended) {

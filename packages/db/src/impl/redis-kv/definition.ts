@@ -29,29 +29,38 @@ export const RedisKv = Kv.implement<KvDef.Options, [options: RedisKvDef.Options]
     if (!(yield* Codec.actions.hasCodec())) {
       yield* JsonCodec.use()
     }
+
     const prefix = options.prefix ?? DEFAULT_KV_PREFIX
+
     if (!isValidKvPrefix(prefix)) {
       return yield* fail(KvErrors.Configuration, `invalid kv prefix "${prefix}"`)
     }
+
     const impl = yield* redisKvImpl.expect()
     const client = impl.createClient({ ...options.client, url: options.url })
+
     // a client with no error listener throws on socket errors — keep them as failures instead
     client.on('error', () => {})
+
     const opened = yield* attempt(until(client.connect()))
+
     if (isFailure(opened)) {
       // the runtime's fold of the client error (its `raw`) one level under
       return yield* fail(KvErrors.Connection, 'cannot connect to redis', opened)
     }
+
     const state: RedisKvDef.State = {
       client,
       bytes: client.withTypeMapping({ [RESP_TYPES.BLOB_STRING]: Buffer }),
       closed: false,
     }
+
     yield* StateRef.set(state)
     yield* ensure(function* () {
       state.closed = true
       yield* attempt(until(client.quit()))
     })
+
     return {
       store: 'redis',
       prefix,

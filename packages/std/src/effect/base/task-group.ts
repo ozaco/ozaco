@@ -13,12 +13,16 @@ export class TaskGroup {
   *halt(): Operation<void> {
     const set = this.tasks
     let total: Result<void> = succeed()
+
     while (set.size > 0) {
       const tasks = [...set]
+
       set.clear()
+
       for (let i = tasks.length - 1; i >= 0; i--) {
         const task = tasks[i]!
         const result = yield* attempt(task.halt)
+
         if (isFailure(result)) {
           total = result
         }

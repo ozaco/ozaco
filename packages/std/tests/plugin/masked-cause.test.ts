@@ -32,10 +32,12 @@ describe('error hook masking keeps the cause chain', () => {
           return yield* fail('hook.threw', 'the hook broke', 'hook.step')
         },
       })
+
       return yield* P.actions.work()
     })
 
     expect(isFailure(outcome)).toBe(true)
+
     if (!isFailure(outcome)) {
       return
     }
@@ -91,14 +93,18 @@ describe('error hook masking keeps the cause chain', () => {
           return yield* fail('hook.threw', '', inner)
         },
       })
+
       return yield* P.actions.work()
     })
 
     expect(isFailure(outcome)).toBe(true)
+
     if (!isFailure(outcome)) {
       return
     }
+
     const [own, marker, masked] = outcome.causes
+
     expect(own).toBe(inner)
     expect(marker).toBe('masked: op.failed')
     expect(masked).toBe(original)
@@ -122,6 +128,7 @@ describe('error hook masking keeps the cause chain', () => {
           return yield* fail('hook.threw', 'wrapped it', failure)
         },
       })
+
       return yield* P.actions.work()
     })
 
@@ -146,6 +153,7 @@ describe('error hook masking keeps the cause chain', () => {
           return yield* thrown
         },
       })
+
       return yield* P.actions.work()
     })
 
@@ -174,6 +182,7 @@ describe('error hook masking keeps the cause chain', () => {
           throw error
         },
       })
+
       return yield* P.actions.work()
     })
 

@@ -34,10 +34,12 @@ export const PgAdapter = DbAdapter.implement<Adapter.Options, [options: Pg.Optio
       max: options.max ?? 10,
       ssl: options.ssl,
     })
+
     yield* StateRef.set({ pool, connection: { url: options.url, ssl: options.ssl } })
     yield* ensure(function* () {
       yield* attempt(until(pool.end() as Promise<void>))
     })
+
     return {
       adapter: 'pg',
       capabilities: { transactions: true, raw: true, alterColumn: true },

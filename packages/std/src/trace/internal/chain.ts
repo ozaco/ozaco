@@ -1,39 +1,33 @@
 import type { Result } from 'std:result'
 import { isFailure } from 'std:result'
 
-import { ABSORB_DEPTH, ABSORB_LEVELS, CHAIN_DEPTH, CHAIN_LEVELS } from './const'
-
 /**
- * A failure and the failures nested in its causes, depth first (a failure before what it wraps,
- * its causes in stored order): at most `depth` levels deep and `limit` failures in all; a failure
- * met again (a cycle, one shared twice) is walked once.
+ * A failure and every failure nested in its causes, depth first (a failure before what it wraps,
+ * its causes in stored order); a failure met again (a cycle, one shared twice) is walked once.
  */
-export const chainOf = (
-  start: Result.Failure<unknown>,
-  depth = CHAIN_DEPTH,
-  limit = CHAIN_LEVELS,
-): Result.Failure<unknown>[] => {
+export const chainOf = (start: Result.Failure<unknown>): Result.Failure<unknown>[] => {
   const out: Result.Failure<unknown>[] = []
   const seen = new Set<unknown>()
+  // an explicit stack, not recursion: a chain of any depth never overflows the call stack
+  const stack: Result.Failure<unknown>[] = [start]
 
-  const visit = (failure: Result.Failure<unknown>, level: number): void => {
-    if (seen.has(failure) || out.length >= limit) {
-      return
+  while (stack.length > 0) {
+    const failure = stack.pop() as Result.Failure<unknown>
+
+    if (seen.has(failure)) {
+      continue
     }
 
     seen.add(failure)
     out.push(failure)
 
-    if (level < depth && Array.isArray(failure.causes)) {
-      for (const cause of failure.causes) {
-        if (isFailure(cause)) {
-          visit(cause, level + 1)
-        }
-      }
+    const nested = Array.isArray(failure.causes) ? failure.causes.filter(isFailure) : []
+
+    // pushed last-first, so the first nested failure is walked next (depth first, stored order)
+    for (let index = nested.length - 1; index >= 0; index -= 1) {
+      stack.push(nested[index] as Result.Failure<unknown>)
     }
   }
-
-  visit(start, 1)
 
   return out
 }
@@ -41,4 +35,4 @@ export const chainOf = (
 /** What `outer` wraps, however deep in its causes: the nested failures (a pending failure is
  * wrapped when it is one of them). */
 export const nestedIn = (outer: Result.Failure<unknown>): Set<unknown> =>
-  new Set(chainOf(outer, ABSORB_DEPTH, ABSORB_LEVELS).slice(1))
+  new Set(chainOf(outer).slice(1))

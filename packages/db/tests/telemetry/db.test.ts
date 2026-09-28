@@ -10,7 +10,7 @@ import type { Operation } from 'std:effect'
 import { attempt, fork, run, sleep } from 'std:effect'
 import { fail, isFailure, unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
-import { span } from 'std:trace'
+import { Trace } from 'std:trace'
 
 import { describe, expect, it } from 'bun:test'
 import { mkdtempSync } from 'node:fs'
@@ -35,22 +35,26 @@ const scope = { name: '@ozaco/db', version: pkg.version }
 function* memoryDb(options: Partial<Database.Options> = {}) {
   yield* BunIO.use()
   yield* MemoryAdapter.use()
+
   return (yield* DbClient.use({ schema, ...options })) as AnyType
 }
 
 function* sqliteDb(options: Partial<Database.Options> = {}) {
   yield* BunIO.use()
   yield* SqliteAdapter.use({ path: join(mkdtempSync(join(tmpdir(), 'ozaco-db-trace-')), 'app.db') })
+
   return (yield* DbClient.use({ schema, ...options })) as AnyType
 }
 
 /** A recording parent span around `body`. */
-const request = <T>(body: () => Operation<T>): Operation<T> => span('request', () => body())
+const request = <T>(body: () => Operation<T>): Operation<T> =>
+  Trace.actions.span('request', () => body())
 
 describe('db spans — child-only', () => {
   it('no recording parent ⇒ no span at all; under one ⇒ `{op} {table}` children', async () => {
     const { tracer } = await traced(function* (live) {
       const db = yield* memoryDb()
+
       yield* db.insert('todos', { title: 'untraced' })
       yield* db.query('todos').collect()
       expect(live.spans).toEqual([])
@@ -64,7 +68,9 @@ describe('db spans — child-only', () => {
 
     // the change-log writes (`__changes_todos`) never show up
     expect(tracer.names()).toEqual(['insert todos', 'count todos', 'find todos', 'request'])
+
     const root = tracer.span('request')
+
     for (const name of ['insert todos', 'count todos', 'find todos']) {
       expect(tracer.span(name).parent?.spanId).toBe(root.context.spanId)
     }
@@ -73,10 +79,12 @@ describe('db spans — child-only', () => {
   it('memory adapter: INTERNAL spans, system ozaco.memory, namespace memory, no query text', async () => {
     const { tracer } = await traced(function* () {
       const db = yield* memoryDb()
+
       yield* request(() => db.insert('todos', { title: 'a' }))
     })
 
     const insert = tracer.span('insert todos')
+
     expect(insert.kind).toBe('internal')
     expect(insert.scope).toEqual(scope)
     expect(insert.attributes).toEqual({
@@ -91,6 +99,7 @@ describe('db spans — child-only', () => {
   it('sqlite: CLIENT spans with the file basename, parameterized query text and batch size', async () => {
     const { tracer } = await traced(function* () {
       const db = yield* sqliteDb()
+
       yield* request(function* () {
         yield* db.insertMany('todos', [
           { title: 'secret-1' },
@@ -103,6 +112,7 @@ describe('db spans — child-only', () => {
     })
 
     const insert = tracer.span('insert todos')
+
     expect(insert.kind).toBe('client')
     expect(insert.attributes).toMatchObject({
       'db.system.name': 'sqlite',
@@ -111,12 +121,15 @@ describe('db spans — child-only', () => {
       'db.operation.name': 'insert',
       'db.operation.batch.size': 3,
     })
+
     const text = String(insert.attributes['db.query.text'])
+
     expect(text).toStartWith('INSERT INTO')
     expect(text).toContain('?')
     expect(text).not.toContain('secret')
 
     const find = tracer.span('find todos')
+
     expect(String(find.attributes['db.query.text'])).toStartWith('SELECT')
     expect(String(find.attributes['db.query.text'])).not.toContain('secret')
     expect(find.attributes['db.operation.batch.size']).toBeUndefined()
@@ -130,6 +143,7 @@ describe('db spans — child-only', () => {
   it('observe.returnedRows stamps db.response.returned_rows', async () => {
     const { tracer } = await traced(function* () {
       const db = yield* memoryDb({ observe: { returnedRows: true } })
+
       yield* db.insertMany('todos', [{ title: 'a' }, { title: 'b' }])
       yield* request(() => db.query('todos').collect())
     })
@@ -140,6 +154,7 @@ describe('db spans — child-only', () => {
   it('a transaction is a `transaction` span over its statements', async () => {
     const { tracer } = await traced(function* () {
       const db = yield* sqliteDb()
+
       yield* request(() =>
         db.transaction(function* (tx: AnyType) {
           yield* tx.insert('todos', { title: 'in tx' })
@@ -148,6 +163,7 @@ describe('db spans — child-only', () => {
     })
 
     const tx = tracer.span('transaction')
+
     expect(tx.kind).toBe('client')
     expect(tx.attributes).toMatchObject({
       'db.system.name': 'sqlite',
@@ -159,14 +175,16 @@ describe('db spans — child-only', () => {
     expect(tx.parent?.spanId).toBe(tracer.span('request').context.spanId)
   })
 
-  it('a conflict retry: `ozaco.db.tx.retry` on the caller, the failed attempt handled (WARN)', async () => {
+  it('a conflict retry: `db.tx.retry` on the caller, the failed attempt handled (WARN)', async () => {
     const { tracer } = await traced(function* () {
       const db = yield* memoryDb()
       let attempts = 0
+
       yield* request(() =>
         db.transaction(function* (tx: AnyType) {
           attempts += 1
           yield* tx.insert('todos', { title: `attempt ${attempts}` })
+
           if (attempts === 1) {
             return yield* fail(DbErrors.Conflict, 'serialization failure')
           }
@@ -175,19 +193,22 @@ describe('db spans — child-only', () => {
     })
 
     const root = tracer.span('request')
+
     expect(root.events.map(event => [event.name, event.attributes])).toEqual([
-      ['ozaco.db.tx.retry', { 'ozaco.db.transaction.attempt': 2 }],
+      ['db.tx.retry', { 'ozaco.db.transaction.attempt': 2 }],
     ])
 
     // the failed attempt's span is held until its failure settles (the request ended): it is
     // exported after the successful one
     const [succeeded, failed] = tracer.all('transaction')
+
     expect(succeeded!.attributes['error.type']).toBeUndefined()
     expect(failed!.attributes['error.type']).toBe(DbErrors.Conflict)
     // handled by the retry: `error.type` only, the status stays unset
     expect(failed!.status.code).toBe('unset')
 
     const [exception] = tracer.exceptions()
+
     expect(tracer.exceptions()).toHaveLength(1)
     expect(exception!.eventName).toBe('db.client.operation.exception')
     expect(exception!.severityNumber).toBe(13)
@@ -197,12 +218,15 @@ describe('db spans — child-only', () => {
   it('a constraint failure: error.type, the SQLite code as status code, the driver error as raw', async () => {
     const { tracer, result } = await tracedResult(function* () {
       const db = yield* sqliteDb()
+
       yield* db.insert('accounts', { email: 'ada@example.com' })
       yield* request(() => db.insert('accounts', { email: 'ada@example.com' }))
     })
 
     expect(isFailure(result)).toBe(true)
+
     const failure = result as AnyType
+
     expect(failure.error).toBe(DbErrors.Unique)
     // the SQLiteError is the failure's `raw` (one level, its text the message); its code rides
     // the `sqlite <code>` cause the span reads, the plugin runtime's labels after it (the
@@ -220,6 +244,7 @@ describe('db spans — child-only', () => {
     ])
 
     const insert = tracer.span('insert accounts')
+
     expect(insert.status.code).toBe('error')
     expect(insert.attributes['error.type']).toBe(DbErrors.Unique)
     // the status cause's code exactly — a label (`sqlite@<version>`) is never read as one
@@ -227,6 +252,7 @@ describe('db spans — child-only', () => {
     expect(insert.events.map(event => event.name)).toEqual(['exception'])
 
     const [exception] = tracer.exceptions()
+
     expect(tracer.exceptions()).toHaveLength(1)
     expect(exception!.eventName).toBe('db.client.operation.exception')
     expect(exception!.severityNumber).toBe(17)
@@ -242,6 +268,7 @@ describe('db spans — child-only', () => {
     })
 
     const [bound, bare] = tracer.all('raw')
+
     expect(bound!.attributes).toMatchObject({
       'db.operation.name': 'raw',
       'db.query.text': 'SELECT title FROM todos WHERE title = ?',
@@ -254,9 +281,11 @@ describe('db spans — child-only', () => {
   it('a watch: the first read is the subscriber’s, live re-queries run with no span', async () => {
     const { tracer } = await traced(function* () {
       const db = yield* memoryDb()
-      yield* span('session', function* () {
+
+      yield* Trace.actions.span('session', function* () {
         const live = yield* db.query('todos').watch()
         const first = yield* live.next()
+
         expect(first.value.rows).toHaveLength(0)
 
         // a writer outside any span; the watch recomputes twice under the long-lived session
@@ -279,7 +308,9 @@ describe('db spans — child-only', () => {
   it('no tracer installed: the handle works exactly as before', async () => {
     const outcome = await run(function* () {
       const db = yield* memoryDb()
+
       yield* request(() => db.insert('todos', { title: 'a' }))
+
       return yield* db.query('todos').count()
     })
 
@@ -296,7 +327,9 @@ describe.skipIf(!url)('db spans — postgres', () => {
     const { tracer } = await tracedResult(function* () {
       yield* BunIO.use()
       yield* PgAdapter.use({ url: url! })
+
       const db = (yield* DbClient.use({ schema, migrations: 'manual' })) as AnyType
+
       yield* Db.actions.dropTable('accounts')
       yield* Db.actions.migrate()
       yield* db.insert('accounts', { email: 'ada@example.com' })
@@ -304,6 +337,7 @@ describe.skipIf(!url)('db spans — postgres', () => {
     })
 
     const insert = tracer.span('insert accounts')
+
     expect(insert.kind).toBe('client')
     expect(insert.attributes).toMatchObject({
       'db.system.name': 'postgresql',

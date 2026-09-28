@@ -49,11 +49,13 @@ function* applyOffer(
   ready: boolean,
 ): Operation<boolean> {
   const applied = yield* attempt(() => until(pc.setRemoteDescription(description)))
+
   if (isSuccess(applied) || ready) {
     return isSuccess(applied)
   }
 
   yield* attempt(() => until(pc.setLocalDescription({ type: 'rollback' })))
+
   const retried = yield* attempt(() => until(pc.setRemoteDescription(description)))
 
   return isSuccess(retried)
@@ -80,34 +82,42 @@ function* handleOffer(
   }
 
   generation.ignoreOffer = !polite && !ready
+
   if (generation.ignoreOffer) {
     return
   }
 
   if (!(yield* applyOffer(pc, description, ready))) {
     failNegotiation(session, generation, 'setRemoteDescription(offer) failed')
+
     return
   }
 
   yield* flushCandidates(generation)
 
   const answer = yield* attempt(() => until(pc.createAnswer()))
+
   if (!isSuccess(answer)) {
     failNegotiation(session, generation, 'createAnswer failed')
+
     return
   }
 
   const set = yield* attempt(() => until(pc.setLocalDescription(answer.value)))
+
   if (!isSuccess(set)) {
     failNegotiation(session, generation, 'setLocalDescription(answer) failed')
+
     return
   }
 
   const sent = yield* attempt(() =>
     session.sendFrame({ t: 'rtc:description', description: descriptionOf(answer.value) }),
   )
+
   if (!isSuccess(sent)) {
     failNegotiation(session, generation, 'signal send failed for the answer')
+
     return
   }
 
@@ -127,11 +137,14 @@ function* handleAnswer(
   }
 
   generation.settingRemoteAnswer = true
+
   const applied = yield* attempt(() => until(pc.setRemoteDescription(description)))
+
   generation.settingRemoteAnswer = false
 
   if (!isSuccess(applied)) {
     failNegotiation(session, generation, 'setRemoteDescription(answer) failed')
+
     return
   }
 
@@ -189,6 +202,7 @@ export function* handleCandidate(
 
   if (!hasDescription(generation.pc.remoteDescription)) {
     generation.pendingCandidates.push(candidate) // too early — flushed after setRemoteDescription
+
     return
   }
 
@@ -226,6 +240,7 @@ export const superviseNegotiation = guard(function* (session: Helpers.Session) {
 
     while (true) {
       const request = yield* generation.negotiations.next()
+
       if (request.done) {
         return
       }
@@ -249,14 +264,18 @@ export const superviseNegotiation = guard(function* (session: Helpers.Session) {
       }
 
       const startedAt = Date.now()
+
       generation.makingOffer = true
+
       const result = yield* attempt(() => offer(session, pc, kind))
+
       generation.makingOffer = false
 
       if (!isSuccess(result)) {
         if (generation.alive && !session.ended) {
           failNegotiation(session, generation, 'offer failed')
         }
+
         continue
       }
 

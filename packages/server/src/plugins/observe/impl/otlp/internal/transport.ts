@@ -148,6 +148,7 @@ export function* deliver(
       if (!last && inTime(budget, waitMs)) {
         stats.retried += 1
         yield* sleep(waitMs)
+
         continue
       }
 
@@ -159,6 +160,7 @@ export function* deliver(
     }
 
     const reply = outcome.value
+
     budget.onAnswer?.()
 
     if (reply.status >= 200 && reply.status < 300) {
@@ -170,6 +172,7 @@ export function* deliver(
     if (!last && RETRYABLE_STATUSES.has(reply.status) && inTime(budget, waitMs)) {
       stats.retried += 1
       yield* sleep(waitMs)
+
       continue
     }
 

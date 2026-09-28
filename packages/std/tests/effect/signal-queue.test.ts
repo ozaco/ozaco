@@ -20,17 +20,22 @@ describe('signal default queue', () => {
       signal.send(2)
 
       const subscription = yield* signal
+
       signal.send(3)
       signal.close()
 
       const seen: number[] = []
+
       for (;;) {
         const next = yield* subscription.next()
+
         if (next.done) {
           break
         }
+
         seen.push(next.value)
       }
+
       return seen
     })
 
@@ -121,8 +126,11 @@ describe('signal default queue', () => {
 
       const insideScope = yield* scoped(function* () {
         const subscription = yield* signal
+
         signal.send(1)
+
         const item = yield* subscription.next()
+
         return item.done ? 'done' : item.value
       })
 
@@ -130,7 +138,9 @@ describe('signal default queue', () => {
       signal.send(2)
 
       const fresh = yield* signal
+
       signal.send(3)
+
       const item = yield* fresh.next()
 
       return { insideScope, afterwards: item.done ? 'done' : item.value }

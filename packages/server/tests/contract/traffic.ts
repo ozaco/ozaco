@@ -26,7 +26,7 @@ import type { Operation } from 'std:effect'
 import { run, sleep, until } from 'std:effect'
 import { DefaultLogger, Logger, LogLevel } from 'std:logger'
 import { asFailure, fail, unwrap } from 'std:result'
-import { event } from 'std:trace'
+import { Trace } from 'std:trace'
 
 import { BunEdge } from 'server:impl/edge/bun'
 import { OpenObserveExporter } from 'server:plugins/observe/openobserve'
@@ -41,6 +41,7 @@ let installs = 0
 /** A destination of one's own: every event the kernel fans out, verbatim. */
 export const memoryExporter = () => {
   installs += 1
+
   const seen: ObserveDef.Event[] = []
   const plugin = ObserveExporter.implement<ObserveDef.ExporterContext, []>({
     name: `test/contract-memory-${installs}`,
@@ -67,11 +68,13 @@ export const memoryExporter = () => {
  */
 const secondOtlp = (options: OtlpDef.Options) => {
   installs += 1
+
   const Impl = ObserveExporter.implement<OtlpDef.Context, []>({
     name: `test/contract-otlp-${installs}`,
     version: '0.0.0',
     *setup() {
       const kernel = yield* Server.context.expect()
+
       return { exporter: 'otlp', ...(yield* createOtlpPipeline(kernel, options)) }
     },
   })
@@ -104,6 +107,7 @@ export const fakeCollector = () => {
       typeof init?.body === 'string'
         ? new TextEncoder().encode(init.body)
         : new Uint8Array(init?.body as ArrayBufferLike)
+
     posted.push({
       url: String(url),
       contentType: new Headers(init?.headers).get('content-type') ?? '',
@@ -128,6 +132,7 @@ export const captureStdout = async <T>(
 ): Promise<{ value: T; lines: string[] }> => {
   const lines: string[] = []
   const original = console.log
+
   console.log = (...args: unknown[]) => {
     lines.push(...args.map(String).join(' ').split('\n'))
   }
@@ -165,6 +170,7 @@ const shop = service('shop', {
         },
         { attributes: { 'app.cached': false, 'app.ids': [1, 2] } },
       )
+
       return { id: input.id, price: 9.5 }
     },
   ),
@@ -177,8 +183,10 @@ const shop = service('shop', {
     // a nested call of its own service: the return annotation breaks the inference cycle
     function* ({ input, ctx }): Operation<{ id: string; total: number }> {
       const item = yield* ctx.call(shop, 'item', { id: input.id })
+
       yield* orders.emit('shop.ordered', { id: input.id, qty: 2 })
       yield* Server.actions.report({ stream: 'audit', 'app.verb': 'ordered', 'app.qty': 2 })
+
       return { id: input.id, total: item.price * 2 }
     },
   ),
@@ -198,9 +206,11 @@ const shop = service('shop', {
 /** One in-process request, its body read to the end (the edge span ends with it). */
 function* request(path: string, init?: RequestInit): Operation<number> {
   const response = yield* Edge.actions.handle(new Request(`http://edge${path}`, init))
+
   yield* until(response.text())
   // the span of a streamed body ends from the edge's scope: let that run
   yield* sleep(5)
+
   return response.status
 }
 
@@ -235,6 +245,7 @@ function* settle(check: () => boolean, ms = 3000): Operation<void> {
     if (Date.now() > deadline) {
       throw new Error('timed out waiting for the traffic to settle')
     }
+
     yield* sleep(5)
   }
 }
@@ -268,6 +279,7 @@ export const runTraffic = async (): Promise<Traffic> => {
         yield* storage()
         // a std Logger at the root: the node bridges its lines (TraceTransport) into every sink
         yield* DefaultLogger.use({ level: LogLevel.info })
+
         const server = yield* createServer({
           services: [shop],
           name: 'contract',
@@ -302,7 +314,7 @@ export const runTraffic = async (): Promise<Traffic> => {
         })
 
         yield* orders.handle('shop.ordered', function* (payload) {
-          yield* event('app.shipped', { 'app.qty': payload.qty })
+          yield* Trace.actions.event('app.shipped', { 'app.qty': payload.qty })
         })
 
         yield* Edge.actions.socket({
@@ -310,6 +322,7 @@ export const runTraffic = async (): Promise<Traffic> => {
           receives: z.object({ t: z.string(), text: z.string() }),
           *handler(socket) {
             yield* socket.send({ t: 'hello' })
+
             const messages = yield* socket.messages
 
             for (;;) {
@@ -320,6 +333,7 @@ export const runTraffic = async (): Promise<Traffic> => {
               }
 
               const { text } = step.value as { text: string }
+
               yield* socket.ctx.log.info('heard', { 'app.text': text })
               yield* socket.send({ t: 'echo', text })
             }
@@ -378,6 +392,7 @@ export const runTraffic = async (): Promise<Traffic> => {
             views.push(view)
           }
         }
+
         store = views
       }),
     ),

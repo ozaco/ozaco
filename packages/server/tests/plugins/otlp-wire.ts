@@ -213,6 +213,7 @@ const decodeMessage = (bytes: Uint8Array, type: string): Record<string, AnyType>
       }
 
       const byte = bytes[at]!
+
       at += 1
       value |= BigInt(byte & 0x7f) << shift
       shift += 7n
@@ -229,6 +230,7 @@ const decodeMessage = (bytes: Uint8Array, type: string): Record<string, AnyType>
     }
 
     const chunk = bytes.subarray(at, at + size)
+
     at += size
 
     return chunk
@@ -270,6 +272,7 @@ const decodeMessage = (bytes: Uint8Array, type: string): Record<string, AnyType>
       }
 
       out[field.name] = [...(out[field.name] ?? []), ...values]
+
       continue
     }
 
@@ -286,6 +289,7 @@ const decodeMessage = (bytes: Uint8Array, type: string): Record<string, AnyType>
       }
 
       put(field, nested)
+
       continue
     }
 
@@ -296,42 +300,51 @@ const decodeMessage = (bytes: Uint8Array, type: string): Record<string, AnyType>
     switch (field.type) {
       case 'string': {
         put(field, new TextDecoder().decode(take(Number(varint()))))
+
         break
       }
       case 'id': {
         put(field, Buffer.from(take(Number(varint()))).toString('hex'))
+
         break
       }
       case 'uint': {
         put(field, Number(varint()))
+
         break
       }
       case 'bool': {
         put(field, varint() !== 0n)
+
         break
       }
       case 'int64': {
         put(field, BigInt.asIntN(64, varint()).toString())
+
         break
       }
       case 'fixed64': {
         put(field, view.getBigUint64(at, true).toString())
         at += 8
+
         break
       }
       case 'sfixed64': {
         put(field, view.getBigInt64(at, true).toString())
         at += 8
+
         break
       }
       case 'double': {
         put(field, view.getFloat64(at, true))
         at += 8
+
         break
       }
       case 'fixed32': {
         put(field, view.getUint32(at, true))
         at += 4
+
         break
       }
       default: {
@@ -402,6 +415,7 @@ export const fakeCollector = (
         ? new TextEncoder().encode(init.body)
         : new Uint8Array(init?.body as ArrayBufferLike)
     const entry: Received = { url: String(url), headers, body }
+
     received.push(entry)
 
     try {

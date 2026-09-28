@@ -32,6 +32,7 @@ export const live = service(
       },
       function* ({ input, ctx }) {
         yield* ctx.emit(input.name, input.payload ?? { at: Date.now() })
+
         return { emitted: input.name }
       },
     ),
@@ -52,6 +53,7 @@ export const live = service(
 
           for (let seen = 0; seen < input.max; seen += 1) {
             const step = yield* source.next()
+
             yield* emit({
               name: step.value.name,
               payload: step.value.payload,
@@ -73,10 +75,12 @@ export const live = service(
       },
       function* (socket) {
         peers.add(socket)
+
         const name = socket.headers['x-name'] ?? socket.id.slice(0, 6)
 
         try {
           yield* socket.send({ t: 'hello', id: socket.id, peers: peers.size })
+
           const messages = yield* socket.messages
 
           for (;;) {

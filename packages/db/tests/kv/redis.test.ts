@@ -50,7 +50,9 @@ describe('redis — client rejections (fake client)', () => {
     expect(isFailure(outcome)).toBe(true)
     expect(outcome.error).toBe(KvErrors.Connection)
     expect(outcome.message).toBe('cannot connect to redis')
+
     const nested = outcome.causes.filter(isFailure)
+
     expect(nested).toHaveLength(1)
     expect(nested[0].error).toBe(ResultErrors.Unknown)
     expect(nested[0].raw).toBe(refused)
@@ -68,7 +70,9 @@ describe('redis — client rejections (fake client)', () => {
     expect(isFailure(outcome)).toBe(true)
     expect(outcome.error).toBe(KvErrors.Connection)
     expect(outcome.message).toBe('redis command failed')
+
     const nested = outcome.causes.filter(isFailure)
+
     expect(nested).toHaveLength(1)
     expect(nested[0].error).toBe(ResultErrors.Unknown)
     expect(nested[0].raw).toBe(reset)

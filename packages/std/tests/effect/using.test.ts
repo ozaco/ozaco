@@ -32,9 +32,11 @@ describe('using', () => {
     const outcome = await run(function* () {
       const adopted = yield* scoped(function* () {
         const value = yield* using(disposable)
+
         order.push('acquired')
         yield* sleep(1)
         order.push('leaving')
+
         return value
       })
 
@@ -77,6 +79,7 @@ describe('using', () => {
       },
       [Symbol.asyncDispose]() {
         calls.push('async')
+
         return Promise.resolve()
       },
     }
@@ -156,6 +159,7 @@ describe('useAbortSignal', () => {
       const insideScope = yield* scoped(function* () {
         signal = yield* useAbortSignal()
         yield* sleep(1)
+
         return signal.aborted
       })
 
@@ -173,6 +177,7 @@ describe('useAbortSignal', () => {
 
       const task = scope.run(function* () {
         const signal = yield* useAbortSignal()
+
         signal.addEventListener('abort', () => {
           aborted = true
         })

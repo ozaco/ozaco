@@ -10,6 +10,7 @@ import type { Helpers } from '../types/helpers'
  * `untagged failure`, never `undefined`. */
 const maskedLabel = (failure: Result.Failure<unknown>): string => {
   const tag = failure.error === undefined ? 'untagged failure' : String(failure.error)
+
   return failure.message ? `${tag}: ${failure.message}` : tag
 }
 
@@ -23,6 +24,7 @@ const layer = (handlers: Record<string, AnyType>, wrap: Helpers.Wrap) => ({
       if (!Object.hasOwn(handlers, key)) {
         return yield* next(key, args)
       }
+
       return yield* wrap(handlers[key], [key, args], next)
     },
   }),
@@ -46,6 +48,7 @@ export const createHookInstallers = (api: Api<Helpers.Dispatch>) => ({
       layer(flatten(handlers), (fn, [key, args], next) => ({
         *[Symbol.iterator]() {
           yield* fn(args)
+
           return yield* next(key, args)
         },
       })),
@@ -57,9 +60,11 @@ export const createHookInstallers = (api: Api<Helpers.Dispatch>) => ({
         *[Symbol.iterator]() {
           let result = yield* next(key, args)
           const modified = yield* fn(result, args)
+
           if (modified !== undefined) {
             result = modified
           }
+
           return result
         },
       })),

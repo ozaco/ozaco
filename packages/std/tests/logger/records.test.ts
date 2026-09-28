@@ -140,6 +140,7 @@ describe('bindings', () => {
 
       const value = yield* Logger.actions.child({ traceId: 't-1' }, function* () {
         yield* Logger.actions.info('inside')
+
         return 'from-child'
       })
 

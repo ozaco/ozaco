@@ -4,7 +4,7 @@ import { attempt } from 'std:effect'
 import type { Result } from 'std:result'
 import { isFailure } from 'std:result'
 import type { TraceDef } from 'std:trace'
-import { current, span } from 'std:trace'
+import { Trace } from 'std:trace'
 
 import { CHANGES_PREFIX, TELEMETRY_SCOPE } from '../const'
 import { Kv } from '../definition/protocol'
@@ -95,7 +95,7 @@ function* dbSpan<T>(
     failure: { eventName: DB_EXCEPTION_EVENT },
   }
 
-  return yield* span(
+  return yield* Trace.actions.span(
     call.table ? `${call.op} ${call.table}` : call.op,
     options,
     function* (handle) {
@@ -113,6 +113,7 @@ function* dbSpan<T>(
 
       if (isFailure(outcome)) {
         handle.setAttribute('db.response.status_code', statusCodeOf(outcome))
+
         return yield* outcome
       }
 
@@ -211,10 +212,10 @@ export const traced = (
   }
 }
 
-/** A transaction retried after a `db.conflict`: an `ozaco.db.tx.retry` event on the caller's span
+/** A transaction retried after a `db.conflict`: an `db.tx.retry` event on the caller's span
  * (`attempt` = the attempt about to run, 2 for the first retry). */
 export function* txRetry(attemptNumber: number): Operation<void> {
-  const handle = yield* current()
+  const handle = yield* Trace.actions.current()
 
   handle.addEvent(TX_RETRY_EVENT, { 'ozaco.db.transaction.attempt': attemptNumber })
 }
@@ -242,7 +243,7 @@ const kvIdentity = (info: KvDef.Options): Helpers.DbIdentity & { readonly collec
 export function* kvSpan<T>(op: string, body: () => Operation<T>, batch?: number): Operation<T> {
   const identity = kvIdentity(yield* Kv.context.expect())
 
-  return yield* span(
+  return yield* Trace.actions.span(
     `${op} kv`,
     {
       kind: identity.kind,

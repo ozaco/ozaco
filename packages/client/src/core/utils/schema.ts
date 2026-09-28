@@ -52,6 +52,7 @@ export const exampleOf = (schema: Helpers.Schema, depth = 0): unknown => {
 
     case 'string': {
       const format = schema['format']
+
       return format === 'email'
         ? 'user@example.com'
         : format === 'date-time'
@@ -85,6 +86,7 @@ export const fieldsOf = (schema: Helpers.Schema): readonly Helpers.Field[] => {
 
   return Object.entries(schema['properties']).map(([name, property]) => {
     const record = isRecord(property) ? property : {}
+
     return {
       name,
       type: typeOf(record) ?? (Array.isArray(record['enum']) ? 'enum' : 'any'),
@@ -105,6 +107,7 @@ export const coerceField = (text: string, type: string): unknown => {
     case 'number':
     case 'integer': {
       const number = Number(text)
+
       return Number.isNaN(number) ? text : number
     }
 

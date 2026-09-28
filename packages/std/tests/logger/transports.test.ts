@@ -116,6 +116,7 @@ describe('transport fan-out', () => {
     })
 
     expect(isFailure(outcome)).toBe(true)
+
     if (isFailure(outcome)) {
       expect(outcome.error).toBe('transport-boom')
     }
@@ -219,10 +220,12 @@ describe('console transport install order', () => {
       yield* JsonCodec.use()
       yield* ConsoleTransport.use({ format: plainFormat })
       yield* DefaultLogger.use()
+
       return 'unreachable'
     })
 
     expect(isFailure(outcome)).toBe(true)
+
     if (isFailure(outcome)) {
       expect(outcome.error).toBe('std:effect.missing-context')
     }
@@ -232,7 +235,9 @@ describe('console transport install order', () => {
     const outcome = await run(function* () {
       yield* JsonCodec.use()
       yield* DefaultLogger.use({ level: LogLevel.warn })
+
       const ctx = yield* ConsoleTransport.use({ format: plainFormat })
+
       return ctx.level
     })
 

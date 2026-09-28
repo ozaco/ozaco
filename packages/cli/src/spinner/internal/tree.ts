@@ -8,17 +8,21 @@ const glyph = (node: Helpers.TreeNode, palette: PaletteDef.Context, frame: numbe
   if (node.status === 'success') {
     return colors.success(symbols.answered)
   }
+
   if (node.status === 'fail') {
     return colors.error(symbols.error)
   }
+
   if (node.status === 'warn') {
     return colors.warning(symbols.warning)
   }
+
   if (node.status === 'info') {
     return colors.info(symbols.info)
   }
 
   const frames = symbols.spinner
+
   return colors.primary(frames[frame % frames.length] ?? '')
 }
 
@@ -37,6 +41,7 @@ const bar = (node: Helpers.TreeNode, palette: PaletteDef.Context): string => {
 
 const line = (node: Helpers.TreeNode, palette: PaletteDef.Context, frame: number): string => {
   const head = `${glyph(node, palette, frame)} ${node.message}`
+
   return node.type === 'bar' ? `${head} ${bar(node, palette)}` : head
 }
 
@@ -77,10 +82,12 @@ export const renderTree = (
     for (const [index, node] of items.entries()) {
       const isLast = index === items.length - 1
       const connector = depth === 0 ? '' : isLast ? '└ ' : '├ '
+
       out.push(`${palette.colors.muted(indent + connector)}${line(node, palette, frame)}`)
 
       if (node.children.length > 0) {
         const childIndent = depth === 0 ? '  ' : indent + (isLast ? '   ' : '│  ')
+
         out.push(...walk(node.children, depth + 1, childIndent))
       }
     }

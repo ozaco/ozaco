@@ -63,6 +63,7 @@ const json = function* (path: string, tenant: string | undefined, init?: Request
 
 const seed = function* (tenant: string, title: string) {
   const db = yield* useDb(notesSchema)
+
   return yield* db.insert('notes', { tenant, title, done: false })
 }
 
@@ -71,7 +72,9 @@ describe('resource scope', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({ services: [notes], edge: BunEdge })
+
         yield* server.start()
 
         const mine = yield* seed('a', 'mine')
@@ -79,6 +82,7 @@ describe('resource scope', () => {
 
         // list: only the caller's rows, whatever the client filter says
         const page = yield* json('/notes', 'a')
+
         expect(page.body.data.map((row: AnyType) => row.title)).toEqual(['mine'])
 
         // get: another tenant's row reads as absent, not as forbidden
@@ -90,6 +94,7 @@ describe('resource scope', () => {
           method: 'POST',
           body: JSON.stringify({ title: 'fresh', done: false }),
         })
+
         expect(created.status).toBe(200)
         expect(created.body.tenant).toBe('a')
 
@@ -118,6 +123,7 @@ describe('resource scope', () => {
 
         // update: the scoped column is not the caller's to move
         const moved = yield* patch(mine._id, 'a', { body: { title: 'kept', tenant: 'b' } })
+
         expect(moved.status).toBe(200)
         expect(moved.body.tenant).toBe('a')
 
@@ -126,6 +132,7 @@ describe('resource scope', () => {
           method: 'PUT',
           body: JSON.stringify({ title: 'put', done: true, tenant: 'b' }),
         })
+
         expect(replaced.status).toBe(200)
         expect(replaced.body.tenant).toBe('a')
         expect((yield* json(`/notes/${mine._id}`, 'a')).status).toBe(200)
@@ -147,6 +154,7 @@ describe('resource scope', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({
           services: [notes],
           edge: BunEdge,
@@ -173,6 +181,7 @@ describe('resource scope', () => {
 
         const socket = new WebSocket(`${info.url!.replace('http', 'ws')}/notes/_realtime`)
         const frames: AnyType[] = []
+
         socket.addEventListener('message', event => frames.push(JSON.parse(String(event.data))))
 
         const next = (after: number) =>
@@ -188,6 +197,7 @@ describe('resource scope', () => {
                   setTimeout(poll, 10)
                 }
               }
+
               poll()
             }),
           )
@@ -202,14 +212,18 @@ describe('resource scope', () => {
         // the scope narrows it to this subscriber's verified tenant
         socket.send(JSON.stringify({ t: 'auth', token: tokens.accessToken }))
         socket.send(JSON.stringify({ t: 'watch', id: 'w1' }))
+
         const sync = yield* next(0)
+
         expect(sync.t).toBe('sync')
         expect(sync.rows.map((row: AnyType) => row.title)).toEqual(['mine'])
 
         // another tenant's write never reaches this subscriber; its own does
         yield* seed('b', 'noise')
         yield* seed('a', 'fresh')
+
         const delta = yield* next(1)
+
         expect(delta.t).toBe('delta')
         expect(delta.added.map((row: AnyType) => row.title)).toEqual(['fresh'])
 

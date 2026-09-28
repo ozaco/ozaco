@@ -54,8 +54,10 @@ export const createHandle = (session: Helpers.Session): WsDef.Connection => {
         }
 
         const socket = session.socket
+
         if (socket && socket.readyState === OPEN) {
           socket.send(payload as AnyType)
+
           return
         }
 

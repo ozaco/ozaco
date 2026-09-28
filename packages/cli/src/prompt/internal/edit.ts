@@ -21,20 +21,25 @@ export const editLine = (state: Helpers.InputState, key: Key): Helpers.InputStat
       ? state
       : { value: value.slice(0, cursor - 1) + value.slice(cursor), cursor: cursor - 1 }
   }
+
   if (key.name === 'delete') {
     return cursor >= value.length
       ? state
       : { value: value.slice(0, cursor) + value.slice(cursor + 1), cursor }
   }
+
   if (key.name === 'left') {
     return { value, cursor: Math.max(0, cursor - 1) }
   }
+
   if (key.name === 'right') {
     return { value, cursor: Math.min(value.length, cursor + 1) }
   }
+
   if (key.name === 'home') {
     return { value, cursor: 0 }
   }
+
   if (key.name === 'end') {
     return { value, cursor: value.length }
   }
@@ -56,10 +61,12 @@ export const renderInput = (
 ): string => {
   if (state.value.length === 0 && options.placeholder) {
     const head = options.placeholder.slice(0, 1)
+
     return palette.colors.inverse(head) + palette.colors.muted(options.placeholder.slice(1))
   }
 
   let visible = state.value
+
   if (options.mask !== undefined) {
     visible = options.mask === '' ? '' : options.mask.repeat(state.value.length)
   }

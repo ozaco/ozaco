@@ -13,6 +13,7 @@ export const defineProtocol: Helpers.DefineProtocol = (options): AnyType => {
     version: options.version,
     subtype: options.subtype,
     cloneable: options.cloneable,
+    labels: options.labels,
     handlers: options.handlers as AnyType,
     defaults: options.defaults as AnyType,
     exec: options.exec,
@@ -25,11 +26,13 @@ export const defineProtocol: Helpers.DefineProtocol = (options): AnyType => {
    */
   const routed = function* (): Operation<AnyType> {
     const active = yield* runtime.context.get()
+
     if (active !== undefined) {
       return active
     }
 
     const installs = (yield* runtime.installsCtx.get()) ?? []
+
     return installs.at(-1)?.value
   }
 
@@ -47,6 +50,7 @@ export const defineProtocol: Helpers.DefineProtocol = (options): AnyType => {
       get: () => routed(),
       *expect() {
         const value = yield* routed()
+
         // nothing installed and no dispatch: the raw context raises the MissingContextError
         return value === undefined ? yield* runtime.context.expect() : value
       },

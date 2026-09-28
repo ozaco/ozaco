@@ -30,11 +30,13 @@ export const createConnection = (
 
     if (session.reconnect) {
       const budget = session.reconnect
+
       yield* fork(() => supervise(session, impl, budget))
     }
 
     if (options.keepalive) {
       const keepalive = options.keepalive
+
       yield* fork(() => keepAlive(session, keepalive))
     }
 

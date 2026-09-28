@@ -50,6 +50,9 @@ export const FORBIDDEN: readonly string[] = ['ozaco.serviceId', 'ozaco.instance'
 /** Grafana cuts span event names past this many characters. */
 export const EVENT_NAME_MAX = 20
 
+/** A span / log event name: lowercase dotted segments, no namespace required. */
+const EVENT_NAME = /^[a-z][a-z0-9_]*(?:\.[a-z0-9_]+)*$/u
+
 /**
  * Semconv's captured-header keys: `http.{request,response}.header.<name>`, the name the
  * LOWERCASED HTTP header name (an RFC 9110 token — `content-type` keeps its dash).
@@ -136,7 +139,12 @@ const ruleOf = (item: Emitted): string | null => {
     return 'a forbidden key'
   }
 
-  if (!isName(item.place) && HEADER_KEY.test(key)) {
+  // an event name is a plain dotted name of its own — no namespace (`breaker`, `cache.evict`)
+  if (isName(item.place)) {
+    return EVENT_NAME.test(key) ? null : `not ${EVENT_NAME.source}`
+  }
+
+  if (HEADER_KEY.test(key)) {
     return null
   }
 
@@ -168,6 +176,7 @@ export const lint = (emitted: readonly Emitted[]): string[] => {
 
   for (const item of emitted) {
     const folded = fold(item.key)
+
     spellings.set(folded, (spellings.get(folded) ?? new Set()).add(item.key))
   }
 

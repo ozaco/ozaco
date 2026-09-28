@@ -17,6 +17,7 @@ const turnResponse = (turn: SuiteChatTurn | undefined): AnyType => {
   if (!turn) {
     return fail(AiErrors.Configuration, 'suite chat script exhausted')
   }
+
   switch (turn.kind) {
     case 'text': {
       return { text: turn.text } satisfies MockChatResult
@@ -28,11 +29,13 @@ const turnResponse = (turn: SuiteChatTurn | undefined): AnyType => {
       if (turn.error === 'auth') {
         return fail(AiErrors.Auth, 'scripted auth failure')
       }
+
       if (turn.error === 'rate-limit') {
         return turn.retryAfterSeconds === undefined
           ? fail(AiErrors.RateLimit, 'scripted rate limit')
           : fail(AiErrors.RateLimit, 'scripted rate limit', `retry-after:${turn.retryAfterSeconds}`)
       }
+
       return fail(AiErrors.BadResponse, 'scripted bad response')
     }
   }
@@ -43,14 +46,19 @@ const toMockScript = (script?: ProviderScript): MockScript => {
   if (!script) {
     return {}
   }
+
   const out: { -readonly [K in keyof MockScript]: MockScript[K] } = {}
+
   if (script.capabilities) {
     out.capabilities = script.capabilities
   }
+
   if (script.chat) {
     const turns = [...script.chat]
+
     out.chat = () => turnResponse(turns.shift())
   }
+
   if (script.chatStream) {
     out.chatStream = {
       queue: script.chatStream.map(stream => ({
@@ -59,16 +67,20 @@ const toMockScript = (script?: ProviderScript): MockScript => {
       })),
     }
   }
+
   if (script.embed) {
     out.embed = script.embed
   }
+
   if (script.tts) {
     out.tts = script.tts
     out.ttsStream = { chunks: [script.tts] }
   }
+
   if (script.stt !== undefined) {
     out.stt = script.stt
   }
+
   return out
 }
 
@@ -87,6 +99,7 @@ runProviderSuite({
   use: script =>
     (function* () {
       yield* JsonCodec.use()
+
       return yield* MockProvider.use(toMockScript(script))
     })(),
 })
@@ -96,6 +109,7 @@ describe('mock provider extras', () => {
     unwrap(
       await run(function* () {
         const mock = yield* MockProvider.use({ chat: { text: 'hi' } })
+
         yield* AiClient.use({ models: { chat: 'model-chat', embed: 'model-embed' } })
         yield* Ai.actions.chat('one')
         yield* Ai.actions.chat('two')
@@ -120,7 +134,9 @@ describe('mock provider extras', () => {
         yield* AiClient.use({ models: { chat: 'm' } })
         expect((yield* Ai.actions.chat('1')).text).toBe('first')
         expect((yield* Ai.actions.chat('2')).text).toBe('second')
+
         const outcome = yield* attempt(Ai.actions.chat('3'))
+
         expect((outcome as AnyType).error).toBe(AiErrors.Configuration)
       }),
     )

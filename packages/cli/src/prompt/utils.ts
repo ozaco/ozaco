@@ -29,21 +29,26 @@ export function* runPrompt<S, V>(spec: PromptSpec<S, V>): Operation<V> {
 
     const paint = (current: S): string => {
       const frame = spec.render(current, ctx)
+
       if (spec.description === undefined) {
         return frame
       }
+
       return `${frame}\n  ${ctx.palette.colors.muted(spec.description)}`
     }
 
     let state = spec.initial
+
     if (spec.prepare) {
       state = yield* spec.prepare(state, ctx)
     }
+
     yield* lease.render(paint(state))
 
     for (const key of yield* each(keys)) {
       if (isCancelKey(key)) {
         yield* lease.done(spec.cancelled(state, ctx))
+
         return yield* fail(CliErrors.Cancelled, 'prompt cancelled')
       }
 
@@ -51,19 +56,23 @@ export function* runPrompt<S, V>(spec: PromptSpec<S, V>): Operation<V> {
 
       if (action?.type === 'cancel') {
         yield* lease.done(spec.cancelled(state, ctx))
+
         return yield* fail(CliErrors.Cancelled, 'prompt cancelled')
       }
 
       if (action?.type === 'submit') {
         yield* lease.done(spec.submitted(action.value, state, ctx))
+
         return action.value
       }
 
       if (action?.type === 'update') {
         state = action.state
+
         if (spec.prepare) {
           state = yield* spec.prepare(state, ctx)
         }
+
         yield* lease.render(paint(state))
       }
 

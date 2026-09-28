@@ -10,7 +10,7 @@ import type { Result } from 'std:result'
 import { asFailure, fail, formatFailure, isFailure } from 'std:result'
 import { fromBase64, toBase64 } from 'std:shared'
 import type { TraceDef } from 'std:trace'
-import { current, span, TraceSeverity } from 'std:trace'
+import { Trace, TraceSeverity } from 'std:trace'
 
 import { HotReloadErrors } from './errors'
 import type { HotReloadDef } from './types'
@@ -35,7 +35,7 @@ const FAILURE: TraceDef.FailureOptions = {
 
 /** A child step of one generation (`hot-reload.bundle`, `hot-reload.import`, `server.reload`). */
 const step = <T>(name: string, body: () => Operation<T>): Operation<T> =>
-  span(name, { kind: 'internal', scope: SCOPE, failure: FAILURE }, () => body())
+  Trace.actions.span(name, { kind: 'internal', scope: SCOPE, failure: FAILURE }, () => body())
 
 export const DEFAULT_IGNORE: readonly RegExp[] = [
   /\/node_modules\//u,
@@ -50,6 +50,7 @@ const cwd = (): string =>
 /** An absolute path without a trailing separator. */
 function* absolute(path: string): Operation<string> {
   const full = (yield* IO.actions.isAbsolute(path)) ? path : yield* IO.actions.join(cwd(), path)
+
   return full.length > 1 ? full.replace(/\/+$/u, '') : full
 }
 
@@ -99,6 +100,7 @@ const fileUrl = (path: string): string => (path.startsWith('/') ? `file://${path
 const resolveFrom = (specifier: string, importer: string): string | null => {
   try {
     const at = importer.lastIndexOf('/')
+
     return Bun.resolveSync(specifier, at > 0 ? importer.slice(0, at) : cwd())
   } catch {
     return null
@@ -171,6 +173,7 @@ const pinSourceMap = (text: string, base: string): string => {
     )
 
     const encoded = toBase64(new TextEncoder().encode(JSON.stringify(map)))
+
     return `${text.slice(0, match.index)}${match[1]}${encoded}${match[3]}`
   } catch {
     return text
@@ -291,8 +294,11 @@ function* freshSpecifier(
     'ozaco-hot-reload',
     yield* IO.actions.ulid(),
   )
+
   yield* IO.actions.ensureDir(dir)
+
   const file = yield* IO.actions.join(dir, `services-${state.generation}.mjs`)
+
   yield* IO.actions.write(file, text)
 
   return { specifier: fileUrl(file), cleanup: dir }
@@ -397,6 +403,7 @@ export function* say(
           : Logger.actions[level](message, { ...data }),
       ),
     )
+
     return
   }
 
@@ -414,7 +421,7 @@ function* complain(
   data?: Readonly<Record<string, unknown>>,
 ): Operation<void> {
   yield* say('warn', message, { ...data, error: failure })
-  yield* (yield* current()).recordFailure(failure, { severity: TraceSeverity.warn })
+  yield* (yield* Trace.actions.current()).recordFailure(failure, { severity: TraceSeverity.warn })
 }
 
 /** A user hook (`onReload` / `onError`): its failure is logged, never swallowed, never raised
@@ -446,6 +453,7 @@ function* generation(
   const startedAt = Date.now()
   const outcome = yield* attempt(function* () {
     const services = yield* loadEntry(state)
+
     return yield* step('server.reload', () => swap(services))
   })
 
@@ -503,11 +511,14 @@ export function* reloadOnce(
   swap: (services: readonly ServiceDef.Service[]) => Operation<ServerDef.ReloadReport>,
 ): Operation<ServerDef.ReloadReport> {
   state.generation += 1
+
   const triggers = [...state.triggers]
+
   state.triggers.clear()
+
   const previous = state.previous
 
-  return yield* span(
+  return yield* Trace.actions.span(
     'hot-reload',
     {
       kind: 'internal',

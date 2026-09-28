@@ -40,7 +40,9 @@ describe('core — serviceErrors', () => {
     const outcome = await run(() => media.tooLarge('cannot store it', 'size: 12MB', inner, folded))
 
     expect(outcome).toMatchObject({ error: 'media.too-large', message: 'cannot store it' })
+
     const { causes } = outcome as AnyType
+
     expect(causes[0]).toBe('size: 12MB')
     // the SAME failure objects — a foreign Error goes in as its fold, the Error its `raw`
     expect(causes[1]).toBe(inner)
@@ -71,14 +73,17 @@ describe('core — serviceErrors', () => {
         const info = yield* server.start({ port: 0 })
 
         const outcome = yield* attempt(() => server.call(files, 'get', { id: 'nope' }))
+
         expect((outcome as AnyType).error).toBe(media.notFound.tag)
         expect((outcome as AnyType).message).toBe('no file nope')
 
         const missing = yield* until(fetch(`${info.url}/files/get?id=nope`))
+
         expect(missing.status).toBe(404)
         expect(((yield* until(missing.json())) as AnyType).error.error).toBe('media.not-found')
 
         const found = yield* until(fetch(`${info.url}/files/get?id=ok`))
+
         expect(found.status).toBe(200)
 
         yield* server.stop()
@@ -90,6 +95,7 @@ describe('core — serviceErrors', () => {
 describe('core — a thrown error is `server.internal`', () => {
   it('tagOf / statusOf answer `asFailure`’s `std:result.unknown` fold as `server.internal` / 500', () => {
     const folded = asFailure(new TypeError('the handler blew up'))
+
     expect(folded.error).toBe(ResultErrors.Unknown)
     expect(tagOf(folded)).toBe(ServerErrors.Internal)
     expect(statusOf(folded)).toBe(500)

@@ -48,7 +48,9 @@ export const runKvSuite = (target: KvTarget): void => {
       unwrap(
         await run(function* () {
           yield* target.use()
+
           const info = yield* useContext(Kv)
+
           expect(info.store).toBe(target.label)
           expect(info.prefix).toBe('suite')
           expect(info.capabilities.persistent).toBe(target.expect.persistent)
@@ -61,10 +63,14 @@ export const runKvSuite = (target: KvTarget): void => {
       unwrap(
         await run(function* () {
           yield* target.use()
+
           const key = unique('v')
+
           expect(yield* Kv.actions.get<AnyType>(key)).toBeUndefined()
           expect(yield* Kv.actions.has(key)).toBe(false)
+
           const value = { n: 1, s: 'x', list: [1, 2, 3], nested: { ok: true }, nil: null }
+
           yield* Kv.actions.set(key, value)
           expect(yield* Kv.actions.get<AnyType>(key)).toEqual(value)
           expect(yield* Kv.actions.has(key)).toBe(true)
@@ -85,9 +91,13 @@ export const runKvSuite = (target: KvTarget): void => {
       unwrap(
         await run(function* () {
           yield* target.use()
+
           const key = unique('ttl')
+
           yield* Kv.actions.set(key, 'soon', { ttlMs: 120 })
+
           const left = yield* Kv.actions.ttl(key)
+
           expect(left).not.toBeNull()
           expect(left!).toBeLessThanOrEqual(120)
           expect(left!).toBeGreaterThan(0)
@@ -111,9 +121,11 @@ export const runKvSuite = (target: KvTarget): void => {
       unwrap(
         await run(function* () {
           yield* target.use()
+
           const base = unique('tag')
           const tagA = unique('a')
           const tagB = unique('b')
+
           yield* Kv.actions.set(`${base}.1`, 1, { tags: [tagA] })
           yield* Kv.actions.set(`${base}.2`, 2, { tags: [tagA, tagB] })
           yield* Kv.actions.set(`${base}.3`, 3, { tags: [tagB] })
@@ -135,22 +147,30 @@ export const runKvSuite = (target: KvTarget): void => {
       unwrap(
         await run(function* () {
           yield* target.use()
+
           const key = unique('n')
+
           expect(yield* Kv.actions.incr(key)).toBe(1)
           expect(yield* Kv.actions.incr(key, 5)).toBe(6)
           expect(yield* Kv.actions.incr(key, -2)).toBe(4)
           // the counter reads back as a number through get
           expect(yield* Kv.actions.get<AnyType>(key)).toBe(4)
+
           const windowed = unique('w')
+
           yield* Kv.actions.incr(windowed, 1, { ttlMs: 150 })
           yield* Kv.actions.incr(windowed, 1, { ttlMs: 10_000 }) // not the creator: ttl untouched
+
           const left = yield* Kv.actions.ttl(windowed)
+
           expect(left).not.toBeNull()
           expect(left!).toBeLessThanOrEqual(150)
+
           // concurrent increments never lose an update
           const results = yield* all(
             Array.from({ length: 20 }, () => Kv.actions.incr(`${key}.race`)),
           )
+
           expect(new Set(results).size).toBe(20)
           expect(yield* Kv.actions.get<AnyType>(`${key}.race`)).toBe(20)
         }),
@@ -161,7 +181,9 @@ export const runKvSuite = (target: KvTarget): void => {
       unwrap(
         await run(function* () {
           yield* target.use()
+
           const base = unique('scan')
+
           yield* Kv.actions.mset(
             Array.from({ length: 7 }, (_, index) => [`${base}.${index}`, index] as const),
           )
@@ -170,16 +192,22 @@ export const runKvSuite = (target: KvTarget): void => {
             6,
             undefined,
           ])
+
           const seen: string[] = []
           let cursor: string | undefined = undefined
+
           for (;;) {
             const page: KvDef.KeysPage = yield* Kv.actions.keys(`${base}.`, { limit: 3, cursor })
+
             seen.push(...page.keys)
+
             if (page.cursor === null) {
               break
             }
+
             cursor = page.cursor
           }
+
           // keys come back application-relative (no install prefix)
           expect(seen.toSorted()).toEqual(
             Array.from({ length: 7 }, (_, index) => `${base}.${index}`),
@@ -192,31 +220,38 @@ export const runKvSuite = (target: KvTarget): void => {
       unwrap(
         await run(function* () {
           yield* target.use()
+
           const key = unique('wrap')
           let computed = 0
           const compute = function* () {
             computed += 1
             yield* sleep(50)
+
             return { at: computed }
           }
           const fanned = yield* all(
             Array.from({ length: 5 }, () => Kv.actions.wrap(key, { ttlMs: 10_000 }, compute)),
           )
+
           expect(computed).toBe(1)
           expect(fanned.every(value => (value as AnyType).at === 1)).toBe(true)
           // already cached: no computation at all
           expect(yield* Kv.actions.wrap(key, { ttlMs: 10_000 }, compute)).toEqual({ at: 1 })
           expect(computed).toBe(1)
+
           // a failing compute caches nothing and reaches the caller intact
           const broken = yield* attempt(
             Kv.actions.wrap(`${key}.bad`, { ttlMs: 1000 }, function* () {
               return yield* fail('compute.broken', 'nope')
             }),
           )
+
           expect((broken as AnyType).error).toBe('compute.broken')
           expect(yield* Kv.actions.get<AnyType>(`${key}.bad`)).toBeUndefined()
+
           // tags given to wrap apply to the stored value
           const tag = unique('t')
+
           yield* Kv.actions.wrap(`${key}.tagged`, { ttlMs: 1000, tags: [tag] }, function* () {
             return 'v'
           })
@@ -229,6 +264,7 @@ export const runKvSuite = (target: KvTarget): void => {
       unwrap(
         await run(function* () {
           yield* target.use()
+
           const key = unique('source')
           const sources: string[] = []
           const onSource = (source: KvDef.Source) => {
@@ -240,6 +276,7 @@ export const runKvSuite = (target: KvTarget): void => {
             expect(sources.at(-1)).toBe('miss')
             computed += 1
             yield* sleep(30)
+
             return computed
           }
 
@@ -247,6 +284,7 @@ export const runKvSuite = (target: KvTarget): void => {
             Kv.actions.wrap(key, { ttlMs: 10_000, onSource }, compute),
             Kv.actions.wrap(key, { ttlMs: 10_000, onSource }, compute),
           ])
+
           expect(answers).toEqual([1, 1])
           expect(sources).toEqual(['miss', 'coalesced'])
 
@@ -258,6 +296,7 @@ export const runKvSuite = (target: KvTarget): void => {
           const throwing = () => {
             throw new Error('telemetry hook')
           }
+
           expect(yield* Kv.actions.wrap(key, { ttlMs: 10_000, onSource: throwing }, compute)).toBe(
             1,
           )
@@ -269,6 +308,7 @@ export const runKvSuite = (target: KvTarget): void => {
       unwrap(
         await run(function* () {
           yield* target.use()
+
           const key = unique('halt')
           const sources: string[] = []
           const onSource = (source: KvDef.Source) => {
@@ -280,9 +320,11 @@ export const runKvSuite = (target: KvTarget): void => {
             Kv.actions.wrap(key, { ttlMs: 10_000 }, function* () {
               computing.resolve()
               yield* suspend()
+
               return -1
             }),
           )
+
           yield* computing.operation
 
           const follower = yield* fork(() =>
@@ -290,10 +332,12 @@ export const runKvSuite = (target: KvTarget): void => {
               return 2
             }),
           )
+
           // the follower has joined the leader's flight
           while (sources.length === 0) {
             yield* sleep(1)
           }
+
           expect(sources).toEqual(['coalesced'])
 
           yield* leader.halt()
@@ -302,9 +346,11 @@ export const runKvSuite = (target: KvTarget): void => {
             follower,
             (function* () {
               yield* sleep(1000)
+
               return 'hung' as const
             })(),
           ])
+
           expect(answer).toBe(2)
           // it went round again: nothing stored, no flight left — it led itself
           expect(sources).toEqual(['coalesced', 'miss'])
@@ -325,6 +371,7 @@ export const runKvSuite = (target: KvTarget): void => {
       unwrap(
         await run(function* () {
           yield* target.use()
+
           const key = unique('stale')
           const computing = withResolvers<void>()
 
@@ -332,9 +379,11 @@ export const runKvSuite = (target: KvTarget): void => {
             Kv.actions.wrap(key, { ttlMs: 10_000 }, function* () {
               computing.resolve()
               yield* suspend()
+
               return -1
             }),
           )
+
           yield* computing.operation
           yield* leader.halt()
 
@@ -344,9 +393,11 @@ export const runKvSuite = (target: KvTarget): void => {
             }),
             (function* () {
               yield* sleep(1000)
+
               return 'hung' as const
             })(),
           ])
+
           expect(answer).toBe('fresh')
         }),
       )
@@ -356,6 +407,7 @@ export const runKvSuite = (target: KvTarget): void => {
       unwrap(
         await run(function* () {
           const key = unique('iso')
+
           yield* scoped(function* () {
             yield* target.use('other')
             yield* Kv.actions.set(key, 'theirs')
@@ -384,15 +436,19 @@ export const runKvSuite = (target: KvTarget): void => {
             scoped(function* () {
               yield* target.use()
               ready.add(undefined)
+
               for (;;) {
                 const value = yield* Kv.actions.get<string>(key)
+
                 if (value !== undefined) {
                   return value
                 }
+
                 yield* sleep(10)
               }
             }),
           )
+
           yield* ready.next()
           yield* scoped(function* () {
             yield* target.use()
@@ -405,6 +461,7 @@ export const runKvSuite = (target: KvTarget): void => {
 
     it('an invalid prefix fails kv.configuration', async () => {
       const outcome = await run(() => target.use('bad:prefix'))
+
       expect(isFailure(outcome)).toBe(true)
       expect((outcome as AnyType).error).toBe(KvErrors.Configuration)
     })

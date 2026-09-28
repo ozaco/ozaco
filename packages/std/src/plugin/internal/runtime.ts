@@ -23,6 +23,8 @@ const defaultExec: Protocol.Exec = function* (entries, run) {
  */
 export const createProtocolRuntime = (options: Helpers.RuntimeOptions) => {
   const tag = `${options.name}@${options.version}`
+  /** The location labels a failure passing here gets — none for a `labels: false` protocol. */
+  const labels = (...names: string[]): string[] => (options.labels === false ? [] : names)
 
   /** Holds the dispatched impl's context value while one of its actions runs. */
   const context = createContext<AnyType>(tag)
@@ -35,17 +37,21 @@ export const createProtocolRuntime = (options: Helpers.RuntimeOptions) => {
 
   if (options.handlers) {
     const flat = flatten(options.handlers)
+
     for (const key of Object.keys(flat)) {
       const raw = flat[key]!
-      handlers[key] = typeof raw === 'function' ? guard(raw, `${key}:handler`, tag) : raw
+
+      handlers[key] = typeof raw === 'function' ? guard(raw, ...labels(`${key}:handler`, tag)) : raw
     }
   }
 
   if (options.defaults) {
     const flat = flatten(options.defaults)
+
     for (const key of Object.keys(flat)) {
       const raw = flat[key]!
-      defaults[key] = typeof raw === 'function' ? guard(raw, `${key}:default`, tag) : raw
+
+      defaults[key] = typeof raw === 'function' ? guard(raw, ...labels(`${key}:default`, tag)) : raw
     }
   }
 
@@ -96,14 +102,14 @@ export const createProtocolRuntime = (options: Helpers.RuntimeOptions) => {
 
       if (target !== undefined) {
         const entry = installs.find(candidate => candidate.tag === target)
+
         // clear the pin so protocol calls made INSIDE the action dispatch normally again
         return yield* targetCtx.with(undefined as unknown as string, () => run(entry))
       }
 
       return yield* exec(installs, run)
     },
-    'dispatch',
-    tag,
+    ...labels('dispatch', tag),
   )
 
   const api = createApi(`plugin.${tag}`, { dispatch })
@@ -128,6 +134,7 @@ export const createProtocolRuntime = (options: Helpers.RuntimeOptions) => {
     pinned,
     cloneable: options.cloneable ?? false,
     subtype: options.subtype,
+    labels,
   }
 }
 
@@ -155,10 +162,12 @@ export const buildPlugin = ({
 
   if (buildActions) {
     const flat = flatten(buildActions)
+
     for (const key of Object.keys(flat)) {
       const raw = flat[key]!
+
       if (typeof raw === 'function') {
-        actions[key] = guard(raw, key, pluginTag)
+        actions[key] = guard(raw, ...runtime.labels(key, pluginTag))
         meta.set(key, Object.fromEntries(Object.entries(raw)))
       } else {
         // value member: dispatched as-is, `yield* Plugin.key()` resolves to the value
@@ -173,6 +182,7 @@ export const buildPlugin = ({
 
       if (!runtime.cloneable) {
         const other = installs.find(entry => entry.tag !== pluginTag)
+
         if (other) {
           return yield* fail(
             PluginErrors.ProtocolNotCloneable,
@@ -184,6 +194,7 @@ export const buildPlugin = ({
       const value = yield* buildOptions.setup(...args)
 
       const current = (yield* runtime.installsCtx.get()) ?? []
+
       yield* runtime.installsCtx.set([
         ...current.filter(entry => entry.tag !== pluginTag),
         { tag: pluginTag, value, actions, meta },
@@ -193,8 +204,7 @@ export const buildPlugin = ({
 
       return value
     },
-    'setup',
-    pluginTag,
+    ...runtime.labels('setup', pluginTag),
   )
 
   const handle = {
@@ -233,5 +243,6 @@ export const buildPlugin = ({
     ],
     getMeta: (key: string) => meta.get(key),
   } satisfies Plugin<AnyType, AnyType[]>
+
   return handle
 }

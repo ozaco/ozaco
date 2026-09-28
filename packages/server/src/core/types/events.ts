@@ -47,7 +47,7 @@ export namespace EventsDef {
     emit<TName extends Name<TMap>>(name: TName, payload: Payload<TMap, TName>): Operation<void>
 
     /** Every occurrence of one event, payload typed and validated — pulled under whatever span
-     * is active (it gets an `ozaco.event.recv` event per item and, for its first 32 items, a
+     * is active (it gets an `event.recv` event per item and, for its first 32 items, a
      * `creation` link to the emitter's span; no consumer span of its own). A
      * payload that does not match is dropped and reported (a bad publisher never breaks a
      * subscriber). Ends when the event plane closes. */

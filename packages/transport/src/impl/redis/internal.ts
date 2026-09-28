@@ -61,6 +61,7 @@ const unframe = (
   }
 
   const length = new DataView(payload.buffer, payload.byteOffset, payload.byteLength).getUint32(0)
+
   if (4 + length > payload.length) {
     return null
   }
@@ -70,6 +71,7 @@ const unframe = (
 
   for (const line of text ? text.split('\n') : []) {
     const eq = line.indexOf('=')
+
     if (eq > 0) {
       headers[decodeURIComponent(line.slice(0, eq))] = decodeURIComponent(line.slice(eq + 1))
     }
@@ -118,6 +120,7 @@ function* subscribeGroup(
 
     if (!durable) {
       queue.add(base)
+
       return
     }
 
@@ -149,6 +152,7 @@ function* subscribeGroup(
   }
 
   const reader = state.client.duplicate()
+
   yield* attempt(until(reader.connect()))
 
   const task = yield* fork(function* () {
@@ -194,13 +198,16 @@ function* subscribeGroup(
 
       if (isFailure(read)) {
         failing += 1
+
         if (failing === 1) {
           yield* logTransport('warn', 'transport group read failed, retrying', {
             ...where,
             error: read,
           })
         }
+
         yield* sleep(100)
+
         continue
       }
 
@@ -236,9 +243,11 @@ export const driver: TransportDef.Driver = {
 
   *publish({ topic, data, headers }) {
     const state = yield* useContext(StateRef)
+
     if (state.drained || state.status === 'closed') {
       return yield* fail(TransportErrors.Closed, 'redis connection drained')
     }
+
     const subject = prefixed(state.prefix, topic)
     const payload = Buffer.from(frame(data, headers))
 
@@ -253,6 +262,7 @@ export const driver: TransportDef.Driver = {
           .exec() as Promise<[number, number]>,
       ),
     )
+
     if (isFailure(published)) {
       return yield* raise(published, `cannot publish on "${topic}"`)
     }
@@ -349,6 +359,7 @@ export const driver: TransportDef.Driver = {
     *[Symbol.iterator]() {
       const state = yield* useContext(StateRef)
       const queue = createQueue<TransportDef.Status, void>()
+
       queue.add(state.status)
 
       const onReady = () => queue.add('connected')
@@ -368,12 +379,14 @@ export const driver: TransportDef.Driver = {
         state.client.off('end', onEnd)
         queue.close(undefined)
       })
+
       return queue
     },
   }),
 
   *drain() {
     const state = yield* useContext(StateRef)
+
     if (state.drained) {
       return
     }

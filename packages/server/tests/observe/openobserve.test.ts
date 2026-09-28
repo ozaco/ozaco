@@ -35,10 +35,12 @@ const row = (rows: readonly AnyType[], name: string, kind?: string): AnyType => 
 
   if (found.length !== 1) {
     const seen = rows.map(entry => `${entry.span_kind} ${entry.operation_name}`).join(', ')
+
     throw new Error(
       `expected ONE row "${name}" (kind ${kind ?? 'any'}), got ${found.length}: ${seen}`,
     )
   }
+
   return found[0]
 }
 
@@ -59,6 +61,7 @@ describe.skipIf(!backends.otlp || !backends.openobserve)('observe leg — OpenOb
 
       for (const node of [run.stats.a, run.stats.b]) {
         expect(node.openobserve).not.toBeNull()
+
         for (const signal of [node.openobserve!.spans, node.openobserve!.logs]) {
           expect(signal).toMatchObject({ failed: 0, rejected: 0, dropped: 0, lastError: null })
           expect(signal.sent).toBeGreaterThan(0)
@@ -77,9 +80,11 @@ describe.skipIf(!backends.otlp || !backends.openobserve)('observe leg — OpenOb
 
       const logs = await logRows(`trace_id = '${run.traces.chain}'`, run.startedAt)
       const exceptions = logs.filter(entry => entry.exception_type)
+
       expect(exceptions).toHaveLength(1)
 
       const [record] = exceptions
+
       expect(record).toMatchObject({
         service_name: STORE,
         span_id: owner.span_id,
@@ -90,6 +95,7 @@ describe.skipIf(!backends.otlp || !backends.openobserve)('observe leg — OpenOb
       expect(String(record.severity)).toBe('17')
 
       const body = String(record.body ?? '')
+
       expect(body.split('\n').length).toBeGreaterThanOrEqual(3)
       expect(body.startsWith('store.save: the note could not be saved')).toBe(true)
       expect(body).toContain('Caused by: std:result.unknown: TypeError: sector 7 is unreadable')
@@ -107,14 +113,17 @@ describe.skipIf(!backends.otlp || !backends.openobserve)('observe leg — OpenOb
         `${STORE}.crash`,
       ])
       const owner = row(spans, `${STORE}.crash`, '2')
+
       expect(owner).toMatchObject({ span_status: 'ERROR', error_type: 'server.internal' })
       expect(row(spans, `${STORE}.crash`, '3')).toMatchObject({ error_type: 'server.internal' })
 
       const logs = await logRows(`trace_id = '${run.traces.crash}'`, run.startedAt)
       const exceptions = logs.filter(entry => entry.exception_type)
+
       expect(exceptions).toHaveLength(1)
 
       const [record] = exceptions
+
       expect(record).toMatchObject({
         service_name: STORE,
         span_id: owner.span_id,
@@ -125,6 +134,7 @@ describe.skipIf(!backends.otlp || !backends.openobserve)('observe leg — OpenOb
       expect(String(record.severity)).toBe('17')
 
       const body = String(record.body ?? '')
+
       // ONE level: the fold, no frames
       expect(body.startsWith('std:result.unknown: RangeError: disk 9 is on fire')).toBe(true)
       expect(body).not.toContain('Caused by:')
@@ -145,12 +155,15 @@ describe.skipIf(!backends.otlp || !backends.openobserve)('observe leg — OpenOb
       ])
 
       const owner = row(spans, `${STORE}.save`, '2')
+
       expect(owner).toMatchObject({
         span_status: 'ERROR',
         error_type: 'store.save',
         service_name: STORE,
       })
+
       const client = row(spans, `${STORE}.save`, '3')
+
       expect(client).toMatchObject({
         span_status: 'ERROR',
         service_name: API,
@@ -163,6 +176,7 @@ describe.skipIf(!backends.otlp || !backends.openobserve)('observe leg — OpenOb
       // ONE exception event across the trace, the whole chain in its stacktrace
       const events = spans.flatMap(entry => json(entry.events).map(event => ({ entry, event })))
       const exceptions = events.filter(({ event }) => event.name === 'exception')
+
       expect(exceptions).toHaveLength(1)
       expect(exceptions[0]!.entry.span_id).toBe(owner.span_id)
       expect(String(exceptions[0]!.event['exception.stacktrace'])).toContain(
@@ -177,15 +191,17 @@ describe.skipIf(!backends.otlp || !backends.openobserve)('observe leg — OpenOb
         `WS ${LIVE}`,
       )
       const frameLinks = json(frameRow.links).map(linkOf)
+
       expect(frameLinks).toHaveLength(1)
       expect(frameLinks[0]!.reason).toBe('ws.session')
-      expect(json(frameRow.events).map(event => event.name)).toContain('ozaco.ws.send')
+      expect(json(frameRow.events).map(event => event.name)).toContain('ws.send')
 
       const noted = await traceRows(run.traces.note, run.startedAt, ['send jobs'])
       const jobRow = row(
         await traceRows(run.job.traceId, run.startedAt, ['process jobs']),
         'process jobs',
       )
+
       expect(json(jobRow.links).map(linkOf)).toEqual([
         { traceId: run.traces.note, spanId: row(noted, 'send jobs').span_id, reason: 'creation' },
       ])
@@ -204,6 +220,7 @@ describe.skipIf(!backends.otlp || !backends.openobserve)('observe leg — OpenOb
         `trace_id = '${run.traces.chain}' AND span_id = '${owner.span_id}'`,
         run.startedAt,
       )
+
       expect(exceptions).toHaveLength(1)
       expect(exceptions[0]).toMatchObject({
         otel_event_name: 'rpc.server.call.exception',
@@ -216,6 +233,7 @@ describe.skipIf(!backends.otlp || !backends.openobserve)('observe leg — OpenOb
         `trace_id = '${run.traces.note}' AND span_id = '${put.span_id}'`,
         run.startedAt,
       )
+
       expect(lines.map(entry => entry.body)).toEqual(['note stored'])
       expect(lines[0]).toMatchObject({ service_name: STORE, severity: 'INFO' })
       // a plain Logger line is no event: no event name at all
@@ -236,6 +254,7 @@ describe.skipIf(!backends.otlp || !backends.openobserve)('observe leg — OpenOb
           run.startedAt,
           tempo.map(span => span.name),
         )
+
         return { tempo, rows }
       }
       const traces = await Promise.all(
@@ -255,6 +274,7 @@ describe.skipIf(!backends.otlp || !backends.openobserve)('observe leg — OpenOb
               `${entry.span_id} ${entry.reference_parent_span_id || '-'} ${entry.operation_name} ${entry.service_name} ${String(entry.span_status).toLowerCase()}`,
           )
           .toSorted()
+
         expect(inOpenObserve).toEqual(inTempo)
       }
     },

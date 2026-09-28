@@ -21,6 +21,7 @@ export const createLock = (): Sqlite.Lock => {
 
     if (next) {
       next() // hand the lock straight to the next waiter; it stays held
+
       return
     }
 
@@ -31,6 +32,7 @@ export const createLock = (): Sqlite.Lock => {
     *acquire() {
       if (!held) {
         held = true
+
         return release
       }
 
@@ -74,12 +76,15 @@ const isMultiStatement = (sql: string): boolean => {
     if (opener) {
       const closer = CLOSERS[opener]!
       const end = sql.indexOf(closer, index + opener.length)
+
       index = end === -1 ? sql.length : end + closer.length
+
       // a doubled quote (`''`) simply re-opens the literal on the next pass
       continue
     }
 
     const char = sql[index]!
+
     index += 1
 
     if (char === ';') {
@@ -114,10 +119,12 @@ export const exec: Sql.Executor = function* (statement: string, params: readonly
   try {
     if (script) {
       const changes = state.db.run(statement)
+
       return { rows: [], rowCount: Number(changes.changes ?? 0) }
     }
 
     const rows = state.db.query(statement).all(...(params as AnyType[])) as AnyType[]
+
     return { rows, rowCount: rows.length }
   } catch (error) {
     return yield* asFailure(error, DbErrors, driverCause(error))

@@ -9,6 +9,7 @@ import type { Helpers } from '../types/helpers'
 export const compareVersions = (a: string, b: string): -1 | 0 | 1 => {
   const left = parse(a)
   const right = parse(b)
+
   if (!left || !right) {
     return left ? 1 : right ? -1 : 0
   }
@@ -26,6 +27,7 @@ export const compareVersions = (a: string, b: string): -1 | 0 | 1 => {
  */
 export const satisfies = (version: string, range: string): boolean => {
   const target = parse(version)
+
   if (!target) {
     return false
   }
@@ -36,9 +38,11 @@ export const satisfies = (version: string, range: string): boolean => {
 
     for (const token of tokens) {
       const parsed = parseComparator(token)
+
       if (!parsed) {
         return false
       }
+
       comparators.push(...parsed)
     }
 

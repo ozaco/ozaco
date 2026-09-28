@@ -14,7 +14,7 @@ import { attempt, fork, run } from 'std:effect'
 import type { Result } from 'std:result'
 import { asFailure, fail, formatFailure, isFailure, ResultErrors, unwrap } from 'std:result'
 import type { TraceDef } from 'std:trace'
-import { enableTracing, extract, isRecorded, span, Tracer, traceparentOf } from 'std:trace'
+import { Trace } from 'std:trace'
 
 import { describe, expect, it } from 'bun:test'
 
@@ -37,17 +37,19 @@ const REQUEST_LABELS = [
 
 let tracers = 0
 
-/** An in-memory Tracer: every exported span and emitted log record lands in the arrays. */
+/** An in-memory Trace sink: every exported span and emitted log record lands in the arrays. */
 const memoryTracer = () => {
   tracers += 1
+
   const spans: TraceDef.SpanData[] = []
   const logs: TraceDef.LogData[] = []
 
-  const plugin = Tracer.implement({
+  const plugin = Trace.implement({
     name: `test/transport-tracer-${tracers}`,
     version: '1.0.0',
     *setup() {
-      yield* enableTracing()
+      yield* Trace.actions.enableTracing()
+
       return {}
     },
   }).build({
@@ -61,7 +63,9 @@ const memoryTracer = () => {
 
   const named = (name: string): TraceDef.SpanData => {
     const found = spans.filter(data => data.name === name)
+
     expect(found.length).toBe(1)
+
     return found[0]!
   }
 
@@ -81,7 +85,9 @@ const unique = (name: string): string => `${name}.${crypto.randomUUID().slice(0,
 /** The failure a request to `topic` comes back with. */
 function* failureOf(topic: string, args: unknown = {}): Operation<Result.Failure<unknown>> {
   const outcome = yield* attempt(Transport.actions.request(topic, args, { timeoutMs: 2000 }))
+
   expect(isFailure(outcome)).toBe(true)
+
   return outcome as Result.Failure<unknown>
 }
 
@@ -109,16 +115,21 @@ describe('transport — failures on the wire', () => {
     const failure = unwrap(
       await run(function* () {
         yield* install()
+
         const topic = unique('rpc.chain')
+
         yield* Transport.actions.serve(topic, function* () {
           return yield* outer
         })
+
         const got = yield* failureOf(topic)
+
         return { got, topic }
       }),
     )
 
     const { got, topic } = failure
+
     // the outer failure keeps its tag / message / causes in order, then where it was answered,
     // then the caller's runtime labels
     expect(got.error).toBe('todo.kaput')
@@ -130,6 +141,7 @@ describe('transport — failures on the wire', () => {
 
     // …and its nested failures came back as real Failures
     const [query] = nestedOf(got)
+
     expect(isFailure(query)).toBe(true)
     expect(query?.error).toBe('db.query')
     expect(query?.message).toBe('select failed')
@@ -137,12 +149,14 @@ describe('transport — failures on the wire', () => {
 
     // the fold came back as its tag and message — the thrown Error (`raw`) stayed home
     const [fold] = nestedOf(query!)
+
     expect(fold?.error).toBe(ResultErrors.Unknown)
     expect(fold?.message).toBe(`TypeError: ${thrown.message}`)
     expect(fold?.causes).toEqual([])
     expect('raw' in fold!).toBe(false)
 
     const rendered = formatFailure(got, { chain: true })
+
     expect(rendered).toContain(`    at remote: ${topic}`)
     expect(rendered).toContain('Caused by: db.query: select failed')
     expect(rendered).toContain(`Caused by: std:result.unknown: TypeError: ${thrown.message}`)
@@ -156,10 +170,13 @@ describe('transport — failures on the wire', () => {
     const { got, topic } = unwrap(
       await run(function* () {
         yield* install()
+
         const served = unique('rpc.throw')
+
         yield* Transport.actions.serve(served, function* () {
           throw thrown
         })
+
         return { got: yield* failureOf(served), topic: served }
       }),
     )
@@ -173,6 +190,7 @@ describe('transport — failures on the wire', () => {
     expect('raw' in got).toBe(false)
 
     const rendered = formatFailure(got, { chain: true })
+
     expect(rendered).toStartWith('std:result.unknown: RangeError: offset out of range')
     expect(rendered).not.toContain('Caused by:')
   })
@@ -183,6 +201,7 @@ describe('transport — failures on the wire', () => {
     const { close } = unwrap(
       await run(function* () {
         yield* install()
+
         const topic = unique('lane.chain')
         const failing: Flow<number, void> = {
           *[Symbol.iterator]() {
@@ -196,19 +215,26 @@ describe('transport — failures on the wire', () => {
         const consumer = yield* fork(function* () {
           const lane = yield* Transport.actions.flow<number, void>(topic)
           const step = yield* lane.next()
+
           return step.done ? step.value : undefined
         })
+
         yield* attempt(Transport.actions.pipe(topic, failing))
+
         return { close: yield* consumer }
       }),
     )
 
     expect(isFailure(close)).toBe(true)
+
     const failure = close as Result.Failure<unknown>
+
     expect(failure.error).toBe('todo.kaput')
     // a lane frame names no origin: the causes are the producer's own
     expect(textsOf(failure)).toEqual(['id=7'])
+
     const [query] = nestedOf(failure)
+
     expect(query?.error).toBe('db.query')
     expect(nestedOf(query!)[0]?.error).toBe(ResultErrors.Unknown)
     expect(nestedOf(query!)[0]?.message).toStartWith('TypeError: ')
@@ -218,6 +244,7 @@ describe('transport — failures on the wire', () => {
     const got = unwrap(
       await run(function* () {
         yield* install()
+
         const tagged = unique('rpc.legacy')
         const thrown = unique('rpc.legacy.thrown')
 
@@ -226,10 +253,13 @@ describe('transport — failures on the wire', () => {
           fork(function* () {
             const requests = yield* Transport.actions.subscribe(topic, { transient: true })
             const step = yield* requests.next()
+
             if (step.done) {
               return
             }
+
             const replyTo = step.value.headers[HEADERS.reply] as string
+
             yield* Transport.actions.publish(replyTo, wire, {
               headers: { [HEADERS.result]: 'fail' },
               transient: true,
@@ -263,15 +293,19 @@ describe('transport — failures on the wire', () => {
     const wire = unwrap(
       await run(function* () {
         yield* install()
+
         const topic = unique('rpc.forward')
+
         yield* Transport.actions.serve(topic, function* () {
           return yield* fail('math.divide-by-zero', 'b must not be 0', 'a=1')
         })
+
         // what an old node's request did: publish with a reply topic, read the reply's value
         const inbox = unique('old.inbox')
         const replies = yield* Transport.actions.subscribe<Record<string, unknown>>(inbox, {
           transient: true,
         })
+
         yield* Transport.actions.publish(
           topic,
           {},
@@ -280,7 +314,9 @@ describe('transport — failures on the wire', () => {
             transient: true,
           },
         )
+
         const step = yield* replies.next()
+
         return { value: step.done ? undefined : step.value.value, topic }
       }),
     )
@@ -297,6 +333,7 @@ describe('transport — failures on the wire', () => {
     const got = unwrap(
       await run(function* () {
         yield* install()
+
         const junk = unique('rpc.junk')
         const odd = unique('rpc.odd')
 
@@ -304,9 +341,11 @@ describe('transport — failures on the wire', () => {
           fork(function* () {
             const requests = yield* Transport.actions.subscribe(topic, { transient: true })
             const step = yield* requests.next()
+
             if (step.done) {
               return
             }
+
             yield* Transport.actions.publish(step.value.headers[HEADERS.reply] as string, wire, {
               headers: { [HEADERS.result]: 'fail' },
               transient: true,
@@ -339,7 +378,9 @@ describe('transport — failures on the wire', () => {
       await run(function* () {
         yield* tracer.plugin.use()
         yield* install()
+
         const topic = unique('rpc.headers')
+
         yield* Transport.actions.serve<unknown, Record<string, string | undefined>>(
           topic,
           function* (_args, message) {
@@ -349,14 +390,16 @@ describe('transport — failures on the wire', () => {
             }
           },
         )
-        const inside = yield* span('caller', { kind: 'client' }, function* (handle) {
+
+        const inside = yield* Trace.actions.span('caller', { kind: 'client' }, function* () {
           const echoed = yield* Transport.actions.request<Record<string, string | undefined>>(
             topic,
             {},
           )
-          return { echoed, context: handle.context }
+
+          return { echoed, traceparent: (yield* Trace.actions.inject()).traceparent }
         })
-        const pinned = yield* span('pinned', function* () {
+        const pinned = yield* Trace.actions.span('pinned', function* () {
           return yield* Transport.actions.request<Record<string, string | undefined>>(
             topic,
             {},
@@ -367,12 +410,14 @@ describe('transport — failures on the wire', () => {
           topic,
           {},
         )
+
         return { inside, pinned, outside }
       }),
     )
 
-    const { context, echoed } = seen.inside
-    expect(echoed.traceparent).toBe(traceparentOf(context))
+    const { traceparent, echoed } = seen.inside
+
+    expect(echoed.traceparent).toBe(traceparent)
     expect(seen.pinned.traceparent).toBe(own)
     // no span, no context: nothing rides along
     expect(seen.outside.traceparent).toBeUndefined()
@@ -386,36 +431,49 @@ describe('transport — failures on the wire', () => {
       await run(function* () {
         yield* tracer.plugin.use()
         yield* install()
+
         const topic = unique('rpc.recorded')
+
         // the owner continues the caller's trace (as a server carrier does) and fails in a span
         yield* Transport.actions.serve(topic, function* (_args, message) {
-          const parent = extract(name => message.headers[name])
-          return yield* span('todos.load', { kind: 'server', parent }, function* () {
+          const parent = yield* Trace.actions.extract(name => message.headers[name])
+
+          return yield* Trace.actions.span('todos.load', { kind: 'server', parent }, function* () {
             return yield* outer
           })
         })
+
         return {
           got: yield* attempt(
-            span('todos.load call', { kind: 'client' }, () => Transport.actions.request(topic, {})),
+            Trace.actions.span('todos.load call', { kind: 'client' }, () =>
+              Transport.actions.request(topic, {}),
+            ),
           ),
         }
       }),
     )
 
     expect(isFailure(got)).toBe(true)
+
     const failure = got as Result.Failure<unknown>
 
     // exactly one exception record in the whole trace — the owner's
     const exceptions = tracer.exceptions()
+
     expect(exceptions).toHaveLength(1)
+
     const owner = tracer.named('todos.load')
+
     // the decoded failure is known recorded in that trace (the registry, no field on it)
-    expect(isRecorded(failure, owner.context.traceId)).toBe(true)
+    expect(unwrap(await run(() => Trace.actions.isRecorded(failure, owner.context.traceId)))).toBe(
+      true,
+    )
     expect(exceptions[0]?.context?.spanId).toBe(owner.context.spanId)
     expect(owner.events.filter(event => event.name === 'exception')).toHaveLength(1)
 
     // the caller's span: status + error.type + the remote marker, no exception of its own
     const caller = tracer.named('todos.load call')
+
     expect(caller.context.traceId).toBe(owner.context.traceId)
     expect(owner.parent?.spanId).toBe(caller.context.spanId)
     expect(caller.status.code).toBe('error')
@@ -433,16 +491,20 @@ describe('transport — failures on the wire', () => {
       await run(function* () {
         yield* tracer.plugin.use()
         yield* install()
+
         const topic = unique('rpc.pinned')
+
         yield* Transport.actions.serve(topic, function* (_args, message) {
-          const parent = extract(name => message.headers[name])
-          return yield* span('todos.load', { kind: 'server', parent }, function* () {
+          const parent = yield* Trace.actions.extract(name => message.headers[name])
+
+          return yield* Trace.actions.span('todos.load', { kind: 'server', parent }, function* () {
             return yield* outer
           })
         })
+
         return {
           got: yield* attempt(
-            span('call', { kind: 'client' }, () =>
+            Trace.actions.span('call', { kind: 'client' }, () =>
               Transport.actions.request(topic, {}, { headers: { traceparent: own } }),
             ),
           ),
@@ -451,17 +513,23 @@ describe('transport — failures on the wire', () => {
     )
 
     expect(isFailure(got)).toBe(true)
+
     const failure = got as Result.Failure<unknown>
     const owner = tracer.named('todos.load')
     const caller = tracer.named('call')
+
     expect(owner.context.traceId).toBe('0af7651916cd43dd8448eb211c80319c')
     expect(caller.context.traceId).not.toBe(owner.context.traceId)
 
     // marked recorded in the trace the answering side named — not in the caller's
-    expect(isRecorded(failure, owner.context.traceId)).toBe(true)
+    expect(unwrap(await run(() => Trace.actions.isRecorded(failure, owner.context.traceId)))).toBe(
+      true,
+    )
     expect(caller.attributes['ozaco.failure.remote']).toBeUndefined()
+
     // one exception per trace: the owner's, and the caller's own
     const spans = tracer.exceptions().map(log => log.context?.spanId)
+
     expect(spans.toSorted()).toEqual([owner.context.spanId, caller.context.spanId].toSorted())
   })
 
@@ -473,14 +541,19 @@ describe('transport — failures on the wire', () => {
       await run(function* () {
         yield* tracer.plugin.use()
         yield* install()
+
         const topic = unique('rpc.unrecorded')
+
         // a responder without a span of its own: nothing records the failure over there
         yield* Transport.actions.serve(topic, function* () {
           return yield* outer
         })
+
         return {
           got: yield* attempt(
-            span('call', { kind: 'client' }, () => Transport.actions.request(topic, {})),
+            Trace.actions.span('call', { kind: 'client' }, () =>
+              Transport.actions.request(topic, {}),
+            ),
           ),
         }
       }),
@@ -489,8 +562,11 @@ describe('transport — failures on the wire', () => {
     expect(isFailure(got)).toBe(true)
 
     const exceptions = tracer.exceptions()
+
     expect(exceptions).toHaveLength(1)
+
     const caller = tracer.named('call')
+
     expect(exceptions[0]?.context?.spanId).toBe(caller.context.spanId)
     expect(caller.attributes['ozaco.failure.remote']).toBeUndefined()
     expect(exceptions[0]?.attributes['ozaco.failure.chain']).toHaveLength(3)
@@ -501,7 +577,9 @@ describe('transport — failures on the wire', () => {
     const { got } = unwrap(
       await run(function* () {
         yield* install()
+
         const topic = unique('rpc.origin')
+
         yield* Transport.actions.serve<{ action: string }, never>(
           topic,
           function* () {
@@ -515,6 +593,7 @@ describe('transport — failures on the wire', () => {
             }),
           },
         )
+
         return { got: yield* failureOf(topic, { action: 'load' }) }
       }),
     )
@@ -542,6 +621,7 @@ describe('transport — failures on the wire', () => {
         yield* Transport.actions.serve(near, function* () {
           return yield* Transport.actions.request(far, {})
         })
+
         return { got: yield* failureOf(near) }
       }),
     )

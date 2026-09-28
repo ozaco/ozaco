@@ -25,13 +25,16 @@ export const driver: EdgeDef.Driver = {
 
         if (handlers.isSocket(request)) {
           const decision = await handlers.upgrade(request, peer)
+
           if (decision.kind === 'reject') {
             return decision.response
           }
+
           const data: BunEdgeDef.SocketData = {
             listeners: { message: [], close: [] },
             attach: decision.attach,
           }
+
           if (bunServer.upgrade(request, { data })) {
             return undefined as AnyType
           }
@@ -39,8 +42,10 @@ export const driver: EdgeDef.Driver = {
           // accepted by the engine, refused by the runtime (not a websocket handshake after
           // all): the upgrade span ends with the 500 the client gets (the engine records it)
           decision.failed(undefined, 500)
+
           return new Response('upgrade failed', { status: 500 })
         }
+
         return handlers.fetch(request, peer)
       },
       websocket: {
@@ -60,10 +65,12 @@ export const driver: EdgeDef.Driver = {
               data.listeners.close.push(listener)
             },
           }
+
           data.attach?.(raw)
         },
         message(ws, message) {
           const payload = typeof message === 'string' ? message : new Uint8Array(message)
+
           for (const listener of ws.data.listeners.message) {
             listener(payload)
           }
@@ -75,7 +82,9 @@ export const driver: EdgeDef.Driver = {
         },
       },
     })
+
     state.server = server
+
     const hostname = String(server.hostname ?? options.hostname ?? '127.0.0.1')
     const port = Number(server.port)
 
@@ -87,6 +96,7 @@ export const driver: EdgeDef.Driver = {
 
     if (state.server) {
       const { server } = state
+
       state.server = null
       yield* until(Promise.resolve(server.stop(true)))
     }

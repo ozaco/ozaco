@@ -1,7 +1,7 @@
 import type { Operation } from 'std:effect'
 import { attempt } from 'std:effect'
 import { Logger } from 'std:logger'
-import { suppressed } from 'std:trace'
+import { Trace } from 'std:trace'
 
 import { OBSERVE_LOGGER } from './const'
 
@@ -16,9 +16,10 @@ export function* warnDelivery(
   data: Readonly<Record<string, unknown>>,
 ): Operation<void> {
   yield* attempt(() =>
-    suppressed(function* () {
+    Trace.actions.suppressed(function* () {
       if ((yield* Logger.context.get()) === undefined) {
         console.warn(`[ozaco/observe] ${message}`)
+
         return
       }
 

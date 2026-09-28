@@ -14,7 +14,9 @@ const Counter = definePlugin<{ start: number }, [options?: { start?: number }]>(
 }).build({
   *next() {
     const ctx = yield* Counter.context.expect()
+
     ctx.start += 1
+
     return ctx.start
   },
 })
@@ -22,12 +24,14 @@ const Counter = definePlugin<{ start: number }, [options?: { start?: number }]>(
 describe('plugin — use', () => {
   it('installs the plugin into the current scope with its arguments and names the plugin', async () => {
     const use = Counter.use({ start: 10 })
+
     expect(isUse(use)).toBe(true)
     expect(use.plugin).toBe(Counter)
     expect(use.args).toEqual([{ start: 10 }])
     unwrap(
       await run(function* () {
         const ctx = yield* Counter.use({ start: 10 })
+
         expect(ctx.start).toBe(10)
         expect(yield* Counter.actions.next()).toBe(11)
         // a child scope sees it; a sibling install replaces it there only
@@ -57,6 +61,7 @@ describe('plugin — use', () => {
         return `hello ${(yield* Greeter.context.expect()).who}`
       },
     })
+
     unwrap(
       await run(function* () {
         yield* Hello.use('ada')

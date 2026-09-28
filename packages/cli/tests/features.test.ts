@@ -35,11 +35,13 @@ describe('cli — palette', () => {
     unwrap(
       await boot(plain, function* () {
         const context = yield* Palette.context.expect()
+
         expect(context.color).toBe(false)
         expect(context.unicode).toBe(false)
 
         // with color off, a style is the identity function — no escape codes leak into output
         const colors = yield* Palette.actions.colors()
+
         expect(colors.error('boom')).toBe('boom')
       }),
     )
@@ -49,6 +51,7 @@ describe('cli — palette', () => {
     unwrap(
       await boot(rich, function* () {
         const colors = yield* Palette.actions.colors()
+
         expect(colors.error('boom')).not.toBe('boom')
       }),
     )
@@ -79,6 +82,7 @@ describe('cli — table', () => {
     )
 
     const out = screen.plain()
+
     expect(out).toContain('Name')
     expect(out).toContain('Runs')
     expect(out).toContain('ada')
@@ -95,6 +99,7 @@ describe('cli — table', () => {
 
         const table = yield* Table.actions.table({ columns: [{ key: 'state', header: 'State' }] })
         const index = yield* table.row({ state: 'pending' })
+
         yield* table.update(index, { state: 'done' })
         yield* table.end()
       }),
@@ -113,6 +118,7 @@ describe('cli — spinner', () => {
         yield* DefaultSpinner.use()
 
         const handle = yield* Spinner.actions.start('working')
+
         yield* sleep(5)
         yield* handle.update('still working')
         yield* handle.succeed('done')
@@ -120,6 +126,7 @@ describe('cli — spinner', () => {
     )
 
     const out = screen.plain()
+
     expect(out).toContain('working')
     expect(out).toContain('done')
   })
@@ -191,6 +198,7 @@ describe('cli — prompt', () => {
         screen.press('ctrl+c')
 
         const outcome = (yield* asked) as AnyType
+
         expect(isFailure(outcome) && outcome.error).toBe(CliErrors.Cancelled)
       }),
     )

@@ -17,6 +17,7 @@ describe('flowOf', () => {
           yield* emit(2)
           yield* sleep(1)
           yield* emit(3)
+
           return 'done'
         })
 
@@ -28,6 +29,7 @@ describe('flowOf', () => {
 
           if (step.done) {
             expect(step.value).toBe('done')
+
             break
           }
 
@@ -70,8 +72,11 @@ describe('flowOf', () => {
 
         const subscription = yield* flow
         const first = yield* subscription.next()
+
         expect(first).toEqual({ done: false, value: 1 })
+
         const closed = yield* subscription.next()
+
         expect(closed.done).toBe(true)
         expect(isFailure(closed.value)).toBe(true)
         expect((closed.value as unknown as { error: string }).error).toBe('flow-of.boom')
@@ -93,12 +98,14 @@ describe('flowOf', () => {
         })
 
         const subscription = yield* flow
+
         yield* subscription.next()
         yield* subscription.next()
       }),
     )
 
     const at = produced
+
     await new Promise(resolve => {
       setTimeout(resolve, 20)
     })

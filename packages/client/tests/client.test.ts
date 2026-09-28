@@ -12,11 +12,14 @@ import { boot, FIXTURE_TOKEN } from './fixture'
 const drain = function* <T>(flow: AnyType): Generator<AnyType, T[], AnyType> {
   const out: T[] = []
   const subscription = yield* flow
+
   for (;;) {
     const step = yield* subscription.next()
+
     if (step.done) {
       return out
     }
+
     out.push(step.value)
   }
 }
@@ -30,11 +33,14 @@ describe('client', () => {
 
         // GET: query params with coercion-safe strings, numbers and booleans
         const echoed = yield* client.demo.echo({ text: '123', n: 2, flag: true })
+
         expect(echoed).toEqual({ text: '123', n: 2, flag: true })
         // path params
         expect(yield* client.demo.byId({ id: 'a b' })).toEqual({ id: 'a b' })
+
         // POST json + typed output
         const made = yield* client.demo.make({ title: 'hello' })
+
         expect(made.title).toBe('hello')
         // 204 → undefined
         expect(yield* client.demo.nothing(undefined)).toBeUndefined()
@@ -42,22 +48,31 @@ describe('client', () => {
 
         // validation failure keeps the server tag and carries the request id
         const invalid = yield* attempt(client.demo.make({ title: '' }))
+
         expect((invalid as AnyType).error).toBe('server.validation')
         expect((invalid as AnyType).causes.some((cause: string) => cause.startsWith('req:'))).toBe(
           true,
         )
+
         // custom error → its tag, and the per-action status
         const teapot = yield* attempt(client.demo.explode({ code: 'demo.teapot' }))
+
         expect((teapot as AnyType).error).toBe('demo.teapot')
+
         // a failure the action maps to 200 is STILL a failure here: the `oz-error` header says so
         const soft = yield* attempt(client.demo.explode({ code: 'demo.soft' }))
+
         expect((soft as AnyType).error).toBe('demo.soft')
         expect((soft as AnyType).causes).toContain('status:200')
+
         // unknown action → client.no-route before any request
         const none = yield* attempt(client.$call('demo.nope'))
+
         expect((none as AnyType).error).toBe(ClientErrors.NoRoute)
+
         // headers + bearer reach the server
         const token = yield* createClient<Api>({ url, token: () => 'abc' })
+
         expect(yield* token.demo.whoami(undefined)).toEqual({ authorization: 'Bearer abc' })
       }),
     )
@@ -68,12 +83,17 @@ describe('client', () => {
       await run(function* () {
         const { url } = yield* boot()
         const client = yield* createClient<Api>({ url })
+
         expect(yield* drain<number>(yield* client.demo.count({ n: 3 }))).toEqual([0, 1, 2])
         expect(yield* drain(yield* client.demo.ticks({ n: 2 }))).toEqual([{ tick: 0 }, { tick: 1 }])
         expect(yield* client.demo.words({ text: 'a b c' })).toBe('a b c ')
+
         const blob = yield* client.demo.blob({ size: 10 })
+
         expect(blob instanceof ReadableStream).toBe(true)
+
         const bytes = yield* until(new Response(blob).arrayBuffer())
+
         expect(bytes.byteLength).toBe(10)
 
         // a stream body
@@ -84,12 +104,15 @@ describe('client', () => {
             controller.close()
           },
         })
+
         expect(yield* client.demo.ingest(body as AnyType)).toEqual({ size: 500 })
+
         // multipart parts: fields + a file
         const uploaded = yield* client.demo.upload({
           fields: { name: 'pic' },
           streams: { file: new Uint8Array(64) },
         } as AnyType)
+
         expect(uploaded).toEqual({ name: 'pic', size: 64 })
       }),
     )
@@ -103,23 +126,33 @@ describe('client', () => {
         // v0.5: crud calls are TYPED end to end — the manifest-declared schemas carry the real
         // input types, so no cast is needed (this block compiling IS the regression test)
         const created = yield* client.notes.create({ title: 'one', done: false })
+
         expect(created.title).toBe('one')
+
         const listed = yield* client.notes.list({ limit: 10 })
+
         expect(listed.data).toBeTruthy()
+
         const fetched = yield* client.notes.get({ id: created._id })
+
         expect(fetched._id).toBe(created._id)
 
         const rows = yield* client.$rows<{ _id: string; title: string }>('notes')
         const first = yield* rows.next()
+
         expect((first.value as AnyType).rows.map((row: AnyType) => row.title)).toEqual(['one'])
         yield* client.notes.create({ title: 'two', done: true })
+
         const second = yield* rows.next()
+
         expect((second.value as AnyType).rows.map((row: AnyType) => row.title).toSorted()).toEqual([
           'one',
           'two',
         ])
         yield* client.notes.remove({ id: created._id })
+
         const third = yield* rows.next()
+
         expect((third.value as AnyType).rows.map((row: AnyType) => row.title)).toEqual(['two'])
         yield* sleep(10)
       }),
@@ -132,16 +165,20 @@ describe('client', () => {
         const { url } = yield* boot({ auth: true })
         const anonymous = yield* createClient<Api>({ url })
         const denied = yield* attempt(anonymous.$manifest())
+
         // the gate's answer, decoded like any action failure — not a network error
         expect((denied as AnyType).error).toBe('server.unauthorized')
         expect((denied as AnyType).causes).toContain('status:401')
 
         const client = yield* createClient<Api>({ url, token: FIXTURE_TOKEN })
         const manifest = yield* client.$manifest()
+
         expect(manifest.manifest).toBe('ozaco/2')
+
         // codegen's `pull` carries the same bearer
         // …and decodes a refusal the same way as the runtime client: the server's tag, not a network error
         const pulled = yield* attempt(pull(url))
+
         expect((pulled as AnyType).error).toBe('server.unauthorized')
         expect((pulled as AnyType).causes).toContain('status:401')
         expect(yield* pull(url, { token: FIXTURE_TOKEN })).toContain('export interface Api')
@@ -158,13 +195,16 @@ describe('client', () => {
         const client = yield* createClient({ url })
         const manifest = yield* client.$manifest()
         const source = yield* generate(manifest)
+
         expect(source).toContain("import type { Flow } from '@ozaco/std/effect'")
         expect(source).toContain('readonly count: {')
         expect(source).toContain('readonly output: Flow<number, void>')
         expect(source).toContain("readonly kind: 'mutation'")
         expect(source).toContain("path: '/demo/:id'")
         expect(source).toContain('readonly output: ReadableStream<Uint8Array>')
+
         const bad = yield* attempt(generate({ nope: true }))
+
         expect((bad as AnyType).error).toBe(ClientErrors.Decode)
       }),
     )
@@ -174,12 +214,14 @@ describe('client', () => {
 describe('client — realtime resume', () => {
   it('a dropped socket reconnects and resumes the watch from the last token', async () => {
     const sockets: WebSocket[] = []
+
     class Spy extends WebSocket {
       constructor(url: string | URL, options?: AnyType) {
         super(url, options)
         sockets.push(this)
       }
     }
+
     // WsClient reads `globalThis.WebSocket` at connect time: swap in the spy for this run only
     const Native = (globalThis as AnyType).WebSocket
     ;(globalThis as AnyType).WebSocket = Spy
@@ -187,9 +229,12 @@ describe('client — realtime resume', () => {
       await run(function* () {
         const { url } = yield* boot()
         const client = yield* createClient<Api>({ url })
+
         yield* client.notes.create({ title: 'before-drop', done: false } as AnyType)
+
         const rows = yield* client.$rows<{ title: string }>('notes')
         const first = yield* rows.next()
+
         expect((first.value as AnyType).rows.map((row: AnyType) => row.title)).toEqual([
           'before-drop',
         ])
@@ -199,7 +244,9 @@ describe('client — realtime resume', () => {
         sockets[0]!.close(4000, 'drop')
         yield* sleep(50)
         yield* client.notes.create({ title: 'after-drop', done: false } as AnyType)
+
         const next = yield* rows.next()
+
         expect((next.value as AnyType).rows.map((row: AnyType) => row.title).toSorted()).toEqual([
           'after-drop',
           'before-drop',

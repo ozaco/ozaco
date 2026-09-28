@@ -1,6 +1,6 @@
 /**
  * `TraceTransport` (`std:logger/transport/trace`): Logger entries → std:trace log records, checked
- * against an in-memory Tracer.
+ * against an in-memory Trace sink.
  */
 import type { Operation } from 'std:effect'
 import { attempt, run } from 'std:effect'
@@ -8,22 +8,19 @@ import type { LoggerDef } from 'std:logger'
 import { DefaultLogger, Logger, LogLevel } from 'std:logger'
 import { fail, isFailure, unwrap } from 'std:result'
 import type { TraceDef } from 'std:trace'
-import { enableTracing, isRecorded, span, suppressed, Tracer } from 'std:trace'
+import { Trace } from 'std:trace'
 
 import { describe, expect, it } from 'bun:test'
 
-import {
-  backendKey,
-  isReservedLogKey,
-  severityOf,
-  TraceTransport,
-} from 'std:logger/transport/trace'
+import { severityOf, TraceTransport } from 'std:logger/transport/trace'
 
 import pkg from '../../package.json'
+import { backendKey, isReservedLogKey } from '../../src/logger/internal/keys'
+import { isRecordedIn } from '../../src/trace/internal/registry'
 import type { MemoryTracer } from '../trace/helpers'
 import { memoryTracer } from '../trace/helpers'
 
-/** Tracing on (in-memory Tracer), a Logger at `level` and the TraceTransport; runs `body`. */
+/** Tracing on (in-memory Trace sink), a Logger at `level` and the TraceTransport; runs `body`. */
 const bridged = async <T>(
   body: (tracer: MemoryTracer) => Operation<T>,
   options: LoggerDef.Options = {},
@@ -35,6 +32,7 @@ const bridged = async <T>(
       yield* tracer.plugin.use()
       yield* DefaultLogger.use({ level: LogLevel.trace, timestamp: () => 4242, ...options })
       yield* TraceTransport.use()
+
       return yield* body(tracer)
     }),
   )
@@ -76,6 +74,7 @@ describe('TraceTransport — mapping', () => {
     })
 
     const [log] = tracer.logs
+
     expect(log).toMatchObject({
       time: 4242,
       body: 'hello',
@@ -129,6 +128,7 @@ describe('TraceTransport — mapping', () => {
 
   it('non-finite numbers become their strings — in leaves, bindings and the overflow JSON', async () => {
     const wide: Record<string, unknown> = {}
+
     for (let index = 0; index < 64; index += 1) {
       wide[`k${index}`] = index
     }
@@ -146,6 +146,7 @@ describe('TraceTransport — mapping', () => {
     })
 
     const [ratio, overflow] = tracer.logs
+
     expect(ratio?.attributes).toEqual({
       bound: '-Infinity',
       ratio: 'NaN',
@@ -159,6 +160,7 @@ describe('TraceTransport — mapping', () => {
 
   it('keeps 64 leaves; the rest travel as ONE `ozaco.log.data` JSON string; values ≤ 8 KiB', async () => {
     const wide: Record<string, unknown> = {}
+
     for (let index = 0; index < 70; index += 1) {
       wide[`k${index}`] = index
     }
@@ -183,13 +185,14 @@ describe('TraceTransport — mapping', () => {
     })
 
     const text = longLog?.attributes['text'] as string
+
     expect(new TextEncoder().encode(text).length).toBeLessThanOrEqual(8192)
     expect(text.endsWith('…')).toBe(true)
   })
 
   it('backend-reserved keys move to `ozaco.data.<key>` (compared lowercased, non-alnum ⇒ _)', async () => {
     const { tracer, value } = await bridged(() =>
-      span('handler', function* (handle) {
+      Trace.actions.span('handler', function* (handle) {
         yield* Logger.actions.info('collision test', {
           trace_id: 'user-supplied-trace',
           'Span-Id': 'user-span',
@@ -202,11 +205,13 @@ describe('TraceTransport — mapping', () => {
           service: { name: 'nested-bogus' },
           ok: true,
         })
+
         return handle.context
       }),
     )
 
     const [log] = lines(tracer)
+
     expect(log?.attributes).toEqual({
       'ozaco.data.trace_id': 'user-supplied-trace',
       'ozaco.data.Span-Id': 'user-span',
@@ -246,8 +251,9 @@ describe('TraceTransport — mapping', () => {
 
   it('inside a span: the record is correlated to it and takes its service', async () => {
     const { tracer, value } = await bridged(() =>
-      span('todos.create', { service: 'todos' }, function* (handle) {
+      Trace.actions.span('todos.create', { service: 'todos' }, function* (handle) {
         yield* Logger.actions.info('inside')
+
         return handle.context
       }),
     )
@@ -265,8 +271,9 @@ describe('TraceTransport — failures', () => {
 
     const { tracer } = await bridged(function* () {
       yield* attempt(() =>
-        span('handler', function* () {
+        Trace.actions.span('handler', function* () {
           yield* Logger.actions.error('saving failed', failure, { id: 7 })
+
           // the same failure escaping afterwards adds no second exception
           return yield* failure
         }),
@@ -274,6 +281,7 @@ describe('TraceTransport — failures', () => {
     })
 
     const exceptions = tracer.exceptions()
+
     expect(exceptions).toHaveLength(1)
     expect(exceptions[0]).toMatchObject({
       severityNumber: 17,
@@ -286,6 +294,7 @@ describe('TraceTransport — failures', () => {
     })
 
     const handler = tracer.span('handler')
+
     expect(handler.events.map(event => event.name)).toEqual(['exception'])
     expect(handler.status).toEqual({ code: 'error', message: 'disk full' })
     expect(exceptions[0]?.context?.spanId).toBe(handler.context.spanId)
@@ -298,7 +307,7 @@ describe('TraceTransport — failures', () => {
 
   it('a message-less, data-less failure line inside a recording span IS the exception record', async () => {
     const { tracer } = await bridged(() =>
-      span('handler', function* () {
+      Trace.actions.span('handler', function* () {
         yield* Logger.actions.warn(fail('cache.miss', 'stale'))
       }),
     )
@@ -311,7 +320,7 @@ describe('TraceTransport — failures', () => {
     const failure = fail('app.kaput')
 
     const { tracer } = await bridged(() =>
-      span('handler', function* () {
+      Trace.actions.span('handler', function* () {
         yield* Logger.actions.error(failure)
         yield* Logger.actions.error(failure)
       }),
@@ -348,13 +357,16 @@ describe('TraceTransport — failures', () => {
 
     const { tracer, value } = await bridged(function* () {
       let traceId = ''
+
       yield* attempt(() =>
-        span('poll', { sampled: false }, function* (handle) {
+        Trace.actions.span('poll', { sampled: false }, function* (handle) {
           traceId = handle.context.traceId
           yield* Logger.actions.warn('poll failed', failure)
+
           return yield* failure
         }),
       )
+
       return traceId
     })
 
@@ -366,14 +378,14 @@ describe('TraceTransport — failures', () => {
       context: { traceId: value, flags: 2 },
       attributes: { 'exception.type': 'poll.failed' },
     })
-    expect(isRecorded(failure, value)).toBe(true)
+    expect(isRecordedIn(failure, value)).toBe(true)
   })
 
   it('below WARN inside a recording span: exception attributes on the line, no span event', async () => {
     const failure = fail('app.retry', 'attempt 1')
 
     const { tracer } = await bridged(() =>
-      span('handler', function* () {
+      Trace.actions.span('handler', function* () {
         yield* Logger.actions.info('retrying', failure)
       }),
     )
@@ -413,8 +425,8 @@ describe('TraceTransport — when it stays silent', () => {
 
   it('tracing off or suppressed: nothing is emitted', async () => {
     const { tracer } = await bridged(function* () {
-      yield* suppressed(() => Logger.actions.error('from inside an exporter'))
-      yield* enableTracing(false)
+      yield* Trace.actions.suppressed(() => Logger.actions.error('from inside an exporter'))
+      yield* Trace.actions.enableTracing(false)
       yield* Logger.actions.error('tracing off')
     })
 
@@ -424,8 +436,10 @@ describe('TraceTransport — when it stays silent', () => {
   it('the level defaults to the Logger level at install; options.level overrides it', async () => {
     const outcome = await run(function* () {
       yield* DefaultLogger.use({ level: LogLevel.warn })
+
       const inherited = yield* TraceTransport.use()
       const explicit = yield* TraceTransport.use({ level: LogLevel.error })
+
       return [inherited.level, explicit.level]
     })
 
@@ -445,18 +459,19 @@ describe('TraceTransport — when it stays silent', () => {
   it('without a Logger installed yet it forwards every level (the Logger filters first)', async () => {
     const outcome = await run(function* () {
       const ctx = yield* TraceTransport.use()
+
       return ctx.level
     })
 
     expect(unwrap(outcome)).toBe(LogLevel.trace)
   })
 
-  it('a failing Tracer never fails the log call', async () => {
-    const broken = Tracer.implement({
+  it('a failing Trace sink never fails the log call', async () => {
+    const broken = Trace.implement({
       name: 'test/broken-tracer',
       version: '1.0.0',
       *setup() {
-        yield* enableTracing()
+        yield* Trace.actions.enableTracing()
       },
     }).build({
       *export() {},
@@ -470,7 +485,8 @@ describe('TraceTransport — when it stays silent', () => {
       yield* DefaultLogger.use()
       yield* TraceTransport.use()
       yield* Logger.actions.info('still fine')
-      yield* span('handler', () => Logger.actions.error('also fine', fail('app.x')))
+      yield* Trace.actions.span('handler', () => Logger.actions.error('also fine', fail('app.x')))
+
       return 'done'
     })
 

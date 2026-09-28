@@ -7,33 +7,28 @@ import type { Operation } from 'std:effect'
 import { run, spawn } from 'std:effect'
 import { DefaultLogger, Logger, LogLevel } from 'std:logger'
 import { fail, unwrap } from 'std:result'
-import {
-  ActiveSpan,
-  isRecorded,
-  parseTraceparent,
-  passThrough,
-  recordFailure,
-  span,
-  suppressed,
-} from 'std:trace'
+import { Trace } from 'std:trace'
 
 import { describe, expect, it } from 'bun:test'
 
 import { TraceTransport } from 'std:logger/transport/trace'
 
 import pkg from '../../package.json'
+import { parseTraceparent } from '../../src/trace/internal/propagation'
+import { isRecordedIn } from '../../src/trace/internal/registry'
 import type { MemoryFallback } from '../trace/helpers'
 import { memoryFallback, memoryTracer, withFallbacks } from '../trace/helpers'
 
 const INBOUND = '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01'
 
-/** A Logger + TraceTransport with NO Tracer anywhere (tracing never enabled); runs `body`. */
+/** A Logger + TraceTransport with NO Trace sink anywhere (tracing never enabled); runs `body`. */
 const untraced = <T>(fallback: MemoryFallback | null, body: () => Operation<T>): Promise<T> =>
   withFallbacks(fallback ? [fallback] : [], async () =>
     unwrap(
       await run(function* () {
         yield* DefaultLogger.use({ level: LogLevel.trace, timestamp: () => 4242 })
         yield* TraceTransport.use()
+
         return yield* body()
       }),
     ),
@@ -80,7 +75,7 @@ describe('TraceTransport — through the process fallback', () => {
     await untraced(fallback, function* () {
       yield* Logger.actions.error('queue worker gone', failure)
       // the same failure recorded later outside any trace: no second exception record
-      yield* recordFailure(failure)
+      yield* Trace.actions.recordFailure(failure)
     })
 
     expect(fallback.logs).toHaveLength(1)
@@ -93,7 +88,7 @@ describe('TraceTransport — through the process fallback', () => {
       },
     })
     expect(fallback.logs[0]?.eventName).toBeUndefined()
-    expect(isRecorded(failure, '')).toBe(true)
+    expect(isRecordedIn(failure, '')).toBe(true)
   })
 
   it('a pass-through context stamped on the entry is the record’s context', async () => {
@@ -101,7 +96,7 @@ describe('TraceTransport — through the process fallback', () => {
     const inbound = parseTraceparent(INBOUND)!
 
     await untraced(fallback, () =>
-      ActiveSpan.with(passThrough(inbound), () => Logger.actions.info('carried')),
+      Trace.actions.passThrough(inbound, () => Logger.actions.info('carried')),
     )
 
     expect(fallback.logs[0]?.context).toEqual({
@@ -117,7 +112,7 @@ describe('TraceTransport — through the process fallback', () => {
     await untraced(null, () => Logger.actions.error('nobody listens', fail('app.x')))
 
     await untraced(fallback, function* () {
-      yield* suppressed(() => Logger.actions.error('from inside an exporter'))
+      yield* Trace.actions.suppressed(() => Logger.actions.error('from inside an exporter'))
       yield* Logger.actions.child({ 'ozaco.telemetry': 'sent' }, () =>
         Logger.actions.info('ctx.log already emitted it'),
       )
@@ -126,7 +121,7 @@ describe('TraceTransport — through the process fallback', () => {
     expect(fallback.logs).toEqual([])
   })
 
-  it('tracing ON in the calling scope: the Tracer gets the line, never the fallback too', async () => {
+  it('tracing ON in the calling scope: the Trace sink gets the line, never the fallback too', async () => {
     const fallback = memoryFallback()
     const tracer = memoryTracer()
 
@@ -134,12 +129,13 @@ describe('TraceTransport — through the process fallback', () => {
       // root: tracing off ⇒ the fallback
       yield* Logger.actions.info('root line')
 
-      // a traced child scope (a node) under the same root transports ⇒ its Tracer
+      // a traced child scope (a node) under the same root transports ⇒ its Trace sinks
       const node = yield* spawn(function* () {
         yield* tracer.plugin.use()
         yield* Logger.actions.info('node line')
-        yield* span('handler', () => Logger.actions.info('handler line'))
+        yield* Trace.actions.span('handler', () => Logger.actions.info('handler line'))
       })
+
       yield* node
     })
 
@@ -158,6 +154,7 @@ describe('TraceTransport — through the process fallback', () => {
         yield* TraceTransport.use()
         yield* Logger.actions.info('once')
       })
+
       yield* node
       yield* Logger.actions.info('root once')
     })

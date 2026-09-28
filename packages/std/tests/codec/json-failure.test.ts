@@ -24,6 +24,7 @@ const withJson = async <T>(body: () => Operation<T>): Promise<T> =>
   unwrap(
     await run(function* () {
       yield* JsonCodec.use()
+
       return yield* body()
     }),
   )
@@ -32,16 +33,20 @@ const withJson = async <T>(body: () => Operation<T>): Promise<T> =>
 const roundTrip = async <T>(value: T): Promise<T> => {
   const { payload } = await withJson(function* () {
     const bytes = yield* JsonCodec.actions.encode({ payload: value })
+
     return yield* JsonCodec.actions.decode<{ payload: T }>(bytes)
   })
+
   return payload
 }
 
 const nestedAt = (failure: Result.Failure<unknown>, index: number): Result.Failure<unknown> => {
   const cause = failure.causes[index]
+
   if (!isFailure(cause)) {
     throw new Error(`cause ${index} is not a failure`)
   }
+
   return cause
 }
 
@@ -66,10 +71,12 @@ describe('JsonCodec — failures', () => {
     expect(decoded.causes[0]).toBe('todos.explode')
 
     const mid = nestedAt(decoded, 1)
+
     expect(mid.error).toBe('todos.db-step')
     expect(mid.causes[0]).toBe('reading row')
 
     const fold = nestedAt(mid, 1)
+
     expect(fold.error).toBe(ResultErrors.Unknown)
     expect(fold.message).toBe('TypeError: x is not a function')
     expect('raw' in fold).toBe(false)
@@ -88,12 +95,14 @@ describe('JsonCodec — failures', () => {
     const raised = await run(function* () {
       return yield* decoded
     })
+
     expect(raised).toBe(decoded)
   })
 
   it('a Failure decoded as the whole value is raised by the action; attempt returns it', async () => {
     const outcome = await run(function* () {
       yield* JsonCodec.use()
+
       const bytes = yield* JsonCodec.actions.encode(fail('todo.kaput', 'boom', 'x'))
 
       return {
@@ -103,6 +112,7 @@ describe('JsonCodec — failures', () => {
     })
 
     const { attempted, parsed } = unwrap(outcome)
+
     for (const [decoded, action] of [
       [attempted, 'decode'],
       [parsed, 'parse'],
@@ -149,9 +159,11 @@ describe('JsonCodec — failures', () => {
 
   it('round-trips a bare fail(), an object error, and failures inside plain data', async () => {
     const bare = await roundTrip(fail())
+
     expect(isFailure(bare) && bare.error).toBeUndefined()
 
     const object = await roundTrip(fail({ reason: 'bad' }, 'msg'))
+
     expect(object.error).toEqual({ reason: 'bad' })
 
     const data = await roundTrip({
@@ -180,6 +192,7 @@ describe('JsonCodec — failures', () => {
   it('cuts a cause cycle where it closes instead of failing', async () => {
     const first = fail('first')
     const second = fail('second', '', first)
+
     first.causes.push(second)
 
     const decoded = await roundTrip(second)
@@ -205,6 +218,7 @@ describe('JsonCodec — failures', () => {
       Result.Failure<unknown>,
       unknown,
     ]
+
     expect(isFailure(empty) && empty.error).toBeUndefined()
     expect(typed.message).toBe('')
     expect(typed.causes).toEqual(['ok'])
@@ -231,7 +245,9 @@ describe('JsonCodec — failures', () => {
     })
 
     expect(isFailure(values[0])).toBe(true)
+
     const failure = values[0] as Result.Failure<unknown>
+
     expect(nestedAt(failure, 0).error).toBe('flow.inner')
     expect(values[1]).toEqual({ ok: 1 })
   })
@@ -239,6 +255,7 @@ describe('JsonCodec — failures', () => {
   it('a codec failure still surfaces as one (a value JSON cannot write)', async () => {
     const outcome = await run(function* () {
       yield* JsonCodec.use()
+
       return yield* JsonCodec.actions.encode({ big: 1n })
     })
 

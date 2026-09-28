@@ -2,9 +2,11 @@ import type { Operation } from 'std:effect'
 import { attempt } from 'std:effect'
 import type { Result } from 'std:result'
 import { fail } from 'std:result'
-import { current, isRecorded, markRecorded, recordFailure, span } from 'std:trace'
+import { Trace } from 'std:trace'
 
 import { describe, expect, it } from 'bun:test'
+
+import { isRecordedIn, markRecordedIn } from '../../src/trace/internal/registry'
 
 import { traced, tracedResult } from './helpers'
 
@@ -14,32 +16,35 @@ describe('record once per (failure, trace)', () => {
 
     const { tracer } = await traced(function* () {
       // a singleflight leader and a follower in another request: one Failure object, two traces
-      yield* attempt(() => span('request-a', () => shared))
-      yield* attempt(() => span('request-b', () => shared))
+      yield* attempt(() => Trace.actions.span('request-a', () => shared))
+      yield* attempt(() => Trace.actions.span('request-b', () => shared))
     })
 
     const a = tracer.span('request-a').context.traceId
     const b = tracer.span('request-b').context.traceId
+
     expect(a).not.toBe(b)
 
     const logs = tracer.exceptions()
+
     expect(logs.map(log => log.context?.traceId)).toEqual([a, b])
-    expect(isRecorded(shared, a)).toBe(true)
-    expect(isRecorded(shared, b)).toBe(true)
-    expect(isRecorded(shared, 'f'.repeat(32))).toBe(false)
+    expect(isRecordedIn(shared, a)).toBe(true)
+    expect(isRecordedIn(shared, b)).toBe(true)
+    expect(isRecordedIn(shared, 'f'.repeat(32))).toBe(false)
   })
 
   it('markRecorded / isRecorded share one registry across std copies (globalThis symbol)', () => {
     const failure = fail('app.x')
-    markRecorded(failure, 'trace-1')
+
+    markRecordedIn(failure, 'trace-1')
 
     const registry = (globalThis as Record<symbol, unknown>)[Symbol.for('std:trace.recorded')] as
       | WeakMap<object, Set<string>>
       | undefined
 
     expect(registry?.get(failure)?.has('trace-1')).toBe(true)
-    expect(isRecorded(failure, 'trace-1')).toBe(true)
-    expect(isRecorded(failure, 'trace-2')).toBe(false)
+    expect(isRecordedIn(failure, 'trace-1')).toBe(true)
+    expect(isRecordedIn(failure, 'trace-2')).toBe(false)
   })
 
   it('a long-lived shared failure keeps only the latest 128 trace ids (a bounded registry)', async () => {
@@ -47,13 +52,14 @@ describe('record once per (failure, trace)', () => {
 
     await traced(function* () {
       for (let at = 0; at < 300; at += 1) {
-        yield* attempt(() => span(`request-${at}`, { parent: null }, () => memoized))
+        yield* attempt(() => Trace.actions.span(`request-${at}`, { parent: null }, () => memoized))
       }
     })
 
     const registry = (globalThis as Record<symbol, unknown>)[
       Symbol.for('std:trace.recorded')
     ] as WeakMap<object, Set<string>>
+
     expect(registry.get(memoized)?.size).toBe(128)
   })
 
@@ -62,10 +68,17 @@ describe('record once per (failure, trace)', () => {
   const decoded = (recorded: boolean, seen: Result.Failure<unknown>[] = []) =>
     function* (): Operation<never> {
       const failure = fail('todo.kaput', 'boom', 'remote: todos.explode @ api span abcdef01')
+
       seen.push(failure)
+
       if (recorded) {
-        markRecorded(failure, (yield* current()).context.traceId, { remote: true })
+        yield* Trace.actions.markRecorded(
+          failure,
+          (yield* Trace.actions.current()).context.traceId,
+          { remote: true },
+        )
       }
+
       return yield* failure
     }
 
@@ -73,24 +86,29 @@ describe('record once per (failure, trace)', () => {
     const seen: Result.Failure<unknown>[] = []
 
     const { tracer } = await tracedResult(() =>
-      span('todos.explode', { kind: 'client' }, decoded(true, seen)),
+      Trace.actions.span('todos.explode', { kind: 'client' }, decoded(true, seen)),
     )
 
     expect(tracer.exceptions()).toHaveLength(0)
+
     const data = tracer.span('todos.explode')
+
     expect(data.status).toEqual({ code: 'error', message: 'boom' })
     expect(data.attributes).toMatchObject({
       'error.type': 'todo.kaput',
       'ozaco.failure.remote': true,
     })
     expect(data.events).toEqual([])
-    expect(isRecorded(seen[0]!, data.context.traceId)).toBe(true)
+    expect(isRecordedIn(seen[0]!, data.context.traceId)).toBe(true)
   })
 
   it('a remote failure nobody recorded yet is recorded here, its origin an `at` line', async () => {
-    const { tracer } = await tracedResult(() => span('call', { kind: 'client' }, decoded(false)))
+    const { tracer } = await tracedResult(() =>
+      Trace.actions.span('call', { kind: 'client' }, decoded(false)),
+    )
 
     const [log] = tracer.exceptions()
+
     expect(tracer.exceptions()).toHaveLength(1)
     expect(log!.body).toBe('todo.kaput: boom\n    at remote: todos.explode @ api span abcdef01')
     // the exception is HERE: nothing points elsewhere
@@ -99,9 +117,11 @@ describe('record once per (failure, trace)', () => {
 
   it('markRecorded without `remote` (a log line took the exception) adds no remote marker', async () => {
     const { tracer } = await tracedResult(() =>
-      span('handler', function* () {
+      Trace.actions.span('handler', function* () {
         const failure = fail('app.x', 'logged')
-        markRecorded(failure, (yield* current()).context.traceId)
+
+        markRecordedIn(failure, (yield* Trace.actions.current()).context.traceId)
+
         return failure
       }),
     )
@@ -113,13 +133,17 @@ describe('record once per (failure, trace)', () => {
 
   it('a local wrap of a remote-recorded failure is new information: it is recorded', async () => {
     const { tracer } = await tracedResult(() =>
-      span('gateway', function* () {
-        const outcome = yield* attempt(() => span('call', { kind: 'client' }, decoded(true)))
+      Trace.actions.span('gateway', function* () {
+        const outcome = yield* attempt(() =>
+          Trace.actions.span('call', { kind: 'client' }, decoded(true)),
+        )
+
         return yield* fail('gateway.failed', 'upstream failed', outcome)
       }),
     )
 
     const [log] = tracer.exceptions()
+
     expect(tracer.exceptions()).toHaveLength(1)
     expect(log!.context?.spanId).toBe(tracer.span('gateway').context.spanId)
     expect(log!.body).toBe(
@@ -137,13 +161,17 @@ describe('record once per (failure, trace)', () => {
 describe('recordFailure', () => {
   it('records on the active span now: event + log, severity / eventName / handled', async () => {
     const { tracer } = await traced(() =>
-      span('attempt', function* () {
-        yield* recordFailure(fail('app.retry', 'will retry'), { handled: true })
-        yield* recordFailure(fail('app.fatal', 'gave up'), { severity: 21, eventName: 'app.fatal' })
+      Trace.actions.span('attempt', function* () {
+        yield* Trace.actions.recordFailure(fail('app.retry', 'will retry'), { handled: true })
+        yield* Trace.actions.recordFailure(fail('app.fatal', 'gave up'), {
+          severity: 21,
+          eventName: 'app.fatal',
+        })
       }),
     )
 
     const [retry, fatal] = tracer.exceptions()
+
     expect(retry).toMatchObject({ severityNumber: 13, eventName: 'exception' })
     expect(fatal).toMatchObject({ severityNumber: 21, eventName: 'app.fatal' })
     expect(tracer.span('attempt').events.map(event => event.name)).toEqual([
@@ -156,8 +184,8 @@ describe('recordFailure', () => {
 
   it("uses the span's failure.eventName by default", async () => {
     const { tracer } = await traced(() =>
-      span('db', { failure: { eventName: 'db.client.operation.exception' } }, () =>
-        recordFailure(fail('db.slow')),
+      Trace.actions.span('db', { failure: { eventName: 'db.client.operation.exception' } }, () =>
+        Trace.actions.recordFailure(fail('db.slow')),
       ),
     )
 
@@ -165,19 +193,22 @@ describe('recordFailure', () => {
   })
 
   it('without an active span it still emits the log record (no context)', async () => {
-    const { tracer } = await traced(() => recordFailure(fail('app.boot', 'config missing')))
+    const { tracer } = await traced(() =>
+      Trace.actions.recordFailure(fail('app.boot', 'config missing')),
+    )
 
     const [log] = tracer.exceptions()
+
     expect(log).toMatchObject({ context: null, service: null, severityNumber: 17 })
     expect(log!.scope.name).toBe('@ozaco/std')
   })
 
   it('handle.recordFailure records on THAT span', async () => {
     const { tracer } = await traced(() =>
-      span('outer', function* (outer) {
-        yield* span('inner', function* () {
+      Trace.actions.span('outer', function* (outer) {
+        yield* Trace.actions.span('inner', function* () {
           yield* outer.recordFailure(fail('app.outer'))
-          yield* (yield* current()).recordFailure(fail('app.inner'))
+          yield* (yield* Trace.actions.current()).recordFailure(fail('app.inner'))
         })
       }),
     )

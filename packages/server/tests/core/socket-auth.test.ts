@@ -75,6 +75,7 @@ const probe = (...args: Parameters<typeof dial>): Operation<Settled | 'hung'> =>
     })(),
     (function* (): Operation<Settled | 'hung'> {
       yield* sleep(HANG_MS)
+
       return 'hung'
     })(),
   ])
@@ -92,6 +93,7 @@ const boot = function* () {
         *authorize(request, token) {
           const bearer =
             token ?? request.headers.get('authorization')?.replace(/^Bearer /u, '') ?? undefined
+
           seen.tokens.push(bearer)
 
           if (bearer !== GOOD) {
@@ -105,6 +107,7 @@ const boot = function* () {
         seen.handlers += 1
         seen.principals.push(socket.ctx.auth)
         yield* socket.send({ t: 'hello' })
+
         const messages = yield* socket.messages
 
         for (;;) {
@@ -119,6 +122,7 @@ const boot = function* () {
   })
 
   yield* storage()
+
   const server = yield* createServer({ services: [guarded], edge: BunEdge })
   const info = yield* server.start({ port: 0 })
 
@@ -134,7 +138,9 @@ describe('socket auth — a failing handshake never hangs', () => {
         const settled = yield* probe(url, { t: 'auth', token: 'garbage' })
 
         expect(settled).not.toBe('hung')
+
         const result = settled as Settled
+
         // the verdict rides the frame — waiting the grace out would be a 2s stall
         expect(result.ms).toBeLessThan(GRACE_MS / 2)
         expect(result.outcome).toBe('closed')
@@ -158,7 +164,9 @@ describe('socket auth — a failing handshake never hangs', () => {
         const settled = yield* probe(url)
 
         expect(settled).not.toBe('hung')
+
         const result = settled as Settled
+
         expect(result.outcome).toBe('closed')
         expect(result.code).toBe(4401)
         // it waits for the token it was promised…
@@ -182,7 +190,9 @@ describe('socket auth — a failing handshake never hangs', () => {
         const settled = yield* probe(url, { t: 'watch', id: 'w1' })
 
         expect(settled).not.toBe('hung')
+
         const result = settled as Settled
+
         expect(result.outcome).toBe('closed')
         expect(result.code).toBe(4401)
         expect(result.ms).toBeLessThan(GRACE_MS / 2)
@@ -202,7 +212,9 @@ describe('socket auth — a failing handshake never hangs', () => {
         const settled = yield* probe(url, undefined, { authorization: 'Bearer garbage' })
 
         expect(settled).not.toBe('hung')
+
         const result = settled as Settled
+
         expect(result.outcome).not.toBe('message')
         expect(result.ms).toBeLessThan(GRACE_MS / 2)
         expect(seen.tokens).toEqual(['garbage'])
@@ -221,7 +233,9 @@ describe('socket auth — a failing handshake never hangs', () => {
         const settled = yield* probe(url, { t: 'auth', token: GOOD })
 
         expect(settled).not.toBe('hung')
+
         const result = settled as Settled
+
         expect(result.outcome).toBe('message')
         expect(result.ms).toBeLessThan(GRACE_MS / 2)
         expect(result.frames).toEqual([{ t: 'hello' }])

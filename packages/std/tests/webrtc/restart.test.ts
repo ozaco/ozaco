@@ -37,6 +37,7 @@ describe('ICE restart supervision', () => {
     })
 
     const value = unwrap(outcome)
+
     expect(value.stateA).toBe('connected')
     expect(value.stateB).toBe('connected')
     expect(value.restartsA).toBeGreaterThanOrEqual(1)
@@ -55,6 +56,7 @@ describe('ICE restart supervision', () => {
         iceRestart: { retries: 2, delayMs: 5 },
       })
       const peerB = yield* Rtc.actions.connect(signalB, { polite: true })
+
       void peerB
 
       const chatA = yield* peerA.channel('chat')
@@ -88,6 +90,7 @@ describe('ICE restart supervision', () => {
       const [signalA, signalB] = createSignalPair()
       const peerA = yield* Rtc.actions.connect(signalA)
       const peerB = yield* Rtc.actions.connect(signalB, { polite: true })
+
       void peerB
 
       const chatA = yield* peerA.channel('chat')
@@ -123,13 +126,17 @@ describe('ICE restart supervision', () => {
         polite: true,
         iceRestart: { retries: 4, delayMs: 10 },
       })
+
       void peerB
 
       const states = yield* peerA.states
+
       yield* peerA.channel('chat')
+
       const first = yield* states.next()
 
       sever(fake.hub)
+
       const second = yield* states.next()
       const third = yield* states.next()
 

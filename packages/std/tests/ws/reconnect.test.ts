@@ -18,9 +18,11 @@ const OPEN = 1
 /** Drops the FIRST connection right after a greeting; echoes on every later connection. */
 const dropFirstServer = () => {
   let connections = 0
+
   return wsServer({
     open(socket) {
       connections += 1
+
       if (connections === 1) {
         socket.send('welcome-then-drop')
         socket.close(4002, 'first-connection-dropped')
@@ -38,8 +40,10 @@ const dropOnCommandServer = () =>
     message(socket, data) {
       if (String(data) === 'drop-now') {
         socket.close(4002, 'commanded-drop')
+
         return
       }
+
       socket.send(data)
     },
   })
@@ -50,13 +54,16 @@ const dropOnCommandServer = () =>
  */
 const dropThenRefuseServer = (code: number, reason: string) => {
   let upgrades = 0
+
   return Bun.serve({
     port: 0,
     fetch(request, srv) {
       upgrades += 1
+
       if (upgrades === 1 && srv.upgrade(request)) {
         return
       }
+
       return new Response('no more upgrades', { status: 400 })
     },
     websocket: {
@@ -71,6 +78,7 @@ const dropThenRefuseServer = (code: number, reason: string) => {
 describe('automatic reconnect', () => {
   it('one continuous flow spans generations, and `reconnects` counts the reopen', async () => {
     const server = dropFirstServer()
+
     try {
       const outcome = await run(function* () {
         yield* JsonCodec.use()
@@ -82,11 +90,13 @@ describe('automatic reconnect', () => {
         const subscription = yield* connection.messages
 
         const greeting = yield* subscription.next() // generation 1's frame
+
         while (connection.reconnects === 0) {
           yield* sleep(5) // the drop is redialed in the background
         }
 
         yield* connection.send('hello-again')
+
         const echo = yield* subscription.next() // generation 2's frame, SAME subscription
 
         const snapshot = {
@@ -94,6 +104,7 @@ describe('automatic reconnect', () => {
           echo: echo.value,
           reconnects: connection.reconnects,
         }
+
         yield* connection.close()
 
         return snapshot
@@ -111,6 +122,7 @@ describe('automatic reconnect', () => {
 
   it('a send during the reconnect window parks, then goes out once the socket reopens', async () => {
     const server = dropOnCommandServer()
+
     try {
       const outcome = await run(function* () {
         yield* JsonCodec.use()
@@ -122,15 +134,18 @@ describe('automatic reconnect', () => {
         const subscription = yield* connection.messages
 
         yield* connection.send('drop-now')
+
         while (connection.readyState === OPEN) {
           yield* sleep(2) // wait until the drop lands; the redial is ≥25ms away
         }
 
         // socket is down, reconnect pending: this send must park until generation 2 is OPEN
         yield* connection.send('after-reopen')
+
         const echo = yield* subscription.next()
 
         const snapshot = { echo: echo.value, reconnects: connection.reconnects }
+
         yield* connection.close()
 
         return snapshot
@@ -144,6 +159,7 @@ describe('automatic reconnect', () => {
 
   it('exhausted retries close the flow with ws/reconnect-exhausted carrying the last close', async () => {
     const server = dropThenRefuseServer(4008, 'go-away')
+
     try {
       const outcome = await run(function* () {
         yield* JsonCodec.use()

@@ -48,30 +48,38 @@ const decodeOne = (input: string): [Key, number] => {
     }
 
     const second = input[1]
+
     if (second === '[' || second === 'O') {
       let j = 2
       let params = ''
+
       while (j < input.length && isParam(input[j]!)) {
         params += input[j]
         j += 1
       }
+
       const final = input[j]
+
       if (final === undefined) {
         // Incomplete sequence (split across chunks) — surface as a bare escape.
         return [make('escape', input.slice(0, j)), j]
       }
+
       const consumed = j + 1
       const sequence = input.slice(0, consumed)
 
       if (final === '~') {
         const base = params.split(';')[0] ?? ''
+
         return [make(TILDE[base] ?? 'unknown', sequence), consumed]
       }
+
       if (final === 'Z') {
         return [make('tab', sequence, { shift: true }), consumed]
       }
 
       const modifier = params.includes(';') ? Number(params.split(';')[1]) : 0
+
       return [
         make(CSI_FINAL[final] ?? 'unknown', sequence, {
           shift: modifier === 2 || modifier === 4 || modifier === 6 || modifier === 8,
@@ -84,6 +92,7 @@ const decodeOne = (input: string): [Key, number] => {
 
     // ESC + char → alt/meta + that key.
     const [inner, innerConsumed] = decodeOne(input.slice(1))
+
     return [{ ...inner, meta: true, sequence: ESC + inner.sequence }, innerConsumed + 1]
   }
 
@@ -93,15 +102,19 @@ const decodeOne = (input: string): [Key, number] => {
   if (code === 13 || code === 10) {
     return [make('return', ch), ch.length]
   }
+
   if (code === 9) {
     return [make('tab', ch), ch.length]
   }
+
   if (code === 127 || code === 8) {
     return [make('backspace', ch), ch.length]
   }
+
   if (code === 32) {
     return [make('space', ch), ch.length]
   }
+
   if (code >= 1 && code <= 26) {
     // Ctrl + letter (1 → a, 26 → z).
     return [make(String.fromCodePoint(code + 96), ch, { ctrl: true }), ch.length]
@@ -109,6 +122,7 @@ const decodeOne = (input: string): [Key, number] => {
 
   // Printable character (possibly a multi-code-unit codepoint).
   const shift = ch !== ch.toLowerCase() && ch === ch.toUpperCase()
+
   return [make(ch, ch, { shift }), ch.length]
 }
 
@@ -122,6 +136,7 @@ export const decodeKeys = (text: string): readonly Key[] => {
 
   while (index < text.length) {
     const [key, consumed] = decodeOne(text.slice(index))
+
     keys.push(key)
     index += Math.max(1, consumed)
   }

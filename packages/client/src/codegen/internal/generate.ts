@@ -29,6 +29,7 @@ const planeType = (plane: ManifestDef.Plane, depth: number, uses: { flow: boolea
   if (plane.plane === 'stream') {
     if (plane.brand === 'ndjson' || plane.brand === 'sse') {
       uses.flow = true
+
       return `Flow<${typeTextOf(plane.schema, depth + 1)}, void>`
     }
 
@@ -89,6 +90,7 @@ export const socketRowType = (socket: ManifestDef.Socket): string | null => {
 
   const sync = variants?.find(variant => {
     const properties = variant['properties'] as Record<string, AnyType> | undefined
+
     return properties?.['t']?.const === 'sync'
   })
   const rows = (sync?.['properties'] as Record<string, AnyType> | undefined)?.['rows']

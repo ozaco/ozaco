@@ -1,6 +1,8 @@
-import { ActiveSpan, parseTraceparent, passThrough, span, startSpan } from 'std:trace'
+import { Trace } from 'std:trace'
 
 import { describe, expect, it } from 'bun:test'
+
+import { parseTraceparent } from '../../src/trace/internal/propagation'
 
 import { traced } from './helpers'
 
@@ -10,7 +12,9 @@ const SERVER = { name: '@ozaco/server', version: '9.9.9' }
 
 describe('span scope without an explicit one', () => {
   it('is `app` for a root span with no service — never `@ozaco/std`', async () => {
-    const { tracer } = await traced(() => span('root', () => span('child', function* () {})))
+    const { tracer } = await traced(() =>
+      Trace.actions.span('root', () => Trace.actions.span('child', function* () {})),
+    )
 
     expect(tracer.span('root').scope).toEqual({ name: 'app' })
     expect(tracer.span('child').scope).toEqual({ name: 'app' })
@@ -18,8 +22,10 @@ describe('span scope without an explicit one', () => {
 
   it("is the span's service — its own, else the one it inherits", async () => {
     const { tracer } = await traced(() =>
-      span('root', { service: 'jobs' }, () =>
-        span('inherits', () => span('own', { service: 'billing' }, function* () {})),
+      Trace.actions.span('root', { service: 'jobs' }, () =>
+        Trace.actions.span('inherits', () =>
+          Trace.actions.span('own', { service: 'billing' }, function* () {}),
+        ),
       ),
     )
 
@@ -30,9 +36,11 @@ describe('span scope without an explicit one', () => {
 
   it("under an ozaco library's span: the service it inherits, else `app`", async () => {
     const { tracer } = await traced(() =>
-      span('dispatch', { scope: SERVER, service: 'demo' }, () =>
-        span('render report', () =>
-          span('library root', { scope: SERVER }, () => span('user code', function* () {})),
+      Trace.actions.span('dispatch', { scope: SERVER, service: 'demo' }, () =>
+        Trace.actions.span('render report', () =>
+          Trace.actions.span('library root', { scope: SERVER }, () =>
+            Trace.actions.span('user code', function* () {}),
+          ),
         ),
       ),
     )
@@ -41,7 +49,9 @@ describe('span scope without an explicit one', () => {
     expect(tracer.span('user code').scope).toEqual({ name: 'demo' })
 
     const bare = await traced(() =>
-      span('dispatch', { scope: SERVER }, () => span('render report', function* () {})),
+      Trace.actions.span('dispatch', { scope: SERVER }, () =>
+        Trace.actions.span('render report', function* () {}),
+      ),
     )
 
     expect(bare.tracer.span('render report').scope).toEqual({ name: 'app' })
@@ -50,8 +60,8 @@ describe('span scope without an explicit one', () => {
 
   it("inherits a parent's scope that is not an ozaco library's (version included)", async () => {
     const { tracer } = await traced(() =>
-      span('outer', { scope: { name: 'my-lib', version: '2.0.0' } }, () =>
-        span('inner', function* () {}),
+      Trace.actions.span('outer', { scope: { name: 'my-lib', version: '2.0.0' } }, () =>
+        Trace.actions.span('inner', function* () {}),
       ),
     )
 
@@ -60,8 +70,8 @@ describe('span scope without an explicit one', () => {
 
   it('an explicit scope always wins', async () => {
     const { tracer } = await traced(() =>
-      span('root', { service: 'jobs' }, () =>
-        span('child', { scope: { name: 'db', version: '1' } }, function* () {}),
+      Trace.actions.span('root', { service: 'jobs' }, () =>
+        Trace.actions.span('child', { scope: { name: 'db', version: '1' } }, function* () {}),
       ),
     )
 
@@ -70,9 +80,9 @@ describe('span scope without an explicit one', () => {
 
   it('a local root under a remote parent (explicit or pass-through) has no parent scope: `app`', async () => {
     const { tracer } = await traced(() =>
-      span('outer', { scope: { name: 'my-lib' } }, () =>
-        span('handler', { parent: REMOTE }, () =>
-          ActiveSpan.with(passThrough(REMOTE), () => span('carried', function* () {})),
+      Trace.actions.span('outer', { scope: { name: 'my-lib' } }, () =>
+        Trace.actions.span('handler', { parent: REMOTE }, () =>
+          Trace.actions.passThrough(REMOTE, () => Trace.actions.span('carried', function* () {})),
         ),
       ),
     )
@@ -83,10 +93,12 @@ describe('span scope without an explicit one', () => {
 
   it('startSpan follows the same rule', async () => {
     const { tracer } = await traced(function* () {
-      const live = yield* startSpan('lane', { service: 'queue' })
+      const live = yield* Trace.actions.startSpan('lane', { service: 'queue' })
+
       yield* live.end()
 
-      const bare = yield* startSpan('bare')
+      const bare = yield* Trace.actions.startSpan('bare')
+
       yield* bare.end()
     })
 

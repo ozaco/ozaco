@@ -22,6 +22,7 @@ interface Config {
 describe('shared — declared shapes vs runtime', () => {
   it('the priority queue keeps its tiers to itself', () => {
     const queue = new PriorityQueue<string>()
+
     queue.push(1, 'low')
     // oxlint-disable-next-line unicorn/prefer-single-call -- a queue, not an array
     queue.push(0, 'high')
@@ -35,13 +36,16 @@ describe('shared — declared shapes vs runtime', () => {
 
   it('deepMerge is a full T only when a full T went in', () => {
     const full: Config = deepMerge<Config>({ name: 'base', nested: { a: 1 } }, { name: 'over' })
+
     expect(full).toEqual({ name: 'over', nested: { a: 1 } })
 
     const partial: Partial<Config> = deepMerge<Config>({ nested: { a: 1 } }, { name: 'over' })
+
     expect(partial).toEqual({ name: 'over', nested: { a: 1 } })
 
     // @ts-expect-error — partials alone never promise a full Config
     const lie: Config = deepMerge<Config>({ nested: { a: 1 } }, undefined)
+
     expect(lie.name).toBeUndefined()
   })
 
@@ -50,6 +54,7 @@ describe('shared — declared shapes vs runtime', () => {
     const tree = { a: { b: 1, c: { d: [1, 2] } }, e: 'x', f: fn, g: null }
 
     const flat = flatten(tree)
+
     expect(flat).toEqual({ 'a.b': 1, 'a.c.d': [1, 2], e: 'x', f: fn, g: null })
     expect(flat).toEqual(
       Object.fromEntries(flattenEntries(tree).map(entry => [entry.key, entry.value])),
@@ -63,13 +68,17 @@ describe('shared — declared shapes vs runtime', () => {
     })()
 
     expect(isAsyncIterable(value)).toBe(true)
+
     if (isAsyncIterable(value)) {
       const seen: unknown[] = []
+
       for await (const item of value) {
         seen.push(item)
       }
+
       expect(seen).toEqual([1])
     }
+
     expect(isAsyncIterable(null)).toBe(false)
     expect(isAsyncIterable({})).toBe(false)
     expect(isNumber(1)).toBe(true)

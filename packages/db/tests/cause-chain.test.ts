@@ -32,13 +32,19 @@ const expectTwoLevels = (
   { tag, labels }: { readonly tag: string; readonly labels: readonly string[] },
 ): void => {
   expect(isFailure(outcome)).toBe(true)
+
   const failure = outcome as Result.Failure<unknown>
+
   expect(failure.error).toBe(tag)
   expect(failure.causes).toHaveLength(1 + labels.length)
+
   const [nested, ...rest] = failure.causes
+
   expect(rest).toEqual([...labels])
   expect(isFailure(nested)).toBe(true)
+
   const level = nested as Result.Failure<unknown>
+
   // the runtime's fold of the Error — the Error itself its `raw`, nothing under it; no labels
   // either: the rewrap folded it before a runtime guard saw it, the guards label the rewrap
   expect(level.error).toBe(ResultErrors.Unknown)
@@ -58,6 +64,7 @@ describe('cause chain: a thrown platform Error nests one level under its tag', (
             throw boom
           },
         })
+
         return { outcome: yield* attempt(Kv.actions.set('k', { n: 1 })) }
       }),
     )
@@ -83,6 +90,7 @@ describe('cause chain: a thrown platform Error nests one level under its tag', (
             throw boom
           },
         })
+
         return { outcome: yield* attempt(Kv.actions.get('k')) }
       }),
     )
@@ -99,6 +107,7 @@ describe('cause chain: a thrown platform Error nests one level under its tag', (
       await run(function* () {
         yield* MemoryAdapter.use()
         yield* BunIO.use()
+
         const installed = yield* attempt(
           DbClient.use({
             tables: [users],
@@ -107,6 +116,7 @@ describe('cause chain: a thrown platform Error nests one level under its tag', (
             },
           }),
         )
+
         // a Failure returned from `run` would be raised: hand it back inside an object
         return { outcome: installed }
       }),
@@ -129,6 +139,7 @@ describe('cause chain: a thrown platform Error nests one level under its tag', (
             throw boom
           },
         })
+
         return { outcome: yield* attempt(DbClient.use({ tables: [users] })) }
       }),
     )
@@ -149,6 +160,7 @@ describe('cause chain: a thrown platform Error nests one level under its tag', (
             throw boom
           },
         })
+
         return { outcome: yield* attempt(TableKv.use({ prefix: 'chain-table' })) }
       }),
     )
@@ -164,17 +176,22 @@ describe('cause chain: a thrown platform Error nests one level under its tag', (
       await run(function* () {
         yield* MemoryAdapter.use()
         yield* BunIO.use()
+
         return { outcome: yield* attempt(DbClient.use({ tables: [users], origin: 'NODE-A' })) }
       }),
     )
 
     expect(isFailure(outcome)).toBe(true)
+
     const failure = outcome as Result.Failure<unknown>
+
     expect(failure.error).toBe(DbErrors.Configuration)
     expect(failure.causes).toHaveLength(3)
+
     const [nested, ...labels] = failure.causes
     // the IO failure is nested with the labels of its own hop (the impl's `hlc`, the dispatch)
     const io = nested as Result.Failure<unknown>
+
     expect(io.error).toBe('std:io.hlc-invalid')
     expect(io.causes).toEqual(['hlc', BunIO.tag, 'dispatch', IO.tag])
     // the install's labels on the rewrap

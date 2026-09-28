@@ -62,15 +62,18 @@ export const Sidebar = ({
   const [closed, setClosed] = useState<Set<string>>(new Set())
   const toggle = (name: string) => {
     const next = new Set(closed)
+
     if (next.has(name)) {
       next.delete(name)
     } else {
       next.add(name)
     }
+
     setClosed(next)
   }
   const groups = manifest ? groupsOf(manifest) : []
   const orphans = manifest ? orphanSockets(manifest) : []
+
   return (
     <div className='flex h-full flex-col' style={{ background: 'var(--panel)' }}>
       <div
@@ -106,10 +109,13 @@ export const Sidebar = ({
         )}
         {groups.map(group => {
           const entries = group.entries.filter(entry => matches(entry, query))
+
           if (entries.length === 0) {
             return null
           }
+
           const open = query.length > 0 || !closed.has(group.name)
+
           return (
             <div key={group.name}>
               <div

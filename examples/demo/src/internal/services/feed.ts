@@ -77,14 +77,18 @@ export const feed = service(
       function* ({ input }) {
         let sent = 0
         const total = input.kb * 1024
+
         return stream.from(
           new ReadableStream<Uint8Array>({
             pull(controller) {
               if (sent >= total) {
                 controller.close()
+
                 return
               }
+
               const chunk = new Uint8Array(Math.min(16 * 1024, total - sent)).fill(sent % 251)
+
               sent += chunk.length
               controller.enqueue(chunk)
             },
@@ -102,7 +106,9 @@ export const feed = service(
       },
       function* ({ input, ctx }) {
         const started = Date.now()
+
         yield* sleep(input.ms)
+
         return { sleptMs: Date.now() - started, aborted: ctx.signal.aborted }
       },
     ),

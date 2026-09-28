@@ -128,6 +128,7 @@ export const presignUrl = (
   url.searchParams.set('X-Amz-Date', stamp.amzDate)
   url.searchParams.set('X-Amz-Expires', String(request.expiresIn))
   url.searchParams.set('X-Amz-SignedHeaders', 'host')
+
   if (config.sessionToken) {
     url.searchParams.set('X-Amz-Security-Token', config.sessionToken)
   }

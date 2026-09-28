@@ -7,6 +7,7 @@ import { posts, users } from './helpers'
 describe('schema DSL', () => {
   it('derives column specs from the column builders', () => {
     const byName = Object.fromEntries(users.columns.map(entry => [entry.name, entry]))
+
     expect(byName.name).toMatchObject({ kind: 'text', optional: false, hasDefault: false })
     expect(byName.age).toMatchObject({ kind: 'int', optional: true })
     expect(byName.role).toMatchObject({
@@ -21,6 +22,7 @@ describe('schema DSL', () => {
 
   it('id columns are plain text columns (the table name is a type-level brand only)', () => {
     const author = posts.columns.find(entry => entry.name === 'author')
+
     expect(author).toMatchObject({ kind: 'text' })
     expect('reference' in (author as object)).toBe(false)
   })
@@ -33,13 +35,16 @@ describe('schema DSL', () => {
 
   it('declares indexes fluently and immutably', () => {
     expect(users.indexes).toEqual([{ name: 'by_name', columns: ['name'], unique: true }])
+
     const extended = users.index('by_role', ['role'])
+
     expect(extended.indexes).toHaveLength(2)
     expect(users.indexes).toHaveLength(1)
   })
 
   it('builds adapter specs with the system columns first', () => {
     const spec = tableSpecOf(users)
+
     expect(spec.columns.slice(0, 4).map(entry => entry.name)).toEqual([
       '_id',
       '_created_at',

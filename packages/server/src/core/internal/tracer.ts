@@ -1,5 +1,5 @@
 import { useScope } from 'std:effect'
-import { enableTracing, Tracer } from 'std:trace'
+import { Trace } from 'std:trace'
 
 import pkg from '../../../package.json'
 import type { ObserveDef } from '../types/observe'
@@ -8,7 +8,7 @@ import type { ServerDef } from '../types/server'
 /** The resources `resourceOf` built, per kernel and service name. */
 export const resources = new WeakMap<ServerDef.Context, Map<string, ObserveDef.Resource>>()
 
-export const ServerTracerImpl = Tracer.implement<
+export const ServerTracerImpl = Trace.implement<
   ServerDef.TracerContext,
   [kernel: ServerDef.Context]
 >({
@@ -22,6 +22,11 @@ export const ServerTracerImpl = Tracer.implement<
   *setup(kernel) {
     // the node's OWN switch (a nested server never flips its parent's); createServer reads
     // whether tracing was already on here BEFORE this install and counts it as observing
-    return { kernel, state: yield* enableTracing(false), scope: yield* useScope(), boot: [] }
+    return {
+      kernel,
+      state: yield* Trace.actions.enableTracing(false),
+      scope: yield* useScope(),
+      boot: [],
+    }
   },
 })

@@ -9,6 +9,7 @@ export const paginate = <T>(items: readonly T[], active: number, size: number): 
   }
 
   const start = Math.min(Math.max(0, active - Math.floor(size / 2)), items.length - size)
+
   return { items: items.slice(start, start + size), start }
 }
 
@@ -20,6 +21,7 @@ export const step = (from: number, delta: number, options: Helpers.StepOptions):
     if (disabled?.(next) !== true) {
       return next
     }
+
     next = wrapIndex(next + delta, length)
   }
 

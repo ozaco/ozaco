@@ -24,7 +24,7 @@ import { definePlugin } from 'std:plugin'
 import { fail, unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
 import type { TraceDef } from 'std:trace'
-import { enableTracing, inject, isTracing, suppressed, Tracer } from 'std:trace'
+import { Trace } from 'std:trace'
 
 import { describe, expect, it } from 'bun:test'
 
@@ -39,6 +39,7 @@ let installs = 0
 /** An in-memory exporter: every observed event of the node it is installed on. */
 const memoryExporter = () => {
   installs += 1
+
   const events: ObserveDef.Event[] = []
   const calls = { start: 0, flush: 0 }
 
@@ -68,9 +69,11 @@ const memoryExporter = () => {
   /** The one span named `name` of the kernel's own scope (fails when there is not exactly one). */
   const span = (name: string): TraceDef.SpanData => {
     const found = spans().filter(data => data.name === name)
+
     if (found.length !== 1) {
       throw new Error(`expected one span "${name}", got ${found.length}: ${names()}`)
     }
+
     return found[0]!
   }
 
@@ -88,16 +91,18 @@ const memoryExporter = () => {
   return { plugin, events, calls, spans, logs, span, names, exceptions, resourceOf }
 }
 
-/** An in-memory std:trace `Tracer` installed around a server (a test's / an OTel bridge's). */
+/** An in-memory std:trace `Trace` sink installed around a server (a test's / an OTel bridge's). */
 const memoryTracer = () => {
   installs += 1
+
   const spans: TraceDef.SpanData[] = []
 
-  const plugin = Tracer.implement({
+  const plugin = Trace.implement({
     name: `test/memory-tracer-${installs}`,
     version: '1.0.0',
     *setup() {
-      yield* enableTracing()
+      yield* Trace.actions.enableTracing()
+
       return {}
     },
   }).build({
@@ -134,6 +139,7 @@ const math = service('math', {
   }),
   slow: action.query({ output: z.string() }, function* () {
     yield* sleep(400)
+
     return 'late'
   }),
 })
@@ -157,6 +163,7 @@ const notes = service('notes', {
         yield* ctx.event('notes.persisted', { 'notes.size': input.text.length })
       })
       yield* ctx.emit('note.written', { text: input.text })
+
       return { ok: true }
     },
   ),
@@ -174,10 +181,11 @@ const notes = service('notes', {
     yield* ctx.log.info('from ctx.log')
     yield* Logger.actions.info('from the Logger', { via: 'logger' })
     yield* ctx.log.debug('debug always reaches the sinks')
+
     return { ok: true }
   }),
   probe: action.query({}, function* ({ ctx }) {
-    return { tracing: yield* isTracing(), trace: ctx.trace, spanId: ctx.spanId }
+    return { tracing: yield* Trace.actions.isTracing(), trace: ctx.trace, spanId: ctx.spanId }
   }),
 })
 
@@ -188,7 +196,9 @@ describe('trace spine — kernel spans on std:trace', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({ services: [notes], plugins: [sink.plugin] })
+
         yield* server.call(notes, 'twice', { text: 'hello' })
       }),
     )
@@ -218,6 +228,7 @@ describe('trace spine — kernel spans on std:trace', () => {
       'messaging.destination.name': 'note.written',
     })
     expect(publish.attributes['messaging.message.id']).toMatch(/^[0-9a-f]{32}$/u)
+
     for (const data of [twice, write, persist, publish]) {
       expect(data.context.traceId).toBe(twice.context.traceId)
       expect(data.status.code).toBe('unset')
@@ -225,7 +236,9 @@ describe('trace spine — kernel spans on std:trace', () => {
 
     // ctx.event: a span event on the active span + a log record
     expect(persist.events.map(event => event.name)).toEqual(['notes.persisted'])
+
     const persisted = sink.logs().find(log => log.eventName === 'notes.persisted')!
+
     expect(persisted.attributes).toMatchObject({
       'notes.size': 5,
       'otel.event.name': 'notes.persisted',
@@ -234,6 +247,7 @@ describe('trace spine — kernel spans on std:trace', () => {
     // ctx.log: correlated to the span active AT THE CALL (debug included)
     const writing = sink.logs().find(log => log.body === 'writing')!
     const persisting = sink.logs().find(log => log.body === 'persisting')!
+
     expect(writing.context?.spanId).toBe(write.context.spanId)
     expect(persisting.context?.spanId).toBe(persist.context.spanId)
     expect(persisting).toMatchObject({ severityNumber: 5, severityText: 'DEBUG' })
@@ -250,25 +264,31 @@ describe('trace spine — kernel spans on std:trace', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({ services: [notes], plugins: [sink.plugin] })
 
         const invalid = yield* attempt(server.call(notes, 'write', { text: '' }))
+
         expect((invalid as AnyType).error).toBe(ServerErrors.Validation)
 
         const exploded = yield* attempt(server.call(notes, 'explode'))
+
         expect((exploded as AnyType).error).toBe('notes.kaput')
       }),
     )
 
     const write = sink.span('notes.write')
+
     expect(write.status.code).toBe('unset')
     expect(write.attributes['error.type']).toBe(ServerErrors.Validation)
 
     const explode = sink.span('notes.explode')
+
     expect(explode.status).toEqual({ code: 'error', message: 'notes exploded' })
     expect(explode.attributes['error.type']).toBe('notes.kaput')
 
     const [warn, error] = sink.exceptions()
+
     expect(sink.exceptions()).toHaveLength(2)
     expect(warn).toMatchObject({
       eventName: 'ozaco.action.exception',
@@ -294,6 +314,7 @@ describe('trace spine — kernel spans on std:trace', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({ services: [notes], plugins: [sink.plugin] })
         const feed = yield* server.events('note.written')
 
@@ -312,7 +333,7 @@ describe('trace spine — kernel spans on std:trace', () => {
     const loop = sink.span('consumer.loop')
     const publishes = sink.spans().filter(span => span.name === 'publish note.written')
 
-    expect(loop.events.filter(event => event.name === 'ozaco.event.recv')).toHaveLength(34)
+    expect(loop.events.filter(event => event.name === 'event.recv')).toHaveLength(34)
     expect(loop.links).toHaveLength(32)
     expect(loop.droppedLinks).toBe(0)
     expect(loop.links.map(link => link.context.spanId)).toEqual(
@@ -327,16 +348,19 @@ describe('trace spine — kernel spans on std:trace', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({ services: [notes], plugins: [sink.plugin] })
         const feed = yield* server.events('note.written')
 
         yield* server.call(notes, 'write', { text: 'hi' })
 
-        // the item arrives under an ambient recording span: it gets `ozaco.event.recv`
+        // the item arrives under an ambient recording span: it gets `event.recv`
         const item = yield* Server.actions.span('consumer.loop', function* () {
           const step = yield* feed.next()
+
           return step.value
         })
+
         expect(item.trace?.spanId).toBe(sink.span('publish note.written').context.spanId)
         expect(item.requestId).toBeString()
         itemId = item.id
@@ -352,7 +376,7 @@ describe('trace spine — kernel spans on std:trace', () => {
     const loop = sink.span('consumer.loop')
     const processed = sink.span('process note.written')
 
-    expect(loop.events.map(event => event.name)).toEqual(['ozaco.event.recv'])
+    expect(loop.events.map(event => event.name)).toEqual(['event.recv'])
     expect(loop.events[0]!.attributes).toEqual({
       'messaging.destination.name': 'note.written',
       'messaging.message.id': itemId!,
@@ -382,13 +406,14 @@ describe('trace spine — kernel spans on std:trace', () => {
     expect(processed.attributes['messaging.message.id']).toBe(itemId!)
 
     // a domain record: ONE log record on the consumer span
-    const domain = sink.logs().find(log => log.eventName === 'ozaco.domain')!
+    const domain = sink.logs().find(log => log.eventName === 'ozaco.local')!
+
     expect(domain.context?.spanId).toBe(processed.context.spanId)
     expect(domain.attributes).toMatchObject({
-      'ozaco.domain.stream': 'audit',
+      'ozaco.local.stream': 'audit',
       verb: 'note.seen',
       size: 2,
-      'otel.event.name': 'ozaco.domain',
+      'otel.event.name': 'ozaco.local',
     })
   })
 
@@ -396,6 +421,7 @@ describe('trace spine — kernel spans on std:trace', () => {
     const writer = service('writer', {
       add: action.mutation({ input: z.object({ title: z.string() }) }, function* ({ input }) {
         const db = yield* useDb(testSchema)
+
         yield* db.insert('todos', { title: input.title, done: false })
       }),
     })
@@ -406,8 +432,10 @@ describe('trace spine — kernel spans on std:trace', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const feed = yield* (yield* useDb(testSchema)).changes('todos')
         const server = yield* createServer({ services: [writer], plugins: [sink.plugin] })
+
         yield* server.call(writer, 'add', { title: 'traced' })
         metas.push(((yield* feed.next()).value as Change.Event).meta)
       }),
@@ -417,8 +445,10 @@ describe('trace spine — kernel spans on std:trace', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const feed = yield* (yield* useDb(testSchema)).changes('todos')
         const server = yield* createServer({ services: [writer] })
+
         yield* server.call(writer, 'add', { title: 'dark' })
         metas.push(((yield* feed.next()).value as Change.Event).meta)
       }),
@@ -426,6 +456,7 @@ describe('trace spine — kernel spans on std:trace', () => {
 
     const add = sink.span('writer.add')
     const [traced, dark] = metas as [Change.Event['meta'], Change.Event['meta']]
+
     expect(traced?.['traceparent']).toBe(`00-${add.context.traceId}-${add.context.spanId}-03`)
     expect(dark).toBeUndefined()
   })
@@ -452,7 +483,9 @@ describe('trace spine — kernel spans on std:trace', () => {
         yield* storage()
         yield* DefaultLogger.use({ level: LogLevel.info })
         yield* Capture.use()
+
         const server = yield* createServer({ services: [notes], plugins: [sink.plugin] })
+
         yield* server.call(notes, 'both')
       }),
     )
@@ -464,7 +497,9 @@ describe('trace spine — kernel spans on std:trace', () => {
     expect(byBody('from ctx.log')).toHaveLength(1)
     expect(byBody('from ctx.log')[0]).toMatchObject({ scope: { name: '@ozaco/server' } })
     expect(byBody('from ctx.log')[0]!.context?.spanId).toBe(both.context.spanId)
+
     const forwarded = entries.find(entry => entry.msg === 'from ctx.log')!
+
     expect(forwarded.bindings['ozaco.telemetry']).toBe('sent')
     expect(forwarded.trace?.spanId).toBe(both.context.spanId)
 
@@ -498,12 +533,14 @@ describe('trace spine — kernel spans on std:trace', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({
           name: 'shop',
           version: '3.0.0',
           services: [scopes],
           plugins: [sink.plugin],
         })
+
         yield* server.call(scopes, 'work')
         // outside any dispatch: the node's
         yield* Server.actions.span('background', function* () {})
@@ -530,7 +567,9 @@ describe('trace spine — kernel spans on std:trace', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({ services: [shape] })
+
         failed = yield* attempt(server.call(shape, 'bad'))
       }),
     )
@@ -538,7 +577,9 @@ describe('trace spine — kernel spans on std:trace', () => {
     // a handler answering outside its output is the server's fault: the validation failure it
     // wraps is its nested cause, not flattened strings
     expect(failed.error).toBe(ServerErrors.Output)
+
     const inner = failed.causes.find((cause: unknown) => typeof cause !== 'string')
+
     expect(inner).toMatchObject({ error: ServerErrors.Validation })
     expect(inner.message).toBe(failed.message)
   })
@@ -554,6 +595,7 @@ describe('trace spine — kernel spans on std:trace', () => {
             name: 'cid-spy',
             *dispatch(call, ctx, next) {
               cids.push(call.cid)
+
               return yield* next(call, ctx)
             },
           },
@@ -564,6 +606,7 @@ describe('trace spine — kernel spans on std:trace', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({ services: [notes], plugins: [Spy] })
         const probe = yield* server.call(notes, 'probe')
 
@@ -573,6 +616,7 @@ describe('trace spine — kernel spans on std:trace', () => {
         expect(probe.trace.requestId).toMatch(/^[0-9a-f]{32}$/u)
 
         const kernel = yield* useContext(Server)
+
         expect(kernel.observing).toBe(false)
       }),
     )
@@ -581,15 +625,17 @@ describe('trace spine — kernel spans on std:trace', () => {
     expect(isSpanId(cids[0])).toBe(true)
   })
 
-  it('a Tracer enabled around createServer counts as observing (and is not switched off)', async () => {
+  it('a Trace sink enabled around createServer counts as observing (and is not switched off)', async () => {
     const tracer = memoryTracer()
 
     unwrap(
       await run(function* () {
         yield* storage()
         yield* tracer.plugin.use()
+
         const server = yield* createServer({ services: [notes] })
         const probe = yield* server.call(notes, 'probe')
+
         expect(probe.tracing).toBe(true)
         expect(isSpanId(probe.spanId)).toBe(true)
       }),
@@ -608,6 +654,7 @@ describe('trace spine — kernel spans on std:trace', () => {
 
         const nested = yield* scoped(function* () {
           const inner = yield* createServer({ services: [notes], name: 'nested' })
+
           return yield* inner.call(notes, 'probe')
         })
 
@@ -624,11 +671,13 @@ describe('trace spine — kernel spans on std:trace', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({ services: [front, math], plugins: [sink.plugin] })
 
         // `math` stays served by the LocalCarrier but is no longer hosted: the call goes through
         // the carrier (what a `reload` narrowing `hosted` does)
         const kernel = yield* useContext(Server)
+
         kernel.hosted.delete('math')
 
         expect(yield* server.call(front, 'sum', { a: 1, b: 2 })).toBe(3)
@@ -637,6 +686,7 @@ describe('trace spine — kernel spans on std:trace', () => {
 
     const sum = sink.span('front.sum')
     const add = sink.span('math.add')
+
     expect(add.kind).toBe('internal')
     expect(add.parent?.spanId).toBe(sum.context.spanId)
     expect(sink.spans().filter(data => data.kind === 'client' || data.kind === 'server')).toEqual(
@@ -667,7 +717,7 @@ describe('trace spine — pass-through and node boundaries', () => {
             trace: producer,
             requestId: 'r1',
           },
-          () => inject(),
+          () => Trace.actions.inject(),
         )
       }),
     )
@@ -683,6 +733,7 @@ describe('trace spine — pass-through and node boundaries', () => {
           services: [notes],
           trace: { trust: probe => probe.headers.get('x-internal') === 'yes' },
         })
+
         const kernel = yield* useContext(Server)
         const request = new Request('http://node.local/notes', { headers })
         const edge = yield* edgeSpan({
@@ -692,13 +743,14 @@ describe('trace spine — pass-through and node boundaries', () => {
           route: '/notes',
         })
 
-        return yield* edge.run(() => inject())
+        return yield* edge.run(() => Trace.actions.inject())
       })
 
     // a stranger's `-00` would blind every node behind this one (carriers honour what they get)
     const untrusted = unwrap(
       await forwarded({ traceparent: `00-${producer.traceId}-${producer.spanId}-00` }),
     )
+
     expect(untrusted.traceparent).toBeUndefined()
 
     // an observing ozaco caller (`ozaco=1`) is continued: its context rides on
@@ -708,6 +760,7 @@ describe('trace spine — pass-through and node boundaries', () => {
         tracestate: 'ozaco=1',
       }),
     )
+
     expect(trusted.traceparent).toBe(`00-${producer.traceId}-${producer.spanId}-01`)
 
     // `ozaco=1` is self-asserted: continued, but a `-00` rides on SAMPLED — it never blinds the
@@ -718,6 +771,7 @@ describe('trace spine — pass-through and node boundaries', () => {
         tracestate: 'ozaco=1',
       }),
     )
+
     expect(marked.traceparent).toBe(`00-${producer.traceId}-${producer.spanId}-01`)
 
     // a caller `trace.trust` accepts keeps its sampling decision
@@ -727,6 +781,7 @@ describe('trace spine — pass-through and node boundaries', () => {
         'x-internal': 'yes',
       }),
     )
+
     expect(vouched.traceparent).toBe(`00-${producer.traceId}-${producer.spanId}-00`)
   })
 
@@ -737,7 +792,9 @@ describe('trace spine — pass-through and node boundaries', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({ services: [math], plugins: [outer.plugin] })
+
         yield* server.start()
 
         yield* scoped(function* () {
@@ -746,6 +803,7 @@ describe('trace spine — pass-through and node boundaries', () => {
             name: 'nested',
             plugins: [inner.plugin],
           })
+
           yield* nested.start()
           yield* nested.call(notes, 'probe')
           yield* nested.stop()
@@ -792,10 +850,12 @@ describe('trace spine — across a network carrier (MemoryTransport)', () => {
             yield* sleep(60_000)
           }),
         )
+
         yield* ready.next()
         yield* scoped(function* () {
           yield* storage()
           yield* MemoryTransport.use({ prefix: 'app', link })
+
           const server = yield* createServer({
             services: [front],
             carrier: NetworkCarrier,
@@ -804,6 +864,7 @@ describe('trace spine — across a network carrier (MemoryTransport)', () => {
             timeoutMs: 2000,
             plugins: [a.plugin],
           })
+
           yield* sleep(50)
           yield* body(server as AnyType, { a, b })
         })
@@ -854,18 +915,23 @@ describe('trace spine — across a network carrier (MemoryTransport)', () => {
 
     const { a } = await twoNodes(function* (server, sinks) {
       const out = yield* server.call(math, 'count', { n: 3 })
+
       yield* sleep(20)
       before = sinks.a.spans().map(data => data.name)
 
       const values: number[] = []
       const flow = yield* stream.flow(out as AnyType)
+
       for (;;) {
         const step = yield* flow.next()
+
         if (step.done) {
           break
         }
+
         values.push(step.value as number)
       }
+
       expect(values).toEqual([0, 1, 2])
     })
 
@@ -878,16 +944,19 @@ describe('trace spine — across a network carrier (MemoryTransport)', () => {
   it('a remote failure is recorded ONCE — by its owner; the caller only takes its status', async () => {
     const { a, b } = await twoNodes(function* (server) {
       const failed = yield* attempt(server.call(math, 'kaput'))
+
       expect((failed as AnyType).error).toBe('math.kaput')
       expect((failed as AnyType).message).toBe('the math is kaput')
 
       const invalid = yield* attempt(server.call(math, 'add', { a: 'x' } as AnyType))
+
       expect((invalid as AnyType).error).toBe(ServerErrors.Validation)
     })
 
     // 5xx: both sides error; ONE exception record across both nodes, on the owner's span
     const kaputClient = a.span('math.kaput')
     const kaputServer = b.span('math.kaput')
+
     expect(kaputServer.status.code).toBe('error')
     expect(kaputServer.attributes).toMatchObject({
       'error.type': 'math.kaput',
@@ -905,6 +974,7 @@ describe('trace spine — across a network carrier (MemoryTransport)', () => {
     const kaputs = [...a.exceptions(), ...b.exceptions()].filter(
       log => log.attributes['exception.type'] === 'math.kaput',
     )
+
     expect(kaputs).toHaveLength(1)
     expect(kaputs[0]).toMatchObject({ eventName: 'rpc.server.call.exception', severityNumber: 17 })
     expect(kaputs[0]!.context?.spanId).toBe(kaputServer.context.spanId)
@@ -913,6 +983,7 @@ describe('trace spine — across a network carrier (MemoryTransport)', () => {
     // span fails (its call failed), no second exception
     const addServer = b.span('math.add')
     const addClient = a.span('math.add')
+
     expect(addServer.status.code).toBe('unset')
     expect(addServer.attributes['error.type']).toBe(ServerErrors.Validation)
     expect(addClient.status.code).toBe('error')
@@ -921,6 +992,7 @@ describe('trace spine — across a network carrier (MemoryTransport)', () => {
     const invalids = [...a.exceptions(), ...b.exceptions()].filter(
       log => log.attributes['exception.type'] === ServerErrors.Validation,
     )
+
     expect(invalids).toHaveLength(1)
     expect(invalids[0]).toMatchObject({ severityNumber: 13 })
   })
@@ -937,6 +1009,7 @@ describe('trace spine — across a network carrier (MemoryTransport)', () => {
     // caller's hops add the plugin runtime's labels: the transport request, the carrier send,
     // the kernel call
     const owner = b.span('math.kaput')
+
     expect(failed).toMatchObject({ error: 'math.kaput', message: 'the math is kaput' })
     expect(failed.remote).toBeUndefined()
     expect(failed.causes).toEqual([
@@ -955,17 +1028,21 @@ describe('trace spine — across a network carrier (MemoryTransport)', () => {
       const winner = yield* race([
         (function* () {
           yield* server.call(math, 'slow')
+
           return 'call'
         })(),
         (function* () {
           yield* sleep(40)
+
           return 'timer'
         })(),
       ])
+
       expect(winner).toBe('timer')
     })
 
     const client = a.span('math.slow')
+
     expect(client).toMatchObject({ kind: 'client', status: { code: 'unset' } })
     expect(client.attributes['ozaco.cancelled']).toBe(true)
     expect(a.exceptions()).toEqual([])
@@ -993,6 +1070,7 @@ describe('trace spine — across a network carrier (MemoryTransport)', () => {
         },
         [],
       )
+
       direct = sent.reply.value
     })
 
@@ -1001,6 +1079,7 @@ describe('trace spine — across a network carrier (MemoryTransport)', () => {
     expect(direct.requestId).toBe('legacy-request-1')
 
     const [first, legacy] = b.spans().filter(data => data.name === 'math.whoami')
+
     expect(first!.context.traceId).toBe(viaCall.traceId)
     expect(legacy!.parent).toBeNull()
     expect(legacy!.kind).toBe('server')
@@ -1040,14 +1119,18 @@ describe('trace spine — across a network carrier (MemoryTransport)', () => {
           )
 
         const owner = yield* node('c', [math], [c.plugin])
+
         yield* ready.next()
+
         // `b` observes nothing: its hops forward the caller's context as a pass-through
         const middle = yield* node('b', [relay], [])
+
         yield* ready.next()
 
         yield* scoped(function* () {
           yield* storage()
           yield* MemoryTransport.use({ prefix: 'app', link })
+
           const server = yield* createServer({
             services: [entry, relay],
             hosted: ['entry'],
@@ -1057,6 +1140,7 @@ describe('trace spine — across a network carrier (MemoryTransport)', () => {
             timeoutMs: 2000,
             plugins: [a.plugin],
           })
+
           failed = yield* attempt(server.call(entry, 'go'))
         })
 
@@ -1069,6 +1153,7 @@ describe('trace spine — across a network carrier (MemoryTransport)', () => {
 
     const go = a.span('entry.go')
     const kaput = c.span('math.kaput')
+
     expect(kaput).toMatchObject({ kind: 'server' })
     expect(kaput.context.traceId).toBe(go.context.traceId)
     // the middle node recorded nothing: the caller's CLIENT span is the owner's parent
@@ -1086,6 +1171,7 @@ describe('trace spine — across a network carrier (MemoryTransport)', () => {
     const board = service('board', {
       post: action.mutation({ status: 202 }, function* ({ ctx }) {
         yield* ctx.emit('board.posted', { n: 1 })
+
         return { queued: true }
       }),
     })
@@ -1112,10 +1198,12 @@ describe('trace spine — across a network carrier (MemoryTransport)', () => {
             yield* sleep(60_000)
           }),
         )
+
         yield* ready.next()
         yield* scoped(function* () {
           yield* storage()
           yield* MemoryTransport.use({ prefix: 'app', link })
+
           // a gateway that knows the declaration (its `status`) but hosts nothing
           const server = yield* createServer({
             services: [board],
@@ -1127,9 +1215,11 @@ describe('trace spine — across a network carrier (MemoryTransport)', () => {
             plugins: [a.plugin],
           })
           const feed = yield* server.events('board.posted')
+
           expect(yield* server.call(board, 'post')).toEqual({ queued: true })
 
           const item = (yield* feed.next()).value as ServerDef.EventItem
+
           itemId = item.id
           yield* Server.actions.process(item, function* () {})
         })
@@ -1155,15 +1245,19 @@ describe('trace spine — across a network carrier (MemoryTransport)', () => {
       await run(function* () {
         yield* storage()
         yield* tracer.plugin.use()
+
         const server = yield* createServer({ services: [todos], timeoutMs: 100 })
+
         late = yield* attempt(server.call(todos, 'slowCancel', { ms: 300 }))
       }),
     )
 
     expect(late.error).toBe(ServerErrors.TimeoutPending)
+
     // the callee's dispatch span (cancelled at the deadline), as the kernel's breadcrumb always
     // named it — not the caller's
     const dispatch = tracer.spans.find(data => data.name === 'todos.slowCancel')!
+
     expect(late.causes[0]).toMatch(
       new RegExp(`^local span:${dispatch.context.spanId} req:[0-9a-f]{32}$`, 'u'),
     )
@@ -1176,12 +1270,14 @@ describe('trace spine — across a network carrier (MemoryTransport)', () => {
       await run(function* () {
         yield* storage()
         yield* MemoryTransport.use({ prefix: 'app', link: createLink() })
+
         const server = yield* createServer({
           services: [front],
           carrier: NetworkCarrier.use({ presence: false }),
           name: 'app',
           timeoutMs: 500,
         })
+
         // nobody serves `math` on this link
         failed = yield* attempt(server.call(math, 'add', { a: 1, b: 2 }))
       }),
@@ -1203,8 +1299,9 @@ describe('trace spine — across a network carrier (MemoryTransport)', () => {
   it('suppression crosses the wire: an unsampled caller is not recorded by its owner', async () => {
     const { a, b } = await twoNodes(function* (server) {
       const sum = yield* Server.actions.span('caller', () =>
-        suppressed(() => server.call(math, 'add', { a: 1, b: 1 })),
+        Trace.actions.suppressed(() => server.call(math, 'add', { a: 1, b: 1 })),
       )
+
       expect(sum).toBe(2)
     })
 

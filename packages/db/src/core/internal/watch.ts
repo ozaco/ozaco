@@ -27,20 +27,27 @@ export const watchDoc = (input: Helpers.DocWatch): Flow<Spec.Doc | null, never> 
       *next() {
         if (!primed) {
           primed = true
+
           return { done: false as const, value: yield* input.load() }
         }
+
         for (;;) {
           const step = yield* subscription.next()
+
           if (step.done) {
             continue
           }
+
           const event = step.value
+
           if (event.id !== input.id && !isTableTouch(event)) {
             continue
           }
+
           if (event.op === 'delete') {
             return { done: false as const, value: null }
           }
+
           return { done: false as const, value: yield* untraced(input.load) }
         }
       },
@@ -80,29 +87,38 @@ export const watchQuery = (input: Helpers.QueryWatch): Flow<AnyType, never> => (
       // capture BEFORE the read: anything applied after this point recomputes again
       computed = input.hub.arrival(input.table)
       token = input.hub.version(input.table)
+
       const rows = yield* input.load()
       const next = new Map<string, string>()
       const added: Spec.Doc[] = []
       const changed: Spec.Doc[] = []
+
       for (const row of rows) {
         const id = String(row[FIELDS.id])
         const version = String(row[FIELDS.version] ?? '')
+
         next.set(id, version)
+
         if (!known) {
           continue
         }
+
         const before = known.get(id)
+
         if (before === undefined) {
           added.push(row)
         } else if (before !== version) {
           changed.push(row)
         }
       }
+
       const removed = known ? [...known.keys()].filter(id => !next.has(id)) : []
       const delta: Change.Delta = known
         ? { added, changed, removed, token }
         : { added: [...rows], changed: [], removed: [], token }
+
       known = next
+
       return { rows, delta }
     }
 
@@ -114,21 +130,26 @@ export const watchQuery = (input: Helpers.QueryWatch): Flow<AnyType, never> => (
       if (!known || event.op === 'touch' || event.id === '' || known.has(event.id)) {
         return false
       }
+
       // under `skip` a delete BEFORE the window shifts it — only an unwindowed query may skip
       if (event.op === 'delete') {
         return !input.windowed
       }
+
       if (event.op === 'update' && event.fields) {
         return !event.fields.some(field => input.fields.has(field))
       }
+
       return false
     }
 
     let primed = false
+
     return {
       *next() {
         if (!primed) {
           primed = true
+
           // `since` is answered by the change log — valid from any node; a consumer that is
           // provably current gets no initial emission (the baseline is still computed for diffs)
           const verdict =
@@ -136,24 +157,33 @@ export const watchQuery = (input: Helpers.QueryWatch): Flow<AnyType, never> => (
               ? 'snapshot'
               : yield* input.resolve(input.options.since)
           const initial = yield* recompute()
+
           if (verdict !== 'skip') {
             return { done: false as const, value: { ...emission(initial), baseline: true } }
           }
         }
+
         for (;;) {
           const step = yield* subscription.next()
+
           if (step.done) {
             continue
           }
+
           arrived += 1
+
           const event = step.value
+
           if (arrived <= computed || skippable(event)) {
             continue
           }
+
           const result = yield* untraced(recompute)
+
           if (mode === 'delta' && isEmptyDelta(result.delta)) {
             continue
           }
+
           return { done: false as const, value: emission(result) }
         }
       },

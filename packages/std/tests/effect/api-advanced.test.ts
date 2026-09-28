@@ -26,8 +26,11 @@ describe('api decoration ordering', () => {
       add: ([a, b]: [number, number], next: (a: number, b: number) => Operation<number>) =>
         (function* () {
           trace.push(`in:${label}`)
+
           const result = yield* next(a, b)
+
           trace.push(`out:${label}`)
+
           return result
         })(),
     })
@@ -62,6 +65,7 @@ describe('api decoration ordering', () => {
         yield* Math_.around({
           base: (_args, next) => (next() as number) * 2,
         })
+
         return yield* Math_.actions.base
       })
 
@@ -96,6 +100,7 @@ describe('api decoration propagation across live scopes', () => {
       })
 
       gate.resolve()
+
       return yield* result.operation
     })
 
@@ -113,6 +118,7 @@ describe('api decoration propagation across live scopes', () => {
               return (yield* next(a, b)) * -1
             })(),
         })
+
         return yield* Math_.actions.add(2, 3)
       })
 
@@ -136,6 +142,7 @@ describe('api decoration propagation across live scopes', () => {
       add: ([a, b]: [number, number], next: (a: number, b: number) => Operation<number>) =>
         (function* () {
           trace.push(label)
+
           return yield* next(a, b)
         })(),
     })
@@ -146,10 +153,12 @@ describe('api decoration propagation across live scopes', () => {
 
         const inner = yield* scoped(function* () {
           yield* Math_.around(layer('inner'))
+
           return yield* Math_.actions.add(1, 1)
         })
 
         trace.push('--')
+
         const outerOnly = yield* Math_.actions.add(1, 1)
 
         return { inner, outerOnly }
@@ -168,6 +177,7 @@ describe('api decoration propagation across live scopes', () => {
         add: ([a, b], next) =>
           (function* () {
             yield* sleep(1)
+
             return yield* next(a, b)
           })(),
       })

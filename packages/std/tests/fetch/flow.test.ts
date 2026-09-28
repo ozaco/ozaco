@@ -19,8 +19,10 @@ const chunked = (...chunks: string[]) => {
       async pull(controller) {
         if (index >= chunks.length) {
           controller.close()
+
           return
         }
+
         controller.enqueue(encoder.encode(chunks[index]!))
         index += 1
         await Bun.sleep(2)
@@ -67,9 +69,11 @@ function* drain<T, R>(source: Flow<T, R>) {
 
   while (true) {
     const next = yield* subscription.next()
+
     if (next.done) {
       return { values, close: next.value }
     }
+
     values.push(next.value)
   }
 }
@@ -134,6 +138,7 @@ describe('raw() byte flow', () => {
       const total = values.reduce((sum, chunk) => sum + chunk.byteLength, 0)
       const joined = new Uint8Array(total)
       let offset = 0
+
       for (const chunk of values) {
         joined.set(chunk, offset)
         offset += chunk.byteLength

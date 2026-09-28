@@ -61,6 +61,7 @@ export const createHandle = (session: Helpers.Session): RtcDef.Peer => {
 
     stats: guard(function* () {
       const generation = session.generation
+
       if (!generation?.alive) {
         return yield* fail(RtcErrors.Stats, 'the peer has no live connection to read stats from')
       }

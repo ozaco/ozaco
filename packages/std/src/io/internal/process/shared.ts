@@ -24,14 +24,17 @@ export const mergeEnv = (
   if (!overrides) {
     return undefined
   }
+
   const base =
     (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env ?? {}
   const merged: Record<string, string> = {}
+
   for (const [key, value] of Object.entries({ ...base, ...overrides })) {
     if (value !== undefined) {
       merged[key] = value
     }
   }
+
   return merged
 }
 
@@ -45,31 +48,40 @@ export const makeStatus = (code: number | null, signal: string | null): IODef.Pr
 /** Concatenate a list of byte chunks into one contiguous buffer. */
 export const concatBytes = (chunks: readonly Uint8Array[]): Uint8Array => {
   let total = 0
+
   for (const chunk of chunks) {
     total += chunk.length
   }
+
   const out = new Uint8Array(total)
   let offset = 0
+
   for (const chunk of chunks) {
     out.set(chunk, offset)
     offset += chunk.length
   }
+
   return out
 }
 
 /** Reduce the public process options into a platform-agnostic, defined-keys-only config. */
 export const normalizeSpawn = (options?: IODef.ExecOptions): Helpers.SpawnConfig => {
   const config: Helpers.SpawnConfig = {}
+
   if (options?.cwd !== undefined) {
     config.cwd = toPath(options.cwd)
   }
+
   const env = mergeEnv(options?.env)
+
   if (env !== undefined) {
     config.env = env
   }
+
   if (options?.timeout !== undefined) {
     config.timeout = options.timeout
   }
+
   return config
 }
 
@@ -77,6 +89,7 @@ export const normalizeSpawn = (options?: IODef.ExecOptions): Helpers.SpawnConfig
 export const resolveStdio = (stdio: IODef.SpawnOptions['stdio']): Helpers.StdioConfig => {
   if (stdio === undefined || typeof stdio === 'string') {
     const mode = stdio ?? 'pipe'
+
     return { stdin: mode, stdout: mode, stderr: mode }
   }
 

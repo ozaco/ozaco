@@ -59,6 +59,7 @@ describe('README — the smallest server', () => {
         expect(yield* until(added.json())).toEqual({ title: 'read me', done: false })
 
         const listed = yield* until(fetch(`${info.url}/todos/list`))
+
         expect(yield* until(listed.json())).toEqual([{ title: 'read me', done: false }])
 
         // the same actions, in process and typed from the definition

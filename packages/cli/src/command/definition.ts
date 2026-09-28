@@ -54,6 +54,7 @@ export function defineAction<R, P extends CommandDef.Inherits | undefined = unde
   config: Omit<CommandDef.ActionConfig<StandardSchemaV1, P>, 'input'>,
   handler: (ctx: CommandDef.Ctx<unknown, CommandDef.InheritedOf<P>>) => Operation<R>,
 ): CommandDef.Action<unknown, R, CommandDef.InheritedOf<P>>
+
 export function defineAction(config: AnyType, handler: AnyType): AnyType {
   return Object.assign(handler, {
     _t: ACTION,

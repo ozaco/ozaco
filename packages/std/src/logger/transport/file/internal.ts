@@ -12,6 +12,7 @@ export function* drain(ctx: FileDef.Context): Operation<void> {
   }
 
   const payload = ctx.buffer.join('')
+
   ctx.buffer.length = 0
 
   yield* IO.actions.write(ctx.options.path, encoder.encode(payload), { flags: IO_FLAGS.append })

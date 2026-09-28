@@ -22,6 +22,7 @@ const tick = (ms = 5) =>
 
 const clock = () => {
   let time = 0
+
   return { now: () => time, advance: (ms: number) => (time += ms) }
 }
 
@@ -43,6 +44,7 @@ describe('createBreaker', () => {
 
     const counted = function* (): Operation<never> {
       calls += 1
+
       return yield* boom()
     }
 
@@ -56,6 +58,7 @@ describe('createBreaker', () => {
     })
 
     const { first, stateAfterFirst, second, third } = unwrap(outcome)
+
     expect(errorOf(first)).toBe('breaker-test.boom')
     expect(stateAfterFirst).toBe('closed')
     expect(errorOf(second)).toBe('breaker-test.boom')
@@ -76,8 +79,11 @@ describe('createBreaker', () => {
           throw new TypeError('socket hang up')
         }),
       )
+
       const open = yield* attempt(() => breaker.run(ok))
+
       breaker.trip(new RangeError('disk full'))
+
       const tripped = yield* attempt(() => breaker.run(ok))
 
       return {
@@ -113,21 +119,28 @@ describe('createBreaker', () => {
     const outcome = await run(function* () {
       yield* attempt(() => breaker.run(boom))
       time.advance(99)
+
       const stillOpen = breaker.state()
+
       time.advance(1)
+
       const halfOpen = breaker.state()
 
       const release = withResolvers<void>()
       const trial = yield* spawn(() =>
         breaker.run(function* () {
           yield* release.operation
+
           return 'trial'
         }),
       )
+
       yield* sleep(1)
 
       const concurrent = yield* attempt(() => breaker.run(ok))
+
       release.resolve()
+
       const trialValue = yield* trial
 
       return { stillOpen, halfOpen, concurrent: errorOf(concurrent), trialValue }
@@ -146,11 +159,14 @@ describe('createBreaker', () => {
   it('a failed trial re-opens the circuit for another halfOpenMs', async () => {
     const time = clock()
     const breaker = createBreaker({ failures: 3, halfOpenMs: 100, now: time.now })
+
     breaker.trip('manual')
 
     await run(function* () {
       time.advance(100)
+
       const trial = yield* attempt(() => breaker.run(boom))
+
       expect(errorOf(trial)).toBe('breaker-test.boom')
     })
 
@@ -164,10 +180,12 @@ describe('createBreaker', () => {
   it('a halted trial frees the probe slot for the next caller', async () => {
     const time = clock()
     const breaker = createBreaker({ failures: 1, halfOpenMs: 10, now: time.now })
+
     breaker.trip('manual')
     time.advance(10)
 
     const trial = run(() => breaker.run(suspend))
+
     await tick(5)
     await trial.halt()
 
@@ -179,6 +197,7 @@ describe('createBreaker', () => {
   it('a terminal trip never half-opens; reset() closes it', async () => {
     const time = clock()
     const breaker = createBreaker({ failures: 5, halfOpenMs: 10, now: time.now })
+
     breaker.trip('credentials revoked', { terminal: true })
     time.advance(1_000_000)
 
@@ -186,6 +205,7 @@ describe('createBreaker', () => {
     expect(breaker.reason).toBe('credentials revoked')
 
     const blocked = await run(() => breaker.run(ok))
+
     expect(errorOf(blocked)).toBe(EffectErrors.BreakerOpen)
     expect(isFailure(blocked) && blocked.message).toContain('credentials revoked')
 
@@ -202,6 +222,7 @@ describe('createBreaker', () => {
 
     await run(function* () {
       const ignored = yield* attempt(() => breaker.run(() => fail('breaker-test.ignored', '')))
+
       expect(errorOf(ignored)).toBe('breaker-test.ignored')
       expect(breaker.state()).toBe('closed')
 

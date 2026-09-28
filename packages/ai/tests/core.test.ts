@@ -5,6 +5,7 @@ import { describe, expect, it } from 'bun:test'
 describe('accumulateToolCalls', () => {
   it('stitches fragments by index: first non-empty id/name wins, arguments concatenate', () => {
     const calls = accumulateToolCalls()
+
     calls.add([{ index: 0, id: 'call-1', name: 'lookup', arguments: '{"q":' }])
     calls.add([{ index: 0, arguments: '"x"' }])
     calls.add(undefined)
@@ -14,6 +15,7 @@ describe('accumulateToolCalls', () => {
 
   it('keeps parallel calls separate and orders them by stream index', () => {
     const calls = accumulateToolCalls()
+
     calls.add([{ index: 1, id: 'b', name: 'second', arguments: '{}' }])
     calls.add([{ index: 0, id: 'a', name: 'first' }])
     calls.add([{ index: 0, arguments: '{"ok":true}' }])
@@ -33,6 +35,7 @@ describe('message normalization', () => {
 
   it('content sugar becomes parts; normalized messages pass through untouched', () => {
     const sugared = normalizeMessage({ role: 'system', content: 'be brief' })
+
     expect(sugared.role).toBe('system')
     expect(sugared.parts).toEqual([{ kind: 'text', text: 'be brief' }])
 
@@ -41,6 +44,7 @@ describe('message normalization', () => {
       parts: [{ kind: 'text' as const, text: 'done' }],
       toolCalls: [{ id: '1', name: 'x', arguments: '{}' }],
     }
+
     expect(normalizeMessage(full)).toBe(full)
 
     const toolResult = normalizeMessage({
@@ -49,6 +53,7 @@ describe('message normalization', () => {
       name: 'x',
       toolCallId: '1',
     })
+
     expect(toolResult.toolCallId).toBe('1')
     expect(toolResult.name).toBe('x')
   })

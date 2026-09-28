@@ -23,19 +23,24 @@ function* program(args: string[], options: RegistryDef.RunOptions): Operation<vo
 
   if (head !== undefined && !head.startsWith('-')) {
     const node = ctx.commands.get(head) as AnyType as Helpers.RuntimeNode | undefined
+
     if (node !== undefined) {
       return yield* runCommand(node, args.slice(1), options)
     }
+
     const help = renderProgramHelp(ctx, palette)
+
     yield* Terminal.actions.write(
       `${palette.colors.error(`Unknown command '${head}'`)}\n\n${help}\n`,
       { stream: 'stderr' },
     )
+
     return yield* fail(CliErrors.Unknown, `Unknown command '${head}'`, CliCauses.Reported)
   }
 
   if (ctx.version !== undefined && hasFlag(args, VERSION_FLAGS)) {
     yield* Terminal.actions.write(`${ctx.version}\n`)
+
     return
   }
 
@@ -53,11 +58,13 @@ export function* register(command: RegistryDef.Command) {
   // to populate `--help`. Program help only reads name/description off the stored node, never the
   // setup.
   const ctx = yield* useContext(Registry)
+
   ctx.commands.set(node.name, node as AnyType as RegistryDef.Command)
 }
 
 export function* get(name: string) {
   const ctx = yield* useContext(Registry)
+
   return ctx.commands.get(name)
 }
 
@@ -75,15 +82,19 @@ export function* run(argv?: string[], options: RegistryDef.RunOptions = {}) {
   }
 
   const outcome = yield* attempt(() => program(args, options))
+
   if (!isFailure(outcome)) {
     return
   }
+
   if (!isReported(outcome)) {
     const palette = yield* usePalette()
+
     yield* Terminal.actions.write(`${palette.colors.error(describeFailure(outcome))}\n`, {
       stream: 'stderr',
     })
     appendCauses(outcome, CliCauses.Reported)
   }
+
   return yield* outcome
 }

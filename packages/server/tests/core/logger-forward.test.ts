@@ -17,7 +17,7 @@ import type { Result } from 'std:result'
 import { fail, ResultErrors, unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
 import type { TraceDef } from 'std:trace'
-import { recordFailure } from 'std:trace'
+import { Trace } from 'std:trace'
 
 import { describe, expect, it } from 'bun:test'
 
@@ -30,6 +30,7 @@ let installs = 0
 /** Every observed event of the node it is installed on. */
 const memoryExporter = () => {
   installs += 1
+
   const events: ObserveDef.Event[] = []
 
   const plugin = ObserveExporter.implement<ObserveDef.ExporterContext, []>({
@@ -59,6 +60,7 @@ const memoryExporter = () => {
 /** A Logger transport keeping every entry the Logger writes. */
 const captureTransport = () => {
   installs += 1
+
   const entries: LoggerDef.Entry[] = []
 
   const plugin = LoggerTransport.implement({
@@ -92,19 +94,23 @@ const jobs = service('jobs', {
   }),
   careful: action.query({}, function* ({ ctx }) {
     yield* ctx.log.warn('careful', { err: fail('jobs.careful', 'watch out') })
+
     return 'ok'
   }),
   logged: action.query({}, function* () {
     yield* Logger.actions.warn('logged', fail('jobs.logged', 'the Logger saw it'))
+
     return 'ok'
   }),
   dead: action.query({}, function* () {
     // recorded where it happened (a queue's dead letter): it never escapes a kernel span
-    yield* recordFailure(DEAD)
+    yield* Trace.actions.recordFailure(DEAD)
+
     return 'ok'
   }),
   quiet: action.query({}, function* () {
-    yield* recordFailure(fail('jobs.quiet', 'below warn'), { severity: 5 })
+    yield* Trace.actions.recordFailure(fail('jobs.quiet', 'below warn'), { severity: 5 })
+
     return 'ok'
   }),
   inner: action.query({}, function* () {
@@ -113,15 +119,19 @@ const jobs = service('jobs', {
   late: action.query({}, function* ({ ctx }): Operation<unknown> {
     // the failure is born in `jobs.inner` — and settles only when this dispatch ends, later
     const failed = yield* attempt(ctx.call(jobs, 'inner'))
+
     yield* sleep(40)
+
     return yield* failed as Result.Failure<unknown>
   }),
   swallowed: action.query({}, function* () {
     // a plugin's pattern: record what it swallowed, then say so in its own words
     const failure = fail('jobs.swallowed', 'the plugin swallowed it')
+
     markLogged(failure)
-    yield* recordFailure(failure, { severity: 13 })
+    yield* Trace.actions.recordFailure(failure, { severity: 13 })
     yield* Logger.actions.warn('swallowed it', { error: failure })
+
     return 'ok'
   }),
 })
@@ -136,7 +146,9 @@ const withLogger = async (body: (server: AnyType) => Operation<void>) => {
       yield* storage()
       yield* DefaultLogger.use({ level: LogLevel.trace })
       yield* capture.plugin.use()
+
       const server = yield* createServer({ services: [jobs], plugins: [sink.plugin] })
+
       yield* body(server)
     }),
   )
@@ -157,6 +169,7 @@ describe('settled exceptions reach the std Logger', () => {
     })
 
     const lines = forwarded(entries)
+
     expect(lines).toHaveLength(1)
     expect(lines[0]).toMatchObject({
       level: LogLevel.error,
@@ -186,6 +199,7 @@ describe('settled exceptions reach the std Logger', () => {
     // the record is typed / worded by the fold (its tag, its message) and recognized as the
     // fold's: the line carries the failure, not the rendered chain
     const lines = forwarded(entries)
+
     expect(lines).toHaveLength(1)
     expect(lines[0]).toMatchObject({ level: LogLevel.error, msg: 'ozaco.action.exception' })
     expect(lines[0]!.failures[0]).toBe(failed!)
@@ -203,10 +217,12 @@ describe('settled exceptions reach the std Logger', () => {
 
     const [record] = sink.exceptions()
     const origin = sink.spans().find(span => span.name === 'jobs.inner')!
+
     expect(sink.exceptions()).toHaveLength(1)
     expect(record!.context?.spanId).toBe(origin.context.spanId)
 
     const lines = forwarded(entries)
+
     expect(lines).toHaveLength(1)
     // the terminal shows `trace=…` of the span the failure was born in — not the span (or no
     // span) active where it settled
@@ -226,6 +242,7 @@ describe('settled exceptions reach the std Logger', () => {
     })
 
     const lines = forwarded(entries)
+
     expect(lines).toHaveLength(1)
     expect(lines[0]!.level).toBe(LogLevel.warn)
     expect(lines[0]!.failures[0]!.error).toBe(ServerErrors.Validation)
@@ -256,7 +273,8 @@ describe('settled exceptions reach the std Logger', () => {
         'background',
         function* () {
           const failure = fail('jobs.later', 'recorded before it was logged')
-          yield* recordFailure(failure, { severity: 13 })
+
+          yield* Trace.actions.recordFailure(failure, { severity: 13 })
           yield* Logger.actions.warn('logged later', { error: failure })
         },
         { parent: null, record: 'errors' },
@@ -279,6 +297,7 @@ describe('settled exceptions reach the std Logger', () => {
     })
 
     const lines = forwarded(entries)
+
     expect(lines).toHaveLength(1)
     expect(lines[0]).toMatchObject({ level: LogLevel.error, failures: [] })
     expect(lines[0]!.msg).toStartWith('jobs.dead: the job died')
@@ -290,7 +309,9 @@ describe('settled exceptions reach the std Logger', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({ services: [jobs], plugins: [sink.plugin] })
+
         yield* attempt(server.call(jobs, 'crash'))
       }),
     )

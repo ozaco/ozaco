@@ -6,7 +6,9 @@ import type { IODef } from '../../types/io'
  * throw `QuotaExceededError` beyond it); NodeIO's `node:crypto.randomBytes` has no such limit. */
 export function* webRandomBytes(length: number) {
   const out = new Uint8Array(length)
+
   crypto.getRandomValues(out)
+
   return out
 }
 
@@ -21,10 +23,12 @@ export function* webHmac(algorithm: IODef.HashAlgorithm, key: Uint8Array, data: 
     ),
   )
   const sig = yield* until(crypto.subtle.sign('HMAC', cryptoKey, data as unknown as ArrayBuffer))
+
   return new Uint8Array(sig as ArrayBuffer)
 }
 
 export function* webHash(algorithm: IODef.HashAlgorithm, data: Uint8Array) {
   const digest = yield* until(crypto.subtle.digest(algorithm, data as unknown as ArrayBuffer))
+
   return new Uint8Array(digest as ArrayBuffer)
 }

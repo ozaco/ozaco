@@ -20,7 +20,9 @@ describe('plugin lifecycle', () => {
     unwrap(
       await run(function* () {
         yield* BunIO.use()
+
         const outcome = yield* attempt(DbClient.use({ tables: [users] }))
+
         expect(isFailure(outcome)).toBe(true)
         expect((outcome as AnyType).error).toBe(DbErrors.Configuration)
       }),
@@ -38,8 +40,10 @@ describe('plugin lifecycle', () => {
         expect((yield* useContext(MemoryAdapter)).adapter).toBe('memory')
 
         yield* BunIO.use()
+
         const routed = yield* DbClient.use({ tables: [users] })
         const routedInfo = yield* useContext(DbAdapter)
+
         expect(routedInfo.capabilities.raw).toBe(true)
         yield* routed.insert('users', { name: 'ada' })
         expect(yield* routed.query('users').count()).toBe(1)
@@ -47,8 +51,11 @@ describe('plugin lifecycle', () => {
         expect(yield* MemoryAdapter.actions.introspect(tableSpecOf(users))).toBeNull()
 
         yield* BunIO.use()
+
         const pinned = yield* DbClient.use({ tables: [users], adapter: MemoryAdapter })
+
         yield* pinned.insert('users', { name: 'grace' })
+
         const stored = yield* MemoryAdapter.actions.find({
           table: tableSpecOf(users),
           filter: null,
@@ -56,6 +63,7 @@ describe('plugin lifecycle', () => {
           limit: null,
           offset: null,
         })
+
         expect(stored.map(row => row.name)).toEqual(['grace'])
       }),
     )
@@ -64,13 +72,16 @@ describe('plugin lifecycle', () => {
   it('sqlite closes its handle with the scope — the file reopens cleanly', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'ozaco-db-'))
     const path = join(dir, 'lifecycle.sqlite')
+
     try {
       unwrap(
         await run(() =>
           scoped(function* () {
             yield* SqliteAdapter.use({ path })
             yield* BunIO.use()
+
             const db = yield* DbClient.use({ tables: [users] })
+
             yield* db.insert('users', { name: 'persisted' })
           }),
         ),
@@ -80,8 +91,10 @@ describe('plugin lifecycle', () => {
           scoped(function* () {
             yield* SqliteAdapter.use({ path })
             yield* BunIO.use()
+
             const db = yield* DbClient.use({ tables: [users] })
             const row = yield* db.query('users').first()
+
             expect((row as AnyType).name).toBe('persisted')
           }),
         ),
@@ -96,14 +109,18 @@ describe('plugin lifecycle', () => {
       scoped(function* () {
         yield* SqliteAdapter.use()
         yield* BunIO.use()
+
         const db = yield* DbClient.use({ tables: [users] })
+
         yield* attempt(
           db.transaction(function* (tx: AnyType) {
             yield* tx.insert('users', { name: 'doomed' })
+
             throw new Error('boom')
           }),
         )
         yield* db.insert('users', { name: 'after' })
+
         return 'closed'
       }),
     )
@@ -113,6 +130,7 @@ describe('plugin lifecycle', () => {
         setTimeout(() => resolve('timeout'), 3000)
       }),
     ])
+
     expect(winner).toBe('completed')
   })
 
@@ -127,9 +145,12 @@ describe('plugin lifecycle', () => {
       proc.kill()
     }, 8000)
     const exitCode = await proc.exited
+
     clearTimeout(killer)
+
     const stdout = await new Response(proc.stdout).text()
     const stderr = await new Response(proc.stderr).text()
+
     expect(stderr).toBe('')
     expect(stdout).toContain('memory-done')
     expect(stdout).toContain('sqlite-done')

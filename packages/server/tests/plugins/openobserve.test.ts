@@ -22,6 +22,7 @@ describe('observe/openobserve', () => {
     const stats = unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({
           services: [todos],
           name: 'oo-demo',
@@ -37,6 +38,7 @@ describe('observe/openobserve', () => {
             }),
           ],
         })
+
         yield* server.start()
         yield* server.call(todos, 'create', { title: 'observed' })
         yield* attempt(server.call(todos, 'explode', { code: 'x.y' }))
@@ -64,16 +66,22 @@ describe('observe/openobserve', () => {
 
     const spans = collector.spans()
     const create = spans.find(span => span.name === 'todos.create')
+
     expect(create).toMatchObject({ $service: 'todos', kind: 1 })
+
     const explode = spans.find(span => span.name === 'todos.explode')
+
     expect(explode.status).toEqual({ code: 2, message: 'boom x.y' })
 
     const logs = collector.logs()
     const creating = logs.find(record => record.body.stringValue === 'creating')
+
     expect(creating.traceId).toBe(create.traceId)
     expect(creating.spanId).toBe(create.spanId)
+
     // OpenObserve keeps EventName (o2_event_name) — and every sink has `otel.event.name` too
     const exception = logs.find(record => record.eventName === 'ozaco.action.exception')
+
     expect(attrOf(exception, 'otel.event.name')).toBe('ozaco.action.exception')
 
     expect(collector.metrics().some(metric => metric.name === 'ozaco.action.duration')).toBe(true)
@@ -87,6 +95,7 @@ describe('observe/openobserve', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({
           services: [todos],
           plugins: [
@@ -101,6 +110,7 @@ describe('observe/openobserve', () => {
             }),
           ],
         })
+
         yield* server.start()
         yield* server.call(todos, 'create', { title: 'renamed' })
         yield* server.stop()
@@ -125,6 +135,7 @@ describe('observe/openobserve', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({
           services: [todos],
           plugins: [
@@ -137,6 +148,7 @@ describe('observe/openobserve', () => {
             }),
           ],
         })
+
         yield* server.start()
         yield* server.call(todos, 'create', { title: 'utf8' })
         yield* server.stop()
@@ -144,19 +156,23 @@ describe('observe/openobserve', () => {
     )
 
     const header = collector.received[0]!.headers['authorization']!
+
     expect(header.startsWith('Basic ')).toBe(true)
+
     const decoded = new TextDecoder().decode(
       Uint8Array.from(atob(header.slice('Basic '.length)), char => char.codePointAt(0)!),
     )
+
     expect(decoded).toBe('kök@ozaco.dev:şifre-Ğ1!')
   })
 
-  it('a domain record is a log record (eventName ozaco.domain) like in every other sink', async () => {
+  it('a domain record is a log record (eventName ozaco.local) like in every other sink', async () => {
     const collector = fakeCollector()
 
     unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({
           services: [todos],
           name: 'oo-domain',
@@ -170,6 +186,7 @@ describe('observe/openobserve', () => {
             }),
           ],
         })
+
         yield* server.start()
         yield* Server.actions.report({
           stream: 'audit',
@@ -181,11 +198,12 @@ describe('observe/openobserve', () => {
       }),
     )
 
-    const domain = collector.logs().find(record => record.eventName === 'ozaco.domain')
+    const domain = collector.logs().find(record => record.eventName === 'ozaco.local')
+
     expect(domain).toBeDefined()
     expect(attrsOf(domain)).toMatchObject({
-      'ozaco.domain.stream': 'audit',
-      'otel.event.name': 'ozaco.domain',
+      'ozaco.local.stream': 'audit',
+      'otel.event.name': 'ozaco.local',
     })
     expect(domain.$service).toBe('oo-domain')
   })
@@ -196,6 +214,7 @@ describe('observe/openobserve', () => {
     const stats = unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({
           services: [todos],
           plugins: [
@@ -208,8 +227,11 @@ describe('observe/openobserve', () => {
             }),
           ],
         })
+
         yield* server.start()
+
         const made = yield* server.call(todos, 'create', { title: 'unsent' })
+
         expect(made.title).toBe('unsent')
         yield* server.stop()
 

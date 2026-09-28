@@ -18,6 +18,7 @@ export const hardBreak = (word: string, columns: number): string[] => {
       current = ''
       width = 0
     }
+
     current += token
     width += size
   }

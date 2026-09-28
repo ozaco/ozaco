@@ -194,12 +194,14 @@ const client = () =>
     (error: unknown) => {
       // a refused manifest (no token yet) must not stick: the next call connects again
       opened = null
+
       throw error
     },
   ))
 
 const call = async <T>(target: string, input?: unknown): Promise<T> => {
   const handle = await client()
+
   return unwrap(await handle.$call(target, input)) as T
 }
 

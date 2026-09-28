@@ -65,6 +65,7 @@ export const HttpTab = ({ action, connection, onToken }: Props) => {
 
   const [bodyText, setBodyText] = useState(() => {
     const example = exampleOf(action.input.schema)
+
     return action.input.plane === 'none' ? '' : JSON.stringify(example ?? {}, null, 2)
   })
   const [files, setFiles] = useState<Record<string, File | null>>({})
@@ -95,16 +96,19 @@ export const HttpTab = ({ action, connection, onToken }: Props) => {
   }, [bodyText])
   const setField = (name: string, value: unknown) => {
     const next = new Map(Object.entries(body ?? {}))
+
     if (value === undefined) {
       next.delete(name)
     } else {
       next.set(name, value)
     }
+
     setBodyText(JSON.stringify(Object.fromEntries(next), null, 2))
   }
 
   const resolvedPath = action.route.path.replaceAll(/:([A-Za-z_]\w*)/gu, (_match, name: string) => {
     const value = body?.[name]
+
     return value === undefined || value === '' ? `:${name}` : encodeURIComponent(String(value))
   })
 
@@ -116,13 +120,18 @@ export const HttpTab = ({ action, connection, onToken }: Props) => {
         ...prior,
         { at: performance.now() - startedAt.current, tone: 'error', text: 'cancelled' },
       ])
+
       return
     }
+
     if (body === null && (isValue || isParts)) {
       setLines([{ at: 0, tone: 'error', text: 'body is not valid JSON' }])
+
       return
     }
+
     let input: unknown = body
+
     if (isParts) {
       input = {
         fields: body,
@@ -137,16 +146,20 @@ export const HttpTab = ({ action, connection, onToken }: Props) => {
     } else if (action.input.plane === 'none') {
       input = undefined
     }
+
     const extraHeaders = pairsToRecord(headers)
+
     if (authOverride.trim()) {
       extraHeaders['authorization'] = authOverride.trim().startsWith('Bearer ')
         ? authOverride.trim()
         : `Bearer ${authOverride.trim()}`
     }
+
     setChunks([])
     setOutcome(null)
     startedAt.current = performance.now()
     setLines([{ at: 0, tone: 'out', text: `${action.route.method} ${resolvedPath}` }])
+
     const flight = send(
       clientOf(connection),
       { service: action.service, action: action.action, input, headers: extraHeaders },
@@ -167,8 +180,11 @@ export const HttpTab = ({ action, connection, onToken }: Props) => {
         ])
       },
     )
+
     setInFlight(flight)
+
     const result = await flight.done
+
     setInFlight(null)
     setOutcome(result)
     setHistory(prior =>

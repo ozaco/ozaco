@@ -56,6 +56,7 @@ for (const target of targets) {
       unwrap(
         await run(function* () {
           yield* bootstrap()
+
           const seen: QueueDef.Job[] = []
 
           const worker = yield* Queue.actions.work(
@@ -69,14 +70,18 @@ for (const target of targets) {
 
           // the worker is parked on a one-minute poll: only the change feed can wake it
           yield* sleep(20)
+
           const { op, job } = yield* Queue.actions.enqueue('email', { to: 'ada' })
+
           expect(op).toBe('inserted')
           expect(job.state).toBe('queued')
 
           yield* until(function* () {
             return (yield* stateOf(job._id)) === 'done'
           })
+
           const done = (yield* Queue.actions.get(job._id))!
+
           expect(done.attempts).toBe(1)
           expect(typeof done.finished_at).toBe('number')
           expect(done.lease_until).toBeNull()
@@ -99,6 +104,7 @@ for (const target of targets) {
       unwrap(
         await run(function* () {
           yield* bootstrap()
+
           const attempts: number[] = []
           let healthy = false
 
@@ -116,10 +122,13 @@ for (const target of targets) {
           )
 
           const { job } = yield* Queue.actions.enqueue('flaky', null)
+
           yield* until(function* () {
             return (yield* stateOf(job._id)) === 'dead'
           })
+
           const dead = (yield* Queue.actions.get(job._id))!
+
           expect(attempts).toEqual([1, 2, 3])
           expect(dead.attempts).toBe(3)
           expect(dead.last_error).toBe('test.flaky: boom 3')
@@ -127,6 +136,7 @@ for (const target of targets) {
 
           // a per-job maxAttempts wins over the worker's
           const { job: once } = yield* Queue.actions.enqueue('flaky', null, { maxAttempts: 1 })
+
           yield* until(function* () {
             return (yield* stateOf(once._id)) === 'dead'
           })
@@ -151,6 +161,7 @@ for (const target of targets) {
 
           const first = yield* Queue.actions.enqueue('sync', { n: 1 }, { dedupeKey: 'ws-1' })
           const again = yield* Queue.actions.enqueue('sync', { n: 2 }, { dedupeKey: 'ws-1' })
+
           expect([first.op, again.op]).toEqual(['inserted', 'skipped'])
           expect(again.job._id).toBe(first.job._id)
           expect(again.job.payload).toEqual({ n: 1 })
@@ -164,11 +175,13 @@ for (const target of targets) {
             },
             { pollMs: 5 },
           )
+
           yield* until(function* () {
             return (yield* stateOf(first.job._id)) === 'done'
           })
 
           const rearmed = yield* Queue.actions.enqueue('sync', { n: 3 }, { dedupeKey: 'ws-1' })
+
           expect(rearmed.op).toBe('updated')
           expect(rearmed.job._id).toBe(first.job._id)
           expect(rearmed.job.attempts).toBe(0)
@@ -198,11 +211,13 @@ for (const target of targets) {
       unwrap(
         await run(function* () {
           yield* bootstrap()
+
           const order: string[] = []
           const later = yield* Queue.actions.enqueue('step', 'later', {
             runAt: Date.now() + 150,
             priority: 100,
           })
+
           yield* Queue.actions.enqueue('step', 'low', { priority: 1 })
           yield* Queue.actions.enqueue('step', 'high', { priority: 9 })
 
@@ -234,6 +249,7 @@ for (const target of targets) {
       unwrap(
         await run(function* () {
           yield* bootstrap()
+
           const db = yield* DbClient.context.expect()
 
           // what a crashed worker leaves behind: running, lease long gone
@@ -258,7 +274,9 @@ for (const target of targets) {
           yield* until(function* () {
             return (yield* stateOf(orphan._id)) === 'done'
           })
+
           const row = (yield* Queue.actions.get(orphan._id))!
+
           expect(row.attempts).toBe(2)
           expect(row.worker).not.toBe('ghost')
           expect(worker.stats().swept).toBe(1)
@@ -270,6 +288,7 @@ for (const target of targets) {
       unwrap(
         await run(function* () {
           yield* bootstrap()
+
           let started = 0
 
           const worker = yield* Queue.actions.work(
@@ -286,13 +305,17 @@ for (const target of targets) {
           // several lease periods pass: the heartbeat keeps the sweeper away
           yield* sleep(250)
           expect(started).toBe(1)
+
           const running = (yield* Queue.actions.get(job._id))!
+
           expect(running.state).toBe('running')
           expect(running.attempts).toBe(1)
           expect(worker.stats().swept).toBe(0)
 
           yield* worker.halt()
+
           const released = (yield* Queue.actions.get(job._id))!
+
           expect(released.state).toBe('queued')
           expect(released.attempts).toBe(0)
           expect(released.worker).toBeNull()
@@ -304,6 +327,7 @@ for (const target of targets) {
       unwrap(
         await run(function* () {
           yield* bootstrap()
+
           const runs = new Map<string, number>()
           const handlers = {
             *count(job: QueueDef.Job) {
@@ -333,15 +357,25 @@ for (const target of targets) {
       unwrap(
         await run(function* () {
           yield* bootstrap()
+
           const empty = yield* attempt(Queue.actions.enqueue('', null))
+
           expect(isFailure(empty) && empty.error).toBe(QueueErrors.Validation)
+
           const priority = yield* attempt(Queue.actions.enqueue('x', null, { priority: 1.5 }))
+
           expect(isFailure(priority) && priority.error).toBe(QueueErrors.Validation)
+
           const noHandlers = yield* attempt(Queue.actions.work({}))
+
           expect(isFailure(noHandlers) && noHandlers.error).toBe(QueueErrors.Validation)
+
           const batch = yield* attempt(Queue.actions.work({ *x() {} }, { batch: 0 }))
+
           expect(isFailure(batch) && batch.error).toBe(QueueErrors.Validation)
+
           const service = yield* attempt(Queue.actions.work({ *x() {} }, { service: '' }))
+
           expect(isFailure(service) && service.error).toBe(QueueErrors.Validation)
         }),
       )
@@ -351,6 +385,7 @@ for (const target of targets) {
         yield* bootstrap()
         yield* Queue.use({ table: 'jobs', service: '' })
       })
+
       expect(isFailure(unnamed) && unnamed.error).toBe(QueueErrors.Configuration)
 
       // a table that is not a queue table
@@ -361,15 +396,19 @@ for (const target of targets) {
         yield* DbClient.use({ tables: [other] })
         yield* Queue.use({ table: 'other' })
       })
+
       expect(isFailure(wiring) && wiring.error).toBe(QueueErrors.Configuration)
+
       // the projection check that found it out is nested as the cause
       const probe = isFailure(wiring) ? wiring.causes.find(isFailure) : undefined
+
       expect(probe?.error).toBe(DbErrors.Validation)
 
       // no DbClient at all
       const bare = await run(function* () {
         yield* Queue.use({ table: 'jobs' })
       })
+
       expect(isFailure(bare) && bare.error).toBe(QueueErrors.Configuration)
     })
   })

@@ -19,25 +19,35 @@ const lines = (body: ReadableStream<Uint8Array>): ReadableStream<string> => {
       while (queued.length === 0) {
         // oxlint-disable-next-line no-await-in-loop -- one read per pull, sequential by nature
         const step = await reader.read()
+
         if (step.done) {
           buffer += decoder.decode()
+
           if (buffer.length > 0) {
             controller.enqueue(buffer)
             buffer = ''
           }
+
           controller.close()
+
           return
         }
+
         buffer += decoder.decode(step.value, { stream: true })
+
         let at = buffer.indexOf('\n')
+
         while (at >= 0) {
           queued.push(buffer.slice(0, at))
           buffer = buffer.slice(at + 1)
           at = buffer.indexOf('\n')
         }
       }
+
       const next = queued
+
       queued = []
+
       for (const line of next) {
         controller.enqueue(line)
       }
@@ -67,37 +77,51 @@ const valuesOf = (
     const subscription: Subscription<unknown, void> = {
       *next() {
         let data: string[] = []
+
         for (;;) {
           const step = yield* source.next()
+
           if (step.done) {
             if (data.length > 0) {
               const text = data.join('\n')
+
               data = []
+
               return { done: false, value: yield* parse(text) }
             }
+
             return { done: true, value: undefined }
           }
+
           const line = step.value
+
           if (brand === 'ndjson') {
             if (line.trim().length === 0) {
               continue
             }
+
             return { done: false, value: yield* parse(line) }
           }
+
           if (line.length === 0) {
             if (data.length > 0) {
               const text = data.join('\n')
+
               data = []
+
               return { done: false, value: yield* parse(text) }
             }
+
             continue
           }
+
           if (line.startsWith('data:')) {
             data.push(line.slice(5).trimStart())
           }
         }
       },
     }
+
     return subscription
   },
 })

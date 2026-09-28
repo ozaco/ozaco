@@ -33,6 +33,7 @@ const loadPolyfill = guard(function* () {
  */
 export const resolveImpl = guard(function* () {
   const global = (globalThis as AnyType).RTCPeerConnection as RtcDef.ImplLike | undefined
+
   if (global) {
     return global
   }

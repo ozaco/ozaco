@@ -78,6 +78,7 @@ describe('observe/otlp — content', () => {
       unwrap(
         await run(function* () {
           yield* storage()
+
           const server = yield* createServer({
             services: [todos],
             name: 'otlp-demo',
@@ -91,6 +92,7 @@ describe('observe/otlp — content', () => {
               }),
             ],
           })
+
           yield* server.start()
           yield* server.call(todos, 'create', { title: 'traced' })
           yield* attempt(server.call(todos, 'explode', { code: 'x.y' }))
@@ -129,11 +131,13 @@ describe('observe/otlp — content', () => {
       // the log records: the handler's line on its dispatch span, the exception record
       const logs = collector.logs()
       const creating = logs.find(record => record.body.stringValue === 'creating')
+
       expect(creating).toMatchObject({ severityNumber: 9, severityText: 'INFO', $service: 'todos' })
       expect(creating.traceId).toBe(create.traceId)
       expect(creating.spanId).toBe(create.spanId)
 
       const exception = logs.find(record => record.eventName === 'ozaco.action.exception')
+
       expect(exception).toMatchObject({ severityNumber: 17, traceId: explode.traceId })
       expect(exception.severityText).toBeUndefined()
       expect(exception.body.stringValue).toContain('boom x.y')
@@ -145,6 +149,7 @@ describe('observe/otlp — content', () => {
   it('one resource block per (service.name, instance): node attributes + OTEL_RESOURCE_ATTRIBUTES', async () => {
     const collector = fakeCollector()
     const previous = process.env['OTEL_RESOURCE_ATTRIBUTES']
+
     process.env['OTEL_RESOURCE_ATTRIBUTES'] =
       'deployment.environment.name=staging,service.namespace=from-env,team=a%20b,broken'
 
@@ -152,6 +157,7 @@ describe('observe/otlp — content', () => {
       unwrap(
         await run(function* () {
           yield* storage()
+
           const server = yield* createServer({
             services: [todos],
             name: 'otlp-res',
@@ -167,6 +173,7 @@ describe('observe/otlp — content', () => {
               }),
             ],
           })
+
           yield* server.start()
           yield* server.call(todos, 'create', { title: 'resourced' })
           yield* server.stop()
@@ -199,8 +206,10 @@ describe('observe/otlp — content', () => {
       'deployment.environment.name': 'staging',
       team: 'a b',
     })
+
     // one block per resource: no service name twice
     const names = blocks.map((block: AnyType) => attrOf(block.resource, 'service.name'))
+
     expect(new Set(names).size).toBe(names.length)
   })
 })
@@ -214,6 +223,7 @@ describe('observe/otlp — metrics', () => {
       unwrap(
         await run(function* () {
           yield* storage()
+
           const server = yield* createServer({
             services: [todos],
             name: 'otlp-metrics',
@@ -236,8 +246,11 @@ describe('observe/otlp — metrics', () => {
               body: JSON.stringify({ title: 'metered' }),
             }),
           )
+
           expect(created.status).toBe(200)
+
           const exploded = yield* until(fetch(`${info.url!}/todos/explode?code=x.y`))
+
           expect(exploded.status).toBe(500)
           // stop flushes: the final metrics export
           yield* server.stop()
@@ -263,8 +276,10 @@ describe('observe/otlp — metrics', () => {
 
       // http.server.request.duration: the EDGE spans (the node's resource), seconds
       const [http] = byName('http.server.request.duration', 'otlp-metrics')
+
       expect(http).toMatchObject({ unit: 's' })
       expect(http.histogram.aggregationTemporality).toBe(2)
+
       const points = http.histogram.dataPoints
       const allowed = new Set([
         'http.request.method',
@@ -283,15 +298,18 @@ describe('observe/otlp — metrics', () => {
       }
 
       const ok = points.find((point: AnyType) => attrOf(point, 'http.route') === '/todos/create')
+
       expect(attrsOf(ok)).toEqual({
         'http.request.method': 'POST',
         'url.scheme': 'http',
         'http.route': '/todos/create',
         'http.response.status_code': 200,
       })
+
       const failed = points.find(
         (point: AnyType) => attrOf(point, 'http.route') === '/todos/explode',
       )
+
       // a 5xx carries error.type — the same value the span has
       expect(attrsOf(failed)).toMatchObject({
         'http.response.status_code': 500,
@@ -300,8 +318,11 @@ describe('observe/otlp — metrics', () => {
 
       // ozaco.action.duration: the in-process dispatch spans, under the SERVICE's resource
       const [action] = byName('ozaco.action.duration', 'todos')
+
       expect(action.unit).toBe('s')
+
       const attributeSets = action.histogram.dataPoints.map((point: AnyType) => attrsOf(point))
+
       expect(attributeSets).toContainEqual({ 'code.function.name': 'todos.create' })
       expect(attributeSets).toContainEqual({
         'code.function.name': 'todos.explode',
@@ -310,6 +331,7 @@ describe('observe/otlp — metrics', () => {
 
       // ozaco.service.up: 1 per served service, in that service's resource
       const [up] = byName('ozaco.service.up', 'todos')
+
       expect(up.gauge.dataPoints).toEqual([
         expect.objectContaining({ asInt: '1', startTimeUnixNano: expect.any(String) }),
       ])
@@ -327,6 +349,7 @@ describe('observe/otlp — active requests', () => {
       unwrap(
         await run(function* () {
           yield* storage()
+
           const server = yield* createServer({
             services: [todos],
             name: 'otlp-active',
@@ -343,6 +366,7 @@ describe('observe/otlp — active requests', () => {
           })
           const info = yield* server.start({ port: 0 })
           const slow = fetch(`${info.url!}/todos/slow?ms=400`)
+
           // metrics beats while the request is still being answered
           yield* sleep(200)
           during = collector.metrics()
@@ -360,6 +384,7 @@ describe('observe/otlp — active requests', () => {
 
       // an up-down counter (a non-monotonic cumulative sum) of the node's resource
       const inflight = activeOf(during)
+
       expect(inflight.unit).toBe('{request}')
       expect(inflight.sum.isMonotonic ?? false).toBe(false)
       expect(inflight.sum.aggregationTemporality).toBe(2)
@@ -369,6 +394,7 @@ describe('observe/otlp — active requests', () => {
 
       // answered: back to zero
       const after = activeOf(collector.metrics())
+
       expect(after.sum.dataPoints.map(valueOf)).toEqual([0])
     },
   )
@@ -383,6 +409,7 @@ describe('observe/otlp — lifecycle', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({
           services: [todos],
           name: 'otlp-beat',
@@ -395,6 +422,7 @@ describe('observe/otlp — lifecycle', () => {
             }),
           ],
         })
+
         yield* server.start()
         yield* sleep(110)
         // the beat POSTs while the node runs, not only at stop
@@ -429,6 +457,7 @@ describe('observe/otlp — transport', () => {
   ) =>
     run(function* () {
       yield* storage()
+
       const server = yield* createServer({
         services: [todos],
         plugins: [
@@ -442,8 +471,11 @@ describe('observe/otlp — transport', () => {
           }),
         ],
       })
+
       yield* server.start()
+
       const made = yield* server.call(todos, 'create', { title: 'shipped' })
+
       expect(made.title).toBe('shipped')
 
       if (body) {
@@ -484,8 +516,10 @@ describe('observe/otlp — transport', () => {
     expect(traces).toBe(4)
     expect(stats.spans).toMatchObject({ retried: 3, rejected: 2, failed: 0, lastError: 'too old' })
     expect(stats.spans.sent).toBeGreaterThan(0)
+
     // every attempt carried the same payload
     const bodies = collector.of('/v1/traces').map(entry => entry.body.join(','))
+
     expect(new Set(bodies).size).toBe(1)
   })
 
@@ -527,6 +561,7 @@ describe('observe/otlp — transport', () => {
   const spansFirst = (collector: ReturnType<typeof fakeCollector>, body: () => Operation<void>) =>
     run(function* () {
       yield* storage()
+
       const server = yield* createServer({
         services: [todos],
         plugins: [
@@ -539,6 +574,7 @@ describe('observe/otlp — transport', () => {
           }),
         ],
       })
+
       yield* server.start()
       yield* server.call(todos, 'list', {})
       yield* sleep(60)
@@ -654,6 +690,7 @@ describe('observe/otlp — transport', () => {
       return new Promise<Response>((_resolve, reject) => {
         init?.signal?.addEventListener('abort', () => {
           const reason: unknown = init.signal?.reason
+
           aborted.push({
             reason: isFailure(reason) ? reason.message : String(reason),
             at: Date.now(),
@@ -733,6 +770,7 @@ describe('observe/otlp — transport', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({
           services: [todos],
           plugins: [
@@ -746,12 +784,15 @@ describe('observe/otlp — transport', () => {
             }),
           ],
         })
+
         yield* server.start()
+
         for (let call = 0; call < 4; call += 1) {
           yield* server.call(todos, 'create', { title: `lost ${call}` })
         }
 
         const began = Date.now()
+
         yield* server.stop()
         stoppedIn = Date.now() - began
       }),
@@ -763,6 +804,7 @@ describe('observe/otlp — transport', () => {
     expect(stoppedIn).toBeGreaterThanOrEqual(140)
     expect(stoppedIn).toBeLessThan(150 + 150)
     expect(hole.started.length).toBeGreaterThan(0)
+
     for (const [at, entry] of hole.aborted.entries()) {
       expect(entry.at - hole.started[at]!).toBeLessThanOrEqual(150 + 30)
     }
@@ -774,6 +816,7 @@ describe('observe/otlp — transport', () => {
     unwrap(await exercise(collector, { gzip: true }))
 
     const [first] = collector.of('/v1/traces')
+
     expect(first!.headers['content-encoding']).toBe('gzip')
     // the gzip magic, and it decodes to the spans
     expect([first!.body[0], first!.body[1]]).toEqual([0x1f, 0x8b])
@@ -786,6 +829,7 @@ describe('observe/otlp — transport', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({
           services: [todos],
           plugins: [
@@ -796,6 +840,7 @@ describe('observe/otlp — transport', () => {
             }),
           ],
         })
+
         yield* server.start()
         yield* server.stop()
       }),
@@ -814,6 +859,7 @@ describe('observe/otlp — transport', () => {
         yield* DefaultLogger.use({ level: LogLevel.info })
         yield* logged.transport.use()
         yield* storage()
+
         const server = yield* createServer({
           services: [todos],
           plugins: [
@@ -826,10 +872,15 @@ describe('observe/otlp — transport', () => {
             }),
           ],
         })
+
         yield* server.start()
+
         const first = yield* server.call(todos, 'create', { title: 'one' })
+
         yield* sleep(40)
+
         const second = yield* server.call(todos, 'create', { title: 'two' })
+
         yield* sleep(40)
         expect([first.title, second.title]).toEqual(['one', 'two'])
         yield* server.stop()
@@ -837,6 +888,7 @@ describe('observe/otlp — transport', () => {
     )
 
     const warns = logged.entries.filter(entry => entry.msg === 'otlp traces delivery failing')
+
     expect(warns).toHaveLength(1)
     expect(warns[0]!.level).toBe(LogLevel.warn)
     expect(warns[0]!.bindings?.['logger']).toBe('@ozaco/server/observe')
@@ -861,13 +913,16 @@ describe('createSink', () => {
             sent.push([...rows])
           },
         })
+
         yield* sink.start()
         sink.push(1)
         yield* sleep(10)
         expect(sent).toEqual([])
+
         for (const row of [2, 3]) {
           sink.push(row)
         }
+
         yield* sleep(10)
         expect(sent).toEqual([[1, 2]])
         expect(sink.stats.sent).toBe(2)
@@ -888,6 +943,7 @@ describe('createSink', () => {
             sent.push([...rows])
           },
         })
+
         sink.push(1)
         yield* spawn(() => sink.flush())
         yield* sleep(5)
@@ -912,9 +968,11 @@ describe('createSink', () => {
           },
           onError: failure => heard.push(failure),
         })
+
         for (const row of [1, 2]) {
           sink.push(row)
         }
+
         yield* sink.flush()
         expect(sink.stats).toEqual({ sent: 0, dropped: 0, failed: 2 })
         expect(heard).toHaveLength(1)

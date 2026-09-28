@@ -36,6 +36,7 @@ const server = Bun.serve({
 
     if (pathname === '/slow') {
       await Bun.sleep(400)
+
       return new Response('late')
     }
 
@@ -107,6 +108,7 @@ describe('request dispatch', () => {
 
       const readMethod = function* (response: FetchDef.Response) {
         const echoed = yield* response.json<{ method: string }>()
+
         return echoed.method
       }
 
@@ -155,6 +157,7 @@ describe('request dispatch', () => {
         () => Promise.resolve(new Response('injected')),
         function* () {
           const response = yield* Fetch.actions.get(`${base}/never-reached`)
+
           return yield* response.text()
         },
       )
@@ -167,6 +170,7 @@ describe('request dispatch', () => {
     const outcome = await run(() => Fetch.actions.get(`${base}/json`))
 
     expect(isFailure(outcome)).toBe(true)
+
     if (isFailure(outcome)) {
       expect(outcome.error).toBe('std:plugin.missing-action')
     }
@@ -197,6 +201,7 @@ describe('expect()', () => {
     })
 
     expect(isFailure(outcome)).toBe(true)
+
     if (isFailure(outcome)) {
       expect(outcome.error).toBe('std:fetch.http-status')
       expect(outcome.message).toBe(`${base}/missing: 404 Not Found`)
@@ -233,6 +238,7 @@ describe('request-level failures', () => {
     // grab an ephemeral port, then release it so nothing listens there
     const ghost = Bun.serve({ port: 0, fetch: () => new Response('') })
     let port: number | undefined
+
     try {
       port = ghost.port
     } finally {
@@ -246,6 +252,7 @@ describe('request-level failures', () => {
     })
 
     expect(isFailure(outcome)).toBe(true)
+
     if (isFailure(outcome)) {
       // tagged — the platform code (Bun's refused connection has an EMPTY message) is the message
       expect(outcome.error).toBe(FetchErrors.Network)
@@ -273,6 +280,7 @@ describe('request-level failures', () => {
     })
 
     expect(isFailure(outcome)).toBe(true)
+
     if (isFailure(outcome)) {
       expect(outcome.error).toBe('std:fetch.timeout')
       expect(outcome.message).toBe(`${base}/slow: timed out after 30ms`)
@@ -292,6 +300,7 @@ describe('network failures and tls', () => {
     })
 
     expect(isFailure(outcome)).toBe(true)
+
     if (isFailure(outcome)) {
       expect(outcome.error).toBe('std:fetch.network')
       expect(outcome.message).toBe('fetch failed')
@@ -310,6 +319,7 @@ describe('network failures and tls', () => {
     })
 
     expect(isFailure(outcome)).toBe(true)
+
     if (isFailure(outcome)) {
       // folded by asFailure: no fetch tag, the thrown Error itself kept as raw
       expect(outcome.error).toBe(ResultErrors.Unknown)
@@ -325,11 +335,13 @@ describe('network failures and tls', () => {
       return yield* fetchImpl.with(
         (_input, init) => {
           seen.push((init as { tls?: unknown } | undefined)?.tls)
+
           return Promise.resolve(new Response('ok'))
         },
         function* () {
           yield* Fetch.actions.get(`${base}/json`)
           yield* Fetch.actions.get(`${base}/json`, { tls: { ca: 'PEM' } })
+
           return seen
         },
       )
@@ -346,10 +358,12 @@ describe('network failures and tls', () => {
       return yield* fetchImpl.with(
         (_input, given) => {
           init = given
+
           return Promise.resolve(new Response('ok'))
         },
         function* () {
           const response = yield* Fetch.actions.get(`${base}/json`)
+
           return yield* response.text()
         },
       )

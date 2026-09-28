@@ -3,7 +3,7 @@ import type { Context, Operation } from 'std:effect'
 import { attempt, ensure, until, useAbortSignal } from 'std:effect'
 import type { Result } from 'std:result'
 import { asFailure, fail, isFailure } from 'std:result'
-import { traceNow } from 'std:trace'
+import { Trace } from 'std:trace'
 
 import { FetchErrors } from '../errors'
 import type { FetchDef } from '../types/fetch'
@@ -95,6 +95,7 @@ function* send(
         : AbortSignal.any([scopeSignal, AbortSignal.timeout(timeoutMs)])
 
     const requestInit: RequestInit = { ...init, signal }
+
     if (tls !== undefined) {
       // Bun's `tls` fetch extension — not in the lib `RequestInit`; other runtimes ignore it
       ;(requestInit as RequestInit & { tls?: FetchDef.Tls }).tls = tls
@@ -136,11 +137,16 @@ export const createRequestAction = (context: Context<FetchDef.Context>) =>
     const target = resolveInput(input, options.baseUrl)
     const method = rest.method ?? (input instanceof Request ? input.method : 'GET')
 
-    const live = yield* openClientSpan(target, method, { template, resendCount })
+    const live = yield* openClientSpan(target, method, {
+      template,
+      resendCount,
+      sensitiveKeys: options.sensitiveKeys,
+    })
     const carrier = (initPropagate ?? options.propagate ?? true) ? yield* carrierOf(live) : {}
     const headers = withCarrier(carrier, input, mergeHeaders(options.headers, input, initHeaders))
 
     const requestInit: RequestInit = { ...rest }
+
     if (headers !== undefined) {
       requestInit.headers = headers
     }
@@ -153,16 +159,20 @@ export const createRequestAction = (context: Context<FetchDef.Context>) =>
     // read ⇒ the request ended when its headers arrived. It lives as long as that scope, so it
     // holds the span only until the span ends (a long-lived scope must not keep every request's)
     const { span, fallback, end } = releasing(live)
+
     yield* ensure(end)
 
     const outcome = yield* attempt(() => send(target, requestInit, { timeoutMs, tls }))
+
     if (isFailure(outcome)) {
       yield* span.end({ failure: outcome })
+
       return yield* outcome
     }
 
     const response = outcome.value
-    fallback.at = yield* span.run(() => traceNow())
+
+    fallback.at = yield* span.run(() => Trace.actions.traceNow())
     markResponse(span, response.status)
 
     if (response.body === null || sentMethod(method) === 'HEAD') {

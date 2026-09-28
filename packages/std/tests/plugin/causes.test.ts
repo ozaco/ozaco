@@ -96,6 +96,7 @@ describe('plugin runtime — failures carry the labels of the hops they crossed'
 
     const outcome = await run(function* () {
       yield* MemIo.use()
+
       return yield* Io.actions.read('/a')
     })
 
@@ -113,6 +114,7 @@ describe('plugin runtime — failures carry the labels of the hops they crossed'
 
     const outcome = await run(function* () {
       yield* MemIo.use()
+
       return yield* MemIo.actions.read('/b')
     })
 
@@ -138,6 +140,7 @@ describe('plugin runtime — failures carry the labels of the hops they crossed'
 
     const outcome = await run(function* () {
       yield* Counter.use()
+
       return yield* Counter.actions.explode()
     })
 
@@ -171,6 +174,7 @@ describe('plugin runtime — failures carry the labels of the hops they crossed'
     })
     const installed = await run(function* () {
       yield* MemIo.use()
+
       return yield* Io.actions.stat()
     })
 
@@ -179,6 +183,7 @@ describe('plugin runtime — failures carry the labels of the hops they crossed'
       message: 'no stat',
       causes: ['io:stat', 'stat:default', Io.tag, 'dispatch', Io.tag],
     }
+
     expect(shapeOf(bare)).toEqual(expected)
     expect(shapeOf(installed)).toEqual(expected)
   })
@@ -213,6 +218,7 @@ describe('plugin runtime — failures carry the labels of the hops they crossed'
     })
 
     const { viaDefault, viaHandler } = unwrap(seen)
+
     expect(viaDefault).toBe(raised)
     expect(viaHandler).toBe(raised)
     // the labels mutate the shared object: every crossing appends its hops again
@@ -234,6 +240,7 @@ describe('plugin runtime — failures carry the labels of the hops they crossed'
 
     const outcome = await run(function* () {
       yield* MemIo.use()
+
       return {
         handler: yield* Io.actions.version(),
         viaProtocol: yield* Io.actions.size(),
@@ -244,6 +251,7 @@ describe('plugin runtime — failures carry the labels of the hops they crossed'
     })
 
     const labels = ['readReturned', MemIo.tag, 'dispatch', Io.tag]
+
     expect(unwrap(outcome)).toEqual({
       handler: 'v9',
       viaProtocol: 3,
@@ -262,6 +270,7 @@ describe('plugin runtime — failures carry the labels of the hops they crossed'
 
     const outcome = await run(function* () {
       yield* MemIo.use()
+
       return {
         action: yield* attempt(() => Io.actions.crash()),
         viaHandle: yield* attempt(() => MemIo.actions.crash()),
@@ -270,12 +279,14 @@ describe('plugin runtime — failures carry the labels of the hops they crossed'
     })
 
     const { action, viaHandle, fallback } = unwrap(outcome)
+
     for (const [failure, message, causes] of [
       [action, 'crash exploded', ['crash', MemIo.tag, 'dispatch', Io.tag]],
       [viaHandle, 'crash exploded', ['crash', MemIo.tag, 'dispatch', Io.tag]],
       [fallback, 'drop exploded', ['drop:default', Io.tag, 'dispatch', Io.tag]],
     ] as const) {
       expect(isFailure(failure)).toBe(true)
+
       if (isFailure(failure)) {
         // folded by asFailure: tagged, the thrown Error kept as raw — the hops' labels its causes
         expect(failure.error).toBe(ResultErrors.Unknown)
@@ -302,10 +313,12 @@ describe('plugin runtime — failures carry the labels of the hops they crossed'
     }).build({
       *load(path) {
         const read = yield* attempt(() => Io.actions.read(path))
+
         if (isFailure(read)) {
           // user code decorating the failure: its cause lands after the inner hops' labels
           return yield* appendCauses(read, 'fs:load')
         }
+
         return read.value
       },
     })
@@ -313,6 +326,7 @@ describe('plugin runtime — failures carry the labels of the hops they crossed'
     const outcome = await run(function* () {
       yield* MemIo.use()
       yield* IoFs.use()
+
       return yield* Fs.actions.load('/x')
     })
 
@@ -351,9 +365,11 @@ describe('plugin runtime — failures carry the labels of the hops they crossed'
     }).build({
       *load(path) {
         const read = yield* attempt(() => Io.actions.read(path))
+
         if (isFailure(read)) {
           return yield* fail('fs.load', `cannot load ${path}`, read)
         }
+
         return read.value
       },
     })
@@ -361,14 +377,18 @@ describe('plugin runtime — failures carry the labels of the hops they crossed'
     const outcome = await run(function* () {
       yield* MemIo.use()
       yield* IoFs.use()
+
       return yield* Fs.actions.load('/w')
     })
 
     expect(isFailure(outcome)).toBe(true)
+
     if (!isFailure(outcome)) {
       return
     }
+
     const [inner, ...labels] = outcome.causes
+
     expect(outcome.error).toBe('fs.load')
     expect(labels).toEqual(['load', IoFs.tag, 'dispatch', Fs.tag])
     expect(shapeOf(inner as Result<unknown>)).toEqual({
@@ -387,6 +407,7 @@ describe('plugin runtime — failures carry the labels of the hops they crossed'
 
     const outcome = await run(function* () {
       yield* MemIo.use()
+
       return yield* Io.actions.read('/e')
     })
 
@@ -412,6 +433,7 @@ describe('plugin runtime — failures carry the labels of the hops they crossed'
     })
     const notCloneable = await run(function* () {
       yield* MemIo.use()
+
       return yield* OtherIo.use()
     })
 

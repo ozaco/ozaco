@@ -26,6 +26,7 @@ export const connectClient = async <TApi = Record<string, Record<string, ClientD
 
       if (isFailure(opened)) {
         ready.reject(opened)
+
         return
       }
 
@@ -36,6 +37,7 @@ export const connectClient = async <TApi = Record<string, Record<string, ClientD
   )
 
   const connected = unwrap(await ready.future) as AnyType
+
   connected.$close = () => Promise.resolve(destroy()).then(() => undefined)
 
   return connected as ClientDef.ConnectedHandle<TApi>

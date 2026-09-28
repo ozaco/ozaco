@@ -106,11 +106,13 @@ export const createSession = (
       for (const record of session.localRecords) {
         record.entry.end(close)
       }
+
       session.localRecords.clear()
 
       for (const entry of session.remoteEntries) {
         entry.end(close)
       }
+
       session.remoteEntries.clear()
       session.trackRecords.clear()
 
@@ -138,6 +140,7 @@ export const createSession = (
 
       if (!session.reconnect || session.signalEnded) {
         session.settle(failure, info)
+
         return
       }
 
@@ -152,6 +155,7 @@ export const createSession = (
       for (const entry of session.remoteEntries) {
         entry.end(true)
       }
+
       session.remoteEntries.clear()
 
       session.outages.add(failure)
@@ -160,6 +164,7 @@ export const createSession = (
     *awaitGeneration() {
       while (!session.ended) {
         const generation = session.generation
+
         if (generation?.alive) {
           return generation
         }
@@ -178,6 +183,7 @@ export const createSession = (
 
         if (!generation?.alive || generation === previous) {
           yield* session.dial.wait()
+
           continue
         }
 

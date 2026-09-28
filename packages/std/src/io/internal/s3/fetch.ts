@@ -27,6 +27,7 @@ export const fetchS3Client = (options: IODef.S3Options): Helpers.S3Native => {
   /** GET the object and hand the response to `read` — every body reader goes through here. */
   const get = async <T>(key: string, read: (response: Response) => Promise<T>): Promise<T> => {
     const response = await transport.send({ method: 'GET', url: transport.objectUrl(key) })
+
     ensureOk(response, key)
 
     return read(response)
@@ -56,6 +57,7 @@ export const fetchS3Client = (options: IODef.S3Options): Helpers.S3Native => {
 
       const body = await toBytes(data)
       const response = await transport.send({ method: 'PUT', url: transport.objectUrl(key), body })
+
       ensureOk(response, key)
 
       return byteLength(body)
@@ -69,12 +71,15 @@ export const fetchS3Client = (options: IODef.S3Options): Helpers.S3Native => {
 
     delete: async () => {
       const response = await transport.send({ method: 'DELETE', url: transport.objectUrl(key) })
+
       ensureOk(response, key)
     },
 
     stat: async () => {
       const response = await transport.send({ method: 'HEAD', url: transport.objectUrl(key) })
+
       ensureOk(response, key)
+
       const lastModified = response.headers.get('last-modified')
 
       return {
@@ -90,21 +95,27 @@ export const fetchS3Client = (options: IODef.S3Options): Helpers.S3Native => {
 
   const list = async (listOptions: IODef.S3ListOptions = {}) => {
     const url = transport.bucketUrl()
+
     url.searchParams.set('list-type', '2')
+
     if (listOptions.prefix) {
       url.searchParams.set('prefix', listOptions.prefix)
     }
+
     if (listOptions.maxKeys) {
       url.searchParams.set('max-keys', String(listOptions.maxKeys))
     }
+
     if (listOptions.continuationToken) {
       url.searchParams.set('continuation-token', listOptions.continuationToken)
     }
+
     if (listOptions.startAfter) {
       url.searchParams.set('start-after', listOptions.startAfter)
     }
 
     const response = await transport.send({ method: 'GET', url })
+
     ensureOk(response, config.bucket)
 
     return parseListing(await response.text())

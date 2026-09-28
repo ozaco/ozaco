@@ -11,13 +11,10 @@ import type { Result } from '../types/result'
  *
  * With `{ chain: true }` it renders the whole chain Java style, one level per failure, depth
  * first: `<error>: <message>`, a `    at <cause>` line per string cause (stored order), then every
- * failure it wraps as a `Caused by: <error>: <message>` level of its own (at most 8 deep, each
- * failure once). `maxBytes` is a UTF-8 budget (default 16384): every header is kept first (its
- * error and message cut to 200 bytes under an explicit budget, 4096 without; middle levels, then
- * the outermost, give way before the innermost one), the `at` lines fill the rest innermost level
- * first, the elided ones counted by `    ... N more`.
+ * failure it wraps as a `Caused by: <error>: <message>` level of its own — every level and every
+ * cause, nothing cut (each failure once, so a cycle ends).
  */
 export const formatFailure = (
   failure: Result.Failure<unknown>,
   options: ResultDef.FormatOptions = {},
-): string => (options.chain ? renderChain(failure, options) : oneLine(failure))
+): string => (options.chain ? renderChain(failure) : oneLine(failure))

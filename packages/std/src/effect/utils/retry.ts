@@ -26,6 +26,7 @@ export const backoffDelay = (attemptNumber: number, options: Utils.BackoffOption
   }
 
   const random = options.random ?? Math.random
+
   return base * (1 - jitter + jitter * random())
 }
 
@@ -63,15 +64,18 @@ export function* retry<T>(op: () => Operation<T>, options: Utils.RetryOptions = 
   const attempts = Math.max(1, options.attempts ?? 3)
 
   let tried = 0
+
   while (true) {
     tried += 1
 
     const result = yield* attempt(op)
+
     if (!isFailure(result)) {
       return result.value
     }
 
     const retriable = tried < attempts && (options.when?.(result) ?? true)
+
     if (!retriable) {
       return yield* appendCauses(result, `retry: ${tried} attempts exhausted`)
     }

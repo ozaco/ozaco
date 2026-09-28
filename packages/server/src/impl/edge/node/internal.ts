@@ -94,6 +94,7 @@ export const write = async (
 
   if (gone.aborted) {
     await response.body?.cancel().catch(() => {})
+
     return
   }
 
@@ -113,11 +114,13 @@ export const write = async (
       res.writeHead(500, { 'content-type': 'text/plain' })
       res.end('internal error')
     }
+
     return
   }
 
   if (!response.body) {
     res.end()
+
     return
   }
 
@@ -140,6 +143,7 @@ export const write = async (
 
     if (step.done || gone.aborted) {
       res.end()
+
       return
     }
 
@@ -232,6 +236,7 @@ export const driver: EdgeDef.Driver = {
       })
 
       const request = toRequest(req, req.headers.host ?? hostname, gone.signal)
+
       void handlers
         .fetch(request, req.socket.remoteAddress)
         .then(response => write(response, res, { gone: gone.signal, warn }))
@@ -244,26 +249,35 @@ export const driver: EdgeDef.Driver = {
 
     if (wsModule) {
       const wss = new wsModule.WebSocketServer({ noServer: true })
+
       state.wss = wss
 
       server.on('upgrade', (req, socket, head) => {
         // a handshake whose client left while its verdict was pending aborts like a request
         const gone = new AbortController()
+
         socket.once('close', () => gone.abort())
+
         const request = toRequest(req, req.headers.host ?? hostname, gone.signal)
+
         if (!handlers.isSocket(request)) {
           socket.destroy()
+
           return
         }
+
         const settle = (decision: EdgeDef.Upgrade): void => {
           if (decision.kind === 'reject') {
             void refuseUpgrade(socket, decision.response)
+
             return
           }
+
           // `ws` completes the handshake synchronously, or aborts it (a malformed handshake: it
           // answers 400 itself) and the socket closes without the callback ever running — the
           // upgrade span then ends with that 400 instead of claiming a 101
           let upgraded = false
+
           socket.once('close', () => {
             if (!upgraded) {
               decision.failed(
@@ -277,6 +291,7 @@ export const driver: EdgeDef.Driver = {
             decision.attach(rawOf(ws))
           })
         }
+
         void handlers
           .upgrade(request, req.socket.remoteAddress)
           .then(settle, () => socket.destroy())
@@ -290,6 +305,7 @@ export const driver: EdgeDef.Driver = {
       }),
     )
     state.server = server
+
     const address = server.address()
     const port = typeof address === 'object' && address ? address.port : (options.port ?? 0)
 
@@ -299,6 +315,7 @@ export const driver: EdgeDef.Driver = {
   *stop() {
     const state = yield* useContext(StateRef)
     const { server, wss } = state
+
     state.server = null
     state.wss = null
 

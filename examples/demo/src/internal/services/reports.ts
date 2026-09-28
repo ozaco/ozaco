@@ -43,11 +43,15 @@ export const reports = service(
       },
       function* ({ input }) {
         computed += 1
+
         let query = (yield* useDb(schema)).query('todos')
+
         if (input.done !== undefined) {
           query = query.filter({ op: 'eq', field: 'done', value: input.done })
         }
+
         const rows = yield* query.collect()
+
         return {
           total: rows.length,
           done: rows.filter(row => row.done === true).length,
@@ -75,11 +79,15 @@ export const reports = service(
       },
       function* ({ input }) {
         flakyCalls += 1
+
         if (flakyCalls <= input.failTimes) {
           return yield* reportsErrors.flaky(`attempt ${flakyCalls} failed`)
         }
+
         const attempts = flakyCalls
+
         flakyCalls = 0
+
         return { attempts }
       },
     ),
@@ -94,9 +102,11 @@ export const reports = service(
       },
       function* ({ input }) {
         yield* sleep(20)
+
         if (input.boom) {
           return yield* reportsErrors.boom('asked to fail')
         }
+
         return { ok: true }
       },
     ),
@@ -109,6 +119,7 @@ export const reports = service(
       },
       function* ({ input }) {
         yield* sleep(100)
+
         return { key: input.key, at: Date.now() }
       },
     ),
@@ -134,6 +145,7 @@ export const reports = service(
       },
       function* ({ input }) {
         yield* sleep(input.ms)
+
         return { value: 'real' }
       },
     ),
@@ -147,6 +159,7 @@ export const reports = service(
       function* ({ ctx }): Operation<{ todos: number; uploads: number }> {
         const page = yield* ctx.call(api.todos.list, {}, { inherit: true })
         const uploads = yield* ctx.call(api.media.list)
+
         return { todos: page.data.length, uploads: uploads.length }
       },
     ),

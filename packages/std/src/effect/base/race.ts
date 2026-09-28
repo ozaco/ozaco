@@ -31,6 +31,7 @@ export function* race<T extends Operation<unknown>>(
         }),
       )
     }
+
     return yield* winner.operation
   })
 

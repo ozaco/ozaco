@@ -28,6 +28,7 @@ const onFailed = (session: Helpers.Session, generation: Helpers.Generation) => {
 
   if (session.restart) {
     generation.outages.add('failed')
+
     return
   }
 
@@ -42,6 +43,7 @@ const onFailed = (session: Helpers.Session, generation: Helpers.Generation) => {
 const onClosed = (session: Helpers.Session, generation: Helpers.Generation) => {
   if (!session.reconnect) {
     session.settle(true, { state: 'closed', reason: 'closed' })
+
     return
   }
 
@@ -71,6 +73,7 @@ const wire = (session: Helpers.Session, generation: Helpers.Generation) => {
     }
 
     const current = pc.connectionState
+
     session.states.add(current)
     observe.record('state', current)
 
@@ -104,6 +107,7 @@ const wire = (session: Helpers.Session, generation: Helpers.Generation) => {
 
     if (generation.kicked) {
       generation.kicked = false // our own channel kick already queued this negotiation
+
       return
     }
 
@@ -164,6 +168,7 @@ export const dialGeneration = (
   const { options, counters, observe } = session
 
   let pc: RtcDef.PeerLike
+
   try {
     pc = new impl({
       ...options.configuration,
@@ -177,6 +182,7 @@ export const dialGeneration = (
   }
 
   const generation = emptyGeneration(pc)
+
   observe.generation += 1
   counters.generations += 1
   observe.record('dial')

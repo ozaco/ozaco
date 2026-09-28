@@ -15,11 +15,13 @@ import { SSE_DONE } from './sse'
 /** Drop `undefined` entries so the provider never sees explicit `undefined` fields. */
 const compact = (record: Record<string, unknown>): Record<string, unknown> => {
   const out: Record<string, unknown> = {}
+
   for (const key of Object.keys(record)) {
     if (record[key] !== undefined) {
       out[key] = record[key]
     }
   }
+
   return out
 }
 
@@ -56,9 +58,11 @@ const encodeOutput = (output: Helpers.OutputSpec): Record<string, unknown> | und
   if (output === 'text') {
     return undefined
   }
+
   if (output === 'json') {
     return { type: 'json_object' }
   }
+
   return {
     type: 'json_schema',
     json_schema: compact({
@@ -120,17 +124,22 @@ export const transcribeForm = (spec: Helpers.TranscribeSpec): FormData => {
     spec.audio instanceof Blob
       ? spec.audio
       : new Blob([spec.audio as AnyType], { type: spec.contentType ?? 'application/octet-stream' })
+
   form.append('file', blob, spec.filename ?? 'audio')
   form.append('model', spec.model)
+
   if (spec.language !== undefined) {
     form.append('language', spec.language)
   }
+
   if (spec.prompt !== undefined) {
     form.append('prompt', spec.prompt)
   }
+
   for (const key of Object.keys(spec.extra ?? {})) {
     form.append(key, String(spec.extra![key]))
   }
+
   return form
 }
 
@@ -147,9 +156,11 @@ function* decodeToolCalls(raw: AnyType): Operation<readonly Helpers.ToolCall[]> 
   if (raw === undefined || raw === null) {
     return []
   }
+
   if (!Array.isArray(raw)) {
     return yield* fail(AiErrors.BadResponse, 'openai returned malformed tool_calls')
   }
+
   return raw.map(call => ({
     id: String(call?.id ?? ''),
     name: String(call?.function?.name ?? ''),
@@ -165,9 +176,11 @@ export function* decodeChatResult(
   const raw = body as AnyType
   const choice = raw?.choices?.[0]
   const rawMessage = choice?.message
+
   if (!rawMessage || typeof rawMessage !== 'object') {
     return yield* fail(AiErrors.BadResponse, 'openai returned a chat completion without a message')
   }
+
   const text = typeof rawMessage.content === 'string' ? rawMessage.content : ''
   const toolCalls = yield* decodeToolCalls(rawMessage.tool_calls)
   const message: Helpers.Message = {
@@ -175,6 +188,7 @@ export function* decodeChatResult(
     parts: text ? [{ kind: 'text', text }] : [],
     ...(toolCalls.length > 0 ? { toolCalls } : {}),
   }
+
   return {
     message,
     text,
@@ -191,16 +205,21 @@ export function* decodeEmbedResult(
   spec: Helpers.EmbedSpec,
 ): Operation<Helpers.EmbedResult> {
   const raw = body as AnyType
+
   if (!Array.isArray(raw?.data)) {
     return yield* fail(AiErrors.BadResponse, 'openai returned an embeddings response without data')
   }
+
   const vectors: (readonly number[])[] = []
+
   for (const entry of raw.data) {
     if (!Array.isArray(entry?.embedding)) {
       return yield* fail(AiErrors.BadResponse, 'openai returned an embedding without a vector')
     }
+
     vectors.push(entry.embedding as number[])
   }
+
   return {
     vectors,
     model: typeof raw.model === 'string' ? raw.model : spec.model,
@@ -211,12 +230,14 @@ export function* decodeEmbedResult(
 /** Pull the transcript out of an `/audio/transcriptions` response; anything else fails. */
 export function* decodeTranscription(body: unknown): Operation<string> {
   const text = (body as AnyType)?.text
+
   if (typeof text !== 'string') {
     return yield* fail(
       AiErrors.BadResponse,
       'openai returned a transcription response without text',
     )
   }
+
   return text
 }
 
@@ -224,19 +245,24 @@ const decodeToolCallDeltas = (raw: AnyType): readonly Helpers.ToolCallDelta[] | 
   if (!Array.isArray(raw) || raw.length === 0) {
     return undefined
   }
+
   return raw.map((call, fallbackIndex) => {
     const delta: { -readonly [K in keyof Helpers.ToolCallDelta]: Helpers.ToolCallDelta[K] } = {
       index: typeof call?.index === 'number' ? call.index : fallbackIndex,
     }
+
     if (call?.id !== undefined) {
       delta.id = String(call.id)
     }
+
     if (call?.function?.name !== undefined) {
       delta.name = String(call.function.name)
     }
+
     if (call?.function?.arguments !== undefined) {
       delta.arguments = String(call.function.arguments)
     }
+
     return delta
   })
 }
@@ -251,34 +277,48 @@ export function* decodeChatDelta(data: string): Operation<Helpers.ChatDelta | un
   if (data === SSE_DONE) {
     return undefined
   }
+
   const outcome = yield* attempt(JsonCodec.actions.parse<AnyType>(data))
+
   if (isFailure(outcome)) {
     if (outcome.error !== CodecErrors.Parse) {
       return yield* outcome
     }
+
     return yield* fail(AiErrors.BadResponse, 'openai stream carried an unparseable chunk')
   }
+
   const payload: AnyType = outcome.value
   const errorFrame = payload?.error
+
   if (errorFrame && typeof errorFrame === 'object') {
     const detail = errorFrame.message ?? (yield* JsonCodec.actions.stringify(errorFrame))
+
     return yield* fail(classifyError(0, errorFrame), `openai stream reported an error: ${detail}`)
   }
+
   const choice = payload?.choices?.[0]
   const delta: { -readonly [K in keyof Helpers.ChatDelta]: Helpers.ChatDelta[K] } = {}
+
   if (typeof choice?.delta?.content === 'string' && choice.delta.content.length > 0) {
     delta.text = choice.delta.content
   }
+
   const fragments = decodeToolCallDeltas(choice?.delta?.tool_calls)
+
   if (fragments) {
     delta.toolCalls = fragments
   }
+
   if (choice?.finish_reason) {
     delta.finishReason = choice.finish_reason
   }
+
   const usage = decodeUsage(payload?.usage)
+
   if (usage) {
     delta.usage = usage
   }
+
   return delta
 }

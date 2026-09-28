@@ -33,24 +33,32 @@ export function* resolveResponder<TSpec, TValue>(
   input: Own.ResolveInput<TSpec, TValue>,
 ): Operation<TValue> {
   const { responder } = input
+
   if (responder === undefined) {
     return input.fallback
   }
+
   if (typeof responder === 'function') {
     const value = (responder as (spec: TSpec) => AnyType)(input.spec)
+
     return isOperation(value) ? yield* value : value
   }
+
   if (isQueue(responder)) {
     const cursor = input.state.cursors.get(input.key) ?? 0
+
     if (cursor >= responder.queue.length) {
       return yield* fail(
         AiErrors.Configuration,
         `the mock "${input.key}" queue is exhausted after ${responder.queue.length} calls`,
       )
     }
+
     input.state.cursors.set(input.key, cursor + 1)
+
     return responder.queue[cursor] as TValue
   }
+
   return responder as TValue
 }
 
@@ -61,6 +69,7 @@ export const completeChatResult = (
 ): Helpers.ChatResult => {
   const text = partial.text ?? ''
   const toolCalls = partial.toolCalls ?? []
+
   return {
     message: partial.message ?? {
       role: 'assistant',
@@ -78,12 +87,15 @@ export const completeChatResult = (
 /** Materialize one scripted stream as a fresh single-consumer flow. */
 export const scriptedFlow = <T>(script: MockStream<T>): Flow<T, Helpers.StreamClose> => {
   const queue: Queue<T, Helpers.StreamClose> = createQueue<T, Helpers.StreamClose>()
+
   for (const chunk of script.chunks) {
     queue.add(chunk)
   }
+
   if (!script.hang) {
     queue.close(script.close ?? true)
   }
+
   return {
     *[Symbol.iterator]() {
       return queue

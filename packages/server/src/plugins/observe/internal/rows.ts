@@ -18,6 +18,7 @@ export const restOf = (resource: ObserveDef.Resource): Helpers.ResourceAttribute
   }
 
   const rest = Object.fromEntries(Object.entries(resource).filter(([key]) => !COLUMNS.has(key)))
+
   restCache.set(resource, rest)
 
   return rest

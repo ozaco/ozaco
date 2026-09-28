@@ -69,7 +69,9 @@ describe('e2e — calls and options', () => {
         const client = yield* createClient<Api>({ url, token: () => token })
 
         const before = (yield* client.probe.headers()) as Record<string, string>
+
         token = 'second'
+
         const after = (yield* client.probe.headers()) as Record<string, string>
 
         expect(before.authorization).toBe('Bearer first')
@@ -103,7 +105,7 @@ describe('e2e — calls and options', () => {
         expect(value.meta.status).toBe(200)
         expect(value.meta.brand).toBeNull()
         expect(value.meta.requestId).toBe(client.$lastRequestId()!)
-        // nothing traced on either side (no Tracer here, the node does not observe): no trace id
+        // nothing traced on either side (no Trace sink here, the node does not observe): no trace id
         expect(value.meta.traceId).toBeNull()
         expect(client.$lastTraceId()).toBeNull()
 
@@ -189,10 +191,14 @@ describe('e2e — failure fidelity', () => {
         const failed = yield* attempt(client.probe.caused())
 
         expect(isFailure(failed)).toBe(true)
+
         const failure = failed as AnyType
+
         expect(failure.error).toBe('probe.caused')
         expect(failure.message).toBe('root problem')
+
         const requestId = client.$lastRequestId()
+
         expect(requestId).toBeTruthy()
         // the handler's own causes, the server's on its way out (the kernel's breadcrumb, then
         // the plugin runtime's labels, inner hop first), where it came from (a remote failure of
@@ -277,7 +283,9 @@ describe('e2e — streams and cancellation', () => {
         })
 
         yield* sleep(200)
+
         const settled = probeState.pumped.get('left') ?? 0
+
         yield* sleep(200)
 
         // no further frames were produced once the consumer left
@@ -341,6 +349,7 @@ describe('e2e — realtime', () => {
         const client = yield* createClient<Api>({ url })
 
         const open = yield* client.notes.create({ title: 'open', done: false })
+
         yield* client.notes.create({ title: 'closed', done: true })
 
         yield* scoped(function* () {
@@ -354,6 +363,7 @@ describe('e2e — realtime', () => {
 
           // a row leaving the filter arrives as a removal
           yield* client.notes.update({ id: open._id, done: true })
+
           const delta = yield* frames.next()
 
           expect((delta.value as AnyType).t).toBe('delta')
@@ -434,6 +444,7 @@ describe('e2e — realtime', () => {
           expect((second.value as AnyType).rows.map((row: AnyType) => row.title)).toEqual(['one'])
 
           yield* client.notes.remove({ id: created._id })
+
           const third = yield* rows.next()
 
           expect((third.value as AnyType).rows).toEqual([])
@@ -452,13 +463,17 @@ describe('e2e — observe console bootstrap', () => {
         // exactly what the embedded console does: bootstrap from the console's OWN manifest
         const client = yield* createClient<AnyType>({ url, docsPath: '/_observe/api' })
         const manifest = yield* client.$manifest()
+
         expect(manifest.manifest).toBe('ozaco/2')
         expect(manifest.services.map((entry: AnyType) => entry.name)).toEqual(['observe'])
 
         const stats = (yield* client.observe!.stats!()) as AnyType
+
         expect(typeof stats.recorded).toBe('number')
+
         // the trace list: one root span row per trace
         const page = (yield* client.observe!.traces!({})) as AnyType
+
         expect(Array.isArray(page.traces)).toBe(true)
         expect(page.cursor === null || typeof page.cursor === 'string').toBe(true)
       }),

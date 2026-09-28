@@ -131,6 +131,7 @@ function* aggregate(
   ops: readonly Spec.AggregateOp[],
 ) {
   const fields = ops.flatMap(op => (op.field === null ? [] : [op.field]))
+
   yield* guard(target, query, fields)
 
   return yield* target.state.adapter.aggregate({
@@ -151,6 +152,7 @@ const opOf = (kind: Spec.AggregateOp['kind'], field: string | null): Spec.Aggreg
 const scalar = (target: Helpers.QueryTarget, query: Helpers.QueryState, op: Spec.AggregateOp) =>
   function* () {
     const rows = yield* aggregate(target, { ...query, groupBy: null }, [op])
+
     return rows[0]?.[op.as] ?? null
   }
 
@@ -211,11 +213,13 @@ function* paginate(
   options: Spec.PaginateOptions,
 ) {
   const keys = pageKeys(query)
+
   yield* guard(
     target,
     query,
     keys.map(key => key.field),
   )
+
   const limit = Math.max(1, Math.trunc(options.limit))
   const backward = options.direction === 'backward'
 
@@ -267,6 +271,7 @@ function* paginate(
       decoded.keys.every(
         (key, at) => key.field === keys[at]!.field && key.direction === keys[at]!.direction,
       )
+
     cursor = sameSort ? decoded : null
   }
 
@@ -332,11 +337,13 @@ function* paginateOffset(
   options: Spec.OffsetPaginateOptions,
 ) {
   const keys = pageKeys(query)
+
   yield* guard(
     target,
     query,
     keys.map(key => key.field),
   )
+
   const pageSize = Math.max(1, Math.trunc(options.pageSize) || 1)
   const total = yield* count(target, query)
   // an empty result is still one (empty) page; a page past the end reads the last one
@@ -365,6 +372,7 @@ function* paginateOffset(
 /** Answer a `since` token from the table's change log (an unknown table has no log → snapshot). */
 function* resolveSinceOf(target: Helpers.QueryTarget, since: string) {
   const log = target.state.logs.get(target.spec.name)
+
   return log ? yield* resolveSince(target.state, log, since) : ('snapshot' as const)
 }
 
@@ -407,16 +415,19 @@ export const createQuery = (
     },
     *first() {
       const rows = yield* find(target, query, 1)
+
       return rows[0] ?? null
     },
     *unique() {
       const rows = yield* find(target, query, 2)
+
       if (rows.length > 1) {
         return yield* fail(
           DbErrors.DataIntegrity,
           `query on "${target.spec.name}" matched multiple rows`,
         )
       }
+
       return rows[0] ?? null
     },
     *count() {
@@ -424,6 +435,7 @@ export const createQuery = (
     },
     *exists() {
       const rows = yield* find(target, query, 1)
+
       return rows.length > 0
     },
     *sum(field: string) {
@@ -445,6 +457,7 @@ export const createQuery = (
       }),
     watch: (options?: Change.WatchOptions) => {
       const filter = combine(predicatesOf(query))
+
       return watchQuery({
         hub: target.state.hub,
         table: target.spec.name,

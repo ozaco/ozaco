@@ -3,18 +3,7 @@ import { attempt } from 'std:effect'
 import { Logger } from 'std:logger'
 import type { Result } from 'std:result'
 import { asFailure, formatFailure, isFailure } from 'std:result'
-import type { TraceDef } from 'std:trace'
-import {
-  activeContext,
-  canEmit,
-  current,
-  emitLog,
-  exceptionAttributes,
-  isRecorded,
-  markRecorded,
-  recordFailure,
-  TraceSeverity,
-} from 'std:trace'
+import { Trace, TraceSeverity } from 'std:trace'
 
 import { logAttributes, severityOf } from 'std:logger/transport/trace'
 
@@ -39,6 +28,7 @@ export const splitLog = (
 
     if (!folded) {
       fields[key] = value
+
       continue
     }
 
@@ -62,51 +52,35 @@ export function* emitHandlerLog(
   data: Readonly<Record<string, unknown>> | undefined,
 ): Operation<void> {
   // tracing on here, or a process fallback (an observing node's claim) takes the record
-  if (!(yield* canEmit())) {
+  if (!(yield* Trace.actions.canEmit())) {
     return
   }
 
   const severity = severityOf(LOG_LEVELS[level])
   const { failure, fields } = splitLog(data)
-  let exception: TraceDef.Attributes | null = null
 
-  if (failure) {
-    const handle = yield* current()
-    const serious = severity.number >= TraceSeverity.warn
+  if (failure && severity.number >= TraceSeverity.warn) {
+    const handle = yield* Trace.actions.current()
 
-    if (serious && handle.recording) {
-      if (!isRecorded(failure, handle.context.traceId)) {
-        // the line itself goes to the Logger (`handlerLog`): its exception record is not
-        // forwarded there a second time
-        markShown(failure)
-        yield* recordFailure(failure, { severity: severity.number })
-      }
-    } else {
-      const traceId = (yield* activeContext())?.traceId ?? ''
-
-      if (!isRecorded(failure, traceId)) {
-        exception = exceptionAttributes(failure)
-
-        if (serious) {
-          markRecorded(failure, traceId)
-        }
-      }
+    // recorded on the span now: the line itself goes to the Logger (`handlerLog`), so its
+    // exception record is not forwarded there a second time
+    if (handle.recording && !(yield* Trace.actions.isRecorded(failure, handle.context.traceId))) {
+      markShown(failure)
     }
   }
 
-  const attributes = logAttributes(fields, new Set(exception ? Object.keys(exception) : []))
-
-  yield* emitLog({
+  yield* Trace.actions.emitLog({
     body: msg || (failure ? formatFailure(failure) : '') || severity.text,
     severityNumber: severity.number,
     severityText: severity.text,
-    attributes: exception ? { ...attributes, ...exception } : attributes,
+    attributes: yield* logAttributes(fields),
     scope: scopeOf(),
+    ...(failure ? { failure } : {}),
   })
 }
 
 /**
- * One `ctx.log.<level>(msg, data)` line (§5): ALWAYS one log record through the Tracer —
+ * One `ctx.log.<level>(msg, data)` line (§5): ALWAYS one log record through the Trace sinks —
  * correlated to the span active NOW, debug included (the Logger's level does not gate telemetry)
  * — AND the line forwarded to the installed std Logger (if any) with the binding
  * `ozaco.telemetry = 'sent'`, which its `TraceTransport` skips: exactly one record whatever was
@@ -147,20 +121,20 @@ export const domainBody = (stream: string, fields: Readonly<Record<string, unkno
 
 /**
  * `Server.actions.report({ stream, time?, …fields })` (§6.4): ONE log record every sink receives
- * — `eventName: 'ozaco.domain'`, `ozaco.domain.stream`, the fields flattened into attributes —
+ * — `eventName: 'ozaco.local'`, `ozaco.local.stream`, the fields flattened into attributes —
  * correlated to the active span. A no-op while nothing observes; never fails the caller.
  */
 export function* domainRecord(record: ObserveDef.DomainRecord): Operation<void> {
   const { stream, time, ...fields } = record
 
-  yield* attempt(() =>
-    emitLog({
+  yield* attempt(function* () {
+    yield* Trace.actions.emitLog({
       body: domainBody(stream, fields),
       severityNumber: TraceSeverity.info,
       eventName: DOMAIN_EVENT,
-      attributes: { ...logAttributes(fields), 'ozaco.domain.stream': stream },
+      attributes: { ...(yield* logAttributes(fields)), 'ozaco.local.stream': stream },
       time,
       scope: scopeOf(),
-    }),
-  )
+    })
+  })
 }

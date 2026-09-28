@@ -11,7 +11,9 @@ export function* critical<T>(operation: () => Operation<T>): Operation<T> {
   const routine = yield* useCoroutine()
 
   const original = routine.data.critical
+
   routine.data.critical = true
+
   try {
     return yield* operation()
   } finally {

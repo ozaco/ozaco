@@ -15,6 +15,7 @@ export const statusOf = (
   meta?: Pick<ServiceDef.Meta, 'errors'>,
 ): number => {
   const tag = tagOf(failure)
+
   return meta?.errors[tag] ?? STATUS_OF[tag] ?? 500
 }
 

@@ -20,9 +20,11 @@ const StaticAuthImpl = AuthStrategy.implement<
       if (token.trim() === '') {
         return yield* fail(ServerErrors.Configuration, 'auth: a static token must not be empty')
       }
+
       if (typeof principal?.sub !== 'string' || principal.sub === '') {
         return yield* fail(ServerErrors.Configuration, 'auth: every static token needs a `sub`')
       }
+
       tokens.set(token, {
         sub: principal.sub,
         type: principal.type ?? 'session',
@@ -32,12 +34,14 @@ const StaticAuthImpl = AuthStrategy.implement<
         jti: `static:${principal.sub}`,
       })
     }
+
     if (tokens.size === 0) {
       return yield* fail(
         ServerErrors.Configuration,
         'StaticAuth needs tokens — StaticAuth.use({ tokens: { "<token>": { sub } } })',
       )
     }
+
     return { strategy: 'static', tokens }
   },
 })

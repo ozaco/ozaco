@@ -16,6 +16,7 @@ const builderOf = (dialect: Sql.Dialect, table: Spec.Table): Sql.Builder => ({
 
 function* bind(builder: Sql.Builder, field: string, value: unknown) {
   builder.params.push(yield* builder.dialect.encode(builder.kinds.get(field) ?? 'json', value))
+
   return builder.dialect.placeholder(builder.params.length)
 }
 
@@ -33,6 +34,7 @@ const COMPARE: Record<string, string> = {
 /** Bind a value verbatim (already in its storage form). */
 const bindRaw = (builder: Sql.Builder, value: unknown): string => {
   builder.params.push(value)
+
   return builder.dialect.placeholder(builder.params.length)
 }
 
@@ -152,6 +154,7 @@ function* filterSql(builder: Sql.Builder, filter: Spec.Filter): Operation<string
     case 'lt':
     case 'lte': {
       const placeholder = yield* bind(builder, filter.field, filter.value)
+
       return `${quoteIdent(filter.field)} ${COMPARE[filter.op]} ${placeholder}`
     }
     case 'in':

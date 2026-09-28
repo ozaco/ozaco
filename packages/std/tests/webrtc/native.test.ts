@@ -20,6 +20,7 @@ afterAll(async () => {
     // libdatachannel keeps worker threads alive — without this the test process never exits
     const nativeSpecifier = 'node-datachannel'
     const native = (await import(nativeSpecifier)) as { cleanup?: () => void }
+
     native.cleanup?.()
   }
 })
@@ -37,9 +38,11 @@ describe.skipIf(!polyfill)('webrtc over node-datachannel (auto-import)', () => {
       const chatA = yield* peerA.channel('e2e', { openTimeoutMs: 15_000 })
       const channelsB = yield* peerB.channels
       const emitted = yield* channelsB.next()
+
       if (emitted.done) {
         return 'channels flow closed early'
       }
+
       const chatB = emitted.value
 
       yield* chatA.send({ ping: 1 })

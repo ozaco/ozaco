@@ -36,6 +36,7 @@ const echo = service('echo', {
     function* (socket) {
       // the upgrade url travels onto the socket — query params included
       yield* socket.send({ t: 'hello', who: socket.url.searchParams.get('who') })
+
       const messages = yield* socket.messages
 
       for (;;) {
@@ -57,11 +58,13 @@ describe('action.socket', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({ services: [echo], edge: BunEdge, plugins: [Docs] })
         const info = yield* server.start({ port: 0 })
 
         // the manifest lists it under the service
         const manifest = yield* server.manifest()
+
         expect(manifest.actions.map(entry => `${entry.service}.${entry.action}`)).toEqual([
           'echo.ping',
         ])
@@ -99,6 +102,7 @@ describe('action.socket', () => {
         const socketDoc = published.services
           .flatMap(svc => svc.actions)
           .find((entry): entry is DocsDef.SocketDoc => entry.kind === 'socket')
+
         expect(socketDoc).toMatchObject({ path: '/echo/room', protocol: 'chat' })
         expect((socketDoc?.receives as AnyType)?.properties?.text?.type).toBe('string')
         expect(socketDoc?.sends).not.toBe(null)
@@ -114,6 +118,7 @@ describe('action.socket — receives', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({ services: [echo], edge: BunEdge })
         const info = yield* server.start({ port: 0 })
 

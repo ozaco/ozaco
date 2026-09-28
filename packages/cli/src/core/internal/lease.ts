@@ -10,26 +10,34 @@ const states = new WeakMap<object, Helpers.LeaseState>()
 /** The lease state for an installed terminal, keyed by its context object (lazy, one per install). */
 export const leaseStateOf = (info: object): Helpers.LeaseState => {
   const found = states.get(info)
+
   if (found) {
     return found
   }
+
   const created: Helpers.LeaseState = { busy: false, waiters: [] }
+
   states.set(info, created)
+
   return created
 }
 
 /** Release the region and hand it to the next living waiter (FIFO). */
 export const releaseLease = (state: Helpers.LeaseState): void => {
   state.busy = false
+
   while (state.waiters.length > 0) {
     const next = state.waiters.shift()!
+
     if (next.abandoned) {
       continue
     }
+
     // reserve BEFORE resuming the waiter, so a racing plain acquire can't steal the region
     next.granted = true
     state.busy = true
     next.grant()
+
     return
   }
 }
@@ -41,6 +49,7 @@ export const releaseLease = (state: Helpers.LeaseState): void => {
 export function* acquireLease(state: Helpers.LeaseState, wait: boolean): Operation<void> {
   if (!state.busy) {
     state.busy = true
+
     return
   }
 
@@ -58,15 +67,18 @@ export function* acquireLease(state: Helpers.LeaseState, wait: boolean): Operati
     grant: () => gate.resolve(),
     gate: gate.operation,
   }
+
   state.waiters.push(waiter)
 
   let acquired = false
+
   try {
     yield* waiter.gate
     acquired = true
   } finally {
     if (!acquired) {
       waiter.abandoned = true
+
       if (waiter.granted) {
         releaseLease(state)
       }

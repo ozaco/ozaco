@@ -32,14 +32,17 @@ function* observed<T>(span: TraceDef.LiveSpan | null, read: () => Operation<T>):
 
   try {
     const outcome = yield* attempt(read)
+
     settled = true
 
     if (isFailure(outcome)) {
       yield* span.end({ failure: outcome })
+
       return yield* outcome
     }
 
     yield* span.end()
+
     return outcome.value
   } finally {
     if (!settled) {
@@ -64,8 +67,10 @@ const watched = <T, TClose>(span: TraceDef.LiveSpan, source: Flow<T, TClose>): F
     yield* ensure(() => (finished ? undefined : span.end({ cancelled: true })))
 
     const opened = yield* attempt(source)
+
     if (isFailure(opened)) {
       yield* finish({ failure: opened })
+
       return yield* opened
     }
 
@@ -74,13 +79,16 @@ const watched = <T, TClose>(span: TraceDef.LiveSpan, source: Flow<T, TClose>): F
     return {
       *next() {
         const step = yield* attempt(() => subscription.next())
+
         if (isFailure(step)) {
           yield* finish({ failure: step })
+
           return yield* step
         }
 
         if (step.value.done) {
           const close: unknown = step.value.value
+
           yield* finish(isFailure(close) ? { failure: close } : {})
         }
 
@@ -100,8 +108,10 @@ function* streamed<T, TClose>(
   }
 
   const opened = yield* attempt(open)
+
   if (isFailure(opened)) {
     yield* span.end({ failure: opened })
+
     return yield* opened
   }
 
@@ -132,6 +142,7 @@ export const buildResponse = (
 
   function* readBody() {
     const bytes = yield* readBytes()
+
     if (bytes.length === 0) {
       return undefined
     }

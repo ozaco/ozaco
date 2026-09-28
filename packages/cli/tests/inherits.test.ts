@@ -34,6 +34,7 @@ const whoami = defineAction(
     const secret: string | undefined = ctx.secret
     const json: boolean = ctx.json
     const cwd: string = ctx.cwd
+
     seen.ctx = { profile, secret, json, cwd }
   },
 )
@@ -45,6 +46,7 @@ const move = defineAction(
     const region: string = ctx.region
     // @ts-expect-error the own `region` is a string, not the inherited 'eu' | 'us'
     const narrow: 'eu' | 'us' = ctx.region
+
     seen.ctx = { region, narrow, profile: ctx.profile }
   },
 )
@@ -53,6 +55,7 @@ const move = defineAction(
 const ping = defineAction({ inherits: rootInput }, function* (ctx) {
   const profile: string = ctx.profile
   const rest: string[] = ctx['--']
+
   seen.ctx = { profile, rest }
 })
 
@@ -72,6 +75,7 @@ const kube = defineCommand({
 const status = defineAction({ inherits: kube }, function* (ctx) {
   const context: string = ctx.context
   const profile: string = ctx.profile
+
   seen.ctx = { context, profile }
 })
 
@@ -95,6 +99,7 @@ const probe = (): void => {
     const a: string = ctx.a
     // @ts-expect-error nothing is inherited without `inherits`
     const profile: string = ctx.profile
+
     return [a, profile]
   })
 
@@ -106,6 +111,7 @@ const probe = (): void => {
   // a helper typed off the same shape (e.g. an `accessOf(ctx)`)
   const accessOf = (ctx: CommandDef.Ctx<unknown, CommandDef.InheritedOf<typeof rootInput>>) =>
     ctx.profile
+
   defineAction({ inherits: rootInput }, function* (ctx) {
     return accessOf(ctx)
   })
@@ -131,6 +137,7 @@ const probe = (): void => {
   defineCommand({ name: 'inner', actions: { status } })
 
   const inner = defineCommand({ name: 'inner', inherits: kube, actions: { status } })
+
   defineCommand({ name: 'nested', inherits: kube, actions: { inner } })
   defineCommand({
     name: 'nested',
@@ -155,6 +162,7 @@ const probe = (): void => {
 
 const cli = async (argv: string[]) => {
   const screen = createMemoryScreen({ capabilities: { interactive: false } })
+
   seen.ctx = undefined
   await run(function* () {
     yield* MemoryTerminal.use({ screen })
@@ -163,6 +171,7 @@ const cli = async (argv: string[]) => {
     yield* Registry.actions.register(root)
     yield* Registry.actions.run(argv)
   })
+
   return seen.ctx
 }
 

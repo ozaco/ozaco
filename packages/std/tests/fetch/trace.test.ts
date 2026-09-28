@@ -1,25 +1,26 @@
 import type { Operation } from 'std:effect'
 import { race, run, sleep } from 'std:effect'
 import type { FetchDef } from 'std:fetch'
-import { Fetch, FetchClient, FetchErrors, fetchImpl, redactQuery, redactUrl } from 'std:fetch'
+import {
+  Fetch,
+  FetchClient,
+  FetchErrors,
+  fetchImpl,
+  isSensitiveKey,
+  redactQuery,
+  redactUrl,
+  SENSITIVE_KEYS,
+} from 'std:fetch'
 import { ResultErrors, isFailure, unwrap } from 'std:result'
 import type { TraceDef } from 'std:trace'
-import {
-  ActiveSpan,
-  enableTracing,
-  extract,
-  parseTraceparent,
-  passThrough,
-  span,
-  suppressed,
-  traceparentOf,
-} from 'std:trace'
+import { Trace } from 'std:trace'
 
 import { afterAll, describe, expect, it } from 'bun:test'
 
 import { JsonCodec } from 'std:codec/impl/json'
 
 import pkg from '../../package.json'
+import { extract, parseTraceparent, traceparentOf } from '../../src/trace/internal/propagation'
 import { memoryTracer, traced, tracedResult } from '../trace/helpers'
 
 const server = Bun.serve({
@@ -56,20 +57,25 @@ const server = Bun.serve({
 
     if (pathname === '/slow') {
       await Bun.sleep(400)
+
       return new Response('late')
     }
 
     if (pathname === '/stream') {
       const encoder = new TextEncoder()
       const chunks = ['a', 'b', 'c']
+
       return new Response(
         new ReadableStream({
           async pull(controller) {
             const chunk = chunks.shift()
+
             if (chunk === undefined) {
               controller.close()
+
               return
             }
+
             controller.enqueue(encoder.encode(chunk))
             await Bun.sleep(5)
           },
@@ -79,6 +85,7 @@ const server = Bun.serve({
 
     if (pathname === '/drip') {
       const encoder = new TextEncoder()
+
       return new Response(
         new ReadableStream({
           async start(controller) {
@@ -109,6 +116,7 @@ const capture = (response: () => Response = () => new Response('ok')) => {
   const impl: FetchDef.Impl = (input, init) => {
     seen.url = input instanceof Request ? input.url : String(input)
     seen.headers = new Headers(init?.headers)
+
     return Promise.resolve(response())
   }
 
@@ -130,12 +138,14 @@ describe('fetch CLIENT span', () => {
       yield* FetchClient.use()
 
       const response = yield* Fetch.actions.get(`${base}/json`)
+
       return yield* response.json()
     })
 
     expect(value).toEqual({ ok: true })
 
     const data = tracer.span('GET')
+
     expect(data.kind).toBe('client')
     expect(data.scope).toEqual({ name: '@ozaco/std/fetch', version: pkg.version })
     expect(data.parent).toBeNull()
@@ -158,10 +168,12 @@ describe('fetch CLIENT span', () => {
         body: '{}',
         template: '/json',
       })
+
       return yield* response.text()
     })
 
     const data = tracer.span('POST /json')
+
     expect(data.attributes['url.template']).toBe('/json')
     expect(data.attributes['http.request.method']).toBe('POST')
   })
@@ -170,14 +182,16 @@ describe('fetch CLIENT span', () => {
     const { tracer } = await traced(function* () {
       yield* FetchClient.use()
 
-      return yield* span('parent', function* () {
+      return yield* Trace.actions.span('parent', function* () {
         const response = yield* Fetch.actions.get(`${base}/json`)
+
         return yield* response.json()
       })
     })
 
     const parent = tracer.span('parent')
     const child = tracer.span('GET')
+
     expect(child.context.traceId).toBe(parent.context.traceId)
     expect(child.parent?.spanId).toBe(parent.context.spanId)
     expect(parent.status).toEqual({ code: 'unset' })
@@ -188,7 +202,7 @@ describe('fetch CLIENT span', () => {
     const { tracer } = await traced(function* () {
       yield* FetchClient.use()
 
-      return yield* span('batch', () =>
+      return yield* Trace.actions.span('batch', () =>
         through(capture().impl, function* () {
           yield* Fetch.actions.request(`${base}/a`, { method: 'get' })
           yield* Fetch.actions.request(`${base}/b`, { method: 'PROPFIND', template: '/b' })
@@ -199,6 +213,7 @@ describe('fetch CLIENT span', () => {
     })
 
     const [get, propfind, lower, patch] = byStart(tracer.spans)
+
     expect([get, propfind, lower, patch].map(data => data?.name)).toEqual([
       'GET',
       'HTTP /b',
@@ -219,13 +234,14 @@ describe('fetch CLIENT span', () => {
     const seen: RequestInit[] = []
     const impl: FetchDef.Impl = (_input, init) => {
       seen.push(init ?? {})
+
       return Promise.resolve(new Response('ok'))
     }
 
     const { tracer } = await traced(function* () {
       yield* FetchClient.use()
 
-      return yield* span('batch', () =>
+      return yield* Trace.actions.span('batch', () =>
         through(impl, function* () {
           yield* Fetch.actions.get(`${base}/a`, { resendCount: 0, template: '/a' })
           yield* Fetch.actions.get(`${base}/a`, { resendCount: 2, template: '/a', propagate: true })
@@ -234,6 +250,7 @@ describe('fetch CLIENT span', () => {
     })
 
     const [first, second] = byStart(tracer.spans)
+
     expect(first!.attributes['http.request.resend_count']).toBeUndefined()
     expect(second!.attributes['http.request.resend_count']).toBe(2)
 
@@ -248,7 +265,7 @@ describe('fetch CLIENT span', () => {
     const { tracer } = await traced(function* () {
       yield* FetchClient.use()
 
-      return yield* span('batch', () =>
+      return yield* Trace.actions.span('batch', () =>
         through(capture().impl, function* () {
           yield* Fetch.actions.get('https://api.example.com/v1')
           yield* Fetch.actions.get('http://[::1]:8080/x')
@@ -257,6 +274,7 @@ describe('fetch CLIENT span', () => {
     })
 
     const [https, ipv6] = byStart(tracer.spans)
+
     expect(https!.attributes['server.address']).toBe('api.example.com')
     expect(https!.attributes['server.port']).toBe(443)
     expect(ipv6!.attributes['server.address']).toBe('::1')
@@ -277,6 +295,52 @@ describe('url.full redaction', () => {
     expect(tracer.span('GET').attributes['url.full']).toBe(
       'https://REDACTED:REDACTED@bucket.s3.example.com/key.txt?X-Amz-Signature=REDACTED&x-amz-credential=REDACTED&X-Amz-Security-Token=REDACTED&keep=1&api_key=REDACTED&Token=REDACTED#frag',
     )
+  })
+
+  it('FetchClient.use({ sensitiveKeys }) redacts that list instead', async () => {
+    const { tracer } = await traced(function* () {
+      yield* FetchClient.use({ sensitiveKeys: ['tenant'] })
+
+      return yield* through(capture().impl, () =>
+        Fetch.actions.get('http://host/p?tenant=acme&token=x'),
+      )
+    })
+
+    expect(tracer.span('GET').attributes['url.full']).toBe('http://host/p?tenant=REDACTED&token=x')
+  })
+
+  it('the installed list is a copy: changing the caller array later changes nothing', async () => {
+    const keys = ['tenant']
+    const { tracer } = await traced(function* () {
+      yield* FetchClient.use({ sensitiveKeys: keys })
+
+      keys.push('page')
+
+      return yield* through(capture().impl, () =>
+        Fetch.actions.get('http://host/p?tenant=a&page=2'),
+      )
+    })
+
+    expect(tracer.span('GET').attributes['url.full']).toBe('http://host/p?tenant=REDACTED&page=2')
+  })
+
+  it('one secret list: query keys, header names and body keys alike', () => {
+    expect(redactUrl('http://host/cb?session=abc&otp=1&page=2')).toBe(
+      'http://host/cb?session=REDACTED&otp=REDACTED&page=2',
+    )
+    expect(
+      ['Authorization', 'set-cookie', 'refresh_token', 'Key'].map(key => isSensitiveKey(key)),
+    ).toEqual([true, true, true, true])
+    expect(isSensitiveKey('title')).toBe(false)
+  })
+
+  it('a list of your own replaces the default one', () => {
+    const keys = [...SENSITIVE_KEYS.filter(key => key !== 'key'), 'tenant']
+
+    expect(redactUrl('http://host/p?key=1&tenant=acme&token=x', keys)).toBe(
+      'http://host/p?key=1&tenant=REDACTED&token=REDACTED',
+    )
+    expect(isSensitiveKey('key', keys)).toBe(false)
   })
 
   it('redactUrl / redactQuery keep everything else byte for byte', () => {
@@ -310,12 +374,14 @@ describe('status', () => {
       yield* FetchClient.use()
 
       const response = yield* Fetch.actions.get(`${base}/missing`)
+
       return { status: response.status, text: yield* response.text() }
     })
 
     expect(value).toEqual({ status: 404, text: 'nope' })
 
     const data = tracer.span('GET')
+
     expect(data.status).toEqual({ code: 'error' })
     expect(data.attributes['http.response.status_code']).toBe(404)
     expect(data.attributes['error.type']).toBe('404')
@@ -327,10 +393,12 @@ describe('status', () => {
       yield* FetchClient.use()
 
       const response = yield* Fetch.actions.get(`${base}/broken`)
+
       return yield* response.text()
     })
 
     const data = tracer.span('GET')
+
     expect(data.status).toEqual({ code: 'error' })
     expect(data.attributes['error.type']).toBe('503')
   })
@@ -348,18 +416,22 @@ describe('failures', () => {
     })
 
     expect(isFailure(result)).toBe(true)
+
     if (!isFailure(result)) {
       return
     }
+
     expect(result.error).toBe(FetchErrors.Network)
 
     const data = tracer.span('GET /json')
+
     expect(data.status.code).toBe('error')
     expect(data.attributes['error.type']).toBe(FetchErrors.Network)
     expect(data.attributes['http.response.status_code']).toBeUndefined()
     expect(data.events.map(event => event.name)).toEqual(['exception'])
 
     const [log, ...rest] = tracer.exceptions()
+
     expect(rest).toEqual([])
     expect(log!.eventName).toBe('http.client.request.exception')
     expect(log!.context?.spanId).toBe(data.context.spanId)
@@ -371,10 +443,12 @@ describe('failures', () => {
   it('a real refused connection is a network failure on the span', async () => {
     const closed = Bun.serve({ port: 0, fetch: () => new Response('') })
     const url = `http://127.0.0.1:${closed.port}/gone`
+
     closed.stop(true)
 
     const { tracer, result } = await tracedResult(function* () {
       yield* FetchClient.use()
+
       return yield* Fetch.actions.get(url)
     })
 
@@ -385,12 +459,14 @@ describe('failures', () => {
   it('a timeout fails the span with FetchErrors.Timeout', async () => {
     const { tracer, result } = await tracedResult(function* () {
       yield* FetchClient.use()
+
       return yield* Fetch.actions.get(`${base}/slow`, { timeoutMs: 30 })
     })
 
     expect(isFailure(result) && result.error).toBe(FetchErrors.Timeout)
 
     const data = tracer.span('GET')
+
     expect(data.status.code).toBe('error')
     expect(data.attributes['error.type']).toBe(FetchErrors.Timeout)
   })
@@ -402,17 +478,21 @@ describe('failures', () => {
     const { tracer } = await tracedResult(function* () {
       yield* FetchClient.use()
 
-      return yield* span('handler', () => through(refused, () => Fetch.actions.get(`${base}/json`)))
+      return yield* Trace.actions.span('handler', () =>
+        through(refused, () => Fetch.actions.get(`${base}/json`)),
+      )
     })
 
     const client = tracer.span('GET')
     const handler = tracer.span('handler')
+
     expect(client.status.code).toBe('error')
     expect(handler.status.code).toBe('error')
     expect(client.events.map(event => event.name)).toEqual(['exception'])
     expect(handler.events).toEqual([])
 
     const exceptions = tracer.exceptions()
+
     expect(exceptions).toHaveLength(1)
     expect(exceptions[0]!.eventName).toBe('http.client.request.exception')
     expect(exceptions[0]!.severityNumber).toBe(17)
@@ -425,10 +505,12 @@ describe('failures', () => {
       return yield* race([
         (function* () {
           yield* Fetch.actions.get(`${base}/slow`)
+
           return 'fetched'
         })(),
         (function* () {
           yield* sleep(20)
+
           return 'timer'
         })(),
       ])
@@ -437,6 +519,7 @@ describe('failures', () => {
     expect(value).toBe('timer')
 
     const data = tracer.span('GET')
+
     expect(data.status).toEqual({ code: 'unset' })
     expect(data.attributes['ozaco.cancelled']).toBe(true)
     expect(data.attributes['error.type']).toBeUndefined()
@@ -451,14 +534,18 @@ describe('span end follows the body', () => {
 
       const response = yield* Fetch.actions.get(`${base}/json`)
       const before = live.spans.length
+
       yield* sleep(15)
+
       const body = yield* response.json()
+
       return { before, after: live.spans.length, body }
     })
 
     expect(value).toEqual({ before: 0, after: 1, body: { ok: true } })
 
     const data = tracer.span('GET')
+
     // the body was read ~15 ms after the headers: the span covers it
     expect(data.end - data.start).toBeGreaterThanOrEqual(10)
   })
@@ -468,6 +555,7 @@ describe('span end follows the body', () => {
       yield* FetchClient.use()
 
       const response = yield* Fetch.actions.get(`${base}/empty`)
+
       return { status: response.status, ended: live.spans.length }
     })
 
@@ -479,6 +567,7 @@ describe('span end follows the body', () => {
       yield* FetchClient.use()
 
       yield* Fetch.actions.head(`${base}/json`)
+
       return live.spans.length
     })
 
@@ -491,13 +580,16 @@ describe('span end follows the body', () => {
       yield* FetchClient.use()
 
       const response = yield* Fetch.actions.get(`${base}/json`)
+
       yield* sleep(30)
+
       return { status: response.status, open: live.spans.length }
     })
 
     expect(value).toEqual({ status: 200, open: 0 })
 
     const data = tracer.span('GET')
+
     expect(data.attributes['ozaco.cancelled']).toBeUndefined()
     expect(data.status).toEqual({ code: 'unset' })
     // ended at the headers, not after the 30 ms sleep
@@ -509,18 +601,21 @@ describe('span end follows the body', () => {
       yield* FetchClient.use()
 
       const response = yield* Fetch.actions.get(`${base}/garbage`)
+
       return yield* response.json()
     })
 
     expect(isFailure(result)).toBe(true)
 
     const data = tracer.span('GET')
+
     expect(data.status.code).toBe('error')
     expect(data.attributes['http.response.status_code']).toBe(200)
     expect(data.attributes['error.type']).toBe(ResultErrors.Unknown)
     expect(data.events.map(event => event.name)).toEqual(['exception'])
 
     const exceptions = tracer.exceptions()
+
     expect(exceptions).toHaveLength(1)
     expect(exceptions[0]!.eventName).toBe('http.client.request.exception')
     expect(exceptions[0]!.context?.spanId).toBe(data.context.spanId)
@@ -536,6 +631,7 @@ describe('span end follows the body', () => {
         response.text(),
         (function* () {
           yield* sleep(20)
+
           return 'timer'
         })(),
       ])
@@ -544,6 +640,7 @@ describe('span end follows the body', () => {
     expect(value).toBe('timer')
 
     const data = tracer.span('GET')
+
     expect(data.attributes['ozaco.cancelled']).toBe(true)
     expect(data.status).toEqual({ code: 'unset' })
     expect(tracer.exceptions()).toEqual([])
@@ -561,9 +658,11 @@ describe('span end follows the body', () => {
 
       for (;;) {
         const step = yield* subscription.next()
+
         if (step.done) {
           break
         }
+
         open = live.spans.length
         text += decoder.decode(step.value)
       }
@@ -583,6 +682,7 @@ describe('span end follows the body', () => {
 
       yield* (function* () {
         const subscription = yield* yield* response.raw()
+
         yield* subscription.next()
       })()
     })
@@ -604,6 +704,7 @@ describe('flow() span end', () => {
               for (const chunk of chunks) {
                 controller.enqueue(new TextEncoder().encode(chunk))
               }
+
               controller.close()
             },
           }),
@@ -623,9 +724,11 @@ describe('flow() span end', () => {
 
         for (;;) {
           const step = yield* subscription.next()
+
           if (step.done) {
             return { values, open, close: step.value, ended: live.spans.length }
           }
+
           open = live.spans.length
           values.push(step.value)
         }
@@ -647,6 +750,7 @@ describe('flow() span end', () => {
 
         for (;;) {
           const step = yield* subscription.next()
+
           if (step.done) {
             return isFailure(step.value)
           }
@@ -657,10 +761,13 @@ describe('flow() span end', () => {
     expect(value).toBe(true)
 
     const data = tracer.span('GET')
+
     expect(data.status.code).toBe('error')
     expect(data.events.map(event => event.name)).toEqual(['exception'])
+
     // the fetch span is its own local root: the failure settles as it ends, unclassified ⇒ ERROR
     const [log, ...rest] = tracer.exceptions()
+
     expect(rest).toEqual([])
     expect(log!.eventName).toBe('http.client.request.exception')
     expect(log!.severityNumber).toBe(17)
@@ -673,10 +780,12 @@ describe('propagation', () => {
       yield* FetchClient.use()
 
       const response = yield* Fetch.actions.get(`${base}/headers`)
+
       return (yield* response.json()) as { traceparent: string; tracestate: string }
     })
 
     const data = tracer.span('GET')
+
     expect(value.traceparent).toBe(traceparentOf(data.context))
     expect(value.traceparent.endsWith('-03')).toBe(true)
     expect(value.tracestate).toBe('ozaco=1')
@@ -689,12 +798,13 @@ describe('propagation', () => {
     const { tracer } = await traced(function* () {
       yield* FetchClient.use()
 
-      return yield* span('server', { parent }, () =>
+      return yield* Trace.actions.span('server', { parent }, () =>
         through(impl, () => Fetch.actions.get(`${base}/x`)),
       )
     })
 
     const data = tracer.span('GET')
+
     expect(data.context.traceId).toBe(parent.traceId)
     expect(seen.headers!.get('traceparent')).toBe(traceparentOf(data.context))
     expect(seen.headers!.get('tracestate')).toBe('ozaco=1,vendor=abc')
@@ -707,13 +817,15 @@ describe('propagation', () => {
     const { tracer } = await traced(function* () {
       yield* FetchClient.use()
 
-      return yield* span('server', { parent }, () =>
+      return yield* Trace.actions.span('server', { parent }, () =>
         through(impl, () => Fetch.actions.get(`${base}/x`)),
       )
     })
 
     expect(tracer.spans).toEqual([])
+
     const sent = parseTraceparent(seen.headers!.get('traceparent'))!
+
     expect(sent.traceId).toBe(parent.traceId)
     expect(sent.spanId).not.toBe(parent.spanId)
     expect(sent.flags & 0x01).toBe(0)
@@ -786,12 +898,13 @@ describe('tracing off', () => {
 
     const outcome = await run(function* () {
       yield* tracer.plugin.use()
-      yield* enableTracing(false)
+      yield* Trace.actions.enableTracing(false)
       yield* FetchClient.use()
 
-      return yield* ActiveSpan.with(passThrough(inbound), () =>
+      return yield* Trace.actions.passThrough(inbound, () =>
         through(impl, function* () {
           const response = yield* Fetch.actions.get(`${base}/x`)
+
           return yield* response.text()
         }),
       )
@@ -811,7 +924,7 @@ describe('tracing off', () => {
     const outcome = await run(function* () {
       yield* FetchClient.use()
 
-      return yield* ActiveSpan.with(passThrough(inbound), () =>
+      return yield* Trace.actions.passThrough(inbound, () =>
         through(impl, () => Fetch.actions.get(`${base}/x`, { headers: { tracestate: 'stray=1' } })),
       )
     })
@@ -826,6 +939,7 @@ describe('tracing off', () => {
 
     const outcome = await run(function* () {
       yield* FetchClient.use()
+
       return yield* through(impl, () => Fetch.actions.get(`${base}/x`))
     })
 
@@ -840,13 +954,15 @@ describe('tracing off', () => {
     const { tracer } = await traced(function* () {
       yield* FetchClient.use()
 
-      return yield* span('outer', () =>
-        suppressed(() => through(impl, () => Fetch.actions.get(`${base}/x`))),
+      return yield* Trace.actions.span('outer', () =>
+        Trace.actions.suppressed(() => through(impl, () => Fetch.actions.get(`${base}/x`))),
       )
     })
 
     expect(tracer.names()).toBe('outer')
+
     const sent = parseTraceparent(seen.headers!.get('traceparent'))!
+
     expect(sent.spanId).toBe(tracer.span('outer').context.spanId)
     // sampled bit clear; the random bit of the trace id minted here stays
     expect(sent.flags).toBe(2)

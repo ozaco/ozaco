@@ -1,12 +1,11 @@
 /**
- * A codec that cannot parse / decode / stringify fails with its tag and what it was doing
- * (`cannot parse the text as JSON`), the parser's own throw folded under it by `asFailure`
- * (`std:result.unknown`, its serialized text the message, the parser error kept as `raw`).
+ * A codec that cannot parse / decode / stringify fails with ONE level: its operation's tag, the
+ * parser's own message, the parser error kept as `raw` — never a nested `std:result.unknown`.
  */
 import { CodecErrors } from 'std:codec'
 import { attempt, run } from 'std:effect'
 import type { Result } from 'std:result'
-import { ResultErrors, formatFailure, isFailure, unwrap } from 'std:result'
+import { formatFailure, isFailure, unwrap } from 'std:result'
 
 import { describe, expect, it } from 'bun:test'
 
@@ -20,24 +19,26 @@ const summary = (outcome: unknown) => {
   if (!isFailure(outcome)) {
     return 'no-failure'
   }
+
   const failure = outcome as Result.Failure<unknown>
-  const [nested] = failure.causes
+
   return {
     tag: failure.error,
-    message: failure.message,
-    inner: isFailure(nested) ? nested.error : undefined,
-    raw: isFailure(nested) ? (nested.raw as Error).name : undefined,
+    hasMessage: failure.message.length > 0,
+    causes: failure.causes.filter(isFailure).length,
+    raw: (failure.raw as Error | undefined)?.name,
     // parser messages span lines (TOML / YAML quote the source): count the `Caused by:` headers
     levels: 1 + (formatFailure(failure, { chain: true }).match(/^Caused by: /gmu) ?? []).length,
   }
 }
 
-describe('codec failures keep the parser error as their cause', () => {
+describe('codec failures are one level: the operation tag, the parser message, raw', () => {
   it('JsonCodec parse / decode / stringify', async () => {
     const outcome = await run(function* () {
       yield* JsonCodec.use()
 
       const cyclic: Record<string, unknown> = {}
+
       cyclic.self = cyclic
 
       return {
@@ -47,27 +48,19 @@ describe('codec failures keep the parser error as their cause', () => {
       }
     })
 
-    const seen = unwrap(outcome)
-    const expected = (tag: string, message: string, raw: string) => ({
+    const expected = (tag: string, raw: string) => ({
       tag,
-      message,
-      inner: ResultErrors.Unknown,
+      hasMessage: true,
+      causes: 0,
       raw,
-      levels: 2,
-    })
-    expect(seen).toEqual({
-      parse: expected(CodecErrors.Parse, 'cannot parse the text as JSON', 'SyntaxError'),
-      decode: expected(CodecErrors.Decode, 'cannot decode the bytes as JSON', 'SyntaxError'),
-      stringify: expected(CodecErrors.Stringify, 'cannot stringify the value as JSON', 'TypeError'),
+      levels: 1,
     })
 
-    // the run settles to the raised failure itself
-    const failure = await run(function* () {
-      yield* JsonCodec.use()
-      return yield* JsonCodec.actions.parse('{oops')
+    expect(unwrap(outcome)).toEqual({
+      parse: expected(CodecErrors.Parse, 'SyntaxError'),
+      decode: expected(CodecErrors.Decode, 'SyntaxError'),
+      stringify: expected(CodecErrors.Stringify, 'TypeError'),
     })
-    const [nested] = isFailure(failure) ? failure.causes : []
-    expect(isFailure(nested) && nested.raw).toBeInstanceOf(SyntaxError)
   })
 
   it('TomlCodec and YamlCodec parse', async () => {
@@ -82,19 +75,10 @@ describe('codec failures keep the parser error as their cause', () => {
     })
 
     const seen = unwrap(outcome) as Record<string, ReturnType<typeof summary>>
+
     expect(seen).toMatchObject({
-      toml: {
-        tag: CodecErrors.Parse,
-        message: 'cannot parse the text as TOML',
-        inner: ResultErrors.Unknown,
-        levels: 2,
-      },
-      yaml: {
-        tag: CodecErrors.Parse,
-        message: 'cannot parse the text as YAML',
-        inner: ResultErrors.Unknown,
-        levels: 2,
-      },
+      toml: { tag: CodecErrors.Parse, hasMessage: true, causes: 0, levels: 1 },
+      yaml: { tag: CodecErrors.Parse, hasMessage: true, causes: 0, levels: 1 },
     })
   })
 })

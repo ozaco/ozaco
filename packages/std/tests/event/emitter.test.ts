@@ -82,6 +82,7 @@ describe('on / emit', () => {
     const dispose = emitter.on('tick', () => {
       calls.push('a')
     })
+
     emitter.on('tick', () => {
       calls.push('b')
     })
@@ -99,6 +100,7 @@ describe('on / emit', () => {
     const calls: string[] = []
 
     let disposeSecond = () => {}
+
     emitter.on('tick', () => {
       calls.push('first')
       disposeSecond()
@@ -137,6 +139,7 @@ describe('on / emit', () => {
     const dispose = emitter.on('tick', () => {
       calls += 1
     })
+
     emitter.off('tick') // wipes the name, orphaning the old list
     emitter.on('tick', () => {
       calls += 10
@@ -177,6 +180,7 @@ describe('emit with a failing listener', () => {
 
     emitter.on('job', () => {
       pending = Promise.reject(new Error('listener-rejected'))
+
       // emit throws the returned promise away, so nothing downstream can observe it through emit;
       // at the runtime level this surfaces as an unhandled rejection unless someone else holds it
       return pending
@@ -214,10 +218,12 @@ describe('once', () => {
 
     const rearm = () => {
       calls += 1
+
       if (calls < 2) {
         emitter.once('tick', rearm)
       }
     }
+
     emitter.once('tick', rearm)
 
     emitter.emit('tick')
@@ -234,6 +240,7 @@ describe('once', () => {
     const dispose = emitter.once('tick', () => {
       calls += 1
     })
+
     dispose()
     emitter.emit('tick')
 
@@ -320,6 +327,7 @@ describe('emitAsync', () => {
     })
 
     const pending = emitter.emitAsync('job', 'x')
+
     expect(steps).toEqual(['start:x'])
 
     gate.resolve()
@@ -349,6 +357,7 @@ describe('emitAsync', () => {
     })
 
     const pending = emitter.emitAsync('job')
+
     // all three started before any async listener resolved
     expect(steps).toEqual(['start:first', 'sync', 'start:second'])
 
@@ -370,6 +379,7 @@ describe('emitAsync', () => {
 
     emitter.on('job', async () => {
       await Promise.resolve()
+
       throw new Error('listener-failed')
     })
 

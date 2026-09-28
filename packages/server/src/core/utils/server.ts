@@ -1,6 +1,6 @@
 import type { Operation } from 'std:effect'
 import { fail } from 'std:result'
-import { isTracing } from 'std:trace'
+import { Trace } from 'std:trace'
 
 import { ServerClient } from '../definition/server'
 import { ServerErrors } from '../errors'
@@ -17,17 +17,17 @@ import { ServerTracer } from './trace'
  * order), the outcome store (memory unless one is installed) and the edge — all std plugins —
  * wire their hooks and option validators into the kernel, validate every action's options, and
  * register the services this node hosts with the carrier. The node OBSERVES (tracing on) when a
- * plugin brought an `ObserveExporter` or an `observe` hook, or a non-server Tracer was already
+ * plugin brought an `ObserveExporter` or an `observe` hook, or a non-server Trace sink was already
  * enabled around it; an installed std Logger then also gets a `TraceTransport` (its lines become
  * log records of the active span) — unless one is visible already.
  *
  * An observing node also claims the PROCESS's log records (`observe.processLogs`, default on):
- * lines logged where no Tracer records — infrastructure (transport, db) installed BEFORE it, in a
+ * lines logged where no Trace sink records — infrastructure (transport, db) installed BEFORE it, in a
  * parent scope — reach its store and exporters with its resource, through std:trace's process
  * fallback (`registerFallback`). One node per process takes them: the first one created; the next
  * takes over when it stops. Logger lines need a `TraceTransport` where they are LOGGED, so install
  * `DefaultLogger` + `ConsoleTransport` + `TraceTransport` at the ROOT (the node then skips its own
- * install, and every line becomes exactly one record: inside the node through its Tracer, outside
+ * install, and every line becomes exactly one record: inside the node through its Trace sinks, outside
  * through the fallback). What a node logs while it comes up (tracing still off) is held for it
  * and never claimed by another node (`bootLogs`). Settled exception records at WARN or above also
  * reach the installed Logger (the console), once.
@@ -58,17 +58,18 @@ export function* createServer<const TServices extends readonly ServiceDef.Servic
   const hosted = hostedOf(options as ServerDef.Options, role)
   const kernel = yield* ServerClient.use({ ...options, hosted } as ServerDef.Options)
 
-  // a Tracer enabled around this server that is NOT another server's (a test's in-memory
+  // a Trace sink enabled around this server that is NOT another server's (a test's in-memory
   // tracer, an OTel bridge) means this node observes; an outer server's tracing does not — a
   // nested non-observing server keeps its spans to itself (its own disabled switch)
-  const traced = (yield* isTracing()) && (yield* ServerTracer.context.get()) === undefined
+  const traced =
+    (yield* Trace.actions.isTracing()) && (yield* ServerTracer.context.get()) === undefined
 
   // the tracer BEFORE the carrier and the plugins, switched OFF: every fork they make (serve
   // loops, presence, stores) shares the node's live switch, flipped once the plugins are in
   const tracer = yield* ServerTracer.use(kernel)
 
   // what is logged while the node comes up is held for it (`bootLogs`), never claimed by another
-  const unboot = bootLogs(kernel, tracer)
+  const unboot = yield* bootLogs(kernel, tracer)
 
   try {
     return yield* buildNode(options, { role, hosted, kernel, tracer, traced, unboot })

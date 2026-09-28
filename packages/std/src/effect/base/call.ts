@@ -38,6 +38,7 @@ export function call<T, TArgs extends unknown[] = []>(
   return {
     [Symbol.iterator]() {
       const target = callable(...args)
+
       if (isNativeIterable(target)) {
         return constant(target as T)[Symbol.iterator]()
       } else if (isCallTarget<T>(target)) {
@@ -47,9 +48,11 @@ export function call<T, TArgs extends unknown[] = []>(
       } else if (isPromise(target)) {
         return action<T>((resolve, reject) => {
           ;(target as Promise<T>).then(resolve, reject)
+
           return () => {}
         }, `async call ${callable.name}()`)[Symbol.iterator]()
       }
+
       return constant(target as T)[Symbol.iterator]()
     },
   }

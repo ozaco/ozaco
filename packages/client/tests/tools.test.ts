@@ -76,12 +76,15 @@ const manifest: Manifest = {
 describe('panel lib', () => {
   it('indexes the manifest into groups, sockets and searchable entries', () => {
     const groups = groupsOf(manifest)
+
     expect(groups[0]!.entries.map(entry => entry.id)).toEqual(['todos.get', 'ws:/todos/_realtime'])
     expect(orphanSockets(manifest).map(socket => socket.path)).toEqual(['/live/chat'])
     expect(findEntry(manifest, 'ws:/live/chat')?.kind).toBe('socket')
     expect(findEntry(manifest, 'todos.get')?.kind).toBe('action')
     expect(pathParams('/todos/:id/items/:item')).toEqual(['id', 'item'])
+
     const entry = groups[0]!.entries[0]!
+
     expect(matches(entry, 'GET')).toBe(true)
     expect(matches(entry, 'crud')).toBe(true)
     expect(matches(entry, 'nope')).toBe(false)
@@ -99,6 +102,7 @@ describe('panel lib', () => {
       },
       required: ['title'],
     }
+
     expect(exampleOf(schema)).toEqual({
       title: '',
       n: 5,
@@ -106,7 +110,9 @@ describe('panel lib', () => {
       kind: 'a',
       nested: { deep: 0 },
     })
+
     const fields = fieldsOf(schema)
+
     expect(fields.map(field => `${field.name}:${field.type}${field.required ? '!' : ''}`)).toEqual([
       'title:string!',
       'n:integer',

@@ -10,9 +10,11 @@ const compareIdentifier = (a: string, b: string): number => {
   if (aNumeric && bNumeric) {
     return Math.sign(Number(a) - Number(b))
   }
+
   if (aNumeric !== bNumeric) {
     return aNumeric ? -1 : 1
   }
+
   return a < b ? -1 : a > b ? 1 : 0
 }
 
@@ -38,20 +40,25 @@ const isWild = (part: string | undefined) =>
 // `1`, `1.x`, `1.2.*`, `*` → the half-open range the wildcard spans
 const xRange = (parts: string[]): Helpers.Comparator[] | undefined => {
   const [major, minor] = parts.map(Number)
+
   if (isWild(parts[0])) {
     return []
   }
+
   if (isWild(parts[1])) {
     return [gte(at(major!, 0, 0)), lt(at(major! + 1, 0, 0))]
   }
+
   if (isWild(parts[2])) {
     return [gte(at(major!, minor!, 0)), lt(at(major!, minor! + 1, 0))]
   }
+
   return undefined
 }
 
 export const parse = (version: string): Helpers.Version | undefined => {
   const match = VERSION.exec(version.trim())
+
   if (!match) {
     return undefined
   }
@@ -67,6 +74,7 @@ export const parse = (version: string): Helpers.Version | undefined => {
 export const compareParsed = (a: Helpers.Version, b: Helpers.Version): number => {
   const core =
     Math.sign(a.major - b.major) || Math.sign(a.minor - b.minor) || Math.sign(a.patch - b.patch)
+
   if (core !== 0) {
     return core
   }
@@ -77,18 +85,23 @@ export const compareParsed = (a: Helpers.Version, b: Helpers.Version): number =>
   }
 
   const length = Math.max(a.prerelease.length, b.prerelease.length)
+
   for (let index = 0; index < length; index += 1) {
     const left = a.prerelease[index]
     const right = b.prerelease[index]
+
     // the shorter identifier list ranks lower when every shared field is equal
     if (left === undefined || right === undefined) {
       return left === undefined ? -1 : 1
     }
+
     const order = compareIdentifier(left, right)
+
     if (order !== 0) {
       return order
     }
   }
+
   return 0
 }
 
@@ -100,44 +113,57 @@ export const parseComparator = (token: string): Helpers.Comparator[] | undefined
 
   const [core = '', ...rest] = body.split(/(?=[-+])/u)
   const parts = core.split('.')
+
   if (parts.length > 3 || parts.some(part => !isWild(part) && !/^\d+$/u.test(part))) {
     return undefined
   }
+
   const wild = parts.length < 3 || parts.some(isWild)
 
   if (wild) {
     const range = xRange(parts)
+
     if (!range) {
       return undefined
     }
+
     // `*` spans everything, whatever operator leads it
     if (operator === '' || operator === '=' || isWild(parts[0])) {
       return range
     }
+
     // a partial bound behaves like its range's edges: `>=1.2` = `>=1.2.0`, `<2` = `<2.0.0`,
     // `>1.2` = `>=1.3.0`, `<=1.2` = `<1.3.0`; `^` / `~` fall through to the full-version rules
     const lower = at(Number(parts[0]) || 0, Number(parts[1]) || 0, 0)
+
     if (operator === '>=') {
       return [gte(lower)]
     }
+
     if (operator === '<') {
       return [lt(lower)]
     }
+
     const upper = isWild(parts[1]) ? at(lower.major + 1, 0, 0) : at(lower.major, lower.minor + 1, 0)
+
     if (operator === '>') {
       return [gte(upper)]
     }
+
     if (operator === '<=') {
       return [lt(upper)]
     }
+
     if (operator === '~') {
       return [gte(lower), lt(upper)]
     }
+
     // `^1.x` / `^0.2` — the caret spans the leftmost non-zero given field
     return [gte(lower), lt(lower.major > 0 || isWild(parts[1]) ? at(lower.major + 1, 0, 0) : upper)]
   }
 
   const version = parse([core, ...rest].join(''))
+
   if (!version) {
     return undefined
   }
@@ -166,6 +192,7 @@ export const parseComparator = (token: string): Helpers.Comparator[] | undefined
           : version.minor > 0
             ? at(0, version.minor + 1, 0)
             : at(0, 0, version.patch + 1)
+
       return [gte(version), lt(upper)]
     }
     default: {

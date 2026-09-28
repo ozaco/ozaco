@@ -1,5 +1,4 @@
 import type { TraceDef } from 'std:trace'
-import { getTracestate } from 'std:trace'
 
 import type { Helpers } from '../../types/helpers'
 import type { ServerDef } from '../../types/server'
@@ -41,8 +40,7 @@ export const policyOf = (
   verdict: Pick<Helpers.Inbound, 'trusted' | 'marked'>,
 ): Helpers.Inbound => {
   const { trusted } = verdict
-  const marked =
-    verdict.marked || (inbound !== null && getTracestate(inbound.state, 'ozaco') === '1')
+  const marked = verdict.marked || inbound?.ozaco === true
   const mode = trusted || marked ? 'continue' : settings.inbound
 
   if (!inbound || mode === 'ignore') {

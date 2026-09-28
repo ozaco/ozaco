@@ -106,6 +106,10 @@ export namespace FetchDef {
 
     /** Default for `init.propagate` (W3C trace-context injection); `true` when unset. */
     propagate?: boolean | undefined
+
+    /** The query keys whose values `url.full` redacts (replaces `SENSITIVE_KEYS`;
+     * `[...SENSITIVE_KEYS, 'my_key']` adds to it). */
+    sensitiveKeys?: readonly string[] | undefined
   }
 
   /** The installed plugin context: the resolved `Options`, built once by `setup`. */
@@ -116,6 +120,7 @@ export namespace FetchDef {
     codec: CodecDef | undefined
     tls: Tls | undefined
     propagate: boolean | undefined
+    sensitiveKeys: readonly string[] | undefined
   }
 
   /**

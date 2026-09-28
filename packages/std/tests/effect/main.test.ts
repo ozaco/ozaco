@@ -79,14 +79,18 @@ const launch = (...args: string[]) => {
 
   const collected = (async () => {
     let stdout = ''
+
     for await (const chunk of proc.stdout) {
       stdout += decoder.decode(chunk, { stream: true })
+
       if (stdout.includes('running')) {
         running.resolve()
       }
     }
+
     // stdout closed without the marker: let a waiting test proceed to its assertions
     running.resolve()
+
     return stdout
   })()
 
@@ -96,6 +100,7 @@ const launch = (...args: string[]) => {
     finish: async () => {
       const status = await proc.exited
       const output = await collected
+
       return { status, output }
     },
   }
@@ -111,12 +116,14 @@ const runCaptured = async (...args: string[]) => {
     cwd: dir,
   })
   const [status, stderr] = await Promise.all([proc.exited, new Response(proc.stderr).text()])
+
   return { status, stderr }
 }
 
 describe('main signal wiring', () => {
   it.skipIf(skip)('SIGTERM shuts the body down gracefully and exits 143', async () => {
     const { proc, running, finish } = launch()
+
     await running
 
     proc.kill('SIGTERM')
@@ -129,6 +136,7 @@ describe('main signal wiring', () => {
 
   it.skipIf(skip)('SIGINT shuts the body down gracefully and exits 130', async () => {
     const { proc, running, finish } = launch()
+
     await running
 
     proc.kill('SIGINT')

@@ -16,6 +16,7 @@ const makeRoot = () => mkdtemp(join(tmpdir(), 'ozaco-config-'))
 describe('config error paths', () => {
   it('a malformed config file fails the load with a Result, not a throw', async () => {
     const root = await makeRoot()
+
     try {
       await writeFile(join(root, '.cfgspec.json'), '{ this is not json')
 
@@ -24,10 +25,12 @@ describe('config error paths', () => {
         yield* JsonCodec.use()
         yield* Config.use({ codec: JsonCodec, name: 'cfgspec', cwd: root, home: root })
         yield* Config.actions.load()
+
         return 'unreachable'
       })
 
       expect(isFailure(outcome)).toBe(true)
+
       if (isFailure(outcome)) {
         expect(outcome.error).toBe(CodecErrors.Parse)
       }
@@ -43,6 +46,7 @@ describe('config error paths', () => {
     })
 
     expect(isFailure(withoutConfig)).toBe(true)
+
     if (isFailure(withoutConfig)) {
       expect(withoutConfig.error).toBe('std:plugin.missing-action')
     }
@@ -51,10 +55,12 @@ describe('config error paths', () => {
     const withoutIo = await run(function* () {
       yield* JsonCodec.use()
       yield* Config.use({ codec: JsonCodec, name: 'cfgspec', cwd: '/tmp', home: '/tmp' })
+
       return 'unreachable'
     })
 
     expect(isFailure(withoutIo)).toBe(true)
+
     if (isFailure(withoutIo)) {
       expect(withoutIo.error).toBe('std:plugin.missing-action')
     }

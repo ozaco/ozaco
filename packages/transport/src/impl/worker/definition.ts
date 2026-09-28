@@ -29,6 +29,7 @@ export const WorkerTransport = Transport.implement<TransportDef.Options, [option
       if (!(yield* Codec.actions.hasCodec())) {
         yield* JsonCodec.use()
       }
+
       if (!isValidPrefix(options.prefix)) {
         return yield* fail(TransportErrors.Configuration, `invalid prefix "${options.prefix}"`)
       }
@@ -49,6 +50,7 @@ export const WorkerTransport = Transport.implement<TransportDef.Options, [option
       options.port.addEventListener('message', onMessage)
 
       const peers = attached.get(options.port) ?? new Set<Worker.State>()
+
       peers.add(state)
       attached.set(options.port, peers)
 
@@ -59,6 +61,7 @@ export const WorkerTransport = Transport.implement<TransportDef.Options, [option
       })
 
       yield* StateRef.set(state)
+
       return { transport: 'worker', prefix: options.prefix, capabilities: driver.capabilities }
     },
   },

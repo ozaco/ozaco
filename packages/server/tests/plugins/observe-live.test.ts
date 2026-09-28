@@ -23,6 +23,7 @@ const CYCLES = 4
 const openSocket = (url: string): Promise<WebSocket> =>
   new Promise((resolve, reject) => {
     const ws = new WebSocket(url)
+
     ws.addEventListener('open', () => resolve(ws))
     ws.addEventListener('error', () => reject(new Error('socket failed to open')))
   })
@@ -42,6 +43,7 @@ describe('observe — the live feed under socket churn', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const todos = crud(todosTable)
         const server = yield* createServer({
           services: [todos],
@@ -54,7 +56,9 @@ describe('observe — the live feed under socket churn', () => {
 
         // subscribe the live feed exactly like the console does
         const live = yield* until(fetch(`${base}/_observe/api/live`))
+
         expect(live.status).toBe(200)
+
         const reader = live.body!.getReader()
         const decoder = new TextDecoder()
         const seen: AnyType[] = []
@@ -68,14 +72,17 @@ describe('observe — the live feed under socket churn', () => {
 
             if (step.done) {
               liveEnded = true
+
               return
             }
 
             buffer += decoder.decode(step.value as Uint8Array, { stream: true })
+
             let at = buffer.indexOf('\n')
 
             while (at !== -1) {
               const line = buffer.slice(0, at)
+
               buffer = buffer.slice(at + 1)
 
               if (line.startsWith('data: ')) {
@@ -95,13 +102,17 @@ describe('observe — the live feed under socket churn', () => {
         for (let cycle = 0; cycle < CYCLES; cycle += 1) {
           // clean cycle: watch → sync → close
           const clean = yield* until(openSocket(`${wsBase}/todos/_realtime`))
+
           clean.send(JSON.stringify({ t: 'watch', id: `clean-${cycle}` }))
+
           const sync = yield* until(nextMessage(clean))
+
           expect(JSON.parse(sync).t).toBe('sync')
           clean.close()
 
           // abrupt cycle: watch and slam the socket shut before the sync can land
           const abrupt = yield* until(openSocket(`${wsBase}/todos/_realtime`))
+
           abrupt.send(JSON.stringify({ t: 'watch', id: `abrupt-${cycle}` }))
           abrupt.close()
 
@@ -118,6 +129,7 @@ describe('observe — the live feed under socket churn', () => {
 
           // the canary: this cycle's list request must still arrive on the live feed
           yield* until(fetch(`${base}/todos?limit=1`))
+
           const target = cycle + 1
           const deadline = Date.now() + 3000
 
@@ -134,9 +146,12 @@ describe('observe — the live feed under socket churn', () => {
         // comments must keep the connection open — this is exactly the panel scenario
         // (connect a realtime socket, go quiet, watch the console flip offline)
         const idleSocket = yield* until(openSocket(`${wsBase}/todos/_realtime`))
+
         idleSocket.send(JSON.stringify({ t: 'watch', id: 'idle' }))
         yield* until(nextMessage(idleSocket))
+
         const keepalivesBefore = keepalives
+
         yield* sleep(12_000)
         idleSocket.close()
         expect(liveEnded).toBe(false)
@@ -144,7 +159,9 @@ describe('observe — the live feed under socket churn', () => {
 
         // and rows still arrive after the quiet
         const before = canaries()
+
         yield* until(fetch(`${base}/todos?limit=1`))
+
         const deadline = Date.now() + 3000
 
         // oxlint-disable-next-line no-unmodified-loop-condition -- the pump task flips it
@@ -157,6 +174,7 @@ describe('observe — the live feed under socket churn', () => {
 
         // the store itself must still answer too
         const page = yield* Observe.actions.traces({})
+
         expect(page.traces.length).toBeGreaterThan(0)
 
         yield* until(reader.cancel().catch(() => {}))

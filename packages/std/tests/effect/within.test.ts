@@ -21,11 +21,14 @@ describe('within(scope, op)', () => {
   it('resolves contexts from the target scope, not the caller', async () => {
     const Vault = createContext<string>('within-test.vault')
     const [scope, destroy] = createScope()
+
     scope.set(Vault, 'vault')
 
     const outcome = await run(function* () {
       yield* Vault.set('caller')
+
       const inside = yield* within(scope, () => Vault.expect())
+
       return { inside, outside: yield* Vault.expect() }
     })
 
@@ -49,11 +52,13 @@ describe('within(scope, op)', () => {
       const failed = yield* attempt(() =>
         within(scope, function* () {
           yield* sleep(1)
+
           return yield* fail('within-test.boom', 'inside the vault')
         }),
       )
 
       yield* sleep(5)
+
       const after = yield* within(scope, function* () {
         return 'still usable'
       })
@@ -77,6 +82,7 @@ describe('within(scope, op)', () => {
     const caller = run(function* () {
       yield* within(scope, function* () {
         started = true
+
         try {
           yield* sleep(200)
           completed = true
@@ -99,6 +105,7 @@ describe('within(scope, op)', () => {
     const alive = await scope.run(function* () {
       return 'alive'
     })
+
     expect(unwrap(alive)).toBe('alive')
 
     await destroy()

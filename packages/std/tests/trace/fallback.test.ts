@@ -1,31 +1,19 @@
 /**
- * The process-level FALLBACK sink (`registerFallback`): where no scope Tracer records (tracing off
+ * The process-level FALLBACK sink (`registerFallback`): where no scope Trace sink records (tracing off
  * or never enabled, not suppressed) log records — `emitLog`, `event()`, `recordFailure` — go to
  * the FIRST registered sink; spans never do.
  */
 import { run, spawn } from 'std:effect'
 import { fail, isFailure, unwrap } from 'std:result'
 import type { TraceDef } from 'std:trace'
-import {
-  ActiveSpan,
-  canEmit,
-  current,
-  emitLog,
-  enableTracing,
-  event,
-  isRecorded,
-  parseTraceparent,
-  passThrough,
-  recordFailure,
-  registerFallback,
-  span,
-  startSpan,
-  suppressed,
-} from 'std:trace'
+import { Trace } from 'std:trace'
 
 import { afterEach, describe, expect, it } from 'bun:test'
 
 import pkg from '../../package.json'
+import { addSink } from '../../src/trace/internal/fallback'
+import { parseTraceparent } from '../../src/trace/internal/propagation'
+import { isRecordedIn } from '../../src/trace/internal/registry'
 
 import { memoryFallback, memoryTracer, withFallbacks } from './helpers'
 
@@ -39,7 +27,7 @@ const queued = (): readonly TraceDef.FallbackSink[] =>
 const INBOUND = '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01'
 
 /** Emit one plain record with `body` where it runs. */
-const say = (body: string) => emitLog({ body, severityNumber: 9 })
+const say = (body: string) => Trace.actions.emitLog({ body, severityNumber: 9 })
 
 afterEach(() => {
   // every test unregisters what it registered: the queue is process-wide
@@ -109,6 +97,7 @@ describe('fallback registry', () => {
 
     await withFallbacks([fallback], () => {
       const [entry] = queued()
+
       expect(entry?.id).toBe('global')
       expect(Object.isFrozen(queued())).toBe(true)
     })
@@ -119,11 +108,13 @@ describe('fallback registry', () => {
   it('nothing registered: every entry point is a no-op, canEmit() is false', async () => {
     const seen = unwrap(
       await run(function* () {
-        const before = yield* canEmit()
+        const before = yield* Trace.actions.canEmit()
+
         yield* say('dropped')
-        yield* event('dropped')
-        yield* recordFailure(fail('app.dropped'))
-        yield* (yield* current()).recordFailure(fail('app.dropped'))
+        yield* Trace.actions.event('dropped')
+        yield* Trace.actions.recordFailure(fail('app.dropped'))
+        yield* (yield* Trace.actions.current()).recordFailure(fail('app.dropped'))
+
         return before
       }),
     )
@@ -139,7 +130,7 @@ describe('fallback routing', () => {
     await withFallbacks([fallback], async () => {
       const can = unwrap(
         await run(function* () {
-          yield* emitLog({
+          yield* Trace.actions.emitLog({
             body: 'bus gap',
             severityNumber: 13,
             severityText: 'WARN',
@@ -147,7 +138,8 @@ describe('fallback routing', () => {
             scope: { name: '@ozaco/db' },
             time: 1234,
           })
-          return yield* canEmit()
+
+          return yield* Trace.actions.canEmit()
         }),
       )
 
@@ -172,7 +164,7 @@ describe('fallback routing', () => {
     expect(fallback.suppressedWhileEmitting).toEqual([true])
   })
 
-  it('tracing ON: the scope Tracer gets the record, the fallback nothing', async () => {
+  it('tracing ON: the scope Trace sink gets the record, the fallback nothing', async () => {
     const fallback = memoryFallback()
     const tracer = memoryTracer()
 
@@ -181,7 +173,7 @@ describe('fallback routing', () => {
         await run(function* () {
           yield* tracer.plugin.use()
           yield* say('traced')
-          yield* span('handler', () => say('in a span'))
+          yield* Trace.actions.span('handler', () => say('in a span'))
         }),
       )
     })
@@ -190,7 +182,7 @@ describe('fallback routing', () => {
     expect(fallback.logs).toEqual([])
   })
 
-  it('tracing explicitly OFF (a Tracer installed, switched off): the fallback gets it', async () => {
+  it('tracing explicitly OFF (a Trace sink installed, switched off): the fallback gets it', async () => {
     const fallback = memoryFallback()
     const tracer = memoryTracer()
 
@@ -198,7 +190,7 @@ describe('fallback routing', () => {
       unwrap(
         await run(function* () {
           yield* tracer.plugin.use()
-          yield* enableTracing(false)
+          yield* Trace.actions.enableTracing(false)
           yield* say('switched off')
         }),
       )
@@ -208,17 +200,18 @@ describe('fallback routing', () => {
     expect(fallback.logs.map(log => log.body)).toEqual(['switched off'])
   })
 
-  it('suppressed: nothing — neither the Tracer nor the fallback', async () => {
+  it('suppressed: nothing — neither the Trace sink nor the fallback', async () => {
     const fallback = memoryFallback()
 
     await withFallbacks([fallback], async () => {
       const can = unwrap(
         await run(() =>
-          suppressed(function* () {
+          Trace.actions.suppressed(function* () {
             yield* say('from inside an exporter')
-            yield* event('ignored')
-            yield* recordFailure(fail('app.ignored'))
-            return yield* canEmit()
+            yield* Trace.actions.event('ignored')
+            yield* Trace.actions.recordFailure(fail('app.ignored'))
+
+            return yield* Trace.actions.canEmit()
           }),
         ),
       )
@@ -234,7 +227,7 @@ describe('fallback routing', () => {
     const inbound = parseTraceparent(INBOUND)!
 
     await withFallbacks([fallback], async () => {
-      unwrap(await run(() => ActiveSpan.with(passThrough(inbound), () => say('carried'))))
+      unwrap(await run(() => Trace.actions.passThrough(inbound, () => say('carried'))))
     })
 
     expect(fallback.logs[0]?.context).toEqual({
@@ -254,13 +247,15 @@ describe('fallback routing', () => {
         await run(function* () {
           yield* inner.plugin.use()
 
-          return yield* span('outer', { service: 'billing' }, function* (handle) {
+          return yield* Trace.actions.span('outer', { service: 'billing' }, function* (handle) {
             const task = yield* spawn(function* () {
-              yield* enableTracing(false)
-              yield* event('from.off', { n: 1 })
-              yield* recordFailure(fail('app.off', 'failed off-scope'))
+              yield* Trace.actions.enableTracing(false)
+              yield* Trace.actions.event('from.off', { n: 1 })
+              yield* Trace.actions.recordFailure(fail('app.off', 'failed off-scope'))
             })
+
             yield* task
+
             return handle.context.spanId
           })
         }),
@@ -273,8 +268,10 @@ describe('fallback routing', () => {
       ['from.off', outer, 'billing'],
       ['exception', outer, 'billing'],
     ])
+
     // the span itself stays untouched: no event, no exception event, status unset
     const data = tracer.span('outer')
+
     expect(data.events).toEqual([])
     expect(data.status.code).toBe('unset')
     expect(tracer.logs).toEqual([])
@@ -286,8 +283,10 @@ describe('fallback routing', () => {
     await withFallbacks([fallback], async () => {
       unwrap(
         await run(function* () {
-          yield* span('untraced', function* () {})
-          const live = yield* startSpan('live')
+          yield* Trace.actions.span('untraced', function* () {})
+
+          const live = yield* Trace.actions.startSpan('live')
+
           yield* live.end({ failure: fail('app.live') })
         }),
       )
@@ -297,7 +296,7 @@ describe('fallback routing', () => {
   })
 
   it('a failing sink never fails the caller', async () => {
-    const releaseBroken = registerFallback({
+    const releaseBroken = addSink({
       id: 'broken',
       *emit() {
         return yield* fail('sink.down', 'unavailable')
@@ -307,8 +306,9 @@ describe('fallback routing', () => {
     try {
       const outcome = await run(function* () {
         yield* say('still fine')
-        yield* event('also fine')
-        yield* recordFailure(fail('app.x'))
+        yield* Trace.actions.event('also fine')
+        yield* Trace.actions.recordFailure(fail('app.x'))
+
         return 'done'
       })
 
@@ -327,8 +327,12 @@ describe('fallback — event() and recordFailure()', () => {
     await withFallbacks([fallback], async () => {
       unwrap(
         await run(function* () {
-          yield* event('cache.miss', { key: 'k' })
-          yield* event('cache.evicted', { key: 'k' }, { severity: 13, body: 'evicted k', time: 5 })
+          yield* Trace.actions.event('cache.miss', { key: 'k' })
+          yield* Trace.actions.event(
+            'cache.evicted',
+            { key: 'k' },
+            { severity: 13, body: 'evicted k', time: 5 },
+          )
         }),
       )
     })
@@ -352,11 +356,14 @@ describe('fallback — event() and recordFailure()', () => {
     await withFallbacks([fallback], async () => {
       unwrap(
         await run(function* () {
-          yield* recordFailure(failure)
-          yield* recordFailure(failure)
-          yield* (yield* current()).recordFailure(failure)
-          yield* recordFailure(fail('app.handled', 'dealt with'), { handled: true })
-          yield* recordFailure(fail('app.named'), { eventName: 'ozaco.custom', severity: 21 })
+          yield* Trace.actions.recordFailure(failure)
+          yield* Trace.actions.recordFailure(failure)
+          yield* (yield* Trace.actions.current()).recordFailure(failure)
+          yield* Trace.actions.recordFailure(fail('app.handled', 'dealt with'), { handled: true })
+          yield* Trace.actions.recordFailure(fail('app.named'), {
+            eventName: 'ozaco.custom',
+            severity: 21,
+          })
         }),
       )
     })
@@ -381,6 +388,6 @@ describe('fallback — event() and recordFailure()', () => {
       },
     })
     // recorded "outside any trace": a later escape into the same (absent) trace adds nothing
-    expect(isRecorded(failure, '')).toBe(true)
+    expect(isRecordedIn(failure, '')).toBe(true)
   })
 })

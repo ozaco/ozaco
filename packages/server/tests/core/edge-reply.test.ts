@@ -25,6 +25,7 @@ const jobs = service('jobs', {
     },
     function* ({ input, ctx }) {
       ctx.reply({ headers: { location: `/jobs/${input.name}`, 'x-static': 'overridden' } })
+
       return { id: input.name }
     },
   ),
@@ -56,12 +57,15 @@ describe('edge — reply shape', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({
           services: [jobs],
           edge: BunEdge,
           plugins: [Docs.use()],
         })
+
         yield* server.start()
+
         const post = (path: string, body?: unknown) =>
           Edge.actions.handle(
             new Request(`http://edge${path}`, {
@@ -73,6 +77,7 @@ describe('edge — reply shape', () => {
 
         // static 201 + static headers, one of them overridden per call, one added per call
         const created = yield* post('/jobs/create', { name: 'j1' })
+
         expect(created.status).toBe(201)
         expect(yield* until(created.json())).toEqual({ id: 'j1' })
         expect(created.headers.get('cache-control')).toBe('no-store')
@@ -82,15 +87,19 @@ describe('edge — reply shape', () => {
 
         // ctx.reply alone: a void reply under 202 (no body, still no content)
         const accepted = yield* post('/jobs/enqueue', { name: 'j2' })
+
         expect(accepted.status).toBe(202)
         expect(accepted.headers.get('x-session')).toBe('s-1')
         expect(yield* until(accepted.text())).toBe('')
 
         // the defaults are untouched
         const pong = yield* Edge.actions.handle(new Request('http://edge/jobs/ping'))
+
         expect(pong.status).toBe(200)
         expect(yield* until(pong.json())).toBe('pong')
+
         const dropped = yield* post('/jobs/drop')
+
         expect(dropped.status).toBe(204)
 
         // off the edge `ctx.reply` is a no-op — the value still comes back
@@ -98,13 +107,18 @@ describe('edge — reply shape', () => {
 
         // a failure mapped to 200: the status says ok, the envelope and the header say failure
         const soft = yield* post('/jobs/rpc', { method: 'nope' })
+
         expect(soft.status).toBe(200)
         expect(soft.headers.get('oz-error')).toBe('rpc.method-not-found')
+
         const envelope = (yield* until(soft.json())) as AnyType
+
         expect(envelope.error.error).toBe('rpc.method-not-found')
         expect(envelope.error.message).toBe('no method nope')
         expect(envelope.error.status).toBe(200)
+
         const hard = yield* post('/jobs/rpc', { method: 'ping' })
+
         expect(hard.status).toBe(200)
         expect(hard.headers.get('oz-error')).toBeNull()
         expect(yield* until(hard.json())).toEqual({ result: 'pong' })
@@ -115,17 +129,22 @@ describe('edge — reply shape', () => {
         )) as AnyType
         const doc = manifest.services[0].actions
         const byName = (name: string) => doc.find((entry: AnyType) => entry.action === name)
+
         expect(byName('create').status).toBe(201)
         expect(byName('create').headers).toEqual({ 'cache-control': 'no-store', 'x-static': 'yes' })
         expect(byName('enqueue').status).toBe(204)
         expect(byName('ping').status).toBe(200)
+
         const openapi = (yield* until(
           (yield* Edge.actions.handle(new Request('http://edge/docs/openapi.json'))).json(),
         )) as AnyType
+
         expect(Object.keys(openapi.paths['/jobs/create'].post.responses)).toContain('201')
         expect(Object.keys(openapi.paths['/jobs/drop'].post.responses)).toContain('204')
+
         // the 200-mapped failure shares the success entry as a oneOf; the 413 stays its own
         const rpc = openapi.paths['/jobs/rpc'].post.responses
+
         expect(Object.keys(rpc).toSorted()).toEqual(['200', '413'])
         expect(rpc['200'].content['application/json'].schema.oneOf).toHaveLength(2)
         expect(rpc['200'].description).toContain('rpc.method-not-found')

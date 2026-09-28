@@ -12,17 +12,22 @@ export const sortDocs = (rows: readonly Spec.Doc[], order: readonly Spec.OrderBy
       const a = left[entry.field]
       const b = right[entry.field]
       const sign = entry.direction === 'desc' ? -1 : 1
+
       if (isNil(a) || isNil(b)) {
         if (isNil(a) && isNil(b)) {
           continue
         }
+
         return sign * (isNil(a) ? 1 : -1)
       }
+
       const rank = compareValues(a, b) ?? 0
+
       if (rank !== 0) {
         return sign * rank
       }
     }
+
     return 0
   })
 }
@@ -54,21 +59,25 @@ export const matches = (doc: Spec.Doc, filter: Spec.Filter): boolean => {
 
     case 'gt': {
       const rank = ordered(doc, filter)
+
       return rank !== null && rank > 0
     }
 
     case 'gte': {
       const rank = ordered(doc, filter)
+
       return rank !== null && rank >= 0
     }
 
     case 'lt': {
       const rank = ordered(doc, filter)
+
       return rank !== null && rank < 0
     }
 
     case 'lte': {
       const rank = ordered(doc, filter)
+
       return rank !== null && rank <= 0
     }
 
@@ -78,6 +87,7 @@ export const matches = (doc: Spec.Doc, filter: Spec.Filter): boolean => {
 
     case 'not-in': {
       const value = read(doc, filter)
+
       return !isNil(value) && !filter.value.some(entry => compareValues(value, entry) === 0)
     }
 

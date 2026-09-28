@@ -40,6 +40,7 @@ export const NetworkCarrier = Carrier.implement<
   *setup(options) {
     const transport = options?.transport ?? Transport
     const described = yield* attempt(() => useContext(transport))
+
     if (isFailure(described)) {
       return yield* fail(
         ServerErrors.Configuration,
@@ -47,6 +48,7 @@ export const NetworkCarrier = Carrier.implement<
         described,
       )
     }
+
     const kernel = yield* Server.context.get()
     const heartbeatMs = options?.presence === false ? 0 : (options?.presence?.heartbeatMs ?? 5000)
     const state: NetworkCarrierDef.State = {
@@ -67,32 +69,40 @@ export const NetworkCarrier = Carrier.implement<
               draining: false,
             },
     }
+
     yield* StateRef.set(state)
+
     if (state.presence && kernel) {
       yield* fork(() => runPresence(kernel, state))
     }
+
     // lane pipes announced by a reply outlive the reply: they run here, in the carrier's scope
     yield* fork(function* () {
       for (;;) {
         const job = yield* state.jobs.next()
+
         if (job.done) {
           return
         }
+
         yield* fork(job.value)
       }
     })
     yield* ensure(() => {
       state.jobs.close(undefined)
     })
+
     return { carrier: 'network', transport: state.transport }
   },
 }).build({
   *hosts(service) {
     const state = yield* useContext(StateRef)
+
     if (!state.presence) {
       // the transport answers `no-responders` when nobody does: optimistic here
       return true
     }
+
     return membersOf(state, service).some(member => !member.draining)
   },
 
@@ -102,11 +112,14 @@ export const NetworkCarrier = Carrier.implement<
 
   *send(dispatch, inputs) {
     const state = yield* useContext(StateRef)
+
     yield* ensureMember(state, dispatch.service)
+
     // input streams ride alongside: piped from this scope, consumed by the owner as it reads
     for (const lane of inputs) {
       yield* fork(() => pipeLane(state, topics.lane(dispatch.cid, 'in', lane.name), lane.source))
     }
+
     const timeoutMs = Math.max(1, dispatch.deadline - Date.now())
     const outcome = yield* attempt(() =>
       state.actions.request<WireDef.Reply, WireDef.Dispatch>(
@@ -117,18 +130,23 @@ export const NetworkCarrier = Carrier.implement<
         },
       ),
     )
+
     if (isFailure(outcome)) {
       return yield* raise(outcome, `${dispatch.service}.${dispatch.action}`)
     }
+
     const reply = outcome.value
     const outputs = new Map(reply.outputs.map(lane => [lane.name, lane.brand]))
+
     return {
       reply,
       *lane(name) {
         const brand = outputs.get(name)
+
         if (brand === undefined) {
           return yield* fail(ServerErrors.Internal, `no output stream "${name}"`)
         }
+
         return yield* attachLane(state, topics.lane(dispatch.cid, 'out', name), brand)
       },
     }
@@ -141,19 +159,23 @@ export const NetworkCarrier = Carrier.implement<
       function* (dispatch) {
         const served = yield* server(dispatch, name => {
           const lane = dispatch.inputs.find(entry => entry.name === name)
+
           return attachLane(
             state,
             topics.lane(dispatch.cid, 'in', name),
             lane?.brand ?? 'bytes:application/octet-stream',
           )
         })
+
         for (const lane of served.outputs) {
           state.jobs.add(function* () {
             // opened here, in the carrier's scope: the handler's is gone once the reply is out
             const source = yield* lane.open()
+
             yield* pipeLane(state, topics.lane(dispatch.cid, 'out', lane.name), source)
           })
         }
+
         return {
           k: 'reply',
           cid: dispatch.cid,
@@ -181,8 +203,11 @@ export const NetworkCarrier = Carrier.implement<
         },
       },
     )
+
     state.serving.set(service, stop)
+
     const kernel = yield* Server.context.get()
+
     if (kernel && state.presence) {
       yield* announce(kernel, state, 'presence')
     }
@@ -191,9 +216,11 @@ export const NetworkCarrier = Carrier.implement<
   *unserve(service) {
     const state = yield* useContext(StateRef)
     const stop = state.serving.get(service)
+
     if (!stop) {
       return
     }
+
     state.serving.delete(service)
     yield* attempt(stop)
   },
@@ -201,15 +228,18 @@ export const NetworkCarrier = Carrier.implement<
   *leave() {
     const state = yield* useContext(StateRef)
     const kernel = yield* Server.context.get()
+
     if (!state.presence || !kernel) {
       return
     }
+
     state.presence.draining = true
     yield* announce(kernel, state, 'leave')
   },
 
   *emit(event) {
     const state = yield* useContext(StateRef)
+
     // plumbing (`_…`, the observe cluster) is never persisted: the transient plane
     yield* state.actions.publish(
       topics.event(event.name),
@@ -241,6 +271,7 @@ export const NetworkCarrier = Carrier.implement<
       let open = planes.length
       const ended = (): void => {
         open -= 1
+
         if (open === 0) {
           merged.close(undefined as never)
         }
@@ -250,11 +281,15 @@ export const NetworkCarrier = Carrier.implement<
         yield* fork(function* () {
           for (;;) {
             const step = yield* plane.subscription.next()
+
             if (step.done) {
               ended()
+
               return
             }
+
             const event = step.value.value
+
             if (event && isInternalEvent(event.name) === plane.internal) {
               merged.add(event)
             }
@@ -273,6 +308,7 @@ export const NetworkCarrier = Carrier.implement<
   status: () => ({
     *[Symbol.iterator]() {
       const state = yield* useContext(StateRef)
+
       return yield* state.actions.status()
     },
   }),

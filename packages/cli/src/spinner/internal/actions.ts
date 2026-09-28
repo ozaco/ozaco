@@ -47,6 +47,7 @@ function* setupTree(intervalMs: number) {
     if (state.stopped) {
       return
     }
+
     state.stopped = true
 
     if (task) {
@@ -78,6 +79,7 @@ const makeBarHandle = (
     node.status = 'success'
     node.value = node.total
     node.message = message ?? node.message
+
     if (finish) {
       yield* finish()
     }
@@ -85,6 +87,7 @@ const makeBarHandle = (
   *fail(message?: string) {
     node.status = 'fail'
     node.message = message ?? node.message
+
     if (finish) {
       yield* finish()
     }
@@ -93,7 +96,9 @@ const makeBarHandle = (
     if (node.status === 'pending') {
       node.status = 'success'
     }
+
     node.message = message ?? node.message
+
     if (finish) {
       yield* finish()
     }
@@ -122,12 +127,16 @@ const makeTaskHandle = (node: Helpers.TreeNode): SpinnerDef.TaskHandle => ({
   },
   *task(message: string) {
     const child = spinnerNode(message)
+
     node.children.push(child)
+
     return makeTaskHandle(child)
   },
   *bar(message: string, options?: SpinnerDef.NodeBarOptions) {
     const child = barNode(message, options ?? {})
+
     node.children.push(child)
+
     return makeBarHandle(child)
   },
 })
@@ -153,6 +162,7 @@ export function* start(options?: string | SpinnerDef.StartOptions) {
 
       while (!state.stopped) {
         const frame = frames[index % frames.length] ?? ''
+
         yield* lease.render(`${color(frame)} ${state.message}`)
         index += 1
         yield* sleep(intervalMs)
@@ -164,6 +174,7 @@ export function* start(options?: string | SpinnerDef.StartOptions) {
     if (state.stopped) {
       return
     }
+
     state.stopped = true
 
     if (task) {
@@ -201,12 +212,16 @@ export function* group(options?: SpinnerDef.GroupOptions) {
   const handle: SpinnerDef.GroupHandle = {
     *task(message: string) {
       const node = spinnerNode(message)
+
       runner.state.roots.push(node)
+
       return makeTaskHandle(node)
     },
     *bar(message: string, barOptions?: SpinnerDef.NodeBarOptions) {
       const node = barNode(message, barOptions ?? {})
+
       runner.state.roots.push(node)
+
       return makeBarHandle(node)
     },
     stop: runner.finish,
@@ -219,6 +234,7 @@ export function* bar(options?: string | SpinnerDef.BarOptions) {
   const opts = normalizeBar(options)
   const runner = yield* setupTree(opts.interval ?? DEFAULT_INTERVAL)
   const node = barNode(opts.message ?? '', { total: opts.total, width: opts.width })
+
   runner.state.roots.push(node)
 
   return makeBarHandle(node, runner.finish)

@@ -21,6 +21,7 @@ describe('serializeError', () => {
     expect(serializeError(new Error('kaput'))).toBe('Error: kaput')
 
     const coded = Object.assign(new TypeError('denied'), { code: 'EACCES' })
+
     expect(serializeError(coded)).toBe('TypeError: denied (EACCES)')
 
     expect(serializeError(null)).toBe('null')
@@ -30,6 +31,7 @@ describe('serializeError', () => {
 
     // circular objects fall back to Object#toString instead of throwing
     const circular: Record<string, unknown> = {}
+
     circular.self = circular
     expect(serializeError(circular)).toBe('[object Object]')
   })
@@ -60,6 +62,7 @@ describe('PriorityQueue', () => {
       [1, 'urgent-2'],
       [3, 'normal'],
     ]
+
     for (const [priority, label] of work) {
       queue.push(priority, label)
     }

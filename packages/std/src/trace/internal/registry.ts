@@ -16,8 +16,10 @@ const add = (
   traceId: string,
 ): void => {
   const traces = recorded.get(failure)
+
   if (!traces) {
     recorded.set(failure, new Set([traceId]))
+
     return
   }
 
@@ -27,6 +29,7 @@ const add = (
 
   if (traces.size > MAX_RECORDED_TRACES) {
     const [oldest] = traces
+
     traces.delete(oldest as string)
   }
 }

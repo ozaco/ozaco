@@ -70,10 +70,12 @@ describe('path helpers', () => {
     const original: Record<string, AnyType> = { a: { b: 1, keep: 2 } }
 
     const removed = unsetPath(original, 'a.b')
+
     expect(removed).toEqual({ a: { keep: 2 } })
     expect(original.a.b).toBe(1)
 
     const untouched = unsetPath(original, 'missing.leaf')
+
     expect(untouched).toEqual(original)
     expect(untouched).not.toBe(original)
   })

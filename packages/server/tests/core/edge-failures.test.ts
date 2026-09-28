@@ -22,6 +22,7 @@ import { storage, todos } from '../helpers'
 const probe = (url: string): Promise<'open' | 'rejected'> =>
   new Promise(resolve => {
     const ws = new WebSocket(url)
+
     ws.addEventListener('open', () => {
       ws.close()
       resolve('open')
@@ -54,6 +55,7 @@ const spy = () => {
           }
         },
       }
+
       return { hooks }
     },
   }).build()
@@ -63,7 +65,9 @@ const spy = () => {
     const found = spans.filter(
       span => span.kind === 'server' && span.attributes['url.path'] === path,
     )
+
     expect(found).toHaveLength(1)
+
     return found[0]!
   }
 
@@ -83,11 +87,13 @@ describe('edge — returned failures are recorded', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({
           services: [todos],
           edge: BunEdge,
           plugins: [seen.plugin.use()],
         })
+
         yield* Edge.actions.socket({
           path: '/guarded',
           *authorize() {
@@ -95,6 +101,7 @@ describe('edge — returned failures are recorded', () => {
           },
           *handler() {},
         })
+
         const info = yield* server.start({ port: 0 })
         const base = info.url!
 
@@ -109,6 +116,7 @@ describe('edge — returned failures are recorded', () => {
             body: '{not json',
           }),
         )
+
         expect(unparseable.status).toBe(400)
 
         // a WRONGLY TYPED body raises inside the dispatch — recorded there
@@ -119,15 +127,18 @@ describe('edge — returned failures are recorded', () => {
             body: JSON.stringify({ title: '' }),
           }),
         )
+
         expect(invalid.status).toBe(400)
 
         // socket: unknown path + rejected authorize
         const wsBase = base.replace('http', 'ws')
+
         expect(yield* until(probe(`${wsBase}/no-socket`))).toBe('rejected')
         expect(yield* until(probe(`${wsBase}/guarded`))).toBe('rejected')
 
         // a RAISED 4xx handler failure: recorded once, at its origin
         const raised = yield* until(fetch(`${base}/todos/explode?code=server.not-found`))
+
         expect(raised.status).toBe(404)
         yield* until(raised.text())
 
@@ -137,11 +148,14 @@ describe('edge — returned failures are recorded', () => {
         // DEBUG record on it (Bun never upgrades an unrouted socket — it falls through to HTTP)
         for (const path of ['/nope', '/no-socket']) {
           const edge = seen.edgeOf(path)
+
           expect(edge.name).toBe('GET')
           expect(edge.attributes['http.response.status_code']).toBe(404)
           expect(edge.attributes['error.type']).toBe('server.not-found')
           expect(edge.status.code).toBe('unset')
+
           const records = seen.exceptionsIn(edge.context.traceId)
+
           expect(records).toHaveLength(1)
           expect(records[0]).toMatchObject({
             eventName: 'http.server.request.exception',
@@ -155,15 +169,20 @@ describe('edge — returned failures are recorded', () => {
         const posts = seen.spans.filter(
           span => span.kind === 'server' && span.name === 'POST /todos/create',
         )
+
         expect(posts).toHaveLength(2)
+
         const badInput = posts.find(span => span.attributes['error.type'] === 'server.bad-request')
         const validation = posts.find(span => span.attributes['error.type'] === 'server.validation')
+
         expect(
           seen.spans.some(
             span => span.context.traceId === badInput!.context.traceId && span.kind !== 'server',
           ),
         ).toBe(false)
+
         const badRecords = seen.exceptionsIn(badInput!.context.traceId)
+
         expect(badRecords).toHaveLength(1)
         expect(badRecords[0]).toMatchObject({
           eventName: 'http.server.request.exception',
@@ -171,12 +190,16 @@ describe('edge — returned failures are recorded', () => {
         })
 
         expect(validation!.status.code).toBe('unset')
+
         const dispatch = seen.spans.find(
           span =>
             span.name === 'todos.create' && span.context.traceId === validation!.context.traceId,
         )
+
         expect(dispatch?.attributes['error.type']).toBe('server.validation')
+
         const validationRecords = seen.exceptionsIn(validation!.context.traceId)
+
         expect(validationRecords).toHaveLength(1)
         expect(validationRecords[0]).toMatchObject({
           eventName: 'ozaco.action.exception',
@@ -186,19 +209,25 @@ describe('edge — returned failures are recorded', () => {
 
         // the refused upgrade: its span `GET /guarded` carries the verdict, one DEBUG record
         const guarded = seen.edgeOf('/guarded')
+
         expect(guarded.name).toBe('GET /guarded')
         expect(guarded.attributes['http.response.status_code']).toBe(401)
         expect(guarded.attributes['error.type']).toBe('server.unauthorized')
+
         const guardedRecords = seen.exceptionsIn(guarded.context.traceId)
+
         expect(guardedRecords).toHaveLength(1)
         expect(guardedRecords[0]!.severityNumber).toBe(5)
 
         // the raised not-found: exactly ONE record, from the dispatch span; the edge span only
         // carries the tag
         const explode = seen.edgeOf('/todos/explode')
+
         expect(explode.attributes['error.type']).toBe('server.not-found')
         expect(explode.events.filter(event => event.name === 'exception')).toHaveLength(0)
+
         const raisedRecords = seen.exceptionsIn(explode.context.traceId)
+
         expect(raisedRecords).toHaveLength(1)
         expect(raisedRecords[0]).toMatchObject({
           eventName: 'ozaco.action.exception',

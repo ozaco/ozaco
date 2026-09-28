@@ -19,6 +19,7 @@ export const KvEditor = ({
 }) => {
   const update = (index: number, patch: Partial<Pair>) =>
     onChange(pairs.map((pair, at) => (at === index ? { ...pair, ...patch } : pair)))
+
   return (
     <div className='flex flex-col gap-1 p-2'>
       {pairs.map((pair, index) => (

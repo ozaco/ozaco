@@ -29,6 +29,7 @@ export const codecRegisterHandler: CodecDef.Handlers['register'] = function* (
 
   let conflict: CodecDef | undefined
   let reinstall = -1
+
   for (const [index, target] of existing.entries()) {
     if ((yield* useContext(target)).name !== transportCtx.name) {
       continue
@@ -55,6 +56,7 @@ export const codecRegisterHandler: CodecDef.Handlers['register'] = function* (
   // a re-install keeps its single entry — swapped for the installing copy, whose context is the one
   // just set up — but re-sorts it: the new install may carry a new priority
   const entries = reinstall === -1 ? [...existing, transport] : existing.with(reinstall, transport)
+
   yield* CodecRegistryContext.set(yield* sortedCodecs(entries, transport, transportCtx))
 }
 
@@ -91,9 +93,11 @@ export const codecEncodeFrameHandler = function* (data: unknown, preferred?: Cod
   if (typeof data === 'string') {
     return data
   }
+
   if (data instanceof ArrayBuffer || ArrayBuffer.isView(data)) {
     return data
   }
+
   return yield* (preferred ?? Codec).actions.stringify(data)
 } as CodecDef.Handlers['encodeFrame']
 
@@ -101,11 +105,15 @@ export const codecDecodeFrameHandler = function* (data: unknown, preferred?: Cod
   if (typeof data !== 'string') {
     return data
   }
+
   const trimmed = data.trim()
+
   if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
     const parsed = yield* attempt((preferred ?? Codec).actions.parse(data))
+
     return isSuccess(parsed) ? parsed.value : data
   }
+
   return data
 } as CodecDef.Handlers['decodeFrame']
 
@@ -116,6 +124,7 @@ export const codecDecodeFramesHandler = function* (
   return {
     *next() {
       const item = yield* source.next()
+
       if (item.done) {
         return item
       }

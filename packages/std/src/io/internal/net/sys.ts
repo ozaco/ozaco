@@ -29,6 +29,7 @@ export function* readInterfaces() {
     if (infos === undefined) {
       continue
     }
+
     for (const info of infos) {
       result.push({
         name,
@@ -49,6 +50,7 @@ export function* readInterfaces() {
 // Windows). Shared by the Bun and Node impls.
 export function* readPlatform(): Operation<IODef.Platform> {
   const uid = typeof process.getuid === 'function' ? process.getuid() : undefined
+
   return uid === undefined
     ? { os: process.platform, arch: process.arch }
     : { os: process.platform, arch: process.arch, uid }

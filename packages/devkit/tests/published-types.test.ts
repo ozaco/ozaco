@@ -18,6 +18,7 @@ const ALIAS = /(?:import\(|from\s*)(["'])((?:std|db|server|transport|client|ai|c
 const walk = (dir: string): readonly string[] =>
   readdirSync(dir, { withFileTypes: true }).flatMap(entry => {
     const path = join(dir, entry.name)
+
     return entry.isDirectory() ? walk(path) : [path]
   })
 

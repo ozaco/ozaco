@@ -15,6 +15,7 @@ import { storage, todosTable, testSchema } from '../helpers'
 const json = function* (path: string, init?: RequestInit) {
   const response = yield* Edge.actions.handle(new Request(`http://edge${path}`, init))
   const text = yield* until(response.text())
+
   return {
     status: response.status,
     body: text ? JSON.parse(text) : null,
@@ -38,16 +39,19 @@ describe('resource schema hooks', () => {
       schema: {
         create: s => {
           inputs.push('create')
+
           // tighten the create input beyond what the column kinds derive
           return s.extend({ title: z.string().min(3) })
         },
         doc: s => {
           outputs.push('doc')
+
           // reshape every read output: titles come back SHOUTED (validation parses through)
           return s.extend({ title: z.string().transform(title => title.toUpperCase()) })
         },
         page: s => {
           outputs.push('page')
+
           // widen the list ENVELOPE — the `after` hook's return passes this schema, so the
           // extra field survives output validation instead of being stripped
           return s.extend({ total: z.number() })
@@ -71,24 +75,29 @@ describe('resource schema hooks', () => {
     unwrap(
       await run(function* () {
         yield* storage()
+
         const server = yield* createServer({
           services: [todos],
           edge: BunEdge,
         })
+
         yield* server.start()
 
         // the tightened create input rejects what the default schema would accept
         const short = yield* post('/todos', { title: 'ab', done: false })
+
         expect(short.status).toBe(400)
         expect(short.body.error.error).toBe(ServerErrors.Validation)
 
         // the reshaped doc flows through every read output
         const created = yield* post('/todos', { title: 'abc', done: false })
+
         expect(created.status).toBe(200)
         expect(created.body.title).toBe('ABC')
 
         // the widened page envelope carries what the `after` hook computed
         const page = yield* json('/todos')
+
         expect(page.body.data.map((row: AnyType) => row.title)).toEqual(['ABC'])
         expect(page.body.total).toBe(1)
         expect((yield* json(`/todos/${created.body._id}`)).body.title).toBe('ABC')
@@ -99,6 +108,7 @@ describe('resource schema hooks', () => {
 
   it('the transforms are definition-time plain functions: a throw refuses the crud()', () => {
     let refused: AnyType
+
     try {
       crud(todosTable, {
         schema: {
@@ -110,6 +120,7 @@ describe('resource schema hooks', () => {
     } catch (error) {
       refused = error
     }
+
     expect(refused?.error).toBe('todo.bad-schema')
   })
 })

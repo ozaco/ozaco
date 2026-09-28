@@ -26,6 +26,7 @@ const bootstrap = function* (options: ConfigDef.Options) {
 describe('config discovery', () => {
   it('discovers the cwd base file and serves dotted reads', async () => {
     const root = await makeRoot()
+
     try {
       await writeFile(
         join(root, '.cfgspec.json'),
@@ -58,8 +59,10 @@ describe('config discovery', () => {
 
   it('merges parent levels under the cwd level; tree lists innermost first', async () => {
     const root = await makeRoot()
+
     try {
       const app = join(root, 'app')
+
       await mkdir(app)
       await writeFile(
         join(root, '.cfgspec.json'),
@@ -95,6 +98,7 @@ describe('config discovery', () => {
 
   it('applies per-level precedence: variant over config-dir files over the base file', async () => {
     const root = await makeRoot()
+
     try {
       await mkdir(join(root, '.cfgspec', 'nested'), { recursive: true })
       await writeFile(
@@ -119,6 +123,7 @@ describe('config discovery', () => {
             variant: 'dev',
           })
           yield* Config.actions.load()
+
           return {
             merged: yield* Config.actions.get(),
             origin: yield* Config.actions.origin('source'),
@@ -134,6 +139,7 @@ describe('config discovery', () => {
             features: Features.FILE | Features.CHAIN | Features.VARIANT | Features.DIR,
           })
           yield* Config.actions.load()
+
           return {
             source: yield* Config.actions.get('source'),
             dup: yield* Config.actions.get('dup'),
@@ -166,8 +172,10 @@ describe('config discovery', () => {
 
   it('feature flags disable discovery layers independently', async () => {
     const root = await makeRoot()
+
     try {
       const app = join(root, 'app')
+
       await mkdir(join(app, '.cfgspec'), { recursive: true })
       await writeFile(join(root, '.cfgspec.json'), jsonText({ level: 'outer' }))
       await writeFile(join(app, '.cfgspec.json'), jsonText({ source: 'base' }))
@@ -192,6 +200,7 @@ describe('config discovery', () => {
 
   it('derives the default file extension from the codec (toml)', async () => {
     const root = await makeRoot()
+
     try {
       await writeFile(join(root, '.cfgspec.toml'), 'port = 8080\n\n[server]\nhost = "local"\n')
 

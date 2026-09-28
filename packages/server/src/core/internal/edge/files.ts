@@ -86,6 +86,7 @@ function* crossesSymlink(root: string, segments: readonly string[]): Operation<b
     if (isFailure(stat)) {
       return false
     }
+
     if (stat.value.isSymlink) {
       return true
     }

@@ -5,7 +5,7 @@ import { IO } from 'std:io'
 import type { Result } from 'std:result'
 import { asFailure, fail, isFailure } from 'std:result'
 import type { TraceDef } from 'std:trace'
-import { isTracing, isValidContext, newSpanId, traceparentOf } from 'std:trace'
+import { Trace } from 'std:trace'
 
 import type { MatchedRoute, RouterContext } from 'rou3'
 import { addRoute, createRouter, findRoute } from 'rou3'
@@ -64,6 +64,7 @@ export function* createEdgeState(
     mounted: false,
     info: null,
   }
+
   yield* EdgeStateRef.set(state)
   JSON_SCOPES.set(state, yield* jsonScope())
 
@@ -162,6 +163,7 @@ export const remountActions = (state: Helpers.EdgeState): number => {
   }
 
   const count = addRegistry(state, router, sockets)
+
   state.router = router
   state.sockets = sockets
   state.mounted = true
@@ -200,7 +202,7 @@ const UPGRADE_SETTLE_MS = 10_000
 
 /** The trace id a failure envelope reports: the edge span's, `''` when nothing is traced. */
 const traceIdOf = (handle: TraceDef.SpanHandle): string =>
-  isValidContext(handle.context) ? handle.context.traceId : ''
+  handle.valid ? handle.context.traceId : ''
 
 /** An IPv4 address as a dual-stack socket reports it (`::ffff:<ipv4>`). */
 const MAPPED_V4 = /^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/iu
@@ -292,7 +294,7 @@ const echoedOf = (by: {
 }): TraceDef.SpanContext | null => {
   const own = by.handle.context
 
-  if (by.observe === 'off' || !isValidContext(own)) {
+  if (by.observe === 'off' || !by.handle.valid) {
     return null
   }
 
@@ -305,7 +307,7 @@ const echoedOf = (by: {
  * (`00-<trace>-<span>-<flags>`), sampled only for a trace that is exported (`echoedOf`). A
  * header the response already has is kept.
  */
-const stamp = (
+function* stamp(
   response: Response,
   by: {
     readonly kernel: ServerDef.Context
@@ -314,7 +316,7 @@ const stamp = (
     readonly observe: EdgeDef.Observe
     readonly failure?: Result.Failure<unknown> | null | undefined
   },
-): Response => {
+): Operation<Response> {
   if (!by.kernel.telemetry.trace.response) {
     return response
   }
@@ -328,7 +330,11 @@ const stamp = (
   const echoed = echoedOf(by)
 
   if (echoed && !response.headers.has(HEADERS.traceresponse)) {
-    headers.push([HEADERS.traceresponse, traceparentOf(echoed)])
+    const { traceparent } = yield* Trace.actions.inject({ context: echoed })
+
+    if (traceparent) {
+      headers.push([HEADERS.traceresponse, traceparent])
+    }
   }
 
   return withHeaders(response, headers)
@@ -371,7 +377,7 @@ function* runAction(
   let callInput = input.value
 
   if (capture.bodies && (entry.meta.inputPlane !== 'value' || sentBody(request))) {
-    handle.setAttributes(bodyAttributes('request', input.value))
+    handle.setAttributes(bodyAttributes('request', input.value, capture.sensitiveKeys))
     handle.setAttribute('http.request.body.size', declaredSize(request))
 
     // a stream body is observed as its SIZE — counted as it flows, never buffered
@@ -386,6 +392,7 @@ function* runAction(
   }
 
   const controller = new AbortController()
+
   request.signal?.addEventListener('abort', () => controller.abort(ServerErrors.Cancelled))
 
   // what the handler says about its own reply (`ctx.reply`), merged over the action's statics
@@ -394,7 +401,7 @@ function* runAction(
   // the dispatch span opens under the ACTIVE edge span (`parent` omitted); `cid` is carrier
   // correlation only — never a span id
   const call: ServerDef.Call = {
-    cid: yield* newSpanId(),
+    cid: yield* Trace.actions.newSpanId(),
     service: entry.service,
     action: entry.action,
     input: callInput,
@@ -425,7 +432,7 @@ function* runAction(
   }
 
   if (capture.bodies) {
-    handle.setAttributes(bodyAttributes('response', outcome.value))
+    handle.setAttributes(bodyAttributes('response', outcome.value, capture.sensitiveKeys))
   }
 
   const value = yield* materialize(outcome.value)
@@ -463,7 +470,7 @@ function* finish({
     out = yield* decorator(request, out)
   }
 
-  return stamp(out, { kernel: state.kernel, requestId, handle: span, observe, failure })
+  return yield* stamp(out, { kernel: state.kernel, requestId, handle: span, observe, failure })
 }
 
 /**
@@ -575,7 +582,7 @@ function* respond(
   const capture = state.kernel.telemetry.observe.capture
 
   if (capture.headers) {
-    handle.setAttributes(headerAttributes('request', request.headers))
+    handle.setAttributes(headerAttributes('request', request.headers, capture.sensitiveKeys))
   }
 
   const answer = yield* routeOf(answering, match)
@@ -595,7 +602,7 @@ function* respond(
   })
 
   if (capture.headers) {
-    handle.setAttributes(headerAttributes('response', response.headers))
+    handle.setAttributes(headerAttributes('response', response.headers, capture.sensitiveKeys))
   }
 
   edgeReply(handle, response, answer.failure)
@@ -612,7 +619,7 @@ function* crashed(
 ): Operation<Helpers.EdgeAnswer> {
   const fault = fail(ServerErrors.Internal, 'the edge failed to answer', crash)
   const answer = yield* failed(answering, fault)
-  const response = stamp(answer.response, {
+  const response = yield* stamp(answer.response, {
     kernel: answering.state.kernel,
     requestId: answering.edge.requestId,
     handle: answering.handle,
@@ -647,6 +654,7 @@ function* ending(
 ): Operation<Helpers.ServedRequest> {
   if (!answer.streamed) {
     yield* live.end(answer.fault ? { failure: answer.fault } : {})
+
     return { response: answer.response, done: Promise.resolve() }
   }
 
@@ -683,11 +691,13 @@ function* ending(
     }
 
     followed = true
+
     return countingStream(body, end)
   })
 
   if (!followed) {
     yield* live.end()
+
     return { response, done: Promise.resolve() }
   }
 
@@ -713,6 +723,7 @@ export function* serveRequest(
   const observe = observeOf(kernel, entry)
 
   const edge = yield* edgeSpan({ kernel, request, url, route: templateOf(entry), observe })
+
   edge.span.setAttribute('client.address', clientOf(request, peer))
 
   // the span is ended exactly once, whatever happens below: handed to `ending` (the body ends
@@ -734,6 +745,7 @@ export function* serveRequest(
 
     if (!isFailure(served)) {
       handed = true
+
       return served.value
     }
 
@@ -742,6 +754,7 @@ export function* serveRequest(
     const fallback = yield* edge.run(handle =>
       crashed({ state, request, url, edge, handle, observe }, served),
     )
+
     handed = true
     yield* edge.span.end({ failure: fallback.fault })
 
@@ -778,6 +791,7 @@ export function* crashResponse(
   const answered = yield* attempt(function* () {
     const url = new URL(request.url)
     const edge = yield* edgeSpan({ kernel: state.kernel, request, url, route: null })
+
     edge.span.updateName('HTTP')
     edge.span.setAttribute('client.address', clientOf(request, undefined))
 
@@ -808,7 +822,8 @@ function* refuse(
   const answer = yield* failed(answering, failure)
 
   yield* replyFailure(handle, failure, { status: answer.response.status })
-  const response = stamp(answer.response, {
+
+  const response = yield* stamp(answer.response, {
     kernel: state.kernel,
     requestId: edge.requestId,
     handle,
@@ -817,7 +832,13 @@ function* refuse(
   })
 
   if (state.kernel.telemetry.observe.capture.headers) {
-    handle.setAttributes(headerAttributes('response', response.headers))
+    handle.setAttributes(
+      headerAttributes(
+        'response',
+        response.headers,
+        state.kernel.telemetry.observe.capture.sensitiveKeys,
+      ),
+    )
   }
 
   edgeReply(handle, response, failure)
@@ -834,7 +855,9 @@ function* upgradeOf(
   const { kernel } = state
 
   if (kernel.telemetry.observe.capture.headers) {
-    handle.setAttributes(headerAttributes('request', request.headers))
+    handle.setAttributes(
+      headerAttributes('request', request.headers, kernel.telemetry.observe.capture.sensitiveKeys),
+    )
   }
 
   if (!match) {
@@ -869,10 +892,11 @@ function* upgradeOf(
   const params = decodeParams(match.params)
   const headers = headersOf(request)
   // every frame span links the upgrade span (`ws.session`); the close log is correlated to it
-  const upgrade = isValidContext(handle.context) ? handle.context : null
+  const upgrade = handle.valid ? handle.context : null
   // the session's id, decided HERE so the upgrade span carries it: search one id, get the
   // upgrade and every frame of the session
   const sessionId = (yield* IO.actions.uuid()).slice(0, 8)
+
   handle.setAttribute('ozaco.ws.session.id', sessionId)
 
   return {
@@ -937,12 +961,14 @@ function* endUpgrade(
 ): Operation<void> {
   if (upgraded.t === 'unknown') {
     yield* edge.span.end({ cancelled: true })
+
     return
   }
 
   if (upgraded.t === 'upgraded') {
     edge.span.setAttribute('http.response.status_code', 101)
     yield* edge.span.end()
+
     return
   }
 
@@ -954,7 +980,7 @@ function* endUpgrade(
       yield* replyFailure(handle, failure, { status })
       edgeReply(handle, new Response(null, { status }), failure)
 
-      if (!(yield* isTracing())) {
+      if (!(yield* Trace.actions.isTracing())) {
         yield* edgeLog('warn', 'edge upgrade failed', {
           'url.path': new URL(request.url).pathname,
           'http.response.status_code': status,
@@ -999,6 +1025,7 @@ const pendingUpgrade = (
             reported.operation,
             (function* (): Operation<Helpers.UpgradeOutcome> {
               yield* sleep(UPGRADE_SETTLE_MS)
+
               return { t: 'unknown' }
             })(),
           ])
@@ -1048,7 +1075,9 @@ export function* decideUpgrade(
   const url = new URL(request.url)
   const match = findRoute(state.sockets, 'WS', url.pathname, { params: true })
   const edge = yield* edgeSpan({ kernel, request, url, route: match?.data.path ?? null })
+
   edge.span.setAttribute('client.address', clientOf(request, peer))
+
   // an accepted upgrade's span is ended by the driver's report, not here
   let pending = false
 
@@ -1062,10 +1091,12 @@ export function* decideUpgrade(
     if (!isFailure(decided)) {
       if (decided.value.kind === 'accept') {
         pending = true
+
         return pendingUpgrade({ state, request, edge }, decided.value)
       }
 
       yield* edge.span.end()
+
       return decided.value
     }
 

@@ -66,6 +66,7 @@ describe('logger — contract', () => {
       const stillMissing = !(yield* IO.actions.exists(nested))
 
       yield* FileTransport.use({ path: join(nested, 'b.log') })
+
       const created = yield* IO.actions.exists(nested)
 
       return { refused: isFailure(refused) ? refused.error : 'installed', stillMissing, created }

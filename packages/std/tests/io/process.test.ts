@@ -64,6 +64,7 @@ describe('exec', () => {
       yield* BunIO.use()
 
       const result = yield* IO.actions.exec('cat', [], { stdin: 'from-stdin' })
+
       return decoder.decode(result.stdout)
     })
 
@@ -97,6 +98,7 @@ describe('exec', () => {
       yield* BunIO.use()
 
       const result = yield* attempt(() => IO.actions.exec('ozaco-definitely-not-a-binary'))
+
       return isFailure(result) ? result.error : 'no-failure'
     })
 
@@ -108,6 +110,7 @@ describe('exec', () => {
       yield* BunIO.use()
 
       const result = yield* IO.actions.exec('sleep', ['2'], { timeout: 50 })
+
       return { success: result.success, endedEarly: result.code !== 0 || result.signal !== null }
     })
 
@@ -124,9 +127,11 @@ describe('spawn', () => {
       const out = yield* handle.stdout
 
       yield* handle.write('ping')
+
       const first = yield* out.next()
 
       yield* handle.closeStdin()
+
       const status = yield* handle.exited()
       const closing = yield* out.next()
 
@@ -153,7 +158,9 @@ describe('spawn', () => {
       yield* BunIO.use()
 
       const handle = yield* IO.actions.spawn('sleep', ['5'])
+
       yield* handle.kill()
+
       const status = yield* handle.exited()
 
       return { code: status.code, signal: status.signal, success: status.success }
@@ -167,6 +174,7 @@ describe('spawn', () => {
       yield* BunIO.use()
 
       const result = yield* attempt(() => IO.actions.spawn('ozaco-definitely-not-a-binary'))
+
       return isFailure(result) ? result.error : 'no-failure'
     })
 

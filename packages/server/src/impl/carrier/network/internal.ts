@@ -8,7 +8,7 @@ import { Logger, LogLevel } from 'std:logger'
 import type { Result } from 'std:result'
 import { fail, formatFailure, isFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
-import { emitLog } from 'std:trace'
+import { Trace } from 'std:trace'
 
 import { logAttributes, severityOf } from 'std:logger/transport/trace'
 import { TransportErrors } from 'transport:core'
@@ -23,7 +23,7 @@ const LOG_SCOPE = scopeOf('carrier/network')
 /**
  * One operational log line of the carrier (presence changes, draining waits, version skew,
  * abandoned lanes): through the installed std Logger (`logger` binding = this carrier's scope —
- * it reaches the sinks through the Logger's `TraceTransport`), else straight to the Tracer as a
+ * it reaches the sinks through the Logger's `TraceTransport`), else straight to the Trace sinks as a
  * log record. Never fails the carrier.
  */
 export function* opLog(
@@ -36,16 +36,17 @@ export function* opLog(
       yield* Logger.actions.child({ logger: LOG_SCOPE.name }, () =>
         Logger.actions[level](msg, data as Record<string, unknown>),
       )
+
       return
     }
 
     const severity = severityOf(level === 'warn' ? LogLevel.warn : LogLevel.info)
 
-    yield* emitLog({
+    yield* Trace.actions.emitLog({
       body: msg,
       severityNumber: severity.number,
       severityText: severity.text,
-      attributes: logAttributes(data),
+      attributes: yield* logAttributes(data),
       scope: LOG_SCOPE,
     })
   })
@@ -117,6 +118,7 @@ export function* attachLane(
   brand: string,
 ): Operation<StreamDef.Branded> {
   const flow = state.actions.flow<AnyType, unknown>(topic, { timeoutMs: state.laneTimeoutMs })
+
   return yield* stream.of(flow, brand)
 }
 
@@ -314,13 +316,17 @@ export function* runPresence(
   yield* fork(function* () {
     for (;;) {
       const step = yield* subscription.next()
+
       if (step.done) {
         return
       }
+
       const beat = step.value.value
+
       if (!beat || beat.instance === kernel.instance) {
         continue
       }
+
       const changed = absorb(presence, beat)
 
       if (changed.joined.length > 0) {
@@ -337,6 +343,7 @@ export function* runPresence(
       }
 
       yield* warnVersions(kernel, beat, warned)
+
       if (beat.k === 'hello') {
         yield* announce(kernel, state, 'presence')
       }
@@ -346,6 +353,7 @@ export function* runPresence(
 
   for (;;) {
     yield* sleep(presence.heartbeatMs)
+
     const expired = sweep(presence, Date.now())
 
     if (expired.length > 0) {
@@ -391,6 +399,7 @@ export function* ensureMember(state: NetworkCarrierDef.State, service: string): 
         'ozaco.presence.service': service,
         'ozaco.presence.draining': members.length,
       })
+
       return
     }
 

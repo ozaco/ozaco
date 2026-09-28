@@ -34,6 +34,7 @@ export function* walkRecursive(
   }
 
   let entries: string[]
+
   try {
     entries = yield* until(fs.readdir(root))
   } catch {
@@ -44,6 +45,7 @@ export function* walkRecursive(
     const fullPath = join(root, name)
 
     let s: Stats
+
     try {
       s = hasFlag(flags, IO_FLAGS.followSymlinks)
         ? yield* until(fs.stat(fullPath))
@@ -69,10 +71,12 @@ export function* walkRecursive(
     if (entry.isFile && hasFlag(flags, IO_FLAGS.files) && matchesPattern) {
       results.push(entry)
     }
+
     if (entry.isDirectory) {
       if (hasFlag(flags, IO_FLAGS.dirs) && matchesPattern) {
         results.push(entry)
       }
+
       yield* walkRecursive(fullPath, options, depth + 1, results)
     }
   }

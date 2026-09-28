@@ -40,15 +40,19 @@ export const wrapAnsi = (text: string, columns: number, options: WrapOptions = {
       if (options.hard && displayWidth(word) > limit) {
         return hardBreak(word, limit)
       }
+
       return [word]
     })
 
     let current = ''
+
     for (const word of words) {
       if (current === '') {
         current = word
+
         continue
       }
+
       if (displayWidth(current) + 1 + displayWidth(word) <= limit) {
         current += ` ${word}`
       } else {
@@ -56,6 +60,7 @@ export const wrapAnsi = (text: string, columns: number, options: WrapOptions = {
         current = word
       }
     }
+
     out.push(current)
   }
 

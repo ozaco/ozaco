@@ -26,25 +26,36 @@ export function* toReadable<T>(flow: Flow<T, unknown>): Operation<ReadableStream
 
   const pump = yield* fork(function* () {
     const opened = yield* attempt(flow)
+
     if (isFailure(opened)) {
       ready.reject(opened)
+
       return
     }
+
     const subscription = opened.value
+
     ready.resolve(undefined)
+
     for (;;) {
       const want = yield* demand.next()
+
       if (want.done) {
         return
       }
+
       const step = yield* subscription.next()
+
       want.value(step)
+
       if (step.done) {
         demand.close(undefined)
+
         return
       }
     }
   })
+
   yield* ready.operation
 
   const take = () =>
@@ -55,14 +66,19 @@ export function* toReadable<T>(flow: Flow<T, unknown>): Operation<ReadableStream
   return new ReadableStream<T>({
     async pull(controller) {
       const step = await take()
+
       if (!step.done) {
         controller.enqueue(step.value)
+
         return
       }
+
       if (isFailure(step.value)) {
         controller.error(step.value)
+
         return
       }
+
       controller.close()
     },
     async cancel() {
@@ -81,22 +97,28 @@ export const fromReadable = <T>(stream: ReadableStream<T>): Flow<T, void> => ({
   *[Symbol.iterator]() {
     const reader = stream.getReader()
     let finished = false
+
     yield* ensure(() => {
       if (!finished) {
         void reader.cancel().catch(() => {})
       }
     })
+
     const subscription: Subscription<T, void> = {
       *next() {
         const result = yield* call(() => reader.read())
+
         if (result.done) {
           finished = true
           reader.releaseLock()
+
           return { done: true as const, value: undefined }
         }
+
         return { done: false as const, value: result.value }
       },
     }
+
     return subscription
   },
 })

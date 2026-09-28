@@ -7,7 +7,7 @@ import { definePlugin, defineProtocol } from 'std:plugin'
 import type { Result } from 'std:result'
 import { fail, isFailure } from 'std:result'
 import type { TraceDef } from 'std:trace'
-import { current } from 'std:trace'
+import { Trace } from 'std:trace'
 
 import pkg from '../../../package.json'
 
@@ -35,7 +35,7 @@ const AUTH_STRATEGY = Symbol.for('server:auth-strategy')
  * succeeds, the first failure met is the answer — the most specific reason there is — and with
  * no failure at all the call resolves `undefined` (nobody knew the credential). A strategy
  * implements only what it supports and answers `undefined` for the rest. A strategy that FAILED
- * before a later one answered leaves an `ozaco.auth.skip` event (`ozaco.auth.strategy`,
+ * before a later one answered leaves an `auth.skip` event (`ozaco.auth.strategy`,
  * `error.type`) on the guarded span (a bearer resolution's `span`, else the active one); a bearer
  * resolution notes which strategy decided.
  */
@@ -71,6 +71,7 @@ const AuthStrategyProtocol = defineProtocol<AuthDef.StrategyContext, AuthDef.Str
 
       if (isFailure(answer)) {
         failed.push([strategyOf(entry), answer])
+
         continue
       }
 
@@ -80,6 +81,7 @@ const AuthStrategyProtocol = defineProtocol<AuthDef.StrategyContext, AuthDef.Str
         }
 
         yield* skipped(failed, resolution?.span)
+
         return answer.value
       }
     }
@@ -132,7 +134,7 @@ function* gate(
   how: { readonly lenient?: boolean; readonly at?: TraceDef.SpanHandle } = {},
 ): Operation<AuthDef.Principal | null> {
   const lenient = how.lenient === true
-  const at = how.at ?? (yield* current())
+  const at = how.at ?? (yield* Trace.actions.current())
   const resolution: AuthDef.Resolution = { strategy: null, rejection: undefined, span: at }
   const resolved = token === null ? null : yield* attempt(() => resolve(token, resolution))
   const principal = resolved === null || isFailure(resolved) ? null : resolved.value
@@ -183,7 +185,9 @@ const AuthImpl = definePlugin<
         'Auth needs at least one strategy installed BEFORE it — plugins: [JwtAuth.use({ secret, provider }), StaticAuth.use({ tokens }), Auth]',
       )
     }
+
     const context: AuthDef.Context = { default: given?.default ?? false }
+
     return {
       ...context,
       options,
@@ -199,6 +203,7 @@ const AuthImpl = definePlugin<
           const principal = yield* gate(requirement, bearerOf(call.headers), {
             at: yield* dispatchSpan(),
           })
+
           return yield* next(call, { ...ctx, auth: principal })
         },
         // …and the edge span of a raw route
@@ -237,23 +242,27 @@ export const AuthStrategy = AuthStrategyProtocol
 export const Auth = AuthImpl.build<AuthDef.Actions>({
   *login(credentials) {
     const tokens = yield* AuthStrategyProtocol.actions.login(credentials)
+
     if (!tokens) {
       return yield* fail(
         ServerErrors.Configuration,
         'no auth strategy issues tokens — install JwtAuth with a `provider`',
       )
     }
+
     return tokens
   },
 
   *refresh(refreshToken) {
     const tokens = yield* AuthStrategyProtocol.actions.refresh(refreshToken)
+
     if (!tokens) {
       return yield* fail(
         ServerErrors.Unsupported,
         'no auth strategy rotates refresh tokens — JwtAuth needs mode: access-refresh',
       )
     }
+
     return tokens
   },
 
@@ -263,18 +272,21 @@ export const Auth = AuthImpl.build<AuthDef.Actions>({
 
   *signService(name, roles = []) {
     const token = yield* AuthStrategyProtocol.actions.signService(name, roles)
+
     if (!token) {
       return yield* fail(
         ServerErrors.Configuration,
         'no auth strategy mints service tokens — install JwtAuth',
       )
     }
+
     return token
   },
 
   *principal() {
     const ctx = yield* CtxRef.get()
     const principal = ctx?.auth as AuthDef.Principal | undefined
+
     if (!principal) {
       return yield* fail(
         ServerErrors.Unauthorized,
@@ -282,6 +294,7 @@ export const Auth = AuthImpl.build<AuthDef.Actions>({
         AuthCauses.Missing,
       )
     }
+
     return principal
   },
 

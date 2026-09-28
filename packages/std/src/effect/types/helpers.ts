@@ -157,9 +157,6 @@ export namespace Helpers {
     reject: (error: unknown) => void
   }
 
-  /** One queued item (`createQueue`): a value, or the close value. */
-  export type QueueItem<T, TClose> = IteratorResult<T, TClose>
-
   /** A pull `toReadable` parks until the pump has the Flow's next step. */
   export type ReadablePull<T> = (step: IteratorResult<T, unknown>) => void
 

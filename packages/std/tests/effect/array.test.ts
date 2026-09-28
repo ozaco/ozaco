@@ -28,6 +28,7 @@ const traced = (log: string[], ms: number) =>
     log.push(`start:${index}`)
     yield* sleep(ms)
     log.push(`end:${index}`)
+
     return value * 2
   }
 
@@ -49,6 +50,7 @@ describe('map (sequential)', () => {
     const outcome = await run(function* () {
       return yield* map([], function* () {
         calls++
+
         return 1
       })
     })
@@ -63,17 +65,21 @@ describe('map (sequential)', () => {
     const outcome = await run(function* () {
       return yield* map([1, 2, 3], function* (value) {
         calls++
+
         if (value === 2) {
           return yield* fail('map.boom')
         }
+
         return value
       })
     })
 
     expect(isFailure(outcome)).toBe(true)
+
     if (isFailure(outcome)) {
       expect(outcome.error).toBe('map.boom')
     }
+
     expect(calls).toBe(2)
   })
 })
@@ -88,6 +94,7 @@ describe('mapPar (parallel via all)', () => {
         log.push(`start:${index}`)
         yield* sleep(ms)
         log.push(`end:${index}`)
+
         return `item-${index}`
       })
     })
@@ -105,21 +112,26 @@ describe('mapPar (parallel via all)', () => {
       return yield* mapPar([1, 2, 3], function* (value) {
         if (value === 2) {
           yield* sleep(1)
+
           return yield* fail('mapPar.boom')
         }
+
         try {
           yield* sleep(200)
         } finally {
           teardowns.push(`halted:${value}`)
         }
+
         return value
       })
     })
 
     expect(isFailure(outcome)).toBe(true)
+
     if (isFailure(outcome)) {
       expect(outcome.error).toBe('mapPar.boom')
     }
+
     expect(teardowns.toSorted()).toEqual(['halted:1', 'halted:3'])
   })
 
@@ -142,6 +154,7 @@ describe('some', () => {
       return yield* some([1, 2, 3, 4], function* (value) {
         tested.push(value)
         yield* sleep(1)
+
         return value === 2
       })
     })
@@ -156,6 +169,7 @@ describe('some', () => {
     const outcome = await run(function* () {
       return yield* some([1, 2, 3], function* (value, index) {
         tested.push(index)
+
         return value > 10
       })
     })
@@ -184,6 +198,7 @@ describe('filter (sequential)', () => {
         log.push(`start:${index}`)
         yield* sleep(1)
         log.push(`end:${index}`)
+
         return value % 2 === 0
       })
     })
@@ -210,6 +225,7 @@ describe('filterPar (parallel via all)', () => {
       return yield* filterPar([30, 15, 1, 20], function* (ms, index) {
         log.push(`start:${index}`)
         yield* sleep(ms)
+
         return index !== 1
       })
     })
@@ -225,6 +241,7 @@ describe('filterPar (parallel via all)', () => {
           if (value === 2) {
             return yield* fail('filterPar.boom')
           }
+
           return true
         }),
       )
@@ -246,6 +263,7 @@ describe('reduce', () => {
         function* (acc, value, index) {
           seen.push(`${index}:${acc}`)
           yield* sleep(1)
+
           return acc + value
         },
         '',
@@ -280,6 +298,7 @@ describe('toSorted (effectful comparator)', () => {
       return yield* toSorted(input, function* (a, b) {
         comparisons++
         yield* sleep(0)
+
         return a - b
       })
     })
@@ -314,6 +333,7 @@ describe('toSorted (effectful comparator)', () => {
     })
 
     expect(isFailure(outcome)).toBe(true)
+
     if (isFailure(outcome)) {
       expect(outcome.error).toBe('sort.boom')
     }
@@ -325,10 +345,12 @@ describe('toSorted (effectful comparator)', () => {
     const outcome = await run(function* () {
       const compare = function* () {
         comparisons++
+
         return 0
       }
       const empty = yield* toSorted([], compare)
       const single = yield* toSorted([1], compare)
+
       return { empty, single }
     })
 

@@ -19,8 +19,10 @@ export const NodeEdge = Edge.implement<EdgeDef.Options, []>({
     if (typeof createHttpServer !== 'function') {
       return yield* fail(ServerErrors.Configuration, 'node:http is not available here')
     }
+
     yield* StateRef.set({ server: null, wss: null })
     yield* openEdge()
+
     return { runtime: 'node' }
   },
 }).build(edgeActions(driver))

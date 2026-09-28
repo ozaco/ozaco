@@ -9,16 +9,7 @@ import type { LoggerDef } from 'std:logger'
 import { DefaultLogger, Logger, LogLevel } from 'std:logger'
 import { fail, unwrap } from 'std:result'
 import type { TraceDef } from 'std:trace'
-import {
-  ActiveSpan,
-  current,
-  enableTracing,
-  parseTraceparent,
-  passThrough,
-  span,
-  suppressed,
-  Tracer,
-} from 'std:trace'
+import { Trace } from 'std:trace'
 
 import { describe, expect, it, spyOn } from 'bun:test'
 
@@ -26,13 +17,14 @@ import { JsonCodec } from 'std:codec/impl/json'
 import { ConsoleTransport } from 'std:logger/transport/console'
 
 import { prettyFormat } from '../../src/logger/transport/console/internal'
+import { parseTraceparent } from '../../src/trace/internal/propagation'
 import { memoryTracer } from '../trace/helpers'
 
 import { captureTransport, createSink } from './helpers'
 
 const INBOUND = '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01'
 
-/** Run `body` with tracing on (an in-memory Tracer), a Logger and a capturing transport. */
+/** Run `body` with tracing on (an in-memory Trace sink), a Logger and a capturing transport. */
 const logged = async <T>(
   body: () => Operation<T>,
 ): Promise<{ entries: LoggerDef.Entry[]; value: T }> => {
@@ -44,6 +36,7 @@ const logged = async <T>(
       yield* tracer.plugin.use()
       yield* DefaultLogger.use({ level: LogLevel.trace, timestamp: () => 1000 })
       yield* captureTransport('capture', sink).use()
+
       return yield* body()
     }),
   )
@@ -55,11 +48,15 @@ describe('logger — trace correlation', () => {
   it('an entry inside span() carries its ids; one outside carries none', async () => {
     const { entries, value } = await logged(function* () {
       yield* Logger.actions.info('before')
-      const context = yield* span('handler', function* (handle) {
+
+      const context = yield* Trace.actions.span('handler', function* (handle) {
         yield* Logger.actions.info('inside')
+
         return handle.context
       })
+
       yield* Logger.actions.info('after')
+
       return context
     })
 
@@ -73,11 +70,13 @@ describe('logger — trace correlation', () => {
 
   it('the innermost span wins, and a task forked inside a span logs with it', async () => {
     const { entries, value } = await logged(function* () {
-      return yield* span('outer', function* () {
-        return yield* span('inner', function* (inner) {
+      return yield* Trace.actions.span('outer', function* () {
+        return yield* Trace.actions.span('inner', function* (inner) {
           const task = yield* spawn(() => Logger.actions.info('forked'))
+
           yield* task
           yield* Logger.actions.info('direct')
+
           return inner.context.spanId
         })
       })
@@ -88,8 +87,9 @@ describe('logger — trace correlation', () => {
 
   it('a non-recording (unsampled) span still stamps its ids, flags without the sampled bit', async () => {
     const { entries, value } = await logged(() =>
-      span('poll', { sampled: false }, function* (handle) {
+      Trace.actions.span('poll', { sampled: false }, function* (handle) {
         yield* Logger.actions.debug('polling')
+
         return handle.context
       }),
     )
@@ -103,10 +103,10 @@ describe('logger — trace correlation', () => {
 
     unwrap(
       await run(function* () {
-        yield* enableTracing(false)
+        yield* Trace.actions.enableTracing(false)
         yield* DefaultLogger.use()
         yield* captureTransport('capture', sink).use()
-        yield* ActiveSpan.with(passThrough(inbound), () => Logger.actions.info('relayed'))
+        yield* Trace.actions.passThrough(inbound, () => Logger.actions.info('relayed'))
       }),
     )
 
@@ -119,9 +119,11 @@ describe('logger — trace correlation', () => {
 
   it('suppressed telemetry code still correlates its entries (activeContext)', async () => {
     const { entries, value } = await logged(() =>
-      span('export', function* () {
-        const { context } = yield* current()
-        yield* suppressed(() => Logger.actions.warn('delivery slow'))
+      Trace.actions.span('export', function* () {
+        const { context } = yield* Trace.actions.current()
+
+        yield* Trace.actions.suppressed(() => Logger.actions.warn('delivery slow'))
+
         return context
       }),
     )
@@ -153,8 +155,9 @@ describe('logger — correlated output', () => {
         yield* JsonCodec.use()
         yield* ConsoleTransport.use({ pretty: false })
 
-        return yield* span('handler', function* (handle) {
+        return yield* Trace.actions.span('handler', function* (handle) {
           yield* Logger.actions.info('inside', { n: 1 })
+
           return handle.context
         })
       })
@@ -230,14 +233,15 @@ describe('logger — correlated output', () => {
   })
 })
 
-describe('logger — exception records forwarded by a Tracer', () => {
-  /** A Tracer that shows every exception record in the std Logger (as a server node does). */
+describe('logger — exception records forwarded by a Trace sink', () => {
+  /** A Trace sink that shows every exception record in the std Logger (as a server node does). */
   const forwardingTracer = () =>
-    Tracer.implement({
+    Trace.implement({
       name: 'test/forwarding-tracer',
       version: '1.0.0',
       *setup() {
-        yield* enableTracing()
+        yield* Trace.actions.enableTracing()
+
         return {}
       },
     }).build({
@@ -260,14 +264,17 @@ describe('logger — exception records forwarded by a Tracer', () => {
 
       // a root span: the failure settles once it ended, where no span is active any more
       let root: TraceDef.SpanContext | undefined
+
       yield* attempt(() =>
-        span('dispatch', function* (handle) {
+        Trace.actions.span('dispatch', function* (handle) {
           root = handle.context
+
           return yield* fail('app.boom', 'kaput')
         }),
       )
 
       const [entry] = sink.entries
+
       return { root: root!, entry: entry!, line: yield* prettyFormat(entry!, false) }
     })
 

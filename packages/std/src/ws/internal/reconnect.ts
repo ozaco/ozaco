@@ -31,6 +31,7 @@ export const supervise = guard(function* (
 ) {
   while (true) {
     const outage = yield* session.outages.next()
+
     if (outage.done) {
       return
     }
@@ -45,6 +46,7 @@ export const supervise = guard(function* (
       }
 
       const redialed = yield* attempt(() => dial(session, impl))
+
       if (!isSuccess(redialed)) {
         continue
       }
@@ -55,12 +57,15 @@ export const supervise = guard(function* (
 
       session.reconnects += 1
       reopened = true
+
       break
     }
 
     if (!reopened) {
       const last = session.lastClose ?? { code: 1006, reason: '' }
+
       session.settle(exhausted(budget, last), last)
+
       return
     }
   }

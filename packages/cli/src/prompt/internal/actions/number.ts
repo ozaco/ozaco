@@ -10,25 +10,31 @@ export function* number(options: PromptDef.NumberOptions) {
 
   const parse = (raw: string): Helpers.NumberParsed => {
     const trimmed = raw.trim()
+
     if (trimmed === '') {
       return { error: 'Please enter a number' }
     }
 
     const value = Number(trimmed)
+
     if (Number.isNaN(value)) {
       return { error: 'Please enter a valid number' }
     }
+
     if (!options.float && !Number.isInteger(value)) {
       return { error: 'Please enter a whole number' }
     }
+
     if (options.min !== undefined && value < options.min) {
       return { error: `Must be at least ${options.min}` }
     }
+
     if (options.max !== undefined && value > options.max) {
       return { error: `Must be at most ${options.max}` }
     }
 
     const custom = options.validate?.(value)
+
     return custom === undefined ? { value } : { error: custom }
   }
 
@@ -45,6 +51,7 @@ export function* number(options: PromptDef.NumberOptions) {
     onKey: (state, key) => {
       if (isEnter(key)) {
         const { value, error } = parse(state.input.value)
+
         return error === undefined
           ? { type: 'submit', value: value! }
           : { type: 'update', state: { ...state, error } }
@@ -55,6 +62,7 @@ export function* number(options: PromptDef.NumberOptions) {
       }
 
       const input = editLine(state.input, key)
+
       return input === undefined ? undefined : { type: 'update', state: { input } }
     },
     submitted: (value, _state, ctx) => submittedLine(ctx, options.message, String(value)),

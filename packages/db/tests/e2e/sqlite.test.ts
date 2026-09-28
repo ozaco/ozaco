@@ -30,11 +30,13 @@ describe('sqlite — concurrent connections', () => {
         yield* BunIO.use()
         yield* SqliteAdapter.use({ path, busyTimeoutMs: 3000 })
         yield* DbClient.use({ tables: [todos] })
+
         const db = (yield* DbClient.context.expect()) as AnyType
 
         // the adapter flipped the FILE to WAL — readers can't block this writer any more
         const probe = new Database(path)
         const mode = probe.query('PRAGMA journal_mode').get() as AnyType
+
         expect(String(mode?.journal_mode ?? mode)).toBe('wal')
 
         probe.close()
@@ -52,15 +54,19 @@ describe('sqlite — concurrent connections', () => {
           db.close()
         `
         const child = Bun.spawn(['bun', '-e', script])
+
         yield* sleep(150)
 
         // our write does NOT fail — it waits out the other process's lock and lands
         const made = yield* db.insert('todos', { title: 'waited' })
+
         expect(made.title).toBe('waited')
         yield* until(child.exited)
 
         yield* sleep(50)
+
         const rows = yield* db.query('todos').collect()
+
         expect(rows.map((row: AnyType) => row.title).toSorted()).toEqual(['held', 'waited'])
       }),
     )

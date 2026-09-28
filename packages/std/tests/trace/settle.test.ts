@@ -9,7 +9,7 @@ import { defineProtocol } from 'std:plugin'
 import type { Result } from 'std:result'
 import { ResultErrors, appendCauses, fail, isFailure } from 'std:result'
 import type { TraceDef } from 'std:trace'
-import { recordFailure, settle, span } from 'std:trace'
+import { Trace } from 'std:trace'
 
 import { describe, expect, it } from 'bun:test'
 
@@ -21,10 +21,13 @@ const exceptionEvents = (data: TraceDef.SpanData) =>
 describe('final state', () => {
   it('causes appended by an ancestor after the failure escaped appear in the exception', async () => {
     const { tracer, result } = await tracedResult(() =>
-      span('dispatch', function* () {
+      Trace.actions.span('dispatch', function* () {
         const outcome = yield* attempt(() =>
-          span('db', { kind: 'client' }, () => fail('db.unique', 'duplicate key', 'insert')),
+          Trace.actions.span('db', { kind: 'client' }, () =>
+            fail('db.unique', 'duplicate key', 'insert'),
+          ),
         )
+
         // a plugin `error` hook: the SAME failure, more context
         return yield* appendCauses(outcome as Result.Failure<unknown>, 'todos:create')
       }),
@@ -35,10 +38,12 @@ describe('final state', () => {
 
     const db = tracer.span('db')
     const [event] = exceptionEvents(db)
+
     expect(event!.attributes!['ozaco.failure.causes']).toEqual(['insert', 'todos:create'])
     expect(String(event!.attributes!['exception.stacktrace'])).toContain('at todos:create')
 
     const [log] = tracer.exceptions()
+
     expect(log!.attributes['ozaco.failure.causes']).toEqual(['insert', 'todos:create'])
     expect(log!.context?.spanId).toBe(db.context.spanId)
     expect(log!.body).toBe('db.unique: duplicate key\n    at insert\n    at todos:create')
@@ -52,17 +57,19 @@ describe('final state', () => {
 
   it('the OUTERMOST classifier decides status and severity (4xx: WARN, only CLIENT spans fail)', async () => {
     const { tracer } = await tracedResult(() =>
-      span('dispatch', { failure: { status: () => 404 } }, () =>
-        span('helper', { failure: { status: () => 500 } }, () =>
-          span('db', { kind: 'client' }, () => fail('todo.missing', 'no such todo')),
+      Trace.actions.span('dispatch', { failure: { status: () => 404 } }, () =>
+        Trace.actions.span('helper', { failure: { status: () => 500 } }, () =>
+          Trace.actions.span('db', { kind: 'client' }, () => fail('todo.missing', 'no such todo')),
         ),
       ),
     )
 
     const [log] = tracer.exceptions()
+
     expect(log!.severityNumber).toBe(13)
 
     expect(tracer.span('db').status).toEqual({ code: 'error', message: 'no such todo' })
+
     for (const name of ['helper', 'dispatch']) {
       expect(tracer.span(name).status).toEqual({ code: 'unset' })
       expect(tracer.span(name).attributes['error.type']).toBe('todo.missing')
@@ -71,8 +78,8 @@ describe('final state', () => {
 
   it('a 5xx class fails every span and records ERROR', async () => {
     const { tracer } = await tracedResult(() =>
-      span('dispatch', { failure: { status: () => 503 } }, () =>
-        span('inner', () => fail('todo.down', 'unavailable')),
+      Trace.actions.span('dispatch', { failure: { status: () => 503 } }, () =>
+        Trace.actions.span('inner', () => fail('todo.down', 'unavailable')),
       ),
     )
 
@@ -83,7 +90,7 @@ describe('final state', () => {
 
   it('a throwing classifier counts as unclassified (500); a custom error.type classifier wins', async () => {
     const { tracer } = await tracedResult(() =>
-      span(
+      Trace.actions.span(
         'dispatch',
         {
           failure: {
@@ -105,10 +112,12 @@ describe('final state', () => {
     )
 
     const dispatch = tracer.span('dispatch')
+
     expect(dispatch.status.code).toBe('error')
     expect(dispatch.attributes['error.type']).toBe('server.internal')
 
     const [log] = tracer.exceptions()
+
     expect(log!.severityNumber).toBe(17)
     // the exception keeps the failure's own tag
     expect(log!.attributes['exception.type']).toBe(ResultErrors.Unknown)
@@ -116,14 +125,15 @@ describe('final state', () => {
 
   it('the log event name comes from the ORIGIN span', async () => {
     const { tracer } = await tracedResult(() =>
-      span('dispatch', { failure: { eventName: 'ozaco.action.exception' } }, () =>
-        span('db', { failure: { eventName: 'db.client.operation.exception' } }, () =>
+      Trace.actions.span('dispatch', { failure: { eventName: 'ozaco.action.exception' } }, () =>
+        Trace.actions.span('db', { failure: { eventName: 'db.client.operation.exception' } }, () =>
           fail('db.down'),
         ),
       ),
     )
 
     const [log] = tracer.exceptions()
+
     expect(log!.eventName).toBe('db.client.operation.exception')
     expect(log!.attributes['otel.event.name']).toBe('db.client.operation.exception')
     expect(exceptionEvents(tracer.span('db'))).toHaveLength(1)
@@ -134,14 +144,16 @@ describe('final state', () => {
     const early = fail('app.early', 'made before the span')
 
     const { tracer } = await tracedResult(() =>
-      span('origin', function* () {
+      Trace.actions.span('origin', function* () {
         yield* sleep(3)
+
         return yield* early
       }),
     )
 
     const origin = tracer.span('origin')
     const [event] = exceptionEvents(origin)
+
     expect(event!.time).toBe(origin.start)
     expect(tracer.exceptions()[0]!.time).toBe(origin.start)
   })
@@ -150,16 +162,23 @@ describe('final state', () => {
 describe('absorbed wraps', () => {
   it('a wrap (the inner failure nested) ⇒ ONE exception at the wrapping span, carrying both levels', async () => {
     const { tracer } = await tracedResult(() =>
-      span('dispatch', { failure: { eventName: 'ozaco.action.exception' } }, function* () {
-        const inner = yield* attempt(() =>
-          span('db', { kind: 'client' }, () => fail('db.unique', 'duplicate key')),
-        )
-        yield* sleep(2)
-        return yield* fail('todo.conflict', 'already exists', inner)
-      }),
+      Trace.actions.span(
+        'dispatch',
+        { failure: { eventName: 'ozaco.action.exception' } },
+        function* () {
+          const inner = yield* attempt(() =>
+            Trace.actions.span('db', { kind: 'client' }, () => fail('db.unique', 'duplicate key')),
+          )
+
+          yield* sleep(2)
+
+          return yield* fail('todo.conflict', 'already exists', inner)
+        },
+      ),
     )
 
     expect(tracer.exceptions()).toHaveLength(1)
+
     const [log] = tracer.exceptions()
     const dispatch = tracer.span('dispatch')
     const db = tracer.span('db')
@@ -183,11 +202,13 @@ describe('absorbed wraps', () => {
 
   it('an absorbed wrap under a 4xx classifier: the CLIENT span fails, the rest are unset', async () => {
     const { tracer } = await tracedResult(() =>
-      span('dispatch', { failure: { status: () => 409 } }, function* () {
+      Trace.actions.span('dispatch', { failure: { status: () => 409 } }, function* () {
         const inner = yield* attempt(() =>
-          span('db', { kind: 'client' }, () => fail('db.unique', 'duplicate key')),
+          Trace.actions.span('db', { kind: 'client' }, () => fail('db.unique', 'duplicate key')),
         )
+
         yield* sleep(2)
+
         return yield* fail('todo.conflict', 'already exists', inner)
       }),
     )
@@ -201,13 +222,17 @@ describe('absorbed wraps', () => {
 describe('where the exception lands', () => {
   it('a span opted out of sampling hands its exception to the nearest recording ancestor', async () => {
     const { tracer } = await tracedResult(() =>
-      span('parent', () => span('opted-out', { sampled: false }, () => fail('app.x', 'boom'))),
+      Trace.actions.span('parent', () =>
+        Trace.actions.span('opted-out', { sampled: false }, () => fail('app.x', 'boom')),
+      ),
     )
 
     const parent = tracer.span('parent')
+
     expect(exceptionEvents(parent)).toHaveLength(1)
 
     const [log] = tracer.exceptions()
+
     expect(log!.context?.spanId).toBe(parent.context.spanId)
     expect(log!.context!.flags & 1).toBe(1)
   })
@@ -218,7 +243,7 @@ describe('where the exception lands', () => {
       version: '1.0.0',
       defaults: {
         *work() {
-          return yield* span('op', () => fail('op.failed', 'the operation failed'))
+          return yield* Trace.actions.span('op', () => fail('op.failed', 'the operation failed'))
         },
       },
     })
@@ -226,13 +251,15 @@ describe('where the exception lands', () => {
     const { tracer } = await tracedResult(function* () {
       yield* P.error({
         *work() {
-          return yield* span('hook-work', () => fail('hook.threw', 'the hook broke'))
+          return yield* Trace.actions.span('hook-work', () => fail('hook.threw', 'the hook broke'))
         },
       })
-      return yield* span('dispatch', () => P.actions.work())
+
+      return yield* Trace.actions.span('dispatch', () => P.actions.work())
     })
 
     const [log, ...rest] = tracer.exceptions()
+
     expect(rest).toEqual([])
     expect(log!.severityNumber).toBe(17)
     expect(log!.attributes['ozaco.failure.chain']).toEqual([
@@ -247,13 +274,17 @@ describe('where the exception lands', () => {
 describe('handled failures', () => {
   it('an ancestor that goes on ⇒ the failure was handled: WARN, error.type only, statuses unset', async () => {
     const { tracer } = await traced(() =>
-      span('dispatch', function* () {
-        yield* attempt(() => span('cache', { kind: 'client' }, () => fail('cache.down', 'miss')))
+      Trace.actions.span('dispatch', function* () {
+        yield* attempt(() =>
+          Trace.actions.span('cache', { kind: 'client' }, () => fail('cache.down', 'miss')),
+        )
+
         return 'fallback'
       }),
     )
 
     const [log] = tracer.exceptions()
+
     expect(log!.severityNumber).toBe(13)
     expect(log!.context?.spanId).toBe(tracer.span('cache').context.spanId)
     // a handled failure (a fallback replaced it) marks the span it escaped, never fails it — even
@@ -266,25 +297,37 @@ describe('handled failures', () => {
 
   it('a failed attempt that was retried leaves the attempt unset (error.type only), even a 5xx one', async () => {
     const { tracer } = await traced(() =>
-      span('dispatch', { kind: 'server', failure: { status: () => 503 } }, function* () {
-        for (let at = 1; at <= 2; at += 1) {
-          const outcome = yield* attempt(() =>
-            span(`attempt ${at}`, { kind: 'client', failure: { status: () => 503 } }, function* () {
-              if (at === 1) {
-                return yield* fail('upstream.busy', 'try again')
-              }
-              return 'ok'
-            }),
-          )
-          if (!isFailure(outcome)) {
-            return outcome.value
+      Trace.actions.span(
+        'dispatch',
+        { kind: 'server', failure: { status: () => 503 } },
+        function* () {
+          for (let at = 1; at <= 2; at += 1) {
+            const outcome = yield* attempt(() =>
+              Trace.actions.span(
+                `attempt ${at}`,
+                { kind: 'client', failure: { status: () => 503 } },
+                function* () {
+                  if (at === 1) {
+                    return yield* fail('upstream.busy', 'try again')
+                  }
+
+                  return 'ok'
+                },
+              ),
+            )
+
+            if (!isFailure(outcome)) {
+              return outcome.value
+            }
           }
-        }
-        return 'never'
-      }),
+
+          return 'never'
+        },
+      ),
     )
 
     const first = tracer.span('attempt 1')
+
     expect(first.status.code).toBe('unset')
     expect(first.attributes['error.type']).toBe('upstream.busy')
     expect(tracer.span('attempt 2').status.code).toBe('unset')
@@ -294,8 +337,10 @@ describe('handled failures', () => {
 
   it('handledSeverity picks the severity of a handled failure', async () => {
     const { tracer } = await traced(() =>
-      span('poll', function* () {
-        yield* attempt(() => span('probe', { failure: { handledSeverity: 5 } }, () => fail('x')))
+      Trace.actions.span('poll', function* () {
+        yield* attempt(() =>
+          Trace.actions.span('probe', { failure: { handledSeverity: 5 } }, () => fail('x')),
+        )
       }),
     )
 
@@ -304,13 +349,15 @@ describe('handled failures', () => {
 
   it('an ancestor failing with an UNRELATED failure handled the first one', async () => {
     const { tracer } = await tracedResult(() =>
-      span('dispatch', function* () {
-        yield* attempt(() => span('first', () => fail('app.first', 'swallowed')))
-        return yield* span('second', () => fail('app.second', 'raised'))
+      Trace.actions.span('dispatch', function* () {
+        yield* attempt(() => Trace.actions.span('first', () => fail('app.first', 'swallowed')))
+
+        return yield* Trace.actions.span('second', () => fail('app.second', 'raised'))
       }),
     )
 
     const logs = tracer.exceptions()
+
     expect(logs.map(log => [log.attributes['exception.type'], log.severityNumber])).toEqual([
       ['app.first', 13],
       ['app.second', 17],
@@ -321,18 +368,22 @@ describe('handled failures', () => {
   it('a long-lived parent settles the oldest handled failures past the pending cap', async () => {
     const { tracer, value } = await traced(function* (memory) {
       let during = 0
-      yield* span('loop', function* () {
+
+      yield* Trace.actions.span('loop', function* () {
         for (let at = 0; at < 130; at += 1) {
           // each failure escapes `step` into `attempt` — handled, but only known at `loop`'s end
           yield* attempt(() =>
-            span('step', function* () {
+            Trace.actions.span('step', function* () {
               yield* sleep(0)
+
               return yield* fail('app.step', `step ${at}`)
             }),
           )
         }
+
         during = memory.exceptions().length
       })
+
       return during
     })
 
@@ -346,16 +397,21 @@ describe('handled failures', () => {
 describe('explicit settle (the edge / carrier answered)', () => {
   it('settle(f, { status: 404 }) ⇒ WARN, the internal dispatch unset, the edge untouched', async () => {
     const { tracer } = await traced(() =>
-      span('GET /todos/:id', { kind: 'server' }, function* () {
-        const outcome = yield* attempt(() => span('todos.get', () => fail('todo.missing', 'gone')))
+      Trace.actions.span('GET /todos/:id', { kind: 'server' }, function* () {
+        const outcome = yield* attempt(() =>
+          Trace.actions.span('todos.get', () => fail('todo.missing', 'gone')),
+        )
+
         if (isFailure(outcome)) {
-          yield* settle(outcome, { status: 404 })
+          yield* Trace.actions.settle(outcome, { status: 404 })
         }
+
         return 'response'
       }),
     )
 
     const [log] = tracer.exceptions()
+
     expect(log!.severityNumber).toBe(13)
     expect(tracer.span('todos.get').status.code).toBe('unset')
     expect(tracer.span('todos.get').attributes['error.type']).toBe('todo.missing')
@@ -365,11 +421,12 @@ describe('explicit settle (the edge / carrier answered)', () => {
 
   it('settle(f, { status: 500 }) ⇒ ERROR — not the WARN of a handled failure', async () => {
     const { tracer } = await traced(() =>
-      span('edge', { kind: 'server' }, function* () {
+      Trace.actions.span('edge', { kind: 'server' }, function* () {
         const outcome = yield* attempt(() =>
-          span('todos.explode', () => fail('todo.kaput', 'boom')),
+          Trace.actions.span('todos.explode', () => fail('todo.kaput', 'boom')),
         )
-        yield* settle(outcome as Result.Failure<unknown>, { status: 500 })
+
+        yield* Trace.actions.settle(outcome as Result.Failure<unknown>, { status: 500 })
       }),
     )
 
@@ -379,12 +436,15 @@ describe('explicit settle (the edge / carrier answered)', () => {
 
   it('the explicit status wins over the classifiers; settling twice is a no-op', async () => {
     const { tracer } = await traced(() =>
-      span('edge', { kind: 'server' }, function* () {
+      Trace.actions.span('edge', { kind: 'server' }, function* () {
         const outcome = (yield* attempt(() =>
-          span('dispatch', { failure: { status: () => 404 } }, () => fail('todo.kaput')),
+          Trace.actions.span('dispatch', { failure: { status: () => 404 } }, () =>
+            fail('todo.kaput'),
+          ),
         )) as Result.Failure<unknown>
-        yield* settle(outcome, { status: 502 })
-        yield* settle(outcome, { status: 404 })
+
+        yield* Trace.actions.settle(outcome, { status: 502 })
+        yield* Trace.actions.settle(outcome, { status: 404 })
       }),
     )
 
@@ -393,7 +453,8 @@ describe('explicit settle (the edge / carrier answered)', () => {
   })
 
   it('without an active local trace settle() does nothing', async () => {
-    const { tracer } = await traced(() => settle(fail('nothing.pending')))
+    const { tracer } = await traced(() => Trace.actions.settle(fail('nothing.pending')))
+
     expect(tracer.logs).toEqual([])
   })
 })
@@ -401,11 +462,14 @@ describe('explicit settle (the edge / carrier answered)', () => {
 describe('record once', () => {
   it('one exception however many spans the same failure escapes', async () => {
     const { tracer } = await tracedResult(() =>
-      span('a', () => span('b', () => span('c', () => fail('app.deep', 'deep')))),
+      Trace.actions.span('a', () =>
+        Trace.actions.span('b', () => Trace.actions.span('c', () => fail('app.deep', 'deep'))),
+      ),
     )
 
     expect(tracer.exceptions()).toHaveLength(1)
     expect(exceptionEvents(tracer.span('c'))).toHaveLength(1)
+
     for (const name of ['a', 'b', 'c']) {
       expect(tracer.span(name).attributes['error.type']).toBe('app.deep')
     }
@@ -413,10 +477,15 @@ describe('record once', () => {
 
   it('an explicit recordFailure wins; the escape then only sets statuses', async () => {
     const { tracer } = await tracedResult(() =>
-      span('dispatch', () =>
-        span('attempt', function* () {
+      Trace.actions.span('dispatch', () =>
+        Trace.actions.span('attempt', function* () {
           const failure = fail('app.final', 'last attempt')
-          yield* recordFailure(failure, { severity: 17, eventName: 'ozaco.retry.exhausted' })
+
+          yield* Trace.actions.recordFailure(failure, {
+            severity: 17,
+            eventName: 'ozaco.retry.exhausted',
+          })
+
           return yield* failure
         }),
       ),
@@ -431,9 +500,10 @@ describe('record once', () => {
     const shared = fail('cache.down', 'leader failed')
 
     const { tracer } = await tracedResult(() =>
-      span('dispatch', function* () {
-        yield* attempt(() => span('leader', () => shared))
-        return yield* span('follower', () => shared)
+      Trace.actions.span('dispatch', function* () {
+        yield* attempt(() => Trace.actions.span('leader', () => shared))
+
+        return yield* Trace.actions.span('follower', () => shared)
       }),
     )
 
@@ -445,7 +515,7 @@ describe('record once', () => {
 describe('halts and crashed tasks', () => {
   it('a Halted failure is a cancellation: DEBUG, ozaco.cancelled, status unset', async () => {
     const { tracer } = await tracedResult(() =>
-      span('awaits', () => fail(EffectErrors.Halted, 'the task was halted')),
+      Trace.actions.span('awaits', () => fail(EffectErrors.Halted, 'the task was halted')),
     )
 
     expect(tracer.exceptions()[0]!.severityNumber).toBe(5)
@@ -455,9 +525,9 @@ describe('halts and crashed tasks', () => {
 
   it('frames unwound by a crashed child task take the failure, not a cancellation', async () => {
     const { tracer, result } = await tracedResult(() =>
-      span('outer', () =>
-        span('parent', function* () {
-          yield* spawn(() => span('child', () => fail('app.crash', 'child failed')))
+      Trace.actions.span('outer', () =>
+        Trace.actions.span('parent', function* () {
+          yield* spawn(() => Trace.actions.span('child', () => fail('app.crash', 'child failed')))
           yield* suspend()
         }),
       ),
@@ -469,6 +539,7 @@ describe('halts and crashed tasks', () => {
 
     for (const name of ['parent', 'outer']) {
       const data = tracer.span(name)
+
       expect(data.attributes['ozaco.cancelled']).toBeUndefined()
       expect(data.attributes['error.type']).toBe('app.crash')
       expect(data.status.code).toBe('error')
@@ -477,10 +548,10 @@ describe('halts and crashed tasks', () => {
 
   it('a span halted with a HANDLED failure pending inside it is just cancelled', async () => {
     const { tracer } = await traced(() =>
-      span('root', () =>
+      Trace.actions.span('root', () =>
         race([
-          span('work', function* () {
-            yield* attempt(() => span('probe', () => fail('app.flaky', 'caught')))
+          Trace.actions.span('work', function* () {
+            yield* attempt(() => Trace.actions.span('probe', () => fail('app.flaky', 'caught')))
             yield* suspend()
           }),
           sleep(5),
@@ -489,6 +560,7 @@ describe('halts and crashed tasks', () => {
     )
 
     const work = tracer.span('work')
+
     expect(work.attributes).toEqual({ 'ozaco.cancelled': true })
     expect(work.status.code).toBe('unset')
     expect(tracer.span('probe').status.code).toBe('unset')
@@ -501,8 +573,8 @@ describe('halts and crashed tasks', () => {
     // so the root's body caught it; the halt (a race lost, a client gone) is a plain cancellation
     const { tracer } = await traced(() =>
       race([
-        span('root', function* () {
-          yield* attempt(() => span('probe', () => fail('app.flaky', 'caught')))
+        Trace.actions.span('root', function* () {
+          yield* attempt(() => Trace.actions.span('probe', () => fail('app.flaky', 'caught')))
           yield* suspend()
         }),
         sleep(5),
@@ -510,6 +582,7 @@ describe('halts and crashed tasks', () => {
     )
 
     const root = tracer.span('root')
+
     expect(root.attributes).toEqual({ 'ozaco.cancelled': true })
     expect(root.status.code).toBe('unset')
     expect(tracer.span('probe').status.code).toBe('unset')
@@ -521,11 +594,12 @@ describe('halts and crashed tasks', () => {
     const { tracer, value } = await traced(function* (memory) {
       let late: Task<unknown> | undefined
 
-      yield* span('parent', function* () {
+      yield* Trace.actions.span('parent', function* () {
         late = yield* fork(() =>
           attempt(() =>
-            span('orphan', function* () {
+            Trace.actions.span('orphan', function* () {
               yield* sleep(5)
+
               return yield* fail('app.late', 'after the parent')
             }),
           ),
@@ -533,7 +607,9 @@ describe('halts and crashed tasks', () => {
       })
 
       const before = memory.exceptions().length
+
       yield* late!
+
       return before
     })
 

@@ -2,7 +2,7 @@
  * Auth's telemetry (design §7): every gate says its verdict on the span it guards — the dispatch
  * span of an action, the edge span of a raw route — as `ozaco.auth.outcome` (granted | anonymous
  * | denied), `ozaco.auth.requirement` (its kind, never the roles) and `ozaco.auth.strategy` (who
- * decided the bearer); `enduser.id` only with the global `capture.enduser`; an `ozaco.auth.skip`
+ * decided the bearer); `enduser.id` only with the global `capture.enduser`; an `auth.skip`
  * event per strategy that FAILED before a later one answered. A denial stays the call's own
  * failure: 401 / 403 ⇒ status unset + `error.type`, one WARN exception record.
  */
@@ -15,7 +15,7 @@ import { attempt, run, sleep, until } from 'std:effect'
 import { fail, unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
 import type { TraceDef } from 'std:trace'
-import { enableTracing, Tracer } from 'std:trace'
+import { Trace } from 'std:trace'
 
 import { describe, expect, it } from 'bun:test'
 
@@ -26,17 +26,19 @@ import { storage } from '../helpers'
 
 let installs = 0
 
-/** An in-memory std:trace `Tracer` installed around the server: every exported span and log. */
+/** An in-memory std:trace `Trace` sink installed around the server: every exported span and log. */
 const memoryTracer = () => {
   installs += 1
+
   const spans: TraceDef.SpanData[] = []
   const logs: TraceDef.LogData[] = []
 
-  const plugin = Tracer.implement({
+  const plugin = Trace.implement({
     name: `test/auth-tracer-${installs}`,
     version: '1.0.0',
     *setup() {
-      yield* enableTracing()
+      yield* Trace.actions.enableTracing()
+
       return {}
     },
   }).build({
@@ -51,7 +53,9 @@ const memoryTracer = () => {
   /** the ONE exported span named `name`. */
   const span = (name: string): TraceDef.SpanData => {
     const found = spans.filter(data => data.name === name)
+
     expect(found.map(data => data.name)).toEqual([name])
+
     return found[0]!
   }
 
@@ -119,11 +123,13 @@ const withServer = async (
     await run(function* () {
       yield* storage()
       yield* memory.plugin.use()
+
       const server = yield* createServer({
         services: [app],
         plugins: [tokens, Auth],
         ...options,
       })
+
       yield* body(server)
     }),
   )
@@ -134,9 +140,11 @@ const withServer = async (
 /** One in-process request, its body read to the end (a raw route's edge span ends with it). */
 function* request(path: string, init?: RequestInit): Operation<number> {
   const response = yield* Edge.actions.handle(new Request(`http://edge${path}`, init))
+
   yield* until(response.text())
   // the span of a streamed body ends from the edge's scope: let that run
   yield* sleep(5)
+
   return response.status
 }
 
@@ -159,6 +167,7 @@ describe('auth trace — the dispatch span', () => {
     expect(memory.span('app.me').attributes['enduser.id']).toBeUndefined()
 
     const open = memory.span('app.open').attributes
+
     expect(open['ozaco.auth.outcome']).toBe('anonymous')
     expect(open['ozaco.auth.requirement']).toBe('open')
     expect(open['ozaco.auth.strategy']).toBeUndefined()
@@ -171,26 +180,35 @@ describe('auth trace — the dispatch span', () => {
 
     // no skip without a failing strategy; a granted call is no failure
     for (const data of memory.spans) {
-      expect(data.events.map(item => item.name)).not.toContain('ozaco.auth.skip')
+      expect(data.events.map(item => item.name)).not.toContain('auth.skip')
       expect(data.status.code).toBe('unset')
     }
+
     expect(memory.logs.filter(log => log.attributes['exception.type'] !== undefined)).toEqual([])
   })
 
   it('a denial is the call failing: denied + error.type, status unset, ONE WARN exception', async () => {
     const memory = await withServer({}, function* (server) {
       const missing = yield* attempt(server.call(app, 'me'))
+
       expect((missing as AnyType).error).toBe(ServerErrors.Unauthorized)
+
       const unknown = yield* attempt(server.call(app, 'me', undefined, bearer('nope')))
+
       expect((unknown as AnyType).error).toBe(ServerErrors.Unauthorized)
+
       const role = yield* attempt(server.call(app, 'admin', undefined, bearer('tok-guest')))
+
       expect((role as AnyType).error).toBe(ServerErrors.Forbidden)
+
       // an unknown bearer is refused even where nothing is required (a stale token is news)
       const stale = yield* attempt(server.call(app, 'open', undefined, bearer('nope')))
+
       expect((stale as AnyType).error).toBe(ServerErrors.Unauthorized)
     })
 
     const [missing, unknown] = memory.named('app.me')
+
     expect(missing!.attributes).toMatchObject({
       'ozaco.auth.outcome': 'denied',
       'ozaco.auth.requirement': 'user',
@@ -216,7 +234,9 @@ describe('auth trace — the dispatch span', () => {
     // 4xx: a client-caused failure — status unset, one WARN (13) record per denied call
     for (const data of [...memory.named('app.me'), memory.span('app.admin')]) {
       expect(data.status.code).toBe('unset')
+
       const exceptions = memory.exceptionsIn(data.context.traceId)
+
       expect(exceptions).toHaveLength(1)
       expect(exceptions[0]!.severityNumber).toBe(13)
       expect(exceptions[0]!.eventName).toBe('ozaco.action.exception')
@@ -241,7 +261,7 @@ describe('auth trace — the dispatch span', () => {
 })
 
 describe('auth trace — the strategy chain', () => {
-  it('a strategy that FAILED before a later one answered leaves ozaco.auth.skip', async () => {
+  it('a strategy that FAILED before a later one answered leaves auth.skip', async () => {
     const Flaky = AuthStrategy.implement<AuthDef.StrategyContext, []>({
       name: 'test-flaky',
       version: '0.0.0',
@@ -273,9 +293,12 @@ describe('auth trace — the strategy chain', () => {
     })
 
     const me = memory.span('app.me')
+
     expect(me.attributes['ozaco.auth.outcome']).toBe('granted')
     expect(me.attributes['ozaco.auth.strategy']).toBe('static')
-    const skips = me.events.filter(item => item.name === 'ozaco.auth.skip')
+
+    const skips = me.events.filter(item => item.name === 'auth.skip')
+
     expect(skips).toHaveLength(1)
     expect(skips[0]!.attributes).toEqual({
       'ozaco.auth.strategy': 'flaky',
@@ -311,6 +334,7 @@ describe('auth trace — the strategy chain', () => {
 
     const memory = await withServer({ plugins: [Gone.use(), tokens, Auth] }, function* (server) {
       const refused = yield* attempt(server.call(app, 'me', undefined, bearer('nope')))
+
       expect((refused as AnyType).message).toBe('revoked')
     })
 
@@ -326,6 +350,7 @@ describe('auth trace — raw routes and handshakes', () => {
   it('a raw route guard says its verdict on the EDGE span', async () => {
     const memory = await withServer({ edge: BunEdge }, function* (server) {
       yield* server.start()
+
       const whoami = function* (
         _request: Request,
         _params: Readonly<Record<string, string>>,
@@ -333,6 +358,7 @@ describe('auth trace — raw routes and handshakes', () => {
       ) {
         return new Response(principal?.sub ?? 'anonymous')
       }
+
       yield* Edge.actions.raw({ method: 'GET', path: '/private', auth: 'user', handler: whoami })
       yield* Edge.actions.raw({ method: 'GET', path: '/public', auth: false, handler: whoami })
 
@@ -344,6 +370,7 @@ describe('auth trace — raw routes and handshakes', () => {
     })
 
     const [granted, denied] = memory.named('GET /private')
+
     expect(granted!.kind).toBe('server')
     expect(granted!.attributes).toMatchObject({
       'ozaco.auth.outcome': 'granted',

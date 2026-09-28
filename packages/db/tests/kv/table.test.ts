@@ -21,6 +21,7 @@ const path = join(mkdtempSync(join(tmpdir(), 'ozaco-table-kv-')), 'kv.sqlite')
 
 const sqlite = function* (prefix = 'suite'): Operation<unknown> {
   yield* SqliteAdapter.use({ path })
+
   return yield* TableKv.use({ prefix })
 }
 
@@ -39,6 +40,7 @@ runKvSuite({
   enabled: Boolean(url),
   *use(prefix = 'suite') {
     yield* PgAdapter.use({ url: url! })
+
     return yield* TableKv.use({ prefix, table: '_kv_pg_suite' })
   },
   expect: { persistent: true, atomic: false },
@@ -47,6 +49,7 @@ runKvSuite({
 describe('kv — table', () => {
   it('coexists with an application DbClient on the same adapter (its tables are never dropped)', async () => {
     const todos = table('todos', { title: column.text() })
+
     unwrap(
       await run(function* () {
         yield* BunIO.use()
@@ -55,8 +58,10 @@ describe('kv — table', () => {
         })
         yield* TableKv.use({ prefix: 'app' })
         yield* Kv.actions.set('greeting', 'hello')
+
         // the app reconciles its own schema AFTER the kv tables exist: they are foreign to it
         const db = (yield* DbClient.use({ tables: [todos] })) as AnyType
+
         yield* db.insert('todos', { title: 'x' })
         expect(yield* Kv.actions.get<string>('greeting')).toBe('hello')
         expect((yield* db.query('todos').collect()).length).toBe(1)
@@ -66,11 +71,15 @@ describe('kv — table', () => {
 
   it('needs an adapter, and refuses a table name that is not an identifier', async () => {
     const bare = await run(() => TableKv.use())
+
     expect((bare as AnyType).error).toBe('kv.configuration')
+
     const badName = await run(function* () {
       yield* SqliteAdapter.use()
+
       return yield* TableKv.use({ table: 'kv; drop' })
     })
+
     expect((badName as AnyType).error).toBe('kv.configuration')
   })
 })

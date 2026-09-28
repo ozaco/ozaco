@@ -81,6 +81,7 @@ export const terminalActions = (): Pick<
       *[Symbol.iterator]() {
         const queue = createQueue<Size, never>()
         const stop = subscribe(size => queue.add(size))
+
         yield* ensure(() => stop())
 
         return queue
@@ -109,6 +110,7 @@ export const terminalActions = (): Pick<
       })
 
       const release = handle.onInterrupt?.(() => interrupted.resolve(undefined))
+
       sessions.set(binding, queue)
 
       try {

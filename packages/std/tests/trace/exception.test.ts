@@ -1,11 +1,11 @@
 import { ResultErrors, asFailure, fail } from 'std:result'
-import { exceptionAttributes, exceptionType, renderFailure, span } from 'std:trace'
+import { Trace } from 'std:trace'
 
 import { describe, expect, it } from 'bun:test'
 
-import { tracedResult } from './helpers'
+import { exceptionAttributes, exceptionType } from '../../src/trace/internal/exception'
 
-const bytes = (text: unknown): number => new TextEncoder().encode(String(text)).length
+import { tracedResult } from './helpers'
 
 /** A pg failure with 30 string causes, wrapped twice: todo.kaput → db.query → pg.sql. */
 const threeLevels = (message = 'x is not a function') => {
@@ -19,6 +19,7 @@ const threeLevels = (message = 'x is not a function') => {
   )
 
   const query = fail('db.query', 'query failed', 'select todos', sql)
+
   return fail('todo.kaput', 'boom', 'todos.db-step', query)
 }
 
@@ -31,6 +32,7 @@ describe('exceptionType', () => {
 
   it('a thrown error folded by asFailure is typed std:result.unknown — its raw is never read', () => {
     const coded = Object.assign(new Error('no file'), { code: 'ENOENT' })
+
     expect(exceptionType(asFailure(coded))).toBe(ResultErrors.Unknown)
     expect(exceptionType(asFailure('plain'))).toBe(ResultErrors.Unknown)
     // any other tag keeps it, whatever it wraps
@@ -49,37 +51,24 @@ describe('exceptionType', () => {
 })
 
 describe('renderFailure / exceptionAttributes', () => {
-  it('the 2000-byte span-event copy keeps every header, the innermost one included', () => {
-    const failure = threeLevels()
-    const attributes = exceptionAttributes(failure, { maxBytes: 2000 })
+  it('exception attributes carry the whole chain, nothing cut', () => {
+    const failure = threeLevels('y'.repeat(20_000))
+    const attributes = exceptionAttributes(failure)
     const stack = String(attributes['exception.stacktrace'])
 
-    expect(bytes(stack)).toBeLessThanOrEqual(2000)
     expect(stack.startsWith('todo.kaput: boom\n    at todos.db-step')).toBe(true)
-    expect(stack).toContain('Caused by: db.query: query failed')
-    expect(stack).toContain('Caused by: pg.sql: x is not a function')
-    expect(stack).toContain('    at handler0 (')
+    expect(stack).toContain(`Caused by: pg.sql: ${'y'.repeat(20_000)}`)
+    expect(stack).toContain('    at handler29 (')
 
     expect(attributes['exception.type']).toBe('todo.kaput')
     expect(attributes['exception.message']).toBe('boom')
     expect(attributes['ozaco.failure.chain']).toEqual([
       'todo.kaput: boom',
       'db.query: query failed',
-      'pg.sql: x is not a function',
+      `pg.sql: ${'y'.repeat(20_000)}`,
     ])
     expect(attributes['ozaco.failure.causes']).toEqual(['todos.db-step'])
     expect(attributes['error.type']).toBeUndefined()
-  })
-
-  it('huge messages are cut, never the innermost header', () => {
-    const failure = threeLevels('y'.repeat(20_000))
-    const stack = renderFailure(failure, { maxBytes: 2000 })
-
-    expect(bytes(stack)).toBeLessThanOrEqual(2000)
-    expect(stack).toContain('Caused by: pg.sql: yyy')
-
-    const chain = exceptionAttributes(failure)['ozaco.failure.chain'] as string[]
-    expect(bytes(chain.at(-1))).toBeLessThanOrEqual(2048)
   })
 
   it('ozaco.failure.causes holds the string causes only, and is left out when there are none', () => {
@@ -121,24 +110,26 @@ describe('renderFailure / exceptionAttributes', () => {
     expect(exceptionAttributes(fail('app.bare'))['exception.message']).toBe('app.bare')
   })
 
-  it('renderFailure without a budget keeps up to 16 KiB — all 30 causes here', () => {
-    const stack = renderFailure(threeLevels())
-    expect(stack).toContain('handler29 (')
-    expect(bytes(stack)).toBeLessThanOrEqual(16_384)
-  })
-
-  it('a recorded failure: the span event is budgeted, the log record carries the full chain', async () => {
+  it('a recorded failure: the chain is whole, the span event under the span value cap', async () => {
     const failure = threeLevels('z'.repeat(150))
 
-    const { tracer } = await tracedResult(() => span('dispatch', () => failure))
+    const { tracer } = await tracedResult(() => Trace.actions.span('dispatch', () => failure))
 
     const [event] = tracer.span('dispatch').events
     const eventStack = String(event!.attributes!['exception.stacktrace'])
-    expect(bytes(eventStack)).toBeLessThanOrEqual(2000)
-    expect(eventStack).toContain('Caused by: pg.sql: zzz')
+
+    // a span event's values are ≤ 2048 bytes like every span attribute; the levels stay listed
+    expect(new TextEncoder().encode(eventStack).length).toBeLessThanOrEqual(2048)
+    expect(eventStack.startsWith('todo.kaput: boom')).toBe(true)
+    expect(event!.attributes!['ozaco.failure.chain']).toEqual([
+      'todo.kaput: boom',
+      'db.query: query failed',
+      `pg.sql: ${'z'.repeat(150)}`,
+    ])
 
     const [log] = tracer.exceptions()
     const logStack = String(log!.attributes['exception.stacktrace'])
+
     expect(logStack).toContain('handler29 (')
     expect(log!.body).toBe(logStack)
     expect(log!.body.split('\n')[0]).toBe('todo.kaput: boom')
@@ -147,7 +138,7 @@ describe('renderFailure / exceptionAttributes', () => {
 
   it('a thrown Error fails its span with the fold: its message the exception.message text', async () => {
     const { tracer, result } = await tracedResult(() =>
-      span('dispatch', function* () {
+      Trace.actions.span('dispatch', function* () {
         throw new RangeError('disk 9 is on fire')
       }),
     )
@@ -156,13 +147,16 @@ describe('renderFailure / exceptionAttributes', () => {
 
     const dispatch = tracer.span('dispatch')
     const [log] = tracer.exceptions()
+
     expect(log!.attributes['exception.message']).toBe('RangeError: disk 9 is on fire')
     expect(dispatch.status).toEqual({ code: 'error', message: 'RangeError: disk 9 is on fire' })
     expect(dispatch.attributes['error.type']).toBe(ResultErrors.Unknown)
   })
 
   it('the status message of a failure without a message is its tag', async () => {
-    const { tracer } = await tracedResult(() => span('dispatch', () => fail('app.bad')))
+    const { tracer } = await tracedResult(() =>
+      Trace.actions.span('dispatch', () => fail('app.bad')),
+    )
 
     expect(tracer.span('dispatch').status).toEqual({ code: 'error', message: 'app.bad' })
     expect(tracer.exceptions()[0]!.attributes['exception.message']).toBe('app.bad')

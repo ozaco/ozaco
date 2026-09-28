@@ -76,6 +76,7 @@ export function* readStats(pc: RtcDef.PeerLike): Operation<RtcDef.Stats> {
   }
 
   const read = yield* attempt(() => until(pc.getStats!()))
+
   if (!isSuccess(read)) {
     return yield* fail(RtcErrors.Stats, 'getStats failed', read)
   }
@@ -98,22 +99,27 @@ export function* readStats(pc: RtcDef.PeerLike): Operation<RtcDef.Stats> {
     switch (entry.type) {
       case 'candidate-pair': {
         pairs.push(entry)
+
         break
       }
       case 'inbound-rtp': {
         inbound.push(mediaOf(entry, 'framesDecoded'))
+
         break
       }
       case 'outbound-rtp': {
         outbound.push(mediaOf(entry, 'framesSent'))
+
         break
       }
       case 'data-channel': {
         channels.push(channelOf(entry))
+
         break
       }
       case 'transport': {
         transport = entry
+
         break
       }
       default: {

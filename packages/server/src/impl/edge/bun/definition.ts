@@ -15,6 +15,7 @@ export const BunEdge = Edge.implement<EdgeDef.Options, []>({
   *setup() {
     yield* StateRef.set({ server: null })
     yield* openEdge()
+
     return { runtime: 'bun' }
   },
 }).build(edgeActions(driver))

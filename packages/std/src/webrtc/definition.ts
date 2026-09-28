@@ -47,6 +47,7 @@ export const RtcClient = RtcClientImpl.build({
     const { defaults } = yield* RtcClientImpl.context.expect()
 
     const impl = yield* resolveImpl()
+
     if (!impl) {
       return yield* fail(
         RtcErrors.Unsupported,

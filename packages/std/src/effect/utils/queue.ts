@@ -7,14 +7,16 @@ import type { Queue } from '../types/operation'
  * channel/signal, items added before the consumer arrives are not lost.
  */
 export function createQueue<T, TClose = void>(): Queue<T, TClose> {
-  const items: Helpers.QueueItem<T, TClose>[] = []
-  const consumers = new Set<Helpers.Resolve<Helpers.QueueItem<T, TClose>>>()
+  const items: IteratorResult<T, TClose>[] = []
+  const consumers = new Set<Helpers.Resolve<IteratorResult<T, TClose>>>()
 
-  function enqueue(item: Helpers.QueueItem<T, TClose>) {
+  function enqueue(item: IteratorResult<T, TClose>) {
     items.unshift(item)
+
     while (items.length > 0 && consumers.size > 0) {
       const [consume] = consumers
-      const top = items.pop() as Helpers.QueueItem<T, TClose>
+      const top = items.pop() as IteratorResult<T, TClose>
+
       consume!(top)
     }
   }
@@ -24,11 +26,14 @@ export function createQueue<T, TClose = void>(): Queue<T, TClose> {
     close: value => enqueue({ done: true, value }),
     *next() {
       const item = items.pop()
+
       if (item) {
         return item
       }
-      return yield* action<Helpers.QueueItem<T, TClose>>(resolve => {
+
+      return yield* action<IteratorResult<T, TClose>>(resolve => {
         consumers.add(resolve)
+
         return () => consumers.delete(resolve)
       }, 'queue.next()')
     },

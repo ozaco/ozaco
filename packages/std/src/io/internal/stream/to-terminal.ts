@@ -16,6 +16,7 @@ function* drain<T>(source: Flow<T, unknown>, write: (item: T) => Operation<void>
       if (isFailure(item.value)) {
         return yield* item.value
       }
+
       return
     }
 
@@ -58,7 +59,9 @@ export function* consoleToTerminal(
   try {
     yield* drain(decodeText(source), function* (text) {
       const lines = `${pending}${text}`.split('\n')
+
       pending = lines.pop() ?? ''
+
       for (const line of lines) {
         log(line)
       }

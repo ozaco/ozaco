@@ -41,7 +41,7 @@ import { action, Server, service, stream } from 'server:core'
 import type { Flow, Operation } from 'std:effect'
 import { attempt, flowOf, until } from 'std:effect'
 import type { AnyType } from 'std:shared'
-import { current } from 'std:trace'
+import { Trace } from 'std:trace'
 
 import { z } from 'zod'
 
@@ -60,7 +60,9 @@ const rooms = new Map<string, Helpers.Room>()
 
 const roomOf = (name: string): Helpers.Room => {
   const room = rooms.get(name) ?? { members: new Map<string, Helpers.Member>(), epoch: 0 }
+
   rooms.set(name, room)
+
   return room
 }
 
@@ -77,6 +79,7 @@ const hasRemote = (room: Helpers.Room, except: string): boolean =>
 /** Derived, never negotiated: the smaller member id offers (impolite), the other yields. */
 const pairingOf = (room: Helpers.Room): Helpers.Pairing => {
   const [first, second] = [...room.members.keys()].toSorted()
+
   return { epoch: room.epoch + 1, roles: { [first!]: false, [second!]: true } }
 }
 
@@ -92,9 +95,12 @@ function* applyPairing(
   if (pairing.epoch <= room.epoch) {
     return false
   }
+
   room.epoch = pairing.epoch
+
   for (const member of room.members.values()) {
     member.polite = pairing.roles[member.id] ?? false
+
     if (member.socket) {
       yield* member.socket.send({
         t: 'rtc:role',
@@ -104,19 +110,24 @@ function* applyPairing(
       })
     }
   }
+
   return true
 }
 
 /** Open a new session for the pair: apply it here, then tell the other nodes. */
 function* announce(name: string, room: Helpers.Room): Operation<void> {
   const pairing = pairingOf(room)
+
   if (!(yield* applyPairing(name, room, pairing))) {
     return
   }
+
   yield* broadcast({ t: 'pair', node: NODE, room: name, pairing })
+
   // the lifecycle is observable even for a peer that dies before it can report — once per
   // pairing, from the node holding the member that drives the offer
   const [first] = [...room.members.keys()].toSorted()
+
   if (room.members.get(first!)?.socket) {
     yield* Server.actions.emit('rtc.pair', { room: name, epoch: pairing.epoch, members: 2 })
   }
@@ -143,29 +154,38 @@ function* announceDeparture(name: string, room: Helpers.Room): Operation<void> {
 function* applyEvent(event: Helpers.RelayEvent): Operation<void> {
   if (event.t === 'frame') {
     const room = rooms.get(event.room)
+
     if (room) {
       yield* deliver(room, event.from, event.frame)
     }
+
     return
   }
 
   const room = roomOf(event.room)
+
   if (event.t === 'join') {
     if (!room.members.has(event.member)) {
       room.members.set(event.member, { id: event.member })
     }
+
     if (room.members.size === 2) {
       yield* announce(event.room, room)
     }
+
     return
   }
+
   if (event.t === 'leave') {
     if (room.members.delete(event.member)) {
       yield* announceDeparture(event.room, room)
     }
+
     forget(event.room, room)
+
     return
   }
+
   yield* applyPairing(event.room, room, event.pairing)
 }
 
@@ -238,6 +258,7 @@ const eventNameOf = (kind: string): string =>
 const attrsOf = (input: Helpers.ReportInput) => {
   const sample = input.timeline.findLast(moment => moment.kind === 'stats')?.data ?? {}
   const { metrics } = input
+
   return {
     'rtc.room': input.room,
     'rtc.epoch': input.epoch,
@@ -329,16 +350,21 @@ function* buildPage() {
       }),
     )
     const artifact = built.outputs[0]
+
     if (!built.success || !artifact) {
       return yield* rtcErrors.build(built.logs.map(String).join('\n') || 'empty build output')
     }
+
     const script = (yield* until(artifact.text())).replaceAll('</script>', String.raw`<\/script>`)
+
     pageCache = new TextEncoder().encode(PAGE.replace('/*__SCRIPT__*/', script))
   }
+
   const body = pageCache
   const flow: Flow<Uint8Array, void> = flowOf(function* (emit) {
     yield* emit(body)
   })
+
   return flow
 }
 
@@ -366,7 +392,7 @@ export const rtc = service(
       },
       function* ({ input, ctx }) {
         const attrs = attrsOf(input)
-        const span = yield* current()
+        const span = yield* Trace.actions.current()
 
         // the counters are the report's own attributes: the dispatch span carries them, so a
         // trace search finds a bad call by its numbers (`{ span.rtc.failures > 0 }`)
@@ -398,6 +424,7 @@ export const rtc = service(
         yield* ctx.emit('rtc.metrics', attrs)
 
         const failed = input.metrics.failures > 0 || input.timeline.some(item => item.error)
+
         yield* (failed ? ctx.log.warn : ctx.log.info)(
           `rtc ${input.final ? 'session ended' : 'session'} ${input.room}#${input.epoch}`,
           attrs,
@@ -418,12 +445,15 @@ export const rtc = service(
         const name = socket.params.room ?? 'lobby'
         const room = roomOf(name)
         const id = socket.id
+
         if (room.members.size >= 2) {
           yield* socket.send({ t: 'rtc:room-full', room: name })
           yield* socket.close(4000, 'room full')
           forget(name, room)
+
           return
         }
+
         room.members.set(id, { id, socket })
         yield* broadcast({ t: 'join', node: NODE, room: name, member: id })
 
@@ -434,12 +464,16 @@ export const rtc = service(
             : announce(name, room)
 
           const messages = yield* socket.messages
+
           for (;;) {
             const step = yield* messages.next()
+
             if (step.done) {
               break
             }
+
             const frame = step.value as { t?: unknown; epoch?: unknown; report?: unknown }
+
             if (frame?.t === 'rtc:report') {
               // telemetry, not signaling: it never reaches the other member. A bad report must
               // not take the call down with it, so the dispatch is attempted, not awaited-raw.
@@ -451,17 +485,22 @@ export const rtc = service(
               } as AnyType
 
               yield* attempt((): Operation<unknown> => socket.ctx.call(rtc, 'report', report))
+
               continue
             }
+
             if (frame?.t === 'rtc:restart') {
               // one honored restart per epoch: the partner's identical request arrives after the
               // bump and is ignored, so a dead session re-pairs exactly once
               if (frame.epoch === room.epoch && room.members.size > 1) {
                 yield* announce(name, room)
               }
+
               continue
             }
+
             yield* deliver(room, id, step.value)
+
             if (hasRemote(room, id)) {
               yield* broadcast({ t: 'frame', node: NODE, room: name, from: id, frame: step.value })
             }
@@ -492,15 +531,20 @@ export const rtc = service(
  */
 export function* startRtcRelay(): Operation<void> {
   const events = yield* Server.actions.events(RELAY)
+
   for (;;) {
     const step = yield* events.next()
+
     if (step.done) {
       return
     }
+
     const event = step.value.payload as Helpers.RelayEvent | undefined
+
     if (!event || event.node === NODE) {
       continue
     }
+
     yield* applyEvent(event)
   }
 }

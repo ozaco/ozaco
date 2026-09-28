@@ -26,6 +26,7 @@ export function* select<T>(options: PromptDef.SelectOptions<T>) {
         if (choice.disabled) {
           return `  ${colors.muted(colors.strikethrough(text))}`
         }
+
         return index === state.active
           ? `${colors.bold(colors.primary(symbols.pointer))} ${colors.bold(colors.primary(text))}${note}`
           : `  ${text}${note}`
@@ -40,16 +41,20 @@ export function* select<T>(options: PromptDef.SelectOptions<T>) {
           state: { active: step(state.active, -1, { length: choices.length, disabled }) },
         }
       }
+
       if (isDown(key)) {
         return {
           type: 'update',
           state: { active: step(state.active, 1, { length: choices.length, disabled }) },
         }
       }
+
       if (isEnter(key)) {
         const choice = choices[state.active]
+
         return !choice || choice.disabled ? undefined : { type: 'submit', value: choice.value }
       }
+
       return undefined
     },
     submitted: (value, _state, ctx) => submittedLine(ctx, options.message, labelOf(value, choices)),

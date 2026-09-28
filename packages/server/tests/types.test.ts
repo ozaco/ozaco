@@ -81,6 +81,7 @@ function* probe(ctx: ServerDef.Ctx): Operation<void> {
   // a ref built from a TYPE-ONLY import keeps the input and output typed
   const api = refs<typeof other>('other')
   const pong: string = yield* ctx.call(api.ping, { n: 1 })
+
   void pong
 
   // @ts-expect-error `n` must be a number
@@ -88,23 +89,29 @@ function* probe(ctx: ServerDef.Ctx): Operation<void> {
 
   // the definition form is typed the same way
   const also: string = yield* ctx.call(other, 'ping', { n: 1 })
+
   void also
 
   // ctx.auth is the principal, not `unknown`
   const who: string | undefined = ctx.auth?.sub
+
   void who
 
   // the telemetry surface: ids, spans (options form), events
   const ids: { traceId: string; spanId: string; requestId: string } = ctx.trace
+
   void ids
+
   const inner: number = yield* ctx.span(
     'work',
     function* (span) {
       span.setAttribute('work.size', 3)
+
       return 3
     },
     { kind: 'client', attributes: { 'work.kind': 'x' }, links: [] },
   )
+
   void inner
   yield* ctx.event('work.done', { 'work.size': 3 }, { time: Date.now() })
 
@@ -123,11 +130,13 @@ const hooks = (): void => {
     *before(call) {
       if (call.op === 'create') {
         const title: string = call.input.title
+
         void title
       }
 
       if (call.op === 'remove') {
         const id: string = call.input.id
+
         void id
       }
 
@@ -140,16 +149,19 @@ const hooks = (): void => {
     *after(call) {
       if (call.op === 'list') {
         const rows: readonly { title: string }[] = call.output.data
+
         void rows
       }
 
       if (call.op === 'get') {
         const priority: 'low' | 'high' = call.output.priority
+
         void priority
       }
 
       if (call.op === 'watch' && call.output.t === 'delta') {
         const added: readonly { done: boolean }[] = call.output.added
+
         void added
       }
     },
@@ -179,7 +191,9 @@ const inference = (): void => {
         // the transform REMOVED `priority` from the create input — the hook sees the reshape
         // @ts-expect-error priority is no longer part of the create input
         void call.input.priority
+
         const title: string = call.input.title
+
         void title
       }
     },
@@ -188,12 +202,14 @@ const inference = (): void => {
       if (call.op === 'list') {
         // the widened page envelope flows into the hook's output type
         const total: number = call.output.total
+
         void total
       }
 
       if (call.op === 'get') {
         // still the resolved row type — reshapes elsewhere did not widen it
         const priority: 'low' | 'high' = call.output.priority
+
         void priority
       }
     },
@@ -204,6 +220,7 @@ const inference = (): void => {
     title: 'x',
     done: false,
   }
+
   void created
 
   // an EXTERNAL hook annotates itself from the built resource — reuse without generics
@@ -212,6 +229,7 @@ const inference = (): void => {
       return { ...call.input, title: call.input.title.trim() }
     }
   }
+
   void audit
 
   // a hook shaped for another resource's rows is a compile error, not a silent widening
@@ -219,6 +237,7 @@ const inference = (): void => {
   const foreign: ResourceDef.HooksOf<typeof otherCrud>['after'] = function* (call) {
     if (call.op === 'get') {
       const label: string = call.output.label
+
       void label
     }
   }
@@ -236,23 +255,27 @@ const authAndSockets = (): void => {
   // any truthy requirement → the handler sees a verified principal, no null check
   action.query({ output: z.string(), auth: 'authenticated' }, function* ({ ctx }) {
     const sub: string = ctx.auth.sub
+
     return sub
   })
 
   action.mutation({ output: z.string(), auth: ['admin'] }, function* ({ ctx }) {
     const roles: readonly string[] = ctx.auth.roles
+
     return roles.join(',')
   })
 
   action.query({ output: z.string() }, function* ({ ctx }) {
     // @ts-expect-error without an auth requirement the principal may be null
     const sub: string = ctx.auth.sub
+
     return String(sub)
   })
 
   action.query({ output: z.string(), auth: false }, function* ({ ctx }) {
     // @ts-expect-error `auth: false` keeps the nullable principal
     const sub: string = ctx.auth.sub
+
     return String(sub)
   })
 
@@ -261,22 +284,28 @@ const authAndSockets = (): void => {
     { receives: z.object({ q: z.string() }), sends: z.object({ a: z.number() }) },
     function* (socket) {
       const step = yield* (yield* socket.messages).next()
+
       if (!step.done) {
         const q: string = step.value.q
+
         void q
       }
+
       yield* socket.send({ a: 1 })
     },
   )
 
   const frame: ServiceDef.ReceivesOf<typeof sock> = { q: 'x' }
+
   void frame
 
   // @ts-expect-error an inbound frame is typed by `receives`
   const bad: ServiceDef.ReceivesOf<typeof sock> = { q: 1 }
+
   void bad
 
   const out: ServiceDef.SendsOf<typeof sock> = { a: 2 }
+
   void out
 }
 
@@ -295,6 +324,7 @@ const sockets = (): void => {
 
       if (!step.done) {
         const text: string = step.value.text
+
         void text
       }
 

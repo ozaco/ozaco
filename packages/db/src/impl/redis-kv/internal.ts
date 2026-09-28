@@ -109,6 +109,7 @@ export const driver: KvDef.Driver = {
   *del(keys) {
     const { client } = yield* useContext(StateRef)
     const removed = Number(yield* call(client.unlink(keys) as Promise<number>))
+
     yield* call(client.unlink(keys.map(tagsKeyOf)) as Promise<number>)
 
     return removed
@@ -116,6 +117,7 @@ export const driver: KvDef.Driver = {
 
   *has(key) {
     const { client } = yield* useContext(StateRef)
+
     return Number(yield* call(client.exists(key) as Promise<number>)) > 0
   },
 
@@ -192,11 +194,14 @@ export const driver: KvDef.Driver = {
       const reply = yield* call(
         client.scan(cursor, { MATCH: `${globEscape(prefix)}*`, COUNT: 500 }) as Promise<AnyType>,
       )
+
       cursor = String(reply.cursor)
+
       const keys = reply.keys as string[]
 
       if (keys.length > 0) {
         const values = keys.filter(key => !key.endsWith(TAGS_SUFFIX))
+
         yield* call(client.unlink(keys) as Promise<number>)
         removed += values.length
       }

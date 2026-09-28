@@ -18,6 +18,7 @@ import { posts, users } from './helpers'
 const bootstrap = function* (): Operation<AnyType> {
   yield* MemoryAdapter.use()
   yield* BunIO.use()
+
   return yield* DbClient.use({ tables: [users, posts] })
 }
 
@@ -29,10 +30,12 @@ describe('reactivity — changes feed', () => {
         const feed = yield* db.changes('users')
 
         const created = yield* db.insert('users', { name: 'ada' })
+
         yield* db.patch('users', String(created._id), { age: 36 })
         yield* db.delete('users', String(created._id))
 
         const first = yield* feed.next()
+
         expect(first.value).toMatchObject({
           table: 'users',
           op: 'insert',
@@ -41,9 +44,11 @@ describe('reactivity — changes feed', () => {
         expect('new' in (first.value as AnyType)).toBe(false)
 
         const second = yield* feed.next()
+
         expect(second.value).toMatchObject({ op: 'update', fields: ['age'] })
 
         const third = yield* feed.next()
+
         expect(third.value).toMatchObject({ op: 'delete' })
         expect(db.version('users')).toBe((third.value as AnyType).token)
       }),
@@ -56,8 +61,11 @@ describe('reactivity — changes feed', () => {
         const db = yield* bootstrap()
         const postsFeed = yield* db.changes('posts')
         const author = yield* db.insert('users', { name: 'ada' })
+
         yield* db.insert('posts', { title: 'notes', author: author._id })
+
         const step = yield* postsFeed.next()
+
         expect(step.value).toMatchObject({ table: 'posts', op: 'insert' })
       }),
     )
@@ -69,15 +77,19 @@ describe('reactivity — query watch', () => {
     unwrap(
       await run(function* () {
         const db = yield* bootstrap()
+
         yield* db.insert('users', { name: 'ada', age: 36, role: 'admin' })
 
         const snaps = yield* db.query('users').where({ role: 'admin' }).order('name').watch()
 
         const initial = yield* snaps.next()
+
         expect((initial.value as AnyType).rows.map((row: AnyType) => row.name)).toEqual(['ada'])
 
         yield* db.insert('users', { name: 'grace', role: 'admin' })
+
         const updated = yield* snaps.next()
+
         expect((updated.value as AnyType).rows.map((row: AnyType) => row.name)).toEqual([
           'ada',
           'grace',
@@ -96,16 +108,21 @@ describe('reactivity — query watch', () => {
 
         const docFeed = yield* db.watch('users', id)
         const initial = yield* docFeed.next()
+
         expect((initial.value as AnyType).name).toBe('ada')
 
         yield* db.patch('users', id, { age: 40 })
+
         const patched = yield* docFeed.next()
+
         expect((patched.value as AnyType).age).toBe(40)
 
         // a write to a DIFFERENT doc must not wake this watcher
         yield* db.insert('users', { name: 'grace' })
         yield* db.delete('users', id)
+
         const gone = yield* docFeed.next()
+
         expect(gone.value).toBeNull()
       }),
     )
@@ -117,9 +134,13 @@ describe('reactivity — cross-node bus', () => {
    * own subscription on the topic and injects what "peers" ship by publishing on it. */
   const makeBus = function* () {
     yield* MemoryTransport.use({ prefix: 'app', link: createLink() })
+
     const shipped = yield* Transport.actions.subscribe<Bus.Envelope>('db.change')
+
     yield* DbBus.use()
+
     const inject = (envelope: Bus.Envelope) => Transport.actions.publish('db.change', envelope)
+
     return { shipped, inject }
   }
 
@@ -135,13 +156,16 @@ describe('reactivity — cross-node bus', () => {
         expect((yield* useContext(DbBus)).transportName).toBe('memory')
 
         const ada = yield* db.insert('users', { name: 'ada' })
+
         yield* db.patch('users', ada._id, { age: 40 })
+
         // the outbox ships asynchronously
         const published = [
           ((yield* shipped.next()) as AnyType).value.value as Bus.Envelope,
           ((yield* shipped.next()) as AnyType).value.value as Bus.Envelope,
         ]
         const origin = (yield* Db.actions.bus()).origin
+
         expect(published[0]).toMatchObject({ origin, seq: 1 })
         expect(published[0]!.events[0]).toMatchObject({ table: 'users', id: ada._id, op: 'insert' })
         expect(published[0]!.events[0]!.token.endsWith(origin)).toBe(true)
@@ -150,16 +174,21 @@ describe('reactivity — cross-node bus', () => {
         expect('new' in (published[1]!.events[0] as AnyType)).toBe(false)
 
         const feed = yield* db.changes('users')
+
         // own echo (same origin) must be dropped; a foreign envelope must surface
         yield* inject(published[0]!)
+
         const foreign = yield* IO.actions.hlc({ origin: 'NDEB0002' })
+
         yield* inject({
           origin: 'NDEB0002',
           seq: 1,
           tx: foreign,
           events: [{ table: 'users', id: 'remote-1', op: 'insert', token: foreign }],
         })
+
         const step = yield* feed.next()
+
         expect(step.value).toMatchObject({
           id: 'remote-1',
           op: 'insert',
@@ -175,7 +204,9 @@ describe('reactivity — cross-node bus', () => {
           tx: foreign,
           events: [{ table: 'users', id: 'remote-1', op: 'insert', token: foreign }],
         })
+
         const third = yield* IO.actions.hlc({ origin: 'NDEB0002' })
+
         yield* inject({
           origin: 'NDEB0002',
           seq: 3,
@@ -184,7 +215,9 @@ describe('reactivity — cross-node bus', () => {
         })
         expect(((yield* feed.next()).value as AnyType).id).toBe('remote-3')
         yield* sleep(10)
+
         const stats = yield* Db.actions.busStats()
+
         // own echoes never reach the hub (dropped by origin before counting)
         expect(stats).toMatchObject({ published: 2, received: 3, deduped: 1, gaps: 2 })
         expect(stats.peers.NDEB0002?.seq).toBe(3)

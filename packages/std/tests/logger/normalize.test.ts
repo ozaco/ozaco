@@ -103,7 +103,7 @@ describe('logger — every failure is kept', () => {
     expect(entry?.error).toBe('app.first: one')
   })
 
-  it('the same failure twice (or one Error folded twice) is one failure', async () => {
+  it('the same failure (or Error) given twice is counted twice', async () => {
     const failure = fail('app.once')
     const error = new Error('same')
 
@@ -112,7 +112,7 @@ describe('logger — every failure is kept', () => {
       yield* Logger.actions.error(error, { nested: { again: error } })
     })
 
-    expect(entries.map(entry => entry.failures.length)).toEqual([1, 1])
+    expect(entries.map(entry => entry.failures.length)).toEqual([2, 2])
   })
 })
 
@@ -143,13 +143,16 @@ describe('logger — nested failures render via formatFailure', () => {
 
   it('an array payload renders its failures too; a cycle does not hang', () => {
     const cyclic: Record<string, unknown> = { name: 'loop' }
+
     cyclic['self'] = cyclic
 
     const arrays = normalizePayload(['items', [fail('app.x', 'y')] as never])
+
     expect(arrays.msg).toBe('items ["app.x: y"]')
     expect(arrays.failures).toHaveLength(1)
 
     const cycle = normalizePayload([{ cyclic }])
+
     expect(cycle.data?.['cyclic']).toBe(cyclic)
   })
 })
@@ -219,6 +222,7 @@ describe('logger — the JSON record', () => {
     const traced = toRecord(
       entry({ trace: { traceId: 'c'.repeat(32), spanId: 'd'.repeat(16), flags: 3 } }),
     )
+
     expect([traced['trace_id'], traced['span_id'], traced['trace_flags']]).toEqual([
       'c'.repeat(32),
       'd'.repeat(16),
@@ -248,8 +252,10 @@ describe('logger — the JSON record', () => {
 
     const pretty = await run(function* () {
       yield* JsonCodec.use()
+
       return yield* prettyFormat(entry({ time: 0, bindings }), false)
     })
+
     expect(unwrap(pretty)).toBe('[1970-01-01T00:00:00.000Z] INFO  req="r-1": hello')
 
     // any other value is an ordinary binding

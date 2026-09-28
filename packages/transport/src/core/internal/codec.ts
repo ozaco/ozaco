@@ -3,7 +3,7 @@ import type { Operation } from 'std:effect'
 import { attempt } from 'std:effect'
 import type { Result } from 'std:result'
 import { appendCauses, fail, isFailure } from 'std:result'
-import { activeContext, isValidContext, markRecorded } from 'std:trace'
+import { Trace } from 'std:trace'
 
 import { HEADERS, KINDS } from '../const'
 import { TransportErrors } from '../errors'
@@ -54,9 +54,9 @@ function* recordedIn(origin: TransportDef.Origin): Operation<string | undefined>
     return origin.traceId
   }
 
-  const context = yield* activeContext()
+  const context = yield* Trace.actions.activeContext()
 
-  return context !== null && isValidContext(context) ? context.traceId : undefined
+  return context?.traceId
 }
 
 /** An empty payload (credit frames, end frames without a close value). */
@@ -142,6 +142,7 @@ export function* decodeFailure(raw: TransportDef.Raw): Operation<Result.Failure<
   )
 
   const from = originOf(origin)
+
   if (from === undefined) {
     return failure
   }
@@ -152,7 +153,7 @@ export function* decodeFailure(raw: TransportDef.Raw): Operation<Result.Failure<
     const traceId = yield* recordedIn(from)
 
     if (traceId !== undefined) {
-      markRecorded(failure, traceId, { remote: true })
+      yield* Trace.actions.markRecorded(failure, traceId, { remote: true })
     }
   }
 

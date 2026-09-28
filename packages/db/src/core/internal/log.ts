@@ -150,6 +150,7 @@ export function* replayLog(state: Helpers.Logger, table: string, fromTs: number)
       find(log, { filter: where.gte('ts', floor), order: TS_ORDER, limit: REPLAY_PAGE }),
     )
     const entries = rows.map(toEntry).filter(entry => !out.some(seen => seen.token === entry.token))
+
     out.push(...entries)
 
     if (rows.length < REPLAY_PAGE) {
@@ -213,6 +214,7 @@ export function* compactLog(
     // no bound: everything but the newest row
     bound = keepNewest
   }
+
   const removed = yield* state.adapter.remove({ table: log, filter: where.and(bound, keepNewest) })
 
   return removed.length

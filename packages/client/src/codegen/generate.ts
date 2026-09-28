@@ -34,6 +34,7 @@ export function* generate(manifest: unknown, options?: GenerateOptions): Operati
   ) {
     return yield* fail(ClientErrors.Decode, 'input is not an OZACO MANIFEST v2 document')
   }
+
   const document = manifest as unknown as ManifestDef.Manifest
   const services = [...document.services].toSorted((left, right) =>
     left.name.localeCompare(right.name),
@@ -45,9 +46,11 @@ export function* generate(manifest: unknown, options?: GenerateOptions): Operati
 
   for (const service of services) {
     apiLines.push(`${INDENT}readonly ${keyText(service.name)}: ${serviceType(service, 1, uses)}`)
+
     const routes = [...callableOf(service)]
       .toSorted((left, right) => left.action.localeCompare(right.action))
       .map(action => `${INDENT}${INDENT}${keyText(action.action)}: ${routeText(action)},`)
+
     routeLines.push(`${INDENT}${keyText(service.name)}: {`, ...routes, `${INDENT}},`)
 
     // resource sockets: the ROW type behind `$watch`/`$rows`/`$window`, keyed by service
@@ -59,6 +62,7 @@ export function* generate(manifest: unknown, options?: GenerateOptions): Operati
       }
     }
   }
+
   return [
     options?.banner ?? DEFAULT_BANNER,
     ...(uses.flow
@@ -117,6 +121,7 @@ export function* pull(
       ? appendCauses(fault, 'manifest')
       : fail(ClientErrors.Network, 'manifest', fault)
   }
+
   // the server's answer, decoded like the runtime client's manifest fetch: its own tag (or
   // `client.refused` for a bare 401/403, `http.<code>` otherwise) — never `client.network`
   if (!response.ok) {
@@ -126,6 +131,8 @@ export function* pull(
       remote: { operation: 'manifest' },
     })
   }
+
   const manifest = yield* until(response.json())
+
   return yield* generate(manifest, options)
 }

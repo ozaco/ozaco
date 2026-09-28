@@ -7,6 +7,7 @@ export const registry = new Map<string, StreamDef.BrandSpec>()
 
 export const register = (brand: string, spec: StreamDef.BrandSpec): StreamDef.BrandSpec => {
   registry.set(brand, spec)
+
   return spec
 }
 

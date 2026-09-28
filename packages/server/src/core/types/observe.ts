@@ -39,7 +39,7 @@ export namespace ObserveDef {
 
   /**
    * A DOMAIN record (audit trails, business events) — `Server.actions.report({ stream: 'audit',
-   * … })`: ONE log record with `eventName: 'ozaco.domain'`, `ozaco.domain.stream` and the fields
+   * … })`: ONE log record with `eventName: 'ozaco.local'`, `ozaco.local.stream` and the fields
    * flattened into attributes, correlated to the active span.
    */
   export interface DomainRecord {

@@ -17,5 +17,6 @@ export const withEncoding = (
     if (options?.encoding === undefined) {
       return bytes
     }
+
     return options.encoding === 'hex' ? toHex(bytes) : toBase64(bytes)
   } as IODef.Hash

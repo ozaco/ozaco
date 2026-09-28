@@ -38,6 +38,7 @@ const createWriter = (): Helpers.ProtoWriter => {
     }
 
     const grown = new Uint8Array(size)
+
     grown.set(buffer.subarray(0, length))
     buffer = grown
     view = new DataView(buffer.buffer)
@@ -46,6 +47,7 @@ const createWriter = (): Helpers.ProtoWriter => {
   /** An unsigned varint of a non-negative safe integer. */
   const rawVarint = (value: number) => {
     reserve(10)
+
     let rest = value
 
     while (rest > 0x7f) {
@@ -61,6 +63,7 @@ const createWriter = (): Helpers.ProtoWriter => {
   /** An unsigned varint of a 64-bit two's complement value (a negative int64 takes 10 bytes). */
   const rawVarint64 = (value: bigint) => {
     reserve(10)
+
     let rest = BigInt.asUintN(64, value)
 
     while (rest > 0x7fn) {
@@ -129,6 +132,7 @@ const createWriter = (): Helpers.ProtoWriter => {
     },
     message(field, build) {
       const child = createWriter()
+
       build(child)
       writer.bytes(field, child.finish())
     },

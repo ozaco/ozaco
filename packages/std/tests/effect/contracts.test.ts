@@ -25,7 +25,9 @@ describe('halt() promise side', () => {
     expect(isSuccess(halted)).toBe(true)
 
     const outcome = await task
+
     expect(isFailure(outcome)).toBe(true)
+
     if (isFailure(outcome)) {
       expect(outcome.error).toBe('std:effect.halted')
     }
@@ -39,6 +41,7 @@ describe('halt() promise side', () => {
     })
 
     const outcome = await task
+
     expect(isFailure(outcome)).toBe(true)
 
     let rejected = false
@@ -50,6 +53,7 @@ describe('halt() promise side', () => {
     expect(isSuccess(halted)).toBe(true)
 
     const disposed = await task[Symbol.asyncDispose]().catch(() => 'rejected')
+
     expect(isSuccess(disposed)).toBe(true)
   })
 
@@ -70,6 +74,7 @@ describe('halt() promise side', () => {
     // the unwind failure is the RESOLVED value — never a rejection
     expect(rejected).toBe(false)
     expect(isFailure(halted)).toBe(true)
+
     if (isFailure(halted)) {
       expect(halted.error).toBe('teardown.boom')
       expect(halted.message).toBe('raised during unwind')
@@ -77,7 +82,9 @@ describe('halt() promise side', () => {
 
     // the task promise itself honors the contract: it resolves the same Failure
     const outcome = await task
+
     expect(isFailure(outcome)).toBe(true)
+
     if (isFailure(outcome)) {
       expect(outcome.error).toBe('teardown.boom')
     }
@@ -99,12 +106,14 @@ describe('halt() promise side', () => {
 
     expect(rejected).toBe(false)
     expect(isFailure(disposed)).toBe(true)
+
     if (isFailure(disposed)) {
       expect(disposed.error).toBe('dispose.boom')
     }
 
     // the task promise itself resolves the same Failure
     const outcome = await task
+
     expect(isFailure(outcome) && outcome.error).toBe('dispose.boom')
   })
 
@@ -132,6 +141,7 @@ describe('halt() promise side', () => {
     })
 
     expect(isSuccess(outcome)).toBe(true)
+
     if (isSuccess(outcome)) {
       expect(outcome.value).toBe('child.teardown.boom')
     }
@@ -145,7 +155,9 @@ describe('createFuture() promise side', () => {
     resolve(7)
 
     const settled = await future
+
     expect(isSuccess(settled)).toBe(true)
+
     if (isSuccess(settled)) {
       expect(settled.value).toBe(7)
     }
@@ -153,7 +165,9 @@ describe('createFuture() promise side', () => {
     const viaOperation = await run(function* () {
       return yield* future
     })
+
     expect(isSuccess(viaOperation)).toBe(true)
+
     if (isSuccess(viaOperation)) {
       expect(viaOperation.value).toBe(7)
     }
@@ -171,6 +185,7 @@ describe('createFuture() promise side', () => {
 
     expect(rejected).toBe(false)
     expect(isFailure(settled)).toBe(true)
+
     if (isFailure(settled)) {
       expect(settled.error).toBe('future.rejected')
       expect(settled.message).toBe('through reject')
@@ -196,6 +211,7 @@ describe('createFuture() promise side', () => {
     })
 
     expect(isSuccess(outcome)).toBe(true)
+
     if (isSuccess(outcome)) {
       expect(outcome.value).toBe('future.rejected')
     }

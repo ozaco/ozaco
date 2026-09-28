@@ -68,6 +68,7 @@ export function* nodeSpawn(cmd: string, args?: readonly string[], options?: IODe
   const stdio = resolveStdio(options?.stdio)
 
   let child
+
   try {
     child = childSpawn(cmd, [...(args ?? [])], {
       ...config,
@@ -83,12 +84,14 @@ export function* nodeSpawn(cmd: string, args?: readonly string[], options?: IODe
     child.once('exit', (code, signal) => resolve(makeStatus(code, signal)))
     child.once('error', reject)
   })
+
   void exitedPromise.catch(() => {})
 
   // guard against an unhandled 'error' on child.stdin (EPIPE when the child closed its read end):
   // `write()` surfaces the failure through its own callback; this listener only prevents the crash.
   // an inherited stream is `null` on the child — every use below checks
   const { stdin, stdout, stderr } = child
+
   stdin?.on('error', () => {})
 
   const exited = function* () {
@@ -152,5 +155,6 @@ export function* nodeSpawn(cmd: string, args?: readonly string[], options?: IODe
     closeStdin,
     kill,
   }
+
   return handle
 }
