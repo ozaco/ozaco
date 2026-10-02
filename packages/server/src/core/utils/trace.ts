@@ -267,9 +267,11 @@ export function* withDispatchSpan<T>(
   const request = yield* RequestRef.get()
 
   // the dispatch's contexts, entered again wherever its streamed output is produced
-  const enter = <R>(active: TraceDef.SpanContext | null, op: () => Operation<R>) => {
+  const enter = <R>(active: TraceDef.ActiveRecorder | null, op: () => Operation<R>) => {
     const inner = (handle: TraceDef.SpanHandle) =>
       DispatchSpan.with(handle, () => DispatchScope.with(scope, op))
+    // the span active during the dispatch, re-entered AS IT WAS (a non-recording one, an outer
+    // node's, a pass-through)
     const traced = () =>
       live.recording
         ? live.run(inner)
@@ -280,13 +282,13 @@ export function* withDispatchSpan<T>(
     return request ? RequestRef.with(request, traced) : traced()
   }
 
-  let active = null as TraceDef.SpanContext | null
+  let active = null as TraceDef.ActiveRecorder | null
   let ended = false
 
   try {
     const outcome = yield* attempt(() =>
       live.run(function* (handle) {
-        active = yield* Trace.actions.activeContext()
+        active = yield* Trace.actions.active()
 
         return yield* DispatchSpan.with(handle, () => DispatchScope.with(scope, () => body(handle)))
       }),
@@ -379,11 +381,11 @@ export function* carrierSpan(input: Helpers.CarrierSpanInput): Operation<TraceDe
 }
 
 /**
- * The span id of the recording SERVER dispatch span that answered `failure` over a carrier, if
- * any — what a carrier names in the failure's wire origin, so the caller's decoder appends
- * `remote: <operation> @ <service> span <id8>` to it.
+ * The recording SERVER dispatch span that answered `failure` over a carrier, if any — what a
+ * carrier names in the failure's wire origin (`spanId`, `traceId`), so the caller's decoder
+ * appends `remote: <operation> @ <service> span <id8>` to it and a caller's edge can echo it.
  */
-export const answeredBy = (failure: Result.Failure<unknown>): string | undefined =>
+export const answeredBy = (failure: Result.Failure<unknown>): TraceDef.SpanContext | undefined =>
   answering.get(failure)
 
 // --- ids & propagation -----------------------------------------------------------------------

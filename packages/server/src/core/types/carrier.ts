@@ -55,6 +55,9 @@ export namespace CarrierDef {
 
     /** the handler's `ctx.reply` (status / headers), carried back as the reply's `http`. */
     readonly http?: WireDef.HttpReply | undefined
+
+    /** the answering span as a `traceparent`, carried back as the reply's `traceparent`. */
+    readonly traceparent?: string | undefined
   }
 
   export type Server = (

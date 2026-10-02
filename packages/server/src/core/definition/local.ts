@@ -80,6 +80,7 @@ export const LocalCarrier = Carrier.implement<CarrierDef.Options, []>({
         value: served.value,
         outputs: served.outputs.map(lane => ({ name: lane.name, brand: lane.brand })),
         ...(served.http ? { http: served.http } : {}),
+        ...(served.traceparent ? { traceparent: served.traceparent } : {}),
       },
       *lane(name) {
         const output = outputs.get(name)

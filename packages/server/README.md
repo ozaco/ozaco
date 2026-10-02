@@ -384,10 +384,14 @@ node) only for callers `trace.trust` accepts, or for everyone with
 | `tracestate` carrying `ozaco=1` (an observing ozaco client / std Fetch) | continued — one trace across ozaco nodes — but self-asserted: always recorded, no chain        |
 | over a carrier                                                          | always continued, sampled flag honoured                                                        |
 
-Every reply carries `x-request-id` and, when the node traced the request,
-`traceresponse: 00-<trace id>-<edge span id>-<flags>` (`trace: { response: false }` drops both;
-the sampled bit is cleared on a `record: 'errors'` success — nothing of that trace is exported; an
-`observe: 'off'` route and a non-observing pass-through node send none). The request id is a valid inbound `x-request-id`
+Every reply carries `x-request-id` and `traceresponse: 00-<trace id>-<span id>-<flags>`: the
+edge span when the node traced the request (`trace: { response: false }` drops both; the sampled
+bit is cleared on a `record: 'errors'` success — nothing of that trace is exported; an
+`observe: 'off'` route sends none), else — a non-observing gateway — the span that ANSWERED
+behind it, its own flags: the owner's dispatch span, carried back as the carrier reply's
+`traceparent` (a success) or named by the failure's wire origin (a failure: the span that
+recorded it — of a nested call when a hosted handler re-raised its failure), so an observing
+caller still learns where its failure was recorded. The request id is a valid inbound `x-request-id`
 (1–128 printable ASCII), else the trace id of a trace started here, else a fresh id; whenever it
 differs from the trace id the edge span carries `ozaco.request.id`. WebSocket frames may carry
 `traceparent` / `tracestate` fields (the server strips them before the handler). `Cors` allows

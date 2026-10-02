@@ -217,6 +217,10 @@ export namespace TraceDef {
   export interface MarkOptions {
     /** The other side of a wire recorded it (a decoded reply said so). */
     remote?: boolean | undefined
+    /** The span that recorded it there, when the reply named it — what `recordedBy` answers. */
+    spanId?: string | undefined
+    /** That span's trace flags (sampled, random); sampled when the reply named none. */
+    flags?: number | undefined
   }
 
   export interface SettleOptions {
@@ -248,7 +252,8 @@ export namespace TraceDef {
     end(options?: EndOptions): Operation<void>
   }
 
-  /** The value the active-span context holds: a recording / non-recording span or a pass-through context. */
+  /** The active span as a value (`Trace.actions.active()`): a recording / non-recording span or a
+   * pass-through context — opaque, re-entered with `passThrough`. */
   export interface ActiveRecorder {
     readonly context: SpanContext
     readonly recording: boolean
@@ -325,13 +330,18 @@ export namespace TraceDef {
     /** The active span's context — recording, non-recording or pass-through (also under
      * suppression, for log correlation), its `tracestate` included; `null` when there is none. */
     activeContext(): Operation<SpanContext | null>
+    /** The active span itself — recording, non-recording or pass-through — as a value
+     * `passThrough` re-enters elsewhere (a stream produced after the dispatch returned); `null`
+     * when there is none. Opaque: read `context` / `recording`, never build one. */
+    active(): Operation<ActiveRecorder | null>
     /**
-     * Run `body` with `context` (an inbound one this node only forwards) as the active context:
-     * carried UNCHANGED while tracing is off — `inject()` forwards it as received — and continued
-     * as a local root by a span opened under it while tracing is on. An invalid context (ids no
-     * W3C header can carry) is ignored: the body runs as it would without one.
+     * Run `body` with `target` as the active span: a span `active()` answered, re-entered as it
+     * was; or a context (an inbound one this node only forwards) — carried UNCHANGED while tracing
+     * is off (`inject()` forwards it as received) and continued as a local root by a span opened
+     * under it while tracing is on. An invalid context (ids no W3C header can carry) is ignored:
+     * the body runs as it would without one.
      */
-    passThrough<T>(context: SpanContext, body: () => Operation<T>): Operation<T>
+    passThrough<T>(target: SpanContext | ActiveRecorder, body: () => Operation<T>): Operation<T>
     /** Run `body` with NO active span: what it opens starts new traces, `inject()` sends nothing. */
     detached<T>(body: () => Operation<T>): Operation<T>
     /**
@@ -374,6 +384,9 @@ export namespace TraceDef {
     ): Operation<void>
     /** Whether `failure` was recorded in trace `traceId` — by any std copy in this process. */
     isRecorded(failure: Result.Failure<unknown>, traceId: string): Operation<boolean>
+    /** The REMOTE span that recorded `failure` (the latest `markRecorded(…, { remote: true,
+     * spanId })`), as a remote context; `null` when no reply named one. */
+    recordedBy(failure: Result.Failure<unknown>): Operation<SpanContext | null>
     /**
      * The W3C headers for an outgoing call: `options.context`, else the active context; `{}`
      * without one or when its ids are invalid. Suppressed code sends it unsampled. `{ ozaco: true }` marks a recording span's

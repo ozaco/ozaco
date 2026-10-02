@@ -453,6 +453,10 @@ export namespace ServerDef {
     /** The edge's sink for {@link Ctx.reply} — also on a carrier hop (it carries the reply
      * back to the edge that forwarded the call); absent on `ctx.call` / `server.call`. */
     readonly reply?: ((reply: Reply) => void) | undefined
+
+    /** the span that answers the call (the dispatch span, when there is one) — for the edge that
+     * forwarded the call and has no span of its own: its `traceresponse`. */
+    readonly trace?: ((context: TraceDef.SpanContext) => void) | undefined
   }
 
   export type Dispatch = (call: Call, ctx: Ctx) => Operation<unknown>

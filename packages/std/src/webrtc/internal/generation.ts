@@ -155,16 +155,15 @@ const readdTracks = (session: Helpers.Session, pc: RtcDef.PeerLike) => {
 }
 
 /** The message of a thrown value (folded by `asFailure`), for failure texts. */
-const messageOf = (error: unknown) => asFailure(error).message
-
 /**
  * Dial ONE generation: construct, wire, adopt as current, recreate every local channel and
- * track on it, kick negotiation. Returns an error message when construction itself failed.
+ * track on it, kick negotiation. Returns the construction failure (the impl's throw, folded by
+ * `asFailure`) when constructing itself failed.
  */
 export const dialGeneration = (
   session: Helpers.Session,
   impl: RtcDef.ImplLike,
-): string | undefined => {
+): Result.Failure<unknown> | undefined => {
   const { options, counters, observe } = session
 
   let pc: RtcDef.PeerLike
@@ -175,10 +174,12 @@ export const dialGeneration = (
       ...(options.iceServers ? { iceServers: options.iceServers } : {}),
     })
   } catch (error) {
-    counters.failures += 1
-    observe.record('error', 'construct', { error: messageOf(error) })
+    const failure = asFailure(error, RtcErrors)
 
-    return messageOf(error)
+    counters.failures += 1
+    observe.record('error', 'construct', { error: failure.message })
+
+    return failure
   }
 
   const generation = emptyGeneration(pc)

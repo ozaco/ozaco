@@ -285,7 +285,7 @@ const withHeaders = (response: Response, headers: readonly [string, string][]): 
  * The context `traceresponse` names: the edge span's own — its sampled flag cleared when the
  * trace is NOT exported (a `record: 'errors'` span answered without a failure: nothing of it
  * reaches a backend); none for an `observe: 'off'` route or a pass-through edge (tracing off: no
- * span of its own).
+ * span of its own — `answeredElsewhere` then names the owner's).
  */
 const echoedOf = (by: {
   readonly handle: TraceDef.SpanHandle
@@ -302,10 +302,34 @@ const echoedOf = (by: {
 }
 
 /**
+ * The span an edge WITHOUT a span of its own (a non-observing gateway) advertises instead: the
+ * owner's answering span — the reply's `traceparent` for a success, the span a failure's wire
+ * origin named as its recorder (`Trace.actions.recordedBy`) for a failure. `null` for an
+ * `observe: 'off'` route or when nothing answered elsewhere.
+ */
+function* answeredElsewhere(by: {
+  readonly handle: TraceDef.SpanHandle
+  readonly observe: EdgeDef.Observe
+  readonly failure?: Result.Failure<unknown> | null | undefined
+  readonly answered?: TraceDef.SpanContext | null | undefined
+}): Operation<TraceDef.SpanContext | null> {
+  if (by.observe === 'off' || by.handle.valid) {
+    return null
+  }
+
+  if (by.answered) {
+    return by.answered
+  }
+
+  return by.failure ? yield* Trace.actions.recordedBy(by.failure) : null
+}
+
+/**
  * Stamp what every response carries back (`createServer({ trace: { response } })`, default on):
- * `x-request-id` and — when the edge span has a context — the W3C draft `traceresponse`
- * (`00-<trace>-<span>-<flags>`), sampled only for a trace that is exported (`echoedOf`). A
- * header the response already has is kept.
+ * `x-request-id` and the W3C draft `traceresponse` (`00-<trace>-<span>-<flags>`): the edge span's
+ * own context, sampled only for a trace that is exported (`echoedOf`) — or, when this edge has no
+ * span (a non-observing gateway), the span that answered the call elsewhere
+ * (`answeredElsewhere`). A header the response already has is kept.
  */
 function* stamp(
   response: Response,
@@ -315,6 +339,7 @@ function* stamp(
     readonly handle: TraceDef.SpanHandle
     readonly observe: EdgeDef.Observe
     readonly failure?: Result.Failure<unknown> | null | undefined
+    readonly answered?: TraceDef.SpanContext | null | undefined
   },
 ): Operation<Response> {
   if (!by.kernel.telemetry.trace.response) {
@@ -327,7 +352,7 @@ function* stamp(
     headers.push([HEADERS.requestId, by.requestId])
   }
 
-  const echoed = echoedOf(by)
+  const echoed = echoedOf(by) ?? (yield* answeredElsewhere(by))
 
   if (echoed && !response.headers.has(HEADERS.traceresponse)) {
     const { traceparent } = yield* Trace.actions.inject({ context: echoed })
@@ -397,6 +422,9 @@ function* runAction(
 
   // what the handler says about its own reply (`ctx.reply`), merged over the action's statics
   let replied: ServerDef.Reply = {}
+  // the span that answered elsewhere (a gateway's owner): this edge's `traceresponse` when it
+  // has no span of its own
+  let answered: TraceDef.SpanContext | null = null
 
   // the dispatch span opens under the ACTIVE edge span (`parent` omitted); `cid` is carrier
   // correlation only — never a span id
@@ -418,6 +446,9 @@ function* runAction(
         status: reply.status ?? replied.status,
         headers: { ...replied.headers, ...reply.headers },
       }
+    },
+    trace: context => {
+      answered = context
     },
   }
 
@@ -449,6 +480,7 @@ function* runAction(
     }),
     failure: null,
     streamed: isBranded(value),
+    answered,
     broke: () => broke,
   }
 }
@@ -462,6 +494,7 @@ function* finish({
   requestId,
   span,
   failure,
+  answered,
   observe,
 }: Helpers.Finishing): Operation<Response> {
   let out = response
@@ -470,7 +503,14 @@ function* finish({
     out = yield* decorator(request, out)
   }
 
-  return yield* stamp(out, { kernel: state.kernel, requestId, handle: span, observe, failure })
+  return yield* stamp(out, {
+    kernel: state.kernel,
+    requestId,
+    handle: span,
+    observe,
+    failure,
+    answered,
+  })
 }
 
 /**
@@ -598,6 +638,7 @@ function* respond(
     requestId: edge.requestId,
     span: handle,
     failure: answer.failure,
+    answered: answer.answered,
     observe: answering.observe,
   })
 

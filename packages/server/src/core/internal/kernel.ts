@@ -65,16 +65,25 @@ const httpOf = (http: WireDef.HttpReply | undefined): ServerDef.Reply | null => 
   }
 }
 
-/** Hand the owner's `ctx.reply` (the reply's usable `http`) to the edge that forwarded the call
- * (`remote.reply`: a gateway); what was handed, or `null`. */
-const forwardReply = (
+/** Hand the owner's `ctx.reply` (the reply's usable `http`) and its answering span (the reply's
+ * `traceparent`, validated) to the edge that forwarded the call (`remote.reply` / `remote.trace`:
+ * a gateway); the `http` handed, or `null`. */
+function* forwardReply(
   sent: CarrierDef.Sent,
   remote: Helpers.RemoteCall,
-): ServerDef.Reply | null => {
+): Operation<ServerDef.Reply | null> {
   const http = httpOf(sent.reply.http)
 
   if (http) {
     remote.reply?.(http)
+  }
+
+  if (remote.trace && typeof sent.reply.traceparent === 'string') {
+    const answered = yield* Trace.actions.extract({ traceparent: sent.reply.traceparent })
+
+    if (answered) {
+      remote.trace(answered)
+    }
   }
 
   return http
@@ -83,7 +92,7 @@ const forwardReply = (
 /** What a reply resolves to for the caller: its value, or its first output lane attached in THIS
  * scope — the owner's `ctx.reply` forwarded first (`forwardReply`). */
 function* replyOf(sent: CarrierDef.Sent, remote: Helpers.RemoteCall): Operation<unknown> {
-  forwardReply(sent, remote)
+  yield* forwardReply(sent, remote)
 
   const [output] = sent.reply.outputs
 
@@ -185,7 +194,7 @@ export function* callRemote(
     const outcome = yield* attempt(() =>
       live.run(function* () {
         const sent = yield* send()
-        const status = forwardReply(sent, remote)?.status
+        const status = (yield* forwardReply(sent, remote))?.status
         const [output] = sent.reply.outputs
 
         return output
@@ -328,8 +337,21 @@ export const serverFor = (kernel: ServerDef.Context, name: string): CarrierDef.S
     // the handler's `ctx.reply`, merged like the edge merges it: carried back as the reply's
     // `http` for the edge that forwarded the call (a gateway)
     let http: WireDef.HttpReply | undefined
-    const served = (value: unknown, outputs: CarrierDef.OutputLane[]): CarrierDef.Served =>
-      http ? { value, outputs, http } : { value, outputs }
+    // the answering span, as the reply's `traceparent` (a caller's edge without a span echoes it)
+    let answered: TraceDef.SpanContext | undefined
+    const served = function* (
+      value: unknown,
+      outputs: CarrierDef.OutputLane[],
+    ): Operation<CarrierDef.Served> {
+      const { traceparent } = answered ? yield* Trace.actions.inject({ context: answered }) : {}
+
+      return {
+        value,
+        outputs,
+        ...(http ? { http } : {}),
+        ...(traceparent ? { traceparent } : {}),
+      }
+    }
 
     const call: ServerDef.Call = {
       cid: dispatch.cid,
@@ -350,6 +372,9 @@ export const serverFor = (kernel: ServerDef.Context, name: string): CarrierDef.S
           status: reply.status ?? http?.status,
           headers: { ...http?.headers, ...reply.headers },
         }
+      },
+      trace: context => {
+        answered = context
       },
     }
 
@@ -401,13 +426,13 @@ export const serverFor = (kernel: ServerDef.Context, name: string): CarrierDef.S
 
     if (isDeferred(value)) {
       // materialized by the consumer (local caller / carrier pipe job) in its own scope
-      return served(undefined, [
+      return yield* served(undefined, [
         { name: 'body', brand: value.brand, open: () => materialize(value) as AnyType },
       ])
     }
 
     if (isBranded(value)) {
-      return served(undefined, [
+      return yield* served(undefined, [
         {
           name: 'body',
           brand: brandOf(value),
@@ -418,7 +443,7 @@ export const serverFor = (kernel: ServerDef.Context, name: string): CarrierDef.S
       ])
     }
 
-    return served(value, [])
+    return yield* served(value, [])
   }
 
 /** `server.api`: typed refs for every declared action. */

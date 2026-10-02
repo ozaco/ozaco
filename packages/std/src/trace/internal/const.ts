@@ -68,6 +68,9 @@ export const RECORDED_KEY = Symbol.for('std:trace.recorded')
 /** The same shape for the failures the other side of a wire recorded (`markRecorded` `remote`). */
 export const REMOTE_KEY = Symbol.for('std:trace.remote')
 
+/** The remote span that recorded a failure, when the reply named it: `WeakMap<failure, SpanContext>`. */
+export const RECORDER_KEY = Symbol.for('std:trace.recorder-of')
+
 /** One process-level fallback queue across std copies: `readonly FallbackSink[]`, the first one
  * receives (`registerFallback`). */
 export const FALLBACK_KEY = Symbol.for('std:trace.fallback')

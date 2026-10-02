@@ -5,9 +5,9 @@
  * `remote: <operation> @ <service> span <id8>` cause, a plain string of the envelope's `causes`
  * for a caller the gateway TRUSTS (`trace.trust`; the self-asserted `ozaco=1` is not enough: node
  * ids are the cluster's own — the kernel's breadcrumbs and the plugin runtime's labels are plain
- * string causes every caller gets). That cause names 8 hex digits of the span, no whole span id:
- * the gateway has no span of its own and none it could name, so no caller gets a
- * `traceresponse`.
+ * string causes every caller gets). The gateway has no span of its own, so its `traceresponse`
+ * names the span that ANSWERED behind it: the owner's dispatch span — the reply's `traceparent`
+ * for a success, the recorder the failure's wire origin named for a failure.
  */
 import type { ObserveDef } from 'server:core'
 import { action, createServer, Edge, HEADERS, ObserveExporter, service } from 'server:core'
@@ -31,6 +31,9 @@ const CALLER = 'b7ad6b7169203331'
 const math = service('math', {
   kaput: action.query({}, function* () {
     return yield* fail('math.kaput', 'the math is kaput')
+  }),
+  fine: action.query({}, function* () {
+    return 'fine'
   }),
 })
 
@@ -68,9 +71,14 @@ const memoryExporter = () => {
 }
 
 /** Node B (observing) hosts `math`; node A (observing NOTHING) hosts `gate` behind its edge. */
-const gateway = async (body: () => Operation<void>, trust?: (request: Request) => boolean) => {
+const gateway = async (
+  body: () => Operation<void>,
+  trust?: (request: Request) => boolean,
+  observing = false,
+) => {
   const link = createLink()
   const sink = memoryExporter()
+  const edge = memoryExporter()
 
   unwrap(
     await run(function* () {
@@ -96,14 +104,17 @@ const gateway = async (body: () => Operation<void>, trust?: (request: Request) =
         yield* storage()
         yield* MemoryTransport.use({ prefix: 'app', link })
 
+        // `math` is declared here too, HOSTED elsewhere: its edge routes forward over the carrier
         const server = yield* createServer({
-          services: [gate],
+          services: [gate, math],
+          hosted: ['gate'],
           carrier: NetworkCarrier,
           edge: BunEdge,
           name: 'app',
           instance: 'a',
           timeoutMs: 2000,
           ...(trust ? { trace: { trust } } : {}),
+          ...(observing ? { plugins: [edge.plugin] } : {}),
         })
 
         yield* server.start({ port: 0 })
@@ -115,7 +126,7 @@ const gateway = async (body: () => Operation<void>, trust?: (request: Request) =
     }),
   )
 
-  return sink
+  return { ...sink, edge }
 }
 
 /**
@@ -141,15 +152,19 @@ const locations = (
   ]
 }
 
-const relay = function* (headers: Record<string, string>) {
-  const response = yield* Edge.actions.handle(new Request('http://edge/gate/relay', { headers }))
+const relay = function* (headers: Record<string, string>, path = '/gate/relay') {
+  const response = yield* Edge.actions.handle(new Request(`http://edge${path}`, { headers }))
   const body = yield* until(response.json())
 
   return { status: response.status, headers: response.headers, body }
 }
 
+/** The `traceresponse` naming `span`. */
+const named = (span: TraceDef.SpanData, flags = '01'): string =>
+  `00-${span.context.traceId}-${span.context.spanId}-${flags}`
+
 describe('pass-through edge — a failure recorded behind it', () => {
-  it('a continued caller is answered in its own trace; no traceresponse, no cluster names', async () => {
+  it('a continued caller is answered in its own trace; traceresponse names the owner, no cluster names', async () => {
     let continued: { status: number; headers: Headers; body: AnyType } | null = null
     let stranger: { status: number; headers: Headers; body: AnyType } | null = null
 
@@ -183,13 +198,14 @@ describe('pass-through edge — a failure recorded behind it', () => {
     expect(continued!.body.error.causes).toEqual(locations(continued!, owner, `span:${CALLER} `))
     expect(stranger!.body.error.causes).toEqual(locations(stranger!, alone, ''))
 
-    // the gateway traced nothing: no traceresponse (the breadcrumbs above still name the spans
-    // the dispatches ran in, as the kernel always did)
-    expect(continued!.headers.get(HEADERS.traceresponse)).toBeNull()
+    // the gateway traced nothing of its own: its traceresponse names the span that ANSWERED —
+    // the owner's, the failure's recorder — in the caller's trace
+    expect(continued!.headers.get(HEADERS.traceresponse)).toBe(named(owner))
 
     // a caller the gateway does not continue (link mode): its context never went on, the
-    // service recorded in a trace of its own — nothing to name either
-    expect(stranger!.headers.get(HEADERS.traceresponse)).toBeNull()
+    // service recorded in a trace of its own — the traceresponse names that span, with the
+    // flags the owner minted (a random trace id)
+    expect(stranger!.headers.get(HEADERS.traceresponse)).toBe(named(alone, '03'))
   })
 
   it('a caller the gateway trusts learns where it was answered (remote cause)', async () => {
@@ -207,7 +223,7 @@ describe('pass-through edge — a failure recorded behind it', () => {
     const recorded = sink.exceptions().find(log => log.context?.traceId === TRACE)
     const owner = sink.spans().find(data => data.context.spanId === recorded!.context?.spanId)!
 
-    // the owner's operation, node and span (8 digits) — and still no traceresponse
+    // the owner's operation, node and span (8 digits) — the traceresponse the whole span
     const [breadcrumb, ...rest] = locations(trusted!, owner, `span:${CALLER} `)
 
     expect(trusted!.body.error.causes).toEqual([
@@ -215,6 +231,69 @@ describe('pass-through edge — a failure recorded behind it', () => {
       `remote: math.kaput @ app@0.0.0#b span ${owner.context.spanId.slice(0, 8)}`,
       ...rest,
     ])
-    expect(trusted!.headers.get(HEADERS.traceresponse)).toBeNull()
+    expect(trusted!.headers.get(HEADERS.traceresponse)).toBe(named(owner))
+  })
+
+  it("a success forwarded by the gateway names the owner's dispatch span too", async () => {
+    let passed: { status: number; headers: Headers; body: AnyType } | null = null
+
+    const sink = await gateway(function* () {
+      passed = yield* relay(
+        { traceparent: `00-${TRACE}-${CALLER}-01`, tracestate: 'ozaco=1' },
+        '/math/fine',
+      )
+    })
+
+    expect(passed!.status).toBe(200)
+    expect(passed!.body).toBe('fine')
+
+    // the reply's `traceparent`: the owner's SERVER span, in the caller's trace
+    const owner = sink.spans().find(data => data.name === 'math.fine')!
+
+    expect(owner.context.traceId).toBe(TRACE)
+    expect(passed!.headers.get(HEADERS.traceresponse)).toBe(named(owner))
+  })
+
+  it("a trusted UNSAMPLED caller is named the owner's span too, flags kept — success and failure alike", async () => {
+    let passed: { status: number; headers: Headers; body: AnyType } | null = null
+    let failed: { status: number; headers: Headers; body: AnyType } | null = null
+    const unsampled = { traceparent: `00-${TRACE}-${CALLER}-00`, 'x-proxy': 'yes' }
+
+    const sink = await gateway(
+      function* () {
+        passed = yield* relay(unsampled, '/math/fine')
+        failed = yield* relay(unsampled)
+      },
+      request => request.headers.get('x-proxy') === 'yes',
+    )
+
+    // the owner honoured the sampled flag: nothing of that trace was exported — the headers
+    // still name its spans, unsampled, on both paths
+    const inTrace = new RegExp(`^00-${TRACE}-(?!${CALLER})[0-9a-f]{16}-00$`, 'u')
+
+    expect(sink.spans().filter(data => data.context.traceId === TRACE)).toHaveLength(0)
+    expect(passed!.headers.get(HEADERS.traceresponse)).toMatch(inTrace)
+    expect(failed!.headers.get(HEADERS.traceresponse)).toMatch(inTrace)
+  })
+
+  it('an OBSERVING gateway names its own edge span, never the owner behind it', async () => {
+    let relayed: { status: number; headers: Headers; body: AnyType } | null = null
+
+    const sink = await gateway(
+      function* () {
+        relayed = yield* relay({ traceparent: `00-${TRACE}-${CALLER}-01`, tracestate: 'ozaco=1' })
+      },
+      undefined,
+      true,
+    )
+
+    const edge = sink.edge
+      .spans()
+      .find(data => data.kind === 'server' && data.name.startsWith('GET'))!
+    const owner = sink.spans().find(data => data.name === 'math.kaput')!
+
+    expect(edge.context.traceId).toBe(TRACE)
+    expect(relayed!.headers.get(HEADERS.traceresponse)).toBe(named(edge))
+    expect(relayed!.headers.get(HEADERS.traceresponse)).not.toBe(named(owner))
   })
 })

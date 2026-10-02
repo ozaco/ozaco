@@ -131,6 +131,8 @@ export namespace TransportDef {
     readonly spanId?: string | undefined
     /** The trace the request came in with (its `traceparent`). */
     readonly traceId?: string | undefined
+    /** The trace flags of `spanId` (sampled, random). */
+    readonly flags?: number | undefined
     /** The answering side recorded the failure in `traceId`. */
     readonly recorded?: boolean | undefined
   }

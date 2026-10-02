@@ -73,10 +73,10 @@ function* outbound(headers: TransportDef.Headers | undefined): Operation<Transpo
 }
 
 /**
- * Where a failed request was answered, for its reply: the topic, the trace it came in with and
- * whether THIS side already recorded the failure in that trace (the caller then records it no
- * second time) — then whatever the service's own `origin` names (it wins; a throwing one is
- * ignored).
+ * Where a failed request was answered, for its reply: the topic, the trace it was answered in (the
+ * one the service's own `origin` names, else the request's inbound one) and whether THIS side
+ * already recorded the failure in that trace (the caller then records it no second time) — then
+ * whatever else the service's `origin` names (it wins; a throwing one is ignored).
  */
 function* originOf<TArgs>(
   service: Helpers.Service<TArgs, unknown>,
@@ -84,14 +84,17 @@ function* originOf<TArgs>(
 ): Operation<TransportDef.Origin> {
   const { raw, failure, request } = failed
   const inbound = yield* Trace.actions.extract(name => raw.headers[name])
-  const recorded = inbound !== null && (yield* Trace.actions.isRecorded(failure, inbound.traceId))
   const named =
     request && service.origin ? throwable(() => service.origin?.(failure, request)) : undefined
   const own = named && !isFailure(named) ? named.value : undefined
+  // the trace the failure was answered in: the one the service names (its own span's), else the
+  // request's inbound one — `recorded` is asked of THAT trace
+  const traceId = own?.traceId ?? inbound?.traceId
+  const recorded = traceId !== undefined && (yield* Trace.actions.isRecorded(failure, traceId))
 
   return {
     operation: raw.topic,
-    ...(inbound === null ? {} : { traceId: inbound.traceId }),
+    ...(traceId === undefined ? {} : { traceId }),
     ...(recorded ? { recorded } : {}),
     ...own,
   }

@@ -50,6 +50,24 @@ describe('scope actions', () => {
     expect(value.during?.spanId).toBe(value.spanId)
   })
 
+  it('active() is re-entered by passThrough as it was — a recording span stays one', async () => {
+    const { value } = await traced(() =>
+      Trace.actions.span('dispatch', function* (handle) {
+        const active = yield* Trace.actions.active()
+
+        // produced later, outside the span's body: the same span, still recording
+        const carrier = yield* Trace.actions.detached(() =>
+          Trace.actions.passThrough(active!, () => Trace.actions.inject({ ozaco: true })),
+        )
+
+        return { carrier, spanId: handle.context.spanId }
+      }),
+    )
+
+    expect(value.carrier.traceparent).toContain(`-${value.spanId}-`)
+    expect(value.carrier.tracestate).toBe('ozaco=1')
+  })
+
   it('a context re-entered from activeContext keeps its tracestate', async () => {
     const inbound = { ...INBOUND, state: 'vendor=abc' }
     const carrier = unwrap(

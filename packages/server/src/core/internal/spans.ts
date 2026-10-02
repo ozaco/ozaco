@@ -24,7 +24,7 @@ import { noteFailure } from './forward'
 export const recvLinks = new WeakMap<TraceDef.SpanHandle, number>()
 
 /** The recording SERVER dispatch span each failure it answered escaped (weakly keyed). */
-export const answering = new WeakMap<Result.Failure<unknown>, string>()
+export const answering = new WeakMap<Result.Failure<unknown>, TraceDef.SpanContext>()
 
 /** How a dispatch span — or a plugin's span wrapping (part of) a dispatch — classifies a failure
  * escaping it: the action's `errors` map / the server table (`statusOf`), `tagOf`, and the
@@ -158,9 +158,12 @@ export const endsWith = (
   return brandStream(piped, brandOf(source as StreamDef.Branded))
 }
 
-/** Note that the recording SERVER dispatch span `spanId` answered `failure` over a carrier. */
-export const noteAnswered = (failure: Result.Failure<unknown>, spanId: string): void => {
-  answering.set(failure, spanId)
+/** Note that the recording SERVER dispatch span `context` answered `failure` over a carrier. */
+export const noteAnswered = (
+  failure: Result.Failure<unknown>,
+  context: TraceDef.SpanContext,
+): void => {
+  answering.set(failure, context)
 }
 
 /**

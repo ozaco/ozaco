@@ -67,6 +67,10 @@ export namespace WireDef {
      * as `Location`) — the caller's edge applies it; absent when it said nothing (and from
      * older nodes). */
     readonly http?: HttpReply | undefined
+
+    /** the owner's answering span as a `traceparent` — a caller's edge with no span of its own
+     * echoes it as `traceresponse`; absent when the owner had none (and from older nodes). */
+    readonly traceparent?: string | undefined
   }
 
   /** A handler's `ctx.reply` as it crosses the wire. */

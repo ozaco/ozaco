@@ -184,6 +184,7 @@ export const NetworkCarrier = Carrier.implement<
 
           // the handler's `ctx.reply` (status, `Location`, …) for the caller's edge
           ...(served.http ? { http: served.http } : {}),
+          ...(served.traceparent ? { traceparent: served.traceparent } : {}),
         }
       },
       {
@@ -193,12 +194,12 @@ export const NetworkCarrier = Carrier.implement<
         // it was recorded, the SERVER span that answered it: the caller's decoder appends it as
         // the `remote: <operation> @ <service> span <id8>` cause
         origin: (failure, request) => {
-          const spanId = answeredBy(failure)
+          const at = answeredBy(failure)
 
           return {
             service: state.kernel?.serviceId ?? service,
             operation: `${service}.${request.value.action}`,
-            ...(spanId ? { spanId } : {}),
+            ...(at ? { spanId: at.spanId, traceId: at.traceId, flags: at.flags } : {}),
           }
         },
       },

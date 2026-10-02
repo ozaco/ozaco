@@ -1,6 +1,8 @@
 import { action, createServer, ServerErrors, service } from 'server:core'
 import { Resilience } from 'server:plugins'
 import { all, attempt, fork, race, run, sleep } from 'std:effect'
+import type { LoggerDef } from 'std:logger'
+import { DefaultLogger, LoggerTransport, LogLevel } from 'std:logger'
 import { asFailure, fail, unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
 import type { TraceDef } from 'std:trace'
@@ -8,6 +10,7 @@ import { Trace } from 'std:trace'
 
 import { describe, expect, it } from 'bun:test'
 
+import { TraceTransport } from 'std:logger/transport/trace'
 import { z } from 'zod'
 
 import { storage } from '../helpers'
@@ -408,12 +411,29 @@ describe('resilience — telemetry', () => {
 
   it('breaker: transitions are events, rejections link the tripping call, only 5xx count', async () => {
     const tracer = memoryTracer()
+    const lines: LoggerDef.Entry[] = []
+    const capture = LoggerTransport.implement({
+      name: 'test/resilience-logger-capture',
+      version: '1.0.0',
+      *setup() {
+        return { name: 'capture', level: LogLevel.trace }
+      },
+    }).build({
+      *write(entry: LoggerDef.Entry) {
+        lines.push(entry)
+      },
+      *flush() {},
+      *close() {},
+    })
     const { svc, counters } = make()
 
     unwrap(
       await run(function* () {
         yield* storage()
         yield* tracer.plugin.use()
+        yield* DefaultLogger.use({ level: LogLevel.trace })
+        yield* capture.use()
+        yield* TraceTransport.use()
 
         const server = yield* createServer({ services: [svc], plugins: [Resilience] })
 
@@ -476,6 +496,17 @@ describe('resilience — telemetry', () => {
       ['half_open', 9],
       ['open', 13],
     ])
+
+    // …and the same three lines in the terminal (WARN when it opens), the Logger's bridge making
+    // no second record of them (`ozaco.telemetry = 'sent'`)
+    const printed = lines.filter(entry => entry.bindings.logger === '@ozaco/server/resilience')
+
+    expect(printed.map(entry => [entry.msg, entry.level])).toEqual([
+      ['r.trips: circuit closed → open', LogLevel.warn],
+      ['r.trips: circuit open → half_open', LogLevel.info],
+      ['r.trips: circuit half_open → open', LogLevel.warn],
+    ])
+    expect(tracer.logs.filter(log => log.scope.name === '@ozaco/server/resilience')).toHaveLength(3)
 
     // …under the plugin's own scope (not the dispatch span's), correlated to that span
     for (const log of tracer.events('breaker')) {

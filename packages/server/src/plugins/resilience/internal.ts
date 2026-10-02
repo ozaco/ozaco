@@ -2,9 +2,10 @@
 import { Kv } from 'db:core'
 import type { ServerDef } from 'server:core'
 import { ServerErrors, statusOf } from 'server:core'
-import { dispatchFailure, scopeOf } from 'server:internal'
+import { dispatchFailure, scopeOf, SENT_BINDING } from 'server:internal'
 import type { Operation } from 'std:effect'
 import { attempt, createSemaphore, race, sleep, useContext, withResolvers } from 'std:effect'
+import { Logger } from 'std:logger'
 import type { Result } from 'std:result'
 import { fail, isFailure } from 'std:result'
 import type { AnyType } from 'std:shared'
@@ -185,9 +186,11 @@ export const primary = ({
 
 // --- breaker ----------------------------------------------------------------------------------
 
-/** A circuit's state change: an `breaker` event on the DISPATCH span AND its record (WARN
- * when it opens, correlated to that span) — the record under the plugin's own scope
- * (`@ozaco/server/resilience`), not the dispatch's. */
+/** A circuit's state change: a `breaker` event on the DISPATCH span AND its record (WARN when
+ * it opens, correlated to that span) — the record under the plugin's own scope
+ * (`@ozaco/server/resilience`), not the dispatch's — AND, with a std Logger installed, the same
+ * line in the terminal (bound `ozaco.telemetry = 'sent'`: the Logger's `TraceTransport` makes no
+ * second record of it). Never fails the dispatch. */
 function* transition(
   dispatch: TraceDef.SpanHandle,
   key: string,
@@ -198,16 +201,27 @@ function* transition(
     'ozaco.resilience.breaker.state.previous': previous,
   }
 
+  const body = `${key}: circuit ${previous} → ${state}`
+  const opened = state === 'open'
+
   dispatch.addEvent(BREAKER_EVENT, attributes)
   yield* Trace.actions.emitLog({
-    body: `${key}: circuit ${previous} → ${state}`,
-    severityNumber: state === 'open' ? TraceSeverity.warn : TraceSeverity.info,
+    body,
+    severityNumber: opened ? TraceSeverity.warn : TraceSeverity.info,
     eventName: BREAKER_EVENT,
     attributes,
     scope: RESILIENCE_SCOPE,
     // no dispatch span (a no-op handle): the record goes where the active span is
     context: dispatch.valid ? dispatch.context : undefined,
   })
+
+  if ((yield* Logger.context.get()) !== undefined) {
+    yield* attempt(() =>
+      Logger.actions.child({ ...SENT_BINDING, logger: RESILIENCE_SCOPE.name }, () =>
+        opened ? Logger.actions.warn(body, attributes) : Logger.actions.info(body, attributes),
+      ),
+    )
+  }
 }
 
 /**

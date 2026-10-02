@@ -26,10 +26,10 @@ import { mintSpanId, mintTraceId } from './ids'
 import { logOf } from './log'
 import { extract as extractFrom, isValidContext, setTracestate, traceparentOf } from './propagation'
 import { SpanRecorder } from './recorder'
-import { isRecordedIn, markRecordedIn } from './registry'
+import { isRecordedIn, markRecordedIn, recordedByRemote } from './registry'
 import { deliverLog, finish, recordChecked, settleIn } from './settle'
 import { idleOf, liveOf, open } from './span'
-import { plainContext } from './tree'
+import { isRecorder, plainContext } from './tree'
 
 /** `attributes` with every key an exception attribute takes moved to `ozaco.data.<key>`. */
 const besideException = (
@@ -114,11 +114,22 @@ export function* activeContext(): Operation<TraceDef.SpanContext | null> {
   return state ? { ...plainContext(active.context), state } : plainContext(active.context)
 }
 
+export function* activeSpan(): Operation<TraceDef.ActiveRecorder | null> {
+  return activeOf(yield* useScope())
+}
+
 export function* passThrough<T>(
-  context: TraceDef.SpanContext,
+  target: TraceDef.SpanContext | TraceDef.ActiveRecorder,
   body: () => Operation<T>,
 ): Operation<T> {
-  // an invalid context carries nothing: the body runs as it would without one
+  // a span `active()` answered: re-entered as it was
+  if (isRecorder(target)) {
+    return yield* ActiveSpan.with(target, body)
+  }
+
+  // not a recorder ⇒ a context; an invalid one carries nothing: the body runs as it would without
+  const context = target as TraceDef.SpanContext
+
   if (!isValidContext(context)) {
     return yield* body()
   }
@@ -262,11 +273,21 @@ export function* markRecorded(
   traceId: string,
   options: TraceDef.MarkOptions = {},
 ): Operation<void> {
-  markRecordedIn(failure, traceId, options.remote === true)
+  markRecordedIn(
+    failure,
+    traceId,
+    options.remote === true ? { spanId: options.spanId, flags: options.flags } : undefined,
+  )
 }
 
 export function* isRecorded(failure: Result.Failure<unknown>, traceId: string): Operation<boolean> {
   return isRecordedIn(failure, traceId)
+}
+
+export function* recordedBy(
+  failure: Result.Failure<unknown>,
+): Operation<TraceDef.SpanContext | null> {
+  return recordedByRemote(failure)
 }
 
 export function* inject(options: TraceDef.InjectOptions = {}): Operation<TraceDef.Carrier> {

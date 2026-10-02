@@ -33,10 +33,10 @@ export const createPeer = (
     const session = createSession(signal, options)
 
     // initial dial — a construction failure surfaces directly to the connect() caller
-    const dialError = dialGeneration(session, impl)
+    const dialFailure = dialGeneration(session, impl)
 
-    if (dialError !== undefined) {
-      return yield* fail(RtcErrors.Connect, `peer construction failed: ${dialError}`)
+    if (dialFailure !== undefined) {
+      return yield* fail(RtcErrors.Connect, 'peer construction failed', dialFailure)
     }
 
     yield* fork(() => pumpSignal(session))

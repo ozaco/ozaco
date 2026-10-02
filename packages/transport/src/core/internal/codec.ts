@@ -24,13 +24,14 @@ const originOf = (value: unknown): TransportDef.Origin | undefined => {
     return undefined
   }
 
-  const { service, operation, spanId, traceId, recorded } = value as Record<string, unknown>
+  const { service, operation, spanId, traceId, flags, recorded } = value as Record<string, unknown>
 
   return {
     service: textOf(service),
     operation: textOf(operation),
     spanId: textOf(spanId),
     traceId: textOf(traceId),
+    flags: typeof flags === 'number' ? flags : undefined,
     recorded: recorded === true,
   }
 }
@@ -153,7 +154,11 @@ export function* decodeFailure(raw: TransportDef.Raw): Operation<Result.Failure<
     const traceId = yield* recordedIn(from)
 
     if (traceId !== undefined) {
-      yield* Trace.actions.markRecorded(failure, traceId, { remote: true })
+      yield* Trace.actions.markRecorded(failure, traceId, {
+        remote: true,
+        spanId: from.spanId,
+        flags: from.flags,
+      })
     }
   }
 

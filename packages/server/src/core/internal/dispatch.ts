@@ -396,6 +396,12 @@ export function* runDispatch(
               seen.spanId = spanId
             }
 
+            // the span answering the call, for the edge that forwarded it (its `traceresponse`) —
+            // this node's OWN span (tracing on here), never a caller's context passed through
+            if (handle.valid && (yield* Trace.actions.isTracing())) {
+              call.trace?.(handle.context)
+            }
+
             const ctx = yield* contextOf({ kernel, call: served, meta: def.meta, actions })
             const outcome = yield* attempt(() => writing(handle, () => chain(served, ctx)))
 
@@ -412,9 +418,10 @@ export function* runDispatch(
               )
 
               // the carrier names this span in the failure's wire origin (the caller's
-              // `remote: … span <id8>` cause)
-              if (isFailure(outcome) && handle.recording) {
-                noteAnswered(outcome, handle.context.spanId)
+              // `remote: … span <id8>` cause, a forwarding edge's `traceresponse`) — recording
+              // or not, like the success path's `call.trace`
+              if (isFailure(outcome) && handle.valid) {
+                noteAnswered(outcome, handle.context)
               }
             }
 

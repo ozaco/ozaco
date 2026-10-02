@@ -130,8 +130,10 @@ export const ServerClient: ServerDef.Client = ServerImpl.build({
           idempotencyKey: call.idempotencyKey,
           meta: call.headers,
 
-          // the owner's `ctx.reply` (status, `Location`, …) shapes THIS edge's response
+          // the owner's `ctx.reply` (status, `Location`, …) shapes THIS edge's response, its
+          // answering span this edge's `traceresponse` when it has no span of its own
           reply: call.reply,
+          trace: call.trace,
         }),
       )
     }

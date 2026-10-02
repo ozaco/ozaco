@@ -203,6 +203,9 @@ export namespace Helpers {
     /** the edge's `ctx.reply` sink (a gateway forwarding an edge call): the owner's reply
      * status / headers are handed to it. */
     readonly reply?: ((reply: ServerDef.Reply) => void) | undefined
+
+    /** the edge's answering-span sink: the owner's span (the reply's `traceparent`). */
+    readonly trace?: ((context: TraceDef.SpanContext) => void) | undefined
   }
 
   /** A call from outside any dispatch, run as a request of its own (`RequestRef` set). */
@@ -367,6 +370,10 @@ export namespace Helpers {
 
     /** the failure it answers (an `errors`-mode success clears the sampled bit). */
     readonly failure?: Result.Failure<unknown> | null | undefined
+
+    /** the span that answered the call elsewhere (a gateway's owner) — `traceresponse` when the
+     * edge span has no context of its own. */
+    readonly answered?: TraceDef.SpanContext | null | undefined
   }
 
   /** One inbound frame as it arrived: the decoded value, its text, its size in bytes, when. */
@@ -424,6 +431,9 @@ export namespace Helpers {
     readonly response: Response
     readonly failure: Result.Failure<unknown> | null
     readonly streamed: boolean
+
+    /** the owner's answering span, when the call went over a carrier (see `Finish.answered`). */
+    readonly answered?: TraceDef.SpanContext | null | undefined
     readonly fault?: Result.Failure<unknown> | undefined
 
     /** the failure a streamed body's source broke with while the body still ended cleanly (an

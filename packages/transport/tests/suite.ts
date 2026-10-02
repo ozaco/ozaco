@@ -565,12 +565,14 @@ export const runTransportSuite = (target: TransportTarget): void => {
 
           const answers: string[] = []
 
-          for (let i = 0; i < 8; i++) {
+          // a broker spreads a group's requests at random (NATS): send until both members were
+          // reached, bounded — 64 in a row on one member is not chance
+          for (let i = 0; i < 64 && !(hits.a > 0 && hits.b > 0); i++) {
             answers.push(yield* Transport.actions.request<string>(topic, i))
           }
 
-          expect(answers).toHaveLength(8)
-          expect(hits.a + hits.b).toBe(8)
+          expect(hits.a + hits.b).toBe(answers.length)
+          expect(answers.every(answer => answer === 'a' || answer === 'b')).toBe(true)
           expect(hits.a).toBeGreaterThan(0)
           expect(hits.b).toBeGreaterThan(0)
         }),

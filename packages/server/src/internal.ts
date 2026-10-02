@@ -28,6 +28,7 @@ export {
   STREAM_DECL,
   TRACE_SCOPE,
 } from './core/const'
+export { SENT_BINDING } from './core/internal/const'
 export { LocalCarrier } from './core/definition/local'
 export { MemoryOutcomes } from './core/definition/outcomes'
 export { ServerClient } from './core/definition/server'
