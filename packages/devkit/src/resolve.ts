@@ -101,6 +101,7 @@ const CLI_MODULES: Record<string, ModuleEntry> = {
   'cli:impl/memory': { subpath: 'impl/memory', source: 'impl/memory/index.ts' },
   'cli:impl/node': { subpath: 'impl/node', source: 'impl/node/index.ts' },
   'cli:table': { subpath: 'table', source: 'table/index.ts' },
+  'cli:trace': { subpath: 'trace', source: 'trace/index.ts' },
 }
 
 const CLIENT_MODULES: Record<string, ModuleEntry> = {

@@ -12,6 +12,7 @@ tasks:
       - db:build
       - server:build
       - client:build
+      - cli:build
     inputs:
       - src/**/*
       - tests/**/*
@@ -26,6 +27,7 @@ tasks:
       - observe:embed
       - server:build
       - client:build
+      - cli:build
     inputs:
       - src/**/*
       - tests/**/*

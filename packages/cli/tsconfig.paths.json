@@ -7,6 +7,7 @@
       "cli:prompt": ["./src/prompt/index.ts", "./dist/prompt.d.ts"],
       "cli:spinner": ["./src/spinner/index.ts", "./dist/spinner.d.ts"],
       "cli:table": ["./src/table/index.ts", "./dist/table.d.ts"],
+      "cli:trace": ["./src/trace/index.ts", "./dist/trace.d.ts"],
       "cli:command": ["./src/command/index.ts", "./dist/command.d.ts"],
       "cli:impl/memory": ["./src/impl/memory/index.ts", "./dist/impl/memory.d.ts"],
       "cli:impl/node": ["./src/impl/node/index.ts", "./dist/impl/node.d.ts"],
@@ -16,7 +17,8 @@
       "std:result": ["./node_modules/@ozaco/std/dist/result"],
       "std:effect": ["./node_modules/@ozaco/std/dist/effect"],
       "std:plugin": ["./node_modules/@ozaco/std/dist/plugin"],
-      "std:io": ["./node_modules/@ozaco/std/dist/io"]
+      "std:io": ["./node_modules/@ozaco/std/dist/io"],
+      "std:trace": ["./node_modules/@ozaco/std/dist/trace"]
     }
   }
 }

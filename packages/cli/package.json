@@ -67,6 +67,17 @@
       },
       "source": "./src/table/index.ts"
     },
+    "./trace": {
+      "import": {
+        "types": "./dist/trace.d.ts",
+        "default": "./dist/trace.js"
+      },
+      "require": {
+        "types": "./dist/trace.d.cts",
+        "default": "./dist/trace.cjs"
+      },
+      "source": "./src/trace/index.ts"
+    },
     "./command": {
       "import": {
         "types": "./dist/command.d.ts",

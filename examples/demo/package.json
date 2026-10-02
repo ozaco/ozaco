@@ -10,6 +10,7 @@
     "codegen": "bun run scripts/codegen.ts"
   },
   "dependencies": {
+    "@ozaco/cli": "workspace:*",
     "@ozaco/client": "workspace:*",
     "@ozaco/db": "workspace:*",
     "@ozaco/devkit": "workspace:*",

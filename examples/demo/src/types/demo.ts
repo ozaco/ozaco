@@ -55,6 +55,10 @@ export interface DemoOptions {
 
   /** development: watch `src/` and swap the services into the running node on every save. */
   readonly hot?: boolean | undefined
+
+  /** draw every trace in the terminal as a timeline block (`cli:trace` `TerminalTracer`) when
+   * it completes — next to the Logger's lines. Default off. */
+  readonly timeline?: boolean | undefined
 }
 
 /** the typed api of one demo node — what `createClient<Api>` speaks. */

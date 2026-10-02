@@ -10,6 +10,7 @@ export default defineConfig({
     prompt: './src/prompt/index.ts',
     spinner: './src/spinner/index.ts',
     table: './src/table/index.ts',
+    trace: './src/trace/index.ts',
     command: './src/command/index.ts',
     'impl/memory': './src/impl/memory/index.ts',
     'impl/node': './src/impl/node/index.ts',

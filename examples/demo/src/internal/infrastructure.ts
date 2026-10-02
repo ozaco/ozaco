@@ -1,3 +1,5 @@
+import { DefaultPalette } from 'cli:palette'
+import { TerminalTracer } from 'cli:trace'
 /**
  * Install logging → transport → change bus → storage → queue — fixed to the zero-dependency
  * picks: the std Logger (console lines that are ALSO log records of the active span, in every
@@ -12,7 +14,9 @@ import { DbBus, DbClient } from 'db:core'
 import { Queue } from 'db:queue'
 import type { Operation } from 'std:effect'
 import { Logger } from 'std:logger'
+import { Trace } from 'std:trace'
 
+import { NodeTerminal } from 'cli:impl/node'
 import { SqliteAdapter } from 'db:impl/sqlite'
 import { TableKv } from 'db:impl/table-kv'
 import { BunIO } from 'std:io/impl/bun'
@@ -46,8 +50,29 @@ function* logging(): Operation<void> {
   yield* TraceTransport.use()
 }
 
+/**
+ * The terminal timeline (`options.timeline`): `TerminalTracer` draws every trace this node (and
+ * the infrastructure under it) produces as one block when it completes, through the cli
+ * `Terminal` with the terminal's own colours and glyphs. A std:trace sink installed here means
+ * tracing is on around the node, so `createServer` observes even without an exporter. A tracer
+ * the caller installed already is kept.
+ */
+function* timeline(): Operation<void> {
+  if (yield* Trace.actions.isTracing()) {
+    return
+  }
+
+  yield* NodeTerminal.use()
+  yield* DefaultPalette.use()
+  yield* TerminalTracer.use()
+}
+
 export function* infrastructure(options: DemoOptions): Operation<void> {
   yield* logging()
+
+  if (options.timeline) {
+    yield* timeline()
+  }
   yield* BunIO.use()
   yield* MemoryTransport.use(
     options.link

@@ -5,7 +5,7 @@ import { ensure, main, suspend } from 'std:effect'
 import { createDemo } from '../src'
 
 await main(function* () {
-  const app = yield* createDemo({ port: 3000, hot: true })
+  const app = yield* createDemo({ port: 3000, hot: true, timeline: true })
 
   yield* ensure(function* () {
     console.log('[demo] stopping…')

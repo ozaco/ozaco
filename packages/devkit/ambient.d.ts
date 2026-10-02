@@ -202,6 +202,10 @@ declare module 'cli:table' {
   export * from '@ozaco/cli/table';
 }
 
+declare module 'cli:trace' {
+  export * from '@ozaco/cli/trace';
+}
+
 // --------- CLIENT ---------
 declare module 'client:core' {
   export * from '@ozaco/client';

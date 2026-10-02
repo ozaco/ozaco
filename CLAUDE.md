@@ -185,9 +185,15 @@ foundation. Layers, bottom up:
   `Registry.actions.run(argv, { report: true })` prints a failure once (`isReported(f)` →
   `CliCauses.Reported`), parse errors + help go to stderr
   (`Terminal.actions.write(text, { stream: 'stderr' })`); non-tty tables buffer until `end()` and fit every row; table handles
-  have `remove`/`replace`
+  have `remove`/`replace`. `cli:trace` `TerminalTracer.use({ width, idleMs })` is a std:trace sink
+  (install after the `Terminal` impl + `Palette`): a trace is drawn as ONE Gantt-like block through
+  `Terminal.actions.write` — header, a row per span in tree order with its bar on a shared axis
+  (palette colours by kind, `error` / `warning` on failure), events `◆` / exception `✖` / records
+  `◇` as markers, the records' lines under the span, duration + outcome — when its root span ends,
+  else after `idleMs` quiet (later spans make a further block); glyphs follow the palette's
+  `unicode`; Logger-bridged records (`severityText`) are skipped (`ConsoleTransport` prints them)
 - `apps/panel` (docs try-it UI) and `apps/observe` (dev console) are embedded into the server's
-  `Docs` / `ObservePlugin`; `examples/demo` is the end-to-end reference app.
+  `Docs` / `ObservePlugin`; `examples/demo` is the end-to-end reference app (`createDemo({ timeline: true })` — `scripts/main.ts` / `dev.ts` — installs `NodeTerminal` + `DefaultPalette` + `TerminalTracer` before the node, so every trace is drawn in the terminal).
 
 **Workspaces** (root `package.json`): `packages/`, `plugins/`, `apps/`, `tools/`, `experiments/`,
 `examples/` — only `packages/`, `apps/` and `examples/` exist on disk today.
