@@ -937,7 +937,7 @@ describe('edge trace — secrets never reach telemetry', () => {
     const login = {
       email: 'ada@example.com',
       password: 'hunter2',
-      profile: { pin: '0000', keys: [{ label: 'ci', Access_Token: 'tok-inner' }] },
+      profile: { pin: 'pin-7391', keys: [{ label: 'ci', Access_Token: 'tok-inner' }] },
     }
     const form = new FormData()
 
@@ -987,7 +987,7 @@ describe('edge trace — secrets never reach telemetry', () => {
 
     for (const secret of [
       'hunter2',
-      '0000',
+      'pin-7391',
       'tok-inner',
       'tok-access-1',
       'tok-refresh-1',

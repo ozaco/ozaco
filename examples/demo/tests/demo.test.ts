@@ -19,6 +19,9 @@ const detail = (steps: Step[], name: string): AnyType =>
 /** The observe console and its API answer admins and the ops bearer (`ObservePlugin.use({ auth })`). */
 const OBSERVE_AUTH = { authorization: `Bearer ${OBSERVE_TOKEN}` }
 
+/** An SGR escape sequence (`ESC[…m`) — what a colour-forced ConsoleTransport wraps its tokens in. */
+const STYLE = new RegExp(`${String.fromCodePoint(27)}\\[[0-9;]*m`, 'gu')
+
 describe('demo — every use case end to end', () => {
   it('boots the monolith and the typed client walks through it all', async () => {
     unwrap(
@@ -405,8 +408,10 @@ describe('demo — failures reach the terminal', () => {
     // the terminal is `console` (ConsoleTransport writes WARN to `warn`, ERROR to `error`)
     const printed: string[] = []
     const { error, warn } = console
+    // the launcher may force colours on the Logger (moon started from a terminal hands its tasks
+    // `FORCE_COLOR`); the assertions are about the TEXT of the line, so the styling is stripped
     const capture = (...args: unknown[]) => {
-      printed.push(args.map(String).join(' '))
+      printed.push(args.map(arg => String(arg).replaceAll(STYLE, '')).join(' '))
     }
     const boomed = () => printed.some(line => line.includes('reports.boom'))
     let traceId = null as string | null

@@ -108,12 +108,26 @@ const launch = (...args: string[]) => {
 
 const skip = process.platform === 'win32'
 
+/**
+ * The environment the program runs with: colours OFF. Bun paints `console.error` red whenever
+ * colours are forced on it, and a launcher started from a terminal (moon, proto) hands its
+ * tasks `FORCE_COLOR` / `CLICOLOR_FORCE` — the assertions below compare the TEXT `main` prints,
+ * not the terminal's styling of it.
+ */
+const plainEnv = (): Record<string, string | undefined> => ({
+  ...Object.fromEntries(Object.entries(process.env).filter(([key]) => !COLOR_FORCING.has(key))),
+  NO_COLOR: '1',
+})
+
+const COLOR_FORCING: ReadonlySet<string> = new Set(['FORCE_COLOR', 'CLICOLOR_FORCE', 'CLICOLOR'])
+
 /** Run the program to completion with stderr captured. */
 const runCaptured = async (...args: string[]) => {
   const proc = Bun.spawn([process.execPath, 'run', script, ...args], {
     stdout: 'pipe',
     stderr: 'pipe',
     cwd: dir,
+    env: plainEnv(),
   })
   const [status, stderr] = await Promise.all([proc.exited, new Response(proc.stderr).text()])
 
