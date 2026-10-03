@@ -78,7 +78,7 @@
     "@nats-io/nats-core": "^3.4.0",
     "@nats-io/transport-node": "^3.4.0",
     "@ozaco/std": "workspace:*",
-    "redis": "^6.2.1",
+    "redis": "^6.3.0",
     "tsdown": "catalog:build",
     "unrun": "catalog:build"
   },
