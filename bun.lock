@@ -172,7 +172,7 @@
       "dependencies": {
         "@fastify/busboy": "^3.2.2",
         "jose": "^6.2.12",
-        "rou3": "0.12.0",
+        "rou3": "0.12.1",
         "zod": "^4.6.5",
       },
       "devDependencies": {
@@ -903,7 +903,7 @@
 
     "rolldown-plugin-dts": ["rolldown-plugin-dts@0.28.6", "", { "dependencies": { "dts-resolver": "^3.0.0", "get-tsconfig": "5.0.0-beta.6", "obug": "^3.0.0", "yuku-ast": "^0.10.1", "yuku-codegen": "^0.10.1", "yuku-parser": "^0.10.1" }, "peerDependencies": { "@typescript/native-preview": "*", "@volar/typescript": "~2.4.0", "@vue/language-core": "~3.2.0 || ~3.3.0", "rolldown": "^1.2.0", "typescript": "^5.0.0 || ^6.0.0 || ~7.0.0", "vue-tsc": "~3.2.0 || ~3.3.0" }, "optionalPeers": ["@typescript/native-preview", "@volar/typescript", "@vue/language-core", "typescript", "vue-tsc"] }, "sha512-qKrFtBfRfR2hP233m7Ic9zf3wv6MSYdZghWKMdEO6dRYZGlNfINJAa1P5ZVvyHh3mrcd7IJQvIY8L9vnm+v5rQ=="],
 
-    "rou3": ["rou3@0.12.0", "", {}, "sha512-V2L6A3jA3RV/zI4pSXkV8OF3+8zPOfaYsb2bV9nTzxV/TXRYDtXgv+k0n1QnYrR0XuTkHfR63wU3Nov6hKCaAA=="],
+    "rou3": ["rou3@0.12.1", "", {}, "sha512-uv7TWJWh0lB6TyXnK1xDn9+OyzOb6Foeh+9bh+wV5hJ0v0ASpMiaGdatrlc9MPc4EBGWBMo8j0lkNxkNBel5Sg=="],
 
     "run-async": ["run-async@3.0.0", "", {}, "sha512-540WwVDOMxA6dN6We19EcT9sc3hkXPw5mzRNGM3FkdN/vtE9NFvj5lFAPNwUDmJjXidm3v7TC1cTE7t17Ulm1Q=="],
 
