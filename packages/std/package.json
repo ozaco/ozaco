@@ -287,7 +287,7 @@
   },
   "devDependencies": {
     "@types/fb-watchman": "2.0.6",
-    "js-yaml": "5.4.2",
+    "js-yaml": "5.4.3",
     "node-datachannel": "0.33.4",
     "smol-toml": "1.9.0",
     "tsdown": "catalog:build",
