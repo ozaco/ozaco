@@ -84,6 +84,7 @@ const TRANSPORT_MODULES: Record<string, ModuleEntry> = {
   'transport:impl/nats': { subpath: 'impl/nats', source: 'impl/nats/index.ts' },
   'transport:impl/redis': { subpath: 'impl/redis', source: 'impl/redis/index.ts' },
   'transport:impl/worker': { subpath: 'impl/worker', source: 'impl/worker/index.ts' },
+  'transport:impl/zmq': { subpath: 'impl/zmq', source: 'impl/zmq/index.ts' },
 }
 
 const AI_MODULES: Record<string, ModuleEntry> = {

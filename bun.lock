@@ -143,7 +143,7 @@
     },
     "packages/devkit": {
       "name": "@ozaco/devkit",
-      "version": "0.4.0",
+      "version": "0.4.1",
       "devDependencies": {
         "@ozaco/ai": "workspace:*",
         "@ozaco/cli": "workspace:*",
@@ -196,7 +196,7 @@
     },
     "packages/std": {
       "name": "@ozaco/std",
-      "version": "0.5.0",
+      "version": "0.5.1",
       "dependencies": {
         "@streamparser/json": "0.0.26",
       },
@@ -217,7 +217,7 @@
     },
     "packages/transport": {
       "name": "@ozaco/transport",
-      "version": "0.3.0",
+      "version": "0.3.1",
       "devDependencies": {
         "@nats-io/jetstream": "^3.4.0",
         "@nats-io/nats-core": "^3.4.0",

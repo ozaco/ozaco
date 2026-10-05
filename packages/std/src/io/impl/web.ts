@@ -12,6 +12,7 @@ import { ulidId } from '../internal/crypto/ulid'
 import { uuidId } from '../internal/crypto/uuid'
 import { webHash, webHmac, webRandomBytes } from '../internal/crypto/web'
 import { readWebCwd, readWebEnv } from '../internal/env'
+import { netEndpoint } from '../internal/net/endpoint'
 import { createExpandHome } from '../internal/path/home'
 import { webPath } from '../internal/path/web'
 import { createS3 } from '../internal/s3/create'
@@ -94,6 +95,8 @@ export const WebIO = IO.implement({
   exec: unsupported('exec'),
   spawn: unsupported('spawn'),
 
+  parseEndpoint: netEndpoint.parseEndpoint,
+  formatEndpoint: netEndpoint.formatEndpoint,
   tcpListen: unsupported('tcpListen'),
   tcpConnect: unsupported('tcpConnect'),
   udpBind: unsupported('udpBind'),

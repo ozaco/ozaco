@@ -109,6 +109,15 @@ const makeHandle = (socket: Socket): IODef.TcpSocket => {
   }
 }
 
+/** The endpoint an option set names, for failure messages: `host:port`, or the unix socket
+ * path. `127.0.0.1` is the connect default, `0.0.0.0` the listen default — `tcpListen` passes
+ * its own. */
+const endpointOf = (
+  options: IODef.TcpListenOptions | IODef.TcpConnectOptions,
+  defaultHost = '0.0.0.0',
+): string =>
+  'path' in options ? options.path : `${options.hostname ?? defaultHost}:${options.port}`
+
 export function* tcpListen(options: IODef.TcpListenOptions, onConnection: IODef.TcpHandler) {
   const scope = yield* useScope()
 
@@ -124,15 +133,19 @@ export function* tcpListen(options: IODef.TcpListenOptions, onConnection: IODef.
       })
   })
 
+  const where = endpointOf(options)
+
   yield* mapError(
     action<void>((resolve, reject) => {
       server.once('error', reject)
       server.listen(
-        {
-          port: options.port,
-          host: options.hostname ?? '0.0.0.0',
-          ...(options.reusePort === undefined ? {} : { reusePort: options.reusePort }),
-        },
+        'path' in options
+          ? { path: options.path }
+          : {
+              port: options.port,
+              host: options.hostname ?? '0.0.0.0',
+              ...(options.reusePort === undefined ? {} : { reusePort: options.reusePort }),
+            },
         () => {
           server.off('error', reject)
           resolve()
@@ -142,15 +155,12 @@ export function* tcpListen(options: IODef.TcpListenOptions, onConnection: IODef.
       return () => {}
     }),
     failure =>
-      fail(
-        IOErrors.TcpListenFailed,
-        `tcp listen on ${options.hostname ?? '0.0.0.0'}:${options.port} failed`,
-        asFailure(failure, IOErrors),
-      ),
+      fail(IOErrors.TcpListenFailed, `tcp listen on ${where} failed`, asFailure(failure, IOErrors)),
   )
 
+  // a unix socket's address is its path — it has no port
   const address = server.address()
-  const port = typeof address === 'object' && address !== null ? address.port : options.port
+  const port = typeof address === 'object' && address !== null ? address.port : 0
 
   // Close at most once: `close()` and the scope-teardown `ensure` share this guard (node's
   // server.close() throws ERR_SERVER_NOT_RUNNING on a server that is already closing).
@@ -170,15 +180,17 @@ export function* tcpListen(options: IODef.TcpListenOptions, onConnection: IODef.
 
   yield* ensure(() => close())
 
-  return { port, hostname: options.hostname ?? '0.0.0.0', close }
+  return 'path' in options
+    ? { port, hostname: '', path: options.path, close }
+    : { port, hostname: options.hostname ?? '0.0.0.0', close }
 }
 
 export function* tcpConnect(options: IODef.TcpConnectOptions) {
-  const socket = connect({
-    port: options.port,
-    host: options.hostname ?? '127.0.0.1',
-    allowHalfOpen: true,
-  })
+  const socket = connect(
+    'path' in options
+      ? { path: options.path, allowHalfOpen: true }
+      : { port: options.port, host: options.hostname ?? '127.0.0.1', allowHalfOpen: true },
+  )
 
   yield* mapError(
     action<void>((resolve, reject) => {
@@ -195,7 +207,7 @@ export function* tcpConnect(options: IODef.TcpConnectOptions) {
 
       return fail(
         IOErrors.TcpConnectFailed,
-        `tcp connect to ${options.hostname ?? '127.0.0.1'}:${options.port} failed`,
+        `tcp connect to ${endpointOf(options, '127.0.0.1')} failed`,
         asFailure(failure, IOErrors),
       )
     },

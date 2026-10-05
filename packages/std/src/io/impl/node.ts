@@ -26,6 +26,7 @@ import { readFileFlow, writeFileFlow } from '../internal/fs/flow'
 import { fsCall } from '../internal/fs/platform'
 import { sharedFs, writeFlagOf } from '../internal/fs/shared'
 import { watchPath } from '../internal/fs/watch'
+import { netEndpoint } from '../internal/net/endpoint'
 import { tcpConnect, tcpListen, udpBind } from '../internal/net/sockets'
 import { readCwd, readHomeDir, readInterfaces, readPlatform, readTmpDir } from '../internal/net/sys'
 import { createExpandHome } from '../internal/path/home'
@@ -168,6 +169,8 @@ export const NodeIO = IO.implement({
   exec: nodeExec,
   spawn: nodeSpawn,
 
+  parseEndpoint: netEndpoint.parseEndpoint,
+  formatEndpoint: netEndpoint.formatEndpoint,
   tcpListen,
   tcpConnect,
   udpBind,

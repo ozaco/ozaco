@@ -234,6 +234,64 @@ describe('tcp', () => {
     expect(unwrap(outcome)).toEqual({ heard: 'eof-first-late', closed: true })
   })
 
+  it('listens on and dials a unix socket path; the file goes with the server', async () => {
+    const path = `${process.env.TMPDIR ?? '/tmp'}/std-net-${crypto.randomUUID().slice(0, 8)}.sock`
+    const echo = function* (socket: IODef.TcpSocket) {
+      const inbound = yield* socket.data
+      const chunk = yield* inbound.next()
+
+      if (!chunk.done) {
+        yield* socket.write(chunk.value)
+      }
+    }
+
+    const outcome = await run(function* () {
+      yield* BunIO.use()
+
+      const bound = yield* scoped(function* () {
+        const server = yield* IO.actions.tcpListen({ path }, echo)
+        const client = yield* IO.actions.tcpConnect({ path })
+        const received = yield* client.data
+
+        yield* client.write('over ipc')
+
+        const chunk = yield* received.next()
+
+        return {
+          server: { port: server.port, hostname: server.hostname, path: server.path },
+          heard: chunk.done ? '' : decoder.decode(chunk.value),
+          file: yield* IO.actions.exists(path),
+        }
+      })
+
+      return { ...bound, fileAfter: yield* IO.actions.exists(path) }
+    })
+
+    expect(unwrap(outcome)).toEqual({
+      server: { port: 0, hostname: '', path },
+      heard: 'over ipc',
+      file: true,
+      fileAfter: false,
+    })
+  })
+
+  it('dialing a unix socket path nobody listens on fails with tcp-connect-failed', async () => {
+    const outcome = await run(function* () {
+      yield* BunIO.use()
+
+      const refused = yield* attempt(() =>
+        IO.actions.tcpConnect({ path: `${process.env.TMPDIR ?? '/tmp'}/std-net-nobody.sock` }),
+      )
+
+      return isFailure(refused) ? [refused.error, refused.message] : 'no-failure'
+    })
+
+    expect(unwrap(outcome)).toEqual([
+      'std:io.tcp-connect-failed',
+      `tcp connect to ${process.env.TMPDIR ?? '/tmp'}/std-net-nobody.sock failed`,
+    ])
+  })
+
   it('connecting to a dead port fails with tcp-connect-failed', async () => {
     const outcome = await run(function* () {
       yield* BunIO.use()
@@ -291,6 +349,46 @@ describe('tcp', () => {
     // an unabsorbed halt rejection surfaces on a later tick — give it the chance to fail the run
     await new Promise<void>(resolve => {
       setTimeout(resolve, 20)
+    })
+  })
+})
+
+describe('endpoint notation', () => {
+  it('parses tcp / ipc / inproc and formats them back; anything else is null', async () => {
+    const outcome = await run(function* () {
+      yield* BunIO.use()
+
+      const parsed = {
+        tcp: yield* IO.actions.parseEndpoint('tcp://127.0.0.1:5555'),
+        any: yield* IO.actions.parseEndpoint('tcp://*:0'),
+        ipc: yield* IO.actions.parseEndpoint('ipc:///tmp/app.sock'),
+        inproc: yield* IO.actions.parseEndpoint('inproc://hub'),
+        bad: [
+          yield* IO.actions.parseEndpoint('tcp://host'),
+          yield* IO.actions.parseEndpoint('tcp://host:70000'),
+          yield* IO.actions.parseEndpoint('udp://host:1'),
+          yield* IO.actions.parseEndpoint('ipc://'),
+          yield* IO.actions.parseEndpoint('nonsense'),
+        ],
+      }
+
+      return {
+        ...parsed,
+        formatted: [
+          yield* IO.actions.formatEndpoint({ scheme: 'tcp', host: '0.0.0.0', port: 5555 }),
+          yield* IO.actions.formatEndpoint({ scheme: 'ipc', path: '/tmp/app.sock' }),
+          yield* IO.actions.formatEndpoint({ scheme: 'inproc', name: 'hub' }),
+        ],
+      }
+    })
+
+    expect(unwrap(outcome)).toEqual({
+      tcp: { scheme: 'tcp', host: '127.0.0.1', port: 5555 },
+      any: { scheme: 'tcp', host: '0.0.0.0', port: 0 },
+      ipc: { scheme: 'ipc', path: '/tmp/app.sock' },
+      inproc: { scheme: 'inproc', name: 'hub' },
+      bad: [null, null, null, null, null],
+      formatted: ['tcp://0.0.0.0:5555', 'ipc:///tmp/app.sock', 'inproc://hub'],
     })
   })
 })

@@ -26,7 +26,14 @@ foundation. Layers, bottom up:
 
 - **`@ozaco/std`** – the standard library (effect, plugin, trace, io, codec, logger, fetch, ws,
   webrtc…)
-- **`@ozaco/transport`** – the messaging plane (`memory` / `nats` / `redis` / `worker` impls).
+- **`@ozaco/transport`** – the messaging plane (`memory` / `nats` / `redis` / `worker` / `zmq`
+  impls; `zmq` is ZMTP 3.1 written in TS over `std:io` sockets — no native binding, the `zeromq`
+  npm package crashes Bun — hub topology: `ZmqTransport.use({ prefix, bind })` serves as the
+  ROUTER everyone `connect`s to (`tcp://` / `ipc://` / `inproc://`, `zmqEndpoint()` tells the
+  bound address), the hub's tables are a memory link (`memoryDriver`), a publish is one round
+  trip whose answer is the receipt, a call made while the hub is down waits for it; `IO.actions`
+  `parseEndpoint` / `formatEndpoint` and the unix-socket `path` of `tcpListen` / `tcpConnect`
+  exist for it).
   `request()` injects `traceparent`/`tracestate` (`Trace.actions.inject()`); a failed reply is the
   envelope `{ error, message, causes, origin }` encoded by the routed codec — JsonCodec carries
   the nested failures in `causes` (tag, message, causes — a fold's `raw` stays home), no wire

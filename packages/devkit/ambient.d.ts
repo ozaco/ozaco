@@ -159,6 +159,9 @@ declare module 'transport:impl/redis' {
 declare module 'transport:impl/worker' {
   export * from '@ozaco/transport/impl/worker';
 }
+declare module 'transport:impl/zmq' {
+  export * from '@ozaco/transport/impl/zmq';
+}
 
 // --------- AI ---------
 declare module 'ai:core' {

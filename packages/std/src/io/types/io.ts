@@ -245,21 +245,43 @@ export namespace IODef {
     cidr: string | null
   }
 
-  /** Options for {@link IODef.Actions.tcpListen}. */
-  export interface TcpListenOptions {
-    port: number
-    /** Interface to bind. Defaults to `0.0.0.0`. */
-    hostname?: string
-    /** Enable kernel-level `SO_REUSEPORT` load balancing across processes. */
-    reusePort?: boolean
+  /** A network endpoint in zmq notation — {@link IODef.Actions.parseEndpoint} /
+   * {@link IODef.Actions.formatEndpoint}: `tcp://host:port` (a tcp socket), `ipc://path` (a unix
+   * domain socket, see {@link UnixSocketOptions}) or `inproc://name` (this process only — no
+   * socket at all; what it means is the caller's). */
+  export type Endpoint =
+    | { readonly scheme: 'tcp'; readonly host: string; readonly port: number }
+    | { readonly scheme: 'ipc'; readonly path: string }
+    | { readonly scheme: 'inproc'; readonly name: string }
+
+  /** A unix domain socket endpoint (`ipc`), for {@link IODef.Actions.tcpListen} and
+   * {@link IODef.Actions.tcpConnect} alike: the filesystem path to bind / dial instead of a
+   * port. The listener creates the file and removes it when it closes; a stale one (a crashed
+   * owner) makes the bind fail `std:io.tcp-listen-failed` (`EADDRINUSE`) — the caller decides
+   * whether to unlink it. Not on WebIO. */
+  export interface UnixSocketOptions {
+    path: string
   }
 
-  /** Options for {@link IODef.Actions.tcpConnect}. */
-  export interface TcpConnectOptions {
-    port: number
-    /** Host to connect to. Defaults to `127.0.0.1`. */
-    hostname?: string
-  }
+  /** Options for {@link IODef.Actions.tcpListen}: a port, or a unix socket path. */
+  export type TcpListenOptions =
+    | {
+        port: number
+        /** Interface to bind. Defaults to `0.0.0.0`. */
+        hostname?: string
+        /** Enable kernel-level `SO_REUSEPORT` load balancing across processes. */
+        reusePort?: boolean
+      }
+    | UnixSocketOptions
+
+  /** Options for {@link IODef.Actions.tcpConnect}: a port, or a unix socket path. */
+  export type TcpConnectOptions =
+    | {
+        port: number
+        /** Host to connect to. Defaults to `127.0.0.1`. */
+        hostname?: string
+      }
+    | UnixSocketOptions
 
   /** A bidirectional TCP byte channel (an accepted connection or a client socket). */
   export interface TcpSocket {
@@ -287,8 +309,12 @@ export namespace IODef {
 
   /** A handle to a listening TCP server (see {@link IODef.Actions.tcpListen}). */
   export interface TcpServer {
+    /** The bound port — `0` for a unix socket. */
     readonly port: number
+    /** The bound interface — `''` for a unix socket. */
     readonly hostname: string
+    /** The unix socket path, when listening on one. */
+    readonly path?: string | undefined
     /** Stop accepting connections and shut the server down. */
     close: () => Operation<void>
   }
@@ -593,6 +619,13 @@ export namespace IODef {
       options?: SpawnOptions,
     ) => Operation<ProcessHandle>
 
+    /** `tcp://host:port` / `ipc://path` / `inproc://name` → its parts, `null` for anything else
+     * (another scheme, no port, a port out of range). A tcp host of `*` or none is every
+     * interface, `0.0.0.0`. Pure — on every impl. */
+    parseEndpoint: (endpoint: string) => Operation<Endpoint | null>
+    /** The notation of parsed parts (what a bind actually resolved to, an ephemeral port
+     * included). */
+    formatEndpoint: (endpoint: Endpoint) => Operation<string>
     tcpListen: (options: TcpListenOptions, onConnection: TcpHandler) => Operation<TcpServer>
     tcpConnect: (options: TcpConnectOptions) => Operation<TcpSocket>
     udpBind: (options?: UdpBindOptions) => Operation<UdpSocket>

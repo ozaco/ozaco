@@ -10,6 +10,7 @@ export default defineConfig({
     'impl/nats': './src/impl/nats/index.ts',
     'impl/redis': './src/impl/redis/index.ts',
     'impl/worker': './src/impl/worker/index.ts',
+    'impl/zmq': './src/impl/zmq/index.ts',
   },
   format: ['esm', 'cjs'],
   dts: true,

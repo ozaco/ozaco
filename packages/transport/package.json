@@ -1,6 +1,6 @@
 {
   "name": "@ozaco/transport",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "homepage": "https://ozaco.com/",
   "author": "giveerr (https://github.com/giveerr)",
   "repository": {
@@ -66,6 +66,17 @@
         "default": "./dist/impl/redis.cjs"
       },
       "source": "./src/impl/redis/index.ts"
+    },
+    "./impl/zmq": {
+      "import": {
+        "types": "./dist/impl/zmq.d.ts",
+        "default": "./dist/impl/zmq.js"
+      },
+      "require": {
+        "types": "./dist/impl/zmq.d.cts",
+        "default": "./dist/impl/zmq.cjs"
+      },
+      "source": "./src/impl/zmq/index.ts"
     }
   },
   "publishConfig": {
