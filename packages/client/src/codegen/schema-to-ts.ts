@@ -6,6 +6,9 @@
  */
 
 import { typeTextOf } from './internal/schema'
+import type { SchemaStyle } from './types'
 
-/** Render one JSON Schema document as TypeScript type text (multi-line for object shapes). */
-export const schemaToType = (schema: unknown, depth = 0): string => typeTextOf(schema, depth)
+/** Render one JSON Schema document as TypeScript type text (multi-line for object shapes);
+ * `style` adds `readonly` members and JSDoc lines. */
+export const schemaToType = (schema: unknown, depth = 0, style?: SchemaStyle): string =>
+  typeTextOf(schema, depth, style)

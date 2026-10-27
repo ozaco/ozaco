@@ -119,7 +119,7 @@ const handlers = {
  * The queue's worker, as a server plugin: its START hook starts it on the node that hosts `jobs`
  * (a gateway or another service node only enqueues through the carrier), its stop hook halts it —
  * in-flight jobs go back to `queued`. The worker lives in the scope `start()` runs in, after
- * `createServer` installed the node's tracer, so every attempt is recorded.
+ * `Server.actions.create` installed the node's tracer, so every attempt is recorded.
  */
 export const JobsWorker = definePlugin<ServerDef.PluginContext, []>({
   name: 'demo-jobs-worker',

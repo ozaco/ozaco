@@ -91,7 +91,9 @@ function* contextOf({
 
     // `inherit: true` carries THIS dispatch's authorization into the nested call — the intent
     // stays visible at the call site; an explicit `meta.authorization` still wins. Both call
-    // spellings go through the ONE parser (`parseCall`) and forward ref-style.
+    // spellings go through the ONE parser (`parseCall`) and forward ref-style. The authorization
+    // is the one the HANDLER's ctx holds (`CtxRef`): a hook may have rewritten the headers on
+    // the way in (Auth's credential exchange); outside the handler it is the call's own.
     call: ((target: AnyType, ...rest: AnyType[]) => {
       const parsed = parseCall(target, rest)
 
@@ -99,17 +101,20 @@ function* contextOf({
         return (actions.call as AnyType)(target, ...rest)
       }
 
-      const authorization = call.headers['authorization']
-      const options =
-        parsed.options?.inherit === true && authorization
-          ? { ...parsed.options, meta: { authorization, ...parsed.options.meta } }
-          : parsed.options
+      return {
+        *[Symbol.iterator]() {
+          const authorization = yield* nestedBearer(kernel, call, parsed.options)
+          const options = authorization
+            ? { ...parsed.options, meta: { authorization, ...parsed.options?.meta } }
+            : parsed.options
 
-      return (actions.call as AnyType)(
-        { service: parsed.service, action: parsed.action },
-        parsed.input,
-        options,
-      )
+          return yield* (actions.call as AnyType)(
+            { service: parsed.service, action: parsed.action },
+            parsed.input,
+            options,
+          )
+        },
+      }
     }) as ServerDef.Ctx['call'],
     emit: actions.emit,
     reply: reply => {
@@ -291,6 +296,47 @@ const invoke = (kernel: ServerDef.Context, def: ServiceDef.Action) =>
 
     return result
   }
+
+/** The bearer a nested `ctx.call` carries: `as: 'service'` asks the plugins for one in the
+ * calling service's name, `inherit` copies the caller's own (the HANDLER's ctx — a hook may have
+ * exchanged a credential on the way in; outside the handler the call's). */
+const nestedBearer = function* (
+  kernel: ServerDef.Context,
+  call: ServerDef.Call,
+  options: ServerDef.CallOptions | undefined,
+): Operation<string | undefined> {
+  if (options?.as === 'service') {
+    return `Bearer ${yield* credentialOf(kernel, call)}`
+  }
+
+  if (options?.inherit !== true) {
+    return undefined
+  }
+
+  const current = yield* CtxRef.get()
+
+  return (current?.headers ?? call.headers)['authorization']
+}
+
+/** The first plugin that mints a service credential answers (`hooks.credential`) — the TOKEN,
+ * carried as a bearer. */
+const credentialOf = function* (
+  kernel: ServerDef.Context,
+  call: ServerDef.Call,
+): Operation<string> {
+  for (const hooks of kernel.hooks) {
+    const answer = hooks.credential ? yield* hooks.credential('service', call) : null
+
+    if (answer) {
+      return answer
+    }
+  }
+
+  return yield* fail(
+    ServerErrors.Configuration,
+    `{ as: 'service' } needs a plugin that mints service credentials — install JwtAuth + Auth`,
+  )
+}
 
 /** Wrap the handler with every plugin's `dispatch` hook, outermost = first installed. Every
  * hook's return is NORMALIZED: a plugin observing the chain with `attempt(() => next(...))`

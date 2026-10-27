@@ -53,6 +53,7 @@ const SERVER_MODULES: Record<string, ModuleEntry> = {
     source: 'impl/carrier/network/index.ts',
   },
   'server:plugins': { subpath: 'plugins', source: 'plugins/index.ts' },
+  'server:testing': { subpath: 'testing', source: 'testing/index.ts' },
   'server:plugins/observe/otlp': {
     subpath: 'plugins/observe/otlp',
     source: 'plugins/observe/impl/otlp/index.ts',
@@ -409,12 +410,28 @@ const withDeclarationPlugins = () => {
   ): T => (build?.cjsDts ? { ...options, plugins: [options.plugins, resolver] } : options)
 }
 
+/** Every family alias → its published specifier (`std:effect` → `@ozaco/std/effect`,
+ * `server:impl/edge/bun` → `@ozaco/server/edge/bun`): what a RUNTIME resolver (the Bun preload,
+ * `@ozaco/devkit/bun`) maps with — the same table the bundler plugins rewrite by. */
+const kitSpecifiers = (): ReadonlyMap<string, string> => {
+  const out = new Map<string, string>()
+
+  for (const [modules, pkg] of KIT_MODULES) {
+    for (const binding of buildBindings(modules, pkg, undefined)) {
+      out.set(binding.alias, binding.packageSpecifier)
+    }
+  }
+
+  return out
+}
+
 export {
   aiResolve,
   clientResolve,
   cliResolve,
   dbResolve,
   kitResolve,
+  kitSpecifiers,
   resolveAlias,
   serverResolve,
   stdResolve,

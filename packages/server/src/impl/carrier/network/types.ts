@@ -60,7 +60,7 @@ export namespace NetworkCarrierDef {
     readonly serving: Map<string, TransportDef.Stop>
     readonly presence: Presence | null
 
-    /** the kernel this carrier serves (null when installed outside createServer). */
+    /** the kernel this carrier serves (null when installed outside Server.actions.create). */
     readonly kernel: ServerDef.Context | null
   }
 }

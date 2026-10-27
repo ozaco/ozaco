@@ -24,7 +24,7 @@ export namespace Plugin {
 
   /**
    * The install of a plugin as an Operation (`yield*` it where the plugin should live) that also
-   * names the plugin and its arguments — what consumers such as `createServer({ plugins })` take,
+   * names the plugin and its arguments — what consumers such as `Server.actions.create({ plugins })` take,
    * so they can both install it and keep its handle.
    */
   export interface Use<TContext, TArgs extends unknown[]> extends Operation<TContext> {
@@ -47,7 +47,7 @@ export namespace Plugin {
 
     setup(...args: TArgs): Operation<TContext>
     /** The install with these arguments as an Operation (`yield* X.use(...)`), which also names
-     * the plugin — what consumers such as `createServer({ plugins })` take. */
+     * the plugin — what consumers such as `Server.actions.create({ plugins })` take. */
     use(...args: TArgs): Use<TContext, TArgs>
     getKeys(): string[]
     getMeta(key: string): Record<string, AnyType> | undefined

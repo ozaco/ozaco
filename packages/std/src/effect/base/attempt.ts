@@ -16,12 +16,25 @@ export function* attempt<T>(
   }
 }
 
-export function* recover<T, R>(
+/** Run `op`; a failure is handed to `handler`, whose answer stands in for the value — or, with
+ * no handler, becomes `null` (the "this or nothing" read: `recover(() => parse(text))`). The
+ * `causes` are appended to the failure before the handler sees it; they ride with a handler only. */
+export function recover<T>(op: Operation<T> | (() => Operation<T>)): Operation<T | null>
+export function recover<T, R>(
   op: Operation<T> | (() => Operation<T>),
   handler: (failure: Result.Failure<unknown>) => Operation<R>,
   ...causes: string[]
-): Operation<T | R> {
+): Operation<T | R>
+export function* recover<T, R>(
+  op: Operation<T> | (() => Operation<T>),
+  handler?: (failure: Result.Failure<unknown>) => Operation<R>,
+  ...causes: string[]
+): Operation<T | R | null> {
   const result = yield* attempt(op, ...causes)
 
-  return isSuccess(result) ? result.value : yield* handler(result)
+  if (isSuccess(result)) {
+    return result.value
+  }
+
+  return handler ? yield* handler(result) : null
 }

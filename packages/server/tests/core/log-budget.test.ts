@@ -7,7 +7,7 @@
  * sink keeps more, none cuts again.
  */
 import type { ObserveDef, ServerDef } from 'server:core'
-import { action, createServer, ObserveExporter, Server, service } from 'server:core'
+import { action, ObserveExporter, Server, service } from 'server:core'
 import { StdoutExporter } from 'server:plugins'
 import { run, useContext } from 'std:effect'
 import { definePlugin } from 'std:plugin'
@@ -130,7 +130,7 @@ describe('log attribute budget — once, in the kernel, before every sink', () =
         await run(function* () {
           yield* storage()
 
-          const server = yield* createServer({
+          const server = yield* Server.actions.create({
             services: [wide],
             name: 'budget',
             plugins: [

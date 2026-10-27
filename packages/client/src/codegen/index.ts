@@ -1,3 +1,3 @@
 export * from './generate'
 export * from './schema-to-ts'
-export type { GenerateOptions } from './types'
+export type { GenerateOptions, SchemaStyle } from './types'

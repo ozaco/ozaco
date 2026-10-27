@@ -221,7 +221,7 @@ export const buildPlugin = ({
 
     setup,
     // `Plugin.use(...args)`: the install of THIS plugin as an Operation that also names the
-    // plugin — what a consumer (`createServer({ plugins })`) takes instead of the handle, so the
+    // plugin — what a consumer (`Server.actions.create({ plugins })`) takes instead of the handle, so the
     // arguments travel with it. Control surface, not an action: it runs before any dispatch.
     use: (...args: unknown[]): Plugin.Use<unknown, unknown[]> => ({
       _t: USE,

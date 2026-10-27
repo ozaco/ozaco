@@ -9,7 +9,7 @@
  */
 import { useDb } from 'db:core'
 import type { ObserveDef, ServerDef, ServiceDef } from 'server:core'
-import { action, createServer, ObserveExporter, service } from 'server:core'
+import { action, ObserveExporter, Server, service } from 'server:core'
 import { crud } from 'server:plugins'
 import type { Operation } from 'std:effect'
 import { createQueue, fork, run, scoped, sleep, until } from 'std:effect'
@@ -121,7 +121,7 @@ const gatewayOf = async (
           yield* storage()
           yield* MemoryTransport.use({ prefix: 'gw', link })
 
-          const app = yield* createServer({
+          const app = yield* Server.actions.create({
             services,
             carrier: NetworkCarrier,
             role: 'service',
@@ -141,7 +141,7 @@ const gatewayOf = async (
         yield* storage()
         yield* MemoryTransport.use({ prefix: 'gw', link })
 
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services,
           edge: BunEdge,
           carrier: NetworkCarrier,

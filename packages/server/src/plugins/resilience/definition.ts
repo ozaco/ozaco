@@ -1,6 +1,5 @@
 import type { ServerDef } from 'server:core'
 import { Server, ServerErrors } from 'server:core'
-import { dispatchSpan } from 'server:internal'
 import { definePlugin } from 'std:plugin'
 import { fail, isFailure } from 'std:result'
 
@@ -24,7 +23,7 @@ import type { ResilienceDef } from './types'
  * Layered outermost → innermost: fallback › rateLimit › singleflight › bulkhead › breaker › retry
  * › timeout › handler.
  *
- * Telemetry (scope `@ozaco/server/resilience`), on the DISPATCH span (`dispatchSpan()` — never a
+ * Telemetry (scope `@ozaco/server/resilience`), on the DISPATCH span (`Server.actions.dispatchSpan()` — never a
  * plugin span wrapping the chain, such as a cache span): `ozaco.resilience.timeout_ms`, `ozaco.resilience.rate_limit.remaining`,
  * `ozaco.resilience.singleflight` (`leader` | `follower`, a follower LINKS the leader), and
  * `ozaco.resilience.fallback = true` when the fallback answered. A retried attempt 1 is recorded
@@ -40,7 +39,10 @@ export const Resilience = definePlugin<ServerDef.PluginContext, []>({
 
   *setup() {
     if (!(yield* Server.context.get())) {
-      return yield* fail(ServerErrors.Configuration, 'Resilience must be installed by createServer')
+      return yield* fail(
+        ServerErrors.Configuration,
+        'Resilience must be installed by Server.actions.create',
+      )
     }
 
     const state: ResilienceDef.State = {
@@ -58,7 +60,7 @@ export const Resilience = definePlugin<ServerDef.PluginContext, []>({
           const given = ctx.meta.options as ResilienceDef.Options
           // dispatch-level telemetry lands on the dispatch span even under an outer plugin's
           // span (a Cache installed before this plugin wraps the chain in its own)
-          const span = yield* dispatchSpan()
+          const span = yield* Server.actions.dispatchSpan()
           const step = (inner: ResilienceDef.Next): ResilienceDef.Step => ({
             state,
             call,

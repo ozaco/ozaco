@@ -5,7 +5,7 @@
  * still names the client behind the proxies.
  */
 import type { ServerDef } from 'server:core'
-import { action, createServer, Edge, service } from 'server:core'
+import { action, Edge, Server, service } from 'server:core'
 import { run, sleep, until } from 'std:effect'
 import { definePlugin } from 'std:plugin'
 import { unwrap } from 'std:result'
@@ -87,7 +87,11 @@ describe('edge drivers — client.address from the peer', () => {
             yield* use()
           }
 
-          const server = yield* createServer({ services: [probe], edge, plugins: [seen.plugin] })
+          const server = yield* Server.actions.create({
+            services: [probe],
+            edge,
+            plugins: [seen.plugin],
+          })
 
           yield* Edge.actions.socket({
             path: '/live',

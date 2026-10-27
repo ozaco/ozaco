@@ -1,3 +1,4 @@
+import type { Operation } from 'std:effect'
 import type { AnyType } from 'std:shared'
 
 import type { IODef } from './io'
@@ -19,9 +20,21 @@ export namespace Helpers {
 
   /** `SpawnOptions.stdio` resolved per stream. */
   export interface StdioConfig {
-    stdin: IODef.StdioMode
-    stdout: IODef.StdioMode
-    stderr: IODef.StdioMode
+    stdin: IODef.StdioTarget
+    stdout: IODef.StdioTarget
+    stderr: IODef.StdioTarget
+  }
+
+  /** One stream as the platform spawn takes it: a mode, or the descriptor of an opened file. */
+  export type StdioHandle = IODef.StdioMode | number
+
+  /** A {@link StdioConfig} with its files opened — `close` releases the parent's descriptors once
+   * the child has been spawned (or the spawn failed). */
+  export interface OpenStdio {
+    stdin: StdioHandle
+    stdout: StdioHandle
+    stderr: StdioHandle
+    close: () => Operation<void>
   }
 
   /** Fully-resolved S3 settings (options merged over the env fallbacks). */
@@ -101,6 +114,16 @@ export namespace Helpers {
     readonly uploadId: string
   }
 
+  /** A runtime's native password hasher (`Bun.password`): what `createPassword` runs the
+   * argon2id / bcrypt algorithms on. Node has none (`null`). */
+  export interface NativePassword {
+    hash(
+      plain: string,
+      options: IODef.PasswordOptions & { algorithm: 'argon2id' | 'bcrypt' },
+    ): Promise<string>
+    verify(plain: string, digest: string): Promise<boolean>
+  }
+
   /** The fs actions `node:fs/promises` gives every runtime alike (Bun / Node share them). */
   export type SharedFs = Pick<
     IODef.Actions,
@@ -115,5 +138,6 @@ export namespace Helpers {
     | 'chmod'
     | 'symlink'
     | 'readlink'
+    | 'realpath'
   >
 }

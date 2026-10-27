@@ -10,7 +10,8 @@ export namespace AuthDef {
   /** The `auth` action option: who may call — see {@link OptionsDef.Requirement}. */
   export type Requirement = OptionsDef.Requirement
 
-  export type Principal = OptionsDef.Principal
+  export type Principal<TClaims extends Record<string, unknown> = Record<string, unknown>> =
+    OptionsDef.Principal<TClaims>
 
   /** Request headers as `check` / `authorize` take them: a web `Headers`, or a record in any
    * casing (`Authorization` and `authorization` alike). */
@@ -89,15 +90,52 @@ export namespace AuthDef {
 
   // --- the coordinator ---------------------------------------------------------------------------
 
+  /**
+   * A credential that arrives in a header of its own (an app token, an API key) instead of a
+   * bearer: the gate exchanges it through the strategies' `login` — `login(value)` shapes the
+   * credentials the provider's `authenticate` understands — and carries on with the access token
+   * it got, so `ctx.auth`, nested calls and the audit trail see an ordinary principal. Per
+   * request, never cached: revoking the credential takes effect on the next call. An explicit
+   * bearer wins over it; a value nobody accepts is `server.unauthorized`, like a bad bearer.
+   */
+  export interface Credential {
+    /** the header's name, any casing (`'x-app-token'`). */
+    readonly header: string
+    readonly login: (value: string) => Record<string, unknown>
+  }
+
   export interface Options {
     /** The requirement of every action that sets no `auth` of its own (and whose service sets
      * none). Default `false` — open. `'authenticated'` makes the node fail-closed: a new action
      * is private until someone writes `auth: false` on it. */
     readonly default?: Requirement | undefined
+
+    /** Headers that carry a credential of another shape (see {@link Credential}). */
+    readonly credentials?: readonly Credential[] | undefined
   }
 
   export interface Context {
     readonly default: Requirement
+    readonly credentials: readonly Credential[]
+  }
+
+  /** One action's gate as {@link Actions.catalog} lists it: the requirement's kind and the
+   * roles / permissions it names (empty for the other kinds). */
+  export interface CatalogEntry {
+    readonly service: string
+    readonly action: string
+    readonly kind: RequirementKind
+    readonly roles: readonly string[]
+    readonly permissions: readonly string[]
+  }
+
+  /** What this node's actions require, read off the registry: every action with its gate, and
+   * the distinct roles and permissions named anywhere — the permission catalog a roles screen
+   * or a test derives, instead of a hand-kept list. */
+  export interface Catalog {
+    readonly actions: readonly CatalogEntry[]
+    readonly roles: readonly string[]
+    readonly permissions: readonly string[]
   }
 
   export interface Actions {
@@ -127,16 +165,20 @@ export namespace AuthDef {
      * failure to recover from. Under `false` an anonymous caller resolves `null` too. Failures
      * that are NOT a verdict (a provider's store down) still raise. */
     check(requirement: Requirement, headers: HeadersLike): Operation<Principal | null>
+
+    /** The node's permission catalog — see {@link Catalog}. An action that says nothing is
+     * listed under the install's `default`. */
+    catalog(): Operation<Catalog>
   }
 
   // --- the jwt strategy ------------------------------------------------------------------------
 
   /** What a provider resolves a caller to — `claims` travel into the principal and the token. */
-  export interface User {
+  export interface User<TClaims extends Record<string, unknown> = Record<string, unknown>> {
     readonly sub: string
     readonly roles?: readonly string[] | undefined
     readonly permissions?: readonly string[] | undefined
-    readonly claims?: Record<string, unknown> | undefined
+    readonly claims?: TClaims | undefined
   }
 
   /** A stored refresh token (access-refresh mode). `rotate` must keep the consumed record

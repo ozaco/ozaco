@@ -1,4 +1,4 @@
-import { action, createServer, ServerErrors, service } from 'server:core'
+import { action, Server, ServerErrors, service } from 'server:core'
 import { attempt, createQueue, fork, run, scoped, sleep, until } from 'std:effect'
 import { unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
@@ -23,7 +23,7 @@ describe('server — roles', () => {
             yield* storage()
             yield* MemoryTransport.use({ prefix: 'app', link })
 
-            const app = yield* createServer({
+            const app = yield* Server.actions.create({
               services: [todos],
               carrier: NetworkCarrier,
               role: 'service',
@@ -43,7 +43,7 @@ describe('server — roles', () => {
           yield* storage()
           yield* MemoryTransport.use({ prefix: 'app', link })
 
-          const gateway = yield* createServer({
+          const gateway = yield* Server.actions.create({
             services: [todos],
             edge: BunEdge,
             carrier: NetworkCarrier,
@@ -92,7 +92,7 @@ describe('server — roles', () => {
           yield* storage()
           yield* MemoryTransport.use({ prefix: 'ready', link })
 
-          const lonely = yield* createServer({
+          const lonely = yield* Server.actions.create({
             services: [todos],
             edge: BunEdge,
             carrier: NetworkCarrier.use({ presence }),
@@ -121,7 +121,7 @@ describe('server — roles', () => {
             yield* storage()
             yield* MemoryTransport.use({ prefix: 'ready', link })
 
-            const app = yield* createServer({
+            const app = yield* Server.actions.create({
               services: [todos],
               carrier: NetworkCarrier.use({ presence }),
               role: 'service',
@@ -139,7 +139,7 @@ describe('server — roles', () => {
           yield* storage()
           yield* MemoryTransport.use({ prefix: 'ready', link })
 
-          const gateway = yield* createServer({
+          const gateway = yield* Server.actions.create({
             services: [todos],
             edge: BunEdge,
             carrier: NetworkCarrier.use({ presence }),
@@ -166,6 +166,69 @@ describe('server — roles', () => {
     )
   })
 
+  it('a hosted name nobody declares is refused at boot; SERVICE=gateway names the gateway role', async () => {
+    const link = createLink()
+    const withEnv = async (value: string, body: () => Promise<void>): Promise<void> => {
+      const before = process.env['SERVICE']
+
+      process.env['SERVICE'] = value
+
+      try {
+        await body()
+      } finally {
+        if (before === undefined) {
+          delete process.env['SERVICE']
+        } else {
+          process.env['SERVICE'] = before
+        }
+      }
+    }
+
+    unwrap(
+      await run(function* () {
+        // an explicit `hosted` with a typo
+        const typo = yield* attempt(
+          Server.actions.create({ services: [todos], hosted: ['todo'], name: 'app' }),
+        )
+
+        expect((typo as AnyType).error).toBe(ServerErrors.Configuration)
+        expect((typo as AnyType).message).toContain('todo')
+        expect((typo as AnyType).causes).toContain('declared: todos')
+      }),
+    )
+
+    // the same typo through the env convention, on a service node
+    await withEnv('todo', async () => {
+      unwrap(
+        await run(function* () {
+          yield* scoped(function* () {
+            yield* storage()
+            yield* MemoryTransport.use({ prefix: 'env', link })
+
+            const outcome = yield* attempt(
+              Server.actions.create({ services: [todos], carrier: NetworkCarrier, name: 'app' }),
+            )
+
+            expect((outcome as AnyType).error).toBe(ServerErrors.Configuration)
+            expect((outcome as AnyType).message).toContain('todo')
+          })
+        }),
+      )
+    })
+
+    // `SERVICE=gateway` is the gateway role (it hosts nothing, so it needs a carrier)
+    await withEnv('gateway', async () => {
+      unwrap(
+        await run(function* () {
+          const outcome = yield* attempt(Server.actions.create({ services: [todos], name: 'app' }))
+
+          expect((outcome as AnyType).error).toBe(ServerErrors.Configuration)
+          expect((outcome as AnyType).message).toContain('"gateway" needs a carrier')
+        }),
+      )
+    })
+  })
+
   it('hosted: [] is refused off-gateway; a service node starts without waiting for anyone', async () => {
     const link = createLink()
 
@@ -177,7 +240,7 @@ describe('server — roles', () => {
           yield* MemoryTransport.use({ prefix: 'trap', link })
 
           const outcome = yield* attempt(
-            createServer({
+            Server.actions.create({
               services: [todos],
               carrier: NetworkCarrier,
               role: 'monolith',
@@ -199,7 +262,7 @@ describe('server — roles', () => {
           yield* storage()
           yield* MemoryTransport.use({ prefix: 'trap', link })
 
-          const app = yield* createServer({
+          const app = yield* Server.actions.create({
             services: [todos, other],
             carrier: NetworkCarrier,
             role: 'service',

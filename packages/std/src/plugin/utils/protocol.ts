@@ -5,6 +5,7 @@ import type { AnyType } from 'std:shared'
 import { PROTOCOL } from '../internal/const'
 import { createActionProxy } from '../internal/proxy'
 import { buildPlugin, createProtocolRuntime } from '../internal/runtime'
+import { buildTarget } from '../internal/target'
 import type { Helpers } from '../types/helpers'
 
 export const defineProtocol: Helpers.DefineProtocol = (options): AnyType => {
@@ -78,6 +79,8 @@ export const defineProtocol: Helpers.DefineProtocol = (options): AnyType => {
 
   return {
     ...base,
+    // a configured implementation: the lifecycle and the bound guard come from the runtime
+    target: (target: AnyType) => buildTarget(base.implement, target),
     actions: createActionProxy(runtime.call),
   }
 }

@@ -96,6 +96,7 @@ export const builder = <
     around: options.around as AnyType,
     error: options.error as AnyType,
   }
+  const present = options.present as ResourceDef.PresentHook<AnyType, AnyType> | undefined
 
   // the RESOLVED schemas (returned as `shapes` so `extend` actions reuse them) — the `schema`
   // transforms applied once, right here at definition time
@@ -137,7 +138,7 @@ export const builder = <
         route: { method: 'GET', path: root },
         docs: { filters: filtersDoc },
       },
-      hooked('list', hooks, function* ({ input, ctx }) {
+      hooked({ op: 'list', hooks, table, scope: scope.read, present }, function* ({ input, ctx }) {
         return (yield* builtinOps.list(table, {
           ctx,
           input: input as AnyType,
@@ -154,7 +155,7 @@ export const builder = <
         output: shapes.doc,
         route: { method: 'GET', path: `${root}/:id` },
       },
-      hooked('get', hooks, function* ({ input, ctx }) {
+      hooked({ op: 'get', hooks, table, scope: scope.read, present }, function* ({ input, ctx }) {
         return yield* builtinOps.get(table, {
           ctx,
           id: (input as AnyType).id,
@@ -169,13 +170,16 @@ export const builder = <
         output: shapes.doc,
         route: { method: 'POST', path: root },
       },
-      hooked('create', hooks, function* ({ input, ctx }) {
-        return yield* builtinOps.create(table, {
-          ctx,
-          value: input as AnyType,
-          scope: yield* scopeOf(scope.write, ctx),
-        })
-      }),
+      hooked(
+        { op: 'create', hooks, table, scope: scope.write, present },
+        function* ({ input, ctx }) {
+          return yield* builtinOps.create(table, {
+            ctx,
+            value: input as AnyType,
+            scope: yield* scopeOf(scope.write, ctx),
+          })
+        },
+      ),
     ),
     update: action.mutation(
       {
@@ -184,16 +188,19 @@ export const builder = <
         output: shapes.doc,
         route: { method: 'PATCH', path: `${root}/:id` },
       },
-      hooked('update', hooks, function* ({ input, ctx }) {
-        const { id: rowId, ...patch } = input as AnyType
+      hooked(
+        { op: 'update', hooks, table, scope: scope.write, present },
+        function* ({ input, ctx }) {
+          const { id: rowId, ...patch } = input as AnyType
 
-        return yield* builtinOps.update(table, {
-          ctx,
-          id: rowId,
-          patch,
-          scope: yield* scopeOf(scope.write, ctx),
-        })
-      }),
+          return yield* builtinOps.update(table, {
+            ctx,
+            id: rowId,
+            patch,
+            scope: yield* scopeOf(scope.write, ctx),
+          })
+        },
+      ),
     ),
     replace: action.mutation(
       {
@@ -202,16 +209,19 @@ export const builder = <
         output: shapes.doc,
         route: { method: 'PUT', path: `${root}/:id` },
       },
-      hooked('replace', hooks, function* ({ input, ctx }) {
-        const { id: rowId, ...value } = input as AnyType
+      hooked(
+        { op: 'replace', hooks, table, scope: scope.write, present },
+        function* ({ input, ctx }) {
+          const { id: rowId, ...value } = input as AnyType
 
-        return yield* builtinOps.replace(table, {
-          ctx,
-          id: rowId,
-          value,
-          scope: yield* scopeOf(scope.write, ctx),
-        })
-      }),
+          return yield* builtinOps.replace(table, {
+            ctx,
+            id: rowId,
+            value,
+            scope: yield* scopeOf(scope.write, ctx),
+          })
+        },
+      ),
     ),
     remove: action.mutation(
       {
@@ -220,13 +230,16 @@ export const builder = <
         output: z.object({ removed: z.boolean() }),
         route: { method: 'DELETE', path: `${root}/:id` },
       },
-      hooked('remove', hooks, function* ({ input, ctx }) {
-        return yield* builtinOps.remove(table, {
-          ctx,
-          id: (input as AnyType).id,
-          scope: yield* scopeOf(scope.write, ctx),
-        })
-      }),
+      hooked(
+        { op: 'remove', hooks, table, scope: scope.write, present },
+        function* ({ input, ctx }) {
+          return yield* builtinOps.remove(table, {
+            ctx,
+            id: (input as AnyType).id,
+            scope: yield* scopeOf(scope.write, ctx),
+          })
+        },
+      ),
     ),
   }
 
@@ -243,7 +256,7 @@ export const builder = <
   // mounts it; a same-named `extend` entry still replaces it
   if (enabled.includes('realtime')) {
     picked['_realtime'] = realtimeSocket(
-      { table, filterable, maxLimit, auth, hooks, scope: scope.read },
+      { table, filterable, maxLimit, auth, hooks, scope: scope.read, present },
       shapes.doc,
       { path: `${root}${options.realtimePath ?? '/_realtime'}` },
     )
@@ -262,6 +275,7 @@ export const builder = <
     auth,
     hooks,
     scope,
+    present,
     shapes,
     enabled,
   } as unknown as ResourceDef.Crud<
@@ -315,6 +329,7 @@ export const realtimeAction = (
       auth: options.auth === undefined ? {} : { read: options.auth },
       hooks: options.hooks ?? {},
       scope: options.scope,
+      present: options.present,
     },
     docSchema(table),
     { path: options.path, description: options.description },

@@ -5,7 +5,7 @@
  * lifecycle test times out. Prints `all-done` last.
  */
 import { column, DbClient, table } from 'db:core'
-import { action, createServer, Edge, service } from 'server:core'
+import { action, Edge, Server, service } from 'server:core'
 import { Cache, Cors, crud, Docs, ObservePlugin } from 'server:plugins'
 import { run, until } from 'std:effect'
 import { unwrap } from 'std:result'
@@ -36,7 +36,7 @@ const outcome = await run(function* () {
   yield* MemoryTransport.use({ prefix: 'life' })
 
   const resource = crud(items)
-  const app = yield* createServer({
+  const app = yield* Server.actions.create({
     services: [echo, resource],
     edge: BunEdge,
     carrier: NetworkCarrier,

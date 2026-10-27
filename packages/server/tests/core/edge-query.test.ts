@@ -3,7 +3,7 @@
  * a single pass (`?v=a` → `['a']`), repeated keys stay arrays, scalars stay scalars — the
  * scalar/array duality of query params ends at the declaration.
  */
-import { action, createServer, Edge, service } from 'server:core'
+import { action, Edge, Server, service } from 'server:core'
 import { run, until } from 'std:effect'
 import { unwrap } from 'std:result'
 
@@ -46,7 +46,7 @@ describe('edge — query strings by the declared schema', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({ services: [q], edge: BunEdge })
+        const server = yield* Server.actions.create({ services: [q], edge: BunEdge })
 
         yield* server.start()
 

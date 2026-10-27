@@ -1,4 +1,5 @@
 import type { Database, Schema, Spec } from 'db:core'
+import type { ServerDef } from 'server:core'
 import type { Operation } from 'std:effect'
 import type { Result } from 'std:result'
 import type { AnyType } from 'std:shared'
@@ -21,6 +22,22 @@ export namespace Helpers {
   /** The installed handle with its tables ERASED: the ops address tables by name (a resource is
    * generic over its own table), so they take the loose shape `useDb()` is narrowed from. */
   export type LooseDb = Database.Handle<Record<string, Schema.Types<Spec.Doc, Spec.Doc>>>
+
+  /** The hooks' handle: {@link LooseDb} plus `expect` (`ResourceDef.HookDb`'s runtime shape). */
+  export type HookHandle = LooseDb & ResourceDef.Expecting<ResourceDef.LooseTables>
+
+  /** One run of a hooked op: the input as it stands, the dispatch ctx, the hooks' shared bag. */
+  export interface HookRun {
+    readonly input: AnyType
+    readonly ctx: ServerDef.Ctx
+    readonly locals: ResourceDef.HookLocals
+  }
+
+  /** The typed table map of a resource's handle (`crud.db(resource)`). */
+  export type TablesOf<TTable extends Schema.Table> = Record<
+    TTable['name'],
+    Schema.Types<Schema.Infer<TTable>, Schema.InferInsert<TTable>>
+  >
 
   /** What an op runs against: the (overridden) db handle and the request headers — a `db`
    * override (a transaction's handle) works without a dispatch, the headers then default empty. */
@@ -102,4 +119,15 @@ export namespace Helpers {
     <T extends z.ZodType>(doc: T): PageShape<T>
     (table: Schema.Table): PageShape<z.ZodObject>
   }
+
+  /** `crud.db(resource, options?)`: the resource's handle, scoped for the running dispatch and
+   * typed by its table. */
+  export type DbFn = <
+    TCrud extends { readonly table: Schema.Table; readonly scope: ResourceDef.Crud['scope'] },
+  >(
+    resource: TCrud,
+    options?: { readonly ctx?: ServerDef.Ctx | undefined; readonly side?: 'read' | 'write' },
+  ) => Operation<
+    Database.Handle<TablesOf<TCrud['table']>> & ResourceDef.Expecting<TablesOf<TCrud['table']>>
+  >
 }

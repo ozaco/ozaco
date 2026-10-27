@@ -1,6 +1,6 @@
 import type { EdgeDef } from 'server:core'
-import { Edge } from 'server:core'
-import { edgeActions, openEdge } from 'server:internal'
+import { Edge, Server } from 'server:core'
+import { edgeActions } from 'server:internal'
 
 import pkg from '../../../../package.json'
 
@@ -14,7 +14,7 @@ export const BunEdge = Edge.implement<EdgeDef.Options, []>({
 
   *setup() {
     yield* StateRef.set({ server: null })
-    yield* openEdge()
+    yield* Server.actions.openEdge()
 
     return { runtime: 'bun' }
   },

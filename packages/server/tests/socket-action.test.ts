@@ -4,7 +4,7 @@
  * from the callable api. `receives`/`sends` type the handler; `receives` also validates the
  * wire, dropping a malformed frame instead of killing the session.
  */
-import { action, createServer, service } from 'server:core'
+import { action, Server, service } from 'server:core'
 import type { DocsDef } from 'server:plugins'
 import { Docs } from 'server:plugins'
 import { run, until } from 'std:effect'
@@ -59,7 +59,11 @@ describe('action.socket', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({ services: [echo], edge: BunEdge, plugins: [Docs] })
+        const server = yield* Server.actions.create({
+          services: [echo],
+          edge: BunEdge,
+          plugins: [Docs],
+        })
         const info = yield* server.start({ port: 0 })
 
         // the manifest lists it under the service
@@ -119,7 +123,7 @@ describe('action.socket — receives', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({ services: [echo], edge: BunEdge })
+        const server = yield* Server.actions.create({ services: [echo], edge: BunEdge })
         const info = yield* server.start({ port: 0 })
 
         const ws = new WebSocket(`${info.url!.replace('http', 'ws')}/echo/room?who=bob`)

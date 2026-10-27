@@ -4,7 +4,7 @@
  * declaration leaves everything as it was. This is the primitive `HotReload` drives.
  */
 import type { ServerDef } from 'server:core'
-import { action, createServer, Edge, refs, service, ServerErrors } from 'server:core'
+import { action, Edge, refs, Server, ServerErrors, service } from 'server:core'
 import { attempt, run, until } from 'std:effect'
 import { definePlugin } from 'std:plugin'
 import { unwrap } from 'std:result'
@@ -49,7 +49,7 @@ describe('kernel — reload', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({ services: [greeter('hello')], edge: BunEdge })
+        const server = yield* Server.actions.create({ services: [greeter('hello')], edge: BunEdge })
 
         yield* server.start()
         yield* Edge.actions.raw({
@@ -131,7 +131,7 @@ describe('kernel — reload', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({ services: [greeter('hello')] })
+        const server = yield* Server.actions.create({ services: [greeter('hello')] })
 
         // an option no installed plugin handles
         const bad = service('bad', {
@@ -180,7 +180,10 @@ describe('kernel — reload', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({ services: [greeter('hello')], plugins: [Mine] })
+        const server = yield* Server.actions.create({
+          services: [greeter('hello')],
+          plugins: [Mine],
+        })
 
         const report = yield* server.reload([greeter('hi')])
 

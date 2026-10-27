@@ -1,5 +1,5 @@
 import { useDb } from 'db:core'
-import { createServer, Edge, ServerErrors } from 'server:core'
+import { Edge, Server, ServerErrors } from 'server:core'
 import { crud } from 'server:plugins'
 import { run, until } from 'std:effect'
 import { fail, unwrap } from 'std:result'
@@ -76,7 +76,7 @@ describe('resource schema hooks', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services: [todos],
           edge: BunEdge,
         })

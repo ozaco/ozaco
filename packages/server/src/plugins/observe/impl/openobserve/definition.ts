@@ -58,7 +58,7 @@ const OpenObserveExporterImpl = ObserveExporter.implement<
     if (!kernel) {
       return yield* fail(
         ServerErrors.Configuration,
-        'OpenObserveExporter must be installed by createServer',
+        'OpenObserveExporter must be installed by Server.actions.create',
       )
     }
 

@@ -25,7 +25,7 @@ export namespace ResilienceDef {
     readonly call: ServerDef.Call
     readonly ctx: ServerDef.Ctx
 
-    /** The DISPATCH span (`dispatchSpan()`) — even while an outer plugin's span (a cache span
+    /** The DISPATCH span (`Server.actions.dispatchSpan()`) — even while an outer plugin's span (a cache span
      * wrapping the chain) is the active one: its attributes, links and events describe what the
      * layers decided. */
     readonly span: TraceDef.SpanHandle

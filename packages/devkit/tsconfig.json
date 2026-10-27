@@ -1,7 +1,12 @@
 {
   "compilerOptions": {
     "lib": ["esnext"],
-    "types": ["node", "bun"]
+    "types": ["node", "bun"],
+    "paths": {
+      "client:codegen": ["./node_modules/@ozaco/client/dist/codegen"],
+      "std:effect": ["./node_modules/@ozaco/std/dist/effect"],
+      "std:result": ["./node_modules/@ozaco/std/dist/result"]
+    }
   },
   "extends": ["../../tsconfig.base.json"],
   "include": ["src", "ambient.d.ts", "tests", "tsdown.config.ts"],

@@ -10,17 +10,8 @@
  * a three-level cause chain, an unrouted 404, a domain record and a websocket frame.
  */
 import type { ObserveDef } from 'server:core'
-import {
-  action,
-  createServer,
-  defineEvents,
-  Edge,
-  HEADERS,
-  Observe,
-  ObserveExporter,
-  Server,
-  service,
-} from 'server:core'
+import { action, defineEvents, Edge, Observe, ObserveExporter, Server, service } from 'server:core'
+import { HEADERS } from 'server:internal'
 import { ObservePlugin, StdoutExporter } from 'server:plugins'
 import type { Operation } from 'std:effect'
 import { run, sleep, until } from 'std:effect'
@@ -280,7 +271,7 @@ export const runTraffic = async (): Promise<Traffic> => {
         // a std Logger at the root: the node bridges its lines (TraceTransport) into every sink
         yield* DefaultLogger.use({ level: LogLevel.info })
 
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services: [shop],
           name: 'contract',
           edge: BunEdge,

@@ -7,7 +7,7 @@
  */
 import { ClientErrors, createClient } from 'client:core'
 import { column, DbClient, table } from 'db:core'
-import { createServer } from 'server:core'
+import { Server } from 'server:core'
 import type { AuthDef } from 'server:plugins'
 import { Auth, crud, Docs, JwtAuth } from 'server:plugins'
 import type { Operation } from 'std:effect'
@@ -44,7 +44,7 @@ function* boot(): Operation<string> {
   yield* DbClient.use({ tables: [notesTable] })
   yield* MemoryKv.use()
 
-  const server = yield* createServer({
+  const server = yield* Server.actions.create({
     services: [crud(notesTable, { auth: { read: 'user', write: 'user' } })],
     edge: BunEdge,
     plugins: [JwtAuth.use({ provider: provider(), secret: 'test-secret' }), Auth, Docs],

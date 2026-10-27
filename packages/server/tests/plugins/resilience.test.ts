@@ -1,4 +1,4 @@
-import { action, createServer, ServerErrors, service } from 'server:core'
+import { action, Server, ServerErrors, service } from 'server:core'
 import { Resilience } from 'server:plugins'
 import { all, attempt, fork, race, run, sleep } from 'std:effect'
 import type { LoggerDef } from 'std:logger'
@@ -215,7 +215,7 @@ describe('resilience', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({ services: [svc], plugins: [Resilience] })
+        const server = yield* Server.actions.create({ services: [svc], plugins: [Resilience] })
 
         expect(yield* server.call(svc, 'slow', { ms: 10 })).toBe('done')
 
@@ -281,7 +281,7 @@ describe('resilience — telemetry', () => {
         yield* storage()
         yield* tracer.plugin.use()
 
-        const server = yield* createServer({ services: [svc], plugins: [Resilience] })
+        const server = yield* Server.actions.create({ services: [svc], plugins: [Resilience] })
 
         expect(yield* server.call(svc, 'once')).toBe(2)
       }),
@@ -324,7 +324,7 @@ describe('resilience — telemetry', () => {
         yield* storage()
         yield* tracer.plugin.use()
 
-        const server = yield* createServer({ services: [svc], plugins: [Resilience] })
+        const server = yield* Server.actions.create({ services: [svc], plugins: [Resilience] })
         const outcome = yield* attempt(server.call(svc, 'always'))
 
         expect((outcome as AnyType).error).toBe('r.down')
@@ -358,7 +358,7 @@ describe('resilience — telemetry', () => {
         yield* storage()
         yield* tracer.plugin.use()
 
-        const server = yield* createServer({ services: [svc], plugins: [Resilience] })
+        const server = yield* Server.actions.create({ services: [svc], plugins: [Resilience] })
 
         expect(yield* server.call(svc, 'layered')).toBe('fallback')
       }),
@@ -392,7 +392,7 @@ describe('resilience — telemetry', () => {
         yield* storage()
         yield* tracer.plugin.use()
 
-        const server = yield* createServer({ services: [svc], plugins: [Resilience] })
+        const server = yield* Server.actions.create({ services: [svc], plugins: [Resilience] })
 
         expect(((yield* attempt(server.call(svc, 'rethrown'))) as AnyType).error).toBe('r.nope')
       }),
@@ -435,7 +435,7 @@ describe('resilience — telemetry', () => {
         yield* capture.use()
         yield* TraceTransport.use()
 
-        const server = yield* createServer({ services: [svc], plugins: [Resilience] })
+        const server = yield* Server.actions.create({ services: [svc], plugins: [Resilience] })
 
         for (let n = 0; n < 2; n += 1) {
           expect(((yield* attempt(server.call(svc, 'trips'))) as AnyType).error).toBe('r.broken')
@@ -527,7 +527,7 @@ describe('resilience — telemetry', () => {
         yield* storage()
         yield* tracer.plugin.use()
 
-        const server = yield* createServer({ services: [svc], plugins: [Resilience] })
+        const server = yield* Server.actions.create({ services: [svc], plugins: [Resilience] })
 
         const results = yield* all([
           attempt(server.call(svc, 'narrow', { ms: 40 })),
@@ -578,7 +578,7 @@ describe('resilience — telemetry', () => {
         yield* storage()
         yield* tracer.plugin.use()
 
-        const server = yield* createServer({ services: [svc], plugins: [Resilience] })
+        const server = yield* Server.actions.create({ services: [svc], plugins: [Resilience] })
         const outcomes = yield* all([
           attempt(server.call(svc, 'shared', { k: 'x', fail: true, ms: 20 })),
           attempt(server.call(svc, 'shared', { k: 'x', fail: true, ms: 20 })),
@@ -625,7 +625,7 @@ describe('resilience — telemetry', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({ services: [svc], plugins: [Resilience] })
+        const server = yield* Server.actions.create({ services: [svc], plugins: [Resilience] })
         const leader = yield* fork(() =>
           race([server.call(svc, 'shared', { k: 'h', ms: 40 }), sleep(10)]),
         )
@@ -660,7 +660,7 @@ describe('resilience — telemetry', () => {
         yield* storage()
         yield* tracer.plugin.use()
 
-        const server = yield* createServer({ services: [svc], plugins: [Resilience] })
+        const server = yield* Server.actions.create({ services: [svc], plugins: [Resilience] })
 
         for (let n = 0; n < 3; n += 1) {
           yield* attempt(server.call(svc, 'limited'))

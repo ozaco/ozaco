@@ -28,6 +28,7 @@ import {
   watchedFlow,
   withCarrier,
 } from './trace'
+import { urlOf } from './url'
 
 /** A PLAIN object (streams, blobs, class instances are not). */
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -160,7 +161,7 @@ function* prepare(
     return yield* fail(ClientErrors.Configuration, failure)
   }
 
-  const url = new URL(path, ctx.options.url)
+  const url = urlOf(ctx.options, path)
   const method = action.route.method.toUpperCase()
 
   const headers: Record<string, string> = {

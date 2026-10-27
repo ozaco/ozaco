@@ -7,8 +7,7 @@
  * forwarded: the Logger printed that line itself.
  */
 import type { ObserveDef } from 'server:core'
-import { action, createServer, ObserveExporter, Server, service, ServerErrors } from 'server:core'
-import { markLogged } from 'server:internal'
+import { action, ObserveExporter, Server, ServerErrors, service } from 'server:core'
 import type { Operation } from 'std:effect'
 import { attempt, run, sleep } from 'std:effect'
 import type { LoggerDef } from 'std:logger'
@@ -23,6 +22,7 @@ import { describe, expect, it } from 'bun:test'
 
 import { z } from 'zod'
 
+import { markLogged } from '../../src/core/utils/trace'
 import { storage } from '../helpers'
 
 let installs = 0
@@ -147,7 +147,7 @@ const withLogger = async (body: (server: AnyType) => Operation<void>) => {
       yield* DefaultLogger.use({ level: LogLevel.trace })
       yield* capture.plugin.use()
 
-      const server = yield* createServer({ services: [jobs], plugins: [sink.plugin] })
+      const server = yield* Server.actions.create({ services: [jobs], plugins: [sink.plugin] })
 
       yield* body(server)
     }),
@@ -310,7 +310,7 @@ describe('settled exceptions reach the std Logger', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({ services: [jobs], plugins: [sink.plugin] })
+        const server = yield* Server.actions.create({ services: [jobs], plugins: [sink.plugin] })
 
         yield* attempt(server.call(jobs, 'crash'))
       }),

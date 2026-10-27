@@ -13,7 +13,7 @@ import { Carrier, Server } from './protocol'
 /**
  * The single-process carrier: knows only the services served on this node. `send` to anything
  * else fails `server.unavailable` — the honest answer without a network. Events fan out on the
- * kernel's own event stream. `createServer` installs it when no carrier is given.
+ * kernel's own event stream. `Server.actions.create` installs it when no carrier is given.
  */
 export const LocalCarrier = Carrier.implement<CarrierDef.Options, []>({
   name: 'server-carrier-local',

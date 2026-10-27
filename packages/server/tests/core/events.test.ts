@@ -4,7 +4,7 @@
  * handed on.
  */
 import type { CarrierDef, ObserveDef, ServerDef, WireDef } from 'server:core'
-import { action, Carrier, createServer, defineEvents, Server, service } from 'server:core'
+import { action, Carrier, defineEvents, Server, service } from 'server:core'
 import type { Operation, Subscription } from 'std:effect'
 import { attempt, createQueue, race, run, scoped, sleep } from 'std:effect'
 import type { LoggerDef } from 'std:logger'
@@ -45,7 +45,7 @@ describe('core — defineEvents', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({ services: [app] })
+        const server = yield* Server.actions.create({ services: [app] })
 
         const feed = yield* events.on('todo.created')
 
@@ -110,7 +110,7 @@ describe('core — defineEvents', () => {
           },
         }).build()
 
-        const server = yield* createServer({ services: [app], plugins: [Spy] })
+        const server = yield* Server.actions.create({ services: [app], plugins: [Spy] })
 
         // the emitter is where a bad payload is still fixable
         const bad = yield* attempt(() => events.emit('todo.created', { id: 'a1' } as AnyType))
@@ -220,7 +220,7 @@ describe('core — defineEvents.handle', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({ services: [app], plugins: [spy.plugin] })
+        const server = yield* Server.actions.create({ services: [app], plugins: [spy.plugin] })
 
         serviceId = (yield* Server.context.expect()).serviceId
 
@@ -302,7 +302,7 @@ describe('core — defineEvents.handle', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({ services: [app], plugins: [spy.plugin] })
+        const server = yield* Server.actions.create({ services: [app], plugins: [spy.plugin] })
 
         yield* events.handle('todo.created', function* (todo) {
           handled.push(todo.title)
@@ -381,7 +381,7 @@ describe('core — defineEvents.handle', () => {
         yield* Capture.use()
 
         // nothing observes: tracing is off on this node
-        const server = yield* createServer({ services: [app] })
+        const server = yield* Server.actions.create({ services: [app] })
 
         yield* events.handle('todo.created', function* () {
           handled += 1
@@ -483,7 +483,7 @@ describe('core — Server.actions.events() when its subscription ends', () => {
     unwrap(
       await run(function* () {
         yield* storage()
-        yield* createServer({ services: [app], carrier: finiteCarrier(pulls) })
+        yield* Server.actions.create({ services: [app], carrier: finiteCarrier(pulls) })
 
         const feed = yield* Server.actions.events()
 
@@ -529,7 +529,10 @@ describe('core — Server.actions.events() when its subscription ends', () => {
       await run(function* () {
         yield* storage()
         yield* MemoryTransport.use({ prefix: 'app', link })
-        yield* createServer({ services: [app], carrier: NetworkCarrier.use({ presence: false }) })
+        yield* Server.actions.create({
+          services: [app],
+          carrier: NetworkCarrier.use({ presence: false }),
+        })
 
         const feed = yield* Server.actions.events()
 
@@ -562,7 +565,7 @@ describe('core — Server.actions.events() when its subscription ends', () => {
       await run(function* () {
         yield* storage()
         // no carrier given: the same-process LocalCarrier
-        yield* createServer({ services: [app] })
+        yield* Server.actions.create({ services: [app] })
 
         // while its scope lives, the node's own emits arrive
         const feed = yield* Server.actions.events()

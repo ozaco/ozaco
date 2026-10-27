@@ -92,6 +92,21 @@ describe('attempt / recover boundaries', () => {
     expect(unwrap(outcome)).toEqual({ replaced: 'fallback:true', untouched: 'primary' })
   })
 
+  it('recover without a handler answers null for a failure, the value otherwise', async () => {
+    const outcome = await run(function* () {
+      const nulled: string | null = yield* recover(function* (): Generator<never, string, never> {
+        throw new Error('primary down')
+      })
+      const kept: number | null = yield* recover(function* () {
+        return 42
+      })
+
+      return { nulled, kept }
+    })
+
+    expect(unwrap(outcome)).toEqual({ nulled: null, kept: 42 })
+  })
+
   it('an error boundary between a failing inner op and the caller contains the failure', async () => {
     const outcome = await run(function* () {
       const contained = yield* attempt(function* () {

@@ -210,6 +210,12 @@ export namespace Helpers {
     readonly scope?: Spec.Filter | undefined
   }
 
+  /** The loose `modify` options (`Database.ModifyOptions` at the typed surface). */
+  export interface ModifyOptions {
+    readonly retries?: number | undefined
+    readonly scope?: Spec.Filter | undefined
+  }
+
   /** The mutable budget/policy of one `sanitizeFilter` walk. */
   export interface SanitizeWalk {
     readonly maxDepth: number

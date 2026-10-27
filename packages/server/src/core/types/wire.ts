@@ -102,7 +102,7 @@ export namespace WireDef {
    * (the tag), written with the JsonCodec. No `_d`. `causes` keeps the failure's string causes
    * as plain strings (what a non-ozaco client reads); the failures it wraps appear among them
    * (JsonCodec-encoded, rebuilt into real Failures by a JsonCodec decode) only with
-   * `createServer({ errors: { expose: 'chain' } })` or for a caller the node trusts
+   * `Server.actions.create({ errors: { expose: 'chain' } })` or for a caller the node trusts
    * (`trace.trust(request) === true` — the self-asserted `tracestate` `ozaco=1` is not enough).
    * The same goes for the `remote: <operation> @ <service> span <id8>` causes a carrier hop adds
    * (node ids, span ids): kept in telemetry, left out of an untrusted caller's envelope.

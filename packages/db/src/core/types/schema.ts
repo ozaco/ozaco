@@ -46,6 +46,9 @@ export namespace Schema {
     readonly hasDefault: boolean
     readonly defaultValue: (() => unknown) | null
     readonly enumValues: readonly string[] | null
+
+    /** a `json` column's value schema (`column.json(schema)`), run on every write. */
+    readonly schema: StandardSchemaV1 | null
   }
 
   /**
@@ -119,6 +122,10 @@ export namespace Schema {
 
     /** insert-time default factories, keyed by column name (from `column.*().default(...)`). */
     readonly defaults: Readonly<Record<string, () => unknown>>
+
+    /** the value schemas of `json` columns, keyed by column name (from `column.json(schema)`):
+     * a write validates (and parses) the value through them, a derived doc schema reuses them. */
+    readonly schemas: Readonly<Record<string, StandardSchemaV1>>
 
     /** table-level insert/replace validator (any Standard Schema v1 library), or null. */
     readonly validate: StandardSchemaV1 | null

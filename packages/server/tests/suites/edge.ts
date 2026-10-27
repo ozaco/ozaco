@@ -1,6 +1,7 @@
 // oxlint-disable import/exports-last
 import type { ServerDef } from 'server:core'
-import { action, createServer, Edge, HEADERS, service, stream } from 'server:core'
+import { action, Edge, Server, service, stream } from 'server:core'
+import { HEADERS } from 'server:internal'
 import type { Operation } from 'std:effect'
 import { run, sleep, until } from 'std:effect'
 import { definePlugin } from 'std:plugin'
@@ -17,11 +18,11 @@ import { storage, todos } from '../helpers'
 export interface EdgeTarget {
   readonly label: string
   readonly enabled: boolean
-  /** the edge entry `createServer` installs. */
+  /** the edge entry `Server.actions.create` installs. */
   readonly edge: ServerDef.PluginLike
   /** whether the runtime can really listen (sockets/streams go over a port). */
   readonly listens: boolean
-  /** runs before `createServer` (inject fakes into the scope). */
+  /** runs before `Server.actions.create` (inject fakes into the scope). */
   readonly use?: (() => Operation<void>) | undefined
 }
 
@@ -148,7 +149,7 @@ const boot = function* (target: EdgeTarget): Operation<ServerDef.Handle<AnyType>
     yield* target.use()
   }
 
-  return yield* createServer({
+  return yield* Server.actions.create({
     services: [todos, media],
     edge: target.edge,
     plugins: [Spy.use()],

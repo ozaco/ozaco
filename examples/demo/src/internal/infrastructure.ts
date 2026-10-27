@@ -34,7 +34,7 @@ import { seedUsers } from './auth'
 /**
  * The std Logger, BEFORE anything that logs (transport, db, the server): `DefaultLogger` +
  * `ConsoleTransport` + `TraceTransport` — every line prints AND becomes one log record,
- * correlated to the span it was logged in (`createServer` sees the bridge and installs none of
+ * correlated to the span it was logged in (`Server.actions.create` sees the bridge and installs none of
  * its own; lines logged by the infrastructure below, outside the node, reach the observing node's
  * sinks through the process fallback). A Logger the caller installed already (a script's root
  * install) is kept as it is.
@@ -54,7 +54,7 @@ function* logging(): Operation<void> {
  * The terminal timeline (`options.timeline`): `TerminalTracer` draws every trace this node (and
  * the infrastructure under it) produces as one block when it completes, through the cli
  * `Terminal` with the terminal's own colours and glyphs. A std:trace sink installed here means
- * tracing is on around the node, so `createServer` observes even without an exporter. A tracer
+ * tracing is on around the node, so `Server.actions.create` observes even without an exporter. A tracer
  * the caller installed already is kept.
  */
 function* timeline(): Operation<void> {

@@ -5,7 +5,8 @@
  * preflighted `method` / `headers` the answer does not allow). Same-origin and origin-less requests
  * are no CORS requests: nothing is said. The answers themselves are unchanged.
  */
-import { createServer, Edge, HEADERS } from 'server:core'
+import { Edge, Server } from 'server:core'
+import { HEADERS } from 'server:internal'
 import type { CorsDef } from 'server:plugins'
 import { Cors } from 'server:plugins'
 import type { Operation } from 'std:effect'
@@ -68,7 +69,7 @@ const withCors = async (options: CorsDef.Options, body: () => Operation<void>): 
       yield* storage()
       yield* memory.plugin.use()
 
-      const server = yield* createServer({
+      const server = yield* Server.actions.create({
         services: [todos],
         edge: BunEdge,
         plugins: [Cors.use(options)],

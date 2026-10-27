@@ -1,5 +1,5 @@
 // oxlint-disable import/exports-last
-import { action, createServer, Server, ServerErrors, service, stream } from 'server:core'
+import { action, Server, ServerErrors, service, stream } from 'server:core'
 import type { Operation } from 'std:effect'
 import { attempt, createQueue, ensure, fork, run, scoped, sleep, useContext } from 'std:effect'
 import { fail, unwrap } from 'std:result'
@@ -130,7 +130,7 @@ export const runCarrierSuite = (target: CarrierTarget): void => {
             scoped(function* () {
               yield* storage()
               yield* target.transport()
-              yield* createServer({
+              yield* Server.actions.create({
                 services: [math],
                 carrier: NetworkCarrier,
                 name: 'app',
@@ -147,7 +147,7 @@ export const runCarrierSuite = (target: CarrierTarget): void => {
             yield* storage()
             yield* target.transport()
 
-            const server = yield* createServer({
+            const server = yield* Server.actions.create({
               services: [front],
               carrier: NetworkCarrier,
               name: 'app',
@@ -257,7 +257,7 @@ export const runCarrierSuite = (target: CarrierTarget): void => {
             scoped(function* () {
               yield* storage()
               yield* target.transport()
-              yield* createServer({
+              yield* Server.actions.create({
                 services: [math],
                 carrier: NetworkCarrier,
                 name: 'app',
@@ -273,7 +273,7 @@ export const runCarrierSuite = (target: CarrierTarget): void => {
             yield* storage()
             yield* target.transport()
 
-            const server = yield* createServer({
+            const server = yield* Server.actions.create({
               services: [front],
               carrier: NetworkCarrier,
               name: 'app',
@@ -317,7 +317,7 @@ export const runCarrierSuite = (target: CarrierTarget): void => {
             yield* storage()
             yield* target.transport()
 
-            const server = yield* createServer({
+            const server = yield* Server.actions.create({
               services: [front, math],
               carrier: NetworkCarrier.use({ presence }),
               name: 'app',
@@ -343,7 +343,7 @@ export const runCarrierSuite = (target: CarrierTarget): void => {
                 yield* storage()
                 yield* target.transport()
 
-                const b = yield* createServer({
+                const b = yield* Server.actions.create({
                   services: [math],
                   carrier: NetworkCarrier.use({ presence }),
                   name: 'app',
@@ -422,7 +422,7 @@ export const runCarrierSuite = (target: CarrierTarget): void => {
                     return instance
                   }),
                 })
-                const server = yield* createServer({
+                const server = yield* Server.actions.create({
                   services: [own],
                   carrier: NetworkCarrier.use({ presence }),
                   name: 'app',
@@ -486,7 +486,7 @@ export const runCarrierSuite = (target: CarrierTarget): void => {
             scoped(function* () {
               yield* storage()
               yield* target.transport()
-              yield* createServer({
+              yield* Server.actions.create({
                 services: [math],
                 carrier: NetworkCarrier,
                 name: 'app',
@@ -503,7 +503,7 @@ export const runCarrierSuite = (target: CarrierTarget): void => {
             yield* target.transport()
 
             // the gateway knows the service DEFINITIONS (for routes, validation, docs) but hosts none
-            const gateway = yield* createServer({
+            const gateway = yield* Server.actions.create({
               services: [math],
               carrier: NetworkCarrier,
               name: 'app',

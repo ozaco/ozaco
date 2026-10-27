@@ -20,6 +20,7 @@ import {
   recordedBy,
   withCarrier,
 } from './trace'
+import { urlOf } from './url'
 
 /** The manifest exchange: an HTTP failure is the SERVER's answer, not a network error. */
 function* fetchManifest(
@@ -73,7 +74,7 @@ export function* manifestOf(ctx: ClientDef.Context): Operation<ManifestDef.Manif
   }
 
   const path = `${ctx.options.docsPath ?? DEFAULT_DOCS_PATH}/manifest`
-  const url = new URL(path, ctx.options.url)
+  const url = urlOf(ctx.options, path)
 
   // a server may gate its docs (`Docs.use({ auth })`) — the manifest fetch carries the same
   // bearer every call does

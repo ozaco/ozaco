@@ -1,4 +1,4 @@
-import { action, createServer, Edge, ServerErrors, service } from 'server:core'
+import { action, Edge, Server, ServerErrors, service } from 'server:core'
 import type { DocsDef } from 'server:plugins'
 import { Auth, Docs, manifestSchema, ObservePlugin, Resilience, StaticAuth } from 'server:plugins'
 import type { Operation } from 'std:effect'
@@ -63,7 +63,7 @@ const tracedDocs = async (options: DocsDef.Options) => {
       yield* storage()
       yield* memory.plugin.use()
 
-      const server = yield* createServer({
+      const server = yield* Server.actions.create({
         services: [todos],
         edge: BunEdge,
         plugins: [
@@ -93,7 +93,7 @@ describe('docs', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services: [todos],
           edge: BunEdge,
           name: 'demo',
@@ -202,7 +202,7 @@ describe('docs', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services: [shop],
           edge: BunEdge,
           plugins: [Docs.use({ path: '/docs' })],
@@ -254,7 +254,7 @@ describe('docs', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services: [todos],
           edge: BunEdge,
           plugins: [
@@ -302,7 +302,7 @@ describe('docs', () => {
       await run(function* () {
         yield* storage()
 
-        const bare = yield* createServer({
+        const bare = yield* Server.actions.create({
           services: [todos],
           edge: BunEdge,
           plugins: [Docs.use({ auth: 'authenticated' })],

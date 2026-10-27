@@ -10,7 +10,8 @@ import { dirname } from 'node:path'
 
 import pkg from '../../../package.json'
 import { IOErrors } from '../errors'
-import { withEncoding } from '../internal/crypto/encode'
+import { digestFile, toNodeHash } from '../internal/crypto/digest'
+import { withEncoding, withFileEncoding } from '../internal/crypto/encode'
 import { hlcDecode, hlcObserve, hlcToken } from '../internal/crypto/hlc'
 import {
   decryptSecret,
@@ -19,28 +20,29 @@ import {
   signData,
   verifyData,
 } from '../internal/crypto/node'
+import { createPassword } from '../internal/crypto/password'
 import { ulidId } from '../internal/crypto/ulid'
 import { uuidId } from '../internal/crypto/uuid'
 import { readEnv } from '../internal/env'
 import { readFileFlow, writeFileFlow } from '../internal/fs/flow'
 import { fsCall } from '../internal/fs/platform'
-import { sharedFs, writeFlagOf } from '../internal/fs/shared'
+import { sharedFs, writeFile } from '../internal/fs/shared'
 import { watchPath } from '../internal/fs/watch'
 import { netEndpoint } from '../internal/net/endpoint'
 import { tcpConnect, tcpListen, udpBind } from '../internal/net/sockets'
 import { readCwd, readHomeDir, readInterfaces, readPlatform, readTmpDir } from '../internal/net/sys'
 import { createExpandHome } from '../internal/path/home'
 import { nodePath } from '../internal/path/node'
+import { lock } from '../internal/process/lock'
 import { nodeExec, nodeSpawn } from '../internal/process/node'
+import { processAlive, signalProcess } from '../internal/process/pid'
+import { createRun } from '../internal/process/shared'
 import { createS3 } from '../internal/s3/create'
 import { fetchS3Client } from '../internal/s3/fetch'
 import { fromReadable } from '../internal/stream/from-readable'
 import { toReadable } from '../internal/stream/to-readable'
 import { processToTerminal } from '../internal/stream/to-terminal'
 import type { IODef } from '../types/io'
-
-const toNodeHash = (alg: IODef.HashAlgorithm) =>
-  alg === 'SHA-256' ? 'sha256' : alg === 'SHA-384' ? 'sha384' : 'sha512'
 
 /**
  * The IO impl for Node (and any runtime with the `node:*` builtins but no `Bun` global, e.g. Deno).
@@ -81,6 +83,9 @@ export const NodeIO = IO.implement({
 
     return new Uint8Array(digest)
   }),
+  hashFile: withFileEncoding(digestFile),
+  // no native argon2 / bcrypt on Node: `scrypt` only
+  password: createPassword(null),
   encrypt: encryptSecret,
   decrypt: decryptSecret,
   generateKeyPair: generateSignKeyPair,
@@ -106,10 +111,7 @@ export const NodeIO = IO.implement({
   },
 
   *write(path, data, options) {
-    const f = options?.flags ?? IO_FLAGS.none
-    const flag = writeFlagOf(f)
-
-    yield* fsCall(fs.writeFile(toPath(path), data, { flag }))
+    yield* writeFile(toPath(path), data, options)
   },
 
   *copy(src, dest, options) {
@@ -168,6 +170,10 @@ export const NodeIO = IO.implement({
 
   exec: nodeExec,
   spawn: nodeSpawn,
+  run: createRun(nodeSpawn),
+  processAlive,
+  signal: signalProcess,
+  lock,
 
   parseEndpoint: netEndpoint.parseEndpoint,
   formatEndpoint: netEndpoint.formatEndpoint,

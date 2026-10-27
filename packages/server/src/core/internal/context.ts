@@ -12,7 +12,7 @@ export const OutcomesDbRef = createContext<Helpers.OutcomesDbState>('server:outc
 export const LocalCarrierRef = createContext<Helpers.LocalCarrierState>('server:carrier/local')
 
 /** The `ObserveExporter` installs a node inherited from an OUTER node's scope (set by
- * `createServer`): its fan-out skips them — a nested node never exports into, starts or flushes
+ * `Server.actions.create`): its fan-out skips them — a nested node never exports into, starts or flushes
  * another node's exporters. */
 export const InheritedExporters = createContext<ReadonlySet<Protocol.Install> | null>(
   'server:observe-exporter.inherited',
@@ -20,7 +20,7 @@ export const InheritedExporters = createContext<ReadonlySet<Protocol.Install> | 
 )
 
 /** While set, an `ObserveExporter` fan-out only COLLECTS the installs it would reach (runs none):
- * how `createServer` tells an outer node's exporters from its own. */
+ * how `Server.actions.create` tells an outer node's exporters from its own. */
 export const ExporterProbe = createContext<Protocol.Install[] | null>(
   'server:observe-exporter.probe',
   null,

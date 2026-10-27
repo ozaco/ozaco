@@ -1,5 +1,6 @@
 import type { OptionsDef } from 'server:core'
-import { action, Observe, Server, service, STATUS_OF, stream } from 'server:core'
+import { action, Observe, Server, service, stream } from 'server:core'
+import { STATUS_OF } from 'server:internal'
 import { fail } from 'std:result'
 import type { AnyType } from 'std:shared'
 

@@ -3,15 +3,8 @@
  * the way to raise it come from the same object, so the `errors` map and the `fail()` call can
  * no longer drift (an undeclared tag answers 500, whatever the handler meant).
  */
-import {
-  action,
-  createServer,
-  ServerErrors,
-  serviceErrors,
-  service,
-  statusOf,
-  tagOf,
-} from 'server:core'
+import { action, Server, ServerErrors, service, serviceErrors } from 'server:core'
+import { statusOf, tagOf } from 'server:internal'
 import { attempt, run, until } from 'std:effect'
 import { asFailure, fail, ResultErrors, unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
@@ -69,7 +62,7 @@ describe('core — serviceErrors', () => {
           ),
         })
 
-        const server = yield* createServer({ services: [files], edge: BunEdge })
+        const server = yield* Server.actions.create({ services: [files], edge: BunEdge })
         const info = yield* server.start({ port: 0 })
 
         const outcome = yield* attempt(() => server.call(files, 'get', { id: 'nope' }))

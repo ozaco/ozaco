@@ -108,6 +108,10 @@ export namespace Utils {
     name?: string | undefined
     /** Clock in ms (default `Date.now`) — injectable for tests. */
     now?: (() => number) | undefined
+    /** Told when the circuit changes state — `open` (with what tripped it), `half-open` (a trial
+     * call is going through), `closed` (the trial won, or `reset`). Synchronous and
+     * deduplicated: a Logger line goes through the scope (`scope.run`). */
+    onChange?: ((state: BreakerState, reason: unknown) => void) | undefined
   }
 
   /** A circuit breaker (`createBreaker`). */
@@ -123,6 +127,37 @@ export namespace Utils {
     readonly reason: unknown
     /** Consecutive counted failures so far. */
     readonly failures: number
+  }
+
+  /** Options for `main`. */
+  export interface MainOptions {
+    /** signal → exit status: the signals that shut the body down gracefully and what the
+     * process exits with. Default `{ SIGINT: 130, SIGTERM: 143 }`; an entry here is ADDED to (or
+     * overrides) it — `{ SIGTERM: 0, SIGHUP: 0 }` for a daemon a supervisor stops. Windows knows
+     * only SIGINT and SIGBREAK. */
+    signals?: Readonly<Record<string, number>> | undefined
+    /** once a signal asked for the shutdown, how long the teardown may take before the process
+     * is ended hard with that signal's status (unset: as long as it takes). */
+    deadlineMs?: number | undefined
+    /** an `unhandledRejection` of the process: `'log'` prints its cause chain to stderr and
+     * goes on, `'exit'` ends the program with status 1 (the rejection its error). Unset: the
+     * runtime's own behaviour. */
+    unhandledRejection?: 'log' | 'exit' | undefined
+  }
+
+  /** Options for `every`. */
+  export interface EveryOptions {
+    /** Names the loop in its failure's message. */
+    name?: string | undefined
+    /** Handles a round's failure (a Logger line) — the loop then goes on; without it the
+     * failure ends the loop and is the answer. */
+    onFailure?: ((failure: Result.Failure<unknown>) => Operation<void>) | undefined
+  }
+
+  /** Options for `timeout`. */
+  export interface TimeoutOptions {
+    /** Names the operation in the failure's message (default `operation`). */
+    name?: string | undefined
   }
 
   /** Options for `retry`. */

@@ -5,7 +5,7 @@ import { DefaultLogger, Logger, LogLevel } from 'std:logger'
 import { fail, unwrap } from 'std:result'
 
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -183,5 +183,45 @@ describe('file transport', () => {
     )
 
     expect(await readFile(path, 'utf8')).toBe(`${LogLevel.info}|custom\n`)
+  })
+})
+
+describe('file transport — mode + rotate', () => {
+  it('chmods the file to mode and shifts it once a write would pass maxBytes', async () => {
+    const path = join(dir, 'app.log')
+
+    unwrap(
+      await run(function* () {
+        yield* JsonCodec.use()
+        yield* BunIO.use()
+        yield* DefaultLogger.use({ timestamp: () => 1 })
+        yield* FileTransport.use({ path, mode: 0o600, rotate: { maxBytes: 120, keep: 2 } })
+
+        // ≈ 80 bytes a record: every second one rotates (120 would be passed)
+        for (let index = 0; index < 6; index += 1) {
+          yield* Logger.actions.info(`line ${index} ${'x'.repeat(40)}`)
+        }
+      }),
+    )
+
+    const lineOf = async (file: string) => {
+      const text = await readFile(file, 'utf8')
+
+      return text.match(/line \d/u)?.[0]
+    }
+    const present = (file: string) =>
+      stat(file).then(
+        () => true,
+        () => false,
+      )
+    const current = await stat(path)
+    const rotated = await stat(`${path}.1`)
+
+    expect(current.mode & 0o777).toBe(0o600)
+    expect(rotated.mode & 0o777).toBe(0o600)
+    expect(await lineOf(path)).toBe('line 5')
+    expect(await lineOf(`${path}.1`)).toBe('line 4')
+    expect(await lineOf(`${path}.2`)).toBe('line 3')
+    expect(await present(`${path}.3`)).toBe(false)
   })
 })

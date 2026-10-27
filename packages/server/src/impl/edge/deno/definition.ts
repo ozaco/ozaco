@@ -1,6 +1,6 @@
 import type { EdgeDef } from 'server:core'
-import { Edge, ServerErrors } from 'server:core'
-import { edgeActions, openEdge } from 'server:internal'
+import { Edge, Server, ServerErrors } from 'server:core'
+import { edgeActions } from 'server:internal'
 import { fail } from 'std:result'
 
 import pkg from '../../../../package.json'
@@ -26,7 +26,7 @@ export const DenoEdge = Edge.implement<EdgeDef.Options, []>({
     }
 
     yield* StateRef.set({ server: null, runtime })
-    yield* openEdge()
+    yield* Server.actions.openEdge()
 
     return { runtime: 'deno' }
   },

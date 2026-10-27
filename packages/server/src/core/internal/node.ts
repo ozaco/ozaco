@@ -26,7 +26,7 @@ import { markLoggedLines } from './forward'
 import { apiOf, exporterEntries, installEntry, pluginOf, serverFor } from './kernel'
 import { registerService, validateOptions } from './registry'
 
-/** Hold a record for a node still coming up — until its `createServer` decides; nothing once it
+/** Hold a record for a node still coming up — until its `Server.actions.create` decides; nothing once it
  * decided (its tracing is off for good: a node that does not observe keeps its lines to itself). */
 export const hold = (tracer: ServerDef.TracerContext, record: ServerDef.BootRecord): void => {
   if (tracer.boot && tracer.boot.length < BOOT_RECORDS) {
@@ -97,7 +97,7 @@ export const processLogs = (
  * While a node comes up (its tracing still OFF, the plugins not in yet), what it logs — a carrier's
  * presence line, a store's first envelope — is HELD in its `boot` records instead of falling to
  * whichever node claims the process (it would carry THAT node's resource); so is the process's
- * own when no node claims it yet. `createServer` decides once the claim is taken
+ * own when no node claims it yet. `Server.actions.create` decides once the claim is taken
  * (`releaseBoot`): handed to the node's Tracers when it observes (the process's records only when
  * it claims them), dropped otherwise. Returns the unregister function.
  */
@@ -136,7 +136,7 @@ export function* releaseBoot(
   }
 }
 
-/** `createServer` from the tracer on (its boot records held meanwhile). */
+/** `Server.actions.create` from the tracer on (its boot records held meanwhile). */
 export function* buildNode<const TServices extends readonly ServiceDef.Service[]>(
   options: ServerDef.Options<TServices>,
   node: Helpers.NodeBuild,

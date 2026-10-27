@@ -8,7 +8,7 @@
  */
 import { column, table } from 'db:core'
 import type { ServerDef, ServiceDef } from 'server:core'
-import { action, createServer, refs, service, serviceErrors, stream } from 'server:core'
+import { action, refs, Server, service, serviceErrors, stream } from 'server:core'
 import type { ResourceDef } from 'server:plugins'
 import { crud } from 'server:plugins'
 import type { Operation } from 'std:effect'
@@ -66,12 +66,12 @@ const accepts = (): void => {
     return 'x'
   })
 
-  // --- createServer options --------------------------------------------------------------------
+  // --- Server.actions.create options --------------------------------------------------------------------
 
-  createServer({ services: [other], role: 'gateway' })
+  Server.actions.create({ services: [other], role: 'gateway' })
 
   // @ts-expect-error 'worker' is not a role
-  createServer({ services: [other], role: 'worker' })
+  Server.actions.create({ services: [other], role: 'worker' })
 }
 
 void accepts
@@ -351,6 +351,36 @@ const streams = (): void => {
 }
 
 void streams
+
+/** A ref to an `auth`-gated action is callable like any other: the callee's `ctx.auth` is the
+ * KERNEL's business, not the caller's (`Ref` leaves that slot open). */
+const gatedRefs = (): void => {
+  const users = service('users', {
+    rename: action.mutation(
+      { input: z.object({ id: z.string() }), output: z.boolean(), auth: 'user' },
+      function* ({ ctx }) {
+        return ctx.auth.sub !== ''
+      },
+    ),
+  })
+  const usersRef = refs<typeof users>('users')
+
+  service('admin', {
+    rename: action.mutation(
+      { input: z.object({ id: z.string() }), output: z.boolean() },
+      function* ({ input, ctx }): Operation<boolean> {
+        const ok: boolean = yield* ctx.call(usersRef.rename, { id: input.id })
+
+        // @ts-expect-error the input is still the callee's
+        yield* ctx.call(usersRef.rename, { nope: 1 })
+
+        return ok
+      },
+    ),
+  })
+}
+
+void gatedRefs
 
 describe('server — types', () => {
   it('serviceErrors carries the tag, the status map and the failer together', () => {

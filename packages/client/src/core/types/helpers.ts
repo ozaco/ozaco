@@ -6,6 +6,12 @@ import type { ManifestDef } from './manifest'
 
 /** The shapes this module passes around inside itself. */
 export namespace Helpers {
+  /** What `lazyClient` builds BEFORE the client (so the handle answers at once) and hands
+   * `createClient` to use instead of its own. */
+  export interface Prebuilt {
+    readonly session: ClientDef.Session & { needsRenewal(): boolean }
+  }
+
   export interface Prepared {
     readonly url: string
     readonly init: RequestInit
@@ -68,6 +74,10 @@ export namespace Helpers {
       | ((turn: (cursor: string | null, back?: boolean) => void) => void)
       | undefined
     readonly onPage?: ((page: ClientDef.WindowInfo | null) => void) | undefined
+
+    /** handed a function that drops the watch's socket from `$realtime` AT ONCE — for a stop
+     * that must not wait for the halt (a socket mid-redial holds its teardown up). */
+    readonly detach?: ((detach: () => void) => void) | undefined
   }
 
   /** A failure as an app renders it — the wire fields plus what the causes carry (a nested

@@ -1,8 +1,8 @@
-import { action, createServer, Edge, ServerErrors, service } from 'server:core'
+import { action, Edge, refs, Server, ServerErrors, service } from 'server:core'
 import type { AuthDef } from 'server:plugins'
 import { Auth, AuthErrors, JwtAuth, StaticAuth } from 'server:plugins'
 import type { Operation } from 'std:effect'
-import { attempt, run, sleep } from 'std:effect'
+import { attempt, run, scoped, sleep } from 'std:effect'
 import type { Result } from 'std:result'
 import { isFailure, unwrap } from 'std:result'
 import type { AnyType } from 'std:shared'
@@ -111,6 +111,9 @@ const app = service('app', {
   admin: action.query({ output: z.string(), auth: ['admin'] }, function* () {
     return 'secret'
   }),
+  perm: action.query({ output: z.string(), auth: { permissions: ['agents:view'] } }, function* () {
+    return 'permitted'
+  }),
   root: action.query({ output: z.string(), auth: ['root'] }, function* () {
     return 'never'
   }),
@@ -163,7 +166,7 @@ describe('auth', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services: [app, vault],
           edge: BunEdge,
           plugins: [
@@ -252,7 +255,7 @@ describe('auth', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services: [app],
           plugins: [
             JwtAuth.use({ provider: provider(), secret: 'test-secret', sessionTtlMs: 1000 }),
@@ -303,7 +306,7 @@ describe('auth', () => {
     unwrap(
       await run(function* () {
         yield* storage()
-        yield* createServer({
+        yield* Server.actions.create({
           services: [app],
           plugins: [
             StaticAuth.use({
@@ -352,12 +355,12 @@ describe('auth', () => {
       await run(function* () {
         yield* storage()
 
-        const alone = yield* attempt(createServer({ services: [app], plugins: [Auth] }))
+        const alone = yield* attempt(Server.actions.create({ services: [app], plugins: [Auth] }))
 
         expect((alone as AnyType).error).toBe(ServerErrors.Configuration)
 
         const noKeys = yield* attempt(
-          createServer({ services: [app], plugins: [JwtAuth.use({} as AnyType), Auth] }),
+          Server.actions.create({ services: [app], plugins: [JwtAuth.use({} as AnyType), Auth] }),
         )
 
         expect((noKeys as AnyType).error).toBe(ServerErrors.Configuration)
@@ -365,7 +368,7 @@ describe('auth', () => {
         // an unreadable key keeps the import's error as the CAUSE (its fold), never a string —
         // the only strings are the plugin runtime's labels of the setup it failed in
         const badKey = yield* attempt(
-          createServer({
+          Server.actions.create({
             services: [app],
             plugins: [
               JwtAuth.use({
@@ -378,11 +381,19 @@ describe('auth', () => {
 
         expect((badKey as AnyType).error).toBe(ServerErrors.Configuration)
         expect((badKey as AnyType).message).toBe('auth: cannot import private key')
-        expect(stringCauses(badKey as AnyType)).toEqual(['setup', `server-auth-jwt@${pkg.version}`])
+        // the plugin's own labels, then the protocol runtime's for `Server.actions.create`
+        expect(stringCauses(badKey as AnyType)).toEqual([
+          'setup',
+          `server-auth-jwt@${pkg.version}`,
+          'create:handler',
+          `server@${pkg.version}`,
+          'dispatch',
+          `server@${pkg.version}`,
+        ])
         expect(chainTypes(badKey as AnyType)).toHaveLength(2)
 
         const noSub = yield* attempt(
-          createServer({
+          Server.actions.create({
             services: [app],
             plugins: [StaticAuth.use({ tokens: { t: {} as AnyType } }), Auth],
           }),
@@ -398,7 +409,7 @@ describe('auth', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services: [app],
           edge: BunEdge,
           plugins: [
@@ -490,7 +501,7 @@ describe('auth', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services: [app],
           plugins: [
             JwtAuth.use({ provider: provider(), secret: 'test-secret' }),
@@ -558,7 +569,7 @@ describe('auth', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services: [app],
           plugins: [
             JwtAuth.use({
@@ -602,6 +613,12 @@ describe('auth', () => {
 
         expect((burned as AnyType).causes).toContain(AuthErrors.Replayed)
 
+        // a string no strategy signed is a refused credential (401), not a missing feature (501)
+        const bogus = yield* attempt(Auth.actions.refresh('not.a.token'))
+
+        expect((bogus as AnyType).error).toBe(ServerErrors.Unauthorized)
+        expect((bogus as AnyType).causes).toContain(AuthErrors.InvalidToken)
+
         // access tokens expire (jose has second granularity)
         const short = yield* server.call(app, 'login', { user: 'ada', pass: 'pw' })
 
@@ -614,6 +631,57 @@ describe('auth', () => {
         )
 
         expect((expired as AnyType).causes).toContain(AuthErrors.ExpiredToken)
+      }),
+    )
+  })
+
+  it("{ as: 'service' }: a nested call runs as the calling service; without a minter it is a configuration failure", async () => {
+    const inner = service('inner', {
+      whoami: action.query({ output: z.string(), auth: 'service' }, function* ({ ctx }) {
+        return `${ctx.auth.type ?? ''}|${ctx.auth.sub}`
+      }),
+    })
+    const innerRef = refs<typeof inner>('inner')
+    const outer = service('outer', {
+      ask: action.query({ output: z.string() }, function* ({ ctx }): Operation<string> {
+        return yield* ctx.call(innerRef.whoami, undefined, { as: 'service' })
+      }),
+    })
+
+    unwrap(
+      await run(function* () {
+        yield* scoped(function* () {
+          yield* storage()
+
+          const server = yield* Server.actions.create({
+            services: [inner, outer],
+            plugins: [JwtAuth.use({ provider: provider(), secret: 'test-secret' }), Auth],
+          })
+
+          expect(yield* server.call(outer, 'ask')).toBe('service|service:outer')
+
+          // the callee stays closed to anyone without a service token
+          const direct = yield* attempt(server.call(inner, 'whoami'))
+
+          expect((direct as AnyType).error).toBe(ServerErrors.Unauthorized)
+        })
+
+        // no plugin mints a credential here (an open callee under the same name)
+        const open = service('inner', {
+          whoami: action.query({ output: z.string() }, function* () {
+            return 'open'
+          }),
+        })
+
+        yield* scoped(function* () {
+          yield* storage()
+
+          const bare = yield* Server.actions.create({ services: [open, outer] })
+          const outcome = yield* attempt(bare.call(outer, 'ask'))
+
+          expect((outcome as AnyType).error).toBe(ServerErrors.Configuration)
+          expect((outcome as AnyType).message).toContain("{ as: 'service' }")
+        })
       }),
     )
   })
@@ -650,7 +718,7 @@ describe('auth', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services: [gated],
           plugins: [JwtAuth.use({ provider: provider(), secret: 'test-secret' }), Auth],
         })
@@ -683,7 +751,7 @@ describe('auth', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services: [relaySvc],
           plugins: [JwtAuth.use({ provider: provider(), secret: 'test-secret' }), Auth],
         })
@@ -696,5 +764,135 @@ describe('auth', () => {
         )
       }),
     )
+  })
+})
+
+describe('auth — credential headers and the catalog', () => {
+  /** A provider that knows passwords AND app tokens (`{ appToken }` credentials). */
+  const apps: AuthDef.Provider = {
+    *authenticate(credentials) {
+      if (credentials.appToken === 'app-1') {
+        return { sub: 'app:one', roles: ['admin'], claims: { app: 'one', email: 'ops@one.test' } }
+      }
+
+      return credentials.user === 'ada' && credentials.pass === 'pw'
+        ? { sub: 'u-ada', roles: ['admin'], claims: { name: 'Ada' } }
+        : undefined
+    },
+    *loadUser(sub) {
+      return sub === 'u-ada' ? { sub, roles: ['admin'], claims: { name: 'Ada' } } : undefined
+    },
+  }
+
+  it('a credential header is exchanged for a bearer both the gate and nested calls see; a bad one is unauthorized; a bearer wins', async () => {
+    unwrap(
+      await run(function* () {
+        yield* storage()
+
+        const server = yield* Server.actions.create({
+          services: [app, relaySvc],
+          edge: BunEdge,
+          plugins: [
+            JwtAuth.use({
+              secret: 'a-secret-long-enough-for-hs256-material-0123456789',
+              provider: apps,
+            }),
+            Auth.use({
+              default: 'authenticated',
+              credentials: [{ header: 'X-App-Token', login: token => ({ appToken: token }) }],
+            }),
+          ],
+        })
+
+        const viaApp = { meta: { 'x-app-token': 'app-1' } }
+
+        expect(yield* server.call(app, 'me', undefined, viaApp)).toEqual({
+          sub: 'app:one',
+          name: 'undefined',
+        })
+        expect(yield* server.call(app, 'admin', undefined, viaApp)).toBe('secret')
+        // the exchanged bearer rides the ctx too: a nested `inherit` call stays authenticated
+        expect(yield* server.call(relaySvc, 'viaInherit', undefined, viaApp)).toBe('app:one')
+
+        const bad = yield* attempt(
+          server.call(app, 'me', undefined, { meta: { 'x-app-token': 'nope' } }),
+        )
+
+        expect((bad as AnyType).error).toBe(ServerErrors.Unauthorized)
+        expect((bad as AnyType).causes).toContain(AuthErrors.BadCredentials)
+
+        // an explicit bearer wins over the header, even a bad one
+        const both = yield* attempt(
+          server.call(app, 'me', undefined, {
+            meta: { 'x-app-token': 'app-1', authorization: 'Bearer not-a-token' },
+          }),
+        )
+
+        expect((both as AnyType).error).toBe(ServerErrors.Unauthorized)
+        expect((both as AnyType).causes).toContain(AuthErrors.InvalidToken)
+
+        // `check` / `authorize` exchange the header the same way
+        expect(yield* Auth.actions.check('user', { 'X-App-Token': 'app-1' })).toMatchObject({
+          sub: 'app:one',
+        })
+        expect(yield* Auth.actions.check('user', { 'x-app-token': 'nope' })).toBeNull()
+
+        yield* server.stop()
+      }),
+    )
+  })
+
+  it('catalog lists every action with its gate and the distinct roles and permissions', async () => {
+    unwrap(
+      await run(function* () {
+        yield* storage()
+
+        const server = yield* Server.actions.create({
+          services: [app, vault],
+          edge: BunEdge,
+          plugins: [
+            StaticAuth.use({ tokens: { 'tok-x': { sub: 'x' } } }),
+            Auth.use({ default: 'authenticated' }),
+          ],
+        })
+
+        const catalog = yield* Auth.actions.catalog()
+        const byId = Object.fromEntries(
+          catalog.actions.map(entry => [`${entry.service}.${entry.action}`, entry]),
+        )
+
+        expect(byId['app.open']).toMatchObject({
+          kind: 'authenticated',
+          roles: [],
+          permissions: [],
+        })
+        expect(byId['app.admin']).toMatchObject({ kind: 'roles', roles: ['admin'] })
+        expect(byId['app.perm']).toMatchObject({
+          kind: 'requirements',
+          permissions: ['agents:view'],
+        })
+        expect(byId['app.internal']).toMatchObject({ kind: 'service' })
+        expect(byId['vault.secrets']).toMatchObject({ kind: 'roles', roles: ['admin'] })
+        expect(byId['vault.status']).toMatchObject({ kind: 'open' })
+        expect(catalog.roles).toEqual(['admin', 'root'])
+        expect(catalog.permissions).toEqual(['agents:view'])
+
+        yield* server.stop()
+      }),
+    )
+  })
+
+  it('Principal<Claims> types the claims', () => {
+    const principal: AuthDef.Principal<{ email?: string }> = {
+      sub: 'u',
+      type: 'session',
+      roles: [],
+      permissions: [],
+      claims: { email: 'a@b.test' },
+      jti: 'j',
+    }
+    const email: string | undefined = principal.claims.email
+
+    expect(email).toBe('a@b.test')
   })
 })

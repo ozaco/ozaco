@@ -33,7 +33,10 @@ const HotReloadPlugin = definePlugin<HotReloadDef.Context, [options: HotReloadDe
     const kernel = yield* Server.context.get()
 
     if (!kernel) {
-      return yield* fail(ServerErrors.Configuration, 'HotReload must be installed by createServer')
+      return yield* fail(
+        ServerErrors.Configuration,
+        'HotReload must be installed by Server.actions.create',
+      )
     }
 
     const state = yield* createState(options)

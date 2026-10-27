@@ -96,6 +96,9 @@ declare module 'server:impl/carrier/network' {
 declare module 'server:plugins' {
   export * from '@ozaco/server/plugins';
 }
+declare module 'server:testing' {
+  export * from '@ozaco/server/testing';
+}
 declare module 'server:plugins/observe/otlp' {
   export * from '@ozaco/server/plugins/observe/otlp';
 }

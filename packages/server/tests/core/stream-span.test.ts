@@ -6,7 +6,7 @@
  * process and over a network carrier.
  */
 import type { ObserveDef, ServerDef } from 'server:core'
-import { action, createServer, ObserveExporter, Server, service, stream } from 'server:core'
+import { action, ObserveExporter, Server, service, stream } from 'server:core'
 import type { Operation } from 'std:effect'
 import { attempt, createQueue, flowOf, fork, run, scoped, sleep } from 'std:effect'
 import { fail, isFailure, unwrap } from 'std:result'
@@ -142,7 +142,7 @@ const local = async (
     await run(function* () {
       yield* storage()
 
-      const server = yield* createServer({ services: [feed], plugins: [sink.plugin] })
+      const server = yield* Server.actions.create({ services: [feed], plugins: [sink.plugin] })
 
       yield* body(server as AnyType)
     }),
@@ -265,7 +265,7 @@ describe('stream spans — the dispatch span covers its stream output', () => {
           scoped(function* () {
             yield* storage()
             yield* MemoryTransport.use({ prefix: 'app', link })
-            yield* createServer({
+            yield* Server.actions.create({
               services: [feed],
               carrier: NetworkCarrier,
               name: 'app',
@@ -281,7 +281,7 @@ describe('stream spans — the dispatch span covers its stream output', () => {
         yield* scoped(function* () {
           yield* storage()
           yield* MemoryTransport.use({ prefix: 'app', link })
-          yield* createServer({
+          yield* Server.actions.create({
             services: [feed],
             hosted: [],
             role: 'gateway',

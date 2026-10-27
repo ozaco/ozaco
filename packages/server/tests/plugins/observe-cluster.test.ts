@@ -1,5 +1,5 @@
 import type { ObserveDef } from 'server:core'
-import { action, createServer, Observe, Server, service } from 'server:core'
+import { action, Observe, Server, service } from 'server:core'
 import { ObservePlugin } from 'server:plugins'
 import { createQueue, fork, run, scoped, sleep } from 'std:effect'
 import { unwrap } from 'std:result'
@@ -26,7 +26,7 @@ describe('observe — cluster', () => {
             yield* storage()
             yield* MemoryTransport.use({ prefix: 'obs', link })
 
-            const svc = yield* createServer({
+            const svc = yield* Server.actions.create({
               services: [todos],
               carrier: NetworkCarrier.use({ presence }),
               plugins: [
@@ -51,7 +51,7 @@ describe('observe — cluster', () => {
           yield* storage()
           yield* MemoryTransport.use({ prefix: 'obs', link })
 
-          const gateway = yield* createServer({
+          const gateway = yield* Server.actions.create({
             services: [todos],
             carrier: NetworkCarrier.use({ presence }),
             plugins: [
@@ -150,7 +150,7 @@ describe('observe — cluster', () => {
         yield* storage()
         yield* MemoryTransport.use({ prefix: 'lonely', link })
 
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services: [todos],
           carrier: NetworkCarrier.use({ presence }),
           plugins: [
@@ -177,7 +177,7 @@ describe('observe — cluster', () => {
         yield* storage()
         yield* MemoryTransport.use({ prefix: 'lonely2', link })
 
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services: [todos],
           carrier: NetworkCarrier.use({ presence }),
           plugins: [
@@ -217,7 +217,7 @@ describe('observe — cluster', () => {
             yield* storage()
             yield* MemoryTransport.use({ prefix: 'odd', link })
 
-            const svc = yield* createServer({
+            const svc = yield* Server.actions.create({
               services: [odd],
               carrier: NetworkCarrier.use({ presence }),
               plugins: [
@@ -241,7 +241,7 @@ describe('observe — cluster', () => {
           yield* storage()
           yield* MemoryTransport.use({ prefix: 'odd', link })
 
-          const gateway = yield* createServer({
+          const gateway = yield* Server.actions.create({
             services: [odd],
             carrier: NetworkCarrier.use({ presence }),
             plugins: [
@@ -309,7 +309,7 @@ describe('observe — cluster', () => {
             yield* storage()
             // NATS' default `max_payload` (1 MB)
             yield* MemoryTransport.use({ prefix: 'bulk', link, maxPayloadBytes: 1024 * 1024 })
-            yield* createServer({
+            yield* Server.actions.create({
               services: [todos],
               carrier: NetworkCarrier.use({ presence }),
               plugins: [
@@ -345,7 +345,7 @@ describe('observe — cluster', () => {
           yield* storage()
           yield* MemoryTransport.use({ prefix: 'bulk', link })
 
-          const gateway = yield* createServer({
+          const gateway = yield* Server.actions.create({
             services: [todos],
             carrier: NetworkCarrier.use({ presence }),
             plugins: [

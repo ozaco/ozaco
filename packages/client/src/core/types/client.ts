@@ -1,6 +1,7 @@
 import type { ServiceDef } from 'server:core'
 import type { Flow, Future, FutureFlow, Operation, Scope } from 'std:effect'
 import type { AnyType, StandardSchemaV1 } from 'std:shared'
+import type { WsDef } from 'std:ws'
 
 import type { ManifestDef } from './manifest'
 
@@ -14,6 +15,10 @@ export namespace ClientDef {
   export interface Options {
     /** Base URL of the server (`http://localhost:3000`). */
     readonly url: string
+
+    /** A path every route is mounted under on this server (`'/api'` when a proxy puts the node
+     * there): prepended to the action routes, the manifest path and the realtime sockets. */
+    readonly prefix?: string | undefined
 
     /** Bearer token — a value or a per-call resolver (sent as `authorization`, and as `?token=`
      * on sockets). */
@@ -34,6 +39,125 @@ export namespace ClientDef {
 
     /** `fetch` to use (tests, custom agents). Default: the global. */
     readonly fetch?: typeof fetch | undefined
+
+    /** What `$text` answers for a failure, by one of its string causes or by its tag
+     * (`{ 'users:last-admin': 'The last admin stays.', 'client.network': 'Offline.' }`). */
+    readonly messages?: Readonly<Record<string, string>> | undefined
+
+    /** The session the client authenticates with (see {@link SessionOptions}): where the tokens
+     * persist and how the access token is renewed. Without it `$session` is memory-only. */
+    readonly session?: SessionOptions | undefined
+  }
+
+  // --- the session -----------------------------------------------------------------------------
+
+  /** Tokens as the server's auth issues them (`login` / `refresh`). */
+  export interface Tokens {
+    readonly accessToken: string
+    readonly refreshToken?: string | undefined
+
+    /** epoch ms; read off the access token's `exp` when it is a JWT, this otherwise. */
+    readonly expiresAt?: number | undefined
+  }
+
+  /** Where a session keeps its tokens across page loads — `localStorage`, or anything shaped
+   * like it. Every read goes to it, so a sign-in in another tab is picked up. */
+  export interface TokenStorage {
+    getItem(key: string): string | null
+    setItem(key: string, value: string): void
+    removeItem(key: string): void
+  }
+
+  export interface SessionOptions {
+    readonly storage?: TokenStorage | undefined
+
+    /** the storage keys. Default `ozaco:access` / `ozaco:refresh`. */
+    readonly keys?: { readonly access?: string; readonly refresh?: string } | undefined
+
+    /** Exchange the refresh token for a fresh pair — the server's refresh action through the
+     * handle: `(client, refreshToken) => client.auth.refresh({ refreshToken })`. Before a call
+     * made within `skewMs` of the access token's expiry the client renews first (one renewal is
+     * shared by every caller); a refresh the server REFUSES ends the session (the tokens are
+     * cleared), one that fails on the network leaves it alone. */
+    readonly refresh?:
+      | ((client: Handle<AnyType>, refreshToken: string) => Future<Tokens>)
+      | undefined
+
+    /** how long before `exp` a token counts as expiring. Default 60 000. */
+    readonly skewMs?: number | undefined
+
+    /** keep renewing in the background while the client lives — a tab whose only live link is a
+     * socket makes no call to renew on. Default on when `refresh` is given. */
+    readonly keepAlive?: boolean | undefined
+  }
+
+  export type SessionStatus = 'active' | 'anonymous'
+
+  /** `client.$session`: the tokens the client calls with. */
+  export interface Session {
+    /** the access token (the storage's, else the `token` option's until the first `set`). */
+    token(): string | null
+    refreshToken(): string | null
+
+    /** the access token's expiry in epoch ms — `0` when unknown. */
+    expiresAt(): number
+    status(): SessionStatus
+
+    /** the access token's decoded JWT payload (`roles`, `permissions`, `email`, … — whatever the
+     * server put there), `null` without a readable JWT. Unverified: what the UI shows and gates
+     * on, never what the server trusts. Re-read on every call, so it follows `set`/`renew`. */
+    claims<T extends Record<string, unknown> = Record<string, unknown>>(): T | null
+    set(tokens: Tokens): void
+    clear(): void
+
+    /** renew now (single-flight): `true` when a fresh pair is in place; `false` when there is
+     * nothing to renew, or the server refused (the session is then cleared). */
+    renew(): Future<boolean>
+
+    /** be told when the session becomes active or anonymous; answers the unsubscribe. */
+    subscribe(listener: (status: SessionStatus) => void): () => void
+  }
+
+  // --- collections ---------------------------------------------------------------------------
+
+  export interface CollectionOptions {
+    readonly filter?: Filter | undefined
+
+    /** the order rows are kept in (the server's keyset order). Default `_created_at`, newest
+     * first. */
+    readonly order?: { readonly field: string; readonly direction?: 'asc' | 'desc' } | undefined
+
+    /** the page size of `load` / `more` and the live window. Default 100. */
+    readonly limit?: number | undefined
+
+    /** the list action's key when it is not `list`. */
+    readonly action?: string | undefined
+
+    /** the realtime route when it is not the manifest's. */
+    readonly path?: string | undefined
+  }
+
+  /**
+   * `client.$collection(resource, options)`: the rows of a resource as ONE list — the page `load`
+   * fetched, the pages `more` walked back to, and the live frames of the watch `load` opened,
+   * merged by `_id` and kept in `order` (a frame's `removed` drops rows). A store keeps it and
+   * renders `rows()`; `changes` says when they moved.
+   */
+  export interface Collection<TDoc = unknown> {
+    rows(): readonly TDoc[]
+
+    /** the first page, replacing what was there, and (once) the live watch. */
+    load(): Future<readonly TDoc[]>
+
+    /** the page after the last one; `false` when there was none to fetch. */
+    more(): Future<boolean>
+    hasMore(): boolean
+
+    /** every new value of `rows()` (one consumer). */
+    readonly changes: FutureFlow<readonly TDoc[]>
+
+    /** end the watch; `rows()` keeps what it had. */
+    stop(): void
   }
 
   export interface CallOptions {
@@ -136,6 +260,68 @@ export namespace ClientDef {
     /** jump to a cursor (`null` = the first page; `back` pages backward from a prev cursor). */
     turn(cursor: string | null, back?: boolean): void
   }
+
+  // --- the resource wire shapes (what `crud` serves) ----------------------------------------
+
+  /** The system fields every stored row carries. */
+  export interface System {
+    readonly _id: string
+    readonly _created_at: number
+    readonly _updated_at: number
+    readonly _version: string
+  }
+
+  /** A resource's `list` page. */
+  export interface Page<TDoc = unknown> {
+    readonly data: readonly TDoc[]
+    readonly nextCursor: string | null
+    readonly prevCursor: string | null
+    readonly token: string
+  }
+
+  /** A resource's `list` input. */
+  export interface ListInput {
+    readonly filter?: Filter | undefined
+    readonly order?: string | undefined
+    readonly direction?: 'asc' | 'desc' | undefined
+    readonly limit?: number | undefined
+    readonly cursor?: string | undefined
+  }
+
+  export type FilterValue = string | number | boolean | null
+
+  /** A field, or a path into a `json` field (`['payload', 'workspace']`). */
+  export type FieldRef = string | readonly [string, ...(string | number)[]]
+
+  /** A filter as the resource routes read it — what `where.*` builds (the db's own algebra, on
+   * the wire). */
+  export type Filter =
+    | {
+        readonly op: 'eq' | 'ne' | 'gt' | 'gte' | 'lt' | 'lte'
+        readonly field: string
+        readonly path?: readonly (string | number)[] | undefined
+        readonly value: FilterValue
+      }
+    | {
+        readonly op: 'in' | 'not-in'
+        readonly field: string
+        readonly path?: readonly (string | number)[] | undefined
+        readonly value: readonly FilterValue[]
+      }
+    | {
+        readonly op: 'like'
+        readonly field: string
+        readonly path?: readonly (string | number)[] | undefined
+        readonly pattern: string
+        readonly insensitive?: boolean | undefined
+      }
+    | {
+        readonly op: 'is-null' | 'not-null'
+        readonly field: string
+        readonly path?: readonly (string | number)[] | undefined
+      }
+    | { readonly op: 'and' | 'or'; readonly filters: readonly Filter[] }
+    | { readonly op: 'not'; readonly filter: Filter }
 
   // --- typing from the server's api (or a generated `Api`) --------------------------------------
 
@@ -248,6 +434,13 @@ export namespace ClientDef {
     readonly $close: () => Promise<void>
   }
 
+  /** What `lazyClient` answers: a {@link ConnectedHandle} usable AT ONCE — every call, watch
+   * and collection made on it waits for the client (manifest, plugins) by itself; `$session`
+   * and `$scope` are real from the start, `$ready` resolves the handle once it is. */
+  export type LazyHandle<TApi> = ConnectedHandle<TApi> & {
+    readonly $ready: Promise<ConnectedHandle<TApi>>
+  }
+
   /** The untyped half of a handle (the same on every client). */
   export interface Statics {
     /** call by name (untyped). */
@@ -289,8 +482,24 @@ export namespace ClientDef {
     readonly $scope: Scope
 
     /** Replace the bearer token from here on (`null` clears it; the option resolver is the
-     * fallback until the first set). */
+     * fallback until the first set) — `$session.set({ accessToken })` / `$session.clear()`. */
     readonly $setToken: (token: string | null) => void
+
+    /** the session the client calls with — see {@link Session}. */
+    readonly $session: Session
+
+    /** the realtime sockets' state — see {@link Realtime}. */
+    readonly $realtime: Realtime
+
+    /** a resource's rows as one live list — see {@link Collection}. */
+    readonly $collection: <TDoc extends { readonly _id: string } = { readonly _id: string }>(
+      resource: string,
+      options?: CollectionOptions,
+    ) => Collection<TDoc>
+
+    /** The text to show for a failure (a rejected call, a failed Result): the first of its string
+     * causes `options.messages` names, else its tag's entry, else `fallback`, else its message. */
+    readonly $text: (failure: unknown, fallback?: string) => string
   }
 
   export interface Context {
@@ -298,5 +507,26 @@ export namespace ClientDef {
     manifest: ManifestDef.Manifest | null
     lastRequestId: string | null
     lastTraceId: string | null
+
+    /** the realtime sockets alive right now (one per watch) — what `$realtime` reads. */
+    readonly sockets: Set<WsDef.Connection>
+    readonly realtime: {
+      status: RealtimeStatus
+      /** watches that ended because their socket could not be reopened. */
+      lost: number
+      readonly listeners: Set<(status: RealtimeStatus) => void>
+    }
+  }
+
+  /** `client.$realtime.status()`: `idle` (no watch open), `open` (a socket is up),
+   * `reconnecting` (every socket is between generations — the ws client is redialing),
+   * `down` (a watch gave up: its reconnect budget ran out and nothing else is open). */
+  export type RealtimeStatus = 'idle' | 'open' | 'reconnecting' | 'down'
+
+  /** The realtime connection state, for a UI that must know when its live data is stale — see
+   * {@link RealtimeStatus}; `subscribe` is told on every change (polled while a watch lives). */
+  export interface Realtime {
+    status(): RealtimeStatus
+    subscribe(listener: (status: RealtimeStatus) => void): () => void
   }
 }

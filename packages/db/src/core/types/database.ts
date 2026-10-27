@@ -174,6 +174,12 @@ export namespace Database {
     readonly scope?: Spec.Filter<FieldOf<TDoc>> | undefined
   }
 
+  /** `modify` options — see {@link Handle.modify}. */
+  export interface ModifyOptions<TDoc = Spec.Doc> extends ReadOptions<TDoc> {
+    /** how many `db.conflict`s to retry before answering with one (default 3). */
+    readonly retries?: number | undefined
+  }
+
   /** Options for the versioned write methods. */
   export interface WriteOptions<TDoc = Spec.Doc> extends ReadOptions<TDoc> {
     /** Optimistic concurrency: apply only while the stored `_version` token still equals this;
@@ -330,6 +336,18 @@ export namespace Database {
       options?: WriteOptions<DocOf<TSchema, TName>>,
     ): Operation<DocOf<TSchema, TName> | null>
 
+    /** Read-modify-write under optimistic concurrency: `change(current)` answers the patch to
+     * apply (`null` to leave the row as it is), written with `ifVersion` pinned to the version
+     * just read; a `db.conflict` (someone wrote in between) re-reads and tries again, `retries`
+     * times (default 3) — then the conflict is the answer. `null` when the row is absent (or
+     * outside `scope`), the unchanged row when `change` declined, else the written row. */
+    modify<TName extends TableName<TSchema>>(
+      table: TName,
+      id: string,
+      change: (current: DocOf<TSchema, TName>) => PatchOf<TSchema, TName> | null,
+      options?: ModifyOptions<DocOf<TSchema, TName>>,
+    ): Operation<DocOf<TSchema, TName> | null>
+
     replace<TName extends TableName<TSchema>>(
       table: TName,
       id: string,
@@ -399,6 +417,13 @@ export namespace Database {
 
     /** Skip destructive reconcile steps (drop-column/drop-table). Default false. */
     readonly safe?: boolean | undefined
+
+    /** After a reconcile (the install's, `Db.actions.migrate()`), apply the insert-time default
+     * of every REQUIRED column that has one to the rows holding `null` there — what a column
+     * added after the rows were written needs, since the adapter adds it empty. Written through
+     * the handle, page by page: every row moves its version and logs its change like any other
+     * write. Default false. */
+    readonly backfill?: boolean | undefined
 
     /** This node's identity: the HLC origin of every token it mints and its id on the change
      * bus — exactly 8 Crockford base32 characters (`0-9 A-H J K M N P-T V-Z`). Default: derived
@@ -566,6 +591,7 @@ export namespace Database {
     readonly logs: ReadonlyMap<string, Spec.Table>
     readonly replayWindowMs: number
     readonly safe: boolean
+    readonly backfill: boolean
     readonly hub: Helpers.Hub
 
     /** the node's local bus (always present; the `DbBus` plugin hangs off it). */

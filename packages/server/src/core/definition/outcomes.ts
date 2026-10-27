@@ -12,7 +12,7 @@ import { outcomesTable } from '../utils/outcomes'
 
 import { Outcomes } from './protocol'
 
-/** The in-process outcome store (the default `createServer` installs). */
+/** The in-process outcome store (the default `Server.actions.create` installs). */
 export const MemoryOutcomes = Outcomes.implement<
   OutcomesDef.Options,
   [options?: { readonly ttlMs?: number | undefined }]

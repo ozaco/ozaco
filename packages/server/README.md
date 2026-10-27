@@ -1,7 +1,7 @@
 # @ozaco/server
 
 A service/action kernel. You declare **services**, each holding **actions** with a schema in and a
-schema out; `createServer` turns them into a node — HTTP routes, WebSocket routes, cross-node RPC,
+schema out; `Server.actions.create` turns them into a node — HTTP routes, WebSocket routes, cross-node RPC,
 tracing, auth, cache and docs all fall out of the same declarations.
 
 ```
@@ -19,7 +19,7 @@ over the carrier, and in-process through `ctx.call(service, 'action', input)` �
 ```ts
 import { column, DbClient, defineSchema, table, useDb } from '@ozaco/db'
 import { MemoryAdapter } from '@ozaco/db/impl/memory'
-import { action, createServer, service } from '@ozaco/server'
+import { action, Server, service } from '@ozaco/server'
 import { BunEdge } from '@ozaco/server/edge/bun'
 import { main, suspend } from '@ozaco/std/effect'
 import { BunIO } from '@ozaco/std/io/impl/bun'
@@ -52,7 +52,11 @@ await main(function* () {
   yield* MemoryAdapter.use()
   yield* DbClient.use({ schema })
 
-  const server = yield* createServer({ services: [todos], edge: BunEdge, listen: { port: 3000 } })
+  const server = yield* Server.actions.create({
+    services: [todos],
+    edge: BunEdge,
+    listen: { port: 3000 },
+  })
   const info = yield* server.start()
 
   console.log(`listening on ${info.url}`)
@@ -80,7 +84,7 @@ sent.
 
 An action's config carries the plugin options as **typed fields** — `auth`, `cache`, `invalidate`,
 `timeoutMs`, `retry`, `breaker`, `bulkhead`, `singleflight`, `rateLimit`, `fallback`. An unknown key
-is a compile error, and a configuration failure at `createServer` if the owning plugin is not
+is a compile error, and a configuration failure at `Server.actions.create` if the owning plugin is not
 installed.
 
 ## Raw routes and static files
@@ -148,7 +152,7 @@ The database and the cache are **not** mirrored on `ctx`: reach them where they 
 
 ## Plugins
 
-Installed in order through `createServer({ plugins })`; their dispatch hooks wrap in that order.
+Installed in order through `Server.actions.create({ plugins })`; their dispatch hooks wrap in that order.
 
 | plugin                                                                                                     | needs installed first                                              | gives                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -177,7 +181,7 @@ plugin's `reload` hook sees the same report.
 `HotReload` (plugins) drives it from the file system in development:
 
 ```ts
-createServer({
+Server.actions.create({
   services,
   plugins: [HotReload.use({ entry: 'src/services.ts', watch: ['src'] })],
 })
@@ -220,7 +224,7 @@ written in. There is no knob for what to record: the kernel decides once and **e
 store, stdout, OTLP, OpenObserve, your own — receives the identical spans and log records**.
 
 ```ts
-import { createServer } from '@ozaco/server'
+import { Server } from '@ozaco/server'
 import { BunEdge } from '@ozaco/server/edge/bun'
 import { OpenObserveExporter } from '@ozaco/server/plugins/observe/openobserve'
 import { OtlpExporter } from '@ozaco/server/plugins/observe/otlp'
@@ -238,7 +242,7 @@ await main(function* () {
   yield* ConsoleTransport.use()
   yield* TraceTransport.use()
 
-  const server = yield* createServer({
+  const server = yield* Server.actions.create({
     name: 'shop', // `service.namespace` — give every node of the app the same one
     services: [todos],
     edge: BunEdge,
@@ -371,7 +375,7 @@ plugin runtime's location labels (`dispatch`, `<plugin>@<version>`, …) and the
 them (JsonCodec's
 `{ _t: 'std:result:failure', error, message, causes }` — a thrown value itself never leaves the
 node) only for callers `trace.trust` accepts, or for everyone with
-`createServer({ errors: { expose: 'chain' } })`; `@ozaco/client` rebuilds them as Failures.
+`Server.actions.create({ errors: { expose: 'chain' } })`; `@ozaco/client` rebuilds them as Failures.
 
 ### Trace context
 
@@ -440,7 +444,7 @@ differs from the trace id the edge span carries `ozaco.request.id`. WebSocket fr
   `logger` binding as the instrumentation scope, bindings and data flattened into attributes
   (≤ 64, the rest one `ozaco.log.data` JSON; keys a backend reserves — `trace_id`, `body`,
   `severity`, … — move to `ozaco.data.<key>`). A failure logged at WARN+ inside a span is recorded
-  through the same record-once rule. `createServer` installs a `TraceTransport` in its own scope
+  through the same record-once rule. `Server.actions.create` installs a `TraceTransport` in its own scope
   when observing and none is visible; installed at the ROOT (above) it also bridges lines logged
   OUTSIDE the node — transport, db, your bootstrap — which the node claims
   (`observe: { processLogs }`, default on) with its resource.

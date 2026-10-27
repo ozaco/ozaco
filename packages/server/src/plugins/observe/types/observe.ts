@@ -60,14 +60,14 @@ export namespace ObservePluginDef {
      * Who may read the telemetry — it holds captured bodies and whole failure chains: the `auth`
      * requirement (the action option's shapes) of every observe API action, `/_observe/api/*`
      * (traces, trace, request, stats, cluster, the live feed, the manifest). The same rule as any
-     * action's `auth`: the `Auth` plugin must be installed (createServer fails otherwise), and
+     * action's `auth`: the `Auth` plugin must be installed (Server.actions.create fails otherwise), and
      * `false` opens the API even under a fail-closed `Auth` default. Default: none of its own —
      * the API falls under `Auth`'s `default` (open without one).
      */
     readonly auth?: OptionsDef.Requirement | undefined
 
     /**
-     * What telemetry may carry beyond the defaults — the SAME switch as `createServer({ observe:
+     * What telemetry may carry beyond the defaults — the SAME switch as `Server.actions.create({ observe:
      * { capture } })` (one decision for every sink): a key given here wins over the server
      * option. Default: leave the server's choice.
      */

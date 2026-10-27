@@ -13,5 +13,6 @@ export const FetchErrors = createTags(
   ['timeout', { name: 'TimeoutError' }],
   'http-status',
   'parse',
+  'too-large',
   ['network', networkFault],
 )

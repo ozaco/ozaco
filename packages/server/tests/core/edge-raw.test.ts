@@ -1,5 +1,6 @@
 import type { EdgeDef } from 'server:core'
-import { action, createServer, Edge, HEADERS, ServerErrors, service } from 'server:core'
+import { action, Edge, Server, ServerErrors, service } from 'server:core'
+import { HEADERS } from 'server:internal'
 import { Auth, Docs, StaticAuth } from 'server:plugins'
 import { attempt, run, until } from 'std:effect'
 import { unwrap } from 'std:result'
@@ -58,7 +59,7 @@ describe('edge — raw routes under Auth', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services: [todos],
           edge: BunEdge,
           plugins: [tokens, Auth.use({ default: 'authenticated' }), Docs],
@@ -107,7 +108,7 @@ describe('edge — raw routes under Auth', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services: [todos],
           edge: BunEdge,
           plugins: [tokens, Auth, Docs.use({ auth: ['admin'] })],
@@ -127,7 +128,7 @@ describe('edge — raw routes under Auth', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({ services: [todos], edge: BunEdge })
+        const server = yield* Server.actions.create({ services: [todos], edge: BunEdge })
 
         yield* server.start()
         yield* Edge.actions.raw({ method: 'GET', path: '/open', handler: whoami })
@@ -160,7 +161,7 @@ describe('edge — output contract', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({ services: [broken], edge: BunEdge })
+        const server = yield* Server.actions.create({ services: [broken], edge: BunEdge })
 
         yield* server.start()
 
@@ -191,7 +192,7 @@ describe('edge — static directories', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({ services: [todos], edge: BunEdge })
+        const server = yield* Server.actions.create({ services: [todos], edge: BunEdge })
 
         yield* server.start()
         yield* Edge.actions.static({ path: '/assets/**', dir: site })
@@ -267,7 +268,7 @@ describe('edge — static directories', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services: [todos],
           edge: BunEdge,
           plugins: [tokens, Auth.use({ default: 'authenticated' })],

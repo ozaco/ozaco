@@ -16,11 +16,11 @@ export const ServerTracerImpl = Trace.implement<
   version: pkg.version,
   description: 'std:trace → the kernel observe events (the store + every exporter)',
 
-  /** Installed by createServer right after the kernel, BEFORE the carrier and the plugins, with
-   * tracing OFF in the node's scope; createServer flips `state.enabled = kernel.observing` once
+  /** Installed by Server.actions.create right after the kernel, BEFORE the carrier and the plugins, with
+   * tracing OFF in the node's scope; Server.actions.create flips `state.enabled = kernel.observing` once
    * the plugins are in. */
   *setup(kernel) {
-    // the node's OWN switch (a nested server never flips its parent's); createServer reads
+    // the node's OWN switch (a nested server never flips its parent's); Server.actions.create reads
     // whether tracing was already on here BEFORE this install and counts it as observing
     return {
       kernel,

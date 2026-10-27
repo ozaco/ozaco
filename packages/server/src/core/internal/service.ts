@@ -64,7 +64,7 @@ export const planeOf = (
 
 /** Resolve an action config into its meta once — the route is decided here (`/<service>/<action>`
  * unless given), the plugin options are collected under `options` for validation at
- * `createServer`. The service name is stamped in by `service()`. */
+ * `Server.actions.create`. The service name is stamped in by `service()`. */
 export const metaOf = (kind: ServiceDef.Kind, config: ServiceDef.Config): ServiceDef.Meta => {
   const options: Record<string, unknown> = {}
 

@@ -24,6 +24,8 @@ export const Client = definePlugin<ClientDef.Context, [options: ClientDef.Option
       manifest: options.manifest ?? null,
       lastRequestId: null,
       lastTraceId: null,
+      sockets: new Set(),
+      realtime: { status: 'idle', lost: 0, listeners: new Set() },
     }
   },
 }).build()

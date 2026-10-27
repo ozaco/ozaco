@@ -11,7 +11,7 @@
 import { DbClient, defineSchema, Kv, useDb } from 'db:core'
 import { Queue, queueTable } from 'db:queue'
 import type { ObserveDef, ServerDef, ServiceDef } from 'server:core'
-import { action, createServer, Edge, refs, service, ServerErrors } from 'server:core'
+import { action, Edge, refs, Server, ServerErrors, service } from 'server:core'
 import type { AuthDef } from 'server:plugins'
 import {
   Auth,
@@ -69,7 +69,7 @@ const observe = async (
         yield* before()
       }
 
-      const server = yield* createServer({
+      const server = yield* Server.actions.create({
         ...options,
         plugins: [memory.plugin, ...(options.plugins ?? [])],
       })
@@ -491,7 +491,7 @@ const carrierTraffic = async (): Promise<ObserveDef.Event[]> => {
           yield* MemoryTransport.use({ prefix: 'contract', link })
           yield* DefaultLogger.use({ level: LogLevel.info })
           yield* Queue.use({ table: 'jobs' })
-          yield* createServer({
+          yield* Server.actions.create({
             services: [vault],
             carrier: NetworkCarrier,
             name: 'contract',
@@ -518,7 +518,7 @@ const carrierTraffic = async (): Promise<ObserveDef.Event[]> => {
         yield* MemoryTransport.use({ prefix: 'contract', link })
         yield* DefaultLogger.use({ level: LogLevel.info })
 
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services: [front],
           carrier: NetworkCarrier,
           name: 'contract',

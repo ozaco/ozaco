@@ -24,7 +24,6 @@ import {
   userSpanOf,
 } from '../internal/spans'
 import type { ServerDef } from '../types/server'
-import type { ServiceDef } from '../types/service'
 import { settingsOf, wireTrace } from '../utils/trace'
 
 import { Server } from './protocol'
@@ -72,7 +71,7 @@ function* performCall(
   })
 }
 
-/** The kernel: one per scope, installed FIRST by {@link createServer}. */
+/** The kernel: one per scope, installed FIRST by {@link Server.actions.create}. */
 const ServerImpl = Server.implement<ServerDef.Context, [options: ServerDef.Options]>({
   name: 'server-kernel',
   version: pkg.version,
@@ -141,7 +140,10 @@ export const ServerClient: ServerDef.Client = ServerImpl.build({
     return yield* runDispatch(kernel, call, { actions: actionsOf(kernel) })
   },
 
-  *call(service: ServiceDef.Service, action: string, ...rest: [unknown?, ServerDef.CallOptions?]) {
+  // the parameters are untyped (and the second optional) on purpose: the ref overload's
+  // `CallArgs` (an action whose auth slot is open) is a union of tuples — one of them empty —
+  // that no concrete parameter list satisfies; the ONE parser below decides the spelling
+  *call(service: AnyType, action?: AnyType, ...rest: AnyType[]) {
     // two spellings, one parser (`parseCall`): the service DEFINITION plus an action name, or a
     // typed REF (`server.api.todos.list`, `refs<typeof todos>('todos').list`)
     const parsed = parseCall(service, [action, ...rest])

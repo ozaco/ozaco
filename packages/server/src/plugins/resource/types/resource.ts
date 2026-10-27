@@ -1,4 +1,4 @@
-import type { Schema, Spec } from 'db:core'
+import type { Database, Schema, Spec } from 'db:core'
 import type { OptionsDef, ServerDef, ServiceDef } from 'server:core'
 import type { Operation } from 'std:effect'
 import type { Result } from 'std:result'
@@ -135,6 +135,28 @@ export namespace ResourceDef {
     TResolved['doc']
   >
 
+  /**
+   * The TYPES of a resource definition object — its `table` and the schemas beside it — under
+   * ONE name: `type Contact = ResourceDef.Shapes<typeof contactsDef>` answers `Contact['Table']`,
+   * `Contact['Row']` (the stored row) and, for every other member that is a schema, its parsed
+   * type under the capitalized key (`doc` → `Contact['Doc']`, `create` → `Contact['Create']`,
+   * `import` → `Contact['Import']`) — no `z.infer` re-export per shape.
+   */
+  export type Shapes<TDef extends { readonly table: Schema.Table }> = {
+    readonly Table: TDef['table']
+    readonly Row: Schema.Infer<TDef['table']>
+  } & {
+    readonly [
+      K in keyof TDef as K extends 'table'
+        ? never
+        : TDef[K] extends StandardSchemaV1
+          ? K extends string
+            ? Capitalize<K>
+            : never
+          : never
+    ]: TDef[K] extends StandardSchemaV1 ? StandardSchemaV1.InferOutput<TDef[K]> : never
+  }
+
   // --- hooks ---------------------------------------------------------------------------------
 
   /** The per-op input/output shapes hooks see — derived from the RESOLVED schemas, so a
@@ -167,10 +189,35 @@ export namespace ResourceDef {
     }
   }
 
+  /** The db handle a hook receives: the installed handle NARROWED to the caller's scope (the
+   * read side for `list`/`get`/`watch`, the write side for the mutations) — a row the caller
+   * cannot see is not there, a write cannot leave the scope. Its tables are untyped (a hook is
+   * generic over its resource); `crud.db(resource)` is the typed form for an extend action. */
+  export type HookDb = Database.Handle<LooseTables> & Expecting<LooseTables>
+
+  /** The untyped table map a hook's handle is generic over. */
+  export type LooseTables = Record<string, Schema.Types<Spec.Doc, Spec.Doc>>
+
+  /** `db.expect(table, id)` — the scoped `get` that FAILS `server.not-found` (cause
+   * `<table>:missing`) instead of answering `null`: the "load it, else 404" every handler
+   * writes, in one call. Every hook's `db` carries it, so does `crud.db(resource)`. */
+  export interface Expecting<TSchema extends Schema.Map> {
+    expect<TName extends Database.TableName<TSchema>>(
+      table: TName,
+      id: string,
+      options?: Database.ReadOptions<Database.DocOf<TSchema, TName>>,
+    ): Operation<Database.DocOf<TSchema, TName>>
+  }
+
+  /** What the hooks of ONE call share: a plain bag `before` fills and `after` / `error` read
+   * (`locals.started = Date.now()`), created per dispatch — per subscriber on `watch`. */
+  export type HookLocals = Record<string, unknown>
+
   /**
-   * What every hook sees: which operation ran, its CURRENT (validated) input and the full
-   * dispatch ctx — auth, headers, `call`, `log`, spans. On `watch`, `input` is the client's
-   * watch frame and `ctx` is the socket's handshake ctx.
+   * What every hook sees: which operation ran, its CURRENT (validated) input, the full dispatch
+   * ctx — auth, headers, `call`, `log`, spans — and `db`, the handle scoped to this caller
+   * ({@link HookDb}). On `watch`, `input` is the client's watch frame and `ctx` is the socket's
+   * handshake ctx.
    *
    * It is a UNION discriminated by `op`, so narrowing types the input:
    * `if (op === 'remove') { input.id }`, `if (op === 'create') { input.title }`.
@@ -180,6 +227,8 @@ export namespace ResourceDef {
       readonly op: K
       readonly input: OpShapes<TResolved>[K]['input']
       readonly ctx: ServerDef.Ctx
+      readonly db: HookDb
+      readonly locals: HookLocals
     }
   }[Op]
 
@@ -190,6 +239,8 @@ export namespace ResourceDef {
       readonly input: OpShapes<TResolved>[K]['input']
       readonly output: OpShapes<TResolved>[K]['output']
       readonly ctx: ServerDef.Ctx
+      readonly db: HookDb
+      readonly locals: HookLocals
     }
   }[Op]
 
@@ -235,6 +286,15 @@ export namespace ResourceDef {
   export type ErrorHook<TResolved extends ResolvedShapes = ResolvedShapes> = (
     call: HookCall<TResolved> & { readonly failure: Result.Failure<unknown> },
   ) => Operation<unknown>
+
+  /** `present(row, ctx)`: the ONE place a stored row becomes the doc a client sees — applied
+   * to what `get` and the mutations answer, to every row of a `list` page and to the rows of
+   * every realtime frame (`rows` / `added` / `changed`), BEFORE `after` (which then sees the
+   * presented doc). A `schema.doc` transform declares the presented shape. */
+  export type PresentHook<TTable extends Schema.Table, TResolved extends ResolvedShapes> = (
+    row: Schema.Infer<TTable>,
+    ctx: ServerDef.Ctx,
+  ) => Operation<DocOf<TResolved>>
 
   /** The seams of a resource: input rewrites (`before`), projections (`after`), instrumentation
    * (`around` — OUTSIDE `before`, see {@link AroundHook}), failure shaping (`error`). Tenancy
@@ -363,6 +423,14 @@ export namespace ResourceDef {
      * the object form splits read/write ({@link ScopeOption}). */
     readonly scope?: ScopeOption | undefined
 
+    /** project every answered row into the wire doc — see {@link PresentHook}. */
+    readonly present?:
+      | PresentHook<
+          TTable,
+          NoInfer<Resolved<TTable, TDoc, TPage, TList, TCreate, TUpdate, TReplace>>
+        >
+      | undefined
+
     /** extra failure tag → http status entries for the built-ins, MERGED over the db failures
      * `crud.errors` already declares (a same tag here wins). The tags a hook raises live here:
      * an undeclared tag answers 500. */
@@ -433,7 +501,7 @@ export namespace ResourceDef {
   >
 
   /** What `crud()` returns: a SERVICE (its `_realtime` socket included) that goes straight into
-   * `createServer({ services })`, carrying the resolved `shapes` and what the realtime
+   * `Server.actions.create({ services })`, carrying the resolved `shapes` and what the realtime
    * machinery reads. */
   export interface Crud<
     TTable extends Schema.Table = Schema.Table,
@@ -454,6 +522,7 @@ export namespace ResourceDef {
     }
     readonly hooks: CrudHooks<TResolved>
     readonly scope: { readonly read?: Scope | undefined; readonly write?: Scope | undefined }
+    readonly present?: PresentHook<TTable, TResolved> | undefined
 
     /** the RESOLVED schemas the built-ins run with (the `schema` transforms applied) — typed
      * by the transforms' return types, so `extend` actions reuse them at full fidelity. */
@@ -593,6 +662,7 @@ export namespace ResourceDef {
     }
     readonly hooks: CrudHooks<AnyType>
     readonly scope?: Scope | undefined
+    readonly present?: PresentHook<AnyType, AnyType> | undefined
   }
 
   /** `crud.realtime` — the delta-watch socket as an `action.socket` entry for ANY service
@@ -613,6 +683,9 @@ export namespace ResourceDef {
      * rewrites — but tenancy belongs in `scope`, a before-injected filter is client-sanitized)
      * — `around` never applies to the long-lived watch. */
     readonly hooks?: CrudHooks<AnyType> | undefined
+
+    /** project the rows of every frame — see {@link PresentHook}. */
+    readonly present?: PresentHook<AnyType, AnyType> | undefined
 
     readonly path?: string | undefined
     readonly description?: string | undefined

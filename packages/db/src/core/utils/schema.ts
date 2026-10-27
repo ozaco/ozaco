@@ -1,3 +1,5 @@
+import type { StandardSchemaV1 } from 'std:shared'
+
 import { SCHEMA, TABLE } from '../const'
 import { builderOf, columnSpecOf, declare, systemColumns, timestamp } from '../internal/schema'
 import type { Schema } from '../types/schema'
@@ -7,7 +9,7 @@ import type { Utils } from '../types/utils'
 /**
  * The column DSL — declares a table's storage shape explicitly (no validator introspection).
  * Chain `.optional()` for a nullable/omittable column and `.default(value | () => value)` for an
- * insert-time default. `timestamp({ as: 'ms' })` is epoch millis as a `number`; `json<T>()` types the stored JSON; `blob()` stores raw bytes as a
+ * insert-time default. `timestamp({ as: 'ms' })` is epoch millis as a `number`; `json<T>()` types the stored JSON, `json(schema)` validates it on every write; `blob()` stores raw bytes as a
  * `Uint8Array` (no JSON detour, no base64); `enumOf` constrains to a string union;
  * `id('table')` brands the value type with the table it names — type-level only: the db layer
  * keeps no relations (no foreign keys, no loaders); the id is stored as plain text.
@@ -18,7 +20,8 @@ export const column = {
   float: () => declare<number>('float'),
   boolean: () => declare<boolean>('boolean'),
   timestamp: timestamp as Utils.Timestamp,
-  json: <TValue = unknown>() => declare<TValue>('json'),
+  json: ((schema?: StandardSchemaV1) =>
+    declare<unknown>('json', schema ? { schema } : undefined)) as Utils.Json,
   blob: () => declare<Uint8Array>('blob'),
   enumOf: <const TValues extends readonly [string, ...string[]]>(...values: TValues) =>
     declare<TValues[number]>('enum', { enumValues: values }),
@@ -44,6 +47,11 @@ export const table = <TName extends string, TShape extends Schema.Shape>(
       entries
         .filter(([, def]) => def.meta.defaultValue !== null)
         .map(([columnName, def]) => [columnName, def.meta.defaultValue!]),
+    ),
+    schemas: Object.fromEntries(
+      entries
+        .filter(([, def]) => def.meta.schema !== null)
+        .map(([columnName, def]) => [columnName, def.meta.schema!]),
     ),
     validate: options?.validate ?? null,
     log: options?.log ?? true,

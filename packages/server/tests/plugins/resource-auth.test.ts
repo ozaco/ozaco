@@ -5,7 +5,7 @@
  * resource. Regression for "expired tokens could still connect to realtime".
  */
 import { column, DbClient, table } from 'db:core'
-import { createServer } from 'server:core'
+import { Server } from 'server:core'
 import type { AuthDef } from 'server:plugins'
 import { Auth, crud, JwtAuth } from 'server:plugins'
 import { run, sleep, until } from 'std:effect'
@@ -77,7 +77,7 @@ function* boot(sessionTtlMs: number) {
     },
   })
   const open = crud(openTable)
-  const server = yield* createServer({
+  const server = yield* Server.actions.create({
     services: [guarded, open],
     edge: BunEdge,
     plugins: [JwtAuth.use({ provider: provider(), secret: 'test-secret', sessionTtlMs }), Auth],

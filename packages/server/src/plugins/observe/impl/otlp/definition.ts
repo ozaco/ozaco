@@ -35,7 +35,7 @@ const OtlpExporterImpl = ObserveExporter.implement<OtlpDef.Context, [options: Ot
     if (!kernel) {
       return yield* fail(
         ServerErrors.Configuration,
-        'OtlpExporter must be installed by createServer',
+        'OtlpExporter must be installed by Server.actions.create',
       )
     }
 

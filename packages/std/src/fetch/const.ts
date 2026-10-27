@@ -3,7 +3,7 @@
  * decoding): query keys of `url.full` / `url.query` and — on a server — captured header names and
  * body / frame keys. The OTel semconv list (presigned S3 / GCS / Azure signatures) plus the usual
  * secrets. A list of your own replaces it (`FetchClient.use({ sensitiveKeys })`,
- * `createServer({ observe: { capture: { sensitiveKeys } } })`): `[...SENSITIVE_KEYS, 'my_key']`
+ * `Server.actions.create({ observe: { capture: { sensitiveKeys } } })`): `[...SENSITIVE_KEYS, 'my_key']`
  * adds to it.
  */
 export const SENSITIVE_KEYS: readonly string[] = Object.freeze([

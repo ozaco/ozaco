@@ -26,7 +26,7 @@ export function* openEdge(): Operation<Helpers.EdgeState> {
   if (!kernel) {
     return yield* fail(
       ServerErrors.Configuration,
-      'an Edge must be installed by createServer (options.edge)',
+      'an Edge must be installed by Server.actions.create (options.edge)',
     )
   }
 

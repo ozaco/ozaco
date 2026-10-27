@@ -11,7 +11,7 @@
  */
 import { where } from 'db:core'
 import type { ServerDef, ServiceDef } from 'server:core'
-import { action, createServer, ServerErrors, service } from 'server:core'
+import { action, Server, ServerErrors, service } from 'server:core'
 import type { AuthDef } from 'server:plugins'
 import { Auth, AuthStrategy, Cache, crud, Resilience, StaticAuth } from 'server:plugins'
 import type { Operation } from 'std:effect'
@@ -121,7 +121,10 @@ const withServer = async (
       yield* storage()
       yield* tracer.plugin.use()
 
-      const server = yield* createServer({ services: [...services], plugins: [...plugins] })
+      const server = yield* Server.actions.create({
+        services: [...services],
+        plugins: [...plugins],
+      })
 
       yield* body(server as ServerDef.Handle<AnyType>)
     }),

@@ -1,4 +1,4 @@
-import { createServer, Edge } from 'server:core'
+import { Edge, Server } from 'server:core'
 import { Cors } from 'server:plugins'
 import { run, until } from 'std:effect'
 import { unwrap } from 'std:result'
@@ -18,7 +18,7 @@ describe('cors', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services: [todos],
           edge: BunEdge,
           plugins: [Cors.use({ origins: ['https://app.test'], credentials: true })],
@@ -97,7 +97,7 @@ describe('cors', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services: [todos],
           edge: BunEdge,
           plugins: [Cors.use({ origins: ['https://app.test'] })],

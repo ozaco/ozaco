@@ -1,4 +1,4 @@
-import { createServer, Edge } from 'server:core'
+import { Edge, Server } from 'server:core'
 import { crud } from 'server:plugins'
 import { run, sleep, until } from 'std:effect'
 import { unwrap } from 'std:result'
@@ -29,7 +29,7 @@ describe('resource', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services: [todos],
           edge: BunEdge,
         })
@@ -127,7 +127,7 @@ describe('resource', () => {
         // a tiny replay window so a spaced `since` resume is provably current (silent)
         yield* storage({ replayWindowMs: 10 })
 
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services: [todos],
           edge: BunEdge,
         })

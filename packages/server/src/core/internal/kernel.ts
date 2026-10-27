@@ -236,7 +236,10 @@ export function* callRemote(
 
 export function* carrierOf(kernel: ServerDef.Context): Operation<CarrierDef> {
   if (!kernel.carrier) {
-    return yield* fail(ServerErrors.Configuration, 'the server has no carrier yet (createServer)')
+    return yield* fail(
+      ServerErrors.Configuration,
+      'the server has no carrier yet (Server.actions.create)',
+    )
   }
 
   return kernel.carrier

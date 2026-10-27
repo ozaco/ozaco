@@ -5,7 +5,7 @@
  * complains once per failure streak (never as telemetry, never into a request).
  */
 import type { ObserveDef } from 'server:core'
-import { createServer, ObserveExporter, Server } from 'server:core'
+import { ObserveExporter, Server } from 'server:core'
 import { createSink } from 'server:internal'
 import type { Operation } from 'std:effect'
 import { attempt, run, sleep, spawn, until } from 'std:effect'
@@ -79,7 +79,7 @@ describe('observe/otlp — content', () => {
         await run(function* () {
           yield* storage()
 
-          const server = yield* createServer({
+          const server = yield* Server.actions.create({
             services: [todos],
             name: 'otlp-demo',
             plugins: [
@@ -158,7 +158,7 @@ describe('observe/otlp — content', () => {
         await run(function* () {
           yield* storage()
 
-          const server = yield* createServer({
+          const server = yield* Server.actions.create({
             services: [todos],
             name: 'otlp-res',
             version: '2.0.0',
@@ -224,7 +224,7 @@ describe('observe/otlp — metrics', () => {
         await run(function* () {
           yield* storage()
 
-          const server = yield* createServer({
+          const server = yield* Server.actions.create({
             services: [todos],
             name: 'otlp-metrics',
             edge: BunEdge,
@@ -350,7 +350,7 @@ describe('observe/otlp — active requests', () => {
         await run(function* () {
           yield* storage()
 
-          const server = yield* createServer({
+          const server = yield* Server.actions.create({
             services: [todos],
             name: 'otlp-active',
             edge: BunEdge,
@@ -410,7 +410,7 @@ describe('observe/otlp — lifecycle', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services: [todos],
           name: 'otlp-beat',
           plugins: [
@@ -458,7 +458,7 @@ describe('observe/otlp — transport', () => {
     run(function* () {
       yield* storage()
 
-      const server = yield* createServer({
+      const server = yield* Server.actions.create({
         services: [todos],
         plugins: [
           OtlpExporter.use({
@@ -562,7 +562,7 @@ describe('observe/otlp — transport', () => {
     run(function* () {
       yield* storage()
 
-      const server = yield* createServer({
+      const server = yield* Server.actions.create({
         services: [todos],
         plugins: [
           OtlpExporter.use({
@@ -771,7 +771,7 @@ describe('observe/otlp — transport', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services: [todos],
           plugins: [
             OtlpExporter.use({
@@ -830,7 +830,7 @@ describe('observe/otlp — transport', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services: [todos],
           plugins: [
             OtlpExporter.use({
@@ -860,7 +860,7 @@ describe('observe/otlp — transport', () => {
         yield* logged.transport.use()
         yield* storage()
 
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services: [todos],
           plugins: [
             memory.plugin,

@@ -1,13 +1,13 @@
 /**
- * `dispatchSpan()` (`@ozaco/server/internal`): a server plugin's handle on the dispatch span
+ * `Server.actions.dispatchSpan()` (`@ozaco/server/internal`): a server plugin's handle on the dispatch span
  * `{service}.{action}` — dispatch-level attributes / links / events land THERE even while a span
  * of another plugin (a cache span wrapping the dispatch) is the active one; the no-op handle
  * outside a dispatch and under suppression. `dispatchFailure` classifies a wrapping span's
  * failure like the dispatch it wraps.
  */
 import type { ServerDef } from 'server:core'
-import { action, createServer, Server, service } from 'server:core'
-import { dispatchFailure, dispatchSpan, scopeOf } from 'server:internal'
+import { action, Server, service } from 'server:core'
+import { dispatchFailure, scopeOf } from 'server:internal'
 import { attempt, run } from 'std:effect'
 import { definePlugin } from 'std:plugin'
 import { fail, unwrap } from 'std:result'
@@ -98,13 +98,15 @@ const Writing = definePlugin<ServerDef.PluginContext, []>({
     const hooks: ServerDef.Hooks = {
       name: 'writing',
       *dispatch(call, ctx, next) {
-        const handle = yield* dispatchSpan()
+        const handle = yield* Server.actions.dispatchSpan()
 
         handle.setAttribute('ozaco.test.dispatch_level', true)
         seenFrom.dispatch.push(handle.context.spanId)
         seenFrom.active.push((yield* Trace.actions.current()).context.spanId)
         // suppressed code gets the no-op handle, even inside a dispatch
-        seenFrom.muted.push((yield* Trace.actions.suppressed(() => dispatchSpan())).recording)
+        seenFrom.muted.push(
+          (yield* Trace.actions.suppressed(() => Server.actions.dispatchSpan())).recording,
+        )
 
         return yield* next(call, ctx)
       },
@@ -114,7 +116,7 @@ const Writing = definePlugin<ServerDef.PluginContext, []>({
   },
 }).build()
 
-describe('dispatchSpan()', () => {
+describe('Server.actions.dispatchSpan()', () => {
   it('a plugin writes on the DISPATCH span while a wrapping cache span is the active one', async () => {
     const seen = spy()
     let outside: TraceDef.SpanHandle | null = null
@@ -124,7 +126,7 @@ describe('dispatchSpan()', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services: [shop],
           plugins: [seen.plugin.use(), Wrapping.use(), Writing.use()],
         })
@@ -132,9 +134,9 @@ describe('dispatchSpan()', () => {
         yield* server.start()
         yield* server.call(shop, 'buy', {})
         yield* attempt(server.call(shop, 'refuse', {}))
-        outside = yield* dispatchSpan()
+        outside = yield* Server.actions.dispatchSpan()
         yield* Server.actions.span('outside', function* () {
-          inSpan = yield* dispatchSpan()
+          inSpan = yield* Server.actions.dispatchSpan()
         })
         yield* server.stop()
       }),

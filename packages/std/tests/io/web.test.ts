@@ -116,6 +116,10 @@ const UNSUPPORTED_ACTIONS: string[] = [
   'generateKeyPair',
   'sign',
   'verify',
+  'hashFile',
+  'password.hash',
+  'password.verify',
+  'password.reject',
   'writeFlow',
   'read',
   'readText',
@@ -135,8 +139,13 @@ const UNSUPPORTED_ACTIONS: string[] = [
   'chmod',
   'symlink',
   'readlink',
+  'realpath',
   'exec',
   'spawn',
+  'run',
+  'processAlive',
+  'signal',
+  'lock',
   'tcpListen',
   'tcpConnect',
   'udpBind',
@@ -152,7 +161,10 @@ describe('WebIO unsupported actions', () => {
     const outcome = await run(function* () {
       yield* WebIO.use()
 
-      const action = (IO.actions as AnyType)[name] as (...args: AnyType[]) => AnyType
+      // a dotted name is a nested action group (`password.hash`)
+      const action = name.split('.').reduce((group, key) => group[key], IO.actions as AnyType) as (
+        ...args: AnyType[]
+      ) => AnyType
       const result = yield* attempt(() => action('/x', '/y'))
 
       return isFailure(result) ? [result.error, result.message] : 'no-failure'
@@ -180,7 +192,7 @@ describe('WebIO unsupported actions', () => {
   it('the table covers every unsupported slot in web.ts', () => {
     // guard against the table drifting from the impl: count the `unsupported(` wirings in the source
     const source = readFileSync(join(import.meta.dir, '../../src/io/impl/web.ts'), 'utf8')
-    const wired = [...source.matchAll(/^\s+(\w+): unsupported\('(\w+)'\)/gmu)].map(m => m[2])
+    const wired = [...source.matchAll(/^\s+(\w+): unsupported\('([\w.]+)'\)/gmu)].map(m => m[2])
     const flows = [...source.matchAll(/^\s+(\w+): \(\) => unsupportedFlow\('(\w+)'\)/gmu)].map(
       m => m[2],
     )

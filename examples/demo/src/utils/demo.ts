@@ -2,7 +2,7 @@
  * service node, picked by plain options (no environment variables — each deployment shape is
  * an entrypoint under `scripts/`). */
 import type { ServerDef } from 'server:core'
-import { createServer, Edge } from 'server:core'
+import { Edge, Server } from 'server:core'
 import {
   Auth,
   Cache,
@@ -111,7 +111,7 @@ export function* createDemo(
     plugins.push(OpenObserveExporter.use(options.openobserve))
   }
 
-  const app = yield* createServer({
+  const app = yield* Server.actions.create({
     services,
     role,
     ...(options.hosted && options.hosted.length > 0 ? { hosted: [...options.hosted] } : {}),

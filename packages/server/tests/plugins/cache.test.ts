@@ -1,5 +1,5 @@
 import { Kv, useDb } from 'db:core'
-import { action, createServer, service } from 'server:core'
+import { action, Server, service } from 'server:core'
 import { Cache } from 'server:plugins'
 import type { Operation } from 'std:effect'
 import { all, attempt, run, sleep } from 'std:effect'
@@ -148,7 +148,7 @@ describe('cache', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({ services: [svc], plugins: [Cache] })
+        const server = yield* Server.actions.create({ services: [svc], plugins: [Cache] })
 
         yield* server.start()
         expect(yield* server.call(svc, 'get', { id: 'a' })).toEqual({ id: 'a', n: 1 })
@@ -194,7 +194,7 @@ describe('cache — telemetry', () => {
         yield* storage()
         yield* tracer.plugin.use()
 
-        const server = yield* createServer({ services: [svc], plugins: [Cache] })
+        const server = yield* Server.actions.create({ services: [svc], plugins: [Cache] })
 
         expect(yield* server.call(svc, 'get', { id: 'a' })).toEqual({ id: 'a', n: 1 })
         expect(yield* server.call(svc, 'get', { id: 'a' })).toEqual({ id: 'a', n: 1 })
@@ -258,7 +258,7 @@ describe('cache — telemetry', () => {
         yield* storage()
         yield* tracer.plugin.use()
 
-        const server = yield* createServer({ services: [svc], plugins: [Cache] })
+        const server = yield* Server.actions.create({ services: [svc], plugins: [Cache] })
 
         const both = yield* all([
           server.call(svc, 'get', { id: 'slow-x' }),
@@ -316,7 +316,7 @@ describe('cache — telemetry', () => {
         yield* storage()
         yield* tracer.plugin.use()
 
-        const server = yield* createServer({ services: [svc], plugins: [Cache] })
+        const server = yield* Server.actions.create({ services: [svc], plugins: [Cache] })
         const outcomes = yield* all([
           attempt(server.call(svc, 'get', { id: 'bad-slow' })),
           attempt(server.call(svc, 'get', { id: 'bad-slow' })),
@@ -359,7 +359,7 @@ describe('cache — telemetry', () => {
         yield* logger.plugin.use()
         yield* tracer.plugin.use()
 
-        const server = yield* createServer({ services: [svc], plugins: [Cache] })
+        const server = yield* Server.actions.create({ services: [svc], plugins: [Cache] })
 
         yield* server.call(svc, 'bump')
         kv.broken.on = true
@@ -410,7 +410,7 @@ describe('cache — telemetry', () => {
         yield* kv.install()
         yield* tracer.plugin.use()
 
-        const server = yield* createServer({ services: [svc], plugins: [Cache] })
+        const server = yield* Server.actions.create({ services: [svc], plugins: [Cache] })
 
         kv.broken.on = true
         yield* server.call(svc, 'bump')
@@ -442,7 +442,7 @@ describe('cache — telemetry', () => {
         yield* DefaultLogger.use({ level: LogLevel.error })
         yield* tracer.plugin.use()
 
-        const server = yield* createServer({ services: [svc], plugins: [Cache] })
+        const server = yield* Server.actions.create({ services: [svc], plugins: [Cache] })
 
         yield* server.start()
         kv.broken.on = true
@@ -485,7 +485,7 @@ describe('cache — telemetry', () => {
         yield* logger.plugin.use()
         yield* tracer.plugin.use()
 
-        const server = yield* createServer({ services: [svc], plugins: [Cache] })
+        const server = yield* Server.actions.create({ services: [svc], plugins: [Cache] })
 
         yield* server.start()
 

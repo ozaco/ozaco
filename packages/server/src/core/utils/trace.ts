@@ -39,12 +39,12 @@ export const scopeOf = (plugin?: string): TraceDef.InstrumentationScope => ({
 })
 
 /**
- * Resolve `createServer`'s `trace` / `observe` / `errors` options into the kernel's settings
+ * Resolve `Server.actions.create`'s `trace` / `observe` / `errors` options into the kernel's settings
  * (defaults applied): inbound `'link'`, `traceresponse` on, `serviceName: 'service'`, namespace =
  * the app name, capture all off. `env` reads `OTEL_SERVICE_NAME` (the node-level name unless the
  * option fixes one) and `OTEL_RESOURCE_ATTRIBUTES` (laid UNDER the node's own resource — every
  * sink, store and exporters alike, carries them). The node-level resource still lacks
- * `ozaco.carrier.name` — createServer adds it once the carrier is installed, BEFORE tracing is
+ * `ozaco.carrier.name` — Server.actions.create adds it once the carrier is installed, BEFORE tracing is
  * enabled (`resourceOf` caches).
  */
 export const settingsOf = (
@@ -102,7 +102,7 @@ export const settingsOf = (
  * The resource of one record: `service.name` = the record's `service` (per-service mode) else
  * the node-level name, `service.instance.id` = the node, over the kernel's node-level resource.
  * One frozen object per name (the kernel's `telemetry.resource` must be complete before the
- * first record — createServer enables tracing after it is).
+ * first record — Server.actions.create enables tracing after it is).
  */
 export const resourceOf = (
   kernel: ServerDef.Context,

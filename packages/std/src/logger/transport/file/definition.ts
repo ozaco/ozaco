@@ -30,12 +30,19 @@ const FileTransportImpl = LoggerTransport.implement<FileDef.Context, [options: F
       )
     }
 
+    const present = yield* IO.actions.exists(options.path)
+
+    if (options.mode !== undefined && present) {
+      yield* IO.actions.chmod(options.path, options.mode)
+    }
+
     const context: FileDef.Context = {
       name,
       level: options.level ?? LogLevel.trace,
 
       buffer: [],
       limit: Math.max(0, options.bufferSize ?? 0),
+      size: options.rotate && present ? (yield* IO.actions.stat(options.path)).size : 0,
       format:
         options.format ??
         (entry => toNdjson(entry, options.msgKey ?? 'msg', options.errorKey ?? 'err')),

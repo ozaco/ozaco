@@ -25,12 +25,22 @@ export const createBreaker = (options: Utils.BreakerOptions): Utils.Breaker => {
   let terminal = false
   let trial = false
   let reason: unknown = undefined
+  let announced: Utils.BreakerState = 'closed'
+
+  /** `onChange`, once per transition. */
+  const announce = (next: Utils.BreakerState) => {
+    if (next !== announced) {
+      announced = next
+      options.onChange?.(next, reason)
+    }
+  }
 
   const open = (cause: unknown, final: boolean) => {
     openedAt = now()
     terminal = final
     reason = cause
     trial = false
+    announce('open')
   }
 
   const state = (): Utils.BreakerState => {
@@ -64,6 +74,7 @@ export const createBreaker = (options: Utils.BreakerOptions): Utils.Breaker => {
 
     if (probing) {
       trial = true
+      announce('half-open')
     }
 
     let settled = false
@@ -83,6 +94,7 @@ export const createBreaker = (options: Utils.BreakerOptions): Utils.Breaker => {
         openedAt = null
         trial = false
         reason = undefined
+        announce('closed')
 
         return outcome.value
       }
@@ -121,6 +133,7 @@ export const createBreaker = (options: Utils.BreakerOptions): Utils.Breaker => {
       terminal = false
       trial = false
       reason = undefined
+      announce('closed')
     },
 
     get reason() {

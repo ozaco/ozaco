@@ -6,16 +6,7 @@
 import type { Change } from 'db:core'
 import { useDb } from 'db:core'
 import type { ObserveDef, ServerDef } from 'server:core'
-import {
-  action,
-  createServer,
-  ObserveExporter,
-  Server,
-  ServerErrors,
-  service,
-  stream,
-} from 'server:core'
-import { edgeSpan } from 'server:internal'
+import { action, ObserveExporter, Server, ServerErrors, service, stream } from 'server:core'
 import type { Operation } from 'std:effect'
 import { attempt, createQueue, fork, race, run, scoped, sleep, useContext } from 'std:effect'
 import type { LoggerDef } from 'std:logger'
@@ -32,6 +23,7 @@ import { NetworkCarrier } from 'server:impl/carrier/network'
 import { createLink, MemoryTransport } from 'transport:impl/memory'
 import { z } from 'zod'
 
+import { edgeSpan } from '../../src/core/utils/trace'
 import { LABELS, storage, testSchema, todos } from '../helpers'
 
 let installs = 0
@@ -197,7 +189,7 @@ describe('trace spine — kernel spans on std:trace', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({ services: [notes], plugins: [sink.plugin] })
+        const server = yield* Server.actions.create({ services: [notes], plugins: [sink.plugin] })
 
         yield* server.call(notes, 'twice', { text: 'hello' })
       }),
@@ -265,7 +257,7 @@ describe('trace spine — kernel spans on std:trace', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({ services: [notes], plugins: [sink.plugin] })
+        const server = yield* Server.actions.create({ services: [notes], plugins: [sink.plugin] })
 
         const invalid = yield* attempt(server.call(notes, 'write', { text: '' }))
 
@@ -315,7 +307,7 @@ describe('trace spine — kernel spans on std:trace', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({ services: [notes], plugins: [sink.plugin] })
+        const server = yield* Server.actions.create({ services: [notes], plugins: [sink.plugin] })
         const feed = yield* server.events('note.written')
 
         for (let index = 0; index < 34; index += 1) {
@@ -349,7 +341,7 @@ describe('trace spine — kernel spans on std:trace', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({ services: [notes], plugins: [sink.plugin] })
+        const server = yield* Server.actions.create({ services: [notes], plugins: [sink.plugin] })
         const feed = yield* server.events('note.written')
 
         yield* server.call(notes, 'write', { text: 'hi' })
@@ -434,7 +426,7 @@ describe('trace spine — kernel spans on std:trace', () => {
         yield* storage()
 
         const feed = yield* (yield* useDb(testSchema)).changes('todos')
-        const server = yield* createServer({ services: [writer], plugins: [sink.plugin] })
+        const server = yield* Server.actions.create({ services: [writer], plugins: [sink.plugin] })
 
         yield* server.call(writer, 'add', { title: 'traced' })
         metas.push(((yield* feed.next()).value as Change.Event).meta)
@@ -447,7 +439,7 @@ describe('trace spine — kernel spans on std:trace', () => {
         yield* storage()
 
         const feed = yield* (yield* useDb(testSchema)).changes('todos')
-        const server = yield* createServer({ services: [writer] })
+        const server = yield* Server.actions.create({ services: [writer] })
 
         yield* server.call(writer, 'add', { title: 'dark' })
         metas.push(((yield* feed.next()).value as Change.Event).meta)
@@ -484,7 +476,7 @@ describe('trace spine — kernel spans on std:trace', () => {
         yield* DefaultLogger.use({ level: LogLevel.info })
         yield* Capture.use()
 
-        const server = yield* createServer({ services: [notes], plugins: [sink.plugin] })
+        const server = yield* Server.actions.create({ services: [notes], plugins: [sink.plugin] })
 
         yield* server.call(notes, 'both')
       }),
@@ -534,7 +526,7 @@ describe('trace spine — kernel spans on std:trace', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           name: 'shop',
           version: '3.0.0',
           services: [scopes],
@@ -568,7 +560,7 @@ describe('trace spine — kernel spans on std:trace', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({ services: [shape] })
+        const server = yield* Server.actions.create({ services: [shape] })
 
         failed = yield* attempt(server.call(shape, 'bad'))
       }),
@@ -607,7 +599,7 @@ describe('trace spine — kernel spans on std:trace', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({ services: [notes], plugins: [Spy] })
+        const server = yield* Server.actions.create({ services: [notes], plugins: [Spy] })
         const probe = yield* server.call(notes, 'probe')
 
         expect(probe.tracing).toBe(false)
@@ -625,7 +617,7 @@ describe('trace spine — kernel spans on std:trace', () => {
     expect(isSpanId(cids[0])).toBe(true)
   })
 
-  it('a Trace sink enabled around createServer counts as observing (and is not switched off)', async () => {
+  it('a Trace sink enabled around Server.actions.create counts as observing (and is not switched off)', async () => {
     const tracer = memoryTracer()
 
     unwrap(
@@ -633,7 +625,7 @@ describe('trace spine — kernel spans on std:trace', () => {
         yield* storage()
         yield* tracer.plugin.use()
 
-        const server = yield* createServer({ services: [notes] })
+        const server = yield* Server.actions.create({ services: [notes] })
         const probe = yield* server.call(notes, 'probe')
 
         expect(probe.tracing).toBe(true)
@@ -650,10 +642,10 @@ describe('trace spine — kernel spans on std:trace', () => {
     unwrap(
       await run(function* () {
         yield* storage()
-        yield* createServer({ services: [math], plugins: [outer.plugin] })
+        yield* Server.actions.create({ services: [math], plugins: [outer.plugin] })
 
         const nested = yield* scoped(function* () {
-          const inner = yield* createServer({ services: [notes], name: 'nested' })
+          const inner = yield* Server.actions.create({ services: [notes], name: 'nested' })
 
           return yield* inner.call(notes, 'probe')
         })
@@ -672,7 +664,10 @@ describe('trace spine — kernel spans on std:trace', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({ services: [front, math], plugins: [sink.plugin] })
+        const server = yield* Server.actions.create({
+          services: [front, math],
+          plugins: [sink.plugin],
+        })
 
         // `math` stays served by the LocalCarrier but is no longer hosted: the call goes through
         // the carrier (what a `reload` narrowing `hosted` does)
@@ -707,7 +702,7 @@ describe('trace spine — pass-through and node boundaries', () => {
     const carried = unwrap(
       await run(function* () {
         yield* storage()
-        yield* createServer({ services: [notes] })
+        yield* Server.actions.create({ services: [notes] })
 
         return yield* Server.actions.process(
           {
@@ -729,7 +724,7 @@ describe('trace spine — pass-through and node boundaries', () => {
     const forwarded = (headers: Record<string, string>) =>
       run(function* () {
         yield* storage()
-        yield* createServer({
+        yield* Server.actions.create({
           services: [notes],
           trace: { trust: probe => probe.headers.get('x-internal') === 'yes' },
         })
@@ -793,12 +788,12 @@ describe('trace spine — pass-through and node boundaries', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({ services: [math], plugins: [outer.plugin] })
+        const server = yield* Server.actions.create({ services: [math], plugins: [outer.plugin] })
 
         yield* server.start()
 
         yield* scoped(function* () {
-          const nested = yield* createServer({
+          const nested = yield* Server.actions.create({
             services: [notes],
             name: 'nested',
             plugins: [inner.plugin],
@@ -839,7 +834,7 @@ describe('trace spine — across a network carrier (MemoryTransport)', () => {
           scoped(function* () {
             yield* storage()
             yield* MemoryTransport.use({ prefix: 'app', link })
-            yield* createServer({
+            yield* Server.actions.create({
               services: [math],
               carrier: NetworkCarrier,
               name: 'app',
@@ -856,7 +851,7 @@ describe('trace spine — across a network carrier (MemoryTransport)', () => {
           yield* storage()
           yield* MemoryTransport.use({ prefix: 'app', link })
 
-          const server = yield* createServer({
+          const server = yield* Server.actions.create({
             services: [front],
             carrier: NetworkCarrier,
             name: 'app',
@@ -1112,7 +1107,7 @@ describe('trace spine — across a network carrier (MemoryTransport)', () => {
             scoped(function* () {
               yield* storage()
               yield* MemoryTransport.use({ prefix: 'app', link })
-              yield* createServer({ services, carrier, name: 'app', instance, plugins })
+              yield* Server.actions.create({ services, carrier, name: 'app', instance, plugins })
               ready.add(undefined)
               yield* sleep(60_000)
             }),
@@ -1131,7 +1126,7 @@ describe('trace spine — across a network carrier (MemoryTransport)', () => {
           yield* storage()
           yield* MemoryTransport.use({ prefix: 'app', link })
 
-          const server = yield* createServer({
+          const server = yield* Server.actions.create({
             services: [entry, relay],
             hosted: ['entry'],
             carrier,
@@ -1187,7 +1182,7 @@ describe('trace spine — across a network carrier (MemoryTransport)', () => {
           scoped(function* () {
             yield* storage()
             yield* MemoryTransport.use({ prefix: 'app', link })
-            yield* createServer({
+            yield* Server.actions.create({
               services: [board],
               carrier: NetworkCarrier.use({ presence: false }),
               name: 'app',
@@ -1205,7 +1200,7 @@ describe('trace spine — across a network carrier (MemoryTransport)', () => {
           yield* MemoryTransport.use({ prefix: 'app', link })
 
           // a gateway that knows the declaration (its `status`) but hosts nothing
-          const server = yield* createServer({
+          const server = yield* Server.actions.create({
             services: [board],
             role: 'gateway',
             carrier: NetworkCarrier.use({ presence: false }),
@@ -1246,7 +1241,7 @@ describe('trace spine — across a network carrier (MemoryTransport)', () => {
         yield* storage()
         yield* tracer.plugin.use()
 
-        const server = yield* createServer({ services: [todos], timeoutMs: 100 })
+        const server = yield* Server.actions.create({ services: [todos], timeoutMs: 100 })
 
         late = yield* attempt(server.call(todos, 'slowCancel', { ms: 300 }))
       }),
@@ -1271,7 +1266,7 @@ describe('trace spine — across a network carrier (MemoryTransport)', () => {
         yield* storage()
         yield* MemoryTransport.use({ prefix: 'app', link: createLink() })
 
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services: [front],
           carrier: NetworkCarrier.use({ presence: false }),
           name: 'app',

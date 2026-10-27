@@ -6,6 +6,7 @@ import {
   countOp,
   createManyOp,
   createOp,
+  dbOp,
   docSchema,
   ERRORS,
   getOp,
@@ -24,7 +25,8 @@ import type { ResourceDef } from './types/resource'
  * `crud(table, options)` builds the service; the RUNNABLE ops on it (`crud.list(table, …)`,
  * `crud.get`, …) are the same pipelines as single calls inside ANY handler — they read the
  * dispatch ctx ambiently (pass `ctx` outside one), so a custom action owns its route, schemas,
- * errors and tags while the crud mechanics stay one `yield*` away. `crud.realtime(table, …)`
+ * errors and tags while the crud mechanics stay one `yield*` away; `crud.db(resource)` is the
+ * resource's SCOPED handle for the running dispatch. `crud.realtime(table, …)`
  * is the delta-watch socket as an `action.socket` entry, `crud.errors` the db failure → status
  * map, and `crud.schemas` the derived building blocks (`doc`/`insert`/`patch`/`listInput`/
  * `page`) for the custom action's own declarations.
@@ -69,6 +71,12 @@ export const crud = Object.assign(builder, {
   ) => Operation<readonly Schema.Infer<TTable>[]>,
 
   realtime: realtimeAction,
+
+  /** The resource's db handle SCOPED for the running dispatch (the read side of a query, the
+   * write side otherwise; `side` overrides) and typed by its table — what an `extend` action
+   * reads and writes through, so the resource's tenancy holds in its custom actions too. Inside
+   * a handler the ctx is ambient; pass `ctx` outside one. */
+  db: dbOp as Helpers.DbFn,
 
   /** per-action http statuses for the db failures the ops raise — spread into a custom
    * action's `errors`. */

@@ -4,6 +4,10 @@ import type { TraceDef } from 'std:trace'
 
 import type { RouterContext } from 'rou3'
 
+import type { createNode } from '../internal/create'
+import type { openEdge } from '../utils/edge'
+import type { dispatchSpan } from '../utils/trace'
+
 import type { CarrierDef } from './carrier'
 import type { EdgeDef } from './edge'
 import type { OptionsDef } from './options'
@@ -14,6 +18,14 @@ import type { ServiceDef } from './service'
 /** Internal helper shapes the core passes around — collected here so no type lives outside
  * `types/`. */
 export namespace Helpers {
+  /** What `definition/protocol.ts` loads on first use for the `Server` protocol's own actions
+   * (`internal/handlers`): the node builder and the two kernel-bound helpers. */
+  export interface Plumbing {
+    readonly createNode: typeof createNode
+    readonly openEdge: typeof openEdge
+    readonly dispatchSpan: typeof dispatchSpan
+  }
+
   /** A dispatch in flight on this node. */
   export interface Inflight {
     readonly cid: string
@@ -122,7 +134,7 @@ export namespace Helpers {
 
   export type Thunk<T> = () => Operation<T>
 
-  /** What `createServer` hands on once the kernel and its tracer are in. */
+  /** What `Server.actions.create` hands on once the kernel and its tracer are in. */
   export interface NodeBuild {
     readonly role: ServerDef.Role
     readonly hosted: readonly string[]

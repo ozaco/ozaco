@@ -3,7 +3,7 @@
  * `/todos/_realtime` — cleanly or ABRUPTLY, mid-handshake — must never end the observe SSE
  * stream or the store behind it. Regression test for the panel's "live → offline" drops.
  */
-import { createServer, Observe } from 'server:core'
+import { Observe, Server } from 'server:core'
 import { crud, ObservePlugin } from 'server:plugins'
 import { fork, run, sleep, until } from 'std:effect'
 import { unwrap } from 'std:result'
@@ -45,7 +45,7 @@ describe('observe — the live feed under socket churn', () => {
         yield* storage()
 
         const todos = crud(todosTable)
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services: [todos],
           edge: BunEdge,
           plugins: [ObservePlugin.use({ console: true, batch: { waitMs: 10 } })],

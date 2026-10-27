@@ -9,13 +9,17 @@ import { fromReadable } from '../stream/from-readable'
 
 import {
   concatBytes,
+  detachFlags,
   emptyByteFlow,
   inheritedStdinWrite,
+  makeExecResult,
   makeStatus,
   normalizeSpawn,
   resolveStdio,
   toBytes,
+  unlessDetached,
 } from './shared'
+import { openStdio } from './stdio'
 
 /**
  * Run a command to completion with `node:child_process`, buffering stdout/stderr. A non-zero exit
@@ -23,11 +27,12 @@ import {
  */
 export function* nodeExec(cmd: string, args?: readonly string[], options?: IODef.ExecOptions) {
   const config = normalizeSpawn(options)
+  const argv = args ?? []
 
   try {
     return yield* until(
       new Promise<IODef.ExecResult>((resolve, reject) => {
-        const child = childSpawn(cmd, [...(args ?? [])], { ...config })
+        const child = childSpawn(cmd, [...argv], { ...config })
         const out: Uint8Array[] = []
         const err: Uint8Array[] = []
 
@@ -39,11 +44,12 @@ export function* nodeExec(cmd: string, args?: readonly string[], options?: IODef
         // it into `reject` — the promise settles once, so a clean `close` still wins the normal case.
         child.stdin.on('error', reject)
         child.once('close', (code, signal) =>
-          resolve({
-            ...makeStatus(code, signal),
-            stdout: concatBytes(out),
-            stderr: concatBytes(err),
-          }),
+          resolve(
+            makeExecResult([cmd, ...argv], makeStatus(code, signal), {
+              stdout: concatBytes(out),
+              stderr: concatBytes(err),
+            }),
+          ),
         )
 
         if (options?.stdin === undefined) {
@@ -66,17 +72,23 @@ export function* nodeExec(cmd: string, args?: readonly string[], options?: IODef
 export function* nodeSpawn(cmd: string, args?: readonly string[], options?: IODef.SpawnOptions) {
   const config = normalizeSpawn(options)
   const stdio = resolveStdio(options?.stdio)
+  const opened = yield* openStdio(stdio)
 
   let child
 
   try {
     child = childSpawn(cmd, [...(args ?? [])], {
       ...config,
-      stdio: [stdio.stdin, stdio.stdout, stdio.stderr],
+      ...detachFlags(options),
+      stdio: [opened.stdin, opened.stdout, opened.stderr],
     })
   } catch (error) {
+    yield* opened.close()
+
     return yield* fail(IOErrors.SpawnFailed, `failed to spawn "${cmd}"`, asFailure(error, IOErrors))
   }
+
+  yield* opened.close()
 
   // Attach the exit/error listeners eagerly: an unhandled 'error' event would otherwise crash the
   // process, and the settled promise is what `exited()` reads.
@@ -89,10 +101,12 @@ export function* nodeSpawn(cmd: string, args?: readonly string[], options?: IODe
 
   // guard against an unhandled 'error' on child.stdin (EPIPE when the child closed its read end):
   // `write()` surfaces the failure through its own callback; this listener only prevents the crash.
-  // an inherited stream is `null` on the child — every use below checks
+  // a stream that is not piped is `null` on the child — every use below checks
   const { stdin, stdout, stderr } = child
 
   stdin?.on('error', () => {})
+
+  let detached = false
 
   const exited = function* () {
     try {
@@ -107,7 +121,7 @@ export function* nodeSpawn(cmd: string, args?: readonly string[], options?: IODe
   }
 
   const write = function* (chunk: Uint8Array | string) {
-    if (!stdin) {
+    if (!stdin || detached) {
       return yield* inheritedStdinWrite()
     }
 
@@ -139,21 +153,34 @@ export function* nodeSpawn(cmd: string, args?: readonly string[], options?: IODe
   }
 
   const kill = function* (signal?: number | string) {
-    const ok = child.kill(signal as NodeJS.Signals | number | undefined)
+    const ok = child.kill(signal as NodeJS.Signals | number)
 
     if (!ok) {
       return yield* fail(IOErrors.KillFailed, `failed to signal pid ${child.pid ?? -1}`)
     }
   }
 
+  // `unref` lets the event loop exit with the child running; destroying the parent's pipe ends
+  // closes them (the handle's flows end `true` on 'close')
+  const detach = function* () {
+    detached = true
+    child.unref()
+    stdin?.destroy()
+    stdout?.destroy()
+    stderr?.destroy()
+  }
+
+  const isDetached = () => detached
+
   const handle: IODef.ProcessHandle = {
     pid: child.pid ?? -1,
-    stdout: stdout ? fromReadable(stdout) : emptyByteFlow(),
-    stderr: stderr ? fromReadable(stderr) : emptyByteFlow(),
+    stdout: stdout ? unlessDetached(fromReadable(stdout), isDetached) : emptyByteFlow(),
+    stderr: stderr ? unlessDetached(fromReadable(stderr), isDetached) : emptyByteFlow(),
     exited,
     write,
     closeStdin,
     kill,
+    detach,
   }
 
   return handle

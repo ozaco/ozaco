@@ -6,7 +6,7 @@
  * and log records.
  */
 import type { ObserveDef } from 'server:core'
-import { action, createServer, ObserveExporter, Server, service } from 'server:core'
+import { action, ObserveExporter, Server, service } from 'server:core'
 import { StdoutExporter } from 'server:plugins'
 import type { Operation } from 'std:effect'
 import { attempt, run, sleep } from 'std:effect'
@@ -171,7 +171,7 @@ describe('observe exporters', () => {
         await run(function* () {
           yield* storage()
 
-          const server = yield* createServer({
+          const server = yield* Server.actions.create({
             services: [todos],
             plugins: [
               memory.plugin,
@@ -224,7 +224,7 @@ describe('observe exporters', () => {
         await run(function* () {
           yield* storage()
 
-          const server = yield* createServer({
+          const server = yield* Server.actions.create({
             services: [todos, chain],
             name: 'stdout-demo',
             plugins: [memory.plugin, StdoutExporter],
@@ -300,7 +300,10 @@ describe('observe exporters', () => {
         await run(function* () {
           yield* storage()
 
-          const server = yield* createServer({ services: [odd], plugins: [StdoutExporter] })
+          const server = yield* Server.actions.create({
+            services: [odd],
+            plugins: [StdoutExporter],
+          })
 
           yield* server.start()
           yield* server.call(odd, 'go', {})
@@ -329,7 +332,7 @@ describe('observe exporters', () => {
         await run(function* () {
           yield* storage()
 
-          const server = yield* createServer({
+          const server = yield* Server.actions.create({
             services: [todos, chain],
             name: 'parity',
             plugins: [
@@ -461,7 +464,7 @@ describe('observe exporters', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({ services: [todos], plugins: [Outer] })
+        const server = yield* Server.actions.create({ services: [todos], plugins: [Outer] })
 
         yield* server.start()
         yield* server.call(todos, 'create', { title: 'nested' })
@@ -479,7 +482,7 @@ describe('observe exporters', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({ services: [todos] })
+        const server = yield* Server.actions.create({ services: [todos] })
 
         yield* server.start()
         expect((server as AnyType).exporting ?? false).toBe(false)

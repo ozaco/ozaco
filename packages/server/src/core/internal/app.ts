@@ -10,7 +10,7 @@ import type { ServerDef } from '../types/server'
 
 /** The node's shape: role, hosted set, readiness — everything `start()`/`stop()`/`/_health`
  * read. One place decides it (the env convention included), so a deployment is described by
- * `createServer` options alone. */
+ * `Server.actions.create` options alone. */
 export const env = (name: string): string | undefined =>
   (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env?.[name]
 
@@ -23,8 +23,25 @@ const namedServices = (): readonly string[] | undefined => {
   return named && named.length > 0 ? named : undefined
 }
 
-export const roleOf = (options: ServerDef.Options): ServerDef.Role =>
-  options.role ?? (namedServices() ? 'service' : 'monolith')
+/** `SERVICE=gateway` alone names the gateway role — unless a declared service is called that. */
+const gatewayNamed = (options: ServerDef.Options, named: readonly string[]): boolean =>
+  named.length === 1 &&
+  named[0] === 'gateway' &&
+  !options.services.some(def => def.name === 'gateway')
+
+export const roleOf = (options: ServerDef.Options): ServerDef.Role => {
+  if (options.role) {
+    return options.role
+  }
+
+  const named = namedServices()
+
+  if (!named) {
+    return 'monolith'
+  }
+
+  return gatewayNamed(options, named) ? 'gateway' : 'service'
+}
 
 export const hostedOf = (options: ServerDef.Options, role: ServerDef.Role): readonly string[] => {
   if (role === 'gateway') {

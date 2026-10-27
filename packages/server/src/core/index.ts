@@ -1,6 +1,6 @@
 /**
  * `@ozaco/server` — the service/action kernel. Define services with `service()` / `action.*`,
- * build a node with `createServer({ services, edge, carrier, plugins })`, and every other
+ * build a node with `Server.actions.create({ services, edge, carrier, plugins })`, and every other
  * concern — HTTP/WS edges (`@ozaco/server/edge/*`), cross-node carriers
  * (`@ozaco/server/carrier/network`), observability, auth, cache, resilience, docs, resources
  * (`@ozaco/server/plugins`) — is a std plugin the kernel wires in. Streams are branded; "what
@@ -10,18 +10,14 @@
  * carriers and plugins are built on lives in `@ozaco/server/internal`.
  */
 
-export { HEADERS } from './const'
-export { ServerErrors, STATUS_OF } from './errors'
-export { ActiveRequest, CtxRef, RequestRef } from './context'
+export { ServerErrors } from './errors'
 
 export { DbOutcomes } from './definition/outcomes'
 export { Carrier, Edge, Observe, ObserveExporter, Outcomes, Server } from './definition/protocol'
 
 export { serviceErrors } from './utils/errors'
 export { defineEvents } from './utils/events'
-export { statusOf, tagOf } from './utils/failure'
 export { outcomesTable } from './utils/outcomes'
-export { createServer } from './utils/server'
 export { action, ref, refs, service } from './utils/service'
 export { stream } from './utils/stream'
 

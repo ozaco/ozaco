@@ -1,10 +1,18 @@
-import { CHANGES_PREFIX } from '../const'
+import type { Operation } from 'std:effect'
+
+import { CHANGES_PREFIX, FIELDS } from '../const'
 import type { Adapter } from '../types/adapter'
+import type { Database } from '../types/database'
 import type { Helpers } from '../types/helpers'
+import type { Schema } from '../types/schema'
 import type { Spec } from '../types/spec'
+import { where } from '../utils/filter'
 import { isDestructive, isSystemField } from '../utils/is'
 
 import { isLogName } from './log'
+
+/** How many `null` rows one backfill page reads before writing them. */
+const BACKFILL_PAGE = 500
 
 /** The reconcile steps for one table, given its live shape (or `null` when absent). */
 const stepsFor = (
@@ -141,4 +149,50 @@ export function* applyPlan(state: Helpers.Reconciler, plan: Spec.Plan) {
   if (steps.length > 0) {
     yield* state.adapter.migrate(steps)
   }
+}
+
+/**
+ * Apply the insert-time default of every REQUIRED column that has one to the rows holding `null`
+ * there (`DbClient.use({ backfill: true })`): a column added after the rows were written comes
+ * back empty from the adapter, and a required column reading `null` fails every output check
+ * downstream. Through the handle, page by page — every row is written like any other write. A
+ * default that answers `null` itself is left alone; an optional column keeps its `null`s.
+ */
+export function* backfillDefaults(
+  handle: Database.Handle,
+  tables: readonly Schema.Table[],
+): Operation<number> {
+  let filled = 0
+
+  for (const def of tables) {
+    for (const column of def.columns) {
+      const make = def.defaults[column.name]
+      const sample = make?.()
+
+      if (!make || column.optional || sample === null || sample === undefined) {
+        continue
+      }
+
+      for (;;) {
+        const stale = yield* handle
+          .query(def.name)
+          .filter(where.isNull(column.name))
+          .take(BACKFILL_PAGE)
+
+        if (stale.length === 0) {
+          break
+        }
+
+        for (const row of stale) {
+          yield* handle.patch(def.name, (row as Spec.Doc)[FIELDS.id] as string, {
+            [column.name]: make(),
+          })
+
+          filled += 1
+        }
+      }
+    }
+  }
+
+  return filled
 }

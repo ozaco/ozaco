@@ -11,6 +11,32 @@ import type { AnyType } from 'std:shared'
 export type IODef = Plugin<AnyType, unknown[], IODef.Actions>
 
 export namespace IODef {
+  /** `IO.actions.lock(path, options)`. */
+  export interface LockOptions {
+    /** what the holder says about itself (a label, an instance id) — read back by a waiter as
+     * the holder's `record`. JSON-encoded. */
+    readonly record?: unknown
+    /** how long to wait for a live holder to let go (default 0: fail at once). */
+    readonly waitMs?: number | undefined
+    /** how often a waiter asks again (default 100). */
+    readonly pollMs?: number | undefined
+  }
+
+  /** What a lock's `lock.json` holds — who has it. */
+  export interface LockHolder {
+    readonly pid: number
+    /** the holder process's start time (epoch ms) — a reused pid is a different holder. */
+    readonly startedAt: number
+    readonly record: unknown
+  }
+
+  /** A held lock — `release()` lets go (idempotent; the scope's close does the same). */
+  export interface Lock {
+    readonly path: string
+    readonly holder: LockHolder
+    release(): Operation<void>
+  }
+
   export type PathLike = string | URL
 
   /** The close value an IO byte flow settles with: `true` on a clean end, or the failure that interrupted it. */
@@ -146,16 +172,77 @@ export namespace IODef {
   }
 
   /** How a child's standard stream is wired: `'pipe'` hands it to the parent (the handle's
-   * `write` / `stdout` / `stderr`), `'inherit'` shares the parent's own stream (the terminal). */
-  export type StdioMode = 'pipe' | 'inherit'
+   * `write` / `stdout` / `stderr`), `'inherit'` shares the parent's own stream (the terminal),
+   * `'ignore'` attaches the null device. */
+  export type StdioMode = 'pipe' | 'inherit' | 'ignore'
+
+  /** A child's standard stream wired to a FILE: `stdout` / `stderr` are written into it (truncated
+   * unless `append`; a missing file is created with `mode`, the umask still applying), `stdin` is
+   * read from it (`append` / `mode` are ignored there). The parent closes its descriptor right
+   * after the spawn — the child keeps its own. */
+  export interface StdioFile {
+    file: PathLike
+    append?: boolean | undefined
+    mode?: number | undefined
+  }
+
+  /** One stream's wiring: a {@link StdioMode} or a {@link StdioFile}. */
+  export type StdioTarget = StdioMode | StdioFile
 
   /** Options for {@link IODef.Actions.spawn}. */
   export interface SpawnOptions extends ProcessOptions {
     /** One mode for all three streams, or per stream (an omitted stream stays `'pipe'`); default
-     * `'pipe'`. An inherited `stdout` / `stderr` is an EMPTY flow on the handle (it closes `true`
-     * at once — the bytes go straight to the terminal); an inherited `stdin` makes `write` fail
-     * `std:io.stdin-write-failed` and `closeStdin` a no-op. */
-    stdio?: StdioMode | { stdin?: StdioMode; stdout?: StdioMode; stderr?: StdioMode } | undefined
+     * `'pipe'`. A `stdout` / `stderr` that is not piped (inherited, ignored, a file) is an EMPTY
+     * flow on the handle (it closes `true` at once — the bytes go to the terminal, nowhere or the
+     * file); a `stdin` that is not piped makes `write` fail `std:io.stdin-write-failed` and
+     * `closeStdin` a no-op. */
+    stdio?:
+      | StdioMode
+      | { stdin?: StdioTarget; stdout?: StdioTarget; stderr?: StdioTarget }
+      | undefined
+    /** Start the child in its own process group, so the terminal's signals (a Ctrl-C) do not
+     * reach it and it can outlive the parent. The parent still waits for it unless the handle is
+     * {@link ProcessHandle.detach}ed — a daemon is `detached: true` + non-piped streams +
+     * `detach()`. */
+    detached?: boolean | undefined
+    /** Windows: open no console window for the child. Ignored elsewhere. */
+    windowsHide?: boolean | undefined
+  }
+
+  /** A stream wiring for {@link IODef.Actions.run}: everything but `'pipe'` (nothing would read
+   * a pipe there). */
+  export type RunStdioTarget = Exclude<StdioTarget, 'pipe'>
+
+  /** Options for {@link IODef.Actions.run}: the child shares the parent's terminal (`'inherit'`)
+   * unless `stdio` says otherwise, per stream or for all three. */
+  export interface RunOptions extends ProcessOptions {
+    stdio?:
+      | Exclude<StdioMode, 'pipe'>
+      | { stdin?: RunStdioTarget; stdout?: RunStdioTarget; stderr?: RunStdioTarget }
+      | undefined
+  }
+
+  /** Options for {@link IODef.Actions.write}. */
+  export interface WriteOptions {
+    /** `IO_FLAGS.append` and/or `IO_FLAGS.exclusive` (fail `std:io.exists` when the file exists);
+     * other bits are ignored. */
+    flags?: number | undefined
+    /** Write a temporary file next to `path` (`<path>.<random>.tmp`, fsynced) and rename it over
+     * `path`, so a reader never sees a half-written file and a crash leaves the old one whole; a
+     * failed rename removes the temporary file and raises the failure. Not combinable with
+     * `IO_FLAGS.append` (`std:io.unsupported`); with `IO_FLAGS.exclusive` the existence check
+     * comes before the write. */
+    atomic?: boolean | undefined
+    /** The mode the file ends up with — passed to the create, then applied with `chmod` (so an
+     * existing file is changed too and the umask does not apply). */
+    mode?: number | undefined
+  }
+
+  /** Options for {@link IODef.Actions.ensureDir}. */
+  export interface EnsureDirOptions {
+    /** The mode `path` ends up with (applied with `chmod`, so an existing directory is changed
+     * too); the parents this call creates get it masked by the umask. */
+    mode?: number | undefined
   }
 
   /** The host platform, from {@link IODef.Actions.platform}. */
@@ -171,14 +258,68 @@ export namespace IODef {
   /** A digest's text form for {@link IODef.Actions.hash}: lowercase hex or standard base64. */
   export type HashEncoding = 'hex' | 'base64'
 
-  /** `hash` returns the raw digest bytes, or its text form when an `encoding` is given. */
+  /** `hash` returns the raw digest bytes, or its text form when an `encoding` is given; a string
+   * is digested as its UTF-8 bytes. */
   export interface Hash {
-    (algorithm: HashAlgorithm, data: Uint8Array): Operation<Uint8Array>
+    (algorithm: HashAlgorithm, data: Uint8Array | string): Operation<Uint8Array>
     (
       algorithm: HashAlgorithm,
-      data: Uint8Array,
+      data: Uint8Array | string,
       options: { encoding: HashEncoding },
     ): Operation<string>
+  }
+
+  /** `hashFile` digests a file as it is read (bounded memory, whatever its size): the raw digest
+   * bytes, or its text form when an `encoding` is given. */
+  export interface HashFile {
+    (path: PathLike, algorithm: HashAlgorithm): Operation<Uint8Array>
+    (
+      path: PathLike,
+      algorithm: HashAlgorithm,
+      options: { encoding: HashEncoding },
+    ): Operation<string>
+  }
+
+  /** The typed readers the `env` mapper receives beside the raw map. Each answers the variable
+   * parsed, the fallback when it is unset or empty, `undefined` when there is neither (the key is
+   * then required unless listed `optional`); a value that does not parse fails the whole read
+   * `std:io.invalid-env` once the mapper returns. `bool` reads `1 / true / yes / on` and
+   * `0 / false / no / off` (case-insensitive); `list` splits on commas, trims, drops empties. */
+  export interface EnvReader {
+    str(name: string): string | undefined
+    str(name: string, fallback: string): string
+    int(name: string): number | undefined
+    int(name: string, fallback: number): number
+    bool(name: string): boolean | undefined
+    bool(name: string, fallback: boolean): boolean
+    list(name: string): readonly string[] | undefined
+    list(name: string, fallback: readonly string[]): readonly string[]
+  }
+
+  /** Options for {@link IODef.Password.hash}: `argon2id` (the default) and `bcrypt` run on the
+   * runtime's native hasher (Bun; `std:io.unsupported` on Node), `scrypt` on `node:crypto` on
+   * Bun and Node alike. */
+  export interface PasswordOptions {
+    algorithm?: 'argon2id' | 'bcrypt' | 'scrypt' | undefined
+    /** argon2id: memory in KiB (Bun's default 65536). */
+    memoryCost?: number | undefined
+    /** argon2id: iterations (Bun's default 2). */
+    timeCost?: number | undefined
+    /** bcrypt: the log2 work factor (Bun's default 10); scrypt: log2 N (default 16, at most 20). */
+    cost?: number | undefined
+  }
+
+  /** `IO.actions.password`: hashing for stored credentials — a self-describing PHC digest
+   * (`$argon2id$…`, `$2b$…`, `$scrypt$…`) `verify` reads the algorithm from. */
+  export interface Password {
+    hash(plain: string, options?: PasswordOptions): Operation<string>
+    /** `true` only for the password that made `digest`: a wrong password, a malformed or foreign
+     * digest answer `false` — never a failure. A digest whose algorithm this runtime cannot run
+     * (an argon2 / bcrypt one on Node) fails `std:io.unsupported`. */
+    verify(plain: string, digest: string): Operation<boolean>
+    /** Answer `false` after the time a real `verify` takes — for the user that does not exist,
+     * so a caller cannot tell the two apart by timing. */
+    reject(plain: string): Operation<false>
   }
 
   /** Options for {@link IODef.Actions.toTerminal}. */
@@ -201,6 +342,14 @@ export namespace IODef {
   export interface ExecResult extends ProcessStatus {
     stdout: Uint8Array
     stderr: Uint8Array
+    /** Everything the child printed, UTF-8 decoded: stderr first, then stdout. */
+    text: () => string
+    /** What the child said: `text()` trimmed — or, when it printed nothing, its signal name, else
+     * `exit code <n>`. */
+    said: () => string
+    /** `text()` when the command succeeded; else fails `tag` with the message
+     * `<cmd> <args…>\n<said()>` — the one wrapper every "run this and give me its output" needs. */
+    must: (tag: string) => Operation<string>
   }
 
   /** A handle to a child process spawned via {@link IODef.Actions.spawn}. */
@@ -223,6 +372,11 @@ export namespace IODef {
      * impls take either. On a child that has ALREADY exited NodeIO fails `std:io.kill-failed`
      * (`child.kill()` reports the signal was not delivered); BunIO resolves silently. */
     kill: (signal?: number | string) => Operation<void>
+    /** Let the child outlive this process: the parent stops waiting for it (its event loop no
+     * longer holds the child) and closes its ends of the piped streams — the handle's flows end
+     * `true`, `write` fails afterwards; `exited()` still answers while the parent runs. The child
+     * keeps running on its own only when it was spawned `detached` with non-piped streams. */
+    detach: () => Operation<void>
   }
 
   /** An Ed25519 key pair (DER bytes: public = SPKI, private = PKCS8), from {@link IODef.Actions.generateKeyPair}. */
@@ -453,8 +607,12 @@ export namespace IODef {
   }
 
   export type Actions = {
+    /** Read the environment through `mapper`: the raw map and the typed {@link EnvReader}
+     * (`env.int('PORT', 3000)`, `env.bool('EDGE', true)`, `env.list('SERVICE')`). A key left
+     * `undefined` fails `std:io.missing-env` unless listed `optional`; a value a reader cannot
+     * parse fails `std:io.invalid-env`. */
     env: <R extends Record<string, unknown>, K extends keyof R = never>(
-      mapper: (data: Record<string, string | undefined>) => R,
+      mapper: (data: Record<string, string | undefined>, env: EnvReader) => R,
       optional?: readonly K[],
     ) => Operation<{ [P in keyof R]: P extends K ? R[P] : NonNullable<R[P]> }>
 
@@ -477,8 +635,14 @@ export namespace IODef {
      * also for a token at or behind the local floor, which is accepted but moves nothing. */
     observeHlc: (token: string, options?: ObserveHlcOptions) => Operation<boolean>
     hmac: (algorithm: HashAlgorithm, key: Uint8Array, data: Uint8Array) => Operation<Uint8Array>
-    /** Digest `data`; with `{ encoding: 'hex' | 'base64' }` the digest comes back as text. */
+    /** Digest `data` (bytes, or a string as UTF-8); with `{ encoding: 'hex' | 'base64' }` the
+     * digest comes back as text. */
     hash: Hash
+    /** Digest a file as it is read — never loads it whole; with `{ encoding }` as text. A missing
+     * file fails `std:io.not-found`. Not on WebIO. */
+    hashFile: HashFile
+    /** Password hashing (see {@link Password}). Not on WebIO. */
+    password: Password
 
     /** Encrypt with a secret (AES-256-GCM, key derived from the secret via scrypt). Reversible via {@link decrypt}. */
     encrypt: (data: Uint8Array | string, secret: string) => Operation<Uint8Array>
@@ -520,17 +684,11 @@ export namespace IODef {
      * decodes non-UTF-8 through `TextDecoder`, so only WHATWG labels work there (`'latin1'`,
      * `'utf-16le'`, …) and `'hex'` / `'base64'` throw an untagged `RangeError`. */
     readText: (path: PathLike, encoding?: string) => Operation<string>
-    /** Write a whole file. `flags`: `IO_FLAGS.append` and/or `IO_FLAGS.exclusive` (fail when the
-     * file exists); other bits are ignored. Missing parent directories: BunIO WITHOUT flags goes
-     * through `Bun.write`, which creates them; BunIO with any flag and NodeIO always use
-     * `fs.writeFile` and fail `ENOENT`. Call {@link ensureDir} first for portable code. */
-    write: (
-      path: PathLike,
-      data: Uint8Array | string,
-      options?: {
-        flags?: number
-      },
-    ) => Operation<void>
+    /** Write a whole file — see {@link WriteOptions} for `flags`, `atomic` and `mode`. Missing
+     * parent directories: BunIO WITHOUT options goes through `Bun.write`, which creates them;
+     * BunIO with any option and NodeIO always use `node:fs` and fail `ENOENT`. Call
+     * {@link ensureDir} first for portable code. */
+    write: (path: PathLike, data: Uint8Array | string, options?: WriteOptions) => Operation<void>
     /** Append bytes, creating the file when missing. Typed bytes-only on purpose (encode text
      * yourself, or use {@link write} with `IO_FLAGS.append`, which takes a string); both impls
      * forward to `fs.appendFile`, which would accept a string at runtime. */
@@ -558,11 +716,15 @@ export namespace IODef {
         flags?: number
       },
     ) => Operation<void>
+    /** Remove a file or directory. `empty: true` removes a DIRECTORY only while it is empty
+     * (`rmdir`) — `std:io.not-empty` otherwise, the lock-release idiom; `force` makes a missing
+     * path a no-op either way. */
     rm: (
       path: PathLike,
       options?: {
         recursive?: boolean
         force?: boolean
+        empty?: boolean
       },
     ) => Operation<void>
     exists: (path: PathLike) => Operation<boolean>
@@ -574,7 +736,9 @@ export namespace IODef {
         recursive?: boolean
       },
     ) => Operation<string[]>
-    ensureDir: (path: PathLike) => Operation<void>
+    /** Create the directory and its missing parents; an existing one is untouched unless `mode`
+     * is given — see {@link EnsureDirOptions}. */
+    ensureDir: (path: PathLike, options?: EnsureDirOptions) => Operation<void>
     /** Create the file (and its parent directories) when missing; an existing file is untouched.
      * When `path` is an existing DIRECTORY NodeIO is a no-op, BunIO fails with the raw `EISDIR`. */
     ensureFile: (path: PathLike) => Operation<void>
@@ -605,19 +769,47 @@ export namespace IODef {
       type?: 'file' | 'dir' | 'junction',
     ) => Operation<void>
     readlink: (path: PathLike) => Operation<string>
+    /** The canonical absolute path: every symlink along the way resolved (`/tmp` → `/private/tmp`
+     * on macOS), `.` / `..` collapsed — the form to compare two paths by. On Windows the native
+     * resolver, so an 8.3 short name (`RUNNER~1`) comes back long. A missing entry fails
+     * `std:io.not-found`. */
+    realpath: (path: PathLike) => Operation<string>
     /** Run a command to completion. A binary that cannot be started fails `std:io.exec-spawn-failed`
      * on BunIO and `std:io.exec-failed` on NodeIO (Node reports it through the same callback as a
-     * failing command). */
+     * failing command). The result's `text()` / `said()` / `must(tag)` read what it printed. */
     exec: (cmd: string, args?: readonly string[], options?: ExecOptions) => Operation<ExecResult>
     /** Start a child process. A binary that cannot be started fails at once with
      * `std:io.spawn-failed` on BunIO; on NodeIO the handle is returned and its `exited()` fails
      * `std:io.process-error` (Node reports the spawn error asynchronously). `stdio: 'inherit'`
-     * (or per stream) shares the parent's terminal instead of piping — see {@link SpawnOptions}. */
+     * (or per stream) shares the parent's terminal instead of piping, `'ignore'` / a file wire
+     * the null device or a file — see {@link SpawnOptions}; `detached` + `handle.detach()` let it
+     * outlive the parent. */
     spawn: (
       cmd: string,
       args?: readonly string[],
       options?: SpawnOptions,
     ) => Operation<ProcessHandle>
+    /** Run a command on the parent's terminal (stdio inherited unless {@link RunOptions} says
+     * otherwise) and answer its exit status — `spawn` + `exited()`, for the `docker build` /
+     * `git clone` kind of step whose output belongs to the user. A binary that cannot be started
+     * fails like `spawn` does on the impl. */
+    run: (cmd: string, args?: readonly string[], options?: RunOptions) => Operation<ProcessStatus>
+    /** Whether a process with this pid exists — a signal-0 probe: `true` also for a process this
+     * one may not signal (`EPERM`, somebody else's), `false` when there is none (`ESRCH`); an
+     * invalid pid raises the folded platform error. The pid is any process's, not only a child's
+     * (a daemon's pid file, another instance). Not on WebIO. */
+    processAlive: (pid: number) => Operation<boolean>
+    /** Send a signal (default `SIGTERM`; a name or a number) to any process by pid. No such
+     * process fails `std:io.not-found`, one this process may not signal `std:io.access-denied`.
+     * Windows has no signals: any signal terminates the process. Not on WebIO. */
+    signal: (pid: number, signal?: number | string) => Operation<void>
+    /** Take an exclusive lock at `path`: a DIRECTORY placed by ONE atomic rename, holding a
+     * `lock.json` that names the holder (pid, its start time, `record`) — the single-instance /
+     * mutex idiom of a daemon or an installer. Held by a LIVE process: wait up to `waitMs`
+     * (default 0: answer at once) asking every `pollMs` (default 100), then `std:io.busy` naming
+     * the holder; held by a DEAD pid: taken over. Released by `release()`, or when the scope
+     * closes — a crash leaves a stale lock the next taker sweeps. Not on WebIO. */
+    lock: (path: PathLike, options?: LockOptions) => Operation<Lock>
 
     /** `tcp://host:port` / `ipc://path` / `inproc://name` → its parts, `null` for anything else
      * (another scheme, no port, a port out of range). A tcp host of `*` or none is every

@@ -45,6 +45,70 @@ describe('env', () => {
       missingError: 'std:io.missing-env',
     })
   })
+
+  it('the typed readers parse, fall back on unset or empty, and name every bad value at once', async () => {
+    process.env.OZACO_IO_TEST_PORT = ' 8080 '
+    process.env.OZACO_IO_TEST_EDGE = 'OFF'
+    process.env.OZACO_IO_TEST_LIST = 'a, b,,c '
+    process.env.OZACO_IO_TEST_EMPTY = ''
+    process.env.OZACO_IO_TEST_BAD_INT = '80x'
+    process.env.OZACO_IO_TEST_BAD_BOOL = 'maybe'
+
+    try {
+      const outcome = await run(function* () {
+        yield* BunIO.use()
+
+        const parsed = yield* IO.actions.env(
+          (_data, env) => ({
+            port: env.int('OZACO_IO_TEST_PORT', 3000),
+            edge: env.bool('OZACO_IO_TEST_EDGE', true),
+            list: env.list('OZACO_IO_TEST_LIST'),
+            empty: env.str('OZACO_IO_TEST_EMPTY', 'fallback'),
+            unset: env.int('OZACO_IO_TEST_NOT_SET', 7),
+            none: env.list('OZACO_IO_TEST_NOT_SET'),
+          }),
+          ['none'],
+        )
+
+        const invalid = yield* attempt(() =>
+          IO.actions.env((_data, env) => ({
+            port: env.int('OZACO_IO_TEST_BAD_INT'),
+            edge: env.bool('OZACO_IO_TEST_BAD_BOOL'),
+          })),
+        )
+
+        return {
+          parsed,
+          invalid: isFailure(invalid)
+            ? [invalid.error, invalid.message, invalid.causes.slice(0, 2)]
+            : 'ok',
+        }
+      })
+
+      expect(unwrap(outcome)).toEqual({
+        parsed: {
+          port: 8080,
+          edge: false,
+          list: ['a', 'b', 'c'],
+          empty: 'fallback',
+          unset: 7,
+          none: undefined,
+        },
+        invalid: [
+          'std:io.invalid-env',
+          'invalid env variables: OZACO_IO_TEST_BAD_INT: not an integer: "80x"; OZACO_IO_TEST_BAD_BOOL: not a boolean: "maybe"',
+          [
+            'OZACO_IO_TEST_BAD_INT: not an integer: "80x"',
+            'OZACO_IO_TEST_BAD_BOOL: not a boolean: "maybe"',
+          ],
+        ],
+      })
+    } finally {
+      for (const key of ['PORT', 'EDGE', 'LIST', 'EMPTY', 'BAD_INT', 'BAD_BOOL']) {
+        delete process.env[`OZACO_IO_TEST_${key}`]
+      }
+    }
+  })
 })
 
 describe('ids and randomness', () => {

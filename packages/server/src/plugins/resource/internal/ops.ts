@@ -10,8 +10,14 @@ import {
   useDb,
 } from 'db:core'
 import type { EdgeDef, ServerDef } from 'server:core'
-import { CtxRef, ServerErrors, statusOf, tagOf } from 'server:core'
-import { dispatchSpan, EXCEPTION_EVENT_NAME, scopeOf as traceScopeOf } from 'server:internal'
+import { Server, ServerErrors } from 'server:core'
+import {
+  CtxRef,
+  EXCEPTION_EVENT_NAME,
+  scopeOf as traceScopeOf,
+  statusOf,
+  tagOf,
+} from 'server:internal'
 import type { Operation } from 'std:effect'
 import { attempt, ensure, fork, scoped, sleep, until, withResolvers } from 'std:effect'
 import type { Result } from 'std:result'
@@ -114,8 +120,19 @@ function* replacedFailure(
   }
 }
 
-/** A zod schema mirroring a column kind (docs + request validation; the db validates again). */
-const columnSchema = (column: Spec.Column): z.ZodType => {
+const isZod = (value: unknown): value is z.ZodType =>
+  typeof value === 'object' && value !== null && '_zod' in value
+
+/** A zod schema mirroring a column kind (docs + request validation; the db validates again). A
+ * `json` column declared with a zod schema (`column.json(schema)`) carries that schema — the
+ * derived doc, create and update shapes then say what the value is instead of `unknown`. */
+const columnSchema = (column: Spec.Column, table: Schema.Table): z.ZodType => {
+  const declared = table.schemas[column.name]
+
+  if (column.kind === 'json' && isZod(declared)) {
+    return declared
+  }
+
   switch (column.kind) {
     case 'text': {
       return z.string()
@@ -156,8 +173,8 @@ export const insertSchema = (table: Schema.Table): z.ZodObject =>
       table.columns.map(column => [
         column.name,
         column.optional || column.hasDefault
-          ? columnSchema(column).optional()
-          : columnSchema(column),
+          ? columnSchema(column, table).optional()
+          : columnSchema(column, table),
       ]),
     ),
   )
@@ -165,7 +182,9 @@ export const insertSchema = (table: Schema.Table): z.ZodObject =>
 /** The patch shape: everything optional. */
 export const patchSchema = (table: Schema.Table): z.ZodObject =>
   z.object(
-    Object.fromEntries(table.columns.map(column => [column.name, columnSchema(column).optional()])),
+    Object.fromEntries(
+      table.columns.map(column => [column.name, columnSchema(column, table).optional()]),
+    ),
   )
 
 /** The stored row shape (system fields included). */
@@ -178,7 +197,7 @@ export const docSchema = (table: Schema.Table): z.ZodObject =>
     ...Object.fromEntries(
       table.columns.map(column => [
         column.name,
-        column.optional ? columnSchema(column).nullable() : columnSchema(column),
+        column.optional ? columnSchema(column, table).nullable() : columnSchema(column, table),
       ]),
     ),
   })
@@ -399,7 +418,7 @@ export const resolveSchemas = (
  * dispatch, so the input they see is already validated and the output they return still passes
  * the action's output schema. Without hooks the handler is returned untouched.
  *
- * Telemetry lands on the DISPATCH span (the built-in's op — `dispatchSpan()`, even under a
+ * Telemetry lands on the DISPATCH span (the built-in's op — `Server.actions.dispatchSpan()`, even under a
  * plugin span wrapping the chain, such as a cache span): a hook that REPLACES the input, the
  * output or the failure adds `crud.hook` (`ozaco.crud.hook.phase`); an `error` hook that
  * RECOVERS sets `ozaco.crud.recovered` and records the failure it swallowed (handled, WARN) — as
@@ -408,23 +427,28 @@ export const resolveSchemas = (
 export const hooked = <
   THandler extends (call: { input: AnyType; ctx: ServerDef.Ctx }) => Operation<AnyType>,
 >(
-  op: ResourceDef.Op,
-  hooks: ResourceDef.CrudHooks<AnyType>,
+  source: {
+    readonly op: ResourceDef.Op
+    readonly hooks: ResourceDef.CrudHooks<AnyType>
+    readonly table: Schema.Table
+    readonly scope: ResourceDef.Scope | undefined
+    readonly present?: ResourceDef.PresentHook<AnyType, AnyType> | undefined
+  },
   handler: THandler,
 ): THandler => {
-  if (!hooks.before && !hooks.after && !hooks.around && !hooks.error) {
+  const { op, hooks, present } = source
+
+  if (!present && !hooks.before && !hooks.after && !hooks.around && !hooks.error) {
     return handler
   }
 
-  const chain = function* (
-    at: TraceDef.SpanHandle,
-    input: AnyType,
-    ctx: ServerDef.Ctx,
-  ): Operation<AnyType> {
-    let value = input
+  const chain = function* (at: TraceDef.SpanHandle, run: Helpers.HookRun): Operation<AnyType> {
+    const { ctx, locals } = run
+    let value = run.input
+    const db = yield* scopedDbOf(source.scope, ctx)
 
     if (hooks.before) {
-      const replaced = yield* hooks.before({ op, input: value, ctx } as AnyType)
+      const replaced = yield* hooks.before({ op, input: value, ctx, db, locals } as AnyType)
 
       if (replaced !== undefined) {
         value = replaced
@@ -434,8 +458,20 @@ export const hooked = <
 
     let output = yield* handler({ input: value, ctx })
 
+    // the stored row becomes the wire doc here, so `after` sees what the client will
+    if (present) {
+      output = yield* presented({ op, present }, output, ctx)
+    }
+
     if (hooks.after) {
-      const replaced = yield* hooks.after({ op, input: value, ctx, output } as AnyType)
+      const replaced = yield* hooks.after({
+        op,
+        input: value,
+        ctx,
+        db,
+        locals,
+        output,
+      } as AnyType)
 
       if (replaced !== undefined) {
         output = replaced
@@ -448,16 +484,15 @@ export const hooked = <
 
   /** `around` owns the call: it REPLACED it when it passed `next` another input, or answered
    * with something other than what `next` returned (or never called it). */
-  // oxlint-disable-next-line max-params -- the span · the hook · the call's input and ctx
   const surround = function* (
     at: TraceDef.SpanHandle,
     around: NonNullable<ResourceDef.CrudHooks<AnyType>['around']>,
-    input: AnyType,
-    ctx: ServerDef.Ctx,
+    run: Helpers.HookRun,
   ): Operation<AnyType> {
     let inner: { readonly input: AnyType; readonly output: AnyType } | null = null
-    const output = yield* around({ op, input, ctx } as AnyType, function* (value: AnyType) {
-      const result = yield* chain(at, value, ctx)
+    const db = yield* scopedDbOf(source.scope, run.ctx)
+    const output = yield* around({ op, ...run, db } as AnyType, function* (value: AnyType) {
+      const result = yield* chain(at, { ...run, input: value })
 
       inner = { input: value, output: result }
 
@@ -465,7 +500,7 @@ export const hooked = <
     })
     const seen = inner as { readonly input: AnyType; readonly output: AnyType } | null
 
-    if (!seen || seen.input !== input || seen.output !== output) {
+    if (!seen || seen.input !== run.input || seen.output !== output) {
       hookEvent(at, 'around')
     }
 
@@ -481,10 +516,10 @@ export const hooked = <
   }): Operation<AnyType> {
     const { around, error } = hooks
     // the built-in's op IS its dispatch span — whatever plugin span is active around the handler
-    const dispatch = yield* dispatchSpan()
-    const invoke = around
-      ? () => surround(dispatch, around, input, ctx)
-      : () => chain(dispatch, input, ctx)
+    const dispatch = yield* Server.actions.dispatchSpan()
+    // one bag per call for what the hooks tell each other (`before` → `after` / `error`)
+    const run: Helpers.HookRun = { input, ctx, locals: {} }
+    const invoke = around ? () => surround(dispatch, around, run) : () => chain(dispatch, run)
 
     if (!error) {
       return yield* invoke()
@@ -497,7 +532,8 @@ export const hooked = <
     }
 
     // raised or returned, a failure from the hook replaces the original
-    const verdict = yield* attempt(() => error({ op, input, ctx, failure: outcome } as AnyType))
+    const db = yield* scopedDbOf(source.scope, ctx)
+    const verdict = yield* attempt(() => error({ op, ...run, db, failure: outcome } as AnyType))
     const replaced = isFailure(verdict) ? verdict : verdict.value
 
     if (replaced === undefined) {
@@ -523,6 +559,64 @@ export const hooked = <
   }
 
   return wrapped as THandler
+}
+
+/** The `present` projection over what an op answered: the row `get` and the mutations
+ * answer, each row of a `list` page; `remove` and `count` answer no row. */
+const presented = function* (
+  source: {
+    readonly op: ResourceDef.Op
+    readonly present: ResourceDef.PresentHook<AnyType, AnyType>
+  },
+  output: AnyType,
+  ctx: ServerDef.Ctx,
+): Operation<AnyType> {
+  if (source.op === 'list') {
+    return { ...output, data: yield* presentedRows(output.data, source.present, ctx) }
+  }
+
+  if (
+    source.op === 'get' ||
+    source.op === 'create' ||
+    source.op === 'update' ||
+    source.op === 'replace'
+  ) {
+    return yield* source.present(output, ctx)
+  }
+
+  return output
+}
+
+const presentedRows = function* (
+  rows: readonly AnyType[],
+  present: ResourceDef.PresentHook<AnyType, AnyType>,
+  ctx: ServerDef.Ctx,
+): Operation<AnyType[]> {
+  const out: AnyType[] = []
+
+  for (const row of rows) {
+    out.push(yield* present(row, ctx))
+  }
+
+  return out
+}
+
+/** The `present` projection over a realtime frame's rows (`rows` of a sync, `added` and
+ * `changed` of a delta). */
+const presentedFrame = function* (
+  frame: Extract<ResourceDef.ServerFrame, { t: 'sync' | 'delta' }>,
+  present: ResourceDef.PresentHook<AnyType, AnyType>,
+  ctx: ServerDef.Ctx,
+): Operation<ResourceDef.ServerFrame> {
+  if (frame.t === 'sync') {
+    return { ...frame, rows: yield* presentedRows(frame.rows, present, ctx) }
+  }
+
+  return {
+    ...frame,
+    added: yield* presentedRows(frame.added, present, ctx),
+    changed: yield* presentedRows(frame.changed, present, ctx),
+  }
 }
 
 // --- scope -----------------------------------------------------------------------------------
@@ -556,6 +650,46 @@ export function* scopeOf(
   }
 
   return ((yield* scope(ctx)) as Spec.Filter | null | undefined) ?? undefined
+}
+
+/** A handle plus `expect`: the scoped `get` that fails `server.not-found` (cause
+ * `<table>:missing`) instead of answering `null`. */
+const expecting = (db: Helpers.LooseDb): Helpers.HookHandle => ({
+  ...db,
+  *expect(table, id, options) {
+    const row = yield* db.get(table, id, options)
+
+    if (!row) {
+      return yield* fail(ServerErrors.NotFound, `no such ${table}`, `${table}:missing`)
+    }
+
+    return row
+  },
+})
+
+/** The installed handle narrowed to one resolved scope side for THIS call — what a hook's `db`
+ * is, and what `crud.db(resource)` answers: a read through it can only see, a write only touch,
+ * what the caller's scope allows. */
+export function* scopedDbOf(
+  scope: ResourceDef.Scope | undefined,
+  ctx: ServerDef.Ctx,
+): Operation<Helpers.HookHandle> {
+  const db = yield* looseDb()
+  const filter = yield* scopeOf(scope, ctx)
+
+  return expecting(filter ? (db.scoped(filter) as Helpers.LooseDb) : db)
+}
+
+/** `crud.db(resource, { ctx, side })`: the resource's scoped handle for the running dispatch —
+ * the read side for a query, the write side otherwise (an extend action's own `ctx.db`). */
+export function* dbOp(
+  resource: Pick<ResourceDef.Crud, 'scope'>,
+  options?: { readonly ctx?: ServerDef.Ctx | undefined; readonly side?: 'read' | 'write' },
+): Operation<Helpers.HookHandle> {
+  const ctx = yield* opCtx(options?.ctx)
+  const side = options?.side ?? (ctx.meta.kind === 'query' ? 'read' : 'write')
+
+  return yield* scopedDbOf(resource.scope[side], ctx)
 }
 
 /** The values a scope PINS onto a written row (nested `and`s flattened, `eq` → value, `isNull`
@@ -639,13 +773,13 @@ function* runnable<T>(
 }
 
 /** A BUILT-IN action's op: the dispatch span IS the op — no span of its own, `ozaco.crud.scoped`
- * goes on the dispatch span (`dispatchSpan()`, even under a plugin span wrapping the chain). */
+ * goes on the dispatch span (`Server.actions.dispatchSpan()`, even under a plugin span wrapping the chain). */
 function* builtin<T>(
   options: Helpers.OpCall['options'],
   pipeline: (env: Helpers.OpEnv) => Operation<T>,
 ): Operation<T> {
   const env = yield* opEnv(options)
-  const dispatch = yield* dispatchSpan()
+  const dispatch = yield* Server.actions.dispatchSpan()
 
   dispatch.setAttribute('ozaco.crud.scoped', options.scope !== undefined)
 
@@ -1091,6 +1225,9 @@ export function* watch(
   const { ctx } = socket
   const hooks = resource.hooks
   const table = resource.table.name
+  // the hooks' handle: the read scope, resolved once for this subscriber — and their bag
+  const hookDb = yield* scopedDbOf(resource.scope, ctx)
+  const locals: ResourceDef.HookLocals = {}
   // the service that declared the socket owns its spans (`service.name`) wherever it is served —
   // a gateway serving a service another node hosts included (never the node's own name)
   const service = ctx.service
@@ -1098,14 +1235,18 @@ export function* watch(
   // the after hook projects outgoing rows: a returned value replaces the sync/delta frame
   // (`t`/`id` pinned back so a careless hook cannot break the protocol)
   const send = function* (out: ResourceDef.ServerFrame): Operation<void> {
-    let frame = out
+    const rows = out.t === 'sync' || out.t === 'delta'
+    // the rows become wire docs first (`present`), then `after` sees the frame
+    let frame = rows && resource.present ? yield* presentedFrame(out, resource.present, ctx) : out
 
-    if (hooks.after && (out.t === 'sync' || out.t === 'delta')) {
+    if (hooks.after && rows) {
       const replaced = yield* hooks.after({
         op: 'watch',
         input: incoming,
         ctx,
-        output: out,
+        db: hookDb,
+        locals,
+        output: frame,
       } as AnyType)
 
       if (replaced !== undefined) {
@@ -1130,7 +1271,7 @@ export function* watch(
     if (hooks.error) {
       const error = hooks.error
       const replaced = yield* attempt(() =>
-        error({ op: 'watch', input: incoming, ctx, failure } as AnyType),
+        error({ op: 'watch', input: incoming, ctx, db: hookDb, locals, failure } as AnyType),
       )
       const verdict = isFailure(replaced) ? replaced : replaced.value
 
@@ -1160,7 +1301,13 @@ export function* watch(
     let frame = incoming
 
     if (hooks.before) {
-      const replaced = yield* hooks.before({ op: 'watch', input: incoming, ctx } as AnyType)
+      const replaced = yield* hooks.before({
+        op: 'watch',
+        input: incoming,
+        ctx,
+        db: hookDb,
+        locals,
+      } as AnyType)
 
       if (replaced !== undefined) {
         frame = { ...(replaced as AnyType), t: 'watch', id: incoming.id }

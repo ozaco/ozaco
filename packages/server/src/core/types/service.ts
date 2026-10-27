@@ -39,7 +39,7 @@ export namespace ServiceDef {
    * An action's configuration: what it takes, what it answers, where it lives — plus the plugin
    * options ({@link OptionsDef.ActionOptions}: `auth`, `cache`, `timeoutMs`, `retry`, …), typed
    * fields rather than an open bag. An unknown key is a compile error here and a configuration
-   * failure at `createServer`: an option nobody handles is a typo, not a feature.
+   * failure at `Server.actions.create`: an option nobody handles is a typo, not a feature.
    */
   export interface Config<
     TInput extends Declaration | undefined = Declaration | undefined,
@@ -127,7 +127,7 @@ export namespace ServiceDef {
     /** free-form docs block, published verbatim in the manifest (`null` when none). */
     readonly docs: Readonly<Record<string, unknown>> | null
 
-    /** plugin options as given (validated at createServer). */
+    /** plugin options as given (validated at Server.actions.create). */
     readonly options: Readonly<Record<string, unknown>>
   }
 
@@ -274,8 +274,13 @@ export namespace ServiceDef {
   export type OutputOf<A> = A extends Action<AnyType, infer O, AnyType> ? Returns<O> : never
 
   /** A typed pointer to one action of one service (what the CLIENT api map carries, and what
-   * `ctx.call` accepts next to a service definition). */
-  export interface Ref<A extends Action = Action> {
+   * `ctx.call` accepts next to a service definition). The action's `auth` slot is left OPEN: what
+   * the callee's handler sees as `ctx.auth` is the kernel's business, so a ref to an `auth`-gated
+   * action is callable like any other (`auth: 'user'` narrows the handler's ctx; a constraint on
+   * the default `Action` would refuse exactly those refs). */
+  export interface Ref<
+    A extends Action<AnyType, AnyType, AnyType> = Action<AnyType, AnyType, AnyType>,
+  > {
     readonly service: string
     readonly action: string
     readonly [ACTION_REF]?: A

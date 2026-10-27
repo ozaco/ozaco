@@ -8,7 +8,8 @@
  * headers / bodies / frames (secrets redacted) and the failure envelope.
  */
 import type { ServerDef } from 'server:core'
-import { action, createServer, Edge, HEADERS, service, stream } from 'server:core'
+import { action, Edge, Server, service, stream } from 'server:core'
+import { HEADERS } from 'server:internal'
 import type { Operation } from 'std:effect'
 import { flowOf, fork, run, scoped, sleep, until } from 'std:effect'
 import { DefaultLogger, LogLevel } from 'std:logger'
@@ -209,7 +210,7 @@ const withServer = async (
     await run(function* () {
       yield* storage()
 
-      const server = yield* createServer({
+      const server = yield* Server.actions.create({
         services: [items],
         edge: BunEdge,
         ...options,
@@ -1048,7 +1049,7 @@ describe('edge trace — websockets', () => {
         yield* storage()
         yield* DefaultLogger.use({ level: LogLevel.info })
 
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services: [items],
           edge: BunEdge,
           plugins: [seen.plugin.use()],
@@ -1191,7 +1192,7 @@ describe('edge trace — websockets', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services: [items],
           edge: BunEdge,
           plugins: [seen.plugin.use()],
@@ -1259,7 +1260,7 @@ describe('edge trace — websockets', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services: [items],
           edge: BunEdge,
           plugins: [seen.plugin.use()],
@@ -1331,7 +1332,7 @@ describe('edge trace — websockets', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services: [items],
           edge: BunEdge,
           plugins: [seen.plugin.use()],
@@ -1437,7 +1438,7 @@ describe('edge trace — websockets', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services: [items],
           edge: BunEdge,
           plugins: [seen.plugin.use()],
@@ -1499,7 +1500,7 @@ describe('edge trace — websockets', () => {
           yield* storage()
 
           // no observe hook, no exporter: tracing is OFF on this node
-          const server = yield* createServer({
+          const server = yield* Server.actions.create({
             services: [items],
             edge: BunEdge,
             ...(inbound ? { trace: { inbound } } : {}),
@@ -1588,7 +1589,7 @@ describe('edge trace — websockets', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services: [guarded],
           edge: BunEdge,
           plugins: [seen.plugin.use()],

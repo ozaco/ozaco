@@ -6,6 +6,7 @@ import type { TraceDef } from 'std:trace'
 
 import type { CarrierDef } from './carrier'
 import type { EdgeDef } from './edge'
+import type { Helpers } from './helpers'
 import type { ObserveDef } from './observe'
 import type { OptionsDef } from './options'
 import type { OutcomesDef } from './outcomes'
@@ -13,14 +14,14 @@ import type { ServiceDef } from './service'
 import type { WireDef } from './wire'
 
 /**
- * The kernel: what `createServer` installs and what every other layer (edge, carriers, plugins)
+ * The kernel: what `Server.actions.create` installs and what every other layer (edge, carriers, plugins)
  * talks to. ONE mental model: service → action → dispatch.
  */
 export namespace ServerDef {
   // --- install ------------------------------------------------------------------------------
 
   /**
-   * What `createServer` installs: a plugin's `use(...args)` operation (arguments bound,
+   * What `Server.actions.create` installs: a plugin's `use(...args)` operation (arguments bound,
    * the handle travelling with it) — or a bare handle when it takes no arguments.
    */
   export type PluginLike = Plugin<AnyType, AnyType[], AnyType> | Plugin.Use<AnyType, AnyType[]>
@@ -96,7 +97,7 @@ export namespace ServerDef {
     readonly errors?: ErrorOptions | undefined
   }
 
-  /** `createServer({ trace })`. */
+  /** `Server.actions.create({ trace })`. */
   export interface TraceOptions {
     /**
      * What an inbound HTTP/WS `traceparent` does to the edge span. `'link'` (default): a new
@@ -120,7 +121,7 @@ export namespace ServerDef {
     readonly response?: boolean | undefined
   }
 
-  /** `createServer({ observe })`. */
+  /** `Server.actions.create({ observe })`. */
   export interface ObserveOptions {
     /**
      * The resource `service.name` of this node's records. `'service'` (default): every dispatch
@@ -140,7 +141,7 @@ export namespace ServerDef {
     /**
      * Claim the PROCESS's log records while this node observes: every record emitted where no
      * Trace sink records — tracing off there, not suppressed: a std Logger line of infrastructure
-     * (transport, db) installed BEFORE `createServer`, in a parent scope, an `emitLog` /
+     * (transport, db) installed BEFORE `Server.actions.create`, in a parent scope, an `emitLog` /
      * `event()` / `recordFailure` there — reaches this node's store and exporters with its
      * resource (`service.name` = the node's, unless the record names a span service) and the
      * record's own scope (the `logger` binding). One node per process takes them (std:trace's
@@ -172,7 +173,7 @@ export namespace ServerDef {
     readonly sensitiveKeys?: readonly string[] | undefined
   }
 
-  /** `createServer({ errors })`. */
+  /** `Server.actions.create({ errors })`. */
   export interface ErrorOptions {
     /** `'chain'`: every failed edge reply carries the nested cause chain (`cause`) and the
      * `remote: …` causes a carrier hop added. Default: only callers `trace.trust` accepts get them
@@ -225,7 +226,7 @@ export namespace ServerDef {
     /** Node-level resource attributes (`service.namespace`, `service.version`,
      * `deployment.environment.name`, `telemetry.sdk.{name,version,language}`,
      * `ozaco.carrier.name`) — merged under every record's `service.name` / `service.instance.id`
-     * (`resourceOf`). `createServer` completes it (the carrier) before tracing is enabled. */
+     * (`resourceOf`). `Server.actions.create` completes it (the carrier) before tracing is enabled. */
     readonly resource: Record<string, TraceDef.AttrValue>
   }
 
@@ -256,14 +257,14 @@ export namespace ServerDef {
   export interface TracerContext {
     readonly kernel: Context
 
-    /** this node's tracing switch — `createServer` flips `enabled` once the plugins are in. */
+    /** this node's tracing switch — `Server.actions.create` flips `enabled` once the plugins are in. */
     readonly state: TraceDef.TracingState
 
     /** the node's scope — where a span that outlives its dispatch (a streamed output's) ends. */
     readonly scope: Scope
 
     /** the log records emitted while the node was still coming up (its tracing off): its own,
-     * and — when it was the process's first claimant — the process's, held until `createServer`
+     * and — when it was the process's first claimant — the process's, held until `Server.actions.create`
      * decides (handed to its Tracers when it observes, dropped otherwise); `null` once decided. */
     boot: BootRecord[] | null
   }
@@ -289,6 +290,13 @@ export namespace ServerDef {
      * intent stays visible at the call site, nothing travels silently; an explicit
      * `meta.authorization` still wins). */
     readonly inherit?: boolean | undefined
+
+    /** make this nested call AS THE CALLING SERVICE (`ctx.call` only): a plugin that mints
+     * service credentials answers the bearer (the Auth plugin, through its strategies'
+     * `signService`, in the calling service's name) — the callee may then say `auth: 'service'`
+     * and stay unreachable from the edge. `server.configuration` when no installed plugin mints
+     * one; an explicit `meta.authorization` still wins. */
+    readonly as?: 'service' | undefined
   }
 
   /** What follows `(service, action, …)` in a call: the input — omissible when the action
@@ -473,7 +481,7 @@ export namespace ServerDef {
     /** action-option keys this plugin owns, with their validators. */
     readonly options?: Readonly<Record<string, StandardSchemaV1>> | undefined
 
-    /** services this plugin brings (the observe console's API, …): `createServer` registers
+    /** services this plugin brings (the observe console's API, …): `Server.actions.create` registers
      * them like the app's own — routed, mounted, documented — and hosts them locally. */
     readonly services?: readonly ServiceDef.Service[] | undefined
   }
@@ -492,6 +500,12 @@ export namespace ServerDef {
     readonly guard?:
       | ((route: EdgeDef.RawRoute, request: Request) => Operation<OptionsDef.Principal | null>)
       | undefined
+
+    /** answers the credential of a nested call made `{ as: 'service' }` (the Auth plugin: a
+     * service token in the CALLING service's name) — the TOKEN, carried as `Bearer <token>`;
+     * `null` when this plugin mints none; the first answer wins, none at all is
+     * `server.configuration`. */
+    readonly credential?: ((kind: 'service', call: Call) => Operation<string | null>) | undefined
 
     /** runs once the server listens / before it stops. */
     readonly start?: (() => Operation<void>) | undefined
@@ -539,7 +553,7 @@ export namespace ServerDef {
     readonly events: EventEmitter<Events>
     readonly timeoutMs: number
 
-    /** the pinned carrier/edge/outcomes handles — set by `createServer` as it installs them. */
+    /** the pinned carrier/edge/outcomes handles — set by `Server.actions.create` as it installs them. */
     carrier: CarrierDef | null
     edge: EdgeDef | null
     outcomes: OutcomesDef | null
@@ -567,12 +581,12 @@ export namespace ServerDef {
      * `http.server.active_requests`. */
     readonly active: Map<string, ActiveRequests>
 
-    /** whether any `ObserveExporter` is installed — set by `createServer` once the plugins are
+    /** whether any `ObserveExporter` is installed — set by `Server.actions.create` once the plugins are
      * in, read on the hot path (events are fanned out to exporters only when one listens). */
     exporting: boolean
 
     /** whether this node records telemetry (an exporter, an observe hook, or a Trace sink already
-     * enabled around `createServer`) — set by `createServer` once the plugins are in; the
+     * enabled around `Server.actions.create`) — set by `Server.actions.create` once the plugins are in; the
      * `server-tracer` switch follows it. */
     observing: boolean
 
@@ -694,7 +708,23 @@ export namespace ServerDef {
     readonly actions: readonly ManifestAction[]
   }
 
-  /** The handle `createServer` resolves. */
+  /**
+   * The protocol-level actions of `Server` — they run without an installed kernel. `create`
+   * builds a node (the kernel, its tracer, the carrier, the plugins, the edge) and resolves its
+   * {@link Handle}; `dispatchSpan` is the running dispatch's span, what a server plugin writes
+   * dispatch-level attributes on (unlike std:trace `current()` it stays the dispatch span under a
+   * plugin span of its own; the no-op handle outside a dispatch or under suppression);
+   * `openEdge` is what an Edge impl's `setup()` calls to bind the engine to the installed kernel.
+   */
+  export interface Handlers {
+    create<const TServices extends readonly ServiceDef.Service[]>(
+      options: Options<TServices>,
+    ): Operation<Handle<TServices>>
+    dispatchSpan(): Operation<TraceDef.SpanHandle>
+    openEdge(): Operation<Helpers.EdgeState>
+  }
+
+  /** The handle `Server.actions.create` resolves. */
   export interface Handle<TServices extends readonly ServiceDef.Service[] = ServiceDef.Service[]> {
     readonly api: ServiceDef.Api<TServices>
     readonly name: string

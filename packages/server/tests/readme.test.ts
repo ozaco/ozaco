@@ -3,7 +3,7 @@
  * if this stops compiling or answering, the first thing anyone reads about this package is wrong.
  */
 import { column, DbClient, defineSchema, table, useDb } from 'db:core'
-import { action, createServer, service } from 'server:core'
+import { action, Server, service } from 'server:core'
 import { run, until } from 'std:effect'
 import { unwrap } from 'std:result'
 
@@ -44,7 +44,7 @@ describe('README — the smallest server', () => {
         yield* MemoryAdapter.use()
         yield* DbClient.use({ schema })
 
-        const server = yield* createServer({ services: [todos], edge: BunEdge })
+        const server = yield* Server.actions.create({ services: [todos], edge: BunEdge })
         const info = yield* server.start({ port: 0 })
 
         const added = yield* until(

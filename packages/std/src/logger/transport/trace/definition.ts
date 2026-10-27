@@ -43,7 +43,7 @@ const TraceTransportImpl = LoggerTransport.implement<
  * `ozaco.telemetry = 'sent'`). Telemetry never fails a log call.
  *
  * Where tracing is off (a scope outside every observing node: infrastructure — transport, db —
- * installed before `createServer`), the record goes to the process FALLBACK sink instead
+ * installed before `Server.actions.create`), the record goes to the process FALLBACK sink instead
  * (`Trace.actions.registerFallback`; an observing `@ozaco/server` node registers itself), and
  * nowhere when none is registered.
  *
@@ -51,7 +51,7 @@ const TraceTransportImpl = LoggerTransport.implement<
  * transport replaces the inherited one — so the recommended setup is ONE install at the ROOT, next
  * to `ConsoleTransport`: `DefaultLogger.use()`, `ConsoleTransport.use()`, `TraceTransport.use()`.
  * Every line then becomes exactly one record: lines logged inside a node reach its sinks, lines
- * logged outside reach the fallback (the node's sinks, with its resource). `createServer` installs
+ * logged outside reach the fallback (the node's sinks, with its resource). `Server.actions.create` installs
  * one in its own scope only when none is visible — then only the lines logged inside the node
  * are bridged.
  */

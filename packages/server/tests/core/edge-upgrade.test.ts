@@ -5,7 +5,7 @@
  * the accept verdict's `failed(reason, status)`; a completed one still ends at the 101.
  */
 import type { ServerDef } from 'server:core'
-import { createServer, Edge, service } from 'server:core'
+import { Edge, Server, service } from 'server:core'
 import type { Operation } from 'std:effect'
 import { run, sleep, until } from 'std:effect'
 import type { LoggerDef } from 'std:logger'
@@ -120,7 +120,11 @@ const withEdge = async (
         yield* options.before()
       }
 
-      const server = yield* createServer({ services: [empty], edge, plugins: options.plugins })
+      const server = yield* Server.actions.create({
+        services: [empty],
+        edge,
+        plugins: options.plugins,
+      })
 
       yield* Edge.actions.socket({
         path: '/live',

@@ -6,13 +6,17 @@ import type { IODef } from '../../types/io'
 import { fromReadable } from '../stream/from-readable'
 
 import {
+  detachFlags,
   emptyByteFlow,
   inheritedStdinWrite,
+  makeExecResult,
   makeStatus,
   normalizeSpawn,
   resolveStdio,
   toBytes,
+  unlessDetached,
 } from './shared'
+import { openStdio } from './stdio'
 
 /**
  * Run a command to completion with `Bun.spawn`, buffering stdout/stderr. A non-zero exit is data
@@ -21,11 +25,12 @@ import {
  */
 export function* bunExec(cmd: string, args?: readonly string[], options?: IODef.ExecOptions) {
   const config = normalizeSpawn(options)
+  const argv = args ?? []
 
   let proc
 
   try {
-    proc = Bun.spawn([cmd, ...(args ?? [])], {
+    proc = Bun.spawn([cmd, ...argv], {
       ...config,
       stdin: options?.stdin === undefined ? 'ignore' : toBytes(options.stdin),
       stdout: 'pipe',
@@ -47,13 +52,11 @@ export function* bunExec(cmd: string, args?: readonly string[], options?: IODef.
         proc.exited,
       ]),
     )
-    const result: IODef.ExecResult = {
-      ...makeStatus(proc.exitCode, proc.signalCode),
+
+    return makeExecResult([cmd, ...argv], makeStatus(proc.exitCode, proc.signalCode), {
       stdout: new Uint8Array(out),
       stderr: new Uint8Array(err),
-    }
-
-    return result
+    })
   } catch (error) {
     return yield* fail(IOErrors.ExecFailed, `command "${cmd}" failed`, asFailure(error, IOErrors))
   }
@@ -61,25 +64,32 @@ export function* bunExec(cmd: string, args?: readonly string[], options?: IODef.
 
 /**
  * Spawn a long-lived child process with `Bun.spawn`, exposing its streams and lifecycle as effect
- * primitives. stdin/stdout/stderr are piped unless `stdio` inherits them (an inherited output is
- * an empty flow on the handle); consume (or `kill`) the handle within the spawning scope.
+ * primitives. stdin/stdout/stderr are piped unless `stdio` says otherwise (a stream that is not
+ * piped is an empty flow on the handle); consume (or `kill`, or `detach`) the handle within the
+ * spawning scope.
  */
 export function* bunSpawn(cmd: string, args?: readonly string[], options?: IODef.SpawnOptions) {
   const config = normalizeSpawn(options)
   const stdio = resolveStdio(options?.stdio)
+  const opened = yield* openStdio(stdio)
 
   let proc
 
   try {
     proc = Bun.spawn([cmd, ...(args ?? [])], {
       ...config,
-      stdin: stdio.stdin,
-      stdout: stdio.stdout,
-      stderr: stdio.stderr,
+      ...detachFlags(options),
+      stdin: opened.stdin,
+      stdout: opened.stdout,
+      stderr: opened.stderr,
     })
   } catch (error) {
+    yield* opened.close()
+
     return yield* fail(IOErrors.SpawnFailed, `failed to spawn "${cmd}"`, asFailure(error, IOErrors))
   }
+
+  yield* opened.close()
 
   const exited = function* () {
     yield* until(proc.exited)
@@ -87,13 +97,17 @@ export function* bunSpawn(cmd: string, args?: readonly string[], options?: IODef
     return makeStatus(proc.exitCode, proc.signalCode)
   }
 
-  // an inherited stream is `null` on the Bun process — typed loosely here, narrowed by `stdio`
-  const stdin = proc.stdin as Bun.FileSink | null
-  const stdout = proc.stdout as ReadableStream<Uint8Array> | null
-  const stderr = proc.stderr as ReadableStream<Uint8Array> | null
+  // a stream that is not piped is no stream on the Bun process — narrowed by `stdio`, not by type
+  const stdin = stdio.stdin === 'pipe' ? (proc.stdin as Bun.FileSink) : null
+  const stdout = stdio.stdout === 'pipe' ? (proc.stdout as ReadableStream<Uint8Array>) : null
+  const stderr = stdio.stderr === 'pipe' ? (proc.stderr as ReadableStream<Uint8Array>) : null
+  const outReader = stdout?.getReader()
+  const errReader = stderr?.getReader()
+
+  let detached = false
 
   const write = function* (chunk: Uint8Array | string) {
-    if (!stdin) {
+    if (!stdin || detached) {
       return yield* inheritedStdinWrite()
     }
 
@@ -128,14 +142,34 @@ export function* bunSpawn(cmd: string, args?: readonly string[], options?: IODef
     }
   }
 
+  // `unref` lets the event loop exit with the child running; cancelling the readers closes the
+  // parent's pipe ends (the handle's flows end `true`), `end` the stdin sink
+  const detach = function* () {
+    if (detached) {
+      return
+    }
+
+    detached = true
+    proc.unref()
+    yield* closeStdin()
+    yield* until(Promise.all([outReader?.cancel(), errReader?.cancel()]).catch(() => {}))
+  }
+
+  const isDetached = () => detached
+
   const handle: IODef.ProcessHandle = {
     pid: proc.pid,
-    stdout: stdout ? fromReadable(stdout.getReader() as IODef.WebReadableLike) : emptyByteFlow(),
-    stderr: stderr ? fromReadable(stderr.getReader() as IODef.WebReadableLike) : emptyByteFlow(),
+    stdout: outReader
+      ? unlessDetached(fromReadable(outReader as IODef.WebReadableLike), isDetached)
+      : emptyByteFlow(),
+    stderr: errReader
+      ? unlessDetached(fromReadable(errReader as IODef.WebReadableLike), isDetached)
+      : emptyByteFlow(),
     exited,
     write,
     closeStdin,
     kill,
+    detach,
   }
 
   return handle

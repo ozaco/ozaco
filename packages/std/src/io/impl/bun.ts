@@ -8,7 +8,9 @@ import { dirname } from 'node:path'
 
 import pkg from '../../../package.json'
 import { IOErrors } from '../errors'
-import { withEncoding } from '../internal/crypto/encode'
+import { bunPassword } from '../internal/crypto/bun'
+import { digestFile } from '../internal/crypto/digest'
+import { withEncoding, withFileEncoding } from '../internal/crypto/encode'
 import { hlcDecode, hlcObserve, hlcToken } from '../internal/crypto/hlc'
 import {
   decryptSecret,
@@ -17,13 +19,14 @@ import {
   signData,
   verifyData,
 } from '../internal/crypto/node'
+import { createPassword } from '../internal/crypto/password'
 import { ulidId } from '../internal/crypto/ulid'
 import { uuidId } from '../internal/crypto/uuid'
 import { webHash, webHmac, webRandomBytes } from '../internal/crypto/web'
 import { readEnv } from '../internal/env'
 import { readFileFlow, writeFileFlow } from '../internal/fs/flow'
 import { fsCall } from '../internal/fs/platform'
-import { sharedFs, writeFlagOf } from '../internal/fs/shared'
+import { sharedFs, writeFile } from '../internal/fs/shared'
 import { watchPath } from '../internal/fs/watch'
 import { netEndpoint } from '../internal/net/endpoint'
 import { tcpConnect, tcpListen, udpBind } from '../internal/net/sockets'
@@ -31,6 +34,9 @@ import { readCwd, readHomeDir, readInterfaces, readPlatform, readTmpDir } from '
 import { createExpandHome } from '../internal/path/home'
 import { nodePath } from '../internal/path/node'
 import { bunExec, bunSpawn } from '../internal/process/bun'
+import { lock } from '../internal/process/lock'
+import { processAlive, signalProcess } from '../internal/process/pid'
+import { createRun } from '../internal/process/shared'
 import { createS3 } from '../internal/s3/create'
 import { fromReadable } from '../internal/stream/from-readable'
 import { toReadable } from '../internal/stream/to-readable'
@@ -56,6 +62,8 @@ export const BunIO = IO.implement({
   observeHlc: hlcObserve,
   hmac: webHmac,
   hash: withEncoding(webHash),
+  hashFile: withFileEncoding(digestFile),
+  password: createPassword(bunPassword),
   encrypt: encryptSecret,
   decrypt: decryptSecret,
   generateKeyPair: generateSignKeyPair,
@@ -90,17 +98,13 @@ export const BunIO = IO.implement({
   },
 
   *write(path, data, options) {
-    const flags = options?.flags
-
-    if (!flags) {
+    if (!options?.flags && !options?.atomic && options?.mode === undefined) {
       yield* fsCall(Bun.write(toPath(path), data))
 
       return
     }
 
-    const flag = writeFlagOf(flags)
-
-    yield* fsCall(fs.writeFile(toPath(path), data, { flag }))
+    yield* writeFile(toPath(path), data, options)
   },
 
   *copy(src, dest, options) {
@@ -164,6 +168,10 @@ export const BunIO = IO.implement({
 
   exec: bunExec,
   spawn: bunSpawn,
+  run: createRun(bunSpawn),
+  processAlive,
+  signal: signalProcess,
+  lock,
 
   parseEndpoint: netEndpoint.parseEndpoint,
   formatEndpoint: netEndpoint.formatEndpoint,

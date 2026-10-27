@@ -119,7 +119,7 @@ export function* forwardException(
  * shown (`markLogged`) before the Logger's transports run: the exception record its
  * `TraceTransport` makes of the line's failure — or a later settle of it — is not forwarded back
  * to the Logger. An exception line the server tracer forwards (`forwardException`) is stamped with
- * the failure's time here (`ForwardedAt`). Installed by `createServer` on an observing node.
+ * the failure's time here (`ForwardedAt`). Installed by `Server.actions.create` on an observing node.
  */
 export function* markLoggedLines(): Operation<void> {
   yield* LoggerTransport.around({

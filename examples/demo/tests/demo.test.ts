@@ -346,7 +346,7 @@ describe('demo — the job queue', () => {
           scope: 'demo/jobs',
         })
 
-        // exactly ONE record per line (the demo's TraceTransport; `createServer` adds none)
+        // exactly ONE record per line (the demo's TraceTransport; `Server.actions.create` adds none)
         const lines = done.logs.filter((log: AnyType) => log.body === 'report rendered')
 
         expect(lines).toHaveLength(1)

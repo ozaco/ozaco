@@ -1,6 +1,6 @@
 import type { ServerDef } from 'server:core'
-import { CtxRef, Server, ServerErrors } from 'server:core'
-import { dispatchSpan } from 'server:internal'
+import { Server, ServerErrors } from 'server:core'
+import { CtxRef, isSocketAction } from 'server:internal'
 import type { Operation } from 'std:effect'
 import { attempt } from 'std:effect'
 import { definePlugin, defineProtocol } from 'std:plugin'
@@ -18,6 +18,7 @@ import {
   bearerOf,
   headerRecord,
   options,
+  requirementKind,
   ResolutionRef,
   skipped,
   strategyOf,
@@ -157,12 +158,56 @@ function* gate(
   return isFailure(verdict) ? yield* verdict : principal
 }
 
-/** A requirement against request headers: a presented bearer is always verified. */
+/**
+ * A credential header exchanged for a bearer (see {@link AuthDef.Credential}): the headers with
+ * an `authorization` the strategies issued for it, or `null` when there is nothing to exchange
+ * (no such header, or a bearer already presented — that one wins).
+ */
+function* exchange(
+  credentials: readonly AuthDef.Credential[],
+  headers: Readonly<Record<string, string>>,
+): Operation<Record<string, string> | null> {
+  if (credentials.length === 0 || bearerOf(headers) !== null) {
+    return null
+  }
+
+  const record = headerRecord(headers)
+
+  for (const credential of credentials) {
+    const value = record[credential.header.toLowerCase()]?.trim()
+
+    if (!value) {
+      continue
+    }
+
+    const tokens = yield* AuthStrategyProtocol.actions.login(credential.login(value))
+
+    // the same answer a bad bearer gets, so neither reveals which credential was tried
+    if (!tokens) {
+      return yield* fail(
+        ServerErrors.Unauthorized,
+        `no auth strategy accepts the ${credential.header} credential`,
+        AuthErrors.BadCredentials,
+      )
+    }
+
+    return { ...headers, authorization: `Bearer ${tokens.accessToken}` }
+  }
+
+  return null
+}
+
+/** A requirement against request headers: a credential header is exchanged, a presented bearer
+ * is always verified. */
 function* authorizeHeaders(
   requirement: AuthDef.Requirement,
   headers: AuthDef.HeadersLike,
 ): Operation<AuthDef.Principal | null> {
-  return yield* gate(requirement, bearerOf(headerRecord(headers)))
+  const record = headerRecord(headers)
+  const credentials = (yield* AuthImpl.context.get())?.credentials ?? []
+  const exchanged = yield* exchange(credentials, record)
+
+  return yield* gate(requirement, bearerOf(exchanged ?? record))
 }
 
 const AuthImpl = definePlugin<
@@ -175,7 +220,10 @@ const AuthImpl = definePlugin<
 
   *setup(given) {
     if (!(yield* Server.context.get())) {
-      return yield* fail(ServerErrors.Configuration, 'Auth must be installed by createServer')
+      return yield* fail(
+        ServerErrors.Configuration,
+        'Auth must be installed by Server.actions.create',
+      )
     }
 
     // the chain is read on every call, but an install with nobody to ask is a mistake to name now
@@ -186,7 +234,10 @@ const AuthImpl = definePlugin<
       )
     }
 
-    const context: AuthDef.Context = { default: given?.default ?? false }
+    const context: AuthDef.Context = {
+      default: given?.default ?? false,
+      credentials: given?.credentials ?? [],
+    }
 
     return {
       ...context,
@@ -200,11 +251,17 @@ const AuthImpl = definePlugin<
           // action that says nothing gets the install's `default`
           const own = (ctx.meta.options as { auth?: AuthDef.Requirement }).auth
           const requirement = own ?? context.default
-          const principal = yield* gate(requirement, bearerOf(call.headers), {
-            at: yield* dispatchSpan(),
+          // a credential header becomes the bearer BOTH sides see: the gate reads the call's
+          // headers, a nested `ctx.call(…, { inherit })` forwards the ctx's
+          const headers = yield* exchange(context.credentials, call.headers)
+          const principal = yield* gate(requirement, bearerOf(headers ?? call.headers), {
+            at: yield* Server.actions.dispatchSpan(),
           })
 
-          return yield* next(call, { ...ctx, auth: principal })
+          return yield* next(
+            headers ? { ...call, headers } : call,
+            headers ? { ...ctx, auth: principal, headers } : { ...ctx, auth: principal },
+          )
         },
         // …and the edge span of a raw route
         *guard(route, request) {
@@ -213,9 +270,17 @@ const AuthImpl = definePlugin<
 
           // a public route (health, docs, static files) never fails on a stale bearer — it is
           // simply served anonymously
-          return yield* gate(requirement, bearerOf(headerRecord(request.headers)), {
+          const record = headerRecord(request.headers)
+          const headers = yield* exchange(context.credentials, record)
+
+          return yield* gate(requirement, bearerOf(headers ?? record), {
             lenient: requirement === false,
           })
+        },
+        // a nested `ctx.call(…, { as: 'service' })`: a service token in the CALLING service's
+        // name, minted by the first strategy that signs them (JwtAuth)
+        *credential(_kind, call): Operation<string | null> {
+          return yield* Auth.actions.signService(call.service)
         },
       },
     }
@@ -233,7 +298,7 @@ const AuthImpl = definePlugin<
  * `Auth.actions.login/refresh/verify/signService` route to the first strategy that answers.
  * Every gate (a dispatch, a raw route, `authorize` / `check`) says its verdict on the span it
  * guards: `ozaco.auth.outcome` (granted | anonymous | denied), `ozaco.auth.requirement` (its
- * kind), `ozaco.auth.strategy` and — only with `createServer({ observe: { capture: { enduser } } })`
+ * kind), `ozaco.auth.strategy` and — only with `Server.actions.create({ observe: { capture: { enduser } } })`
  * — `enduser.id`; a denial stays the call's own 401 / 403 failure.
  */
 /** The strategy protocol — see the definition above; exported here so the exports stay last. */
@@ -312,5 +377,56 @@ export const Auth = AuthImpl.build<AuthDef.Actions>({
     }
 
     return yield* verdict
+  },
+  *catalog() {
+    const kernel = yield* Server.context.expect()
+    const context = yield* AuthImpl.context.expect()
+    const actions: AuthDef.CatalogEntry[] = []
+    const roles = new Set<string>()
+    const permissions = new Set<string>()
+
+    for (const service of kernel.registry.services.values()) {
+      for (const [name, entry] of Object.entries(service.actions)) {
+        if (isSocketAction(entry)) {
+          continue
+        }
+
+        const requirement =
+          (entry.meta.options as { auth?: AuthDef.Requirement }).auth ?? context.default
+        const listed = Array.isArray(requirement) ? (requirement as readonly string[]) : null
+        const shaped =
+          listed === null && typeof requirement === 'object' && requirement !== null
+            ? (requirement as {
+                readonly roles?: readonly string[] | undefined
+                readonly permissions?: readonly string[] | undefined
+              })
+            : null
+        const required = {
+          roles: listed ?? shaped?.roles ?? [],
+          permissions: shaped?.permissions ?? [],
+        }
+
+        for (const role of required.roles) {
+          roles.add(role)
+        }
+
+        for (const permission of required.permissions) {
+          permissions.add(permission)
+        }
+
+        actions.push({
+          service: service.name,
+          action: name,
+          kind: requirementKind(requirement),
+          ...required,
+        })
+      }
+    }
+
+    return {
+      actions,
+      roles: [...roles].toSorted(),
+      permissions: [...permissions].toSorted(),
+    }
   },
 })

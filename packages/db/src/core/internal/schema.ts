@@ -41,6 +41,7 @@ export const declare = <TValue>(
     hasDefault: false,
     defaultValue: null,
     enumValues: null,
+    schema: null,
     ...extra,
   })
 

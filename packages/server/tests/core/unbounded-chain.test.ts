@@ -5,7 +5,7 @@
  * (both encodings) takes them.
  */
 import type { ObserveDef, ServerDef } from 'server:core'
-import { action, createServer, Edge, service } from 'server:core'
+import { action, Edge, Server, service } from 'server:core'
 import type { Operation } from 'std:effect'
 import { run, sleep, until } from 'std:effect'
 import { definePlugin } from 'std:plugin'
@@ -62,7 +62,7 @@ describe('an unbounded failure chain through a server', () => {
       await run(function* (): Operation<{ status: number; body: unknown }> {
         yield* storage()
 
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services: [deep],
           edge: BunEdge,
           plugins: [spy.use()],

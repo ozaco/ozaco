@@ -16,7 +16,7 @@
  */
 import { column, DbClient, defineSchema, table, useDb } from 'db:core'
 import { Queue, queueTable } from 'db:queue'
-import { action, createServer, defineEvents, Edge, service } from 'server:core'
+import { action, defineEvents, Edge, Server, service } from 'server:core'
 import type { ServerDef } from 'server:core'
 import { Auth, Resilience, StaticAuth } from 'server:plugins'
 import { createQueue, fork, run, scoped, sleep, until } from 'std:effect'
@@ -346,7 +346,7 @@ async function drive(): Promise<Scenario> {
             yield* DefaultLogger.use({ level: LogLevel.info })
             yield* Queue.use({ table: 'jobs' })
 
-            const server = yield* createServer({
+            const server = yield* Server.actions.create({
               name: APP,
               version: VERSION,
               instance: 'b',
@@ -382,7 +382,7 @@ async function drive(): Promise<Scenario> {
           yield* DefaultLogger.use({ level: LogLevel.info })
           yield* Trace.actions.useIds(zeroLed())
 
-          const server: ServerDef.Handle<AnyType> = yield* createServer({
+          const server: ServerDef.Handle<AnyType> = yield* Server.actions.create({
             name: APP,
             version: VERSION,
             instance: 'a',

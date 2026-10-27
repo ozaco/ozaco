@@ -6,7 +6,7 @@
  * entry of a custom service.
  */
 import { CLEAR, DbClient, DbErrors, useDb, where } from 'db:core'
-import { action, createServer, Edge, ServerErrors, service } from 'server:core'
+import { action, Edge, Server, ServerErrors, service } from 'server:core'
 import { crud, Docs } from 'server:plugins'
 import { attempt, run, until } from 'std:effect'
 import { isFailure, unwrap } from 'std:result'
@@ -173,7 +173,7 @@ describe('resource — runnable ops', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({ services: [catalogue], edge: BunEdge })
+        const server = yield* Server.actions.create({ services: [catalogue], edge: BunEdge })
 
         yield* server.start()
 
@@ -434,7 +434,7 @@ describe('resource — runnable ops', () => {
           }),
         })
 
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services: [catalogue, feed],
           edge: BunEdge,
           plugins: [Docs.use({ path: '/docs' })],

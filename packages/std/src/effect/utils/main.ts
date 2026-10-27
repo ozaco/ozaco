@@ -12,6 +12,12 @@ import { withHost } from './with-host'
 
 declare const Deno: AnyType
 
+/** The signals `main` wires by default, and what they exit with. */
+const DEFAULT_SIGNALS: Readonly<Record<string, number>> = { SIGINT: 130, SIGTERM: 143 }
+
+/** The signals a Windows process can receive. */
+const WINDOWS_SIGNALS: ReadonlySet<string> = new Set(['SIGINT', 'SIGBREAK'])
+
 /** Exit the enclosing `main` with the given status. */
 export function* exit(status: number, message?: string): Operation<void> {
   const escape = yield* ExitContext.expect()
@@ -20,12 +26,17 @@ export function* exit(status: number, message?: string): Operation<void> {
 }
 
 /**
- * A complete-program entry point: runs `body`, wires SIGINT/SIGTERM into a graceful shutdown, and
- * exits the process with the resulting status.
+ * A complete-program entry point: runs `body`, wires the stop signals (SIGINT / SIGTERM, plus
+ * `options.signals`) into a graceful shutdown — bounded by `deadlineMs` when given — and exits
+ * the process with the resulting status; `unhandledRejection` says what a stray rejection does.
  */
-export async function main(body: (args: string[]) => Operation<void>): Promise<void> {
+export async function main(
+  body: (args: string[]) => Operation<void>,
+  options?: Utils.MainOptions,
+): Promise<void> {
   let hardexit = (_status: number) => {}
 
+  const signals = { ...DEFAULT_SIGNALS, ...options?.signals }
   const outcome = await run(() =>
     callcc<Utils.Exit>(function* (resolve) {
       yield* ExitContext.set(resolve)
@@ -33,33 +44,64 @@ export async function main(body: (args: string[]) => Operation<void>): Promise<v
       const interval = setInterval(() => {}, 2 ** 30)
 
       const scope = yield* useScope()
+      let asked = false
 
-      try {
-        const interrupt = {
-          SIGINT: () => scope.run(() => resolve({ status: 130 })),
-          SIGTERM: () => scope.run(() => resolve({ status: 143 })),
+      /** The shutdown a signal asks for — once; the deadline (if any) ends a slow teardown hard. */
+      const stopWith = (status: number) => () => {
+        if (asked) {
+          return
         }
 
+        asked = true
+        scope.run(() => resolve({ status }))
+
+        if (options?.deadlineMs !== undefined) {
+          const timer = setTimeout(() => hardexit(status), options.deadlineMs)
+
+          ;(timer as { unref?: () => void }).unref?.()
+        }
+      }
+
+      const onRejection = (reason: unknown) => {
+        if (options?.unhandledRejection === 'exit') {
+          scope.run(() => resolve({ status: 1, error: reason }))
+
+          return
+        }
+
+        console.error(formatFailure(asFailure(reason), { chain: true }))
+      }
+
+      const interrupt = Object.fromEntries(
+        Object.entries(signals).map(([signal, status]) => [signal, stopWith(status)]),
+      )
+
+      try {
         yield* withHost({
           *deno() {
             hardexit = status => Deno.exit(status)
 
-            try {
-              Deno.addSignalListener('SIGINT', interrupt.SIGINT)
+            const wired = Object.entries(interrupt).filter(
+              ([signal]) => Deno.build.os !== 'windows' || WINDOWS_SIGNALS.has(signal),
+            )
 
-              /**
-               * Windows only supports ctrl-c (SIGINT), ctrl-break (SIGBREAK), and ctrl-close (SIGUP)
-               */
-              if (Deno.build.os !== 'windows') {
-                Deno.addSignalListener('SIGTERM', interrupt.SIGTERM)
+            try {
+              for (const [signal, handler] of wired) {
+                Deno.addSignalListener(signal, handler)
+              }
+
+              if (options?.unhandledRejection) {
+                globalThis.addEventListener('unhandledrejection', rejectionEvent)
               }
 
               yield* body(Deno.args.slice())
             } finally {
-              Deno.removeSignalListener('SIGINT', interrupt.SIGINT)
+              for (const [signal, handler] of wired) {
+                Deno.removeSignalListener(signal, handler)
+              }
 
-              if (Deno.build.os !== 'windows') {
-                Deno.removeSignalListener('SIGTERM', interrupt.SIGTERM)
+              if (options?.unhandledRejection) {
+                globalThis.removeEventListener('unhandledrejection', rejectionEvent)
               }
             }
           },
@@ -73,28 +115,38 @@ export async function main(body: (args: string[]) => Operation<void>): Promise<v
             // oxlint-disable-next-line unicorn/no-process-exit
             hardexit = status => process.exit(status)
 
-            try {
-              process.on('SIGINT', interrupt.SIGINT)
+            const wired = Object.entries(interrupt).filter(
+              ([signal]) => process.platform !== 'win32' || WINDOWS_SIGNALS.has(signal),
+            )
 
-              if (process.platform !== 'win32') {
-                process.on('SIGTERM', interrupt.SIGTERM)
+            try {
+              for (const [signal, handler] of wired) {
+                process.on(signal as NodeJS.Signals, handler)
+              }
+
+              if (options?.unhandledRejection) {
+                process.on('unhandledRejection', onRejection)
               }
 
               yield* body(process.argv.slice(2))
             } finally {
-              process.off('SIGINT', interrupt.SIGINT)
+              for (const [signal, handler] of wired) {
+                process.off(signal as NodeJS.Signals, handler)
+              }
 
-              if (process.platform !== 'win32') {
-                process.off('SIGTERM', interrupt.SIGTERM)
+              if (options?.unhandledRejection) {
+                process.off('unhandledRejection', onRejection)
               }
             }
           },
           *browser() {
+            const unload = interrupt['SIGINT'] ?? stopWith(130)
+
             try {
-              self.addEventListener('unload', interrupt.SIGINT)
+              self.addEventListener('unload', unload)
               yield* body([])
             } finally {
-              self.removeEventListener('unload', interrupt.SIGINT)
+              self.removeEventListener('unload', unload)
             }
           },
         })
@@ -104,6 +156,11 @@ export async function main(body: (args: string[]) => Operation<void>): Promise<v
         yield* resolve({ status: 1, error })
       } finally {
         clearInterval(interval)
+      }
+
+      function rejectionEvent(event: { reason?: unknown; preventDefault?: () => void }): void {
+        event.preventDefault?.()
+        onRejection(event.reason)
       }
     }),
   )

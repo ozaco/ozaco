@@ -5,15 +5,7 @@
  */
 import { column, DbAdapter, DbClient, table } from 'db:core'
 import type { ObserveDef } from 'server:core'
-import {
-  action,
-  createServer,
-  Edge,
-  Observe,
-  ObserveExporter,
-  ServerErrors,
-  service,
-} from 'server:core'
+import { action, Edge, Observe, ObserveExporter, Server, ServerErrors, service } from 'server:core'
 import {
   Auth,
   eventOfLogRow,
@@ -163,7 +155,7 @@ describe('observe — spans and log records are db rows', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services: [todos],
           edge: BunEdge,
           // the plugin's `capture` is the server's one capture switch
@@ -280,7 +272,7 @@ describe('observe — spans and log records are db rows', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services: [todos],
           plugins: [ObservePlugin.use({ batch: { waitMs: 10 } })],
         })
@@ -393,7 +385,7 @@ describe('observe — spans and log records are db rows', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services: [todos],
           edge: BunEdge,
           plugins: [ObservePlugin.use({ batch: { waitMs: 10 } }), sink.plugin],
@@ -475,7 +467,7 @@ describe('observe — spans and log records are db rows', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services: [todos],
           edge: BunEdge,
           plugins: [ObservePlugin.use({ console: true, batch: { waitMs: 10 } })],
@@ -520,7 +512,7 @@ describe('observe — spans and log records are db rows', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services: [todos],
           edge: BunEdge,
           plugins: [
@@ -586,7 +578,7 @@ describe('observe — spans and log records are db rows', () => {
         await run(function* () {
           yield* storage()
 
-          const server = yield* createServer({
+          const server = yield* Server.actions.create({
             services: [todos],
             edge: BunEdge,
             plugins: [
@@ -609,14 +601,14 @@ describe('observe — spans and log records are db rows', () => {
     })
   }
 
-  it('auth without the Auth plugin fails createServer — never a silently open API', async () => {
+  it('auth without the Auth plugin fails Server.actions.create — never a silently open API', async () => {
     let failed: AnyType
 
     unwrap(
       await run(function* () {
         yield* storage()
         failed = yield* attempt(
-          createServer({
+          Server.actions.create({
             services: [todos],
             plugins: [ObservePlugin.use({ auth: 'authenticated' })],
           }),
@@ -635,7 +627,7 @@ describe('observe — spans and log records are db rows', () => {
         await run(function* () {
           yield* storage()
 
-          const server = yield* createServer({
+          const server = yield* Server.actions.create({
             services: [todos],
             edge: BunEdge,
             plugins: [ObservePlugin.use({ console: true, selfTrace, batch: { waitMs: 10 } })],
@@ -681,7 +673,7 @@ describe('observe — spans and log records are db rows', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services: [chat],
           edge: BunEdge,
           plugins: [ObservePlugin.use({ batch: { waitMs: 10 }, capture: { frames: true } })],
@@ -735,7 +727,7 @@ describe('observe — spans and log records are db rows', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services: [todos],
           plugins: [
             // the removed per-kind switch, as an older config still passes it
@@ -775,7 +767,7 @@ describe('observe — spans and log records are db rows', () => {
     unwrap(
       await run(function* () {
         yield* storage()
-        yield* createServer({
+        yield* Server.actions.create({
           services: [todos],
           plugins: [ObservePlugin.use({ batch: { waitMs: 10 } })],
         })
@@ -817,7 +809,7 @@ describe('observe — spans and log records are db rows', () => {
     unwrap(
       await run(function* () {
         yield* storage()
-        yield* createServer({
+        yield* Server.actions.create({
           services: [todos],
           plugins: [ObservePlugin.use({ batch: { waitMs: 10 } })],
         })
@@ -889,7 +881,7 @@ describe('observe — spans and log records are db rows', () => {
     unwrap(
       await run(function* () {
         yield* storage()
-        yield* createServer({
+        yield* Server.actions.create({
           services: [todos],
           plugins: [ObservePlugin.use({ batch: { waitMs: 10 } })],
         })
@@ -940,7 +932,7 @@ describe('observe — spans and log records are db rows', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services: [todos],
           plugins: [ObservePlugin.use({ batch: { waitMs: 10 } })],
         })
@@ -1004,7 +996,7 @@ describe('observe — spans and log records are db rows', () => {
         await run(function* () {
           yield* storage()
 
-          const server = yield* createServer({
+          const server = yield* Server.actions.create({
             services: [todos],
             plugins: [
               ObservePlugin.use({ db: SqliteAdapter.use({ path }), batch: { waitMs: 10 } }),
@@ -1046,7 +1038,7 @@ describe('observe — spans and log records are db rows', () => {
         await run(function* () {
           yield* storage()
 
-          const server = yield* createServer({
+          const server = yield* Server.actions.create({
             services: [todos],
             plugins: [
               ObservePlugin.use({
@@ -1109,7 +1101,7 @@ describe('observe — spans and log records are db rows', () => {
         await run(function* () {
           yield* storage()
 
-          const server = yield* createServer({
+          const server = yield* Server.actions.create({
             services: [odd],
             plugins: [
               ObservePlugin.use({

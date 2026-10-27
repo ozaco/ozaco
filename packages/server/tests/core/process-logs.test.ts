@@ -6,7 +6,7 @@
  * at the root, every line is exactly ONE record.
  */
 import type { ObserveDef, ServerDef } from 'server:core'
-import { action, createServer, ObserveExporter, Server, service } from 'server:core'
+import { action, ObserveExporter, Server, service } from 'server:core'
 import type { Operation, Scope } from 'std:effect'
 import { run, scoped, sleep, useContext, useScope, within } from 'std:effect'
 import { DefaultLogger, Logger, LogLevel } from 'std:logger'
@@ -105,7 +105,11 @@ describe('process logs — a node claims the lines logged outside it', () => {
 
         yield* scoped(function* () {
           yield* storage()
-          yield* createServer({ name: 'shop-node', services: [shop], plugins: [sink.plugin] })
+          yield* Server.actions.create({
+            name: 'shop-node',
+            services: [shop],
+            plugins: [sink.plugin],
+          })
           instance = (yield* useContext(Server)).instance
 
           // a real transport line: the link drops, the transport's watcher logs it (root scope)
@@ -156,7 +160,11 @@ describe('process logs — a node claims the lines logged outside it', () => {
 
         yield* scoped(function* () {
           yield* storage()
-          yield* createServer({ name: 'worker-node', services: [shop], plugins: [sink.plugin] })
+          yield* Server.actions.create({
+            name: 'worker-node',
+            services: [shop],
+            plugins: [sink.plugin],
+          })
 
           yield* within(root, () => Trace.actions.recordFailure(failure))
           yield* within(root, () => Trace.actions.recordFailure(failure))
@@ -195,7 +203,7 @@ describe('process logs — a node claims the lines logged outside it', () => {
         return yield* scoped(function* () {
           yield* storage()
 
-          const server = yield* createServer({ services: [shop], plugins: [sink.plugin] })
+          const server = yield* Server.actions.create({ services: [shop], plugins: [sink.plugin] })
 
           // the node saw the root's TraceTransport and did not install its own
           const skipped = (yield* TraceTransport.context.get()) === rootTransport
@@ -240,7 +248,7 @@ describe('process logs — a node claims the lines logged outside it', () => {
         return yield* scoped(function* () {
           yield* storage()
 
-          const server = yield* createServer({ services: [shop], plugins: [sink.plugin] })
+          const server = yield* Server.actions.create({ services: [shop], plugins: [sink.plugin] })
 
           yield* server.start()
 
@@ -278,7 +286,7 @@ describe('process logs — a node claims the lines logged outside it', () => {
 
         yield* scoped(function* () {
           yield* storage()
-          yield* createServer({ services: [shop], plugins: [sink.plugin] })
+          yield* Server.actions.create({ services: [shop], plugins: [sink.plugin] })
         })
 
         yield* logIn(root, 'nobody claims this')
@@ -302,10 +310,14 @@ describe('process logs — a node claims the lines logged outside it', () => {
         yield* scoped(function* () {
           yield* storage()
 
-          const a = yield* createServer({ name: 'a', services: [shop], plugins: [first.plugin] })
+          const a = yield* Server.actions.create({
+            name: 'a',
+            services: [shop],
+            plugins: [first.plugin],
+          })
 
           yield* scoped(function* () {
-            const b = yield* createServer({
+            const b = yield* Server.actions.create({
               name: 'b',
               services: [shop],
               plugins: [second.plugin],
@@ -336,7 +348,7 @@ describe('process logs — a node claims the lines logged outside it', () => {
 
         const off = yield* scoped(function* () {
           yield* storage()
-          yield* createServer({
+          yield* Server.actions.create({
             services: [shop],
             plugins: [optedOut.plugin],
             observe: { processLogs: false },
@@ -348,7 +360,7 @@ describe('process logs — a node claims the lines logged outside it', () => {
 
         const idle = yield* scoped(function* () {
           yield* storage()
-          yield* createServer({ services: [shop] })
+          yield* Server.actions.create({ services: [shop] })
 
           return yield* canEmitIn(root)
         })
@@ -395,13 +407,13 @@ describe('process logs — what a node logs while it comes up is its own', () =>
 
         yield* scoped(function* () {
           yield* storage()
-          yield* createServer({ name: 'a', services: [shop], plugins: [first.plugin] })
+          yield* Server.actions.create({ name: 'a', services: [shop], plugins: [first.plugin] })
 
           const a = (yield* useContext(Server)).instance
 
           // `a` claims the process's records by now: `b`'s boot line fell to it before the fix
           const b = yield* scoped(function* () {
-            yield* createServer({
+            yield* Server.actions.create({
               name: 'b',
               services: [shop],
               plugins: [bootLine('b is coming up'), second.plugin],
@@ -438,7 +450,7 @@ describe('process logs — what a node logs while it comes up is its own', () =>
 
         yield* scoped(function* () {
           yield* storage()
-          yield* createServer({
+          yield* Server.actions.create({
             name: 'solo',
             services: [shop],
             plugins: [
@@ -451,7 +463,7 @@ describe('process logs — what a node logs while it comes up is its own', () =>
         // a node that does not claim the process keeps its own boot lines only
         yield* scoped(function* () {
           yield* storage()
-          yield* createServer({
+          yield* Server.actions.create({
             name: 'private',
             services: [shop],
             observe: { processLogs: false },
@@ -481,10 +493,10 @@ describe('process logs — what a node logs while it comes up is its own', () =>
 
         yield* scoped(function* () {
           yield* storage()
-          yield* createServer({ name: 'a', services: [shop], plugins: [claimant.plugin] })
+          yield* Server.actions.create({ name: 'a', services: [shop], plugins: [claimant.plugin] })
 
           yield* scoped(function* () {
-            const idle = yield* createServer({
+            const idle = yield* Server.actions.create({
               name: 'idle',
               services: [shop],
               plugins: [bootLine('idle is coming up')],

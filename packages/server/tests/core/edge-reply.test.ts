@@ -2,7 +2,7 @@
  * The HTTP shape of a SUCCESSFUL reply: an action's static `status`/`headers`, the handler's
  * per-call `ctx.reply`, the defaults (200 / 204) and what the manifest publishes about them.
  */
-import { action, createServer, Edge, service } from 'server:core'
+import { action, Edge, Server, service } from 'server:core'
 import { Docs } from 'server:plugins'
 import { run, until } from 'std:effect'
 import { fail, unwrap } from 'std:result'
@@ -58,7 +58,7 @@ describe('edge — reply shape', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services: [jobs],
           edge: BunEdge,
           plugins: [Docs.use()],

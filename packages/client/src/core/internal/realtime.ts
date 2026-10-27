@@ -1,5 +1,5 @@
 import type { Flow, Operation, Subscription } from 'std:effect'
-import { attempt, createQueue, fork, sleep, withResolvers } from 'std:effect'
+import { attempt, createQueue, ensure, fork, sleep, withResolvers } from 'std:effect'
 import { IO } from 'std:io'
 import type { Result } from 'std:result'
 import { fail, isFailure } from 'std:result'
@@ -17,6 +17,7 @@ import type { Helpers } from '../types/helpers'
 import { RECONNECT_FIELD } from './const'
 import { manifestOf } from './manifest'
 import { markRemote, remoteCause, withCarrier } from './trace'
+import { urlOf } from './url'
 
 const RECONNECT_POLL_MS = 100
 
@@ -59,7 +60,7 @@ function* socketPath(
 }
 
 const socketUrl = (ctx: ClientDef.Context, path: string): string => {
-  const url = new URL(path, ctx.options.url)
+  const url = urlOf(ctx.options, path)
 
   url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
 
@@ -124,6 +125,43 @@ function* verdictOf(
  * naming the span that recorded it (`recorded`) in the watch's own trace is marked recorded
  * there: the consumer's spans then carry only its status.
  */
+/** The status right now — from the sockets alive and the watches lost. */
+const statusOf = (ctx: ClientDef.Context): ClientDef.RealtimeStatus => {
+  if (ctx.sockets.size === 0) {
+    return ctx.realtime.lost > 0 ? 'down' : 'idle'
+  }
+
+  for (const connection of ctx.sockets) {
+    // 1 = OPEN
+    if (connection.readyState === 1) {
+      return 'open'
+    }
+  }
+
+  return 'reconnecting'
+}
+
+/** `$realtime.status()`: re-read the status and answer it; a change is told to every
+ * `$realtime.subscribe` listener (the watches' poll asks too, every 100 ms, so a UI that never
+ * asks still hears). An open socket forgets the watches lost before it. */
+export const realtimeTick = (ctx: ClientDef.Context): ClientDef.RealtimeStatus => {
+  const next = statusOf(ctx)
+
+  if (next === 'open') {
+    ctx.realtime.lost = 0
+  }
+
+  if (next !== ctx.realtime.status) {
+    ctx.realtime.status = next
+
+    for (const listener of ctx.realtime.listeners) {
+      listener(next)
+    }
+  }
+
+  return next
+}
+
 // oxlint-disable-next-line max-params -- ctx · resource · options · pager hooks
 export const watch = <TRow>(
   ctx: ClientDef.Context,
@@ -142,6 +180,14 @@ export const watch = <TRow>(
         opening,
       ),
       reconnect: { retries: 10, delayMs: 100, backoff: 2, maxDelayMs: 5000 },
+    })
+
+    // `$realtime` reads the live sockets: this one for as long as the watch lives
+    ctx.sockets.add(connection)
+    realtimeTick(ctx)
+    hooks?.detach?.(() => {
+      ctx.sockets.delete(connection)
+      realtimeTick(ctx)
     })
     // the `traceparent` the last watch frame went out with (an error frame's `recorded` is
     // weighed against it)
@@ -261,6 +307,7 @@ export const watch = <TRow>(
       const messages = yield* attempt(connection.messages)
 
       if (isFailure(messages)) {
+        ctx.realtime.lost += 1
         frames.close(messages)
 
         return
@@ -270,6 +317,11 @@ export const watch = <TRow>(
         const step = yield* messages.value.next()
 
         if (step.done) {
+          // a socket that could not be reopened ends with its failure: the watch is LOST
+          if (step.value !== true && step.value !== undefined) {
+            ctx.realtime.lost += 1
+          }
+
           frames.close(step.value === true ? undefined : step.value)
 
           return
@@ -294,12 +346,21 @@ export const watch = <TRow>(
 
       for (;;) {
         yield* sleep(RECONNECT_POLL_MS)
+        realtimeTick(ctx)
 
         if (connection.reconnects !== seen) {
           seen = connection.reconnects
           yield* attempt(() => subscribe(true))
         }
       }
+    })
+
+    // registered LAST, so it runs FIRST when the watch is halted: `$realtime` stops counting
+    // this socket before the pumps are halted and the socket closed (a redial in flight may
+    // hold that up)
+    yield* ensure(() => {
+      ctx.sockets.delete(connection)
+      realtimeTick(ctx)
     })
 
     const subscription: Subscription<ClientDef.WatchFrame<TRow>, void> = {

@@ -1,5 +1,5 @@
 import { useDb } from 'db:core'
-import { action, createServer, Edge } from 'server:core'
+import { action, Edge, Server } from 'server:core'
 import { crud } from 'server:plugins'
 import { run, until } from 'std:effect'
 import { unwrap } from 'std:result'
@@ -55,7 +55,7 @@ describe('resource actions + extend', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services: [todos],
           edge: BunEdge,
         })
@@ -119,7 +119,7 @@ describe('resource actions + extend', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services: [everything],
           edge: BunEdge,
         })

@@ -8,6 +8,7 @@ export const EffectErrors = createTags(
   'iteration-error',
   'missing-context',
   'no-scope-handler',
+  'timeout',
   'using',
 )
 

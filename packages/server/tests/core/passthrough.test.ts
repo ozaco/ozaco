@@ -10,7 +10,8 @@
  * for a success, the recorder the failure's wire origin named for a failure.
  */
 import type { ObserveDef } from 'server:core'
-import { action, createServer, Edge, HEADERS, ObserveExporter, service } from 'server:core'
+import { action, Edge, ObserveExporter, Server, service } from 'server:core'
+import { HEADERS } from 'server:internal'
 import type { Operation } from 'std:effect'
 import { createQueue, fork, run, scoped, sleep, until } from 'std:effect'
 import { fail, unwrap } from 'std:result'
@@ -87,7 +88,7 @@ const gateway = async (
         scoped(function* () {
           yield* storage()
           yield* MemoryTransport.use({ prefix: 'app', link })
-          yield* createServer({
+          yield* Server.actions.create({
             services: [math],
             carrier: NetworkCarrier,
             name: 'app',
@@ -105,7 +106,7 @@ const gateway = async (
         yield* MemoryTransport.use({ prefix: 'app', link })
 
         // `math` is declared here too, HOSTED elsewhere: its edge routes forward over the carrier
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services: [gate, math],
           hosted: ['gate'],
           carrier: NetworkCarrier,

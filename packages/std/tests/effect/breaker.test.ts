@@ -232,3 +232,39 @@ describe('createBreaker', () => {
     expect(breaker.state()).toBe('open')
   })
 })
+
+describe('createBreaker — onChange', () => {
+  it('announces open, half-open and closed once per transition, with the reason', async () => {
+    const time = clock()
+    const seen: string[] = []
+    const breaker = createBreaker({
+      failures: 1,
+      halfOpenMs: 100,
+      now: time.now,
+      onChange: (state, reason) => {
+        seen.push(
+          `${state}:${isFailure(reason as Result<never, unknown>) ? String((reason as Result.Failure<unknown>).error) : String(reason)}`,
+        )
+      },
+    })
+
+    unwrap(
+      await run(function* () {
+        yield* attempt(() => breaker.run(boom))
+        yield* attempt(() => breaker.run(boom))
+        time.advance(150)
+        expect(yield* breaker.run(ok)).toBe('ok')
+        breaker.trip('by hand')
+        breaker.reset()
+      }),
+    )
+
+    expect(seen).toEqual([
+      'open:breaker-test.boom',
+      'half-open:breaker-test.boom',
+      'closed:undefined',
+      'open:by hand',
+      'closed:undefined',
+    ])
+  })
+})

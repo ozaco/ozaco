@@ -1,3 +1,5 @@
+import type { Operation } from 'std:effect'
+import { until } from 'std:effect'
 import type { Protocol } from 'std:plugin'
 import { defineProtocol } from 'std:plugin'
 import { fail } from 'std:result'
@@ -16,27 +18,53 @@ import { ServerErrors } from '../errors'
 import { ExporterProbe, InheritedExporters } from '../internal/context'
 import type { CarrierDef } from '../types/carrier'
 import type { EdgeDef } from '../types/edge'
+import type { Helpers } from '../types/helpers'
 import type { ObserveDef } from '../types/observe'
 import type { OutcomesDef } from '../types/outcomes'
 import type { ServerDef } from '../types/server'
 
+/** The plumbing the protocol-level actions run, loaded on first use (see `internal/handlers`). */
+let plumbing: Helpers.Plumbing | undefined
+
+function* loaded(): Operation<Helpers.Plumbing> {
+  plumbing ??= yield* until(import('../internal/handlers'))
+
+  return plumbing
+}
+
+function* create(options: ServerDef.Options): Operation<ServerDef.Handle> {
+  return yield* (yield* loaded()).createNode(options)
+}
+
 /**
- * The kernel protocol: service → action → dispatch. `createServer` installs its single impl
- * ({@link ServerClient}) first, then the edge, the carrier and the plugins — all of them std
- * plugins — and wires their hooks into it. Not cloneable: one server per scope.
+ * The kernel protocol: service → action → dispatch. `Server.actions.create(options)` builds a
+ * node: it installs the single impl ({@link ServerClient}) first, then the edge, the carrier and
+ * the plugins — all of them std plugins — and wires their hooks into it. Not cloneable: one
+ * server per scope. The other protocol-level actions are the plumbing an Edge impl
+ * (`openEdge`) and a server plugin (`dispatchSpan`) reach the kernel with.
  */
-export const Server = defineProtocol<ServerDef.Context, ServerDef.Actions>({
+export const Server = defineProtocol<ServerDef.Context, ServerDef.Actions, ServerDef.Handlers>({
   name: 'server',
   version: pkg.version,
   description: 'The service/action kernel: dispatch, tracing, manifest',
 
   subtype: SERVER,
+
+  handlers: {
+    create: create as ServerDef.Handlers['create'],
+    *dispatchSpan() {
+      return yield* (yield* loaded()).dispatchSpan()
+    },
+    *openEdge() {
+      return yield* (yield* loaded()).openEdge()
+    },
+  },
 })
 
 /**
  * The HTTP/WebSocket face. The engine is core's; an impl (`server:impl/edge/{bun,node,deno}`)
  * only knows how to listen on its runtime. Cloneable so a test can run two edges side by side;
- * `createServer` pins the one it was given.
+ * `Server.actions.create` pins the one it was given.
  */
 export const Edge: Protocol<EdgeDef.Options, EdgeDef.Actions> = defineProtocol<
   EdgeDef.Options,
@@ -52,7 +80,7 @@ export const Edge: Protocol<EdgeDef.Options, EdgeDef.Actions> = defineProtocol<
 
 /**
  * How dispatches travel between nodes. `LocalCarrier` (core) serves only this process;
- * `NetworkCarrier` rides an `@ozaco/transport`. Cloneable; `createServer` pins the one it was
+ * `NetworkCarrier` rides an `@ozaco/transport`. Cloneable; `Server.actions.create` pins the one it was
  * given (or installs `LocalCarrier`).
  */
 export const Carrier: Protocol<CarrierDef.Options, CarrierDef.Actions> = defineProtocol<

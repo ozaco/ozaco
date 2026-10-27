@@ -1,5 +1,6 @@
 // oxlint-disable import/exports-last
-import { Server, ServerErrors, tagOf } from 'server:core'
+import { Server, ServerErrors } from 'server:core'
+import { tagOf } from 'server:internal'
 import type { Operation } from 'std:effect'
 import { attempt, createContext, until } from 'std:effect'
 import { IO } from 'std:io'
@@ -197,7 +198,7 @@ export const requirementKind = (requirement: AuthDef.Requirement): AuthDef.Requi
 
 /**
  * Say a gate's verdict on the guarded span `span` — the DISPATCH span of an action
- * (`dispatchSpan()`, even under a plugin span wrapping it), the edge span of a raw route, the
+ * (`Server.actions.dispatchSpan()`, even under a plugin span wrapping it), the edge span of a raw route, the
  * upgrade / first-frame span of a socket handshake, the active span of an `authorize` / `check`:
  * `ozaco.auth.outcome`, `ozaco.auth.requirement`, `ozaco.auth.strategy` and — only with the
  * global `capture.enduser` on (personal data) — `enduser.id`. A denial is still the call's

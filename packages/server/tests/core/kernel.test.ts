@@ -1,5 +1,5 @@
 import type { ObserveDef, ServerDef } from 'server:core'
-import { action, createServer, refs, Server, ServerErrors, service, stream } from 'server:core'
+import { action, refs, Server, ServerErrors, service, stream } from 'server:core'
 import { attempt, run, sleep, useContext } from 'std:effect'
 import { definePlugin } from 'std:plugin'
 import { unwrap } from 'std:result'
@@ -33,7 +33,7 @@ describe('kernel — services, dispatch, hooks', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({ services: [todos] })
+        const server = yield* Server.actions.create({ services: [todos] })
 
         expect(server.api.todos.create).toEqual({ service: 'todos', action: 'create' })
 
@@ -131,7 +131,7 @@ describe('kernel — services, dispatch, hooks', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services: [whoami],
           plugins: [Auth, Timing.use({ label: 'timing' })],
         })
@@ -146,7 +146,7 @@ describe('kernel — services, dispatch, hooks', () => {
     const outcome = await run(function* () {
       yield* storage()
 
-      return yield* createServer({ services: [orphan], plugins: [Auth] })
+      return yield* Server.actions.create({ services: [orphan], plugins: [Auth] })
     })
 
     expect((outcome as AnyType).error).toBe(ServerErrors.Configuration)
@@ -160,7 +160,7 @@ describe('kernel — services, dispatch, hooks', () => {
     const outcome2 = await run(function* () {
       yield* storage()
 
-      return yield* createServer({ services: [invalid], plugins: [Auth] })
+      return yield* Server.actions.create({ services: [invalid], plugins: [Auth] })
     })
 
     expect((outcome2 as AnyType).error).toBe(ServerErrors.Configuration)
@@ -187,7 +187,7 @@ describe('kernel — services, dispatch, hooks', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({ services: [todos], plugins: [Observer] })
+        const server = yield* Server.actions.create({ services: [todos], plugins: [Observer] })
 
         // the client sees the VALUE, never `{ value: { ... } }`
         const created = yield* server.call(todos, 'create', { title: 'enveloped' })
@@ -208,7 +208,7 @@ describe('kernel — services, dispatch, hooks', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({ services: [todos], timeoutMs: 100 })
+        const server = yield* Server.actions.create({ services: [todos], timeoutMs: 100 })
         const late = yield* attempt(server.call(todos, 'slowCancel', { ms: 300 }))
 
         expect((late as AnyType).error).toBe(ServerErrors.TimeoutPending)
@@ -260,7 +260,11 @@ describe('kernel — services, dispatch, hooks', () => {
         await run(function* () {
           yield* storage()
 
-          const server = yield* createServer({ services: [todos], name: 'env-res', plugins: [Spy] })
+          const server = yield* Server.actions.create({
+            services: [todos],
+            name: 'env-res',
+            plugins: [Spy],
+          })
 
           yield* server.call(todos, 'create', { title: 'resourced' })
         }),
@@ -308,7 +312,7 @@ describe('kernel — services, dispatch, hooks', () => {
             }
           },
         }).build()
-        const server = yield* createServer({ services: [todos], plugins: [Spy] })
+        const server = yield* Server.actions.create({ services: [todos], plugins: [Spy] })
         const out = yield* server.call(todos, 'count', { n: 3 })
 
         expect(out instanceof ReadableStream).toBe(true)
@@ -416,7 +420,11 @@ describe('kernel — services, dispatch, hooks', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({ services: [todos], name: 'tests', version: '1.2.3' })
+        const server = yield* Server.actions.create({
+          services: [todos],
+          name: 'tests',
+          version: '1.2.3',
+        })
         const manifest = yield* server.manifest()
 
         expect(manifest.name).toBe('tests')
@@ -440,7 +448,7 @@ describe('kernel — calling by ref', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({ services: [todos] })
+        const server = yield* Server.actions.create({ services: [todos] })
 
         // built from the service TYPE alone — `refs` only ever sees the name string
         const api = refs<typeof todos>('todos')

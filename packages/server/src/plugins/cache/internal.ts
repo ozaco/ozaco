@@ -1,7 +1,8 @@
 // oxlint-disable import/exports-last
 import type { KvDef } from 'db:core'
 import { Kv } from 'db:core'
-import { dispatchFailure, dispatchSpan, scopeOf } from 'server:internal'
+import { Server } from 'server:core'
+import { dispatchFailure, scopeOf } from 'server:internal'
 import type { Operation } from 'std:effect'
 import { attempt } from 'std:effect'
 import { Logger, LogLevel } from 'std:logger'
@@ -22,7 +23,7 @@ export const CACHE_SCOPE = scopeOf('cache')
 /** The span event a mutation's `invalidate` leaves on the writer's span (≤ 20 chars). */
 const EVICT_EVENT = 'cache.evict'
 
-/** The action options this plugin owns (validated by the kernel at createServer). */
+/** The action options this plugin owns (validated by the kernel at Server.actions.create). */
 export const options = {
   cache: z.object({
     ttlMs: z.number().positive(),
@@ -213,12 +214,12 @@ export function* lookup(input: CacheDef.LookupInput): Operation<unknown> {
 /**
  * A mutation's `invalidate` once it succeeded: the tags dropped and an `cache.evict`
  * `{ ozaco.cache.tags }` span event on the writer's span — the mutation's DISPATCH span
- * (`dispatchSpan()`), whatever plugin span is active around this hook. A failed invalidation
+ * (`Server.actions.dispatchSpan()`), whatever plugin span is active around this hook. A failed invalidation
  * never fails the committed mutation — it is logged (WARN, the failure recorded once, on that
  * same span).
  */
 export function* evict(tags: readonly string[]): Operation<void> {
-  const writer = yield* dispatchSpan()
+  const writer = yield* Server.actions.dispatchSpan()
   const dropped = yield* attempt(() => Kv.actions.invalidate(...tags))
 
   if (isFailure(dropped)) {

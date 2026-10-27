@@ -22,7 +22,7 @@ import {
   removeLogRow,
   replayLog,
 } from '../internal/log'
-import { applyPlan, planMigration } from '../internal/migrate'
+import { applyPlan, backfillDefaults, planMigration } from '../internal/migrate'
 import { traced } from '../internal/trace'
 import type { Bus } from '../types/bus'
 import type { Change } from '../types/change'
@@ -139,6 +139,7 @@ const DbImpl = Db.implement<Database.Context, [options: Database.Options]>({
       specs: new Map(tables.map(def => [def.name, tableSpecOf(def)])),
       logs: new Map(tables.filter(def => def.log).map(def => [def.name, logSpecOf(def.name)])),
       safe: options.safe ?? false,
+      backfill: options.backfill ?? false,
       // every data-plane call goes through its db span (child-only — see `internal/trace`)
       adapter: traced(adapter.actions, described.value, options.observe),
       info: described.value,
@@ -190,7 +191,13 @@ const DbImpl = Db.implement<Database.Context, [options: Database.Options]>({
       )
     }
 
-    return createHandle(state)
+    const handle = createHandle(state)
+
+    if (state.backfill && (options.migrations ?? 'auto') === 'auto') {
+      yield* backfillDefaults(handle, tables)
+    }
+
+    return handle
   },
 })
 
@@ -199,6 +206,10 @@ export const DbClient: Database.Client = DbImpl.build({
     const state = yield* useContext(StateRef)
 
     yield* applyPlan(state, yield* planMigration(state))
+
+    if (state.backfill) {
+      yield* backfillDefaults(createHandle(state), [...state.tables.values()])
+    }
   },
 
   *planMigration() {

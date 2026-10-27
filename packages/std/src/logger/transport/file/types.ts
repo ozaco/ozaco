@@ -20,6 +20,12 @@ export namespace FileDef {
      */
     bufferSize?: number | undefined
     format?: ((entry: LoggerDef.Entry) => Operation<string>) | undefined
+    /** chmod the file to this mode at setup and after every rotation (`0o600`: the owner's
+     * alone). */
+    mode?: number | undefined
+    /** Rotate once a write would take the file past `maxBytes`: `<path>` becomes `<path>.1`
+     * (the older ones shift up to `<path>.<keep>`, default `keep` 1) and a fresh file starts. */
+    rotate?: { readonly maxBytes: number; readonly keep?: number | undefined } | undefined
   }
 
   export interface Context {
@@ -28,6 +34,8 @@ export namespace FileDef {
 
     buffer: string[]
     limit: number
+    /** bytes in the current file — what `rotate` counts against. */
+    size: number
     format: (entry: LoggerDef.Entry) => Operation<AnyType>
     options: Options
   }

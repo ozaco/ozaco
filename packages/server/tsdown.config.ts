@@ -20,6 +20,7 @@ export default defineConfig({
     'edge/deno': './src/impl/edge/deno/index.ts',
     'carrier/network': './src/impl/carrier/network/index.ts',
     plugins: './src/plugins/index.ts',
+    testing: './src/testing/index.ts',
     'plugins/observe/otlp': './src/plugins/observe/impl/otlp/index.ts',
     'plugins/observe/openobserve': './src/plugins/observe/impl/openobserve/index.ts',
   },

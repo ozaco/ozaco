@@ -7,7 +7,7 @@
  * failure exactly once, never twice.
  */
 import type { ServerDef } from 'server:core'
-import { createServer, Edge } from 'server:core'
+import { Edge, Server } from 'server:core'
 import { run, sleep, until } from 'std:effect'
 import { definePlugin } from 'std:plugin'
 import { fail, unwrap } from 'std:result'
@@ -88,7 +88,7 @@ describe('edge — returned failures are recorded', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services: [todos],
           edge: BunEdge,
           plugins: [seen.plugin.use()],

@@ -378,3 +378,41 @@ describe('paths', () => {
     })
   })
 })
+
+describe('rm', () => {
+  it('empty: removes an empty directory, refuses a full one with std:io.not-empty; force makes a missing one a no-op', async () => {
+    await withTempDir(async dir => {
+      const outcome = await run(function* () {
+        yield* BunIO.use()
+
+        const empty = join(dir, 'empty')
+        const full = join(dir, 'full')
+
+        yield* IO.actions.ensureDir(empty)
+        yield* IO.actions.ensureDir(full)
+        yield* IO.actions.write(join(full, 'a.txt'), 'x')
+        yield* IO.actions.rm(empty, { empty: true })
+
+        const refused = yield* attempt(() => IO.actions.rm(full, { empty: true }))
+
+        yield* IO.actions.rm(join(dir, 'missing'), { empty: true, force: true })
+
+        const missing = yield* attempt(() => IO.actions.rm(join(dir, 'missing'), { empty: true }))
+
+        return {
+          emptyGone: !(yield* IO.actions.exists(empty)),
+          fullKept: yield* IO.actions.exists(full),
+          refused: isFailure(refused) ? refused.error : null,
+          missing: isFailure(missing) ? missing.error : null,
+        }
+      })
+
+      expect(unwrap(outcome)).toEqual({
+        emptyGone: true,
+        fullKept: true,
+        refused: 'std:io.not-empty',
+        missing: 'std:io.not-found',
+      })
+    })
+  })
+})

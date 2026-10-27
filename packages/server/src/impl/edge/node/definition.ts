@@ -1,6 +1,6 @@
 import type { EdgeDef } from 'server:core'
-import { Edge, ServerErrors } from 'server:core'
-import { edgeActions, openEdge } from 'server:internal'
+import { Edge, Server, ServerErrors } from 'server:core'
+import { edgeActions } from 'server:internal'
 import { fail } from 'std:result'
 
 import { createServer as createHttpServer } from 'node:http'
@@ -21,7 +21,7 @@ export const NodeEdge = Edge.implement<EdgeDef.Options, []>({
     }
 
     yield* StateRef.set({ server: null, wss: null })
-    yield* openEdge()
+    yield* Server.actions.openEdge()
 
     return { runtime: 'node' }
   },

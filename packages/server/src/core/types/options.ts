@@ -18,20 +18,22 @@ import type { ServerDef } from './server'
  *   }
  *
  * Runtime validation stays the plugin's: it declares a zod schema per key in its
- * `PluginContext.options`, and `createServer` refuses an option nobody claims.
+ * `PluginContext.options`, and `Server.actions.create` refuses an option nobody claims.
  */
 export namespace OptionsDef {
   // --- auth ---------------------------------------------------------------------------------
 
   export type TokenType = 'access' | 'refresh' | 'session' | 'service'
 
-  /** A verified caller, as `ctx.auth` sees it. */
-  export interface Principal {
+  /** A verified caller, as `ctx.auth` sees it. `TClaims` types what the provider put in the
+   * token (`Principal<{ email?: string }>` — `ctx.auth.claims.email` is a `string | undefined`,
+   * no `typeof` dance); the default keeps the claims open. */
+  export interface Principal<TClaims extends Record<string, unknown> = Record<string, unknown>> {
     readonly sub: string
     readonly type: TokenType
     readonly roles: readonly string[]
     readonly permissions: readonly string[]
-    readonly claims: Record<string, unknown>
+    readonly claims: TClaims
     readonly jti: string
   }
 

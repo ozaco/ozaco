@@ -30,6 +30,28 @@
         "default": "./dist/resolve.cjs"
       },
       "source": "./src/resolve.ts"
+    },
+    "./vite": {
+      "import": {
+        "types": "./dist/vite.d.ts",
+        "default": "./dist/vite.js"
+      },
+      "require": {
+        "types": "./dist/vite.d.cts",
+        "default": "./dist/vite.cjs"
+      },
+      "source": "./src/vite.ts"
+    },
+    "./bun": {
+      "import": {
+        "types": "./dist/bun.d.ts",
+        "default": "./dist/bun.js"
+      },
+      "require": {
+        "types": "./dist/bun.d.cts",
+        "default": "./dist/bun.cjs"
+      },
+      "source": "./src/bun.ts"
     }
   },
   "publishConfig": {

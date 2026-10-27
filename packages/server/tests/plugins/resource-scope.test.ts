@@ -1,6 +1,6 @@
 import { column, DbClient, defineSchema, table, useDb, where } from 'db:core'
 import type { ServerDef } from 'server:core'
-import { createServer, Edge } from 'server:core'
+import { Edge, Server } from 'server:core'
 import type { AuthDef } from 'server:plugins'
 import { Auth, crud, JwtAuth } from 'server:plugins'
 import type { Operation } from 'std:effect'
@@ -73,7 +73,7 @@ describe('resource scope', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({ services: [notes], edge: BunEdge })
+        const server = yield* Server.actions.create({ services: [notes], edge: BunEdge })
 
         yield* server.start()
 
@@ -155,7 +155,7 @@ describe('resource scope', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services: [notes],
           edge: BunEdge,
           plugins: [

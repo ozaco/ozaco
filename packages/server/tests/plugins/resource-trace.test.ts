@@ -10,7 +10,7 @@
  * Seen through an in-memory std:trace `Trace` sink.
  */
 import { DbClient, where } from 'db:core'
-import { action, createServer, Edge, ServerErrors, service } from 'server:core'
+import { action, Edge, Server, ServerErrors, service } from 'server:core'
 import { crud, CrudCauses } from 'server:plugins'
 import { run, sleep, until } from 'std:effect'
 import { fail, ResultErrors, unwrap } from 'std:result'
@@ -164,7 +164,7 @@ describe('resource — telemetry', () => {
       await run(function* () {
         yield* storage()
         yield* tracer.plugin.use()
-        yield* createServer({ services: [todos], edge: BunEdge })
+        yield* Server.actions.create({ services: [todos], edge: BunEdge })
 
         expect((yield* post('/todos', { title: 'a', done: false })).status).toBe(200)
         expect((yield* json('/todos')).body.data).toHaveLength(1)
@@ -252,7 +252,7 @@ describe('resource — telemetry', () => {
       await run(function* () {
         yield* storage()
         yield* tracer.plugin.use()
-        yield* createServer({ services: [todos], edge: BunEdge })
+        yield* Server.actions.create({ services: [todos], edge: BunEdge })
 
         const created = yield* post('/todos', { title: 'a', done: false })
 
@@ -339,7 +339,7 @@ describe('resource — telemetry', () => {
       await run(function* () {
         yield* storage()
         yield* tracer.plugin.use()
-        yield* createServer({ services: [todos], edge: BunEdge })
+        yield* Server.actions.create({ services: [todos], edge: BunEdge })
 
         const rewritten = yield* json('/todos/nope', {
           method: 'PATCH',
@@ -379,7 +379,7 @@ describe('resource — telemetry', () => {
     unwrap(
       await run(function* () {
         yield* storage()
-        yield* createServer({ services: [todos], edge: BunEdge })
+        yield* Server.actions.create({ services: [todos], edge: BunEdge })
 
         const missing = yield* json('/todos/nope')
 
@@ -427,7 +427,7 @@ describe('resource — telemetry', () => {
         yield* storage()
         yield* tracer.plugin.use()
 
-        const server = yield* createServer({ services: [todos], edge: BunEdge })
+        const server = yield* Server.actions.create({ services: [todos], edge: BunEdge })
         const info = yield* server.start({ port: 0 })
         const client = socketClient(`${info.url!.replace('http', 'ws')}/todos/_realtime`)
 
@@ -529,7 +529,7 @@ describe('resource — telemetry', () => {
         yield* storage()
         yield* tracer.plugin.use()
 
-        const server = yield* createServer({ services: [todos], edge: BunEdge })
+        const server = yield* Server.actions.create({ services: [todos], edge: BunEdge })
         const info = yield* server.start({ port: 0 })
         const client = socketClient(`${info.url!.replace('http', 'ws')}/todos/_realtime`)
 
@@ -583,7 +583,7 @@ describe('resource — telemetry', () => {
         yield* storage()
         yield* tracer.plugin.use()
 
-        const server = yield* createServer({ services: [todos], edge: BunEdge })
+        const server = yield* Server.actions.create({ services: [todos], edge: BunEdge })
         const info = yield* server.start({ port: 0 })
         const client = socketClient(`${info.url!.replace('http', 'ws')}/todos/_realtime`)
 
@@ -637,7 +637,7 @@ describe('resource — telemetry', () => {
         yield* storage()
         yield* tracer.plugin.use()
 
-        const server = yield* createServer({ services: [todos], edge: BunEdge })
+        const server = yield* Server.actions.create({ services: [todos], edge: BunEdge })
         const info = yield* server.start({ port: 0 })
         const client = socketClient(`${info.url!.replace('http', 'ws')}/todos/_realtime`)
 
@@ -678,7 +678,7 @@ describe('resource — telemetry', () => {
         yield* storage()
         yield* tracer.plugin.use()
 
-        const server = yield* createServer({ services: [todos], edge: BunEdge })
+        const server = yield* Server.actions.create({ services: [todos], edge: BunEdge })
         const info = yield* server.start({ port: 0 })
         const client = socketClient(`${info.url!.replace('http', 'ws')}/todos/_realtime`)
 
@@ -739,7 +739,7 @@ describe('resource — telemetry', () => {
         yield* storage()
         yield* tracer.plugin.use()
 
-        const server = yield* createServer({ services: [todos], edge: BunEdge })
+        const server = yield* Server.actions.create({ services: [todos], edge: BunEdge })
         const info = yield* server.start({ port: 0 })
         const client = socketClient(`${info.url!.replace('http', 'ws')}/todos/_realtime`)
 
@@ -787,7 +787,7 @@ describe('resource — telemetry', () => {
         yield* storage()
         yield* tracer.plugin.use()
 
-        const server = yield* createServer({ services: [todos], edge: BunEdge })
+        const server = yield* Server.actions.create({ services: [todos], edge: BunEdge })
         const info = yield* server.start({ port: 0 })
         const client = socketClient(`${info.url!.replace('http', 'ws')}/todos/_realtime`)
 
@@ -833,7 +833,7 @@ describe('resource — telemetry', () => {
         yield* storage()
         yield* tracer.plugin.use()
 
-        const server = yield* createServer({ services: [notes] })
+        const server = yield* Server.actions.create({ services: [notes] })
 
         yield* server.call(notes, 'seed', { title: 'x' })
       }),

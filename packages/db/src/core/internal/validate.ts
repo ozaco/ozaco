@@ -138,6 +138,28 @@ const normalize = (
       continue
     }
 
+    const schema = column.kind === 'json' ? def.schemas[column.name] : undefined
+
+    if (schema) {
+      const verdict = schema['~standard'].validate(entry)
+
+      if (isPromise(verdict)) {
+        problems.push(`"${column.name}" has an async schema — a column schema must be synchronous`)
+
+        continue
+      }
+
+      if (verdict.issues) {
+        problems.push(`"${column.name}": ${verdict.issues[0]?.message ?? 'rejected by its schema'}`)
+
+        continue
+      }
+
+      data[column.name] = verdict.value
+
+      continue
+    }
+
     data[column.name] = entry
   }
 

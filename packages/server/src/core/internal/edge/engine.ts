@@ -325,7 +325,7 @@ function* answeredElsewhere(by: {
 }
 
 /**
- * Stamp what every response carries back (`createServer({ trace: { response } })`, default on):
+ * Stamp what every response carries back (`Server.actions.create({ trace: { response } })`, default on):
  * `x-request-id` and the W3C draft `traceresponse` (`00-<trace>-<span>-<flags>`): the edge span's
  * own context, sampled only for a trace that is exported (`echoedOf`) — or, when this edge has no
  * span (a non-observing gateway), the span that answered the call elsewhere

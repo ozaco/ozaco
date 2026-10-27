@@ -5,7 +5,7 @@
  * the grace expires, a non-auth first frame buys no extra time, and a bad `authorization` header
  * is refused at the upgrade. None of them reaches the handler.
  */
-import { action, createServer, ServerErrors, service } from 'server:core'
+import { action, Server, ServerErrors, service } from 'server:core'
 import type { Operation } from 'std:effect'
 import { race, run, sleep, until } from 'std:effect'
 import { fail, unwrap } from 'std:result'
@@ -123,7 +123,7 @@ const boot = function* () {
 
   yield* storage()
 
-  const server = yield* createServer({ services: [guarded], edge: BunEdge })
+  const server = yield* Server.actions.create({ services: [guarded], edge: BunEdge })
   const info = yield* server.start({ port: 0 })
 
   return { server, seen, url: `${info.url!.replace('http', 'ws')}/guarded/feed` }

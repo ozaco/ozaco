@@ -8,7 +8,7 @@
  * node too) and headers node refuses (a 500, never a crashed process).
  */
 import type { ServerDef } from 'server:core'
-import { action, createServer, Edge, service, stream } from 'server:core'
+import { action, Edge, Server, service, stream } from 'server:core'
 import type { Operation } from 'std:effect'
 import { flowOf, run, sleep, until } from 'std:effect'
 import { definePlugin } from 'std:plugin'
@@ -141,7 +141,7 @@ const withServer = async (
     await run(function* () {
       yield* storage()
 
-      const server = yield* createServer({
+      const server = yield* Server.actions.create({
         services: [feeds],
         edge: BunEdge,
         ...options,
@@ -397,7 +397,7 @@ describe('edge robustness — sockets', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services: [guarded],
           edge: BunEdge,
           plugins: [seen.plugin.use()],
@@ -461,7 +461,7 @@ describe('edge robustness — sockets', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services: [broken],
           edge: BunEdge,
           plugins: [seen.plugin.use()],
@@ -503,7 +503,7 @@ describe('edge robustness — sockets', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services: [feeds],
           edge: BunEdge,
           plugins: [seen.plugin.use()],
@@ -566,7 +566,7 @@ const leaving = (label: string, edge: ServerDef.PluginLike): void => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services: [feeds],
           edge,
           plugins: [seen.plugin.use()],
@@ -616,7 +616,7 @@ const leaving = (label: string, edge: ServerDef.PluginLike): void => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services: [feeds],
           edge,
           plugins: [seen.plugin.use()],

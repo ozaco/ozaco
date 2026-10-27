@@ -6,8 +6,9 @@
  * shared symbols.
  *
  * Application code does not need any of it — `@ozaco/server` (service / action / stream /
- * createServer / serviceErrors) is the whole surface for writing a server. Reach in here when
- * you are writing an Edge, a Carrier or a server plugin of your own.
+ * `Server.actions.create` / serviceErrors) is the whole surface for writing a server. Reach in
+ * here when you are writing an Edge, a Carrier or a server plugin of your own; what needs the
+ * running kernel (`openEdge`, `dispatchSpan`) is a `Server.actions.*` action, not an export.
  */
 export {
   ACTION,
@@ -28,12 +29,12 @@ export {
   STREAM_DECL,
   TRACE_SCOPE,
 } from './core/const'
+export { HEADERS } from './core/const'
+export { STATUS_OF } from './core/errors'
+export { ActiveRequest, CtxRef, RequestRef } from './core/context'
 export { SENT_BINDING } from './core/internal/const'
-export { LocalCarrier } from './core/definition/local'
-export { MemoryOutcomes } from './core/definition/outcomes'
-export { ServerClient } from './core/definition/server'
-export { edgeActions, openEdge } from './core/utils/edge'
-export { breadcrumb } from './core/utils/failure'
+export { edgeActions } from './core/utils/edge'
+export { breadcrumb, statusOf, tagOf } from './core/utils/failure'
 export { isSchema, isService, isSocketAction } from './core/utils/service'
 export { rewrapResponse } from './core/utils/response'
 export { createSink } from './core/utils/sink'
@@ -45,26 +46,5 @@ export {
   isPartsDecl,
   isStreamDecl,
 } from './core/utils/stream'
-export {
-  answeredBy,
-  carrierSpan,
-  dispatchFailure,
-  dispatchSpan,
-  edgeReply,
-  edgeSpan,
-  inboundOf,
-  isRequestId,
-  markLogged,
-  replyFailure,
-  report,
-  requestIdFor,
-  resourceOf,
-  scopeOf,
-  ServerTracer,
-  settingsOf,
-  traceOf,
-  wireParent,
-  wireTrace,
-  withDispatchSpan,
-} from './core/utils/trace'
+export { answeredBy, dispatchFailure, isRequestId, resourceOf, scopeOf } from './core/utils/trace'
 export { validate } from './core/utils/validation'

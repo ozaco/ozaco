@@ -4,7 +4,7 @@
  * moved the range/total), and re-watching the same id with a new cursor turns the page for that
  * subscriber only. Every frame carries the page token (uniform version tracking).
  */
-import { createServer } from 'server:core'
+import { Server } from 'server:core'
 import { crud, Docs } from 'server:plugins'
 import { run, until } from 'std:effect'
 import { unwrap } from 'std:result'
@@ -48,7 +48,7 @@ describe('resource — windowed realtime', () => {
         yield* storage()
 
         const todos = crud(todosTable)
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services: [todos],
           edge: BunEdge,
           plugins: [Docs.use({ path: '/docs' })],

@@ -113,8 +113,10 @@ export const JwtAuth = JwtAuthImpl.build({
 
     const verified = yield* verify(context.material, refreshToken)
 
+    // a string this key did not sign is a REFUSED credential, not "nobody rotates" (the gate
+    // would answer 501 for it); the chain still moves on, so another key's JwtAuth may answer
     if (!verified) {
-      return undefined
+      return yield* fail(ServerErrors.Unauthorized, 'not a refresh token', AuthErrors.InvalidToken)
     }
 
     if (verified.type !== 'refresh' || !verified.family) {

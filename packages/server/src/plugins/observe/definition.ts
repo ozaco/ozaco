@@ -25,7 +25,7 @@ import type { ObservePluginDef } from './types/observe'
 
 const CAPTURE_KEYS = ['headers', 'bodies', 'frames', 'enduser'] as const
 
-/** `capture` is the server's ONE capture switch (`createServer({ observe: { capture } })`): a key
+/** `capture` is the server's ONE capture switch (`Server.actions.create({ observe: { capture } })`): a key
  * given here overrides it for every sink. */
 const applyCapture = (
   kernel: ServerDef.Context,
@@ -98,7 +98,7 @@ export const ObservePlugin = Observe.implement<
     if (!kernel) {
       return yield* fail(
         ServerErrors.Configuration,
-        'Observe must be installed by createServer (plugins: [ObservePlugin.use(…)])',
+        'Observe must be installed by Server.actions.create (plugins: [ObservePlugin.use(…)])',
       )
     }
 
@@ -107,7 +107,7 @@ export const ObservePlugin = Observe.implement<
     if ((state.forward !== false || state.collect) && !kernel.carrier) {
       return yield* fail(
         ServerErrors.Configuration,
-        'Observe cluster mode needs a carrier (createServer installs it before plugins)',
+        'Observe cluster mode needs a carrier (Server.actions.create installs it before plugins)',
       )
     }
 
@@ -166,7 +166,7 @@ export const ObservePlugin = Observe.implement<
       },
     }
 
-    // the observe API is a REAL service (typed calls, docs, the console): `createServer`
+    // the observe API is a REAL service (typed calls, docs, the console): `Server.actions.create`
     // registers it through the PluginContext seam — mounted with everything else, hosted
     // locally, never served over the carrier. `auth` is its requirement (the service-level
     // option: an action option like any other — the `Auth` plugin must handle it)

@@ -442,6 +442,47 @@ export const createHandle = (state: Database.State, base?: Spec.Filter): Databas
     return stored.length === rows.length ? stored : rows
   }
 
+  /** `modify`: read → `change` → a write guarded by the version just read; a `db.conflict`
+   * re-reads and tries again, `retries` times, then answers with it. */
+  // oxlint-disable-next-line max-params -- table · id · the change · its options
+  const modify = function* (
+    table: string,
+    id: string,
+    change: (current: Spec.Doc) => Spec.Doc | null,
+    options?: Helpers.ModifyOptions,
+  ) {
+    const retries = options?.retries ?? 3
+
+    for (let attemptIndex = 0; ; attemptIndex += 1) {
+      const current = yield* get(table, id, { scope: options?.scope })
+
+      if (!current) {
+        return null
+      }
+
+      const value = change(current)
+
+      if (value === null) {
+        return current
+      }
+
+      const outcome = yield* attempt(() =>
+        patch(table, id, value, {
+          scope: options?.scope,
+          ifVersion: String(current[FIELDS.version]),
+        }),
+      )
+
+      if (!isFailure(outcome)) {
+        return outcome.value
+      }
+
+      if (outcome.error !== DbErrors.Conflict || attemptIndex >= retries) {
+        return yield* outcome
+      }
+    }
+  }
+
   const handle = {
     get,
     insert,
@@ -450,6 +491,7 @@ export const createHandle = (state: Database.State, base?: Spec.Filter): Databas
     insertOrIgnore,
     import: importRows,
     patch,
+    modify,
     replace,
     delete: remove,
     query: (table: string) => {

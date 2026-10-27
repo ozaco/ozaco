@@ -5,6 +5,13 @@ import type { FetchDef } from './fetch'
 
 /** The shapes this module passes around inside itself. */
 export namespace Helpers {
+  /** What one platform send is made with: the deadline, the TLS material, the proxy. */
+  export interface SendSettings {
+    readonly timeoutMs: number | undefined
+    readonly tls: FetchDef.Tls | undefined
+    readonly proxy: string | undefined
+  }
+
   /** What the scope-close fallback end needs: the span until it ends, and when the headers came. */
   export interface Fallback {
     span: TraceDef.LiveSpan | undefined

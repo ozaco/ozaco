@@ -1,10 +1,11 @@
 import type { Context, Operation } from 'std:effect'
-import type { AnyType, EmptyType } from 'std:shared'
+import type { AnyType, EmptyType, StandardSchemaV1 } from 'std:shared'
 
 import type { PROTOCOL } from '../internal/const'
 
 import type { Helpers } from './helpers'
 import type { Plugin } from './plugin'
+import type { Target } from './target'
 
 /**
  * A protocol is a contract whose members live under `.actions`, mirroring the api layer:
@@ -48,6 +49,25 @@ export namespace Protocol {
       description?: string | undefined
       setup(...args: TIArgs): Operation<TIContext>
     }): Implementation<TIContext, TIArgs, TActions>
+
+    /**
+     * A configured implementation (see {@link Target}): `implement` + `build` over a
+     * `{ bound, health, state }` context, the lifecycle (`connect` / `isConnected` / `disconnect`)
+     * written once by the runtime, every domain action receiving the parsed binding first and
+     * failing `std:plugin.not-connected` while there is none. The contract (`TActions`) extends
+     * `Target.Lifecycle`; several targets of one cloneable protocol sit installed side by side.
+     */
+    target<CSchema extends StandardSchemaV1, SSchema extends StandardSchemaV1, TState = EmptyType>(
+      options: Target.Options<TActions, CSchema, SSchema, TState>,
+    ): Plugin<
+      Target.Context<
+        StandardSchemaV1.InferOutput<CSchema>,
+        StandardSchemaV1.InferOutput<SSchema>,
+        TState
+      >,
+      [],
+      TActions
+    >
   }
 
   export interface Implementation<TContext, TArgs extends unknown[], TActions> {

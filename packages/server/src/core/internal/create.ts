@@ -4,15 +4,15 @@ import { Trace } from 'std:trace'
 
 import { ServerClient } from '../definition/server'
 import { ServerErrors } from '../errors'
-import { hostedOf, roleOf } from '../internal/app'
-import { bootLogs, buildNode } from '../internal/node'
 import type { ServerDef } from '../types/server'
 import type { ServiceDef } from '../types/service'
+import { ServerTracer } from '../utils/trace'
 
-import { ServerTracer } from './trace'
+import { hostedOf, roleOf } from './app'
+import { bootLogs, buildNode } from './node'
 
 /**
- * Build a node: install the kernel and its `server-tracer` (std:trace → the observe sinks,
+ * `Server.actions.create` — build a node: install the kernel and its `server-tracer` (std:trace → the observe sinks,
  * switched OFF until the plugins are in), then the carrier (or the local one), every plugin (in
  * order), the outcome store (memory unless one is installed) and the edge — all std plugins —
  * wire their hooks and option validators into the kernel, validate every action's options, and
@@ -37,7 +37,7 @@ import { ServerTracer } from './trace'
  * `start()` runs the plugins' start hooks, mounts `/_health`, listens and waits for
  * `dependsOn`; `stop()` pauses, leaves the cluster, drains and tears down in reverse.
  */
-export function* createServer<const TServices extends readonly ServiceDef.Service[]>(
+export function* createNode<const TServices extends readonly ServiceDef.Service[]>(
   options: ServerDef.Options<TServices>,
 ): Operation<ServerDef.Handle<TServices>> {
   const role = roleOf(options as ServerDef.Options)
@@ -56,6 +56,18 @@ export function* createServer<const TServices extends readonly ServiceDef.Servic
   }
 
   const hosted = hostedOf(options as ServerDef.Options, role)
+  // a hosted name nobody declares (a typo in `SERVICE=` or in `hosted`) would host nothing and
+  // turn every call to it into a 503 — a word at boot instead
+  const unknown = hosted.filter(name => !options.services.some(def => def.name === name))
+
+  if (unknown.length > 0) {
+    return yield* fail(
+      ServerErrors.Configuration,
+      `hosted names no declared service: ${unknown.join(', ')}`,
+      `declared: ${options.services.map(def => def.name).join(', ')}`,
+    )
+  }
+
   const kernel = yield* ServerClient.use({ ...options, hosted } as ServerDef.Options)
 
   // a Trace sink enabled around this server that is NOT another server's (a test's in-memory

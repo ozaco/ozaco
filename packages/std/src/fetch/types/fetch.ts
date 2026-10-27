@@ -1,5 +1,5 @@
 import type { CodecDef } from 'std:codec'
-import type { Flow, Operation } from 'std:effect'
+import type { Flow, Operation, Utils } from 'std:effect'
 import type { Plugin } from 'std:plugin'
 import type { Result } from 'std:result'
 import type { TlsOptions } from 'std:shared'
@@ -69,6 +69,35 @@ export namespace FetchDef {
      * otherwise need a CORS preflight). A caller-set `traceparent` header always wins.
      * Overrides the install-time `propagate` default. Stripped before the platform fetch. */
     propagate?: boolean | undefined
+
+    /** Send the request again when it fails the way `on` names, with exponential backoff
+     * between tries — see {@link RetryPolicy}. Overrides the install-time `retry` default.
+     * Stripped before the platform fetch. */
+    retry?: RetryPolicy | undefined
+
+    /** Refuse a response body past this many bytes: the body read fails `std:fetch.too-large`
+     * once the count is passed (the bytes before it were streamed). Overrides the install-time
+     * default. Stripped before the platform fetch. */
+    maxBytes?: number | undefined
+
+    /** An HTTP proxy for this request (`http://proxy:3128`), passed through as the platform
+     * `proxy` init key (Bun reads it; other runtimes ignore it). Overrides the install-time
+     * default. There is no per-request BYPASS of the environment's proxy: Bun honours
+     * `NO_PROXY` (`127.0.0.1,localhost` for a loopback daemon). */
+    proxy?: string | undefined
+  }
+
+  /** What `retry` re-sends on: a transport fault (`network`), the deadline (`timeout`), a
+   * server error (`5xx`), a rate limit (`429`). */
+  export type RetryOn = 'network' | 'timeout' | '5xx' | '429'
+
+  /** `retry: { attempts, on, delayMs, factor, maxDelayMs, jitter }` — `attempts` is the total,
+   * the first try included (default 3); `on` defaults to `['network', '5xx']` (a timeout and a
+   * 4xx are answered as they are); the backoff is `std:effect`'s (`backoffDelay`, default
+   * 250 ms doubling). Every re-send sets `http.request.resend_count` on the CLIENT span. */
+  export interface RetryPolicy extends Utils.BackoffOptions {
+    attempts?: number | undefined
+    on?: readonly RetryOn[] | undefined
   }
 
   /** TLS options for a request — see `TlsOptions` (`std:shared`). */
@@ -110,6 +139,15 @@ export namespace FetchDef {
     /** The query keys whose values `url.full` redacts (replaces `SENSITIVE_KEYS`;
      * `[...SENSITIVE_KEYS, 'my_key']` adds to it). */
     sensitiveKeys?: readonly string[] | undefined
+
+    /** Default retry policy for every request; a per-request `init.retry` replaces it whole. */
+    retry?: RetryPolicy | undefined
+
+    /** Default body cap for every request; a per-request `init.maxBytes` overrides it. */
+    maxBytes?: number | undefined
+
+    /** Default proxy for every request; a per-request `init.proxy` overrides it. */
+    proxy?: string | undefined
   }
 
   /** The installed plugin context: the resolved `Options`, built once by `setup`. */
@@ -121,6 +159,9 @@ export namespace FetchDef {
     tls: Tls | undefined
     propagate: boolean | undefined
     sensitiveKeys: readonly string[] | undefined
+    retry: RetryPolicy | undefined
+    maxBytes: number | undefined
+    proxy: string | undefined
   }
 
   /**

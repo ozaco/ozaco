@@ -1,7 +1,7 @@
 // oxlint-disable import/exports-last
 import { column, DbClient, table } from 'db:core'
 import type { ServerDef } from 'server:core'
-import { action, createServer, service, stream } from 'server:core'
+import { action, Server, service, stream } from 'server:core'
 import { Auth, crud, Docs, ObservePlugin, StaticAuth } from 'server:plugins'
 import type { Operation } from 'std:effect'
 import { sleep, until } from 'std:effect'
@@ -273,7 +273,7 @@ export function* boot(options?: {
   yield* DbClient.use({ tables: [notesTable] })
   yield* MemoryKv.use()
 
-  const server = yield* createServer({
+  const server = yield* Server.actions.create({
     services: [demo, probe, notes, wall],
     edge: BunEdge,
     plugins: [

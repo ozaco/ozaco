@@ -1,6 +1,5 @@
 import type { EdgeDef, ServerDef, ServiceDef } from 'server:core'
-import { STATUS_OF } from 'server:core'
-import { isPartsDecl, isSocketAction, isStreamDecl } from 'server:internal'
+import { isPartsDecl, isSocketAction, isStreamDecl, STATUS_OF } from 'server:internal'
 
 import { z } from 'zod'
 

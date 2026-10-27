@@ -12,6 +12,7 @@
         "./dist/carrier/network.d.ts"
       ],
       "server:plugins": ["./src/plugins/index.ts", "./dist/plugins.d.ts"],
+      "server:testing": ["./src/testing/index.ts", "./dist/testing.d.ts"],
       "server:plugins/observe/otlp": [
         "./src/plugins/observe/impl/otlp/index.ts",
         "./dist/plugins/observe/otlp.d.ts"

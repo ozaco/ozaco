@@ -7,7 +7,7 @@
  * failure: 401 / 403 ⇒ status unset + `error.type`, one WARN exception record.
  */
 import type { ServerDef } from 'server:core'
-import { action, createServer, Edge, Server, ServerErrors, service } from 'server:core'
+import { action, Edge, Server, ServerErrors, service } from 'server:core'
 import type { AuthDef } from 'server:plugins'
 import { Auth, AuthStrategy, StaticAuth } from 'server:plugins'
 import type { Operation } from 'std:effect'
@@ -124,7 +124,7 @@ const withServer = async (
       yield* storage()
       yield* memory.plugin.use()
 
-      const server = yield* createServer({
+      const server = yield* Server.actions.create({
         services: [app],
         plugins: [tokens, Auth],
         ...options,

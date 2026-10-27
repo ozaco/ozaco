@@ -4,7 +4,7 @@
  * file change into a reload by itself.
  */
 import type { ServiceDef } from 'server:core'
-import { action, createServer, refs, service } from 'server:core'
+import { action, refs, Server, service } from 'server:core'
 import { HotReload, HotReloadErrors } from 'server:plugins'
 import type { Operation } from 'std:effect'
 import { attempt, run, sleep } from 'std:effect'
@@ -42,7 +42,8 @@ function* scaffold(name: string): Operation<{ dir: string; entry: string; dep: s
   yield* IO.actions.write(
     entry,
     [
-      `import { action, service } from 'server:core'`,
+      `import { action, Server, service } from 'server:core'
+`,
       `import { z } from 'zod'`,
       `import { GREETING } from './greeting'`,
       ``,
@@ -79,7 +80,7 @@ describe('plugins — hot reload', () => {
 
         const files = yield* scaffold('manual')
 
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services: [],
           plugins: [HotReload.use({ entry: files.entry, watch: [files.dir] })],
         })
@@ -142,7 +143,7 @@ describe('plugins — hot reload', () => {
         yield* storage()
 
         const files = yield* scaffold('watched')
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services: [],
           plugins: [
             HotReload.use({
@@ -192,7 +193,7 @@ describe('plugins — hot reload', () => {
         yield* storage()
 
         let greeting = 'one'
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services: [],
           plugins: [
             HotReload.use({

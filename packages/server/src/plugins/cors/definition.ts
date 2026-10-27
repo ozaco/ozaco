@@ -1,6 +1,6 @@
 import type { ServerDef } from 'server:core'
-import { HEADERS, Server, ServerErrors } from 'server:core'
-import { rewrapResponse } from 'server:internal'
+import { Server, ServerErrors } from 'server:core'
+import { HEADERS, rewrapResponse } from 'server:internal'
 import type { Operation } from 'std:effect'
 import { definePlugin } from 'std:plugin'
 import { fail } from 'std:result'
@@ -50,7 +50,10 @@ export const Cors = definePlugin<ServerDef.PluginContext, [options?: CorsDef.Opt
     const kernel = yield* Server.context.get()
 
     if (!kernel) {
-      return yield* fail(ServerErrors.Configuration, 'Cors must be installed by createServer')
+      return yield* fail(
+        ServerErrors.Configuration,
+        'Cors must be installed by Server.actions.create',
+      )
     }
 
     const config: CorsDef.Config = {

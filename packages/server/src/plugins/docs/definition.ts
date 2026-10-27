@@ -33,7 +33,10 @@ export const Docs = definePlugin<
     const kernel = yield* Server.context.get()
 
     if (!kernel) {
-      return yield* fail(ServerErrors.Configuration, 'Docs must be installed by createServer')
+      return yield* fail(
+        ServerErrors.Configuration,
+        'Docs must be installed by Server.actions.create',
+      )
     }
 
     const path = (options?.path ?? '/docs').replace(/\/$/u, '')

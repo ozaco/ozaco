@@ -3,7 +3,7 @@
  * (`/api/<org>/v1/{traces,logs,metrics}`), Basic / Bearer auth, the `stream-name` header — and
  * nothing else: no `_json` side streams, the same records every sink holds.
  */
-import { createServer, Server } from 'server:core'
+import { Server } from 'server:core'
 import { attempt, run, sleep } from 'std:effect'
 import { unwrap } from 'std:result'
 
@@ -23,7 +23,7 @@ describe('observe/openobserve', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services: [todos],
           name: 'oo-demo',
           plugins: [
@@ -96,7 +96,7 @@ describe('observe/openobserve', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services: [todos],
           plugins: [
             OpenObserveExporter.use({
@@ -136,7 +136,7 @@ describe('observe/openobserve', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services: [todos],
           plugins: [
             OpenObserveExporter.use({
@@ -173,7 +173,7 @@ describe('observe/openobserve', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services: [todos],
           name: 'oo-domain',
           plugins: [
@@ -215,7 +215,7 @@ describe('observe/openobserve', () => {
       await run(function* () {
         yield* storage()
 
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services: [todos],
           plugins: [
             OpenObserveExporter.use({

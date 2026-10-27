@@ -10,6 +10,7 @@ import { failureOf } from '../core/utils/failure'
 import { DEFAULT_BANNER, DEFAULT_EFFECT_MODULE, INDENT } from './internal/const'
 import {
   callableOf,
+  enumsOfService,
   keyText,
   routeText,
   serviceType,
@@ -17,7 +18,7 @@ import {
   socketsOf,
 } from './internal/generate'
 import { isRecord } from './internal/schema'
-import type { GenerateOptions } from './types'
+import type { Emit, GenerateOptions } from './types'
 
 /**
  * Compile an OZACO MANIFEST v1 into a self-contained `.ts` source: an `Api` interface (one entry
@@ -39,13 +40,35 @@ export function* generate(manifest: unknown, options?: GenerateOptions): Operati
   const services = [...document.services].toSorted((left, right) =>
     left.name.localeCompare(right.name),
   )
-  const uses = { flow: false }
+  const emit: Emit = { flow: false, style: { readonly: options?.readonly, docs: options?.docs } }
   const apiLines: string[] = []
   const routeLines: string[] = []
   const rowLines: string[] = []
+  const enumLines: string[] = []
 
   for (const service of services) {
-    apiLines.push(`${INDENT}readonly ${keyText(service.name)}: ${serviceType(service, 1, uses)}`)
+    if (options?.docs && service.description) {
+      apiLines.push(`${INDENT}/** ${service.description.replaceAll('*/', '* /')} */`)
+    }
+
+    apiLines.push(`${INDENT}readonly ${keyText(service.name)}: ${serviceType(service, 1, emit)}`)
+
+    if (options?.enums) {
+      const found = [...enumsOfService(service)].toSorted(([left], [right]) =>
+        left.localeCompare(right),
+      )
+
+      if (found.length > 0) {
+        enumLines.push(
+          `${INDENT}${keyText(service.name)}: {`,
+          ...found.map(
+            ([key, values]) =>
+              `${INDENT}${INDENT}${keyText(key)}: [${values.map(value => `'${value.replaceAll('\\', String.raw`\\`).replaceAll("'", String.raw`\'`)}'`).join(', ')}],`,
+          ),
+          `${INDENT}},`,
+        )
+      }
+    }
 
     const routes = [...callableOf(service)]
       .toSorted((left, right) => left.action.localeCompare(right.action))
@@ -55,7 +78,7 @@ export function* generate(manifest: unknown, options?: GenerateOptions): Operati
 
     // resource sockets: the ROW type behind `$watch`/`$rows`/`$window`, keyed by service
     for (const socket of socketsOf(service)) {
-      const row = socketRowType(socket)
+      const row = socketRowType(socket, emit.style)
 
       if (row) {
         rowLines.push(`${INDENT}readonly ${keyText(service.name)}: ${row}`)
@@ -65,7 +88,7 @@ export function* generate(manifest: unknown, options?: GenerateOptions): Operati
 
   return [
     options?.banner ?? DEFAULT_BANNER,
-    ...(uses.flow
+    ...(emit.flow
       ? ['', `import type { Flow } from '${options?.effectModule ?? DEFAULT_EFFECT_MODULE}'`]
       : []),
     '',
@@ -77,6 +100,15 @@ export function* generate(manifest: unknown, options?: GenerateOptions): Operati
     ...routeLines,
     '} as const',
     '',
+    ...(enumLines.length > 0
+      ? [
+          '/** The string enums the schemas declare, by service and field. */',
+          'export const apiEnums = {',
+          ...enumLines,
+          '} as const',
+          '',
+        ]
+      : []),
     ...(rowLines.length > 0
       ? [
           '/** Realtime resources: the row type each `$watch`/`$rows` feed carries. */',

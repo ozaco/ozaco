@@ -34,13 +34,16 @@ export const Cache = definePlugin<ServerDef.PluginContext, [options?: CacheDef.P
     const kernel = yield* Server.context.get()
 
     if (!kernel) {
-      return yield* fail(ServerErrors.Configuration, 'Cache must be installed by createServer')
+      return yield* fail(
+        ServerErrors.Configuration,
+        'Cache must be installed by Server.actions.create',
+      )
     }
 
     if (isFailure(yield* attempt(() => useContext(Kv)))) {
       return yield* fail(
         ServerErrors.Configuration,
-        'Cache needs a Kv store installed before createServer (MemoryKv / RedisKv)',
+        'Cache needs a Kv store installed before Server.actions.create (MemoryKv / RedisKv)',
       )
     }
 

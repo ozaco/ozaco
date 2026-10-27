@@ -8,7 +8,7 @@
  * never swallowed. Seen through an in-memory std:trace `Trace` sink.
  */
 import type { ServiceDef } from 'server:core'
-import { action, createServer, refs, service } from 'server:core'
+import { action, refs, Server, service } from 'server:core'
 import { HotReload, HotReloadErrors } from 'server:plugins'
 import type { Operation } from 'std:effect'
 import { attempt, run, sleep } from 'std:effect'
@@ -119,7 +119,8 @@ function* writeEntry(entry: string, body: readonly string[]): Operation<void> {
   yield* IO.actions.write(
     entry,
     [
-      `import { action, service } from 'server:core'`,
+      `import { action, Server, service } from 'server:core'
+`,
       `import { z } from 'zod'`,
       ``,
       ...body,
@@ -144,7 +145,7 @@ describe('plugins — hot reload telemetry', () => {
         yield* storage()
         yield* tracer.plugin.use()
 
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services: [],
           plugins: [
             HotReload.use({
@@ -240,7 +241,7 @@ describe('plugins — hot reload telemetry', () => {
       yield* DefaultLogger.use({ level: LogLevel.info })
       yield* logger.plugin.use()
       yield* tracer.plugin.use()
-      yield* createServer({
+      yield* Server.actions.create({
         services: [],
         plugins: [
           HotReload.use({
@@ -384,7 +385,7 @@ describe('plugins — hot reload telemetry', () => {
         yield* tracer.plugin.use()
 
         const files = yield* scaffold('trace-steps', GOOD)
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services: [],
           plugins: [HotReload.use({ entry: files.entry, watch: [files.dir] })],
         })
@@ -484,7 +485,7 @@ describe('plugins — hot reload telemetry', () => {
         yield* tracer.plugin.use()
 
         const files = yield* scaffold('trace-watch', GOOD)
-        const server = yield* createServer({
+        const server = yield* Server.actions.create({
           services: [],
           plugins: [HotReload.use({ entry: files.entry, watch: [files.dir], debounceMs: 30 })],
         })
